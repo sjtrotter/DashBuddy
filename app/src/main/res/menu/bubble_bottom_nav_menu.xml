@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/nav_statistics"
+        android:icon="@android:drawable/ic_menu_sort_by_size"
+        android:title="Statistics" />
+
+    <item
+        android:id="@+id/nav_offers"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="Offers" />
+
+    <item
+        android:id="@+id/nav_settings"
+        android:icon="@android:drawable/ic_menu_preferences"
+        android:title="Settings" />
+
+</menu>

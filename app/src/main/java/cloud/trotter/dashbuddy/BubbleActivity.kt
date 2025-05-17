@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-//import androidx.compose.ui.layout.layout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentContainerView
 import com.google.android.material.bottomnavigation.BottomNavigationView
