@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">DashBuddy</string>
+    <string name="this_is_the_bubble">This is the Bubble!</string>
 </resources>

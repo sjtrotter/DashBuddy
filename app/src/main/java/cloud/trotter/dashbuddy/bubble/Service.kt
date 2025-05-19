@@ -6,7 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.content.pm.ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION
+import android.content.pm.ShortcutInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -26,17 +26,19 @@ class Service : Service() {
     private lateinit var notificationManager: NotificationManager
     private lateinit var dashBuddyPerson: Person
     private lateinit var bubbleShortcut: ShortcutInfoCompat
-    private lateinit var dashBuddyIcon: IconCompat
+    private lateinit var dashBuddyNotificationIcon: IconCompat
+    private lateinit var dashBuddyPersonIcon: IconCompat
     private lateinit var dashBuddyLocusId: LocusIdCompat
-    private lateinit var messagingStyle: NotificationCompat.MessagingStyle
 
     // Flag to indicate if core components are initialized
     private var areComponentsInitialized = false
 
 
     companion object {
-        const val CHANNEL_ID = "bubble_channel"
-        const val NOTIFICATION_ID = 1
+        const val BUBBLE_CHANNEL_ID = "bubble_channel"
+        const val SERVICE_CHANNEL_ID = "service_channel"
+        const val BUBBLE_NOTIFICATION_ID = 1
+        const val SERVICE_NOTIFICATION_ID = 2
         private const val SHORTCUT_ID = "DashBuddy_Bubble_Shortcut"
         private const val TAG = "BubbleService"
         const val EXTRA_MESSAGE = "extra_message_to_show" // Key for intent extra
@@ -55,19 +57,27 @@ class Service : Service() {
         notificationManager = DashBuddyApplication.notificationManager
 
         // 1. Create Notification Channel (essential)
-        createNotificationChannel()
+        createNotificationChannel(
+            BUBBLE_CHANNEL_ID,
+            "Bubble Channel",
+            NotificationManager.IMPORTANCE_HIGH,
+            "Bubble Notifications",
+            true
+        )
 
         // 2. Define the "Person" representing DashBuddy
-        dashBuddyIcon = IconCompat.createWithResource(DashBuddyApplication.context, R.drawable.bag_red_idle)
+        dashBuddyNotificationIcon = IconCompat.createWithResource(
+            DashBuddyApplication.context, R.drawable.bag_red_idle)
+
+        dashBuddyPersonIcon = IconCompat.createWithContentUri("android.resource://${packageName}/${R.drawable.bag_red_idle}")
+
         dashBuddyPerson = Person.Builder()
             .setName("DashBuddy")
-            .setIcon(dashBuddyIcon)
+            .setIcon(dashBuddyNotificationIcon)
             .setKey(DASHBUDDY_PERSON_KEY) // Added a stable key for the Person
             .setImportant(true)
+//            .setBot(true)
             .build()
-
-        messagingStyle = NotificationCompat.MessagingStyle(dashBuddyPerson)
-
 
         // Initialize LocusId here
         dashBuddyLocusId = LocusIdCompat("${SHORTCUT_ID}_Locus")
@@ -81,10 +91,11 @@ class Service : Service() {
             .setLongLived(true)
             .setIntent(shortcutIntent)
             .setShortLabel("DashBuddy")
-            .setIcon(dashBuddyIcon)
+            .setIcon(dashBuddyNotificationIcon)
             .setPerson(dashBuddyPerson)
-            .setCategories(setOf(SHORTCUT_CATEGORY_CONVERSATION))
-            .setLocusId(dashBuddyLocusId) // Associate LocusId with the shortcut
+            .setCategories(setOf(ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION))
+            .setIsConversation()
+            .setLocusId(dashBuddyLocusId)
             .build()
         ShortcutManagerCompat.pushDynamicShortcut(DashBuddyApplication.context, bubbleShortcut)
 
@@ -104,26 +115,20 @@ class Service : Service() {
         // Otherwise, use a default initial message.
         val messageToShow = intent?.getStringExtra(EXTRA_MESSAGE) ?: "DashBuddy is active!"
 
-        val bubbleContentPendingIntent = PendingIntent.getActivity(
-            DashBuddyApplication.context,
-            0,
-            Intent(DashBuddyApplication.context, BubbleActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
+        createNotificationChannel(
+            SERVICE_CHANNEL_ID,
+            SERVICE_CHANNEL_ID,
+            NotificationManager.IMPORTANCE_LOW,
+            "Messenger Service",
+            false)
 
-        val notification = BubbleNotification.create(
-            context = DashBuddyApplication.context,
-            channelId = CHANNEL_ID,
-            senderPerson = dashBuddyPerson,
-            shortcutId = bubbleShortcut.id,
-            bubbleIcon = dashBuddyIcon,
-            messagingStyle = messagingStyle,
-            messageText = messageToShow, // Use the determined message
-            contentIntent = bubbleContentPendingIntent,
-            locusId = dashBuddyLocusId, // Use the member variable
-            autoExpandBubble = true, // Good for initial launch or if explicitly requested
-            suppressNotification = true // Good for subsequent messages
-        )
+        val notification = NotificationCompat.Builder(DashBuddyApplication.context, SERVICE_CHANNEL_ID)
+            .setSmallIcon(dashBuddyNotificationIcon)
+            .setContentTitle("DashBuddy")
+            .setContentText("Messenger Service active.")
+            .build()
+
+        postNotification(messageToShow, true)
 
         try {
             val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -135,9 +140,9 @@ class Service : Service() {
             }
             // If serviceType is 0 for API < 34, just call startForeground(id, notification)
             if (serviceType != 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(NOTIFICATION_ID, notification, serviceType)
+                startForeground(SERVICE_NOTIFICATION_ID, notification, serviceType)
             } else {
-                startForeground(NOTIFICATION_ID, notification)
+                startForeground(SERVICE_NOTIFICATION_ID, notification)
             }
             Log.d(TAG, "Service started in foreground with message: '$messageToShow'")
         } catch (e: Exception) {
@@ -153,9 +158,9 @@ class Service : Service() {
         super.onDestroy()
         isServiceRunningIntentional = false // Mark that the service is no longer intentionally running
         areComponentsInitialized = false
-        if (DashBuddyApplication.bubbleService == this) {
-            DashBuddyApplication.bubbleService = null // Clear static reference
-        }
+//        if (DashBuddyApplication.bubbleService == this) {
+//            DashBuddyApplication.bubbleService = null // Clear static reference
+//        }
         Log.d(TAG, "onDestroy: BubbleService destroyed.")
     }
 
@@ -163,26 +168,34 @@ class Service : Service() {
         return null
     }
 
-    private fun createNotificationChannel() {
+    private fun createNotificationChannel(
+        channelId: String,
+        name: String,
+        importance: Int,
+        channelDescription: String,
+        allowBubbles: Boolean) {
+
         val channel = NotificationChannel(
-            CHANNEL_ID,
-            "DashBuddy Bubbles",
-            NotificationManager.IMPORTANCE_HIGH
+            channelId,
+            name,
+            importance
         ).apply {
-            description = "Channel for DashBuddy bubble notifications."
-//            setAllowBubbles(true)
-            setAllowBubbles(true)
-            setConversationId(CHANNEL_ID, "dashbuddy")
+            description = channelDescription
+            setAllowBubbles(allowBubbles)
         }
         notificationManager.createNotificationChannel(channel)
-        Log.d(TAG, "Notification channel created/updated.")
+
+        if (allowBubbles) {
+            channel.setConversationId(channelId, "dashbuddy")
+        }
+        Log.d(TAG, "Notification channel $name created/updated.")
     }
 
     /**
      * Public method to show a new message in the bubble.
      * If the service is not running, it will attempt to start it with this message.
      */
-    fun showMessageInBubble(message: String) {
+    fun showMessageInBubble(message: String, expand: Boolean = false) {
         Log.d(TAG, "showMessageInBubble called with message: '$message'")
 
         if (!isServiceRunningIntentional || !areComponentsInitialized) {
@@ -194,12 +207,16 @@ class Service : Service() {
             ContextCompat.startForegroundService(DashBuddyApplication.context, startIntent)
             // The message will be displayed when onStartCommand processes this intent.
             // We return here because the current instance might not be fully ready yet.
-            return
         }
 
         // If service is running and initialized, proceed to update the notification
         Log.d(TAG, "Service is running. Updating bubble notification with message: '$message'")
 
+        postNotification(message, expand)
+
+    }
+
+    private fun postNotification(message: String, expand: Boolean) {
         val bubbleContentPendingIntent = PendingIntent.getActivity(
             DashBuddyApplication.context,
             0,
@@ -209,18 +226,19 @@ class Service : Service() {
 
         val newNotification = BubbleNotification.create(
             context = DashBuddyApplication.context,
-            channelId = CHANNEL_ID,
+            channelId = BUBBLE_CHANNEL_ID,
             senderPerson = dashBuddyPerson,
             shortcutId = bubbleShortcut.id,
-            bubbleIcon = dashBuddyIcon,
+            bubbleIcon = dashBuddyPersonIcon,
+            notificationIcon = dashBuddyNotificationIcon,
             messageText = message,
-            messagingStyle = messagingStyle,
             contentIntent = bubbleContentPendingIntent,
-            locusId = dashBuddyLocusId, // Use the member variable
+            locusId = dashBuddyLocusId,
             suppressNotification = true,
-            autoExpandBubble = true // Usually false for subsequent messages
+            autoExpandBubble = expand
         )
-        notificationManager.notify(NOTIFICATION_ID, newNotification)
+
+        notificationManager.notify(BUBBLE_NOTIFICATION_ID, newNotification)
 
         Log.d(TAG, "Updated bubble notification posted.")
     }

@@ -50,6 +50,15 @@
                 android:value="bubble" />
         </service>
 
+        <service
+            android:name="cloud.trotter.dashbuddy.ui.Bubble"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="bubble" />
+        </service>
+
     </application>
 
 </manifest>

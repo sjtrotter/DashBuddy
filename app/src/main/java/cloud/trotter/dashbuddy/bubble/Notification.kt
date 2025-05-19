@@ -37,22 +37,23 @@ object Notification {
         senderPerson: Person,
         shortcutId: String,
         bubbleIcon: IconCompat,
+        notificationIcon: IconCompat,
         messageText: String,
-        messagingStyle: NotificationCompat.MessagingStyle,
         contentIntent: PendingIntent,
         locusId: LocusIdCompat? = null, // Added LocusIdCompat parameter
         desiredHeight: Int = 600, // Standard height for bubbles
         suppressNotification: Boolean = true,
-        autoExpandBubble: Boolean = true
+        autoExpandBubble: Boolean = false
     ): Notification {
         Log.d("BubbleNotificationHelper", "Creating messaging bubble notification with message: '$messageText', Locus ID: $locusId")
 
         // 1. Create the BubbleMetadata
         val bubbleMetadataBuilder = NotificationCompat.BubbleMetadata.Builder(contentIntent, bubbleIcon)
             .setDesiredHeight(desiredHeight)
+            .setIntent(contentIntent)
+            .setIcon(bubbleIcon)
             .setSuppressNotification(suppressNotification)
             .setAutoExpandBubble(autoExpandBubble)
-
         // For API 30+, associate LocusId with BubbleMetadata if available
         // Although setLocusId is not directly on BubbleMetadata.Builder,
         // the LocusId on the Notification itself is what matters most for system context.
@@ -60,7 +61,8 @@ object Notification {
         val bubbleMetadata = bubbleMetadataBuilder.build()
 
         // 2. Create the MessagingStyle for the notification content
-        messagingStyle.addMessage(
+        val messagingStyle = NotificationCompat.MessagingStyle(senderPerson)
+            .addMessage(
                 NotificationCompat.MessagingStyle.Message(
                     messageText,
                     Date().time,
@@ -70,7 +72,7 @@ object Notification {
 
         // 3. Build the Notification
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(bubbleIcon)
+            .setSmallIcon(notificationIcon)
             .setContentTitle(senderPerson.name)
             .setContentText(messageText)
             .setShortcutId(shortcutId)
@@ -79,12 +81,8 @@ object Notification {
             .setStyle(messagingStyle)
             .setBubbleMetadata(bubbleMetadata)
             .setContentIntent(contentIntent)
+            .setLocusId(locusId)
             .setShowWhen(true)
-
-        // Set LocusId on the notification builder if provided (for API 29+)
-        if (locusId != null) {
-            builder.setLocusId(locusId)
-        }
 
         return builder.build()
     }

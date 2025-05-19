@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy
 
 import android.app.Application
-import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -9,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import cloud.trotter.dashbuddy.bubble.Service as BubbleService
+//import cloud.trotter.dashbuddy.ui.Bubble as BubbleService
 import java.util.concurrent.TimeUnit
 
 class DashBuddyApplication : Application() {
@@ -56,15 +56,12 @@ class DashBuddyApplication : Application() {
 //            }
 //            Log.d("DashBuddyApp", "'Delayed!' notification created. Attempting to post.")
             try {
-                bubbleService?.showMessageInBubble("Delayed!") // No '!!' needed due to the check above
+                bubbleService?.showMessageInBubble("Delayed!", true) // No '!!' needed due to the check above
+//                bubbleService?.post(notification) // No '!!' needed due to the check above
                 Log.d("DashBuddyApp", "'Delayed!' notification posted successfully (or attempt made).")
             } catch (e: Exception) {
                 Log.e("DashBuddyApp", "Exception during bubbleService.post()", e)
             }
         }, TimeUnit.SECONDS.toMillis(10))
-    }
-
-    fun getBubble(): BubbleService? {
-        return bubbleService
     }
 }
