@@ -8,7 +8,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import cloud.trotter.dashbuddy.bubble.Service as BubbleService
-//import cloud.trotter.dashbuddy.ui.Bubble as BubbleService
 import java.util.concurrent.TimeUnit
 
 class DashBuddyApplication : Application() {
@@ -43,21 +42,8 @@ class DashBuddyApplication : Application() {
                 Log.e("DashBuddyApp", "bubbleService is NULL. Cannot update bubble.")
                 return@postDelayed // Exit if service is null
             }
-//            Log.d("DashBuddyApp", "bubbleService is available. Calling create().")
-//            val notification: Notification? = try {
-//                bubbleService?.create("Delayed!")
-//            } catch (e: Exception) {
-//                Log.e("DashBuddyApp", "Exception during bubbleService.create()", e)
-//                null // Ensure notification is null if create fails
-//            }
-//            if (notification == null) {
-//                Log.e("DashBuddyApp", "Failed to create 'Delayed!' notification (it's null). Cannot post.")
-//                return@postDelayed // Exit if notification is null
-//            }
-//            Log.d("DashBuddyApp", "'Delayed!' notification created. Attempting to post.")
             try {
                 bubbleService?.showMessageInBubble("Delayed!", true) // No '!!' needed due to the check above
-//                bubbleService?.post(notification) // No '!!' needed due to the check above
                 Log.d("DashBuddyApp", "'Delayed!' notification posted successfully (or attempt made).")
             } catch (e: Exception) {
                 Log.e("DashBuddyApp", "Exception during bubbleService.post()", e)

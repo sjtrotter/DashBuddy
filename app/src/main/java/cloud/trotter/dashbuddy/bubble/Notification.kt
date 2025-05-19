@@ -40,8 +40,8 @@ object Notification {
         notificationIcon: IconCompat,
         messageText: String,
         contentIntent: PendingIntent,
-        locusId: LocusIdCompat? = null, // Added LocusIdCompat parameter
-        desiredHeight: Int = 600, // Standard height for bubbles
+        locusId: LocusIdCompat? = null,
+        desiredHeight: Int = 600,
         suppressNotification: Boolean = true,
         autoExpandBubble: Boolean = false
     ): Notification {
@@ -54,9 +54,6 @@ object Notification {
             .setIcon(bubbleIcon)
             .setSuppressNotification(suppressNotification)
             .setAutoExpandBubble(autoExpandBubble)
-        // For API 30+, associate LocusId with BubbleMetadata if available
-        // Although setLocusId is not directly on BubbleMetadata.Builder,
-        // the LocusId on the Notification itself is what matters most for system context.
 
         val bubbleMetadata = bubbleMetadataBuilder.build()
 

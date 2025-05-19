@@ -11,9 +11,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.DashBuddy"
         android:enableOnBackInvokedCallback="true"
@@ -43,15 +43,6 @@
 
         <service
             android:name=".bubble.Service"
-            android:foregroundServiceType="specialUse"
-            android:exported="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="bubble" />
-        </service>
-
-        <service
-            android:name="cloud.trotter.dashbuddy.ui.Bubble"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property

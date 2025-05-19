@@ -117,7 +117,7 @@ class Service : Service() {
 
         createNotificationChannel(
             SERVICE_CHANNEL_ID,
-            SERVICE_CHANNEL_ID,
+            "Messenger Service",
             NotificationManager.IMPORTANCE_LOW,
             "Messenger Service",
             false)
@@ -173,7 +173,8 @@ class Service : Service() {
         name: String,
         importance: Int,
         channelDescription: String,
-        allowBubbles: Boolean) {
+        allowBubbles: Boolean
+    ) {
 
         val channel = NotificationChannel(
             channelId,
