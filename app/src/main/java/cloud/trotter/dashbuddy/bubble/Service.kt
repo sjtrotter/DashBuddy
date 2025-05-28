@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.bubble
 
+import android.app.ActivityOptions
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,7 +10,6 @@ import android.content.pm.ServiceInfo
 import android.content.pm.ShortcutInfo
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.content.ContextCompat
@@ -17,10 +17,11 @@ import androidx.core.content.LocusIdCompat
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import cloud.trotter.dashbuddy.BubbleActivity
+import cloud.trotter.dashbuddy.ui.activities.BubbleActivity
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.bubble.Notification as BubbleNotification
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 class Service : Service() {
     private lateinit var notificationManager: NotificationManager
@@ -199,6 +200,7 @@ class Service : Service() {
     fun showMessageInBubble(message: String, expand: Boolean = false) {
         Log.d(TAG, "showMessageInBubble called with message: '$message'")
 
+        Log.d(TAG, "Service Running: $isServiceRunningIntentional, Components Initialized: $areComponentsInitialized")
         if (!isServiceRunningIntentional || !areComponentsInitialized) {
             Log.w(TAG, "Service not running or not initialized. Attempting to start service with this message.")
             val startIntent = Intent(DashBuddyApplication.context,
@@ -218,11 +220,21 @@ class Service : Service() {
     }
 
     private fun postNotification(message: String, expand: Boolean) {
+        val activityOptions = ActivityOptions.makeBasic()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            activityOptions.setPendingIntentCreatorBackgroundActivityStartMode(
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+            )
+        }
+
         val bubbleContentPendingIntent = PendingIntent.getActivity(
             DashBuddyApplication.context,
             0,
-            Intent(DashBuddyApplication.context, BubbleActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            Intent(
+                DashBuddyApplication.context,
+                BubbleActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                activityOptions.toBundle()
         )
 
         val newNotification = BubbleNotification.create(
@@ -235,8 +247,7 @@ class Service : Service() {
             messageText = message,
             contentIntent = bubbleContentPendingIntent,
             locusId = dashBuddyLocusId,
-            suppressNotification = true,
-            autoExpandBubble = expand
+            autoExpandAndSuppress = expand
         )
 
         notificationManager.notify(BUBBLE_NOTIFICATION_ID, newNotification)

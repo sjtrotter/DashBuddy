@@ -1,14 +1,15 @@
-package cloud.trotter.dashbuddy
+package cloud.trotter.dashbuddy.ui.activities
 
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.Manifest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import cloud.trotter.dashbuddy.bubble.Service as BubbleService
+import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 class MainActivity : AppCompatActivity() {
 

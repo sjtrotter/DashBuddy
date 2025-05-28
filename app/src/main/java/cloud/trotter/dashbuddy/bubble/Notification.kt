@@ -3,12 +3,12 @@ package cloud.trotter.dashbuddy.bubble // You can choose your package structure
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.content.LocusIdCompat
 import androidx.core.graphics.drawable.IconCompat
 import java.util.Date
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 /**
  * Helper object to create bubble-specific notifications.
@@ -27,8 +27,8 @@ object Notification {
      * @param contentIntent The PendingIntent to launch when the bubble is tapped.
      * @param locusId Optional LocusIdCompat to link the notification to app state.
      * @param desiredHeight The desired height of the bubble's expanded view.
-     * @param suppressNotification True to suppress the fly-out notification and only show the bubble.
-     * @param autoExpandBubble True to have the bubble auto-expand when it first appears.
+     * @param autoExpandAndSuppress True to have the bubble auto-expand when it first appears.
+     *          (This also sets suppressNotification to true to disable notification and fly-out.)
      * @return A configured Notification object.
      */
     fun create(
@@ -42,8 +42,7 @@ object Notification {
         contentIntent: PendingIntent,
         locusId: LocusIdCompat? = null,
         desiredHeight: Int = 600,
-        suppressNotification: Boolean = true,
-        autoExpandBubble: Boolean = false
+        autoExpandAndSuppress: Boolean = false
     ): Notification {
         Log.d("BubbleNotificationHelper", "Creating messaging bubble notification with message: '$messageText', Locus ID: $locusId")
 
@@ -52,8 +51,8 @@ object Notification {
             .setDesiredHeight(desiredHeight)
             .setIntent(contentIntent)
             .setIcon(bubbleIcon)
-            .setSuppressNotification(suppressNotification)
-            .setAutoExpandBubble(autoExpandBubble)
+            .setSuppressNotification(autoExpandAndSuppress)
+            .setAutoExpandBubble(autoExpandAndSuppress)
 
         val bubbleMetadata = bubbleMetadataBuilder.build()
 
