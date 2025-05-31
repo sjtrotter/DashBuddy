@@ -71,7 +71,10 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
             try {
                 logDirectory = context.getExternalFilesDir(null) // App-specific storage
                 if (logDirectory == null) {
-                    Log.e("FileLogger", "Failed to get external files directory. File logging disabled.")
+                    Log.e(
+                        "FileLogger",
+                        "Failed to get external files directory. File logging disabled."
+                    )
                     return
                 }
                 if (!logDirectory!!.exists()) {
@@ -83,7 +86,12 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
                 updateLogLevelFromPrefs() // Set initial log level
                 sharedPreferences?.registerOnSharedPreferenceChangeListener(this)
 
-                writeToFileInternal(LogLevel.INFO, "FileLogger", "--- Log Session Started (Level: $currentActiveLogLevel) ---", null)
+                writeToFileInternal(
+                    LogLevel.INFO,
+                    "FileLogger",
+                    "--- Log Session Started (Level: $currentActiveLogLevel) ---",
+                    null
+                )
                 pruneOldLogs() // Prune on init in case of leftover files from previous crashes
             } catch (e: Exception) {
                 Log.e("FileLogger", "Error initializing FileLogger", e)
@@ -97,7 +105,12 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
         if (key == debugModePrefKey) {
             updateLogLevelFromPrefs()
             Log.i("Logger", "Log level updated due to preference change to: $currentActiveLogLevel")
-            writeToFileInternal(LogLevel.INFO, "Logger", "--- Log Level Changed to: $currentActiveLogLevel ---", null)
+            writeToFileInternal(
+                LogLevel.INFO,
+                "Logger",
+                "--- Log Level Changed to: $currentActiveLogLevel ---",
+                null
+            )
         }
     }
 
@@ -131,7 +144,12 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
         }
     }
 
-    private fun writeToFileInternal(level: LogLevel, tag: String, message: String, throwable: Throwable?) {
+    private fun writeToFileInternal(
+        level: LogLevel,
+        tag: String,
+        message: String,
+        throwable: Throwable?
+    ) {
         synchronized(lock) {
             if (currentLogFile == null || logDirectory == null) {
                 // Log to Logcat only if file logging isn't initialized
@@ -165,7 +183,8 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
         // This function assumes it's called from within a synchronized(lock) block
         Log.i("FileLogger", "Rotating log file: ${currentLogFile?.name}")
         val timestamp = fileTimestampFormat.format(Date())
-        val rotatedFileName = "${ROTATED_LOG_FILE_PREFIX}${timestamp}${LOG_FILE_NAME.substringAfterLast('.', "")}"
+        val rotatedFileName =
+            "${ROTATED_LOG_FILE_PREFIX}${timestamp}.${LOG_FILE_NAME.substringAfterLast('.', "")}"
         val rotatedFile = File(logDirectory, rotatedFileName)
 
         try {
@@ -186,14 +205,25 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
         // In a full implementation, you would delete files here.
 
         val rotatedFiles = logDirectory?.listFiles { file ->
-            file.name.startsWith(ROTATED_LOG_FILE_PREFIX) && file.name.endsWith(LOG_FILE_NAME.substringAfterLast('.', ""))
+            file.name.startsWith(ROTATED_LOG_FILE_PREFIX) && file.name.endsWith(
+                LOG_FILE_NAME.substringAfterLast(
+                    '.',
+                    ""
+                )
+            )
         }?.sortedByDescending { it.lastModified() } // Newest first
 
         if (rotatedFiles != null && rotatedFiles.size > maxRotatedLogFiles) {
-            Log.i("FileLogger", "Pruning old logs. Max rotated files: $maxRotatedLogFiles, Found: ${rotatedFiles.size}")
+            Log.i(
+                "FileLogger",
+                "Pruning old logs. Max rotated files: $maxRotatedLogFiles, Found: ${rotatedFiles.size}"
+            )
             val filesToDelete = rotatedFiles.subList(maxRotatedLogFiles, rotatedFiles.size)
             for (fileToDelete in filesToDelete) {
-                Log.d("FileLogger", "Would delete old log file: ${fileToDelete.name} (Size: ${fileToDelete.length()} bytes)")
+                Log.d(
+                    "FileLogger",
+                    "Would delete old log file: ${fileToDelete.name} (Size: ${fileToDelete.length()} bytes)"
+                )
                 // To actually delete:
                 // if (fileToDelete.delete()) {
                 //     Log.i("FileLogger", "Deleted old log file: ${fileToDelete.name}")
@@ -202,7 +232,10 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
                 // }
             }
         } else if (rotatedFiles != null) {
-            Log.d("FileLogger", "No pruning needed. Rotated files: ${rotatedFiles.size}, Max allowed: $maxRotatedLogFiles")
+            Log.d(
+                "FileLogger",
+                "No pruning needed. Rotated files: ${rotatedFiles.size}, Max allowed: $maxRotatedLogFiles"
+            )
         }
     }
 

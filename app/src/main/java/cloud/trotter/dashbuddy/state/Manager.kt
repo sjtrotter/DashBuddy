@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.state.App
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import cloud.trotter.dashbuddy.log.Logger as Log // Your Logger alias
 // AppState enum (from app_state_kt_with_user_handlers artifact) is expected to be in this package or imported.
 // StateHandler interface is expected to be defined and imported.
@@ -13,13 +15,35 @@ object Manager {
 
     private const val TAG = "StateManager"
 
-    private var currentState: AppState = AppState.UNKNOWN // Default initial state before initialization
+    private var currentState: AppState =
+        AppState.UNKNOWN // Default initial state before initialization
     private lateinit var currentHandler: StateHandler
+
+    /** The recorded pre-dash zone. */
+    private var preDashZone: String? = null
+
+    /** Sets the Pre Dash Zone.
+     * @param zone The Pre Dash Zone.
+     */
+    fun setPreDashZone(zone: String) {
+        preDashZone = zone
+    }
+
+    /** Consumes the Pre Dash Zone.
+     * @return The Pre Dash Zone.
+     */
+    fun consumePreDashZone(): String? {
+        val preDashZone = this.preDashZone; this.preDashZone = null; return preDashZone
+    }
+
+    /** A [CoroutineScope] for handling database operations. */
+    private var stateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    fun getScope(): CoroutineScope = stateScope
 
     /**
      * Initializes the StateManager.
      * Call this once, e.g., from Application.onCreate() or when your AccessibilityService is connected.
-     *
      * @param initialContext The application context.
      * @param initialAppState The desired initial state for the machine. Defaults to APP_INITIALIZING.
      */
@@ -34,14 +58,25 @@ object Manager {
             currentHandler = initialAppState.handler
             currentState = initialAppState
         } catch (e: Exception) {
-            Log.e(TAG, "!!! Error getting handler for initial state $initialAppState. Defaulting to UNKNOWN. Check AppState enum. Error: ${e.message} !!!")
+            Log.e(
+                TAG,
+                "!!! Error getting handler for initial state $initialAppState. Defaulting to UNKNOWN. Check AppState enum. Error: ${e.message} !!!"
+            )
             // Fallback to UNKNOWN state if initial handler is problematic
             currentState = AppState.UNKNOWN
-            currentHandler = AppState.UNKNOWN.handler // Assumes UNKNOWN state and handler are always valid
+            currentHandler =
+                AppState.UNKNOWN.handler // Assumes UNKNOWN state and handler are always valid
         }
 
-        Log.i(TAG, "Transitioning to initial state: $currentState (${currentHandler::class.java.simpleName})")
-        currentHandler.enterState(initialContext, currentState, null) // No previous state for the very first entry
+        Log.i(
+            TAG,
+            "Transitioning to initial state: $currentState (${currentHandler::class.java.simpleName})"
+        )
+        currentHandler.enterState(
+            initialContext,
+            currentState,
+            null
+        ) // No previous state for the very first entry
     }
 
     /**
@@ -50,13 +85,19 @@ object Manager {
      */
     fun dispatchEvent(eventContext: StateContext) {
         if (!::currentHandler.isInitialized) {
-            Log.e(TAG, "State machine not initialized! Call initialize() first. Ignoring event: ${eventContext.eventTypeString}")
+            Log.e(
+                TAG,
+                "State machine not initialized! Call initialize() first. Ignoring event: ${eventContext.eventTypeString}"
+            )
             // Attempt to initialize if not already, though this might indicate a logic error in app startup.
             // initialize(eventContext.androidAppContext) // Consider if this is safe or desirable
             return
         }
 
-        Log.d(TAG, "Dispatching event to current state: $currentState (${currentHandler::class.java.simpleName}). EventType: ${eventContext.eventTypeString}")
+        Log.d(
+            TAG,
+            "Dispatching event to current state: $currentState (${currentHandler::class.java.simpleName}). EventType: ${eventContext.eventTypeString}"
+        )
 
         // Run processEvent in currentHandler, store what it thinks the next state should be
         val processResult = currentHandler.processEvent(eventContext, currentState)
@@ -72,7 +113,10 @@ object Manager {
             try {
                 nextHandler = nextState.handler
             } catch (e: Exception) {
-                Log.e(TAG, "!!! Error getting handler for next state $nextState. Transition aborted. Staying in $currentState. Error: ${e.message} !!!")
+                Log.e(
+                    TAG,
+                    "!!! Error getting handler for next state $nextState. Transition aborted. Staying in $currentState. Error: ${e.message} !!!"
+                )
                 return // Abort transition if next handler is problematic
             }
 
@@ -87,7 +131,10 @@ object Manager {
         } else {
             // The event was processed by the current handler, but the state remains the same.
             // The currentHandler might have updated its internal data or performed actions.
-            Log.d(TAG, "Event processed by ${currentHandler::class.java.simpleName}. State remains: $currentState")
+            Log.d(
+                TAG,
+                "Event processed by ${currentHandler::class.java.simpleName}. State remains: $currentState"
+            )
         }
     }
 
@@ -107,15 +154,13 @@ object Manager {
         )
 
         // Handle global/forced transitions first
-        if (
-            (identifiedScreen == DasherScreen.LOGIN_SCREEN || identifiedScreen == DasherScreen.APP_STARTING_OR_LOADING)
-            && currentKnownState != AppState.DASHER_LOGIN_FLOW
-        ) {
+        if (identifiedScreen == DasherScreen.LOGIN_SCREEN && currentKnownState != AppState.DASHER_LOGIN_FLOW) {
             return AppState.DASHER_LOGIN_FLOW
         }
-        // Screens that can be back-buttoned into (or gestured)
+        // Screens that can be back-buttoned into (or gestured) -- needed?
         if (identifiedScreen == DasherScreen.MAIN_MAP_IDLE &&
-            currentKnownState != AppState.DASHER_IDLE_OFFLINE) {
+            currentKnownState != AppState.DASHER_IDLE_OFFLINE
+        ) {
             return AppState.DASHER_IDLE_OFFLINE
         }
 

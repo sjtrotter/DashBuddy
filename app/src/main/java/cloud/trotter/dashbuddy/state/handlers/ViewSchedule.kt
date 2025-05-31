@@ -7,22 +7,24 @@ import cloud.trotter.dashbuddy.state.Context as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
 
-class ViewMainMenu : StateHandler {
+class ViewSchedule : StateHandler {
 
     override fun processEvent(context: StateContext, currentState: AppState): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
+        // process event here
 
-        if (context.dasherScreen == Screen.EARNINGS_VIEW) return AppState.VIEWING_EARNINGS
-        if (context.dasherScreen == Screen.RATINGS_VIEW) return AppState.VIEWING_RATINGS
-        if (context.dasherScreen == Screen.SCHEDULE_VIEW) return AppState.VIEWING_SCHEDULE
-        if (context.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_IDLE_OFFLINE
+        // add more specific things up here if needed.
+
+        if (context.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
         if (context.dasherScreen == Screen.DASH_CONTROL) return AppState.VIEWING_DASH_CONTROL
+        if (context.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_IDLE_OFFLINE
 
         return currentState
     }
 
     override fun enterState(context: StateContext, currentState: AppState, previousState: AppState?) {
         Log.d("${this::class.simpleName} State", "Entering state...")
+        // initialize components here
         DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${context.dasherScreen?.screenName} Screen")
     }
 

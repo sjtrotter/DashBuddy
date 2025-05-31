@@ -16,6 +16,8 @@ class ViewRatings : StateHandler {
         // add more specific things up here if needed.
 
         if (context.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
+        if (context.dasherScreen == Screen.DASH_CONTROL) return AppState.VIEWING_DASH_CONTROL
+        if (context.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_IDLE_OFFLINE
 
         return currentState
     }

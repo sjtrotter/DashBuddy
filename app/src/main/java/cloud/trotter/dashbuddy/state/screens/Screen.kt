@@ -37,15 +37,27 @@ enum class Screen(
     ),
     MAIN_MAP_IDLE(
         screenName = "Main Map Idle",
-        requiredTexts = listOf("dash now"),
-        someOfTheseTexts = listOf("earn per offer", "earn by time", "promos", "avg."),
-        forbiddenTexts = listOf("looking for offers", "we'll look for orders along the way", "this dash", "timeline", "select end time"),
+        requiredTexts = listOf("dash", "open navigation drawer", "safety", "help"),
+        // ensure the screen has the button.
+        someOfTheseTexts = listOf("dash now", "dash along the way", "schedule", "navigate"),
         minTextCount = 5
     ),
-//    SCHEDULE_VIEW(
-//        requiredTexts = listOf("schedule"),
+    SCHEDULE_VIEW(
+        screenName = "Schedule",
+        requiredTexts = listOf(
+            "schedule",
+            "sun",
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "locations"
+        ),
 //        someOfTheseTexts = listOf("available slots", "sun", "mon", "tue", "wed", "thu", "fri", "sat")
-//    ),
+        minTextCount = 23
+    ),
     EARNINGS_VIEW(
         screenName = "Earnings",
         requiredTexts = listOf("earnings", "this week"),
@@ -55,51 +67,125 @@ enum class Screen(
         screenName = "Ratings",
         requiredTexts = listOf("ratings", "acceptance rate", "completion rate", "overall"),
     ),
+    SAFETY_VIEW(
+        screenName = "Safety",
+        requiredTexts = listOf(
+            "safedash",
+            "safety tools",
+            "report safety issue",
+            "share your location"
+        ),
+    ),
+    CHAT_VIEW(
+        screenName = "Chat",
+        requiredTexts = listOf("dasher", "messages"),
+    ),
+    NOTIFICATIONS_VIEW(
+        screenName = "Notifications",
+        requiredTexts = listOf("notifications"),
+    ),
+    PROMOS_VIEW(
+        screenName = "Promos",
+        requiredTexts = listOf("navigate up", "promotions"),
+    ),
+    HELP_VIEW(
+        screenName = "Help",
+        requiredTexts = listOf(
+            "doordash dasher",
+            "close webview",
+            "safety resources",
+            "additional resources",
+            "chat with support"
+        ),
+    ),
     MAIN_MENU_VIEW(
         screenName = "Main Menu",
-        requiredTexts = listOf("dash", "schedule", "earnings", "ratings", "account", "dash preferences", "settings", "log out")
+        requiredTexts = listOf(
+            "dash",
+            "schedule",
+            "earnings",
+            "ratings",
+            "account",
+            "dash preferences",
+            "settings",
+            "log out"
+        )
     ),
-//    ACCOUNT_DETAILS_VIEW(
+
+    //    ACCOUNT_DETAILS_VIEW(
 //        requiredTexts = listOf("account details", "edit account", "vehicles") // Example keywords
 //    ),
 //    PROMOS_VIEW(
 //        requiredTexts = listOf("promos", "challenges", "peak pay") // Example keywords
 //    ),
-//    SETTINGS_MENU_VIEW( // This might be tricky, often identified by a list of menu items
-//        someOfTheseTexts = listOf("earnings", "schedule", "ratings", "account details", "settings", "logout")
-//        // Could also use a custom matcher to check if it's a typical menu structure
-//    ),
 //    DASHER_HELP_VIEW(
 //        requiredTexts = listOf("help", "faq", "contact support") // Example keywords
 //    ),
 //
-//    // --- Starting a Dash Workflow ---
-//    SELECT_DASH_END_TIME(
-//        requiredTexts = listOf("select end time", "create"),
-//        someOfTheseTexts = listOf("dashers needed until", "pm", "am", "schedule dash")
-//    ),
-//
-//    // --- Actively Dashing States ---
-//    ON_DASH_MAP_WAITING_FOR_OFFER(
-//        requiredTexts = listOf("looking for offers", "this dash", "timeline"),
-//        forbiddenTexts = listOf("dash now", "we'll look for orders along the way", "select end time", "accept")
-//    ),
-//    ON_DASH_ALONG_THE_WAY(
-//        requiredTexts = listOf("we'll look for orders along the way", "timeline"), // "Navigate" button is also key
-//        someOfTheseTexts = listOf("navigate"),
-//        forbiddenTexts = listOf("dash now", "looking for offers", "accept")
-//    ),
+    // --- Starting a Dash Workflow ---
+    SET_DASH_END_TIME(
+        screenName = "Set Dash End Time",
+        requiredTexts = listOf(
+            "navigate up",
+            "dash now",
+            "select end time",
+            "dashers needed until"
+        ),
+    ),
+
+    // --- Actively Dashing States ---
+    ON_DASH_MAP_WAITING_FOR_OFFER(
+        screenName = "Waiting for Offer",
+        requiredTexts = listOf("looking for offers", "this dash", "timeline"),
+        forbiddenTexts = listOf(
+            "dash now",
+            "we'll look for orders along the way",
+            "select end time",
+            "accept"
+        )
+    ),
+    DASH_CONTROL(
+        screenName = "Dash Control",
+        requiredTexts = listOf(
+            "return to dash",
+            "you're dashing in",
+            "end dash",
+            "you're dashing now"
+        ),
+    ),
+    ON_DASH_ALONG_THE_WAY(
+        screenName = "Dash Along the Way",
+        requiredTexts = listOf(
+            "we'll look for orders along the way",
+            "navigate",
+            "up",
+            "to zone",
+            "spot saved until"
+        ), // "Navigate" button is also key
+    ),
+    TIMELINE_VIEW(
+        screenName = "Timeline",
+        requiredTexts = listOf(
+            "current dash",
+            "pause orders",
+            "end now",
+            "dash ends at",
+            "add time"
+        ),
+    ),
+
     // --- Generic Navigation View ---
     NAVIGATION_VIEW(
         screenName = "Navigation",
         requiredTexts = listOf("mi", "min", "exit"),
         forbiddenTexts = listOf("accept", "decline")
     ),
-//    // --- Offer Handling ---
+
+    // --- Offer Handling ---
     OFFER_POPUP(
         screenName = "Offer",
-        requiredTexts = listOf("decline", "accept", "mi"),
-        someOfTheseTexts = listOf("guaranteed (incl. tips)", "total will be higher", "$"),
+        requiredTexts = listOf("decline", "accept", "mi", "$"),
+        someOfTheseTexts = listOf("guaranteed (incl. tips)", "total will be higher", "guaranteed"),
         minTextCount = 6 // Offer popups usually have a certain density of info
     ),
 //    DECLINE_OFFER_REASON_MODAL( // From your logs: "Decline this order?", "This order doesn't pay enough"

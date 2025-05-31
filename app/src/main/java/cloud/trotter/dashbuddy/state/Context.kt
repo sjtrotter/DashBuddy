@@ -25,5 +25,5 @@ data class Context(
     val sourceNode: AccessibilityNodeInfo? = null,
 
     // the current Dasher screen, if any
-    val dasherScreen: DasherScreen? = null
+    val dasherScreen: DasherScreen? = null,
 )

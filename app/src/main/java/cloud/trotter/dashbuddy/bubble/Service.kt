@@ -197,7 +197,7 @@ class Service : Service() {
      * Public method to show a new message in the bubble.
      * If the service is not running, it will attempt to start it with this message.
      */
-    fun showMessageInBubble(message: String, expand: Boolean = false) {
+    fun showMessageInBubble(message: CharSequence, expand: Boolean = false) {
         Log.d(TAG, "showMessageInBubble called with message: '$message'")
 
         Log.d(TAG, "Service Running: $isServiceRunningIntentional, Components Initialized: $areComponentsInitialized")
@@ -219,7 +219,7 @@ class Service : Service() {
 
     }
 
-    private fun postNotification(message: String, expand: Boolean) {
+    private fun postNotification(message: CharSequence, expand: Boolean) {
         val activityOptions = ActivityOptions.makeBasic()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             activityOptions.setPendingIntentCreatorBackgroundActivityStartMode(

@@ -38,7 +38,7 @@ object Notification {
         shortcutId: String,
         bubbleIcon: IconCompat,
         notificationIcon: IconCompat,
-        messageText: String,
+        messageText: CharSequence,
         contentIntent: PendingIntent,
         locusId: LocusIdCompat? = null,
         desiredHeight: Int = 600,

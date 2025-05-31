@@ -12,7 +12,7 @@ object Recognizer {
     // should generally come before more general, full-screen states.
     private val screenCheckOrder: List<Screen> = listOf(
         // High-priority, often modal or overlay screens
-//        Screen.OFFER_POPUP,
+        Screen.OFFER_POPUP,
 //        Screen.DECLINE_OFFER_CONFIRM_MODAL,
 //        Screen.DECLINE_OFFER_REASON_MODAL, // Added from your logs
 //        Screen.END_DASH_CONFIRMATION_DIALOG,
@@ -37,20 +37,28 @@ object Recognizer {
 //        Screen.DELIVERY_NAVIGATION_TO_CUSTOMER,
 //        Screen.DELIVERY_ARRIVED_AT_STORE,
 //        Screen.DELIVERY_NAVIGATION_TO_STORE,
-//        Screen.ON_DASH_MAP_WAITING_FOR_OFFER,
-//        Screen.ON_DASH_ALONG_THE_WAY,
+        Screen.ON_DASH_MAP_WAITING_FOR_OFFER,
+        Screen.DASH_CONTROL,
+        Screen.ON_DASH_ALONG_THE_WAY,
+        Screen.TIMELINE_VIEW,
+//        Screen.NAVIGATION_VIEW,
 //        Screen.DASH_PAUSED_SCREEN,
 
         // Post-dash or pre-dash setup
 //        Screen.DASH_SUMMARY_SCREEN,
-//        Screen.SELECT_DASH_END_TIME,
+        Screen.SET_DASH_END_TIME,
 
         // Main app sections when idle/offline
         Screen.MAIN_MAP_IDLE,
         Screen.MAIN_MENU_VIEW,
         Screen.EARNINGS_VIEW,
-//        Screen.SCHEDULE_VIEW,
+        Screen.SCHEDULE_VIEW,
         Screen.RATINGS_VIEW,
+        Screen.CHAT_VIEW,
+        Screen.HELP_VIEW,
+        Screen.SAFETY_VIEW,
+        Screen.NOTIFICATIONS_VIEW,
+        Screen.PROMOS_VIEW,
 //        Screen.PROMOS_VIEW,
 //        Screen.ACCOUNT_DETAILS_VIEW,
 //        Screen.SETTINGS_MENU_VIEW,
@@ -76,7 +84,10 @@ object Recognizer {
             }
             Log.v(TAG, "Attempting to identify screen from texts: [$textsToLog]")
         } else if (context.eventTypeString != "INITIALIZATION") { // Don't log for the very first init context
-            Log.v(TAG, "Attempting to identify screen: No screen texts. Event: ${context.eventTypeString}, SourceClass: ${context.sourceClassName}")
+            Log.v(
+                TAG,
+                "Attempting to identify screen: No screen texts. Event: ${context.eventTypeString}, SourceClass: ${context.sourceClassName}"
+            )
         }
 
 
@@ -90,7 +101,12 @@ object Recognizer {
         if (previousScreen != null) {
             return previousScreen
         } else {
-            Log.w(TAG, "Screen UNKNOWN. No signature matched. Texts (first 10): ${context.screenTexts.take(10).joinToString(" | ")}, SourceClass: ${context.sourceClassName}")
+            Log.w(
+                TAG,
+                "Screen UNKNOWN. No signature matched. Texts (first 10): ${
+                    context.screenTexts.take(10).joinToString(" | ")
+                }, SourceClass: ${context.sourceClassName}"
+            )
             return Screen.UNKNOWN
         }
     }

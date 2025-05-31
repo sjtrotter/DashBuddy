@@ -9,16 +9,27 @@ package cloud.trotter.dashbuddy.state
 // }
 
 // Import your concrete handler implementations
+import cloud.trotter.dashbuddy.state.handlers.AwaitingOffer
+import cloud.trotter.dashbuddy.state.handlers.DashAlongTheWay
 import cloud.trotter.dashbuddy.state.handlers.Unknown
 import cloud.trotter.dashbuddy.state.handlers.DasherIdleOffline
 import cloud.trotter.dashbuddy.state.handlers.DasherLogin
 import cloud.trotter.dashbuddy.state.handlers.OfferPresented
-import cloud.trotter.dashbuddy.state.handlers.SessionStart
-import cloud.trotter.dashbuddy.state.handlers.SessionStop
+import cloud.trotter.dashbuddy.state.handlers.DashStarting
+import cloud.trotter.dashbuddy.state.handlers.DashStopping
+import cloud.trotter.dashbuddy.state.handlers.SetDashEndTime
 import cloud.trotter.dashbuddy.state.handlers.Startup
+import cloud.trotter.dashbuddy.state.handlers.ViewChat
+import cloud.trotter.dashbuddy.state.handlers.ViewDashControl
 import cloud.trotter.dashbuddy.state.handlers.ViewEarnings
-import cloud.trotter.dashbuddy.state.handlers.ViewRatings
+import cloud.trotter.dashbuddy.state.handlers.ViewHelp
 import cloud.trotter.dashbuddy.state.handlers.ViewMainMenu
+import cloud.trotter.dashbuddy.state.handlers.ViewNotifications
+import cloud.trotter.dashbuddy.state.handlers.ViewPromos
+import cloud.trotter.dashbuddy.state.handlers.ViewRatings
+import cloud.trotter.dashbuddy.state.handlers.ViewSafety
+import cloud.trotter.dashbuddy.state.handlers.ViewSchedule
+import cloud.trotter.dashbuddy.state.handlers.ViewTimeline
 
 /**
  * Represents the various states the DashBuddy application perceives
@@ -43,7 +54,8 @@ enum class App(
         handler = Startup(), // Using your Startup handler
         displayName = "Dashbuddy Started!"
     ),
-//    AWAITING_DASHER_APP_FOCUS(
+
+    //    AWAITING_DASHER_APP_FOCUS(
 //        handler = PlaceHolder(AWAITING_DASHER_APP_FOCUS), // Placeholder
 //        displayName = "Awaiting Dasher Focus"
 //    ),
@@ -59,23 +71,41 @@ enum class App(
         handler = DasherIdleOffline(), // Placeholder
         displayName = "Dasher Idle Offline"
     ),
-//
+
+    //
 //    // --- Initiating a Dash ---
-//    DASHER_INITIATING_DASH_SESSION(
-//        handler = PlaceHolder(DASHER_INITIATING_DASH_SESSION), // Placeholder
-//        displayName = "Dasher Initiating Dash Session"
-//    ),
+    DASHER_SETTING_END_TIME(
+        handler = SetDashEndTime(),
+        displayName = "Set Dash End Time"
+    ),
+    DASHER_INITIATING_DASH_SESSION(
+        handler = DashStarting(),
+        displayName = "Initiating Dash"
+    ),
 
     // --- Active Dashing Session ---
     SESSION_ACTIVE_WAITING_FOR_OFFER(
-        handler = SessionStart(), // Using your SessionStart handler
-        displayName = "Session Active - Waiting for Offer"
+        handler = AwaitingOffer(),
+        displayName = "Awaiting Offer"
+    ),
+    SESSION_ACTIVE_DASHING_ALONG_THE_WAY(
+        handler = DashAlongTheWay(), // Placeholder
+        displayName = "Dash Along the Way",
+    ),
+    VIEWING_DASH_CONTROL(
+        handler = ViewDashControl(),
+        displayName = "Viewing Dash Control"
     ),
     SESSION_ACTIVE_OFFER_PRESENTED(
-        handler = OfferPresented(), // Placeholder
+        handler = OfferPresented(),
         displayName = "Session Active - Offer Presented"
     ),
-//
+    VIEWING_TIMELINE(
+        handler = ViewTimeline(),
+        displayName = "Viewing Timeline"
+    ),
+
+    //
 //    // --- Active Delivery (after offer acceptance) ---
 //    DELIVERY_IN_PROGRESS_TO_STORE(
 //        handler = PlaceHolder(DELIVERY_IN_PROGRESS_TO_STORE), // Placeholder
@@ -104,12 +134,12 @@ enum class App(
 //    ),
 //
 //    // --- Ending a Dash ---
-//    SESSION_ENDING_FLOW(
-//        handler = PlaceHolder(SESSION_ENDING_FLOW), // Placeholder
-//        displayName = "Session Ending Flow"
-//    ),
+    DASHER_ENDING_DASH_SESSION(
+        handler = DashStopping(),
+        displayName = "Session Ending Flow"
+    ),
     SESSION_ENDED_DISPLAYING_SUMMARY(
-        handler = SessionStop(), // Using your SessionStop handler
+        handler = DashStopping(), // Using your SessionStop handler
         displayName = "Session Ended - Summary"
     ),
     VIEWING_RATINGS(
@@ -123,9 +153,31 @@ enum class App(
     VIEWING_MAIN_MENU(
         handler = ViewMainMenu(),
         displayName = "Opened Main Menu"
-    )
+    ),
+    VIEWING_SCHEDULE(
+        handler = ViewSchedule(),
+        displayName = "Viewing Schedule"
+    ),
+    VIEWING_NOTIFICATIONS(
+        handler = ViewNotifications(),
+        displayName = "Viewing Notifications"
+    ),
+    VIEWING_SAFETY(
+        handler = ViewSafety(),
+        displayName = "Viewing Safety"
+    ),
+    VIEWING_PROMOS(
+        handler = ViewPromos(),
+        displayName = "Viewing Promos"
+    ),
+    VIEWING_HELP(
+        handler = ViewHelp(),
+        displayName = "Viewing Help"
+    ),
+    VIEWING_CHATS(
+        handler = ViewChat(),
+        displayName = "Viewing Chats"
+    ),
 
-
-
-;
+    ;
 }
