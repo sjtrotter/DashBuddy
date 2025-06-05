@@ -11,6 +11,8 @@ import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
 import cloud.trotter.dashbuddy.data.current.CurrentRepo
 import cloud.trotter.dashbuddy.data.dash.DashRepo
 import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneRepo
+import cloud.trotter.dashbuddy.data.offer.OfferRepo
+import cloud.trotter.dashbuddy.data.order.OrderRepo
 import cloud.trotter.dashbuddy.data.zone.ZoneRepo
 import cloud.trotter.dashbuddy.bubble.Service as BubbleService
 import cloud.trotter.dashbuddy.log.Level as LogLevel
@@ -31,6 +33,9 @@ class DashBuddyApplication : Application() {
         val currentRepo: CurrentRepo by lazy { CurrentRepo(database.currentDashDao()) }
         val dashRepo: DashRepo by lazy { DashRepo(database.dashDao()) }
         val dashZoneRepo: DashZoneRepo by lazy { DashZoneRepo(database.dashZoneDao()) }
+        val offerRepo: OfferRepo by lazy { OfferRepo(database.offerDao()) }
+        val orderRepo: OrderRepo by lazy { OrderRepo(database.orderDao()) }
+//        val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
         val zoneRepo: ZoneRepo by lazy { ZoneRepo(database.zoneDao()) }
 
         val notificationManager: NotificationManager

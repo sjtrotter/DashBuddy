@@ -24,6 +24,7 @@ import cloud.trotter.dashbuddy.state.handlers.ViewDashControl
 import cloud.trotter.dashbuddy.state.handlers.ViewEarnings
 import cloud.trotter.dashbuddy.state.handlers.ViewHelp
 import cloud.trotter.dashbuddy.state.handlers.ViewMainMenu
+import cloud.trotter.dashbuddy.state.handlers.ViewNavigation
 import cloud.trotter.dashbuddy.state.handlers.ViewNotifications
 import cloud.trotter.dashbuddy.state.handlers.ViewPromos
 import cloud.trotter.dashbuddy.state.handlers.ViewRatings
@@ -103,6 +104,10 @@ enum class App(
     VIEWING_TIMELINE(
         handler = ViewTimeline(),
         displayName = "Viewing Timeline"
+    ),
+    VIEWING_NAVIGATION(
+        handler = ViewNavigation(),
+        displayName = "Viewing Navigation"
     ),
 
     //

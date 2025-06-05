@@ -58,7 +58,37 @@ class DasherIdleOffline : StateHandler {
             ) {
                 Log.i("${this::class.simpleName} State", "Zone? - ${context.sourceNodeTexts[0]}")
                 Manager.setPreDashZone(context.sourceNodeTexts[0])
+
+            } else if ( // might need a better way to check for earning type.
+            // there's an event named "TYPE_VIEW_SELECTED" which might be useful;
+            // that's what generates the single strings "Earn per Offer" and "Earn by Time" we check
+            // here in this current if block.
+            // also, the source text contains the string: "Pay per offer + Customer tips"
+            // when the type is Earn per Offer - need to get the text for Earn by Time
+            // (in the main screen source texts when it updates the bottom shade)
+                context.sourceNodeTexts.size == 1 &&
+                (context.sourceNodeTexts[0] == "Earn by Time" || context.sourceNodeTexts[0] == "Earn per Offer")
+            ) {
+                Log.i(
+                    "${this::class.simpleName} State",
+                    "Earning Type? - ${context.sourceNodeTexts[0]}"
+                )
+                Manager.setPreDashType(context.sourceNodeTexts[0])
             }
+
+            // determine dash type by iterating over source node text.
+            var dashType: String? = null
+            for (text in context.sourceNodeTexts) {
+                if (text.matches(Regex("^\\$\\d{1,2}\\.\\d{2}/active hr \\+ tips$"))) {
+                    dashType = "Earn by Time"
+                } else if (text.contains("Pay per offer + Customer tips") ||
+                    text.contains("Dash Along the Way")
+                ) {
+                    dashType = "Earn per Offer"
+                }
+            }
+            Log.i("${this::class.simpleName} State", "Earning Type? - $dashType")
+            if (dashType != null) Manager.setPreDashType(dashType)
         }
 
 

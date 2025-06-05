@@ -6,7 +6,17 @@ import cloud.trotter.dashbuddy.state.StateHandler
 
 // You can create more specific placeholder handlers or a generic one:
 class PlaceHolder : StateHandler {
-    override fun enterState(context: StateContext, currentState: AppState, previousState: AppState?) {}
-    override fun processEvent(context: StateContext, currentState: AppState): AppState = currentState // Stays in current state
+    override fun enterState(
+        context: StateContext,
+        currentState: AppState,
+        previousState: AppState?
+    ) {
+    }
+
+    override fun processEvent(
+        context: StateContext,
+        currentState: AppState
+    ): AppState = currentState
+
     override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {}
 }

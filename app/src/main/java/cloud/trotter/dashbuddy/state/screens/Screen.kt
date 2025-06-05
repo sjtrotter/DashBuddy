@@ -79,10 +79,12 @@ enum class Screen(
     CHAT_VIEW(
         screenName = "Chat",
         requiredTexts = listOf("dasher", "messages"),
+        forbiddenTexts = listOf("folder"),
     ),
     NOTIFICATIONS_VIEW(
         screenName = "Notifications",
         requiredTexts = listOf("notifications"),
+        forbiddenTexts = listOf("battery"),
     ),
     PROMOS_VIEW(
         screenName = "Promos",
@@ -184,8 +186,8 @@ enum class Screen(
     // --- Offer Handling ---
     OFFER_POPUP(
         screenName = "Offer",
-        requiredTexts = listOf("decline", "accept", "mi", "$"),
-        someOfTheseTexts = listOf("guaranteed (incl. tips)", "total will be higher", "guaranteed"),
+        requiredTexts = listOf("decline", "accept", "mi", "$", "deliver by"),
+        someOfTheseTexts = listOf("guaranteed (incl. tips)", "total will be higher"),
         minTextCount = 6 // Offer popups usually have a certain density of info
     ),
 //    DECLINE_OFFER_REASON_MODAL( // From your logs: "Decline this order?", "This order doesn't pay enough"

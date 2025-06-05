@@ -13,6 +13,17 @@ import cloud.trotter.dashbuddy.log.Level as LogLevel
 
 
 object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
+    private val isJvmTestEnvironment: Boolean by lazy {
+        try {
+            // Try to load a class that's only available on Android.
+            // If this fails, we're likely in a local JVM test.
+            Class.forName("android.os.Looper")
+            false // Class found, so it's an Android environment
+        } catch (e: ClassNotFoundException) {
+            true  // Class not found, assume JVM test environment
+        }
+    }
+
     private const val LOG_FILE_NAME = "app_log.txt"
     private const val ROTATED_LOG_FILE_PREFIX = "app_log_rotated_"
     private const val MAX_FILE_SIZE_MB_DEFAULT = 2.5
@@ -127,6 +138,11 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
     fun e(tag: String, msg: String, tr: Throwable? = null) = log(LogLevel.ERROR, tag, msg, tr)
 
     private fun log(level: LogLevel, tag: String, msg: String, tr: Throwable? = null) {
+        if (isJvmTestEnvironment) {
+            println("$level/$tag: $msg")
+            tr?.printStackTrace()
+            return
+        }
         if (level.ordinal >= currentActiveLogLevel.ordinal) {
             val androidLogLevel = when (level) {
                 LogLevel.VERBOSE -> Log.VERBOSE

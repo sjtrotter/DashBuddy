@@ -1,13 +1,12 @@
 package cloud.trotter.dashbuddy.state.handlers
 
-import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.App as AppState
 import cloud.trotter.dashbuddy.state.Context as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
 
-class AwaitingOffer : StateHandler {
+class ViewNavigation : StateHandler {
 
     override fun processEvent(context: StateContext, currentState: AppState): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
@@ -15,13 +14,10 @@ class AwaitingOffer : StateHandler {
 
         // add more specific things up here if needed.
 
-        // can they access the main menu from this screen? If not, comment out.
-//        if (context.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
-
-        // should dash control be global?
-        if (context.dasherScreen == Screen.DASH_CONTROL) return AppState.VIEWING_DASH_CONTROL
-
-        if (context.dasherScreen == Screen.OFFER_POPUP) return AppState.SESSION_ACTIVE_OFFER_PRESENTED
+        if (context.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
+        if (context.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_ENDING_DASH_SESSION
+        if (context.dasherScreen == Screen.ON_DASH_ALONG_THE_WAY) return AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
+        if (context.dasherScreen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER) return AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
 
         return currentState
     }

@@ -41,7 +41,7 @@ object Recognizer {
         Screen.DASH_CONTROL,
         Screen.ON_DASH_ALONG_THE_WAY,
         Screen.TIMELINE_VIEW,
-//        Screen.NAVIGATION_VIEW,
+        Screen.NAVIGATION_VIEW,
 //        Screen.DASH_PAUSED_SCREEN,
 
         // Post-dash or pre-dash setup

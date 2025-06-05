@@ -22,22 +22,31 @@ object Manager {
     /** The recorded pre-dash zone. */
     private var preDashZone: String? = null
 
-    /** Sets the Pre Dash Zone.
-     * @param zone The Pre Dash Zone.
-     */
     fun setPreDashZone(zone: String) {
         preDashZone = zone
     }
 
-    /** Consumes the Pre Dash Zone.
-     * @return The Pre Dash Zone.
-     */
     fun consumePreDashZone(): String? {
-        val preDashZone = this.preDashZone; this.preDashZone = null; return preDashZone
+        val preDashZone = this.preDashZone
+        this.preDashZone = null
+        return preDashZone
+    }
+
+    /** The recorded pre-dash earning type. */
+    private var preDashType: String = "Earn per Offer"
+
+    fun setPreDashType(dashType: String) {
+        preDashType = dashType
+    }
+
+    fun consumePreDashType(): String {
+        val preDashType = this.preDashType
+        this.preDashType = "Earn per Offer"
+        return preDashType
     }
 
     /** A [CoroutineScope] for handling database operations. */
-    private var stateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val stateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun getScope(): CoroutineScope = stateScope
 
@@ -102,11 +111,12 @@ object Manager {
         // Run processEvent in currentHandler, store what it thinks the next state should be
         val processResult = currentHandler.processEvent(eventContext, currentState)
 
+        // Determine the next state based on the processResult
         val nextState = determineNextState(currentState, eventContext, processResult)
 
         if (nextState != currentState) {
             val oldState = currentState
-            val oldHandler = currentHandler // This is oldState.handler
+            val oldHandler = currentHandler
 
             // Get the new handler from the nextState
             val nextHandler: StateHandler
@@ -154,9 +164,19 @@ object Manager {
         )
 
         // Handle global/forced transitions first
-        if (identifiedScreen == DasherScreen.LOGIN_SCREEN && currentKnownState != AppState.DASHER_LOGIN_FLOW) {
-            return AppState.DASHER_LOGIN_FLOW
+//        if (identifiedScreen == DasherScreen.APP_STARTING_OR_LOADING &&
+//            currentKnownState != AppState.DASHER_LOGIN_FLOW
+//        ) {
+//            return AppState.DASHER_LOGIN_FLOW
+//        }
+
+        // PRIORITY - Offer Popped Up on Screen
+        if (identifiedScreen == DasherScreen.OFFER_POPUP &&
+            currentKnownState != AppState.SESSION_ACTIVE_OFFER_PRESENTED
+        ) {
+            return AppState.SESSION_ACTIVE_OFFER_PRESENTED
         }
+
         // Screens that can be back-buttoned into (or gestured) -- needed?
         if (identifiedScreen == DasherScreen.MAIN_MAP_IDLE &&
             currentKnownState != AppState.DASHER_IDLE_OFFLINE

@@ -4,41 +4,42 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-//import androidx.room.TypeConverters // If you use Date type converters later
+import androidx.room.TypeConverters
 import cloud.trotter.dashbuddy.data.current.CurrentDao
-import cloud.trotter.dashbuddy.data.dash.DashDao
-import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneDao
-//import cloud.trotter.dashbuddy.data.dao.OfferDao
-import cloud.trotter.dashbuddy.data.zone.ZoneDao
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
+import cloud.trotter.dashbuddy.data.dash.DashDao
 import cloud.trotter.dashbuddy.data.dash.DashEntity
+import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneDao
 import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneEntity
+import cloud.trotter.dashbuddy.data.offer.OfferDao
 import cloud.trotter.dashbuddy.data.offer.OfferEntity
+import cloud.trotter.dashbuddy.data.order.OrderDao
+import cloud.trotter.dashbuddy.data.order.OrderEntity
+import cloud.trotter.dashbuddy.data.zone.ZoneDao
 import cloud.trotter.dashbuddy.data.zone.ZoneEntity
-
-// If you end up using Date objects directly in entities and need type converters:
-// import cloud.trotter.dashbuddy.data.converters.DateConverter
 
 @Database(
     entities = [
         ZoneEntity::class,
         DashEntity::class,
         OfferEntity::class,
+        OrderEntity::class,
         DashZoneEntity::class,
         CurrentEntity::class // Your entity for current dash state
     ],
-    version = 3, // Start with version 1
+    version = 4, // Start with version 1
     exportSchema = false // Set to true if you plan to use schema for testing migrations
 // For production, schema export is recommended.
 )
-// @TypeConverters(DateConverter::class) // Uncomment if you use a DateConverter for 'start'/'stop' in Dash
+@TypeConverters(DataTypeConverters::class)
 abstract class DashBuddyDatabase : RoomDatabase() {
     // Abstract methods for each of your DAOs
     abstract fun zoneDao(): ZoneDao
     abstract fun dashDao(): DashDao
     abstract fun dashZoneDao(): DashZoneDao
     abstract fun currentDashDao(): CurrentDao
-//    abstract fun offerDao(): OfferDao // You'll need to create this DAO interface
+    abstract fun offerDao(): OfferDao
+    abstract fun orderDao(): OrderDao
 
     companion object {
         @Volatile

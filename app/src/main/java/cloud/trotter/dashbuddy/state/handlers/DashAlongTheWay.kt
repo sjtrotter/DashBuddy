@@ -31,7 +31,7 @@ class DashAlongTheWay : StateHandler {
     ) {
         Log.d("${this::class.simpleName} State", "Entering state...")
         // initialize components here
-        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${context.dasherScreen?.screenName} Screen")
+//        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${context.dasherScreen?.screenName} Screen")
     }
 
     override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
