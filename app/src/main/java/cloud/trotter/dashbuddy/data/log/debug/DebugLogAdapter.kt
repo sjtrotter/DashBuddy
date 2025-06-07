@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.fragments
+package cloud.trotter.dashbuddy.data.log.debug
 
 import android.content.Context
 import android.text.Spannable
@@ -13,7 +13,6 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.data.log.debug.DebugLogItem
 
 class DebugLogAdapter :
     ListAdapter<DebugLogItem, DebugLogAdapter.DebugLogViewHolder>(DebugLogDiffCallback()) {

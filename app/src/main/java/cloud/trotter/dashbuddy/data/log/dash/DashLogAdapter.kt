@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.fragments // Or wherever you want to keep your adapters
+package cloud.trotter.dashbuddy.data.log.dash // Or wherever you want to keep your adapters
 
 import android.view.LayoutInflater
 import android.view.View
@@ -8,7 +8,6 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.data.log.dash.DashLogItem // Import the data class
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
