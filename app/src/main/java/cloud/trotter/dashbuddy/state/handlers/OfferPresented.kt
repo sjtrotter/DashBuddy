@@ -32,7 +32,7 @@ class OfferPresented : StateHandler {
         // --- Handle "Accept" click specifically within this state ---
         if (internalOfferId != null && context.eventTypeString == "TYPE_VIEW_CLICKED") {
             if (context.sourceNodeTexts.any { it.equals("Accept", ignoreCase = true) }) {
-                Log.i(tag, "Offer 'Accept' button clicked for offer ID: $internalOfferId")
+                Log.i(tag, "'Accept' button clicked for offer ID: $internalOfferId")
                 Manager.getScope().launch {
                     try {
                         offerRepo.updateOfferStatus(internalOfferId!!, "ACCEPTED")
@@ -49,7 +49,7 @@ class OfferPresented : StateHandler {
                         ignoreCase = true
                     )
                 }) {
-                Log.i(tag, "Offer 'Decline' button clicked for offer ID: $internalOfferId")
+                Log.i(tag, "'Decline' button clicked for offer ID: $internalOfferId")
                 Manager.getScope().launch {
                     try {
                         offerRepo.updateOfferStatus(internalOfferId!!, "DECLINED")
@@ -58,6 +58,27 @@ class OfferPresented : StateHandler {
                     } catch (e: Exception) {
                         Log.e(tag, "!!! Could not mark offer as DECLINED: $internalOfferId !!!", e)
                         DashBuddyApplication.sendBubbleMessage("Error marking offer declined!\nCheck logs.")
+                    }
+                }
+            } else if (context.sourceNodeTexts.any { // order decline - for CoD offers
+                    it.equals(
+                        "Decline order",
+                        ignoreCase = true
+                    )
+                }) {
+                Log.i(tag, "'Decline Order' button clicked for offer ID: $internalOfferId")
+                Manager.getScope().launch {
+                    try {
+                        offerRepo.deleteOffer(offerRepo.getOfferById(internalOfferId!!)!!)
+                        currentRepo.updateLastOfferInfo(
+                            lastOfferId = null,
+                            lastOfferValue = null,
+                        )
+                        Log.i(tag, "Offer DELETED for ID: $internalOfferId")
+                        DashBuddyApplication.sendBubbleMessage("Order Declined!")
+                    } catch (e: Exception) {
+                        Log.e(tag, "!!! Could not DELETE offer: $internalOfferId !!!", e)
+                        DashBuddyApplication.sendBubbleMessage("Error deleting offer!\nCheck logs.")
                     }
                 }
             }
