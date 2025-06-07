@@ -20,6 +20,7 @@ import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.ui.activities.BubbleActivity
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.data.log.dash.DashLogRepo
 import cloud.trotter.dashbuddy.bubble.Notification as BubbleNotification
 import cloud.trotter.dashbuddy.log.Logger as Log
 
@@ -70,7 +71,8 @@ class Service : Service() {
         dashBuddyNotificationIcon = IconCompat.createWithResource(
             DashBuddyApplication.context, R.drawable.bag_red_idle)
 
-        dashBuddyPersonIcon = IconCompat.createWithContentUri("android.resource://${packageName}/${R.drawable.bag_red_idle}")
+        dashBuddyPersonIcon =
+            IconCompat.createWithContentUri("android.resource://${packageName}/${R.drawable.bag_red_idle}")
 
         dashBuddyPerson = Person.Builder()
             .setName("DashBuddy")
@@ -86,8 +88,8 @@ class Service : Service() {
 
         // 3. Create and push the dynamic shortcut for the bubble
         val shortcutIntent = Intent(DashBuddyApplication.context, BubbleActivity::class.java).apply {
-            action = Intent.ACTION_VIEW
-        }
+                action = Intent.ACTION_VIEW
+            }
         bubbleShortcut = ShortcutInfoCompat.Builder(DashBuddyApplication.context, SHORTCUT_ID)
             .setLongLived(true)
             .setIntent(shortcutIntent)
@@ -123,11 +125,12 @@ class Service : Service() {
             "Messenger Service",
             false)
 
-        val notification = NotificationCompat.Builder(DashBuddyApplication.context, SERVICE_CHANNEL_ID)
-            .setSmallIcon(dashBuddyNotificationIcon)
-            .setContentTitle("DashBuddy")
-            .setContentText("Messenger Service active.")
-            .build()
+        val notification =
+            NotificationCompat.Builder(DashBuddyApplication.context, SERVICE_CHANNEL_ID)
+                .setSmallIcon(dashBuddyNotificationIcon)
+                .setContentTitle("DashBuddy")
+                .setContentText("Messenger Service active.")
+                .build()
 
         postNotification(messageToShow, true)
 
@@ -216,7 +219,9 @@ class Service : Service() {
         Log.d(TAG, "Service is running. Updating bubble notification with message: '$message'")
 
         postNotification(message, expand)
-
+        // --- Communicate this message to the UI/ViewModel via the Repository ---
+        DashLogRepo.addLogMessage(message) // Timestamp will be default (System.currentTimeMillis())
+        Log.d(TAG, "Added message to DashLogRepository.")
     }
 
     private fun postNotification(message: CharSequence, expand: Boolean) {

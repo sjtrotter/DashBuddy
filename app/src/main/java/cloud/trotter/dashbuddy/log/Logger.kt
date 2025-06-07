@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.log
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
+import cloud.trotter.dashbuddy.data.log.debug.DebugLogRepo
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -11,23 +11,12 @@ import java.util.Date
 import java.util.Locale
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 
-
 object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
-    private val isJvmTestEnvironment: Boolean by lazy {
-        try {
-            // Try to load a class that's only available on Android.
-            // If this fails, we're likely in a local JVM test.
-            Class.forName("android.os.Looper")
-            false // Class found, so it's an Android environment
-        } catch (e: ClassNotFoundException) {
-            true  // Class not found, assume JVM test environment
-        }
-    }
 
     private const val LOG_FILE_NAME = "app_log.txt"
     private const val ROTATED_LOG_FILE_PREFIX = "app_log_rotated_"
-    private const val MAX_FILE_SIZE_MB_DEFAULT = 2.5
-    private const val MAX_ROTATED_FILES_DEFAULT = 5 // Keeps 5 old files + 1 current
+    private const val MAX_FILE_SIZE_MB_DEFAULT = 2.3
+    private const val MAX_ROTATED_FILES_DEFAULT = 5
 
     private var currentLogFile: File? = null
     private var logDirectory: File? = null
@@ -36,54 +25,43 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
     private val fileTimestampFormat = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
-    private val lock = Any() // For synchronizing file access
+    private val lock = Any()
 
-    // --- SharedPreferences related properties ---
     private var sharedPreferences: SharedPreferences? = null
-    private var debugModePrefKey: String = "debug_logging_enabled" // Default key
-    private var appDefaultLogLevel: LogLevel = LogLevel.INFO // Level when debug mode is OFF
-    private var appDebugLogLevel: LogLevel = LogLevel.DEBUG   // Level when debug mode is ON
+    private lateinit var logLevelPrefKey: String
+    private lateinit var bubbleDebugModePrefKey: String
 
     @Volatile
-    private var currentActiveLogLevel: LogLevel = appDefaultLogLevel // Initial default
+    private var currentActiveLogLevel: LogLevel = LogLevel.INFO
 
-    /**
-     * Initializes the FileLogger. Call this once from Application.onCreate().
-     *
-     * @param context The application context.
-     * @param prefs The SharedPreferences instance for reading debug mode.
-     * @param debugModePreferenceKey The key for the boolean debug mode preference.
-     * @param defaultLogLevel Log level when debug mode is OFF.
-     * @param debugLogLevel Log level when debug mode is ON.
-     * @param maxFileSizeMb Max size of the current log file in MB before rotation.
-     * @param maxNumRotatedFiles Max number of rotated log files to keep.
-     */
+    @Volatile
+    var isBubbleDebugOutputEnabled: Boolean = false
+        private set
+
     fun initialize(
         context: Context,
         prefs: SharedPreferences,
-        debugModePreferenceKey: String = "debugMode",
-        defaultLogLevel: LogLevel = LogLevel.INFO,
-        debugLogLevel: LogLevel = LogLevel.DEBUG,
-        maxFileSizeMb: Double = MAX_FILE_SIZE_MB_DEFAULT,
-        maxNumRotatedFiles: Int = MAX_ROTATED_FILES_DEFAULT
+        logLevelPreferenceKey: String = "logLevel",
+        bubbleDebugModeEnableKey: String = "debugMode",
+        initialDefaultLogLevel: LogLevel = LogLevel.INFO,
+        initialBubbleDebugStatus: Boolean = false,
     ) {
         synchronized(lock) {
             if (logDirectory != null) {
-                Log.w("FileLogger", "FileLogger already initialized.")
+                android.util.Log.w("Logger", "Logger already initialized.")
                 return
             }
             this.sharedPreferences = prefs
-            this.debugModePrefKey = debugModePreferenceKey
-            this.appDefaultLogLevel = defaultLogLevel
-            this.appDebugLogLevel = debugLogLevel
-            this.maxFileSizeInBytes = (maxFileSizeMb * 1024 * 1024).toLong()
-            this.maxRotatedLogFiles = maxNumRotatedFiles
+            this.logLevelPrefKey = logLevelPreferenceKey
+            this.bubbleDebugModePrefKey = bubbleDebugModeEnableKey
+            this.currentActiveLogLevel = initialDefaultLogLevel
+            this.isBubbleDebugOutputEnabled = initialBubbleDebugStatus
 
             try {
-                logDirectory = context.getExternalFilesDir(null) // App-specific storage
+                logDirectory = context.getExternalFilesDir(null)
                 if (logDirectory == null) {
-                    Log.e(
-                        "FileLogger",
+                    android.util.Log.e(
+                        "Logger",
                         "Failed to get external files directory. File logging disabled."
                     )
                     return
@@ -92,20 +70,22 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
                     logDirectory!!.mkdirs()
                 }
                 currentLogFile = File(logDirectory, LOG_FILE_NAME)
-                Log.i("FileLogger", "Logging to: ${currentLogFile?.absolutePath}")
+                android.util.Log.i("Logger", "File logging to: ${currentLogFile?.absolutePath}")
 
-                updateLogLevelFromPrefs() // Set initial log level
+                updateLogLevelFromPrefs()
+                updateBubbleDebugStatusFromPrefs()
+
                 sharedPreferences?.registerOnSharedPreferenceChangeListener(this)
 
                 writeToFileInternal(
                     LogLevel.INFO,
-                    "FileLogger",
-                    "--- Log Session Started (Level: $currentActiveLogLevel) ---",
+                    "Logger",
+                    "--- Log Session Started (Console/File Level: $currentActiveLogLevel, BubbleDebugOutput: $isBubbleDebugOutputEnabled) ---",
                     null
                 )
-                pruneOldLogs() // Prune on init in case of leftover files from previous crashes
+                pruneOldLogs()
             } catch (e: Exception) {
-                Log.e("FileLogger", "Error initializing FileLogger", e)
+                android.util.Log.e("Logger", "Error initializing Logger", e)
                 logDirectory = null
                 currentLogFile = null
             }
@@ -113,24 +93,54 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        if (key == debugModePrefKey) {
-            updateLogLevelFromPrefs()
-            Log.i("Logger", "Log level updated due to preference change to: $currentActiveLogLevel")
-            writeToFileInternal(
-                LogLevel.INFO,
-                "Logger",
-                "--- Log Level Changed to: $currentActiveLogLevel ---",
-                null
-            )
+        when (key) {
+            logLevelPrefKey -> {
+                val oldLevel = currentActiveLogLevel
+                updateLogLevelFromPrefs()
+                if (oldLevel != currentActiveLogLevel) {
+                    val message =
+                        "Console/File Log level updated from $oldLevel to: $currentActiveLogLevel"
+                    i("Logger", message)
+                    writeToFileInternal(LogLevel.INFO, "Logger", "--- $message ---", null)
+                }
+            }
+
+            bubbleDebugModePrefKey -> {
+                val oldStatus = isBubbleDebugOutputEnabled
+                updateBubbleDebugStatusFromPrefs()
+                if (oldStatus != isBubbleDebugOutputEnabled) {
+                    val statusMsg = if (isBubbleDebugOutputEnabled) "ENABLED" else "DISABLED"
+                    val message = "Bubble Debug UI Output $statusMsg"
+                    i("Logger", message)
+                    writeToFileInternal(LogLevel.INFO, "Logger", "--- $message ---", null)
+                }
+            }
         }
     }
 
     private fun updateLogLevelFromPrefs() {
-        val isDebugMode = sharedPreferences?.getBoolean(debugModePrefKey, false) ?: false
-        currentActiveLogLevel = if (isDebugMode) appDebugLogLevel else appDefaultLogLevel
+        val savedLevelName = sharedPreferences?.getString(logLevelPrefKey, null)
+        val newLevel = if (savedLevelName != null) {
+            try {
+                LogLevel.valueOf(savedLevelName)
+            } catch (e: IllegalArgumentException) {
+                android.util.Log.w(
+                    "Logger",
+                    "Invalid log level string '$savedLevelName' in SharedPreferences. Using previous."
+                )
+                currentActiveLogLevel
+            }
+        } else {
+            currentActiveLogLevel
+        }
+        currentActiveLogLevel = newLevel
     }
 
-    // Public logging methods
+    private fun updateBubbleDebugStatusFromPrefs() {
+        isBubbleDebugOutputEnabled =
+            sharedPreferences?.getBoolean(bubbleDebugModePrefKey, false) ?: false
+    }
+
     fun v(tag: String, msg: String, tr: Throwable? = null) = log(LogLevel.VERBOSE, tag, msg, tr)
     fun d(tag: String, msg: String, tr: Throwable? = null) = log(LogLevel.DEBUG, tag, msg, tr)
     fun i(tag: String, msg: String, tr: Throwable? = null) = log(LogLevel.INFO, tag, msg, tr)
@@ -138,28 +148,47 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
     fun e(tag: String, msg: String, tr: Throwable? = null) = log(LogLevel.ERROR, tag, msg, tr)
 
     private fun log(level: LogLevel, tag: String, msg: String, tr: Throwable? = null) {
-        if (isJvmTestEnvironment) {
-            println("$level/$tag: $msg")
-            tr?.printStackTrace()
-            return
-        }
+        // --- Console/File Logging ---
+        // Governed by currentActiveLogLevel
         if (level.ordinal >= currentActiveLogLevel.ordinal) {
             val androidLogLevel = when (level) {
-                LogLevel.VERBOSE -> Log.VERBOSE
-                LogLevel.DEBUG -> Log.DEBUG
-                LogLevel.INFO -> Log.INFO
-                LogLevel.WARN -> Log.WARN
-                LogLevel.ERROR -> Log.ERROR
+                LogLevel.VERBOSE -> android.util.Log.VERBOSE
+                LogLevel.DEBUG -> android.util.Log.DEBUG
+                LogLevel.INFO -> android.util.Log.INFO
+                LogLevel.WARN -> android.util.Log.WARN
+                LogLevel.ERROR -> android.util.Log.ERROR
             }
+            val safeTag = if (tag.length > 23) tag.substring(0, 23) else tag
             if (tr != null) {
-                Log.println(androidLogLevel, tag, "$msg\n${Log.getStackTraceString(tr)}")
+                android.util.Log.println(
+                    androidLogLevel,
+                    safeTag,
+                    "$msg\n${android.util.Log.getStackTraceString(tr)}"
+                )
             } else {
-                Log.println(androidLogLevel, tag, msg)
+                android.util.Log.println(androidLogLevel, safeTag, msg)
             }
-            writeToFileInternal(level, tag, msg, tr)
+            writeToFileInternal(level, safeTag, msg, tr)
+        }
+
+        // --- Bubble Debug UI Logging ---
+        // Governed by isBubbleDebugOutputEnabled flag
+        if (isBubbleDebugOutputEnabled) {
+            // Send ALL levels of logs to the debug repo if debug mode is on
+            // This ensures you see everything in the UI when debugging.
+            val timestamp = dateFormat.format(Date())
+            var logEntryForUi = "$timestamp ${level.name}/$tag: $msg"
+            tr?.let {
+                val sw = StringWriter()
+                it.printStackTrace(PrintWriter(sw))
+                logEntryForUi += "\n${sw}"
+            }
+            // Call the singleton DebugLogRepo to add the formatted message
+            DebugLogRepo.addLogMessage(logEntryForUi)
         }
     }
 
+    // ... writeToFileInternal and other private methods remain the same ...
     private fun writeToFileInternal(
         level: LogLevel,
         tag: String,
@@ -167,59 +196,44 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
         throwable: Throwable?
     ) {
         synchronized(lock) {
-            if (currentLogFile == null || logDirectory == null) {
-                // Log to Logcat only if file logging isn't initialized
-                // Log.w("FileLogger", "File logger not initialized. Skipping file write for: $level/$tag: $message")
-                return
-            }
-
+            if (currentLogFile == null || logDirectory == null) return
             try {
                 val timestamp = dateFormat.format(Date())
                 var logEntry = "$timestamp ${level.name}/$tag: $message\n"
                 throwable?.let {
-                    val sw = StringWriter()
-                    it.printStackTrace(PrintWriter(sw))
-                    logEntry += "$sw\n"
+                    val sw =
+                        StringWriter(); it.printStackTrace(PrintWriter(sw)); logEntry += "$sw\n"
                 }
-
                 currentLogFile!!.appendText(logEntry)
-
                 if (currentLogFile!!.length() > maxFileSizeInBytes) {
                     rotateLogFile()
                 } else {
-                    // do nothing
+                    // No need to rotate, just log
                 }
             } catch (e: Exception) {
-                Log.e("FileLogger", "Error writing to log file", e)
+                android.util.Log.e("Logger", "Error writing to log file", e)
             }
         }
     }
 
     private fun rotateLogFile() {
-        // This function assumes it's called from within a synchronized(lock) block
-        Log.i("FileLogger", "Rotating log file: ${currentLogFile?.name}")
+        android.util.Log.i("Logger", "Rotating log file: ${currentLogFile?.name}")
         val timestamp = fileTimestampFormat.format(Date())
         val rotatedFileName =
             "${ROTATED_LOG_FILE_PREFIX}${timestamp}.${LOG_FILE_NAME.substringAfterLast('.', "")}"
         val rotatedFile = File(logDirectory, rotatedFileName)
-
         try {
-            currentLogFile?.renameTo(rotatedFile)
-            Log.i("FileLogger", "Log file rotated to: ${rotatedFile.name}")
-            // currentLogFile remains pointing to DEFAULT_LOG_FILE_NAME,
-            // it will be created anew on the next write.
+            currentLogFile?.renameTo(rotatedFile); android.util.Log.i(
+                "Logger",
+                "Log file rotated to: ${rotatedFile.name}"
+            )
         } catch (e: Exception) {
-            Log.e("FileLogger", "Error rotating log file", e)
+            android.util.Log.e("Logger", "Error rotating log file", e)
         }
         pruneOldLogs()
     }
 
     private fun pruneOldLogs() {
-        // This function assumes it's called from within a synchronized(lock) block
-        // User preference: "don't want to run those [cutoff mechanisms] yet."
-        // So, for now, we'll just log what would happen.
-        // In a full implementation, you would delete files here.
-
         val rotatedFiles = logDirectory?.listFiles { file ->
             file.name.startsWith(ROTATED_LOG_FILE_PREFIX) && file.name.endsWith(
                 LOG_FILE_NAME.substringAfterLast(
@@ -227,45 +241,25 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
                     ""
                 )
             )
-        }?.sortedByDescending { it.lastModified() } // Newest first
-
+        }?.sortedByDescending { it.lastModified() }
         if (rotatedFiles != null && rotatedFiles.size > maxRotatedLogFiles) {
-            Log.i(
-                "FileLogger",
-                "Pruning old logs. Max rotated files: $maxRotatedLogFiles, Found: ${rotatedFiles.size}"
+            android.util.Log.i(
+                "Logger",
+                "Pruning. Max: $maxRotatedLogFiles, Found: ${rotatedFiles.size}"
             )
-            val filesToDelete = rotatedFiles.subList(maxRotatedLogFiles, rotatedFiles.size)
-            for (fileToDelete in filesToDelete) {
-                Log.d(
-                    "FileLogger",
-                    "Would delete old log file: ${fileToDelete.name} (Size: ${fileToDelete.length()} bytes)"
-                )
-                // To actually delete:
-                // if (fileToDelete.delete()) {
-                //     Log.i("FileLogger", "Deleted old log file: ${fileToDelete.name}")
-                // } else {
-                //     Log.w("FileLogger", "Failed to delete old log file: ${fileToDelete.name}")
-                // }
-            }
-        } else if (rotatedFiles != null) {
-            Log.d(
-                "FileLogger",
-                "No pruning needed. Rotated files: ${rotatedFiles.size}, Max allowed: $maxRotatedLogFiles"
-            )
+            rotatedFiles.subList(maxRotatedLogFiles, rotatedFiles.size)
+                .forEach { android.util.Log.d("Logger", "Would delete: ${it.name}") }
         }
     }
 
-    /**
-     * For explicitly closing resources if needed, e.g., when application is terminating.
-     * Not strictly necessary with appendText, but good for flushing.
-     */
     fun close() {
         synchronized(lock) {
-            writeToFileInternal(LogLevel.INFO, "FileLogger", "--- Log Session Ended ---", null)
+            writeToFileInternal(LogLevel.INFO, "Logger", "--- Log Session Ended ---", null)
             sharedPreferences?.unregisterOnSharedPreferenceChangeListener(this)
-            logDirectory = null
-            currentLogFile = null
-            Log.i("FileLogger", "FileLogger closed.")
+            logDirectory = null; currentLogFile = null; android.util.Log.i(
+            "Logger",
+            "Logger closed."
+        )
         }
     }
 }

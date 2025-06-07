@@ -7,4 +7,13 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="dasher_red">#EA3323</color>
+    <color name="dasher_log_text_white">#FFFFFF</color>
+    <color name="bubble_nav_background_semi_transparent">#80000000</color>
+    <!-- Log Level Colors -->
+    <color name="log_level_verbose">#FFBB86FC</color> <!-- A light purple -->
+    <color name="log_level_debug">#FF03DAC5</color> <!-- A teal/cyan -->
+    <color name="log_level_info">#FFCCCCCC</color>  <!-- A light gray -->
+    <color name="log_level_warn">#FFFFAB40</color>  <!-- An orange/amber -->
+    <color name="log_level_error">#FFFF5252</color>  <!-- A soft red -->
 </resources>

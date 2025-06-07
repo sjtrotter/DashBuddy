@@ -12,8 +12,18 @@
         android:title="Offers" />
 
     <item
+        android:id="@+id/nav_dash_log"
+        android:icon="@android:drawable/ic_menu_send"
+        android:title="Dash Log" />
+
+    <item
         android:id="@+id/nav_settings"
         android:icon="@android:drawable/ic_menu_preferences"
         android:title="Settings" />
+
+    <item
+        android:id="@+id/nav_debug_log"
+        android:icon="@android:drawable/stat_notify_error"
+        android:title="Debug" />
 
 </menu>

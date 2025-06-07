@@ -35,8 +35,9 @@ class DashBuddyApplication : Application() {
         val dashZoneRepo: DashZoneRepo by lazy { DashZoneRepo(database.dashZoneDao()) }
         val offerRepo: OfferRepo by lazy { OfferRepo(database.offerDao()) }
         val orderRepo: OrderRepo by lazy { OrderRepo(database.orderDao()) }
-//        val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
         val zoneRepo: ZoneRepo by lazy { ZoneRepo(database.zoneDao()) }
+
+        //        val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
 
         val notificationManager: NotificationManager
             get() = instance.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -58,6 +59,15 @@ class DashBuddyApplication : Application() {
             return appPreferences.getBoolean("debugMode", false)
         }
 
+        fun setLogLevel(level: LogLevel) {
+            appPreferences.edit { putString("logLevel", level.name) }
+        }
+
+        fun getLogLevel(): LogLevel {
+            val levelName = appPreferences.getString("logLevel", null)
+            return levelName?.let { LogLevel.valueOf(it) } ?: LogLevel.INFO
+        }
+
         fun sendBubbleMessage(message: CharSequence) {
             if (bubbleService != null &&
                 cloud.trotter.dashbuddy.bubble.Service.isServiceRunningIntentional
@@ -77,12 +87,15 @@ class DashBuddyApplication : Application() {
         instance = this // Initialize the instance
 //        startBubbleService()
 
+        // TODO: set initial log level and debug mode here.
+        // or, don't actually, use the initialize method below?
         setDebugMode(true)
+        setLogLevel(LogLevel.DEBUG)
+
         Log.initialize(
             context = context,
             prefs = appPreferences,
-            defaultLogLevel = LogLevel.INFO,
-            debugLogLevel = LogLevel.DEBUG
+            initialDefaultLogLevel = LogLevel.INFO,
         )
 
         Log.i("DashBuddyApp", "DashBuddyApplication initialized.")
