@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">DashBuddy</string>
     <string name="this_is_the_bubble">This is the Bubble!</string>
+    <string name="log_level">Log Level</string>
+    <string name="save_log">Save Log</string>
+    <string name="share_log">Share Log</string>
 </resources>
