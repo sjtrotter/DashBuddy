@@ -21,7 +21,7 @@ data class ParsedOrder(
             storeName = storeName,
             itemCount = itemCount,
             isItemCountEstimated = isItemCountEstimated,
-            offerId = offerId
+            offerId = offerId,
         )
     }
 }

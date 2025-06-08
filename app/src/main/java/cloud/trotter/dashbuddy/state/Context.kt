@@ -13,6 +13,7 @@ data class Context(
     val eventType: Int?,                        // e.g., AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
     val eventTypeString: String,                // For logging/debugging, e.g., "TYPE_WINDOW_CONTENT_CHANGED"
     val packageName: CharSequence?,             // e.g., "com.doordash.driverapp"
+    val rootNode: AccessibilityNodeInfo?,       // The root node of the current window
     val sourceClassName: CharSequence?,    // Class name of the view that fired the event
 
     val screenTexts: List<String>,              // All texts extracted from the current window (rootInActiveWindow)

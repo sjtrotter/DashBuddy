@@ -177,6 +177,13 @@ object Manager {
             return AppState.SESSION_ACTIVE_OFFER_PRESENTED
         }
 
+        // PRIORITY - Delivery Completed
+        if (identifiedScreen == DasherScreen.DELIVERY_COMPLETED_DIALOG &&
+            currentKnownState != AppState.DELIVERY_COMPLETED
+        ) {
+            return AppState.DELIVERY_COMPLETED
+        }
+
         // Screens that can be back-buttoned into (or gestured) -- needed?
         if (identifiedScreen == DasherScreen.MAIN_MAP_IDLE &&
             currentKnownState != AppState.DASHER_IDLE_OFFLINE

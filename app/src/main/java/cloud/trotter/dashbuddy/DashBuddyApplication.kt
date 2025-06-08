@@ -13,6 +13,8 @@ import cloud.trotter.dashbuddy.data.dash.DashRepo
 import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneRepo
 import cloud.trotter.dashbuddy.data.offer.OfferRepo
 import cloud.trotter.dashbuddy.data.order.OrderRepo
+import cloud.trotter.dashbuddy.data.pay.AppPayRepo
+import cloud.trotter.dashbuddy.data.pay.TipRepo
 import cloud.trotter.dashbuddy.data.zone.ZoneRepo
 import cloud.trotter.dashbuddy.bubble.Service as BubbleService
 import cloud.trotter.dashbuddy.log.Level as LogLevel
@@ -36,6 +38,8 @@ class DashBuddyApplication : Application() {
         val offerRepo: OfferRepo by lazy { OfferRepo(database.offerDao()) }
         val orderRepo: OrderRepo by lazy { OrderRepo(database.orderDao()) }
         val zoneRepo: ZoneRepo by lazy { ZoneRepo(database.zoneDao()) }
+        val appPayRepo: AppPayRepo by lazy { AppPayRepo(database.appPayDao()) }
+        val tipRepo: TipRepo by lazy { TipRepo(database.tipDao()) }
 
         //        val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
 

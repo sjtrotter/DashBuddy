@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import cloud.trotter.dashbuddy.data.current.CurrentDao
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
+import cloud.trotter.dashbuddy.data.customer.CustomerEntity
 import cloud.trotter.dashbuddy.data.dash.DashDao
 import cloud.trotter.dashbuddy.data.dash.DashEntity
 import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneDao
@@ -15,19 +16,30 @@ import cloud.trotter.dashbuddy.data.offer.OfferDao
 import cloud.trotter.dashbuddy.data.offer.OfferEntity
 import cloud.trotter.dashbuddy.data.order.OrderDao
 import cloud.trotter.dashbuddy.data.order.OrderEntity
+import cloud.trotter.dashbuddy.data.pay.AppPayEntity
+import cloud.trotter.dashbuddy.data.pay.AppPayType
+import cloud.trotter.dashbuddy.data.pay.AppPayDao
+import cloud.trotter.dashbuddy.data.pay.TipEntity
+import cloud.trotter.dashbuddy.data.pay.TipDao
+import cloud.trotter.dashbuddy.data.store.StoreEntity
 import cloud.trotter.dashbuddy.data.zone.ZoneDao
 import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 
 @Database(
     entities = [
-        ZoneEntity::class,
+        AppPayEntity::class,
+        AppPayType::class,
+        CurrentEntity::class,
+        CustomerEntity::class,
         DashEntity::class,
+        DashZoneEntity::class,
         OfferEntity::class,
         OrderEntity::class,
-        DashZoneEntity::class,
-        CurrentEntity::class // Your entity for current dash state
+        StoreEntity::class,
+        TipEntity::class,
+        ZoneEntity::class,
     ],
-    version = 4, // Start with version 1
+    version = 6, // Start with version 1
     exportSchema = false // Set to true if you plan to use schema for testing migrations
 // For production, schema export is recommended.
 )
@@ -40,6 +52,8 @@ abstract class DashBuddyDatabase : RoomDatabase() {
     abstract fun currentDashDao(): CurrentDao
     abstract fun offerDao(): OfferDao
     abstract fun orderDao(): OrderDao
+    abstract fun appPayDao(): AppPayDao
+    abstract fun tipDao(): TipDao
 
     companion object {
         @Volatile

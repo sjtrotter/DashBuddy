@@ -27,6 +27,40 @@ class OfferParserTest {
         "35"                          // Timer
     )
 
+    private val addToRouteTexts = listOf(
+        "Decline",
+        "+$2.50  Guaranteed (incl. tips)",
+        "Additional 1.2 mi",
+        "Deliver by 5:46 PM",
+        "Retail pickup",
+        "7-Eleven",
+        "Customer dropoff",
+        "Contains restricted items",
+        "including alcohol",
+        "Must be 21+ to accept order",
+        "Check recipient's ID",
+        "May need returns",
+        "Add to route",
+        "34"
+    )
+
+    private val addToRouteTextsInFeet = listOf(
+        "Decline",
+        "+$2.50  Guaranteed (incl. tips)",
+        "Additional 528 ft",
+        "Deliver by 5:46 PM",
+        "Retail pickup",
+        "7-Eleven",
+        "Customer dropoff",
+        "Contains restricted items",
+        "including alcohol",
+        "Must be 21+ to accept order",
+        "Check recipient's ID",
+        "May need returns",
+        "Add to route",
+        "34"
+    )
+
     private val shopAndPayWithBadgeTexts = listOf(
         "Decline",
         "$12.50 Guaranteed (incl. tips)",
@@ -113,6 +147,62 @@ class OfferParserTest {
             val order = it.orders[0]
             assertEquals(OrderType.PICKUP.typeName, order.orderType)
             assertEquals("The Coffee House", order.storeName)
+            assertEquals(1, order.itemCount) // Default for non-shop pickup
+            assertFalse(order.isItemCountEstimated)
+            assertTrue("Order-specific badges should be empty", order.badges.isEmpty())
+            assertEquals(0, order.orderIndex)
+        }
+    }
+
+    @Test
+    fun `parseOffer with add to route in feet returns correct ParsedOffer`() {
+        val result = OfferParser.parseOffer(addToRouteTextsInFeet)
+
+        assertNotNull("ParsedOffer should not be null", result)
+        result?.let { // Safe call
+            assertEquals(2.5, it.payAmount!!, 0.001)
+            assertEquals("+$2.50  Guaranteed (incl. tips)", it.payTextRaw)
+            assertEquals(0.1, it.distanceMiles!!, 0.001)
+            assertEquals("Additional 528 ft", it.distanceTextRaw)
+            assertEquals("5:46 PM", it.dueByTimeText) // The time string part
+            assertNotNull(it.dueByTimeMillis)
+            assertTrue("Offer badges should not be empty", it.badges.isNotEmpty())
+            assertEquals(34, it.initialCountdownSeconds)
+            assertFalse("OfferHash should not be blank", it.offerHash.isBlank())
+            assertEquals(1, it.itemCount) // From orders list sum or heuristic
+
+            assertEquals("Expected 1 order", 1, it.orders.size)
+            val order = it.orders[0]
+            assertEquals(OrderType.RETAIL_PICKUP.typeName, order.orderType)
+            assertEquals("7-Eleven", order.storeName)
+            assertEquals(1, order.itemCount) // Default for non-shop pickup
+            assertFalse(order.isItemCountEstimated)
+            assertTrue("Order-specific badges should be empty", order.badges.isEmpty())
+            assertEquals(0, order.orderIndex)
+        }
+    }
+
+    @Test
+    fun `parseOffer with add to route returns correct ParsedOffer`() {
+        val result = OfferParser.parseOffer(addToRouteTexts)
+
+        assertNotNull("ParsedOffer should not be null", result)
+        result?.let { // Safe call
+            assertEquals(2.5, it.payAmount!!, 0.001)
+            assertEquals("+$2.50  Guaranteed (incl. tips)", it.payTextRaw)
+            assertEquals(1.2, it.distanceMiles!!, 0.001)
+            assertEquals("Additional 1.2 mi", it.distanceTextRaw)
+            assertEquals("5:46 PM", it.dueByTimeText) // The time string part
+            assertNotNull(it.dueByTimeMillis)
+            assertTrue("Offer badges should not be empty", it.badges.isNotEmpty())
+            assertEquals(34, it.initialCountdownSeconds)
+            assertFalse("OfferHash should not be blank", it.offerHash.isBlank())
+            assertEquals(1, it.itemCount) // From orders list sum or heuristic
+
+            assertEquals("Expected 1 order", 1, it.orders.size)
+            val order = it.orders[0]
+            assertEquals(OrderType.RETAIL_PICKUP.typeName, order.orderType)
+            assertEquals("7-Eleven", order.storeName)
             assertEquals(1, order.itemCount) // Default for non-shop pickup
             assertFalse(order.isItemCountEstimated)
             assertTrue("Order-specific badges should be empty", order.badges.isEmpty())

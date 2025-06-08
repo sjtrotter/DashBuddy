@@ -186,18 +186,17 @@ enum class Screen(
     // --- Offer Handling ---
     OFFER_POPUP(
         screenName = "Offer",
-        requiredTexts = listOf("decline", "accept", "mi", "$", "deliver by"),
-        someOfTheseTexts = listOf("guaranteed (incl. tips)", "total will be higher"),
+        requiredTexts = listOf("decline", "$", "deliver by"),
+        someOfTheseTexts = listOf(
+            "guaranteed (incl. tips)",
+            "total will be higher",
+            "accept",
+            "add to route",
+            "mi",
+            "ft",
+        ),
         minTextCount = 6 // Offer popups usually have a certain density of info
     ),
-//    DECLINE_OFFER_REASON_MODAL( // From your logs: "Decline this order?", "This order doesn't pay enough"
-//        requiredTexts = listOf("decline this order?", "submit"),
-//        someOfTheseTexts = listOf("order is too small", "distance is too far", "i don't want to go to this store")
-//    ),
-//    DECLINE_OFFER_CONFIRM_MODAL(
-//        requiredTexts = listOf("are you sure you want to decline this offer?", "decline offer", "view offer details")
-//    ),
-//
 //    // --- Active Delivery - Pickup Phase ---
 //    DELIVERY_NAVIGATION_TO_STORE(
 //        requiredTexts = listOf("heading to", "pick up by"), // "mi" and "min" are good indicators of navigation
@@ -263,6 +262,13 @@ enum class Screen(
 //    DELIVERY_CONFIRM_DIALOG( // Final confirmation after all steps
 //        requiredTexts = listOf("confirm delivery", "complete")
 //    ),
+    DELIVERY_COMPLETED_DIALOG(
+        screenName = "Delivery Completed",
+        requiredTexts = listOf("completed", "$"),
+        someOfTheseTexts = listOf("delivery", "deliveries", "done", "continue"),
+        forbiddenTexts = listOf("accept", "decline", "dash summary")
+    ),
+//
 //    DELIVERY_PROBLEM_REPORTING(
 //        requiredTexts = listOf("report issue", "can't reach customer") // Example
 //    ),

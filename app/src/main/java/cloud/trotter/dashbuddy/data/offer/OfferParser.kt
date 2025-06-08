@@ -14,11 +14,12 @@ object OfferParser {
 
     // regexes.
     private val COUNTDOWN_TIMER_REGEX = Regex("^\\d{1,2}$")
-    private val PAY_AMOUNT_REGEX = Regex("^\\$(\\d+\\.\\d{2}).*$")
-    private val DISTANCE_REGEX = Regex("^(\\d+\\.\\d{1,2}).*mi$")
+    private val PAY_AMOUNT_REGEX = Regex("^\\+?\\s*\\$(\\d+\\.\\d{2}).*$")
+    private val DISTANCE_REGEX =
+        Regex("""^(?:Additional\s)?(\d+(?:\.\d{1,2})?)\s*(mi|ft)$""", RegexOption.IGNORE_CASE)
     private val DUE_BY_TIME_REGEX =
         Regex("^Deliver by (\\d{1,2}:\\d{2} (AM|PM)).*$") // As per your code
-//    private val ITEM_COUNT_REGEX = Regex("""\((\d+)\s*(?:item|items)\)""") // Not used in your current main logic
+    private const val FEET_IN_A_MILE = 5280.0
 
     fun parseOffer(screenTexts: List<String>): ParsedOffer? { // Return nullable
         Log.d(TAG, "--- Starting Offer Parsing ---")
@@ -69,11 +70,48 @@ object OfferParser {
             } // Added toDoubleOrNull
         Log.d(TAG, "Pay amount: $payAmount")
 
-        val distanceMiles =
-            distanceTextRaw?.let {
-                DISTANCE_REGEX.find(it)?.groupValues?.get(1)?.toDoubleOrNull()
-            } // Added toDoubleOrNull
-        Log.d(TAG, "Distance miles: $distanceMiles")
+        val distanceMiles = distanceTextRaw?.let {
+            DISTANCE_REGEX.find(it.trim())?.let { matchResult ->
+                val numericValueString = matchResult.groupValues.getOrNull(1)
+                val unitString = matchResult.groupValues.getOrNull(2)
+
+                val numericValue = numericValueString?.toDoubleOrNull()
+                if (numericValue == null || unitString == null) {
+                    null // Failed to parse number or unit
+                } else {
+                    var convertedMiles = when (unitString.lowercase()) {
+                        "ft" -> {
+                            Log.d(
+                                TAG,
+                                "Found distance in feet: $numericValue ft. Converting to miles."
+                            )
+                            numericValue / FEET_IN_A_MILE
+                        }
+
+                        "mi" -> {
+                            Log.d(TAG, "Found distance in miles: $numericValue mi.")
+                            numericValue
+                        }
+
+                        else -> {
+                            Log.w(
+                                TAG,
+                                "Found unknown distance unit: '$unitString'. Treating as miles."
+                            )
+                            numericValue // Default to treating as miles if unit is unknown
+                        }
+                    }
+
+                    // If the final calculated distance is 0.0, change it to a small default value.
+                    if (convertedMiles == 0.0) {
+                        Log.w(TAG, "Parsed distance is 0.0 miles, changing to 0.1 for scoring.")
+                        convertedMiles = 0.1
+                    }
+
+                    convertedMiles
+                }
+            }
+        }
 
         val dueByTimeActual =
             dueByTimeTextLine?.let { DUE_BY_TIME_REGEX.find(it.trim())?.groupValues?.get(1) } // Extracted time part

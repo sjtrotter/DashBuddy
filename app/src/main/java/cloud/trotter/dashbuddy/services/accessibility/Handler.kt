@@ -21,6 +21,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 object Handler {
 
     private const val TAG = "AccessibilityHandler"
+
     // Variables to store details of the last processed event for debouncing
     private var lastEventType: Int = -1
     private var lastPackageName: CharSequence? = null
@@ -39,6 +40,7 @@ object Handler {
             eventType = null,
             eventTypeString = "INITIALIZATION",
             packageName = null,
+            rootNode = null,
             sourceClassName = null,
             screenTexts = emptyList(),
             sourceNodeTexts = emptyList(),
@@ -92,7 +94,9 @@ object Handler {
         }
 
         // if source text and screen text equal, clear source text.
-        if (currentSourceTexts == currentScreenTexts) { currentSourceTexts.clear() }
+        if (currentSourceTexts == currentScreenTexts) {
+            currentSourceTexts.clear()
+        }
 
         val currentExtractedTextsHash = Objects.hash(currentScreenTexts)
         val currentEventSourceHash = Objects.hash(currentSourceTexts)
@@ -104,6 +108,7 @@ object Handler {
             eventType = currentEventType,
             eventTypeString = AccessibilityEvent.eventTypeToString(currentEventType),
             packageName = currentPackageName,
+            rootNode = rootNode,
             sourceClassName = currentClassName,
             screenTexts = currentScreenTexts,
             sourceNodeTexts = currentSourceTexts,
@@ -118,34 +123,35 @@ object Handler {
             ( // currentEventType == lastEventType &&
 //                currentPackageName == lastPackageName &&
 //                currentClassName == lastClassName &&
-                currentExtractedTextsHash == lastScreenTextsHash &&
-                currentEventSourceHash == lastSourceTextsHash
-            )
+                    currentExtractedTextsHash == lastScreenTextsHash &&
+                            currentEventSourceHash == lastSourceTextsHash
+                    )
             || // specific screens check for skip
-            (
-                currentDasherScreen == lastDasherScreen &&
-                currentDasherScreen == DasherScreen.NAVIGATION_VIEW
-            )
+            (currentDasherScreen == lastDasherScreen &&
+                    currentDasherScreen == DasherScreen.NAVIGATION_VIEW
+                    )
             ||
-            (
-                currentDasherScreen == lastDasherScreen &&
-                currentDasherScreen == DasherScreen.OFFER_POPUP &&
-                currentEventSourceHash == lastSourceTextsHash
-            )
-            //            currentDasherScreen == lastDasherScreen
+            (currentDasherScreen == lastDasherScreen &&
+                    currentDasherScreen == DasherScreen.OFFER_POPUP &&
+                    currentEventSourceHash == lastSourceTextsHash
+                    )
+        //            currentDasherScreen == lastDasherScreen
         ) {
 //            Log.d(TAG, "Event is a duplicate. Ignoring.") // verbose logging for duplicate events
             return
         }
 
-        Log.d(TAG, "Processing Event: ${AccessibilityEvent.eventTypeToString(currentEventType)}, Pkg: $currentPackageName, Class: $currentClassName")
+        Log.d(
+            TAG,
+            "Processing Event: ${AccessibilityEvent.eventTypeToString(currentEventType)}, Pkg: $currentPackageName, Class: $currentClassName"
+        )
         // for debug, send screen name to bubble.
 //        DashBuddyApplication.sendBubbleMessage("${currentDasherScreen.screenName} Screen")
 
         if (currentScreenTexts.isNotEmpty()) {
-             Log.d(TAG, "Screen texts: $currentScreenTexts")
-         } else {
-             Log.d(TAG, "No texts extracted.")
+            Log.d(TAG, "Screen texts: $currentScreenTexts")
+        } else {
+            Log.d(TAG, "No texts extracted.")
         }
 
         if (currentSourceTexts.isNotEmpty()) {
@@ -187,7 +193,9 @@ object Handler {
         }
         nodeInfo.contentDescription?.let {
             val desc = it.toString().trim()
-            if (desc.isNotEmpty() && (nodeInfo.text == null || desc != nodeInfo.text.toString().trim())) {
+            if (desc.isNotEmpty() && (nodeInfo.text == null || desc != nodeInfo.text.toString()
+                    .trim())
+            ) {
                 texts.add(desc)
             }
         }

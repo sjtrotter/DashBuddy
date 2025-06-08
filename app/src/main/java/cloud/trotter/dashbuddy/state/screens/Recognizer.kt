@@ -13,6 +13,7 @@ object Recognizer {
     private val screenCheckOrder: List<Screen> = listOf(
         // High-priority, often modal or overlay screens
         Screen.OFFER_POPUP,
+        Screen.DELIVERY_COMPLETED_DIALOG,
 //        Screen.DECLINE_OFFER_CONFIRM_MODAL,
 //        Screen.DECLINE_OFFER_REASON_MODAL, // Added from your logs
 //        Screen.END_DASH_CONFIRMATION_DIALOG,

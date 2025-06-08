@@ -14,93 +14,118 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface OrderDao {
 
-    /**
-     * Inserts a single order into the table.
-     * If there's a conflict (e.g., same primary key), it replaces the old data.
-     *
-     * @param order The OrderEntity to insert.
-     * @return The row ID of the newly inserted order.
-     */
+    // --- Basic CUD (Create, Update, Delete) ---
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrder(order: OrderEntity): Long
 
-    /**
-     * Inserts a list of orders into the table.
-     * If there's a conflict, it replaces the old data.
-     *
-     * @param orders The list of OrderEntities to insert.
-     * @return A list of row IDs for the newly inserted orders.
-     */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrders(orders: List<OrderEntity>): List<Long>
 
-    /**
-     * Updates an existing order in the table.
-     *
-     * @param order The OrderEntity to update.
-     */
     @Update
     suspend fun updateOrder(order: OrderEntity)
 
-    /**
-     * Deletes an order from the table.
-     *
-     * @param order The OrderEntity to delete.
-     */
     @Delete
     suspend fun deleteOrder(order: OrderEntity)
 
-    /**
-     * Deletes all orders from the table.
-     * Use with caution.
-     */
     @Query("DELETE FROM orders")
     suspend fun deleteAllOrders()
 
-    /**
-     * Retrieves a specific order by its ID.
-     *
-     * @param orderId The ID of the order to retrieve.
-     * @return The OrderEntity if found, otherwise null.
-     */
+    // --- Basic Queries ---
+
     @Query("SELECT * FROM orders WHERE id = :orderId")
     suspend fun getOrderById(orderId: Long): OrderEntity?
 
-    /**
-     * Retrieves all orders associated with a specific offer ID.
-     * Returns a Flow for observable updates.
-     *
-     * @param offerId The ID of the offer.
-     * @return A Flow emitting a list of OrderEntities.
-     */
     @Query("SELECT * FROM orders WHERE offerId = :offerId ORDER BY orderIndex ASC")
     fun getOrdersForOffer(offerId: Long): Flow<List<OrderEntity>>
 
-    /**
-     * Retrieves all orders associated with a specific offer ID as a simple list (non-observable).
-     *
-     * @param offerId The ID of the offer.
-     * @return A list of OrderEntities.
-     */
     @Query("SELECT * FROM orders WHERE offerId = :offerId ORDER BY orderIndex ASC")
     suspend fun getOrdersForOfferList(offerId: Long): List<OrderEntity>
 
-
-    /**
-     * Retrieves all orders from the table.
-     * Returns a Flow for observable updates.
-     *
-     * @return A Flow emitting a list of all OrderEntities.
-     */
     @Query("SELECT * FROM orders ORDER BY offerId ASC, orderIndex ASC")
     fun getAllOrders(): Flow<List<OrderEntity>>
 
-    /**
-     * Retrieves all orders as a simple list (non-observable).
-     *
-     * @return A list of all OrderEntities.
-     */
     @Query("SELECT * FROM orders ORDER BY offerId ASC, orderIndex ASC")
     suspend fun getAllOrdersList(): List<OrderEntity>
 
+    // --- New, More Specific Queries & Updates ---
+
+    /**
+     * Updates the status of a specific order.
+     *
+     * @param orderId The ID of the order to update.
+     * @param newStatus The new status string (e.g., "AT_STORE", "COMPLETED").
+     */
+    @Query("UPDATE orders SET status = :newStatus WHERE id = :orderId")
+    suspend fun updateOrderStatus(orderId: Long, newStatus: String)
+
+    /**
+     * Updates the storeId for a specific order.
+     * Useful for your deferred store linking strategy.
+     *
+     * @param orderId The ID of the order to update.
+     * @param specificStoreId The ID of the specific, identified StoreEntity.
+     */
+    @Query("UPDATE orders SET storeId = :specificStoreId WHERE id = :orderId")
+    suspend fun linkOrderToStore(orderId: Long, specificStoreId: Long)
+
+    /**
+     * Updates the customerId for a specific order.
+     *
+     * @param orderId The ID of the order to update.
+     * @param specificCustomerId The ID of the specific, identified CustomerEntity.
+     */
+    @Query("UPDATE orders SET customerId = :specificCustomerId WHERE id = :orderId")
+    suspend fun linkOrderToCustomer(orderId: Long, specificCustomerId: Long)
+
+    /**
+     * Updates all delivery-related fields for an order upon completion.
+     *
+     * @param orderId The ID of the order to update.
+     * @param customerId The ID of the customer (can be null).
+     * @param completionTimestamp The timestamp of completion.
+     */
+    @Query(
+        """
+        UPDATE orders 
+        SET 
+            status = 'COMPLETED', 
+            customerId = :customerId, 
+            completionTimestamp = :completionTimestamp 
+        WHERE id = :orderId
+    """
+    )
+    suspend fun markOrderAsCompleted(orderId: Long, customerId: Long?, completionTimestamp: Long)
+
+    /**
+     * Retrieves all "active" orders for a given dash that are not yet completed.
+     * This is useful for knowing what tasks are currently in progress.
+     *
+     * @param dashId The ID of the current dash session.
+     * @return A list of active OrderEntities.
+     */
+    @Query(
+        """
+        SELECT * FROM orders 
+        WHERE offerId IN (SELECT id FROM offers WHERE dashId = :dashId) 
+        AND status != 'COMPLETED'
+    """
+    )
+    suspend fun getActiveOrdersForDash(dashId: Long): List<OrderEntity>
+
+    /**
+     * Retrieves all orders for a given dash, regardless of status.
+     * Returns an observable Flow.
+     *
+     * @param dashId The ID of the current dash session.
+     * @return A Flow emitting a list of all OrderEntities for the dash.
+     */
+    @Query(
+        """
+        SELECT * FROM orders 
+        WHERE offerId IN (SELECT id FROM offers WHERE dashId = :dashId)
+        ORDER BY orderIndex ASC
+    """
+    )
+    fun getAllOrdersForDash(dashId: Long): Flow<List<OrderEntity>>
 }

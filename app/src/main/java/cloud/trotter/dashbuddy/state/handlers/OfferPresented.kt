@@ -145,12 +145,13 @@ class OfferPresented : StateHandler {
                 if (existingOffer == null) {
                     Log.i(tag, "New offer detected. Evaluating and inserting.")
                     // Score offer and build OfferEntity
-                    val offerToInsert: OfferEntity = OfferEvaluator.evaluateOffer(
+                    val evaluationResult = OfferEvaluator.evaluateOffer(
                         parsedOffer = parsedOffer,
                         dashId = current.dashId,
                         zoneId = current.zoneId,
                         eventTimestamp = context.timestamp
                     )
+                    val offerToInsert: OfferEntity = evaluationResult.offerEntity
                     Log.d(tag, "Offer evaluated. Attempting to insert: ${offerToInsert.offerHash}")
 
                     val newOfferId = offerRepo.insertOffer(offerToInsert)
@@ -161,13 +162,7 @@ class OfferPresented : StateHandler {
                             tag,
                             "Offer inserted successfully with ID: $newOfferId. Score: ${offerToInsert.calculatedScore}, Quality: ${offerToInsert.scoreText}"
                         )
-                        DashBuddyApplication.sendBubbleMessage(
-                            "New Offer: ${offerToInsert.scoreText ?: "N/A"}\nScore: ${
-                                String.format(
-                                    Locale.US, "%.1f", offerToInsert.calculatedScore ?: 0.0
-                                )
-                            }"
-                        )
+                        DashBuddyApplication.sendBubbleMessage(evaluationResult.bubbleMessage)
 
                         // Insert orders associated with the offer
                         if (parsedOffer.orders.isNotEmpty()) {
