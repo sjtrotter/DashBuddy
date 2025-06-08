@@ -10,22 +10,7 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 
 /**
  * Represents the current state of a dash.
- * @property id The unique identifier for the current dash.
- * @property dashId The ID of the dash associated with the current state.
- * @property zoneId The ID of the zone associated with the current state.
- * @property lastOfferId The ID of the last offer associated with the current state.
- * @property dashStartTime The timestamp when the dash started.
- * @property isActive Whether the dash is currently active.
- * @property isPaused Whether the dash is currently paused.
- * @property dashMode The mode of the dash (e.g., Earn By Time, Earn By Offer).
- * @property dashEarnings The running total of earnings for the dash.
- * @property deliveriesReceived The running total of deliveries received parsed from Offers.
- * @property deliveriesCompleted The running total of deliveries completed.
- * @property lastOfferValue The value of the last offer associated with the current state.
- * @property offersReceived The running total of offers received.
- * @property offersAccepted The running total of offers accepted.
- * @property offersDeclined The running total of offers declined.
- * @property lastUpdate The timestamp of the last update to the current state.
+ * This table should only ever have one row with id = 1.
  */
 @Entity(
     tableName = "current_dash",
@@ -48,11 +33,12 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
             childColumns = ["lastOfferId"],
             onDelete = ForeignKey.SET_NULL
         ),
-    ],
-
-    )
+        // A foreign key for activeOrderId is also possible if desired
+        // ForeignKey(entity = OrderEntity::class, ...)
+    ]
+)
 data class CurrentEntity(
-    @PrimaryKey val id: Long = 1,
+    @PrimaryKey val id: Long = 1, // Singleton row
     @ColumnInfo(index = true, name = "dashId") val dashId: Long? = null,
     @ColumnInfo(index = true, name = "zoneId") val zoneId: Long? = null,
     @ColumnInfo(index = true, name = "lastOfferId") val lastOfferId: Long? = null,
@@ -68,4 +54,11 @@ data class CurrentEntity(
     val offersAccepted: Int? = null,
     val offersDeclined: Int? = null,
     val lastUpdate: Long? = null,
+
+    /** The ID of the specific OrderEntity the dasher is currently working on. Null if between tasks. */
+    @ColumnInfo(index = true, name = "activeOrderId")
+    val activeOrderId: Long? = null,
+
+    /** A queue of OrderEntity IDs that have been accepted but are not yet complete. */
+    val activeOrderQueue: List<Long> = emptyList()
 )

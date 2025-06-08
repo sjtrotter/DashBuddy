@@ -6,35 +6,28 @@ import cloud.trotter.dashbuddy.data.order.OrderBadge
 
 class DataTypeConverters {
 
-    // For Set<OfferBadge>
     @TypeConverter
-    fun fromOfferBadgeSet(badges: Set<OfferBadge>?): String { // Returns non-null String
-        // If set is null or empty, store an empty string. Otherwise, join names.
-        return badges?.takeIf { it.isNotEmpty() }
-            ?.joinToString("|") { it.name }
-            ?: "" // Default to empty string if set is null or empty
+    fun fromOfferBadgeSet(badges: Set<OfferBadge>?): String {
+        return badges?.takeIf { it.isNotEmpty() }?.joinToString("|") { it.name } ?: ""
     }
 
     @TypeConverter
     fun toOfferBadgeSet(badgeString: String?): Set<OfferBadge> {
-        // If string is null/blank, return emptySet. Otherwise, split, convert, and collect.
         return badgeString?.takeIf { it.isNotBlank() }
             ?.split('|')
             ?.mapNotNull { part ->
                 try {
                     OfferBadge.valueOf(part.trim())
-                } catch (e: IllegalArgumentException) {
+                } catch (e: Exception) {
                     null
                 }
-            }?.toSet() ?: emptySet()
+            }
+            ?.toSet() ?: emptySet()
     }
 
-    // For Set<OrderBadge>
     @TypeConverter
-    fun fromOrderBadgeSet(badges: Set<OrderBadge>?): String { // Returns non-null String
-        return badges?.takeIf { it.isNotEmpty() }
-            ?.joinToString("|") { it.name }
-            ?: "" // Default to empty string if set is null or empty
+    fun fromOrderBadgeSet(badges: Set<OrderBadge>?): String {
+        return badges?.takeIf { it.isNotEmpty() }?.joinToString("|") { it.name } ?: ""
     }
 
     @TypeConverter
@@ -44,9 +37,27 @@ class DataTypeConverters {
             ?.mapNotNull { part ->
                 try {
                     OrderBadge.valueOf(part.trim())
-                } catch (e: IllegalArgumentException) {
+                } catch (e: Exception) {
                     null
                 }
-            }?.toSet() ?: emptySet()
+            }
+            ?.toSet() ?: emptySet()
+    }
+
+    @TypeConverter
+    fun fromLongList(list: List<Long>?): String {
+        // Converts a list of Longs into a single comma-separated string.
+        // Returns an empty string if the list is null or empty.
+        return list?.joinToString(",") ?: ""
+    }
+
+    @TypeConverter
+    fun toLongList(data: String?): List<Long> {
+        // Converts a comma-separated string back into a list of Longs.
+        // Returns an empty list if the data is null, blank, or contains no valid numbers.
+        return data?.takeIf { it.isNotBlank() }
+            ?.split(',')
+            ?.mapNotNull { it.toLongOrNull() } // Safely convert each part to Long, ignoring invalid parts
+            ?: emptyList()
     }
 }
