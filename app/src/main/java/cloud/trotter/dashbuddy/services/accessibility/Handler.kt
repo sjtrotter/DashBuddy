@@ -149,16 +149,16 @@ object Handler {
 //        DashBuddyApplication.sendBubbleMessage("${currentDasherScreen.screenName} Screen")
 
         if (currentScreenTexts.isNotEmpty()) {
-            Log.d(TAG, "Screen texts: $currentScreenTexts")
+            Log.d(TAG, "Screen texts: [${currentScreenTexts.joinToString(" | ")}]")
         } else {
             Log.d(TAG, "No texts extracted.")
         }
 
         if (currentSourceTexts.isNotEmpty()) {
-            Log.d(TAG, "Source texts: $currentSourceTexts")
-        } //else {
-//            Log.d(TAG, "No source texts extracted.")
-//        }
+            Log.d(TAG, "Source texts: [${currentSourceTexts.joinToString(" | ")}]")
+        } else {
+            Log.d(TAG, "No source texts extracted.")
+        }
 
         // Update StateContext with DasherScreen
         val finalContext = tempContext.copy(
