@@ -94,9 +94,9 @@ object Handler {
         }
 
         // if source text and screen text equal, clear source text.
-        if (currentSourceTexts == currentScreenTexts) {
-            currentSourceTexts.clear()
-        }
+//        if (currentSourceTexts == currentScreenTexts) {
+//            currentSourceTexts.clear()
+//        }
 
         val currentExtractedTextsHash = Objects.hash(currentScreenTexts)
         val currentEventSourceHash = Objects.hash(currentSourceTexts)
