@@ -19,6 +19,8 @@ class ViewDashControl : StateHandler {
         if (context.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_ENDING_DASH_SESSION
         if (context.dasherScreen == Screen.ON_DASH_ALONG_THE_WAY) return AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
         if (context.dasherScreen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER) return AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
+        if (context.dasherScreen == Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL) return AppState.VIEWING_PICKUP_DETAILS
+        if (context.dasherScreen == Screen.NAVIGATION_VIEW) return AppState.VIEWING_NAVIGATION
 
         return currentState
     }

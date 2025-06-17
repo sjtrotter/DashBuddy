@@ -15,7 +15,7 @@ class DasherIdleOffline : StateHandler {
         "Schedule", "Navigate up", "notification icon", "Notifications", "Safety",
         "Earn per Offer", "Got it", "© MAPBOX", "Help", "Close Webview",
         "Feeling unsafe? Get help here. Close Tooltip", "Getting Started",
-        "Select end time", "Navigate up", "Schedule"
+        "Select end time", "Navigate up", "Schedule", "Cancel", "Starting…",
     )
 
     override fun processEvent(context: StateContext, currentState: AppState): AppState {

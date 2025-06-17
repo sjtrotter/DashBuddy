@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.state
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.log.Logger as Log // Your Logger alias
 // AppState enum (from app_state_kt_with_user_handlers artifact) is expected to be in this package or imported.
 // StateHandler interface is expected to be defined and imported.
@@ -22,10 +24,12 @@ object Manager {
     /** The recorded pre-dash zone. */
     private var preDashZone: String? = null
 
+    /** Setting the zone. */
     fun setPreDashZone(zone: String) {
         preDashZone = zone
     }
 
+    /** Consuming the zone. */
     fun consumePreDashZone(): String? {
         val preDashZone = this.preDashZone
         this.preDashZone = null
@@ -35,14 +39,45 @@ object Manager {
     /** The recorded pre-dash earning type. */
     private var preDashType: String = "Earn per Offer"
 
+    /** Setting the dash type. */
     fun setPreDashType(dashType: String) {
         preDashType = dashType
     }
 
+    /** Consuming the dash type. */
     fun consumePreDashType(): String {
         val preDashType = this.preDashType
         this.preDashType = "Earn per Offer"
         return preDashType
+    }
+
+    /** A channel that acts as a sequential queue for database jobs. */
+    private val dbWorkChannel = Channel<suspend CoroutineScope.() -> Unit>(Channel.UNLIMITED)
+
+    /** Add database work to the queue. */
+    fun enqueueDbWork(work: suspend CoroutineScope.() -> Unit) {
+        stateScope.launch {
+            dbWorkChannel.send(work)
+        }
+    }
+
+    /**
+     * Launches a single, long-running coroutine that acts as a serial worker.
+     * It pulls jobs from the channel one by one and executes them to completion.
+     */
+    private fun startDbWorker() {
+        Log.i(TAG, "Starting database worker...")
+        stateScope.launch(Dispatchers.IO) {
+            for (work in dbWorkChannel) {
+                try {
+                    Log.d(TAG, "Executing next job in DB queue...")
+                    work()
+                    Log.d(TAG, "DB job completed.")
+                } catch (e: Exception) {
+                    Log.e(TAG, "!!! CRITICAL error in a DB worker job !!!", e)
+                }
+            }
+        }
     }
 
     /** A [CoroutineScope] for handling database operations. */
@@ -85,7 +120,9 @@ object Manager {
             initialContext,
             currentState,
             null
-        ) // No previous state for the very first entry
+        )
+
+        startDbWorker()
     }
 
     /**

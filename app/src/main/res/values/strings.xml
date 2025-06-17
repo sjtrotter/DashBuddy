@@ -4,4 +4,9 @@
     <string name="log_level">Log Level</string>
     <string name="save_log">Save Log</string>
     <string name="share_log">Share Log</string>
+    <string name="accessibility_service_description">
+    DashBuddy reads information from the Dasher app screen to automatically track your miles, log offer details, and record your earnings.
+
+    This service never collects passwords or personal information. This permission is required to enable automatic tracking features.
+</string>
 </resources>

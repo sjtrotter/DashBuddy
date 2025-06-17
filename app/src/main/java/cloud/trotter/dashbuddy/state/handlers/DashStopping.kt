@@ -44,7 +44,7 @@ class DashStopping : StateHandler {
     ) {
         Log.i(tag, "Entering state: Attempting to stop and finalize current dash.")
 
-        Manager.getScope().launch {
+        Manager.enqueueDbWork {
             var currentZoneName: String?
             try {
                 // Get current dash state first
@@ -59,7 +59,7 @@ class DashStopping : StateHandler {
                     // Clear current state anyway, as it might be invalid
                     currentRepo.clearCurrentDashState()
                     Log.i(tag, "Cleared current dash state due to missing dashId.")
-                    return@launch
+                    return@enqueueDbWork
                 }
                 Log.d(tag, "Current dash state retrieved: $current")
 

@@ -77,7 +77,7 @@ class OrderRepo(private val orderDao: OrderDao) {
     /**
      * Updates the status of a specific order.
      */
-    suspend fun updateOrderStatus(orderId: Long, newStatus: String) {
+    suspend fun updateOrderStatus(orderId: Long, newStatus: OrderStatus) {
         withContext(Dispatchers.IO) {
             orderDao.updateOrderStatus(orderId, newStatus)
         }

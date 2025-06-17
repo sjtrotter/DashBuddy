@@ -6,11 +6,6 @@ object PayParser {
 
     private const val TAG = "PayParser"
 
-    // Regex to capture a line item that ends with a dollar amount.
-    // Group 1: The label (e.g., "Base pay", "Richie’s Hot Chicken")
-    // Group 2: The dollar amount (e.g., "2.00")
-    private val PAY_LINE_ITEM_REGEX = Regex("""^(.*?)\s*\$\s*(\d+\.\d{2})$""")
-
     // Headers to look for to start parsing sections
     private const val APP_PAY_HEADER =
         "DoorDash Pay" // Catches "DoorDash Pay" and "DoorDash pay" with ignoreCase
@@ -65,28 +60,42 @@ object PayParser {
 
     /**
      * Helper function to parse a given sub-list of texts for pay line items.
-     * @param regionTexts The list of strings for a specific section (e.g., only app pay lines).
-     * @return A list of ParsedPayComponent found in the region.
+     * It iterates through the list in pairs, expecting a [label, value] structure.
+     * @param regionTexts The list of strings for a specific section
+     * (e.g., ["Base Pay", "$2.00", "Peak Pay", "$1.00"]).
+     * @return A list of ParsedPayItem found in the region.
      */
     private fun parseSection(regionTexts: List<String>): List<ParsedPayItem> {
         val components = mutableListOf<ParsedPayItem>()
-        regionTexts.forEach { textLine ->
-            val cleanedLine = textLine.trim()
-            val matchResult = PAY_LINE_ITEM_REGEX.find(cleanedLine)
+        if (regionTexts.isEmpty()) {
+            return components
+        }
 
-            if (matchResult != null) {
+        // Iterate through the list by pairs (index 0, 2, 4, etc.)
+        for (i in regionTexts.indices step 2) {
+            val label = regionTexts[i].trim()
+            // Safely get the next item, which should be the amount.
+            val amountString = regionTexts.getOrNull(i + 1)?.trim()
+
+            // Check if we have a valid pair: a label followed by a string that looks like a dollar amount.
+            if (amountString != null && amountString.startsWith("$")) {
                 try {
-                    val payTypeOrStore = matchResult.groupValues[1].trim()
-                        .removeSuffix("...") // Clean up trailing characters
-                        .trim()
-                    val payAmount = matchResult.groupValues[2].toDouble()
+                    // Sanitize and parse the amount
+                    val amount = amountString.removePrefix("$").trim().toDouble()
 
-                    if (payTypeOrStore.isNotEmpty()) {
-                        components.add(ParsedPayItem(type = payTypeOrStore, amount = payAmount))
+                    if (label.isNotEmpty()) {
+                        Log.d(TAG, "Parsed Item Pair: '$label' -> $amount")
+                        components.add(ParsedPayItem(type = label, amount = amount))
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not fully parse line: '$cleanedLine'", e)
+                } catch (e: NumberFormatException) {
+                    Log.w(TAG, "Could not parse dollar amount from string: '$amountString'", e)
                 }
+            } else {
+                // This can happen if there's a label without a value, or other unexpected formatting.
+                Log.w(
+                    TAG,
+                    "Expected a dollar amount after label '$label', but found '${amountString ?: "nothing"}'. Skipping pair."
+                )
             }
         }
         return components

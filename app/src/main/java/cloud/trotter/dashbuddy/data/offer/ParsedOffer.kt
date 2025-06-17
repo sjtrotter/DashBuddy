@@ -57,7 +57,7 @@ data class ParsedOffer(
         timestamp: Long,
         calculatedScore: Double?,
         scoreText: String?,
-        status: String,
+        status: OfferStatus,
         dollarsPerMile: Double?,
         dollarsPerHour: Double,
     ): OfferEntity {

@@ -2,15 +2,25 @@ package cloud.trotter.dashbuddy.data.base
 
 import androidx.room.TypeConverter
 import cloud.trotter.dashbuddy.data.offer.OfferBadge
+import cloud.trotter.dashbuddy.data.offer.OfferStatus
 import cloud.trotter.dashbuddy.data.order.OrderBadge
+import cloud.trotter.dashbuddy.data.order.OrderStatus
 
+/** Class used by the Room database to convert Kotlin data types to and from SQL types. */
 class DataTypeConverters {
 
+    /** Converts a set of [OfferBadge]s to a bar-separated string for storage in the database.
+     * @return A bar-separated string representation of the set,
+     * or an empty string if the set is null or empty.
+     */
     @TypeConverter
     fun fromOfferBadgeSet(badges: Set<OfferBadge>?): String {
         return badges?.takeIf { it.isNotEmpty() }?.joinToString("|") { it.name } ?: ""
     }
 
+    /** Converts a bar-separated string of offer badges back to a set of [OfferBadge]s.
+     * @return A set of [OfferBadge]s, or an empty set if the string is blank or null.
+     */
     @TypeConverter
     fun toOfferBadgeSet(badgeString: String?): Set<OfferBadge> {
         return badgeString?.takeIf { it.isNotBlank() }
@@ -25,11 +35,18 @@ class DataTypeConverters {
             ?.toSet() ?: emptySet()
     }
 
+    /** Converts a set of [OrderBadge]s to a bar-separated string for storage in the database.
+     * @return A bar-separated string representation of the set,
+     * or an empty string if the set is null or empty.
+     */
     @TypeConverter
     fun fromOrderBadgeSet(badges: Set<OrderBadge>?): String {
         return badges?.takeIf { it.isNotEmpty() }?.joinToString("|") { it.name } ?: ""
     }
 
+    /** Converts a bar-separated string of offer badges back to a set of [OfferBadge]s.
+     * @return A set of [OrderBadge]s, or an empty set if the string is blank or null.
+     */
     @TypeConverter
     fun toOrderBadgeSet(badgeString: String?): Set<OrderBadge> {
         return badgeString?.takeIf { it.isNotBlank() }
@@ -44,6 +61,10 @@ class DataTypeConverters {
             ?.toSet() ?: emptySet()
     }
 
+    /** Converts a list of [Long]s to a comma-separated string for storage in the database.
+     * @return A comma-separated string representation of the list,
+     * or an empty string if the list is null or empty.
+     */
     @TypeConverter
     fun fromLongList(list: List<Long>?): String {
         // Converts a list of Longs into a single comma-separated string.
@@ -51,6 +72,9 @@ class DataTypeConverters {
         return list?.joinToString(",") ?: ""
     }
 
+    /** Converts a comma-separated string of Longs back to a list of [Long]s.
+     * @return A list of [Long]s, or an empty list if the string is blank or null.
+     */
     @TypeConverter
     fun toLongList(data: String?): List<Long> {
         // Converts a comma-separated string back into a list of Longs.
@@ -59,5 +83,32 @@ class DataTypeConverters {
             ?.split(',')
             ?.mapNotNull { it.toLongOrNull() } // Safely convert each part to Long, ignoring invalid parts
             ?: emptyList()
+    }
+
+    /** Converts the [OfferStatus] to a string for storage in the database. */
+    @TypeConverter
+    fun fromOfferStatus(status: OfferStatus): String {
+        return status.name
+    }
+
+    /** Converts the string from the database back to the [OfferStatus]. */
+    @TypeConverter
+    fun toOfferStatus(statusString: String): OfferStatus {
+        // Converts the string "ACCEPTED" from the database back to OfferStatus.ACCEPTED.
+        return enumValueOf<OfferStatus>(statusString)
+    }
+
+    /** Converts the [OrderStatus] to a string for storage in the database. */
+    @TypeConverter
+    fun fromOrderStatus(status: OrderStatus): String {
+        // Converts OrderStatus.PICKUP_CONFIRMED to "PICKUP_CONFIRMED".
+        return status.name
+    }
+
+    /** Converts the string from the database back to the [OrderStatus]. */
+    @TypeConverter
+    fun toOrderStatus(statusString: String): OrderStatus {
+        // Converts "PICKUP_CONFIRMED" back to OrderStatus.PICKUP_CONFIRMED.
+        return enumValueOf<OrderStatus>(statusString)
     }
 }

@@ -2,33 +2,41 @@ package cloud.trotter.dashbuddy.services.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
-import cloud.trotter.dashbuddy.services.accessibility.Handler as EventHandler
+import cloud.trotter.dashbuddy.services.accessibility.EventHandler as EventHandler
 import cloud.trotter.dashbuddy.log.Logger as Log
 
-class Service : AccessibilityService() {
+class DashBuddyAccessibility : AccessibilityService() {
 
     private lateinit var eventHandler: EventHandler
+    private val tag = "DashBuddyAccessibility"
 
     override fun onCreate() {
         super.onCreate()
-        Log.d("Accessibility", "Accessibility service created")
+        Log.d(tag, "Accessibility service created")
         eventHandler = EventHandler
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event != null) {
-            eventHandler.handleEvent(event, this)
+        val rootNode = rootInActiveWindow
+        if (event != null && rootNode != null) {
+            eventHandler.handleEvent(event, this, rootNode)
         }
     }
 
+    override fun onUnbind(intent: Intent?): Boolean {
+        eventHandler.clearServiceInstance()
+        return super.onUnbind(intent)
+    }
+
     override fun onInterrupt() {
-        Log.d("Accessibility", "Accessibility service interrupted")
+        Log.d(tag, "Accessibility service interrupted")
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("Accessibility", "Accessibility service destroyed")
+        Log.d(tag, "Accessibility service destroyed")
     }
 
     override fun onServiceConnected() {
@@ -43,8 +51,9 @@ class Service : AccessibilityService() {
         this.serviceInfo = info
 
         eventHandler.initializeStateManager(applicationContext)
+        eventHandler.setServiceInstance(this)
 
-        Log.d("Accessibility", "Accessibility service connected")
+        Log.d(tag, "Accessibility service connected")
     }
 
 }

@@ -176,12 +176,31 @@ enum class Screen(
         ),
     ),
 
-    // --- Generic Navigation View ---
+    // --- Navigation Views ---
+    // Generic view. Match AFTER more specific views.
     NAVIGATION_VIEW(
-        screenName = "Navigation",
-        requiredTexts = listOf("mi", "min", "exit"),
+        screenName = "Generic Navigation",
+        requiredTexts = listOf("min", "exit"),
+        someOfTheseTexts = listOf("mi", "ft"),
         forbiddenTexts = listOf("accept", "decline")
     ),
+    NAVIGATION_VIEW_TO_PICK_UP(
+        screenName = "Navigation to Pick Up",
+        requiredTexts = listOf("heading to", "pick up instructions", "pick up by"),
+        someOfTheseTexts = listOf("mi", "ft"),
+        forbiddenTexts = listOf(
+            "accept",
+            "decline",
+            "read instructions on arrival"
+        )
+    ),
+    NAVIGATION_VIEW_TO_DROP_OFF(
+        screenName = "Navigation to Drop Off",
+        requiredTexts = listOf("heading to", "read instructions on arrival", "deliver by"),
+        someOfTheseTexts = listOf("mi", "ft", "leave it at the door", "hand to customer"),
+        forbiddenTexts = listOf("accept", "decline")
+    ),
+
 
     // --- Offer Handling ---
     OFFER_POPUP(
@@ -203,11 +222,11 @@ enum class Screen(
 //        someOfTheseTexts = listOf("navigate", "directions"),
 //        forbiddenTexts = listOf("deliver to", "looking for offers", "complete delivery steps", "accept")
 //    ),
-//    DELIVERY_ARRIVED_AT_STORE( // "Slide after arrival" is a key indicator
-//        requiredTexts = listOf("pickup from"),
-//        someOfTheseTexts = listOf("arrived at store", "slide after arrival", "confirm items", "start shopping"),
+    PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL(
+        requiredTexts = listOf("pickup from", "directions"),
+        someOfTheseTexts = listOf("arrived at store", "directions"),
 //        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
-//    ),
+    ),
 //    DELIVERY_SHOP_AND_DELIVER_LIST(
 //        requiredTexts = listOf("shop and deliver", "to shop", "start shopping", "found item", "item unavailable")
 //    ),
@@ -266,7 +285,14 @@ enum class Screen(
         screenName = "Delivery Completed",
         requiredTexts = listOf("completed", "$"),
         someOfTheseTexts = listOf("delivery", "deliveries", "done", "continue"),
-        forbiddenTexts = listOf("accept", "decline", "dash summary")
+        forbiddenTexts = listOf(
+            "accept",
+            "decline",
+            "dash summary",
+            "current orders",
+            "add time",
+            "dash ends at"
+        )
     ),
 //
 //    DELIVERY_PROBLEM_REPORTING(

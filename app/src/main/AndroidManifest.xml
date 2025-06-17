@@ -55,8 +55,9 @@
         </service>
 
         <service
-            android:name=".services.accessibility.Service"
+            android:name=".services.accessibility.DashBuddyAccessibility"
             android:exported="true"
+            android:label="DashBuddy Accessibility Service"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

@@ -16,7 +16,7 @@ class AppPayRepo(private val appPayDao: AppPayDao) {
      * @return The Long ID of the existing or newly created AppPayType.
      */
     @Transaction
-    suspend fun getOrInsertPayType(name: String): Long {
+    suspend fun upsertPayType(name: String): Long {
         return withContext(Dispatchers.IO) {
             val existingType = appPayDao.getPayTypeByName(name)
             existingType?.id ?: appPayDao.insertPayType(AppPayType(name = name))

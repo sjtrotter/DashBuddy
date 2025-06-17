@@ -72,4 +72,11 @@ interface CurrentDao {
      */
     @Query("UPDATE current_dash SET activeOrderQueue = :orderQueue, lastUpdate = :timestamp WHERE id = 1")
     suspend fun updateActiveOrderQueue(orderQueue: List<Long>, timestamp: Long)
+
+    @Query("UPDATE current_dash SET activeOrderId = :newActiveOrderId, activeOrderQueue = :newQueue, lastUpdate = :timestamp WHERE id = 1")
+    suspend fun updateActiveOrderAndQueue(
+        newActiveOrderId: Long,
+        newQueue: List<Long>,
+        timestamp: Long
+    )
 }

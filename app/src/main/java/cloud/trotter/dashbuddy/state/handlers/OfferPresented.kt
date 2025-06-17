@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.data.offer.OfferEntity
 import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
 import cloud.trotter.dashbuddy.data.offer.OfferParser
+import cloud.trotter.dashbuddy.data.offer.OfferStatus
 import cloud.trotter.dashbuddy.state.Manager
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.App as AppState
@@ -12,7 +13,6 @@ import cloud.trotter.dashbuddy.state.Context as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import java.util.Locale
 
 class OfferPresented : StateHandler {
@@ -38,9 +38,9 @@ class OfferPresented : StateHandler {
                 }) {
                 Log.i(tag, "'Accept/Add to Route' button clicked for offer ID: $internalOfferId")
                 offerDecided = true
-                Manager.getScope().launch {
+                Manager.enqueueDbWork {
                     try {
-                        offerRepo.updateOfferStatus(internalOfferId!!, "ACCEPTED")
+                        offerRepo.updateOfferStatus(internalOfferId!!, OfferStatus.ACCEPTED)
                         Log.i(tag, "Offer status updated to ACCEPTED for ID: $internalOfferId")
                         DashBuddyApplication.sendBubbleMessage("Offer Accepted!")
                     } catch (e: Exception) {
@@ -54,11 +54,11 @@ class OfferPresented : StateHandler {
                 }) {
                 Log.i(tag, "'Decline offer' button clicked for offer ID: $internalOfferId")
                 offerDecided = true
-                Manager.getScope().launch {
+                Manager.enqueueDbWork {
                     try {
                         offerRepo.updateOfferStatus(
                             internalOfferId!!,
-                            "DECLINED_USER"
+                            OfferStatus.DECLINED_USER
                         )
                         Log.i(tag, "Offer status updated to DECLINED_USER for ID: $internalOfferId")
                         DashBuddyApplication.sendBubbleMessage("Offer Declined!")
@@ -77,7 +77,7 @@ class OfferPresented : StateHandler {
                 }) {
                 Log.i(tag, "'Decline Order' button clicked for offer ID: $internalOfferId")
                 offerDecided = true
-                Manager.getScope().launch {
+                Manager.enqueueDbWork {
                     try {
                         // For CoD declines, you might want a specific status rather than deleting
                         // offerRepo.updateOfferStatus(internalOfferId!!, "DECLINED_COD")
@@ -101,6 +101,7 @@ class OfferPresented : StateHandler {
             Screen.DASH_CONTROL -> AppState.VIEWING_DASH_CONTROL
             Screen.MAIN_MAP_IDLE -> AppState.DASHER_IDLE_OFFLINE
             Screen.NAVIGATION_VIEW -> AppState.VIEWING_NAVIGATION
+            Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
             else -> currentState // As long as it's an OFFER_POPUP, stay in this state
         }
     }
@@ -115,19 +116,19 @@ class OfferPresented : StateHandler {
         internalOfferId = null
         offerDecided = false
 
-        Manager.getScope().launch {
+        Manager.enqueueDbWork {
             try {
                 // ... (your existing parsing and inserting logic remains the same) ...
                 Log.d(tag, "Starting offer processing coroutine.")
                 val current: CurrentEntity? = currentRepo.getCurrentDashState()
                 if (current?.dashId == null || current.zoneId == null) {
                     Log.w(tag, "Cannot process offer: Missing current dashId or zoneId.")
-                    return@launch
+                    return@enqueueDbWork
                 }
                 val parsedOffer = OfferParser.parseOffer(context.screenTexts)
                 if (parsedOffer == null) {
                     Log.w(tag, "!!! OfferParser returned null. Offer was not parsed!")
-                    return@launch
+                    return@enqueueDbWork
                 }
                 val existingOffer = offerRepo.getOfferByDashZoneAndHash(
                     current.dashId,
@@ -180,68 +181,88 @@ class OfferPresented : StateHandler {
 
     override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
         Log.d(tag, "Exiting state...")
+        // Capture the state into local variables BEFORE launching the coroutines.
+        val decided = offerDecided
+        val finalOfferId = internalOfferId
+        val exitTime = context.timestamp
 
-        // --- TIMEOUT LOGIC ---
-        if (!offerDecided && internalOfferId != null) {
-            Log.i(
-                tag,
-                "Exiting without a decision. Marking offer ID $internalOfferId as MISSED."
-            )
-            Manager.getScope().launch {
+        // --- TIMEOUT CHECK ---
+        if (!decided && finalOfferId != null) {
+
+            Manager.enqueueDbWork {
                 try {
-                    offerRepo.updateOfferStatus(internalOfferId!!, "MISSED_TIMEOUT")
+                    val offer = offerRepo.getOfferById(finalOfferId)
+                    if (offer == null || offer.status != OfferStatus.SEEN) {
+                        // If the offer doesn't exist or was already handled by another process (like a failsafe),
+                        // there's nothing for us to do.
+                        return@enqueueDbWork
+                    }
+
+                    // Calculate the exact time the offer was set to expire.
+                    // We add a small 1-second buffer to account for system lag.
+                    val expirationTime =
+                        offer.timestamp + ((offer.initialCountdownSeconds ?: 0) * 1000) + 1000
+
+                    // Only if the current time is past the expiration time do we mark it as timed out.
+                    if (exitTime >= expirationTime) {
+                        Log.i(
+                            tag,
+                            "Offer #${finalOfferId} has expired. Marking as DECLINED_TIMEOUT."
+                        )
+                        DashBuddyApplication.sendBubbleMessage("Offer Expired!")
+                        offerRepo.updateOfferStatus(finalOfferId, OfferStatus.DECLINED_TIMEOUT)
+                        currentRepo.incrementOffersDeclined() // Still counts as a decline
+                    } else {
+                        // If we are exiting the state BEFORE the timer expired, it means the
+                        // user navigated away or an informational click changed the screen.
+                        // In this case, we do NOTHING. The offer status remains SEEN.
+                        Log.i(
+                            tag,
+                            "Exiting state for Offer #${finalOfferId} before timeout. Status remains SEEN."
+                        )
+                    }
+
                 } catch (e: Exception) {
-                    Log.e(
-                        tag,
-                        "!!! Could not mark offer as MISSED_TIMEOUT: $internalOfferId !!!",
-                        e
-                    )
+                    Log.e(tag, "!!! Could not check timeout status for offer: $finalOfferId !!!", e)
                 }
             }
         }
 
         // --- DECISION LOGIC ---
-        // If an offer was decided, update the CurrentEntity state accordingly.
-        if (offerDecided && internalOfferId != null) {
-            Manager.getScope().launch {
+        if (decided && finalOfferId != null) {
+            Manager.enqueueDbWork {
                 try {
-                    val offer = offerRepo.getOfferById(internalOfferId!!)
+                    // Now, use the local variables inside the coroutine.
+                    val offer = offerRepo.getOfferById(finalOfferId)
                     if (offer == null) {
                         Log.w(
                             tag,
-                            "Offer with ID $internalOfferId not found, can't update current state."
+                            "Offer with ID $finalOfferId not found, can't update current state."
                         )
-                        return@launch
+                        return@enqueueDbWork
                     }
 
                     when (offer.status) {
-                        "ACCEPTED" -> {
-                            Log.d(tag, "Offer ACCEPTED. Updating current dash state.")
-                            // Increment the accepted counter
+                        OfferStatus.ACCEPTED -> {
+                            Log.d(
+                                tag,
+                                "Offer ACCEPTED. Updating current dash state for offer ID $finalOfferId."
+                            )
                             currentRepo.incrementOffersAccepted()
-
-                            // Get associated order IDs and add them to the queue
-                            val orders = orderRepo.getOrdersForOffer(internalOfferId!!).first()
+                            val orders = orderRepo.getOrdersForOffer(finalOfferId).first()
                             if (orders.isNotEmpty()) {
                                 val orderIds = orders.map { it.id }
                                 currentRepo.addOrdersToQueue(orderIds)
                                 Log.i(tag, "Added order IDs $orderIds to the active queue.")
-                            } else {
-                                Log.w(
-                                    tag,
-                                    "Accepted offer has no associated orders to add to queue."
-                                )
                             }
                         }
 
-                        "DECLINED_USER" -> {
+                        OfferStatus.DECLINED_USER -> {
                             Log.d(tag, "Offer DECLINED by user. Updating current dash state.")
-                            // Increment the declined counter
                             currentRepo.incrementOffersDeclined()
                         }
 
                         else -> {
-                            // No state change needed for other statuses like DECLINED_COD, etc.
                             Log.d(
                                 tag,
                                 "Exiting with status '${offer.status}', no counter update needed."
@@ -251,7 +272,7 @@ class OfferPresented : StateHandler {
                 } catch (e: Exception) {
                     Log.e(
                         tag,
-                        "!!! Failed to update CurrentEntity for offer ID: $internalOfferId !!!",
+                        "!!! Failed to update CurrentEntity for offer ID: $finalOfferId !!!",
                         e
                     )
                 }

@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.state.handlers.OfferPresented
 import cloud.trotter.dashbuddy.state.handlers.DashStarting
 import cloud.trotter.dashbuddy.state.handlers.DashStopping
 import cloud.trotter.dashbuddy.state.handlers.DeliveryCompleted
+import cloud.trotter.dashbuddy.state.handlers.ViewPickupDetails
 import cloud.trotter.dashbuddy.state.handlers.SetDashEndTime
 import cloud.trotter.dashbuddy.state.handlers.Startup
 import cloud.trotter.dashbuddy.state.handlers.ViewChat
@@ -116,6 +117,10 @@ enum class App(
     DELIVERY_COMPLETED(
         handler = DeliveryCompleted(), // Placeholder
         displayName = "Delivery Completed"
+    ),
+    VIEWING_PICKUP_DETAILS(
+        handler = ViewPickupDetails(),
+        displayName = "Viewing Pickup Details"
     ),
 //    DELIVERY_IN_PROGRESS_TO_STORE(
 //        handler = PlaceHolder(DELIVERY_IN_PROGRESS_TO_STORE), // Placeholder

@@ -204,4 +204,46 @@ class CurrentRepo(private val currentDao: CurrentDao) {
             currentDao.upsertCurrentDashState(newState)
         }
     }
+
+    /**
+     * Updates which order is the primary focus. It sets the new activeOrderId,
+     * adds the old one (if any) back to the queue, and removes the new one from the queue.
+     */
+    suspend fun updateActiveOrderFocus(newlyActiveOrderId: Long) {
+        withContext(Dispatchers.IO) {
+            val current = currentDao.getCurrentDashState()
+            if (current != null) {
+                // If the requested active order is already the active one, do nothing.
+                if (current.activeOrderId == newlyActiveOrderId) {
+                    Log.d(tag, "Order $newlyActiveOrderId is already active. No change needed.")
+                    return@withContext
+                }
+
+                val oldActiveOrderId = current.activeOrderId
+                val newQueue = current.activeOrderQueue.toMutableList()
+
+                // 1. Add the old active order ID back to the queue, if there was one.
+                if (oldActiveOrderId != null) {
+                    newQueue.add(oldActiveOrderId)
+                }
+
+                // 2. Remove the new active order ID from the queue.
+                newQueue.remove(newlyActiveOrderId)
+
+                Log.i(
+                    tag,
+                    "Swapping active order. Old: $oldActiveOrderId, New: $newlyActiveOrderId. New Queue: $newQueue"
+                )
+
+                // 3. Perform the database update in a single transaction.
+                currentDao.updateActiveOrderAndQueue(
+                    newActiveOrderId = newlyActiveOrderId,
+                    newQueue = newQueue.distinct(), // Use distinct() for safety
+                    timestamp = System.currentTimeMillis()
+                )
+            } else {
+                Log.w(tag, "Cannot update active order focus, current dash state is null.")
+            }
+        }
+    }
 }

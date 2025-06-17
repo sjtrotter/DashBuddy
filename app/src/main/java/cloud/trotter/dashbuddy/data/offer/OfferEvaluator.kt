@@ -127,7 +127,7 @@ object OfferEvaluator {
             timestamp = eventTimestamp,
             calculatedScore = totalScore,
             scoreText = offerQuality,
-            status = "SEEN",
+            status = OfferStatus.SEEN,
             dollarsPerMile = dollarsPerMile,
             dollarsPerHour = dollarsPerHour
         )

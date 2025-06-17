@@ -11,7 +11,7 @@ import cloud.trotter.dashbuddy.data.offer.OfferEntity
  * For example, one row could be for "Base Pay" and another for "Peak Pay" for the same offer.
  */
 @Entity(
-    tableName = "app_pay_components",
+    tableName = "app_pays",
     foreignKeys = [
         ForeignKey(
             entity = OfferEntity::class,

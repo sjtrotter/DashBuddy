@@ -112,7 +112,7 @@ data class OfferEntity(
      * Status of the offer. E.g., "SEEN", "ACCEPTED", "DECLINED_USER", "DECLINED_TIMEOUT", "MISSED".
      * Using a String or an Enum converted to String. Replaces separate boolean flags.
      */
-    val status: String = "SEEN", // Default to SEEN when first logged
+    val status: OfferStatus = OfferStatus.SEEN, // Default to SEEN when first logged
 
     /** The initial countdown timer value displayed on the offer screen (e.g., 36 seconds). */
     val initialCountdownSeconds: Int? = null,

@@ -16,7 +16,7 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
     private const val LOG_FILE_NAME = "app_log.txt"
     private const val ROTATED_LOG_FILE_PREFIX = "app_log_rotated_"
     private const val MAX_FILE_SIZE_MB_DEFAULT = 2.3
-    private const val MAX_ROTATED_FILES_DEFAULT = 5
+    private const val MAX_ROTATED_FILES_DEFAULT = 20
 
     private var currentLogFile: File? = null
     private var logDirectory: File? = null
@@ -118,6 +118,14 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
         }
     }
 
+    /**
+     * Helper function to prepare text lists for clean, single-line logging.
+     * It replaces newline characters with their escaped representation.
+     */
+    private fun formatTextsForLogging(msg: String): String {
+        return msg.replace("\n", "\\n")
+    }
+
     private fun updateLogLevelFromPrefs() {
         val savedLevelName = sharedPreferences?.getString(logLevelPrefKey, null)
         val newLevel = if (savedLevelName != null) {
@@ -199,7 +207,7 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
             if (currentLogFile == null || logDirectory == null) return
             try {
                 val timestamp = dateFormat.format(Date())
-                var logEntry = "$timestamp ${level.name}/$tag: $message\n"
+                var logEntry = "$timestamp ${level.name}/$tag: ${formatTextsForLogging(message)}\n"
                 throwable?.let {
                     val sw =
                         StringWriter(); it.printStackTrace(PrintWriter(sw)); logEntry += "$sw\n"

@@ -22,6 +22,7 @@ import cloud.trotter.dashbuddy.data.pay.AppPayDao
 import cloud.trotter.dashbuddy.data.pay.TipEntity
 import cloud.trotter.dashbuddy.data.pay.TipDao
 import cloud.trotter.dashbuddy.data.store.StoreEntity
+import cloud.trotter.dashbuddy.data.store.StoreDao
 import cloud.trotter.dashbuddy.data.zone.ZoneDao
 import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 
@@ -39,7 +40,7 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
         TipEntity::class,
         ZoneEntity::class,
     ],
-    version = 6, // Start with version 1
+    version = 9, // Start with version 1
     exportSchema = false // Set to true if you plan to use schema for testing migrations
 // For production, schema export is recommended.
 )
@@ -54,6 +55,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
     abstract fun orderDao(): OrderDao
     abstract fun appPayDao(): AppPayDao
     abstract fun tipDao(): TipDao
+    abstract fun storeDao(): StoreDao
 
     companion object {
         @Volatile

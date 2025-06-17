@@ -14,15 +14,21 @@ class ViewNavigation : StateHandler {
 
         // add more specific things up here if needed.
 
-        if (context.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
-        if (context.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_ENDING_DASH_SESSION
-        if (context.dasherScreen == Screen.ON_DASH_ALONG_THE_WAY) return AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
-        if (context.dasherScreen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER) return AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
-
-        return currentState
+        return when (context.dasherScreen) {
+            Screen.MAIN_MENU_VIEW -> AppState.VIEWING_MAIN_MENU
+            Screen.MAIN_MAP_IDLE -> AppState.DASHER_ENDING_DASH_SESSION
+            Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
+            Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
+            Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
+            else -> currentState
+        }
     }
 
-    override fun enterState(context: StateContext, currentState: AppState, previousState: AppState?) {
+    override fun enterState(
+        context: StateContext,
+        currentState: AppState,
+        previousState: AppState?
+    ) {
         Log.d("${this::class.simpleName} State", "Entering state...")
         // initialize components here
 //        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${context.dasherScreen?.screenName} Screen")

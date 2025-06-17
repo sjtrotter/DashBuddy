@@ -57,7 +57,7 @@ interface OrderDao {
      * @param newStatus The new status string (e.g., "AT_STORE", "COMPLETED").
      */
     @Query("UPDATE orders SET status = :newStatus WHERE id = :orderId")
-    suspend fun updateOrderStatus(orderId: Long, newStatus: String)
+    suspend fun updateOrderStatus(orderId: Long, newStatus: OrderStatus)
 
     /**
      * Updates the storeId for a specific order.

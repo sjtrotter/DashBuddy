@@ -14,6 +14,7 @@ object Recognizer {
         // High-priority, often modal or overlay screens
         Screen.OFFER_POPUP,
         Screen.DELIVERY_COMPLETED_DIALOG,
+        Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL,
 //        Screen.DECLINE_OFFER_CONFIRM_MODAL,
 //        Screen.DECLINE_OFFER_REASON_MODAL, // Added from your logs
 //        Screen.END_DASH_CONFIRMATION_DIALOG,
@@ -38,6 +39,8 @@ object Recognizer {
 //        Screen.DELIVERY_NAVIGATION_TO_CUSTOMER,
 //        Screen.DELIVERY_ARRIVED_AT_STORE,
 //        Screen.DELIVERY_NAVIGATION_TO_STORE,
+        Screen.NAVIGATION_VIEW_TO_PICK_UP,
+        Screen.NAVIGATION_VIEW_TO_DROP_OFF,
         Screen.ON_DASH_MAP_WAITING_FOR_OFFER,
         Screen.DASH_CONTROL,
         Screen.ON_DASH_ALONG_THE_WAY,
@@ -75,22 +78,25 @@ object Recognizer {
     )
 
     fun identify(context: Context, previousScreen: Screen? = null): Screen {
-        // Log texts for debugging the recognizer itself
+        // 1. Log screen texts if they exist, with newlines handled.
         if (context.screenTexts.isNotEmpty()) {
-            // Limit logged texts to avoid overly verbose logs if screenTexts is huge
-            val textsToLog = if (context.screenTexts.size > 20) {
-                context.screenTexts.take(20).joinToString(" | ") + " ... (and more)"
-            } else {
-                context.screenTexts.joinToString(" | ")
-            }
-            Log.v(TAG, "Attempting to identify screen from texts: [$textsToLog]")
-        } else if (context.eventTypeString != "INITIALIZATION") { // Don't log for the very first init context
+            Log.v(TAG, "Screen Texts: [${context.screenTexts}]")
+        } else {
             Log.v(
                 TAG,
-                "Attempting to identify screen: No screen texts. Event: ${context.eventTypeString}, SourceClass: ${context.sourceClassName}"
+                "No screen texts. Event: ${context.eventTypeString}, SourceClass: ${context.sourceClassName}"
             )
         }
 
+        // 2. Log source texts if they exist, with newlines handled.
+        if (context.sourceNodeTexts.isNotEmpty()) {
+            Log.v(TAG, "Source Texts: [${context.sourceNodeTexts}]")
+        } else {
+            Log.v(
+                TAG,
+                "No source texts. Event: ${context.eventTypeString}, SourceClass: ${context.sourceClassName}"
+            )
+        }
 
         for (screenCandidate in screenCheckOrder) {
             if (screenCandidate.matches(context)) {

@@ -155,7 +155,7 @@ class OfferRepo(private val offerDao: OfferDao) {
      * @param offerId The ID of the offer.
      * @param newStatus The new status string.
      */
-    suspend fun updateOfferStatus(offerId: Long, newStatus: String) {
+    suspend fun updateOfferStatus(offerId: Long, newStatus: OfferStatus) {
         withContext(Dispatchers.IO) {
             offerDao.updateOfferStatus(offerId, newStatus)
         }

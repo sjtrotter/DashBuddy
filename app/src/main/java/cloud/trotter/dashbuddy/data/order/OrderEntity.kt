@@ -62,6 +62,6 @@ data class OrderEntity(
     val customerId: Long? = null,
     /** Timestamp (milliseconds since epoch) when the delivery was completed. Null until completion. */
     val completionTimestamp: Long? = null,
-    /** The current status of this order's lifecycle (e.g., "ACCEPTED", "COMPLETED"). */
-    val status: String = "PENDING",
+    /** The current status of this order's lifecycle. */
+    val status: OrderStatus = OrderStatus.PENDING,
 )

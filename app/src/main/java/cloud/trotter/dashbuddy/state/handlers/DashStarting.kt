@@ -69,7 +69,7 @@ class DashStarting : StateHandler {
         )
         DashBuddyApplication.sendBubbleMessage("Starting Dash: $zoneName\n($dashType)")
 
-        Manager.getScope().launch {
+        Manager.enqueueDbWork {
             try {
                 // 1. Get or Insert Zone to get zoneId
                 Log.d(tag, "Getting/inserting zone: $zoneName")
@@ -81,7 +81,7 @@ class DashStarting : StateHandler {
                         "Failed to get or insert a valid zoneId for zoneName: $zoneName. Received zoneId: $zoneId"
                     )
                     DashBuddyApplication.sendBubbleMessage("Error: Could not setup zone '$zoneName'.")
-                    return@launch
+                    return@enqueueDbWork
                 }
                 Log.i(tag, "Zone ID for '$zoneName': $zoneId")
 
@@ -96,7 +96,7 @@ class DashStarting : StateHandler {
                 if (dashId <= 0L) {
                     Log.e(tag, "Failed to insert new dash. Received dashId: $dashId")
                     DashBuddyApplication.sendBubbleMessage("Error: Could not start new dash session.")
-                    return@launch
+                    return@enqueueDbWork
                 }
                 Log.i(tag, "New dash created with ID: $dashId for zoneId: $zoneId")
 
@@ -130,7 +130,7 @@ class DashStarting : StateHandler {
                 // This might require more sophisticated rollback or cleanup logic.
             }
         }
-        Log.d(tag, "Dash initialization coroutine launched.")
+        Log.d(tag, "Dash initialization added to queue.")
     }
 
     override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
