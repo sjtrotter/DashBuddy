@@ -48,7 +48,7 @@ object UtilityFunctions {
             hashBytes.fold("") { str, it -> str + "%02x".format(it) }
         } catch (e: Exception) {
             input
-        } // Fallback
+        }
     }
 
 }

@@ -9,7 +9,6 @@ import cloud.trotter.dashbuddy.state.App as AppState
 import cloud.trotter.dashbuddy.state.Context as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
-import kotlinx.coroutines.launch
 
 // Placeholder/Example handlers for states not yet implemented by you
 // You would replace these with your actual handler classes.
@@ -56,7 +55,7 @@ class ViewPickupDetails : StateHandler {
                     return@enqueueDbWork
                 }
 
-                val parsedStore = StoreParser.parseStoreDetails(context.screenTexts)
+                val parsedStore = StoreParser.parseStoreDetails(context.rootNodeTexts)
                 if (parsedStore == null) {
                     Log.w(tag, "Could not parse store details from the screen.")
                     return@enqueueDbWork

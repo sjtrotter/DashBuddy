@@ -6,9 +6,46 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 /**
  * A utility object for performing actions on AccessibilityNodeInfo objects.
  */
-object NodeActionUtils {
+object AccNodeUtils {
 
-    private const val TAG = "NodeActionUtils"
+    private const val TAG = "AccNodeUtils"
+
+    /**
+     * Recursively extracts identifying structural info (class name, view ID) from nodes.
+     * This helps differentiate screens with identical text but different layouts.
+     */
+    fun extractStructure(nodeInfo: AccessibilityNodeInfo?, builder: StringBuilder) {
+        if (nodeInfo == null || !nodeInfo.isVisibleToUser) return
+
+        builder.append(nodeInfo.className)
+        builder.append(nodeInfo.viewIdResourceName)
+        // Add other stable attributes if needed (e.g., isClickable)
+        // builder.append(nodeInfo.isClickable)
+
+        for (i in 0 until nodeInfo.childCount) {
+            extractStructure(nodeInfo.getChild(i), builder)
+        }
+    }
+
+    /**
+     * Recursively extracts visible text from a node and its children.
+     */
+    fun extractTexts(nodeInfo: AccessibilityNodeInfo?, texts: MutableList<String>) {
+        if (nodeInfo == null || !nodeInfo.isVisibleToUser) return
+
+        nodeInfo.text?.let {
+            if (it.isNotEmpty()) texts.add(it.toString().trim())
+        }
+        nodeInfo.contentDescription?.let {
+            val desc = it.toString().trim()
+            if (desc.isNotEmpty() && !texts.contains(desc)) {
+                texts.add(desc)
+            }
+        }
+        for (i in 0 until nodeInfo.childCount) {
+            extractTexts(nodeInfo.getChild(i), texts)
+        }
+    }
 
     /**
      * Finds a node containing the exact specified text and performs a click action on it

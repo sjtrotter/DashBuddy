@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.data.base
 
 import androidx.room.TypeConverter
+import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.offer.OfferBadge
 import cloud.trotter.dashbuddy.data.offer.OfferStatus
 import cloud.trotter.dashbuddy.data.order.OrderBadge
@@ -83,6 +84,16 @@ class DataTypeConverters {
             ?.split(',')
             ?.mapNotNull { it.toLongOrNull() } // Safely convert each part to Long, ignoring invalid parts
             ?: emptyList()
+    }
+
+    @TypeConverter
+    fun fromDashType(type: DashType?): String? {
+        return type?.name // Converts EarningType.PER_OFFER to the string "PER_OFFER"
+    }
+
+    @TypeConverter
+    fun toDashType(name: String?): DashType? {
+        return name?.let { DashType.valueOf(it) }
     }
 
     /** Converts the [OfferStatus] to a string for storage in the database. */

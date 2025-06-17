@@ -20,10 +20,10 @@ interface AppPayDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(appPays: List<AppPayEntity>): List<Long>
 
-    @Query("SELECT * FROM app_pay_components WHERE offerId = :offerId")
+    @Query("SELECT * FROM app_pays WHERE offerId = :offerId")
     fun getPayComponentsForOffer(offerId: Long): Flow<List<AppPayEntity>>
 
-    @Query("SELECT * FROM app_pay_components WHERE offerId = :offerId")
+    @Query("SELECT * FROM app_pays WHERE offerId = :offerId")
     suspend fun getPayComponentsForOfferList(offerId: Long): List<AppPayEntity>
 }
 

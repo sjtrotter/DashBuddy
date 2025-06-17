@@ -14,17 +14,12 @@ data class Context(
     val eventTypeString: String,                // For logging/debugging, e.g., "TYPE_WINDOW_CONTENT_CHANGED"
     val packageName: CharSequence?,             // e.g., "com.doordash.driverapp"
     val rootNode: AccessibilityNodeInfo?,       // The root node of the current window
-    val sourceClassName: CharSequence?,    // Class name of the view that fired the event
-
-    val screenTexts: List<String>,              // All texts extracted from the current window (rootInActiveWindow)
+    val rootNodeTexts: List<String>,            // All texts extracted from the current window (rootInActiveWindow)
+    val sourceNode: AccessibilityNodeInfo?,     // The source node of the event (if any)
+    val sourceClassName: CharSequence?,         // Class name of the view that fired the event
     val sourceNodeTexts: List<String>,          // Texts specifically from event.source (can be empty)
-
-    // Optional: If you need to perform actions or more detailed inspection.
-    // Be very careful with the lifecycle of AccessibilityNodeInfo if you pass it directly.
-    // The component receiving it becomes responsible for recycling if it holds onto the reference.
-    // For simplicity here, we'll assume the state machine processes it immediately if passed.
-    val sourceNode: AccessibilityNodeInfo? = null,
-
     // the current Dasher screen, if any
     val dasherScreen: DasherScreen? = null,
+    val clickInfo: ClickInfo? = null,
+    val screenInfo: ScreenInfo? = null,
 )

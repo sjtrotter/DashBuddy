@@ -1,7 +1,9 @@
 package cloud.trotter.dashbuddy.state.handlers
 
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.state.Manager
+import cloud.trotter.dashbuddy.state.ScreenInfo
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.App as AppState
 import cloud.trotter.dashbuddy.state.Context as StateContext
@@ -10,13 +12,8 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 
 class DasherIdleOffline : StateHandler {
 
-    private val nonZoneTexts = setOf(
-        "Dash Now", "Dash Along the Way", "Open navigation drawer", "Navigate", "Promos",
-        "Schedule", "Navigate up", "notification icon", "Notifications", "Safety",
-        "Earn per Offer", "Got it", "© MAPBOX", "Help", "Close Webview",
-        "Feeling unsafe? Get help here. Close Tooltip", "Getting Started",
-        "Select end time", "Navigate up", "Schedule", "Cancel", "Starting…",
-    )
+    private val currentRepo = DashBuddyApplication.currentRepo
+    private val zoneRepo = DashBuddyApplication.zoneRepo
 
     override fun processEvent(context: StateContext, currentState: AppState): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
@@ -40,57 +37,42 @@ class DasherIdleOffline : StateHandler {
         // then Dash Now button is replaced with Schedule button.
         if (context.dasherScreen == Screen.SCHEDULE_VIEW) return AppState.VIEWING_SCHEDULE
 
-        // If from here we see the on map screen waiting for offer, then we either
-        // just started a dash or we're resuming a dash.
-        // TODO: add check to Current table to see if a dash is started.
-
-
         // if a dash is not started:
         if (context.dasherScreen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ||
             context.dasherScreen == Screen.ON_DASH_ALONG_THE_WAY
         )
             return AppState.DASHER_INITIATING_DASH_SESSION
 
-        if (context.sourceNodeTexts.isNotEmpty()) {
-            if (!nonZoneTexts.contains(context.sourceNodeTexts[0]) &&
-                !context.sourceNodeTexts[0].contains("Earn by Time") &&
-                !context.sourceNodeTexts[0].matches(Regex("^\\d{1,2}:\\d{2}$"))
-            ) {
-                Log.i("${this::class.simpleName} State", "Zone? - ${context.sourceNodeTexts[0]}")
-                Manager.setPreDashZone(context.sourceNodeTexts[0])
+        if (context.screenInfo is ScreenInfo.IdleMap) {
+            Manager.enqueueDbWork {
+                try {
+                    // Get the current state from the DB, or create a default empty one
+                    val currentData = currentRepo.getCurrentDashState() ?: CurrentEntity()
 
-            } else if ( // might need a better way to check for earning type.
-            // there's an event named "TYPE_VIEW_SELECTED" which might be useful;
-            // that's what generates the single strings "Earn per Offer" and "Earn by Time" we check
-            // here in this current if block.
-            // also, the source text contains the string: "Pay per offer + Customer tips"
-            // when the type is Earn per Offer - need to get the text for Earn by Time
-            // (in the main screen source texts when it updates the bottom shade)
-                context.sourceNodeTexts.size == 1 &&
-                (context.sourceNodeTexts[0] == "Earn by Time" || context.sourceNodeTexts[0] == "Earn per Offer")
-            ) {
-                Log.i(
-                    "${this::class.simpleName} State",
-                    "Earning Type? - ${context.sourceNodeTexts[0]}"
-                )
-                Manager.setPreDashType(context.sourceNodeTexts[0])
-            }
+                    // Get the new data from the screen parser
+                    val newZoneId =
+                        context.screenInfo.zoneName?.let { zoneRepo.getOrInsertZone(it) }
 
-            // determine dash type by iterating over source node text.
-            var dashType: String? = null
-            for (text in context.sourceNodeTexts) {
-                if (text.matches(Regex("^\\$\\d{1,2}\\.\\d{2}/active hr \\+ tips$"))) {
-                    dashType = "Earn by Time"
-                } else if (text.contains("Pay per offer + Customer tips") ||
-                    text.contains("Dash Along the Way")
-                ) {
-                    dashType = "Earn per Offer"
+                    val newDashType = context.screenInfo.dashType
+
+                    // Check if an update is actually needed
+                    val needsUpdate =
+                        (currentData.zoneId != newZoneId) || (currentData.dashType != newDashType)
+
+                    if (needsUpdate) {
+                        // If and only if something changed, perform a SINGLE update
+                        // with both new values.
+                        currentRepo.updatePreDashInfo(newZoneId, newDashType)
+                        Log.i("DasherIdleOffline", "Pre-dash info changed, updating Current table.")
+                    }
+
+                } catch (e: Exception) {
+                    Log.e("DasherIdleOffline", "!!! Error updating pre-dash zone/type data. !!!", e)
                 }
             }
-            Log.i("${this::class.simpleName} State", "Earning Type? - $dashType")
-            if (dashType != null) Manager.setPreDashType(dashType)
+        } else {
+            Log.d("DasherIdleOffline", "ScreenInfo is not IdleMap: ${context.screenInfo}")
         }
-
 
         return currentState
     }

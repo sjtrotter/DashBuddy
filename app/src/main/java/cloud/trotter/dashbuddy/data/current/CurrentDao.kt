@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import cloud.trotter.dashbuddy.data.dash.DashType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -34,6 +35,12 @@ interface CurrentDao {
 
     @Query("UPDATE current_dash SET isPaused = :isPaused, lastUpdate = :timestamp WHERE id = 1")
     suspend fun updateIsPaused(isPaused: Boolean, timestamp: Long)
+
+    @Query("UPDATE current_dash SET dashType = :dashType, lastUpdate = :timestamp WHERE id = 1")
+    suspend fun updateDashType(dashType: DashType, timestamp: Long)
+
+    @Query("UPDATE current_dash SET zoneId = :newZoneId, dashType = :newDashType, lastUpdate = :timestamp WHERE id = 1")
+    suspend fun updatePreDashInfo(newZoneId: Long?, newDashType: DashType?, timestamp: Long)
 
     @Query("UPDATE current_dash SET lastOfferId = :lastOfferId, lastOfferValue = :lastOfferValue, offersReceived = offersReceived + :offersReceivedIncrement, lastUpdate = :timestamp WHERE id = 1")
     suspend fun updateLastOfferInfo(

@@ -14,7 +14,7 @@ import java.util.Date
  * @property duration Total duration of the dash in milliseconds. Can be calculated (endTimeMillis - startTimeMillis).
  * @property activeTime Active time during the dash in milliseconds (time spent on deliveries). From Dash Summary.
  * @property totalDistance Total distance traveled during this dash.
- * @property earningMode Earning mode for this dash, e.g., "Per Offer", "By Time".
+ * @property dashType Earning mode for this dash, e.g., "Per Offer", "By Time".
  * @property totalEarnings Final total earnings for this dash from the Dash Summary.
  * @property basePay Breakdown of earnings: Base pay from DoorDash.
  * @property tips Breakdown of earnings: Total tips received.
@@ -59,7 +59,7 @@ data class DashEntity(
     val totalDistance: Double? = null,
 
     /** Earning mode for this dash, e.g., "Per Offer", "By Time". */
-    val earningMode: String? = null,
+    val dashType: DashType? = DashType.PER_OFFER,
 
     /** Final total earnings for this dash from the Dash Summary. */
     val totalEarnings: Double? = null,

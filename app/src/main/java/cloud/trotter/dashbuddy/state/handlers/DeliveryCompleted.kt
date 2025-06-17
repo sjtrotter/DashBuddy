@@ -4,7 +4,6 @@ import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.order.OrderEntity
 import cloud.trotter.dashbuddy.data.order.OrderStatus
 import cloud.trotter.dashbuddy.data.pay.AppPayEntity
-import cloud.trotter.dashbuddy.data.pay.AppPayType
 import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.data.pay.TipEntity
 import cloud.trotter.dashbuddy.data.pay.TipType
@@ -14,7 +13,7 @@ import cloud.trotter.dashbuddy.state.App as AppState
 import cloud.trotter.dashbuddy.state.Context as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
-import cloud.trotter.dashbuddy.util.NodeActionUtils
+import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -31,11 +30,11 @@ class DeliveryCompleted : StateHandler {
     override fun processEvent(context: StateContext, currentState: AppState): AppState {
         Log.d(tag, "Evaluating event. Current Screen: ${context.dasherScreen}")
 
-        if (!wasPayRecorded && context.screenTexts.any {
+        if (!wasPayRecorded && context.rootNodeTexts.any {
                 it.contains("Customer Tips", ignoreCase = true)
             }) {
             Log.i(tag, "Pay breakdown detected. Attempting to parse pays.")
-            val parsedPay = PayParser.parsePay(context.screenTexts)
+            val parsedPay = PayParser.parsePay(context.rootNodeTexts)
             Manager.enqueueDbWork {
                 try {
                     val completedCountOnScreen = parsedPay.customerTips.size
@@ -183,7 +182,7 @@ class DeliveryCompleted : StateHandler {
         // The goal is to find the dollar amount button and click it.
         // The button's text is the dollar amount itself.
         // We look for any text that starts with a '$'.
-        val buttonText = context.screenTexts.find { it.trim().startsWith("$") }
+        val buttonText = context.rootNodeTexts.find { it.trim().startsWith("$") }
 
         if (buttonText == null) {
             Log.w(
@@ -197,7 +196,7 @@ class DeliveryCompleted : StateHandler {
 
         Manager.getScope().launch {
             val clickSuccess =
-                NodeActionUtils.findAndClickNodeByText(context.rootNode, buttonText.trim())
+                AccNodeUtils.findAndClickNodeByText(context.rootNode, buttonText.trim())
             if (clickSuccess) {
                 Log.i(tag, "Successfully performed click on button with text: '$buttonText'")
                 DashBuddyApplication.sendBubbleMessage("Pay button clicked!")

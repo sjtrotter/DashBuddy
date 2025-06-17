@@ -14,7 +14,6 @@ enum class Screen(
     val requiredTexts: List<String> = emptyList(),
     val someOfTheseTexts: List<String> = emptyList(), // At least one text in this list must match
     val forbiddenTexts: List<String> = emptyList(),
-    val requiredSourceTexts: List<String> = emptyList(), // Texts to check in event.sourceNodeTexts
     val minTextCount: Int = 0, // Min number of texts expected on the screen (from root)
     val maxTextCount: Int = Int.MAX_VALUE, // Max number of texts
     // Custom matcher lambda for more complex logic beyond simple text checks for this screen
@@ -332,12 +331,12 @@ enum class Screen(
 
         // Use screenTexts from context for primary matching
         val textsToSearch =
-            context.screenTexts.joinToString(separator = " | ").lowercase(Locale.getDefault())
+            context.rootNodeTexts.joinToString(separator = " | ").lowercase(Locale.getDefault())
         val sourceTextsToSearch =
             context.sourceNodeTexts.joinToString(separator = " | ").lowercase(Locale.getDefault())
 
 
-        if (context.screenTexts.size < this.minTextCount || context.screenTexts.size > this.maxTextCount) {
+        if (context.rootNodeTexts.size < this.minTextCount || context.rootNodeTexts.size > this.maxTextCount) {
             return false
         }
 
@@ -357,13 +356,9 @@ enum class Screen(
             if (textsToSearch.contains(text.lowercase(Locale.getDefault()))) return false
         }
 
-        for (text in this.requiredSourceTexts) {
-            if (!sourceTextsToSearch.contains(text.lowercase(Locale.getDefault()))) return false
-        }
-
         // Execute custom matcher if provided
         this.customMatcher?.let {
-            if (!it(context.screenTexts, context.sourceNodeTexts, context)) return false
+            if (!it(context.rootNodeTexts, context.sourceNodeTexts, context)) return false
         }
 
         return true

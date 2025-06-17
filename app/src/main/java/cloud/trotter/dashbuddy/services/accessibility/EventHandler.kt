@@ -7,6 +7,10 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.state.ClickInfo
+import cloud.trotter.dashbuddy.state.parsers.ClickParser
+import cloud.trotter.dashbuddy.state.screens.ScreenRecognizerV2
+import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
 import cloud.trotter.dashbuddy.state.screens.Recognizer as ScreenRecognizer
@@ -20,8 +24,6 @@ import cloud.trotter.dashbuddy.log.Logger as Log
  * Singleton object to handle accessibility events.
  * This allows for centralized processing and state management
  * related to detected events.
- *
- * REFINED VERSION with advanced debouncing and screen fingerprinting.
  */
 object EventHandler {
 
@@ -34,6 +36,7 @@ object EventHandler {
     private var lastDasherScreen: DasherScreen? = null
     private var debouncedEvent: AccessibilityEvent? = null
     private var debouncedRootNode: AccessibilityNodeInfo? = null
+    private var debouncedRootNodeTexts: List<String> = emptyList()
     private val _serviceFlow = MutableStateFlow<AccessibilityService?>(null)
 
     // This runnable will contain the logic to process the event after the delay.
@@ -41,7 +44,7 @@ object EventHandler {
         Log.d(TAG, "Processing debounced event.")
         _serviceFlow.value?.let { activeService ->
             debouncedEvent?.let { event ->
-                processEvent(event, activeService, debouncedRootNode)
+                processEvent(event, activeService, debouncedRootNode, debouncedRootNodeTexts)
             }
         }
     }
@@ -59,6 +62,7 @@ object EventHandler {
      * It includes text, structure, and source node information for accurate comparison.
      */
     private data class ScreenFingerprint(
+        val rootNodeTexts: List<String>,
         val rootTextsHash: Int,
         val rootStructureHash: Int,
         val sourceNodeClassName: CharSequence?,
@@ -76,7 +80,7 @@ object EventHandler {
             packageName = null,
             rootNode = null,
             sourceClassName = null,
-            screenTexts = emptyList(),
+            rootNodeTexts = emptyList(),
             sourceNodeTexts = emptyList(),
             sourceNode = null,
             dasherScreen = null
@@ -102,17 +106,24 @@ object EventHandler {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 Log.v(
                     TAG,
-                    "High-priority event '${AccessibilityEvent.eventTypeToString(event.eventType)}' received. Processing immediately."
+                    "High-priority event '${
+                        AccessibilityEvent.eventTypeToString(event.eventType)
+                    }' received. Processing immediately."
                 )
                 // Cancel any pending debounced event because this new event is more important.
                 handler.removeCallbacks(debounceRunnable)
                 debouncedEvent = null
                 // Process this high-priority event right away.
-                processEvent(event, service, rootNode)
+                val rootNodeTexts = mutableListOf<String>()
+                AccNodeUtils.extractTexts(rootNode, rootNodeTexts)
+                processEvent(event, service, rootNode, rootNodeTexts)
             }
 
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                val currentFingerprint = createScreenFingerprint(rootNode, event.source)
+                val rootNodeTexts = mutableListOf<String>()
+                AccNodeUtils.extractTexts(rootNode, rootNodeTexts)
+                val currentFingerprint =
+                    createScreenFingerprint(rootNode, rootNodeTexts, event.source)
 
                 if (currentFingerprint == lastFingerprint) {
                     // This is a truly redundant update, ignore it.
@@ -128,6 +139,7 @@ object EventHandler {
                 handler.removeCallbacks(debounceRunnable)
                 debouncedEvent = event // Store a copy of the new event
                 debouncedRootNode = rootNode // Store a copy of the root node
+                debouncedRootNodeTexts = rootNodeTexts
                 handler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS)
             }
 
@@ -145,7 +157,8 @@ object EventHandler {
     private fun processEvent(
         event: AccessibilityEvent,
         service: AccessibilityService,
-        rootNodePassed: AccessibilityNodeInfo?
+        rootNodePassed: AccessibilityNodeInfo?,
+        rootNodeTexts: List<String>
     ) {
         var rootNode = rootNodePassed
         if (rootNode == null) {
@@ -153,27 +166,26 @@ object EventHandler {
         }
 
         val currentEventType = event.eventType
-
         Log.d(
             TAG,
             "--- Processing Event: ${AccessibilityEvent.eventTypeToString(currentEventType)} ---"
         )
 
-        val currentScreenTexts = mutableListOf<String>()
-        extractTextsFromNode(rootNode, currentScreenTexts)
+        val sourceNodeTexts = mutableListOf<String>()
+        event.source?.let { AccNodeUtils.extractTexts(it, sourceNodeTexts) }
 
-        val currentSourceTexts = mutableListOf<String>()
-        event.source?.let { extractTextsFromNode(it, currentSourceTexts) }
-
-        if (currentScreenTexts.isNotEmpty()) {
-            Log.d(TAG, "Screen texts: ${currentScreenTexts.joinToString(" | ")}")
+        if (rootNodeTexts.isNotEmpty()) {
+            Log.d(TAG, "Screen texts: ${rootNodeTexts.joinToString(" | ")}")
         } else {
             Log.d(TAG, "No screen texts extracted.")
         }
-        if (currentSourceTexts.isNotEmpty()) {
-            Log.d(TAG, "Source texts: ${currentSourceTexts.joinToString(" | ")}")
+        if (sourceNodeTexts.isNotEmpty()) {
+            Log.d(TAG, "Source texts: ${sourceNodeTexts.joinToString(" | ")}")
         }
 
+        var clickInfo: ClickInfo = ClickInfo.NoClick
+        if (currentEventType == AccessibilityEvent.TYPE_VIEW_CLICKED)
+            clickInfo = ClickParser.parse(sourceNodeTexts)
         val tempContext = StateContext(
             timestamp = Date().time,
             androidAppContext = DashBuddyApplication.context,
@@ -182,11 +194,14 @@ object EventHandler {
             packageName = event.packageName,
             rootNode = rootNode,
             sourceClassName = event.className,
-            screenTexts = currentScreenTexts,
-            sourceNodeTexts = currentSourceTexts,
+            sourceNode = event.source,
+            rootNodeTexts = rootNodeTexts,
+            sourceNodeTexts = sourceNodeTexts,
+            clickInfo = clickInfo
         )
         val finalContext = tempContext.copy(
-            dasherScreen = ScreenRecognizer.identify(tempContext, lastDasherScreen)
+            dasherScreen = ScreenRecognizer.identify(tempContext, lastDasherScreen),
+            screenInfo = ScreenRecognizerV2.identify(tempContext)
         )
 
         StateManager.dispatchEvent(finalContext)
@@ -197,6 +212,14 @@ object EventHandler {
         if (event == debouncedEvent) {
             debouncedEvent = null
         }
+
+        // Testing ScreenRecognizerV2
+        try {
+            val screenInfoV2 = ScreenRecognizerV2.identify(finalContext)
+            Log.i(TAG, "[V2-TEST] Recognized ScreenInfo: $screenInfoV2")
+        } catch (e: Exception) {
+            Log.e(TAG, "[V2-TEST] Exception while recognizing screen", e)
+        }
     }
 
     /**
@@ -204,57 +227,20 @@ object EventHandler {
      */
     private fun createScreenFingerprint(
         rootNode: AccessibilityNodeInfo,
+        rootNodeTexts: List<String>,
         sourceNode: AccessibilityNodeInfo?
     ): ScreenFingerprint {
-        val screenTexts = mutableListOf<String>()
-        extractTextsFromNode(rootNode, screenTexts)
 
         val structureInfo = StringBuilder()
-        extractStructureInfo(rootNode, structureInfo)
+        AccNodeUtils.extractStructure(rootNode, structureInfo)
 
         return ScreenFingerprint(
-            rootTextsHash = Objects.hash(screenTexts),
+            rootNodeTexts = rootNodeTexts,
+            rootTextsHash = Objects.hash(rootNodeTexts),
             rootStructureHash = structureInfo.toString().hashCode(),
             sourceNodeClassName = sourceNode?.className,
             sourceNodeViewId = sourceNode?.viewIdResourceName,
             sourceNodeText = sourceNode?.text ?: sourceNode?.contentDescription
         )
-    }
-
-    /**
-     * Recursively extracts identifying structural info (class name, view ID) from nodes.
-     * This helps differentiate screens with identical text but different layouts.
-     */
-    private fun extractStructureInfo(nodeInfo: AccessibilityNodeInfo?, builder: StringBuilder) {
-        if (nodeInfo == null || !nodeInfo.isVisibleToUser) return
-
-        builder.append(nodeInfo.className)
-        builder.append(nodeInfo.viewIdResourceName)
-        // Add other stable attributes if needed (e.g., isClickable)
-        // builder.append(nodeInfo.isClickable)
-
-        for (i in 0 until nodeInfo.childCount) {
-            extractStructureInfo(nodeInfo.getChild(i), builder)
-        }
-    }
-
-    /**
-     * Recursively extracts visible text from a node and its children.
-     */
-    private fun extractTextsFromNode(nodeInfo: AccessibilityNodeInfo?, texts: MutableList<String>) {
-        if (nodeInfo == null || !nodeInfo.isVisibleToUser) return
-
-        nodeInfo.text?.let {
-            if (it.isNotEmpty()) texts.add(it.toString().trim())
-        }
-        nodeInfo.contentDescription?.let {
-            val desc = it.toString().trim()
-            if (desc.isNotEmpty() && !texts.contains(desc)) {
-                texts.add(desc)
-            }
-        }
-        for (i in 0 until nodeInfo.childCount) {
-            extractTextsFromNode(nodeInfo.getChild(i), texts)
-        }
     }
 }

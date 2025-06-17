@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.data.current
 
+import cloud.trotter.dashbuddy.data.dash.DashType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -14,7 +15,11 @@ class CurrentRepo(private val currentDao: CurrentDao) {
         withContext(Dispatchers.IO) {
             Log.d(
                 tag,
-                "Upserting current dash state. IsActive: ${currentDashState.isActive}, DashID: ${currentDashState.dashId}"
+                "Upserting current dash state. IsActive: ${
+                    currentDashState.isActive
+                }, DashID: ${
+                    currentDashState.dashId
+                }"
             )
             currentDao.upsertCurrentDashState(currentDashState)
         }
@@ -54,6 +59,15 @@ class CurrentRepo(private val currentDao: CurrentDao) {
         }
     }
 
+    suspend fun updateDashType(dashType: DashType) {
+        withContext(Dispatchers.IO) {
+            currentDao.updateDashType(
+                dashType,
+                System.currentTimeMillis()
+            )
+        }
+    }
+
     suspend fun updateIsActive(isActive: Boolean) {
         withContext(Dispatchers.IO) {
             currentDao.updateIsActive(
@@ -88,15 +102,21 @@ class CurrentRepo(private val currentDao: CurrentDao) {
     }
 
     suspend fun incrementOffersAccepted() {
-        withContext(Dispatchers.IO) { currentDao.incrementOffersAccepted(System.currentTimeMillis()) }
+        withContext(Dispatchers.IO) {
+            currentDao.incrementOffersAccepted(System.currentTimeMillis())
+        }
     }
 
     suspend fun incrementOffersDeclined() {
-        withContext(Dispatchers.IO) { currentDao.incrementOffersDeclined(System.currentTimeMillis()) }
+        withContext(Dispatchers.IO) {
+            currentDao.incrementOffersDeclined(System.currentTimeMillis())
+        }
     }
 
     suspend fun incrementDeliveriesCompleted() {
-        withContext(Dispatchers.IO) { currentDao.incrementDeliveriesCompleted(System.currentTimeMillis()) }
+        withContext(Dispatchers.IO) {
+            currentDao.incrementDeliveriesCompleted(System.currentTimeMillis())
+        }
     }
 
     suspend fun updateDashEarnings(newEarnings: Double?) {
@@ -150,7 +170,10 @@ class CurrentRepo(private val currentDao: CurrentDao) {
                 val updatedQueue = current.activeOrderQueue.toMutableList().apply {
                     remove(completedOrderId)
                 }
-                Log.i(tag, "Removing order $completedOrderId from queue. New queue: $updatedQueue")
+                Log.i(
+                    tag,
+                    "Removing order $completedOrderId from queue. New queue: $updatedQueue"
+                )
                 currentDao.updateActiveOrderQueue(updatedQueue, System.currentTimeMillis())
 
                 // If the completed order was the "active" one, clear it.
@@ -172,7 +195,7 @@ class CurrentRepo(private val currentDao: CurrentDao) {
     suspend fun startNewActiveDash(
         dashId: Long,
         zoneId: Long?,
-        dashMode: String?,
+        dashType: DashType?,
         startTime: Long = System.currentTimeMillis()
     ) {
         withContext(Dispatchers.IO) {
@@ -183,7 +206,7 @@ class CurrentRepo(private val currentDao: CurrentDao) {
                 dashStartTime = startTime,
                 isActive = true,
                 isPaused = false,
-                dashMode = dashMode,
+                dashType = dashType,
                 dashEarnings = 0.0,
                 deliveriesReceived = 0,
                 deliveriesCompleted = 0,
@@ -192,8 +215,7 @@ class CurrentRepo(private val currentDao: CurrentDao) {
                 offersReceived = 0,
                 offersAccepted = 0,
                 offersDeclined = 0,
-                lastUpdate = startTime,
-                // Explicitly initialize new fields
+                lastUpdate = System.currentTimeMillis(),
                 activeOrderId = null,
                 activeOrderQueue = emptyList()
             )
@@ -244,6 +266,28 @@ class CurrentRepo(private val currentDao: CurrentDao) {
             } else {
                 Log.w(tag, "Cannot update active order focus, current dash state is null.")
             }
+        }
+    }
+
+    suspend fun updatePreDashInfo(newZoneId: Long?, newDashType: DashType?) {
+        withContext(Dispatchers.IO) {
+            // 1. Get the current state from the DB, or create a fresh default entity if it's null.
+            // The 'id = 1' ensures we're always working with the single row.
+            val currentState = currentDao.getCurrentDashState() ?: CurrentEntity(id = 1)
+
+            // 2. Create the new, updated entity in memory using .copy()
+            val updatedState = currentState.copy(
+                zoneId = newZoneId,
+                dashType = newDashType,
+                lastUpdate = System.currentTimeMillis()
+            )
+
+            // 3. Perform a single, atomic upsert operation.
+            // This will INSERT the row if it's the first time, or
+            // REPLACE the existing row with the updated data.
+            currentDao.upsertCurrentDashState(updatedState)
+
+            Log.i(tag, "Upserted pre-dash info. ZoneID: $newZoneId, Mode: $newDashType")
         }
     }
 }

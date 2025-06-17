@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
 import cloud.trotter.dashbuddy.data.dash.DashEntity
+import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.offer.OfferEntity
 import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 
@@ -39,13 +40,16 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 )
 data class CurrentEntity(
     @PrimaryKey val id: Long = 1, // Singleton row
-    @ColumnInfo(index = true, name = "dashId") val dashId: Long? = null,
-    @ColumnInfo(index = true, name = "zoneId") val zoneId: Long? = null,
-    @ColumnInfo(index = true, name = "lastOfferId") val lastOfferId: Long? = null,
+    @ColumnInfo(index = true, name = "dashId")
+    val dashId: Long? = null,
+    @ColumnInfo(index = true, name = "zoneId")
+    val zoneId: Long? = null,
+    @ColumnInfo(index = true, name = "lastOfferId")
+    val lastOfferId: Long? = null,
+    val dashType: DashType? = null,
     val dashStartTime: Long? = null,
     val isActive: Boolean = false,
     val isPaused: Boolean = false,
-    val dashMode: String? = null,
     val dashEarnings: Double? = null,
     val deliveriesReceived: Int? = null,
     val deliveriesCompleted: Int? = null,

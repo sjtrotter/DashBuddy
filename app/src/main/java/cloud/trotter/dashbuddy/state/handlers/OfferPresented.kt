@@ -125,7 +125,7 @@ class OfferPresented : StateHandler {
                     Log.w(tag, "Cannot process offer: Missing current dashId or zoneId.")
                     return@enqueueDbWork
                 }
-                val parsedOffer = OfferParser.parseOffer(context.screenTexts)
+                val parsedOffer = OfferParser.parseOffer(context.rootNodeTexts)
                 if (parsedOffer == null) {
                     Log.w(tag, "!!! OfferParser returned null. Offer was not parsed!")
                     return@enqueueDbWork

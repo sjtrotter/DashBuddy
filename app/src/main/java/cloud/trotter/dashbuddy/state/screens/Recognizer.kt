@@ -10,7 +10,7 @@ object Recognizer {
     // Define the order in which to check screens.
     // More specific screens (e.g., popups, dialogs that can overlay others)
     // should generally come before more general, full-screen states.
-    private val screenCheckOrder: List<Screen> = listOf(
+    val screenCheckOrder: List<Screen> = listOf(
         // High-priority, often modal or overlay screens
         Screen.OFFER_POPUP,
         Screen.DELIVERY_COMPLETED_DIALOG,
@@ -79,8 +79,8 @@ object Recognizer {
 
     fun identify(context: Context, previousScreen: Screen? = null): Screen {
         // 1. Log screen texts if they exist, with newlines handled.
-        if (context.screenTexts.isNotEmpty()) {
-            Log.v(TAG, "Screen Texts: [${context.screenTexts}]")
+        if (context.rootNodeTexts.isNotEmpty()) {
+            Log.v(TAG, "Screen Texts: [${context.rootNodeTexts}]")
         } else {
             Log.v(
                 TAG,
@@ -111,7 +111,7 @@ object Recognizer {
             Log.w(
                 TAG,
                 "Screen UNKNOWN. No signature matched. Texts (first 10): ${
-                    context.screenTexts.take(10).joinToString(" | ")
+                    context.rootNodeTexts.take(10).joinToString(" | ")
                 }, SourceClass: ${context.sourceClassName}"
             )
             return Screen.UNKNOWN
