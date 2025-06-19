@@ -9,47 +9,17 @@ import cloud.trotter.dashbuddy.log.Logger as Log // Your Logger alias
 // AppState enum (from app_state_kt_with_user_handlers artifact) is expected to be in this package or imported.
 // StateHandler interface is expected to be defined and imported.
 // StateContext data class is expected to be defined and imported.
-import cloud.trotter.dashbuddy.state.App as AppState
-import cloud.trotter.dashbuddy.state.Context as StateContext
+import cloud.trotter.dashbuddy.state.AppState as AppState
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
 
-object Manager {
+object StateManager {
 
     private const val TAG = "StateManager"
 
     private var currentState: AppState =
         AppState.UNKNOWN // Default initial state before initialization
     private lateinit var currentHandler: StateHandler
-
-    /** The recorded pre-dash zone. */
-    private var preDashZone: String? = null
-
-    /** Setting the zone. */
-    fun setPreDashZone(zone: String) {
-        preDashZone = zone
-    }
-
-    /** Consuming the zone. */
-    fun consumePreDashZone(): String? {
-        val preDashZone = this.preDashZone
-        this.preDashZone = null
-        return preDashZone
-    }
-
-    /** The recorded pre-dash earning type. */
-    private var preDashType: String = "Earn per Offer"
-
-    /** Setting the dash type. */
-    fun setPreDashType(dashType: String) {
-        preDashType = dashType
-    }
-
-    /** Consuming the dash type. */
-    fun consumePreDashType(): String {
-        val preDashType = this.preDashType
-        this.preDashType = "Earn per Offer"
-        return preDashType
-    }
 
     /** A channel that acts as a sequential queue for database jobs. */
     private val dbWorkChannel = Channel<suspend CoroutineScope.() -> Unit>(Channel.UNLIMITED)

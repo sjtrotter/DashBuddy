@@ -14,8 +14,8 @@ import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
 import cloud.trotter.dashbuddy.state.screens.Recognizer as ScreenRecognizer
-import cloud.trotter.dashbuddy.state.Context as StateContext
-import cloud.trotter.dashbuddy.state.Manager as StateManager
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
+import cloud.trotter.dashbuddy.state.StateManager as StateManager
 import java.util.Date
 import java.util.Objects
 import cloud.trotter.dashbuddy.log.Logger as Log

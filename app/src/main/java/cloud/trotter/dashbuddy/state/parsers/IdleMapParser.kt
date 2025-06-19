@@ -8,26 +8,29 @@ object IdleMapParser {
     // This logic is moved from the DasherIdleOffline handler.
     // It now takes the full list of screen texts to be more robust.
     fun parse(screenTexts: List<String>): Pair<String?, DashType?> {
-        var zoneName: String? = null
+        var zoneName: String?
         var dashType: DashType? = null
 
         // Find Earning Type
-        for (text in screenTexts) {
-            if (text.matches(Regex("^\\$\\d{1,2}\\.\\d{2}/active hr \\+ tips$"))) {
+        for (text in screenTexts.withIndex()) {
+            if (text.value.matches(Regex("^\\$\\d{1,2}\\.\\d{2}/active hr \\+ tips$"))) {
                 dashType = DashType.BY_TIME
-            } else if (text.contains("Pay per offer + Customer tips") ||
-                text.contains("Dash Along the Way")
+            } else if (text.value.contains("Pay per offer + Customer tips") ||
+                text.value.contains("Dash Along the Way")
             ) {
                 dashType = DashType.PER_OFFER
             }
         }
 
-        var zonePreIndex = screenTexts.indexOf("Promos")
+        var zonePreIndex = screenTexts.indexOfFirst { it.contains("Promos", ignoreCase = true) }
         if (zonePreIndex == -1) {
-            zonePreIndex = screenTexts.indexOf("Help")
+            zonePreIndex = screenTexts.indexOfFirst { it.contains("Help", ignoreCase = true) }
         }
-        if (zonePreIndex != -1) {
-            zoneName = screenTexts.getOrNull(zonePreIndex + 1)
+
+        zoneName = if (zonePreIndex != -1) {
+            screenTexts[zonePreIndex + 1]
+        } else {
+            null
         }
 
         Log.d("IdleMapParser", "Parsed Zone: $zoneName, Type: $dashType")

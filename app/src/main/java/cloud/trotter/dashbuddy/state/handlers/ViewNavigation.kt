@@ -1,20 +1,20 @@
 package cloud.trotter.dashbuddy.state.handlers
 
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.App as AppState
-import cloud.trotter.dashbuddy.state.Context as StateContext
+import cloud.trotter.dashbuddy.state.AppState as AppState
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
 
 class ViewNavigation : StateHandler {
 
-    override fun processEvent(context: StateContext, currentState: AppState): AppState {
+    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
         // add more specific things up here if needed.
 
-        return when (context.dasherScreen) {
+        return when (stateContext.dasherScreen) {
             Screen.MAIN_MENU_VIEW -> AppState.VIEWING_MAIN_MENU
             Screen.MAIN_MAP_IDLE -> AppState.DASHER_ENDING_DASH_SESSION
             Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
@@ -25,7 +25,7 @@ class ViewNavigation : StateHandler {
     }
 
     override fun enterState(
-        context: StateContext,
+        stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
@@ -34,7 +34,11 @@ class ViewNavigation : StateHandler {
 //        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${context.dasherScreen?.screenName} Screen")
     }
 
-    override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
+    override fun exitState(
+        stateContext: StateContext,
+        currentState: AppState,
+        nextState: AppState
+    ) {
         Log.d("${this::class.simpleName} State", "Exiting state...")
     }
 }

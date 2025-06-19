@@ -12,13 +12,13 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 
 // Placeholder/Example handlers for states not yet implemented by you
 // You would replace these with your actual handler classes.
-class ViewPickupDetails : StateHandler {
+class NavigationToStore : StateHandler {
 
     private val currentRepo = DashBuddyApplication.currentRepo
     private val orderRepo = DashBuddyApplication.orderRepo
     private val storeRepo = DashBuddyApplication.storeRepo
 
-    private val tag = this::class.simpleName ?: "ViewPickupDetails"
+    private val tag = this::class.simpleName ?: "NavigationToStore"
 
     override fun processEvent(
         stateContext: StateContext,
@@ -29,11 +29,9 @@ class ViewPickupDetails : StateHandler {
         // process the screen
         return when (stateContext.dasherScreen) {
             Screen.DASH_CONTROL -> AppState.VIEWING_DASH_CONTROL
-//            Screen.ON_DASH_ALONG_THE_WAY -> maybe?
 //            Screen.TIMELINE_VIEW -> maybe add for timeline eventually?
-            Screen.NAVIGATION_VIEW -> AppState.VIEWING_NAVIGATION
+            Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
             Screen.OFFER_POPUP -> AppState.SESSION_ACTIVE_OFFER_PRESENTED
-            Screen.DELIVERY_COMPLETED_DIALOG -> AppState.DELIVERY_COMPLETED
             else -> currentState
         }
     }
@@ -43,13 +41,14 @@ class ViewPickupDetails : StateHandler {
         currentState: AppState,
         previousState: AppState?
     ) {
-        Log.d(tag, "Entering state: DeliveryDetails")
+        Log.d(tag, "Entering state: NavigationToStore")
 
         StateManager.enqueueDbWork {
             try {
                 // --- Initial Setup and Parsing ---
                 val current = currentRepo.getCurrentDashState()
-                val activeOrderQueue = current?.activeOrderQueue
+                val activeOrderQueue =
+                    current?.activeOrderQueue?.plus(listOfNotNull(current.activeOrderId))
                 if (current == null || (activeOrderQueue.isNullOrEmpty() && current.activeOrderId == null)) {
                     Log.w(tag, "No active orders in queue. Cannot process.")
                     return@enqueueDbWork

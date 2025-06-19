@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state.screens // Package for the Screen enum
 
 import java.util.Locale
-import cloud.trotter.dashbuddy.state.Context as StateContext
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
 
 /**
  * Represents distinct UI screens identified within the Dasher application.
@@ -332,9 +332,6 @@ enum class Screen(
         // Use screenTexts from context for primary matching
         val textsToSearch =
             context.rootNodeTexts.joinToString(separator = " | ").lowercase(Locale.getDefault())
-        val sourceTextsToSearch =
-            context.sourceNodeTexts.joinToString(separator = " | ").lowercase(Locale.getDefault())
-
 
         if (context.rootNodeTexts.size < this.minTextCount || context.rootNodeTexts.size > this.maxTextCount) {
             return false

@@ -4,7 +4,7 @@ import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.data.store.StoreParser
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.Context
+import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.state.ScreenInfo
 import cloud.trotter.dashbuddy.state.parsers.IdleMapParser
 
@@ -62,32 +62,32 @@ object ScreenRecognizerV2 {
         // UNKNOWN is the implicit fallback if none of these match in the loop.
     )
 
-    fun identify(context: Context): ScreenInfo {
+    fun identify(stateContext: StateContext): ScreenInfo {
         for (screenCandidate in screenCheckOrder) {
-            if (screenCandidate.matches(context)) {
+            if (screenCandidate.matches(stateContext)) {
                 Log.i(TAG, "V2 Matched Screen: $screenCandidate")
 
                 // This is where we delegate to the correct parser
                 return when (screenCandidate) {
                     Screen.OFFER_POPUP -> {
-                        val parsedOffer = OfferParser.parseOffer(context.rootNodeTexts)
+                        val parsedOffer = OfferParser.parseOffer(stateContext.rootNodeTexts)
                         parsedOffer?.let { ScreenInfo.Offer(screenCandidate, it) }
                             ?: ScreenInfo.Simple(screenCandidate) // Fallback
                     }
 
                     Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL -> {
-                        val parsedStore = StoreParser.parseStoreDetails(context.rootNodeTexts)
+                        val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
                         parsedStore?.let { ScreenInfo.PickupDetails(screenCandidate, it) }
                             ?: ScreenInfo.Simple(screenCandidate) // Fallback
                     }
 
                     Screen.DELIVERY_COMPLETED_DIALOG -> {
-                        val parsedPay = PayParser.parsePay(context.rootNodeTexts)
+                        val parsedPay = PayParser.parsePay(stateContext.rootNodeTexts)
                         ScreenInfo.DeliveryCompleted(screenCandidate, parsedPay)
                     }
 
                     Screen.MAIN_MAP_IDLE -> {
-                        val (zone, type) = IdleMapParser.parse(context.rootNodeTexts)
+                        val (zone, type) = IdleMapParser.parse(stateContext.rootNodeTexts)
                         ScreenInfo.IdleMap(screenCandidate, zone, type)
                     }
 

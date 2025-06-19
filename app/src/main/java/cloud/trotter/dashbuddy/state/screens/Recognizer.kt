@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state.screens
 
-import cloud.trotter.dashbuddy.state.Context
+import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 object Recognizer {
@@ -77,29 +77,29 @@ object Recognizer {
         // UNKNOWN is the implicit fallback if none of these match in the loop.
     )
 
-    fun identify(context: Context, previousScreen: Screen? = null): Screen {
+    fun identify(stateContext: StateContext, previousScreen: Screen? = null): Screen {
         // 1. Log screen texts if they exist, with newlines handled.
-        if (context.rootNodeTexts.isNotEmpty()) {
-            Log.v(TAG, "Screen Texts: [${context.rootNodeTexts}]")
+        if (stateContext.rootNodeTexts.isNotEmpty()) {
+            Log.v(TAG, "Screen Texts: [${stateContext.rootNodeTexts}]")
         } else {
             Log.v(
                 TAG,
-                "No screen texts. Event: ${context.eventTypeString}, SourceClass: ${context.sourceClassName}"
+                "No screen texts. Event: ${stateContext.eventTypeString}, SourceClass: ${stateContext.sourceClassName}"
             )
         }
 
         // 2. Log source texts if they exist, with newlines handled.
-        if (context.sourceNodeTexts.isNotEmpty()) {
-            Log.v(TAG, "Source Texts: [${context.sourceNodeTexts}]")
+        if (stateContext.sourceNodeTexts.isNotEmpty()) {
+            Log.v(TAG, "Source Texts: [${stateContext.sourceNodeTexts}]")
         } else {
             Log.v(
                 TAG,
-                "No source texts. Event: ${context.eventTypeString}, SourceClass: ${context.sourceClassName}"
+                "No source texts. Event: ${stateContext.eventTypeString}, SourceClass: ${stateContext.sourceClassName}"
             )
         }
 
         for (screenCandidate in screenCheckOrder) {
-            if (screenCandidate.matches(context)) {
+            if (screenCandidate.matches(stateContext)) {
                 Log.i(TAG, "Screen Identified As: $screenCandidate")
                 return screenCandidate
             }
@@ -111,8 +111,8 @@ object Recognizer {
             Log.w(
                 TAG,
                 "Screen UNKNOWN. No signature matched. Texts (first 10): ${
-                    context.rootNodeTexts.take(10).joinToString(" | ")
-                }, SourceClass: ${context.sourceClassName}"
+                    stateContext.rootNodeTexts.take(10).joinToString(" | ")
+                }, SourceClass: ${stateContext.sourceClassName}"
             )
             return Screen.UNKNOWN
         }

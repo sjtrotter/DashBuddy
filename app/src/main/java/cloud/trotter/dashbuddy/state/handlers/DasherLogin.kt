@@ -2,26 +2,34 @@ package cloud.trotter.dashbuddy.state.handlers
 
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.App as AppState
-import cloud.trotter.dashbuddy.state.Context as StateContext
+import cloud.trotter.dashbuddy.state.AppState as AppState
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 
 class DasherLogin : StateHandler {
 
-    override fun processEvent(context: StateContext, currentState: AppState): AppState {
+    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
         return currentState
     }
 
-    override fun enterState(context: StateContext, currentState: AppState, previousState: AppState?) {
+    override fun enterState(
+        stateContext: StateContext,
+        currentState: AppState,
+        previousState: AppState?
+    ) {
         Log.d("${this::class.simpleName} State", "Entering state...")
         // initialize components here
-        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${context.dasherScreen?.screenName} Screen")
+        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${stateContext.dasherScreen?.screenName} Screen")
     }
 
-    override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
+    override fun exitState(
+        stateContext: StateContext,
+        currentState: AppState,
+        nextState: AppState
+    ) {
         Log.d("${this::class.simpleName} State", "Exiting state...")
     }
 }

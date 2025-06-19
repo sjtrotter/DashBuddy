@@ -4,13 +4,12 @@ import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.data.dash.DashEntity
 import cloud.trotter.dashbuddy.data.zone.ZoneEntity
-import cloud.trotter.dashbuddy.state.Manager
+import cloud.trotter.dashbuddy.state.StateManager
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.App as AppState
-import cloud.trotter.dashbuddy.state.Context as StateContext
+import cloud.trotter.dashbuddy.state.AppState as AppState
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
-import kotlinx.coroutines.launch
 
 class DashStopping : StateHandler {
 
@@ -21,12 +20,12 @@ class DashStopping : StateHandler {
     private val dashRepo = DashBuddyApplication.dashRepo
     private val zoneRepo = DashBuddyApplication.zoneRepo // Added ZoneRepository
 
-    override fun processEvent(context: StateContext, currentState: AppState): AppState {
+    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d(tag, "Evaluating state for event...")
 
         // The primary logic of this state is in enterState.
         // Here, we just transition if the screen changes after the dash has been stopped.
-        if (context.dasherScreen == Screen.MAIN_MAP_IDLE) {
+        if (stateContext.dasherScreen == Screen.MAIN_MAP_IDLE) {
             Log.i(tag, "Screen is MAIN_MAP_IDLE, transitioning to DASHER_IDLE_OFFLINE.")
             return AppState.DASHER_IDLE_OFFLINE
         }
@@ -38,13 +37,13 @@ class DashStopping : StateHandler {
     }
 
     override fun enterState(
-        context: StateContext,
+        stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
         Log.i(tag, "Entering state: Attempting to stop and finalize current dash.")
 
-        Manager.enqueueDbWork {
+        StateManager.enqueueDbWork {
             var currentZoneName: String?
             try {
                 // Get current dash state first
@@ -90,7 +89,7 @@ class DashStopping : StateHandler {
 
                 if (dash != null) {
                     Log.d(tag, "Dash to finalize found: $dash")
-                    val stopTime = context.timestamp
+                    val stopTime = stateContext.timestamp
                     val duration = if (dash.startTime > 0) stopTime - dash.startTime else 0L
 
                     val endedDash = dash.copy(
@@ -136,7 +135,11 @@ class DashStopping : StateHandler {
         }
     }
 
-    override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
+    override fun exitState(
+        stateContext: StateContext,
+        currentState: AppState,
+        nextState: AppState
+    ) {
         Log.i(tag, "Exiting state to $nextState.")
         // Any cleanup specific to exiting DashStopping, if necessary
     }

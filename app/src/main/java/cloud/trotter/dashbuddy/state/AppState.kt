@@ -43,7 +43,7 @@ import cloud.trotter.dashbuddy.state.handlers.ViewTimeline
  * @property handler The concrete [StateHandler] instance for this state.
  * @property displayName A user-friendly name for the state, useful for logging.
  */
-enum class App(
+enum class AppState(
     val handler: StateHandler,
     val displayName: String
 ) {

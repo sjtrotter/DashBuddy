@@ -2,10 +2,10 @@ package cloud.trotter.dashbuddy.state.handlers
 
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.dash.DashEntity
-import cloud.trotter.dashbuddy.state.Manager
+import cloud.trotter.dashbuddy.state.StateManager
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.App as AppState
-import cloud.trotter.dashbuddy.state.Context as StateContext
+import cloud.trotter.dashbuddy.state.AppState as AppState
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
 
@@ -18,12 +18,12 @@ class DashStarting : StateHandler {
     private val dashZoneRepo = DashBuddyApplication.dashZoneRepo
     private val zoneRepo = DashBuddyApplication.zoneRepo
 
-    override fun processEvent(context: StateContext, currentState: AppState): AppState {
+    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d(tag, "Evaluating state for event...")
 
         // The main setup happens in enterState.
         // This method transitions based on the screen after setup.
-        return when (context.screenInfo?.screen) {
+        return when (stateContext.screenInfo?.screen) {
             Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
             Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
 
@@ -32,13 +32,13 @@ class DashStarting : StateHandler {
     }
 
     override fun enterState(
-        context: StateContext,
+        stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
         Log.i(tag, "Entering state: Initializing new dash from persisted CurrentEntity.")
 
-        Manager.enqueueDbWork {
+        StateManager.enqueueDbWork {
             try {
                 // 1. Get the pre-dash info from the database, NOT the Manager.
                 val currentInfo = currentRepo.getCurrentDashState()
@@ -65,7 +65,7 @@ class DashStarting : StateHandler {
                 // 2. Insert new DashEntity using the data from the Current table
                 val newDash = DashEntity(
                     zoneId = zoneId,
-                    startTime = context.timestamp,
+                    startTime = stateContext.timestamp,
                     dashType = dashType
                 )
                 val dashId = dashRepo.insertDash(newDash)
@@ -77,7 +77,7 @@ class DashStarting : StateHandler {
                 Log.i(tag, "New dash created with ID: $dashId for zoneId: $zoneId")
 
                 // 3. Link the dash and zone (this logic is the same)
-                dashZoneRepo.linkDashToZone(dashId, zoneId, true, context.timestamp)
+                dashZoneRepo.linkDashToZone(dashId, zoneId, true, stateContext.timestamp)
                 Log.d(tag, "DashZone link created: $dashId -> $zoneId")
 
                 // 4. Update Current table to make the dash fully active
@@ -85,7 +85,7 @@ class DashStarting : StateHandler {
                     dashId,
                     zoneId,
                     dashType,
-                    context.timestamp,
+                    stateContext.timestamp,
                 )
                 Log.i(tag, "Current dash state updated. Dash successfully started.")
 
@@ -98,7 +98,11 @@ class DashStarting : StateHandler {
         }
     }
 
-    override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
+    override fun exitState(
+        stateContext: StateContext,
+        currentState: AppState,
+        nextState: AppState
+    ) {
         Log.i(tag, "Exiting state to $nextState.")
     }
 }

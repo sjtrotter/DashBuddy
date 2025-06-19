@@ -6,10 +6,10 @@ import cloud.trotter.dashbuddy.data.offer.OfferEntity
 import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.offer.OfferStatus
-import cloud.trotter.dashbuddy.state.Manager
+import cloud.trotter.dashbuddy.state.StateManager
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.App as AppState
-import cloud.trotter.dashbuddy.state.Context as StateContext
+import cloud.trotter.dashbuddy.state.AppState as AppState
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
 import kotlinx.coroutines.flow.first
@@ -27,18 +27,18 @@ class OfferPresented : StateHandler {
     private val tag = this::class.simpleName ?: "OfferPresented"
 
 
-    override fun processEvent(context: StateContext, currentState: AppState): AppState {
+    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d(tag, "Evaluating state for event...")
 
-        if (internalOfferId != null && context.eventTypeString == "TYPE_VIEW_CLICKED") {
+        if (internalOfferId != null && stateContext.eventTypeString == "TYPE_VIEW_CLICKED") {
             // --- Logic for Accept click ---
-            if (context.sourceNodeTexts.any {
+            if (stateContext.sourceNodeTexts.any {
                     it.equals("Accept", ignoreCase = true) ||
                             it.equals("Add to route", ignoreCase = true)
                 }) {
                 Log.i(tag, "'Accept/Add to Route' button clicked for offer ID: $internalOfferId")
                 offerDecided = true
-                Manager.enqueueDbWork {
+                StateManager.enqueueDbWork {
                     try {
                         offerRepo.updateOfferStatus(internalOfferId!!, OfferStatus.ACCEPTED)
                         Log.i(tag, "Offer status updated to ACCEPTED for ID: $internalOfferId")
@@ -49,12 +49,12 @@ class OfferPresented : StateHandler {
                 }
             }
             // --- Logic for Decline click ---
-            else if (context.sourceNodeTexts.any {
+            else if (stateContext.sourceNodeTexts.any {
                     it.equals("Decline offer", ignoreCase = true)
                 }) {
                 Log.i(tag, "'Decline offer' button clicked for offer ID: $internalOfferId")
                 offerDecided = true
-                Manager.enqueueDbWork {
+                StateManager.enqueueDbWork {
                     try {
                         offerRepo.updateOfferStatus(
                             internalOfferId!!,
@@ -72,12 +72,12 @@ class OfferPresented : StateHandler {
                 }
             }
             // --- Logic for Decline Order (CoD) click ---
-            else if (context.sourceNodeTexts.any {
+            else if (stateContext.sourceNodeTexts.any {
                     it.equals("Decline order", ignoreCase = true)
                 }) {
                 Log.i(tag, "'Decline Order' button clicked for offer ID: $internalOfferId")
                 offerDecided = true
-                Manager.enqueueDbWork {
+                StateManager.enqueueDbWork {
                     try {
                         // For CoD declines, you might want a specific status rather than deleting
                         // offerRepo.updateOfferStatus(internalOfferId!!, "DECLINED_COD")
@@ -95,7 +95,7 @@ class OfferPresented : StateHandler {
         }
 
         // Determine next state based on screen changes
-        return when (context.dasherScreen) {
+        return when (stateContext.dasherScreen) {
             Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
             Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
             Screen.DASH_CONTROL -> AppState.VIEWING_DASH_CONTROL
@@ -107,7 +107,7 @@ class OfferPresented : StateHandler {
     }
 
     override fun enterState(
-        context: StateContext,
+        stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
@@ -116,7 +116,7 @@ class OfferPresented : StateHandler {
         internalOfferId = null
         offerDecided = false
 
-        Manager.enqueueDbWork {
+        StateManager.enqueueDbWork {
             try {
                 // ... (your existing parsing and inserting logic remains the same) ...
                 Log.d(tag, "Starting offer processing coroutine.")
@@ -125,7 +125,7 @@ class OfferPresented : StateHandler {
                     Log.w(tag, "Cannot process offer: Missing current dashId or zoneId.")
                     return@enqueueDbWork
                 }
-                val parsedOffer = OfferParser.parseOffer(context.rootNodeTexts)
+                val parsedOffer = OfferParser.parseOffer(stateContext.rootNodeTexts)
                 if (parsedOffer == null) {
                     Log.w(tag, "!!! OfferParser returned null. Offer was not parsed!")
                     return@enqueueDbWork
@@ -141,7 +141,7 @@ class OfferPresented : StateHandler {
                         parsedOffer,
                         current.dashId,
                         current.zoneId,
-                        context.timestamp
+                        stateContext.timestamp
                     )
                     val offerToInsert: OfferEntity = evaluationResult.offerEntity
                     val newOfferId = offerRepo.insertOffer(offerToInsert)
@@ -179,17 +179,21 @@ class OfferPresented : StateHandler {
         }
     }
 
-    override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
+    override fun exitState(
+        stateContext: StateContext,
+        currentState: AppState,
+        nextState: AppState
+    ) {
         Log.d(tag, "Exiting state...")
         // Capture the state into local variables BEFORE launching the coroutines.
         val decided = offerDecided
         val finalOfferId = internalOfferId
-        val exitTime = context.timestamp
+        val exitTime = stateContext.timestamp
 
         // --- TIMEOUT CHECK ---
         if (!decided && finalOfferId != null) {
 
-            Manager.enqueueDbWork {
+            StateManager.enqueueDbWork {
                 try {
                     val offer = offerRepo.getOfferById(finalOfferId)
                     if (offer == null || offer.status != OfferStatus.SEEN) {
@@ -230,7 +234,7 @@ class OfferPresented : StateHandler {
 
         // --- DECISION LOGIC ---
         if (decided && finalOfferId != null) {
-            Manager.enqueueDbWork {
+            StateManager.enqueueDbWork {
                 try {
                     // Now, use the local variables inside the coroutine.
                     val offer = offerRepo.getOfferById(finalOfferId)

@@ -6,7 +6,7 @@ import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
 // You'll also need your AppState enum, e.g.:
 // enum class AppState { UNKNOWN, STARTUP, LOGIN_SCREEN, MAIN_DASHBOARD, OFFER_POPUP, ON_DELIVERY, ... }
 
-data class Context(
+data class StateContext(
     val timestamp: Long,                        // When the event data was processed
     val androidAppContext: AndroidContext,      // Application context for global resources, SharedPreferences
     // Data from AccessibilityEvent

@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.state.App as AppState
+import cloud.trotter.dashbuddy.state.AppState as AppState
 
 /**
  * The StateHandler classes this interface defines will in-turn define
@@ -13,21 +13,21 @@ interface StateHandler {
 
     /**
      * The definition for when to enter this state.
-     * @param context the [Context] calling this handler.
+     * @param stateContext the [StateContext] calling this handler.
      * @return this StateHandler instance if matched, null if not.
      */
-    fun processEvent(context: Context, currentState: AppState): AppState
+    fun processEvent(stateContext: StateContext, currentState: AppState): AppState
 
     /**
      * The actions for entering this state.
-     * @param context the [Context] calling this handler.
+     * @param stateContext the [StateContext] calling this handler.
      */
-    fun enterState(context: Context, currentState: AppState, previousState: AppState?)
+    fun enterState(stateContext: StateContext, currentState: AppState, previousState: AppState?)
 
     /**
      * The actions for exiting this state.
-     * @param context the [Context] calling this handler.
+     * @param stateContext the [StateContext] calling this handler.
      */
-    fun exitState(context: Context, currentState: AppState, nextState: AppState)
+    fun exitState(stateContext: StateContext, currentState: AppState, nextState: AppState)
 
 }

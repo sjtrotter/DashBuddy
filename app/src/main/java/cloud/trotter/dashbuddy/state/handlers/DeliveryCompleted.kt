@@ -7,10 +7,10 @@ import cloud.trotter.dashbuddy.data.pay.AppPayEntity
 import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.data.pay.TipEntity
 import cloud.trotter.dashbuddy.data.pay.TipType
-import cloud.trotter.dashbuddy.state.Manager
+import cloud.trotter.dashbuddy.state.StateManager
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.App as AppState
-import cloud.trotter.dashbuddy.state.Context as StateContext
+import cloud.trotter.dashbuddy.state.AppState as AppState
+import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
 import cloud.trotter.dashbuddy.util.AccNodeUtils
@@ -27,15 +27,15 @@ class DeliveryCompleted : StateHandler {
     private val tipRepo = DashBuddyApplication.tipRepo
     private val appPayRepo = DashBuddyApplication.appPayRepo
 
-    override fun processEvent(context: StateContext, currentState: AppState): AppState {
-        Log.d(tag, "Evaluating event. Current Screen: ${context.dasherScreen}")
+    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+        Log.d(tag, "Evaluating event. Current Screen: ${stateContext.dasherScreen}")
 
-        if (!wasPayRecorded && context.rootNodeTexts.any {
+        if (!wasPayRecorded && stateContext.rootNodeTexts.any {
                 it.contains("Customer Tips", ignoreCase = true)
             }) {
             Log.i(tag, "Pay breakdown detected. Attempting to parse pays.")
-            val parsedPay = PayParser.parsePay(context.rootNodeTexts)
-            Manager.enqueueDbWork {
+            val parsedPay = PayParser.parsePay(stateContext.rootNodeTexts)
+            StateManager.enqueueDbWork {
                 try {
                     val completedCountOnScreen = parsedPay.customerTips.size
                     if (completedCountOnScreen == 0) {
@@ -117,15 +117,12 @@ class DeliveryCompleted : StateHandler {
                                 tag,
                                 "Processing completed order #${orderToComplete.id} ('${orderToComplete.storeName}')"
                             )
-                            // 1. Update status to COMPLETED
-                            orderRepo.updateOrderStatus(orderToComplete.id, OrderStatus.COMPLETED)
-
-                            // 2. Save the tip, linking to this order
+                            // Save the tip, linking to this order
                             val tipEntity = TipEntity(
                                 orderId = orderToComplete.id,
                                 amount = tipItem.amount,
                                 type = TipType.IN_APP_INITIAL,
-                                timestamp = context.timestamp
+                                timestamp = stateContext.timestamp
                             )
                             tipRepo.insert(tipEntity)
 
@@ -140,7 +137,7 @@ class DeliveryCompleted : StateHandler {
                             offerId = matchedOfferId,
                             payTypeId = payTypeId,
                             amount = appPayItem.amount,
-                            timestamp = context.timestamp
+                            timestamp = stateContext.timestamp
                         )
                         appPayRepo.insert(appPayEntity)
                     }
@@ -149,8 +146,13 @@ class DeliveryCompleted : StateHandler {
                     if (completedOrderIds.isNotEmpty()) {
                         for (orderId in completedOrderIds) {
                             currentRepo.removeOrderFromQueue(orderId)
+                            orderRepo.updateOrderStatus(orderId, OrderStatus.COMPLETED)
+
                         }
-                        Log.i(tag, "Removed completed order IDs $completedOrderIds from the queue.")
+                        Log.i(
+                            tag,
+                            "Removed completed order IDs $completedOrderIds from the queue, and marked them COMPLETED."
+                        )
                     }
                     wasPayRecorded = true
 
@@ -161,7 +163,7 @@ class DeliveryCompleted : StateHandler {
 
         }
 
-        return when (context.dasherScreen) {
+        return when (stateContext.dasherScreen) {
             Screen.OFFER_POPUP -> AppState.SESSION_ACTIVE_OFFER_PRESENTED
             Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
             Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
@@ -172,17 +174,17 @@ class DeliveryCompleted : StateHandler {
     }
 
     override fun enterState(
-        context: StateContext,
+        stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
-        Log.i(tag, "Entering state. Screen: ${context.dasherScreen?.screenName}")
+        Log.i(tag, "Entering state. Screen: ${stateContext.dasherScreen?.screenName}")
         wasClickAttempted = false // Reset flag on entering state
 
         // The goal is to find the dollar amount button and click it.
         // The button's text is the dollar amount itself.
         // We look for any text that starts with a '$'.
-        val buttonText = context.rootNodeTexts.find { it.trim().startsWith("$") }
+        val buttonText = stateContext.rootNodeTexts.find { it.trim().startsWith("$") }
 
         if (buttonText == null) {
             Log.w(
@@ -194,9 +196,9 @@ class DeliveryCompleted : StateHandler {
 
         Log.d(tag, "Found potential button text: '$buttonText'. Attempting to click.")
 
-        Manager.getScope().launch {
+        StateManager.getScope().launch {
             val clickSuccess =
-                AccNodeUtils.findAndClickNodeByText(context.rootNode, buttonText.trim())
+                AccNodeUtils.findAndClickNodeByText(stateContext.rootNode, buttonText.trim())
             if (clickSuccess) {
                 Log.i(tag, "Successfully performed click on button with text: '$buttonText'")
                 DashBuddyApplication.sendBubbleMessage("Pay button clicked!")
@@ -207,7 +209,11 @@ class DeliveryCompleted : StateHandler {
         }
     }
 
-    override fun exitState(context: StateContext, currentState: AppState, nextState: AppState) {
+    override fun exitState(
+        stateContext: StateContext,
+        currentState: AppState,
+        nextState: AppState
+    ) {
         Log.i(tag, "Exiting state to $nextState")
         wasClickAttempted = false // Reset flag
     }
