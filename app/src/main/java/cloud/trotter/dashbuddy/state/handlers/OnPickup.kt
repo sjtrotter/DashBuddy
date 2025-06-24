@@ -64,13 +64,13 @@ class OnPickup : StateHandler {
 //              screen == Screen.PICKUP_DETAILS_PRE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
 
             // new offer presented.
-            screen == Screen.OFFER_POPUP -> AppState.SESSION_ACTIVE_OFFER_PRESENTED
+            screen == Screen.OFFER_POPUP -> AppState.DASH_ACTIVE_OFFER_PRESENTED
 
             // dasher viewing timeline and may switch tasks. need to transition.
-            screen == Screen.TIMELINE_VIEW -> AppState.VIEWING_TIMELINE
+            screen == Screen.TIMELINE_VIEW -> AppState.DASH_ACTIVE_ON_TIMELINE
 
             // dasher went to a delivery screen.
-            screen.isDelivery -> AppState.SESSION_ACTIVE_ON_DELIVERY
+            screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
 
             else -> {
                 if (stateContext.currentDashState?.activeOrderId == null) {

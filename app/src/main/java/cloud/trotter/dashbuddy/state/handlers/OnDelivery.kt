@@ -81,10 +81,10 @@ class OnDelivery : StateHandler {
             // TODO: do we need to transition on dash control anymore?
 //            screen == Screen.DASH_CONTROL -> AppState.VIEWING_DASH_CONTROL
             // TODO: hm.. if the dash ends right away, we *could* transition to this state.
-            screen == Screen.MAIN_MAP_IDLE -> AppState.DASHER_IDLE_OFFLINE
+            screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
 //            screen == Screen.NAVIGATION_VIEW -> AppState.VIEWING_NAVIGATION
 //              screen == Screen.PICKUP_DETAILS_PRE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
-            screen.isPickup -> AppState.SESSION_ACTIVE_ON_PICKUP
+            screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
             else -> currentState
         }
     }

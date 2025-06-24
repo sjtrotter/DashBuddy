@@ -4,15 +4,10 @@ import cloud.trotter.dashbuddy.DashBuddyApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
-import cloud.trotter.dashbuddy.log.Logger as Log // Your Logger alias
-// AppState enum (from app_state_kt_with_user_handlers artifact) is expected to be in this package or imported.
-// StateHandler interface is expected to be defined and imported.
-// StateContext data class is expected to be defined and imported.
+import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
-import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
 
 object StateManager {
 
@@ -83,16 +78,8 @@ object StateManager {
                 return@launch
             }
 
-            Log.d(
-                TAG,
-                "Dispatching event to current state: $currentState (${currentHandler::class.java.simpleName}). EventType: ${eventContext.eventTypeString}"
-            )
-
-            // Run processEvent in currentHandler, store what it thinks the next state should be
-            val processResult = currentHandler.processEvent(eventContext, currentState)
-
-            // Determine the next state based on the processResult
-            val nextState = determineNextState(currentState, eventContext, processResult)
+            // Determine the next state - check for dash starting or stopping first.
+            val nextState = determineNextState(currentState, eventContext)
 
             if (nextState != currentState) {
                 val oldState = currentState
@@ -133,108 +120,54 @@ object StateManager {
     }
 
     /**
-     * Compares the current state's activity hint to the observed screen's hint
-     * to detect if a dash has started or stopped unexpectedly.
-     * This acts as a high-level guard to correct the app's state.
+     * First compares the current state's activity hint to the observed screen's hint
+     * to detect if a dash has started or stopped. This is a guard to correct the app's state.
      *
-     * @return A new AppState if a transition is needed, otherwise null.
+     * Then we delegate the event to the current handler if the state is consistent.
+     *
+     * @return The next AppState.
      */
-    private fun reconcileDashState(currentKnownState: AppState, context: StateContext): AppState? {
-        // TODO: wire this in.
-        val newScreen = context.dasherScreen ?: return null
-
-        val currentHint = currentKnownState.activityHint
-        val observedHint = newScreen.activityHint
-
-        // If either hint is NEUTRAL, we don't have enough information to reconcile.
-        // Let the specific state handler decide what to do.
-        if (currentHint == ActivityHint.NEUTRAL || observedHint == ActivityHint.NEUTRAL) {
-            return null
-        }
-
-        // CASE 1: App thinks dash is INACTIVE, but sees a screen that implies it's ACTIVE.
-        if (currentHint == ActivityHint.INACTIVE && observedHint == ActivityHint.ACTIVE) {
-            Log.i(
-                TAG,
-                "Reconciliation: Activity detected! Current state is INACTIVE, but screen is ACTIVE. Transitioning to DashStarting."
-            )
-            return AppState.DASHER_INITIATING_DASH_SESSION
-        }
-
-        // CASE 2: App thinks dash is ACTIVE, but sees a screen that implies it's INACTIVE.
-        // This handles all end-of-dash scenarios (manual, auto, force-stop recovery).
-        if (currentHint == ActivityHint.ACTIVE && observedHint == ActivityHint.INACTIVE) {
-            Log.i(
-                TAG,
-                "Reconciliation: Inactivity detected! Current state is ACTIVE, but screen is INACTIVE. Transitioning to DashStopping."
-            )
-            return AppState.DASHER_ENDING_DASH_SESSION
-        }
-
-        // No conflicting active/inactive state change detected.
-        // Return null to allow the current state's handler to process the event.
-        return null
-    }
-
-
-    private fun determineNextState(
+    private suspend fun determineNextState(
         currentKnownState: AppState,
-        context: StateContext,
-        processResult: AppState
+        context: StateContext
     ): AppState {
-        // If the handler determined a subsequent state, use that
-        if (processResult != currentKnownState) {
-            return processResult
-        }
         val identifiedScreen = context.dasherScreen
+
+        // --- 1. RECONCILIATION (Highest Priority) ---
+        // First, ensure our active/inactive session state is correct.
+        val currentHint = currentKnownState.activityHint
+        val observedHint = identifiedScreen?.activityHint ?: ActivityHint.NEUTRAL
+
+        if (currentHint != ActivityHint.NEUTRAL && observedHint != ActivityHint.NEUTRAL) {
+            // CASE 1: App thinks dash is OFF, but sees a screen that implies it's ON.
+            // This is the trigger for starting a dash, regardless of the specific screen.
+            if (currentHint == ActivityHint.INACTIVE && observedHint == ActivityHint.ACTIVE) {
+                Log.i(
+                    TAG,
+                    "Reconciliation: Activity detected! Current state is INACTIVE, but screen is ACTIVE. Transitioning to DashStarting."
+                )
+                return AppState.DASH_STARTING
+            }
+
+            // CASE 2: App thinks dash is ON, but sees a screen that implies it's OFF.
+            // This is the trigger for stopping a dash.
+            if (currentHint == ActivityHint.ACTIVE && observedHint == ActivityHint.INACTIVE) {
+                Log.i(
+                    TAG,
+                    "Reconciliation: Inactivity detected! Current state is ACTIVE, but screen is INACTIVE. Transitioning to DashStopping."
+                )
+                return AppState.DASH_STOPPING
+            }
+        }
+
+        // --- 2. CURRENT HANDLER'S LOGIC (Default Action) ---
+        // If the high-level state is consistent, let the current handler process the event
+        // and decide on the next state. This is where specific transitions like
+        // AwaitingOffer -> OfferPresented will be handled.
         Log.d(
             TAG,
-            "Determining next state. Current AppState: $currentKnownState, Identified Screen: $identifiedScreen"
+            "State is reconciled. Delegating to ${currentKnownState.handler::class.java.simpleName}."
         )
-
-        // Handle global/forced transitions first
-//        if (identifiedScreen == DasherScreen.APP_STARTING_OR_LOADING &&
-//            currentKnownState != AppState.DASHER_LOGIN_FLOW
-//        ) {
-//            return AppState.DASHER_LOGIN_FLOW
-//        }
-
-        // PRIORITY - Offer Popped Up on Screen
-        if (identifiedScreen == DasherScreen.OFFER_POPUP &&
-            currentKnownState != AppState.SESSION_ACTIVE_OFFER_PRESENTED
-        ) {
-            return AppState.SESSION_ACTIVE_OFFER_PRESENTED
-        }
-
-        // PRIORITY - Delivery Completed
-        if (identifiedScreen == DasherScreen.DELIVERY_COMPLETED_DIALOG &&
-            currentKnownState != AppState.DELIVERY_COMPLETED
-        ) {
-            return AppState.DELIVERY_COMPLETED
-        }
-
-        // Screens that can be back-buttoned into (or gestured) -- needed?
-        if (identifiedScreen == DasherScreen.MAIN_MAP_IDLE &&
-            currentKnownState != AppState.DASHER_IDLE_OFFLINE
-        ) {
-            return AppState.DASHER_IDLE_OFFLINE
-        }
-
-        return currentKnownState // Default to staying in the current state
-    }
-
-    /**
-     * Gets the current high-level application state.
-     * @return The current [AppState].
-     */
-    fun getCurrentAppState(): AppState = currentState
-
-    /**
-     * Gets the handler for the current state.
-     * Useful if you need to directly interact with the current handler's specific methods (though rare).
-     * @return The current [StateHandler], or null if not initialized.
-     */
-    fun getCurrentStateHandler(): StateHandler? {
-        return if (::currentHandler.isInitialized) currentHandler else null
+        return currentKnownState.handler.processEvent(context, currentKnownState)
     }
 }

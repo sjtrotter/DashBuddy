@@ -24,27 +24,15 @@ class DasherIdleOffline : StateHandler {
 
         // add more specific things up here if needed.
 
-        if (stateContext.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
-        if (stateContext.dasherScreen == Screen.NOTIFICATIONS_VIEW) return AppState.VIEWING_NOTIFICATIONS
-        if (stateContext.dasherScreen == Screen.SAFETY_VIEW) return AppState.VIEWING_SAFETY
-        if (stateContext.dasherScreen == Screen.PROMOS_VIEW) return AppState.VIEWING_PROMOS
-        if (stateContext.dasherScreen == Screen.HELP_VIEW) return AppState.VIEWING_HELP
-        if (stateContext.dasherScreen == Screen.CHAT_VIEW) return AppState.VIEWING_CHATS
-        if (stateContext.dasherScreen == Screen.SET_DASH_END_TIME) return AppState.DASHER_SETTING_END_TIME
-
         // Seems that the on dash map waiting for offer might recognize the main map idle screen
         // when backing out to dash control. putting this in to catch and re-orient.
-        if (stateContext.dasherScreen == Screen.DASH_CONTROL) return AppState.VIEWING_DASH_CONTROL
-
-        // If the dasher is not Platinum and not scheduled to dash,
-        // then Dash Now button is replaced with Schedule button.
-        if (stateContext.dasherScreen == Screen.SCHEDULE_VIEW) return AppState.VIEWING_SCHEDULE
+        if (stateContext.dasherScreen == Screen.DASH_CONTROL) return AppState.DASH_ACTIVE_ON_CONTROL
 
         // if a dash is not started:
         if (stateContext.dasherScreen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ||
             stateContext.dasherScreen == Screen.ON_DASH_ALONG_THE_WAY
         )
-            return AppState.DASHER_INITIATING_DASH_SESSION
+            return AppState.DASH_STARTING
 
         if (stateContext.screenInfo is ScreenInfo.IdleMap) {
             try {

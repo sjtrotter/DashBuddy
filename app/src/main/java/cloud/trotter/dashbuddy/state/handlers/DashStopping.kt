@@ -4,7 +4,6 @@ import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.data.dash.DashEntity
 import cloud.trotter.dashbuddy.data.zone.ZoneEntity
-import cloud.trotter.dashbuddy.state.StateManager
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
@@ -27,7 +26,7 @@ class DashStopping : StateHandler {
         // Here, we just transition if the screen changes after the dash has been stopped.
         if (stateContext.dasherScreen == Screen.MAIN_MAP_IDLE) {
             Log.i(tag, "Screen is MAIN_MAP_IDLE, transitioning to DASHER_IDLE_OFFLINE.")
-            return AppState.DASHER_IDLE_OFFLINE
+            return AppState.DASH_IDLE_OFFLINE
         }
         // Potentially handle other screen changes if the app doesn't go directly to idle.
         // For example, if it shows a dash summary screen first.

@@ -9,15 +9,17 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 
 class ViewEarnings : StateHandler {
 
-    override suspend fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
         // add more specific things up here if needed.
 
-        if (stateContext.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
-        if (stateContext.dasherScreen == Screen.DASH_CONTROL) return AppState.VIEWING_DASH_CONTROL
-        if (stateContext.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_IDLE_OFFLINE
+        if (stateContext.dasherScreen == Screen.DASH_CONTROL) return AppState.DASH_ACTIVE_ON_CONTROL
+        if (stateContext.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASH_IDLE_OFFLINE
 
         return currentState
     }

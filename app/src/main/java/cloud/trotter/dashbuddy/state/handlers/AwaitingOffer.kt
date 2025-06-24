@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
@@ -8,21 +9,23 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 
 class AwaitingOffer : StateHandler {
 
-    override suspend fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
-        // process event here
 
-        // add more specific things up here if needed.
+        val screen = stateContext.screenInfo?.screen ?: return currentState
+        // Determine next state based on screen changes
+        return when {
+            screen == Screen.DASH_CONTROL -> AppState.DASH_ACTIVE_ON_CONTROL
+            screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
+            screen == Screen.OFFER_POPUP -> AppState.DASH_ACTIVE_OFFER_PRESENTED
 
-        // can they access the main menu from this screen? If not, comment out.
-//        if (context.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
-
-        // should dash control be global?
-        if (stateContext.dasherScreen == Screen.DASH_CONTROL) return AppState.VIEWING_DASH_CONTROL
-
-        if (stateContext.dasherScreen == Screen.OFFER_POPUP) return AppState.SESSION_ACTIVE_OFFER_PRESENTED
-
-        return currentState
+            screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
+            screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
+            else -> currentState
+        }
     }
 
     override suspend fun enterState(
@@ -32,7 +35,6 @@ class AwaitingOffer : StateHandler {
     ) {
         Log.d("${this::class.simpleName} State", "Entering state...")
         // initialize components here
-//        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${context.dasherScreen?.screenName} Screen")
     }
 
     override suspend fun exitState(

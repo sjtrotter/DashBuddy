@@ -8,9 +8,9 @@ package cloud.trotter.dashbuddy.state
 //     fun onExitState(context: StateContext, nextState: AppState)
 // }
 
+// import the DashBuddyApplication database repos to inject into the handlers
 // Import your concrete handler implementations
 import cloud.trotter.dashbuddy.state.handlers.AwaitingOffer
-import cloud.trotter.dashbuddy.state.handlers.DashAlongTheWay
 import cloud.trotter.dashbuddy.state.handlers.Unknown
 import cloud.trotter.dashbuddy.state.handlers.DasherIdleOffline
 import cloud.trotter.dashbuddy.state.handlers.OfferPresented
@@ -19,20 +19,9 @@ import cloud.trotter.dashbuddy.state.handlers.DashStopping
 import cloud.trotter.dashbuddy.state.handlers.DeliveryCompleted
 import cloud.trotter.dashbuddy.state.handlers.OnDelivery
 import cloud.trotter.dashbuddy.state.handlers.OnPickup
-import cloud.trotter.dashbuddy.state.handlers.ViewPickupDetails
-import cloud.trotter.dashbuddy.state.handlers.SetDashEndTime
 import cloud.trotter.dashbuddy.state.handlers.Startup
-import cloud.trotter.dashbuddy.state.handlers.ViewChat
 import cloud.trotter.dashbuddy.state.handlers.ViewDashControl
 import cloud.trotter.dashbuddy.state.handlers.ViewEarnings
-import cloud.trotter.dashbuddy.state.handlers.ViewHelp
-import cloud.trotter.dashbuddy.state.handlers.ViewMainMenu
-import cloud.trotter.dashbuddy.state.handlers.ViewNavigation
-import cloud.trotter.dashbuddy.state.handlers.ViewNotifications
-import cloud.trotter.dashbuddy.state.handlers.ViewPromos
-import cloud.trotter.dashbuddy.state.handlers.ViewRatings
-import cloud.trotter.dashbuddy.state.handlers.ViewSafety
-import cloud.trotter.dashbuddy.state.handlers.ViewSchedule
 import cloud.trotter.dashbuddy.state.handlers.ViewTimeline
 
 /**
@@ -54,153 +43,76 @@ enum class AppState(
         displayName = "Unknown"
     ),
 
-    // --- App Lifecycle & Pre-Dash ---
+    // --- Initializing ---
     APP_INITIALIZING(
         handler = Startup(),
         displayName = "Dashbuddy Started!"
     ),
 
-    DASHER_IDLE_OFFLINE(
+    // --- Offline States ---
+    DASH_IDLE_OFFLINE(
         handler = DasherIdleOffline(), // Placeholder
         displayName = "Dasher Idle Offline",
         activityHint = ActivityHint.INACTIVE
     ),
-
-    // --- Initiating a Dash ---
-    DASHER_SETTING_END_TIME(
-        handler = SetDashEndTime(),
-        displayName = "Set Dash End Time",
-        activityHint = ActivityHint.INACTIVE
-    ),
-    DASHER_INITIATING_DASH_SESSION(
-        handler = DashStarting(),
-        displayName = "Initiating Dash"
-    ),
-
-    // --- Active Dashing Session ---
-    SESSION_ACTIVE_WAITING_FOR_OFFER(
-        handler = AwaitingOffer(),
-        displayName = "Awaiting Offer",
-        activityHint = ActivityHint.ACTIVE
-    ),
-    SESSION_ACTIVE_DASHING_ALONG_THE_WAY(
-        handler = DashAlongTheWay(), // Placeholder
-        displayName = "Dash Along the Way",
-        activityHint = ActivityHint.ACTIVE
-    ),
-    VIEWING_DASH_CONTROL(
-        handler = ViewDashControl(),
-        displayName = "Viewing Dash Control",
-        activityHint = ActivityHint.ACTIVE
-    ),
-    SESSION_ACTIVE_OFFER_PRESENTED(
-        handler = OfferPresented(),
-        displayName = "Session Active - Offer Presented",
-        activityHint = ActivityHint.ACTIVE
-    ),
-    SESSION_ACTIVE_ON_PICKUP(
-        handler = OnPickup(),
-        displayName = "Session Active - On Pickup",
-        activityHint = ActivityHint.ACTIVE
-    ),
-    SESSION_ACTIVE_ON_DELIVERY(
-        handler = OnDelivery(),
-        displayName = "Session Active - On Delivery",
-        activityHint = ActivityHint.ACTIVE
-    ),
-    VIEWING_TIMELINE(
-        handler = ViewTimeline(),
-        displayName = "Viewing Timeline",
-        activityHint = ActivityHint.ACTIVE
-    ),
-    VIEWING_NAVIGATION(
-        handler = ViewNavigation(),
-        displayName = "Viewing Navigation"
-    ),
-
-    //
-//    // --- Active Delivery (after offer acceptance) ---
-    DELIVERY_COMPLETED(
-        handler = DeliveryCompleted(), // Placeholder
-        displayName = "Delivery Completed",
-        activityHint = ActivityHint.ACTIVE
-    ),
-    VIEWING_PICKUP_DETAILS(
-        handler = ViewPickupDetails(),
-        displayName = "Viewing Pickup Details",
-        activityHint = ActivityHint.ACTIVE
-    ),
-//    DELIVERY_IN_PROGRESS_TO_STORE(
-//        handler = PlaceHolder(DELIVERY_IN_PROGRESS_TO_STORE), // Placeholder
-//        displayName = "Delivery - To Store"
-//    ),
-//    DELIVERY_IN_PROGRESS_AT_STORE(
-//        handler = PlaceHolder(DELIVERY_IN_PROGRESS_AT_STORE), // Placeholder
-//        displayName = "Delivery - At Store"
-//    ),
-//    DELIVERY_IN_PROGRESS_TO_CUSTOMER(
-//        handler = PlaceHolder(DELIVERY_IN_PROGRESS_TO_CUSTOMER), // Placeholder
-//        displayName = "Delivery - To Customer"
-//    ),
-//    DELIVERY_IN_PROGRESS_AT_CUSTOMER(
-//        handler = PlaceHolder(DELIVERY_IN_PROGRESS_AT_CUSTOMER), // Placeholder
-//        displayName = "Delivery - At Customer"
-//    ),
-//    DELIVERY_COMPLETING(
-//        handler = PlaceHolder(DELIVERY_COMPLETING), // Placeholder
-//        displayName = "Delivery - Completing"
-//    ),
-//
-//    SESSION_ACTIVE_PAUSED(
-//        handler = PlaceHolder(SESSION_ACTIVE_PAUSED), // Placeholder
-//        displayName = "Session Active - Paused"
-//    ),
-//
-//    // --- Ending a Dash ---
-    DASHER_ENDING_DASH_SESSION(
-        handler = DashStopping(),
-        displayName = "Session Ending Flow"
-    ),
-    SESSION_ENDED_DISPLAYING_SUMMARY(
+    DASH_IDLE_ON_SUMMARY(
         handler = DashStopping(), // Using your SessionStop handler
         displayName = "Session Ended - Summary",
         activityHint = ActivityHint.INACTIVE
     ),
-    VIEWING_RATINGS(
-        handler = ViewRatings(),
-        displayName = "Viewing Ratings"
-    ),
-    VIEWING_EARNINGS(
+    DASH_IDLE_ON_EARNINGS(
         handler = ViewEarnings(),
-        displayName = "Viewing Earnings"
+        displayName = "Viewing Earnings",
+        activityHint = ActivityHint.INACTIVE
     ),
-    VIEWING_MAIN_MENU(
-        handler = ViewMainMenu(),
-        displayName = "Opened Main Menu"
+
+    // --- Initiating a Dash ---
+    DASH_STARTING(
+        handler = DashStarting(),
+        displayName = "Starting Dash"
     ),
-    VIEWING_SCHEDULE(
-        handler = ViewSchedule(),
-        displayName = "Viewing Schedule"
+
+    // --- Active Dashing Session ---
+    DASH_ACTIVE_AWAITING_OFFER(
+        handler = AwaitingOffer(),
+        displayName = "Awaiting Offer",
+        activityHint = ActivityHint.ACTIVE
     ),
-    VIEWING_NOTIFICATIONS(
-        handler = ViewNotifications(),
-        displayName = "Viewing Notifications"
+    DASH_ACTIVE_OFFER_PRESENTED(
+        handler = OfferPresented(),
+        displayName = "Offer Presented",
+        activityHint = ActivityHint.ACTIVE
     ),
-    VIEWING_SAFETY(
-        handler = ViewSafety(),
-        displayName = "Viewing Safety"
+    DASH_ACTIVE_ON_CONTROL(
+        handler = ViewDashControl(),
+        displayName = "Dash Control",
+        activityHint = ActivityHint.ACTIVE
     ),
-    VIEWING_PROMOS(
-        handler = ViewPromos(),
-        displayName = "Viewing Promos"
+    DASH_ACTIVE_ON_PICKUP(
+        handler = OnPickup(),
+        displayName = "Dash Active - On Pickup",
+        activityHint = ActivityHint.ACTIVE
     ),
-    VIEWING_HELP(
-        handler = ViewHelp(),
-        displayName = "Viewing Help"
+    DASH_ACTIVE_ON_DELIVERY(
+        handler = OnDelivery(),
+        displayName = "Dash Active - On Delivery",
+        activityHint = ActivityHint.ACTIVE
     ),
-    VIEWING_CHATS(
-        handler = ViewChat(),
-        displayName = "Viewing Chats"
+    DASH_ACTIVE_ON_TIMELINE(
+        handler = ViewTimeline(),
+        displayName = "Dash Timeline",
+        activityHint = ActivityHint.ACTIVE
+    ),
+    DASH_ACTIVE_DELIVERY_COMPLETED(
+        handler = DeliveryCompleted(), // Placeholder
+        displayName = "Delivery Completed",
+        activityHint = ActivityHint.ACTIVE
+    ),
+
+    // --- Ending a Dash ---
+    DASH_STOPPING(
+        handler = DashStopping(),
+        displayName = "Stopping Dash"
     ),
 
     ;

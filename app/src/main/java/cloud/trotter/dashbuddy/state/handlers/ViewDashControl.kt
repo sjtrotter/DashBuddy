@@ -9,20 +9,29 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 
 class ViewDashControl : StateHandler {
 
-    override suspend fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
         // add more specific things up here if needed.
 
-        if (stateContext.dasherScreen == Screen.MAIN_MENU_VIEW) return AppState.VIEWING_MAIN_MENU
-        if (stateContext.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_ENDING_DASH_SESSION
-        if (stateContext.dasherScreen == Screen.ON_DASH_ALONG_THE_WAY) return AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
-        if (stateContext.dasherScreen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER) return AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
-        if (stateContext.dasherScreen == Screen.PICKUP_DETAILS_PRE_ARRIVAL) return AppState.VIEWING_PICKUP_DETAILS
-        if (stateContext.dasherScreen == Screen.NAVIGATION_VIEW) return AppState.VIEWING_NAVIGATION
+        val screen = stateContext.screenInfo?.screen ?: return currentState
+        return when {
+            screen == Screen.ON_DASH_ALONG_THE_WAY ||
+                    screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ->
+                AppState.DASH_ACTIVE_AWAITING_OFFER
 
-        return currentState
+            screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
+            screen == Screen.TIMELINE_VIEW -> AppState.DASH_ACTIVE_ON_TIMELINE
+
+            screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
+            screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
+
+            else -> currentState
+        }
     }
 
     override suspend fun enterState(

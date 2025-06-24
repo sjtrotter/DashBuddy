@@ -7,15 +7,14 @@ import cloud.trotter.dashbuddy.data.pay.AppPayEntity
 import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.data.pay.TipEntity
 import cloud.trotter.dashbuddy.data.pay.TipType
-import cloud.trotter.dashbuddy.state.StateManager
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.state.screens.Screen
 import cloud.trotter.dashbuddy.util.AccNodeUtils
+import cloud.trotter.dashbuddy.util.UtilityFunctions.stringsMatch
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 class DeliveryCompleted : StateHandler {
 
@@ -69,7 +68,7 @@ class DeliveryCompleted : StateHandler {
                 // Find a candidate order from the first parsed tip to identify a potential offer
                 val firstTipStoreName = parsedPay.customerTips.first().type
                 val candidateOrders =
-                    activeOrders.filter { namesMatch(it.storeName, firstTipStoreName) }
+                    activeOrders.filter { stringsMatch(it.storeName, firstTipStoreName) }
 
                 for (candidateOrder in candidateOrders) {
                     val ordersInDbForOffer =
@@ -115,7 +114,7 @@ class DeliveryCompleted : StateHandler {
                 // Now that we've confirmed the offer, process each tip against its orders.
                 for (tipItem in parsedPay.customerTips) {
                     val orderToComplete =
-                        ordersForMatchedOffer.find { namesMatch(it.storeName, tipItem.type) }
+                        ordersForMatchedOffer.find { stringsMatch(it.storeName, tipItem.type) }
 
                     if (orderToComplete != null) {
                         Log.i(
@@ -167,12 +166,16 @@ class DeliveryCompleted : StateHandler {
 
         }
 
-        return when (stateContext.dasherScreen) {
-            Screen.OFFER_POPUP -> AppState.SESSION_ACTIVE_OFFER_PRESENTED
-            Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
-            Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
+        val screen = stateContext.screenInfo?.screen ?: return currentState
+        return when {
+            screen == Screen.OFFER_POPUP -> AppState.DASH_ACTIVE_OFFER_PRESENTED
+            screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ||
+                    screen == Screen.ON_DASH_ALONG_THE_WAY ->
+                AppState.DASH_ACTIVE_AWAITING_OFFER
 
-            Screen.DELIVERY_COMPLETED_DIALOG -> currentState
+            screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
+            screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
+
             else -> currentState // Stay in this state by default until a known transition occurs
         }
     }
@@ -218,20 +221,5 @@ class DeliveryCompleted : StateHandler {
     ) {
         Log.i(tag, "Exiting state to $nextState")
         wasClickAttempted = false // Reset flag
-    }
-
-    // Using a helper function to contain matching logic makes it cleaner and easier to improve later
-    private fun namesMatch(nameFromOffer: String, nameFromPickupScreen: String): Boolean {
-        val normalizedOfferName = normalize(nameFromOffer)
-        val normalizedPickupName = normalize(nameFromPickupScreen)
-
-        // Check for containment in both directions to handle cases where one name is a subset of the other
-        return normalizedOfferName.contains(normalizedPickupName)
-                || normalizedPickupName.contains(normalizedOfferName)
-    }
-
-    // Normalizes a string for better matching by lowercasing and removing non-alphanumeric chars
-    private fun normalize(input: String): String {
-        return input.lowercase().replace(Regex("[^a-z0-9]"), "")
     }
 }

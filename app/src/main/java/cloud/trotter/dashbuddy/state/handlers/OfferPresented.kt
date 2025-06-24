@@ -7,7 +7,6 @@ import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.offer.OfferStatus
 import cloud.trotter.dashbuddy.state.parsers.click.ClickInfo
-import cloud.trotter.dashbuddy.state.StateManager
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
@@ -153,16 +152,15 @@ class OfferPresented : StateHandler {
         val screen = stateContext.screenInfo?.screen ?: return currentState
         // Determine next state based on screen changes
         return when {
-            // TODO: combine dash along the way & map waiting for offer? add isActiveIdle screen property?
-            screen == Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
-            screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
-            screen == Screen.DASH_CONTROL -> AppState.VIEWING_DASH_CONTROL
-            screen == Screen.MAIN_MAP_IDLE -> AppState.DASHER_IDLE_OFFLINE
-            screen == Screen.NAVIGATION_VIEW -> AppState.VIEWING_NAVIGATION
-            // using isPickup -> ON_PICKUP now.
-//              screen == Screen.PICKUP_DETAILS_PRE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
-            screen.isPickup -> AppState.SESSION_ACTIVE_ON_PICKUP
-            screen.isDelivery -> AppState.SESSION_ACTIVE_ON_DELIVERY
+            screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER
+                    || screen == Screen.ON_DASH_ALONG_THE_WAY ->
+                AppState.DASH_ACTIVE_AWAITING_OFFER
+
+            screen == Screen.DASH_CONTROL -> AppState.DASH_ACTIVE_ON_CONTROL
+            screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
+
+            screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
+            screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
             else -> currentState
         }
     }
