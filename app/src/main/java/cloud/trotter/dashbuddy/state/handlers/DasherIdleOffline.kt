@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.state.handlers
 
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
-import cloud.trotter.dashbuddy.state.StateManager
+import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.state.ScreenInfo
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
@@ -15,7 +15,10 @@ class DasherIdleOffline : StateHandler {
     private val currentRepo = DashBuddyApplication.currentRepo
     private val zoneRepo = DashBuddyApplication.zoneRepo
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
@@ -44,31 +47,31 @@ class DasherIdleOffline : StateHandler {
             return AppState.DASHER_INITIATING_DASH_SESSION
 
         if (stateContext.screenInfo is ScreenInfo.IdleMap) {
-            StateManager.enqueueDbWork {
-                try {
-                    // Get the current state from the DB, or create a default empty one
-                    val currentData = currentRepo.getCurrentDashState() ?: CurrentEntity()
+            try {
+                // Get the current state from the DB, or create a default empty one
+                val currentData = currentRepo.getCurrentDashState() ?: CurrentEntity()
 
-                    // Get the new data from the screen parser
-                    val newZoneId =
-                        stateContext.screenInfo.zoneName?.let { zoneRepo.getOrInsertZone(it) }
+                // Get the new data from the screen parser
+                val newZoneId =
+                    stateContext.screenInfo.zoneName?.let { zoneRepo.getOrInsertZone(it) }
 
-                    val newDashType = stateContext.screenInfo.dashType
-
-                    // Check if an update is actually needed
-                    val needsUpdate =
-                        (currentData.zoneId != newZoneId) || (currentData.dashType != newDashType)
-
-                    if (needsUpdate) {
-                        // If and only if something changed, perform a SINGLE update
-                        // with both new values.
-                        currentRepo.updatePreDashInfo(newZoneId, newDashType)
-                        Log.i("DasherIdleOffline", "Pre-dash info changed, updating Current table.")
-                    }
-
-                } catch (e: Exception) {
-                    Log.e("DasherIdleOffline", "!!! Error updating pre-dash zone/type data. !!!", e)
+                val newDashType = stateContext.screenInfo.dashType ?: DashType.PER_OFFER.also {
+                    Log.d("DasherIdleOffline", "DashType is null, defaulting to PER_OFFER")
                 }
+
+                // Check if an update is actually needed
+                val needsUpdate =
+                    (currentData.zoneId != newZoneId) || (currentData.dashType != newDashType)
+
+                if (needsUpdate) {
+                    // If and only if something changed, perform a SINGLE update
+                    // with both new values.
+                    currentRepo.updatePreDashInfo(newZoneId, newDashType)
+                    Log.i("DasherIdleOffline", "Pre-dash info changed, updating Current table.")
+                }
+
+            } catch (e: Exception) {
+                Log.e("DasherIdleOffline", "!!! Error updating pre-dash zone/type data. !!!", e)
             }
         } else {
             Log.d("DasherIdleOffline", "ScreenInfo is not IdleMap: ${stateContext.screenInfo}")
@@ -77,7 +80,7 @@ class DasherIdleOffline : StateHandler {
         return currentState
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
@@ -103,7 +106,7 @@ class DasherIdleOffline : StateHandler {
 //        DashBuddyApplication.sendBubbleMessage(message)
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState

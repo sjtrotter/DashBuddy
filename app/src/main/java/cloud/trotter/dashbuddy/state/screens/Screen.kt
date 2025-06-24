@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.screens // Package for the Screen enum
 
+import cloud.trotter.dashbuddy.state.ActivityHint
 import java.util.Locale
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 
@@ -10,6 +11,10 @@ import cloud.trotter.dashbuddy.state.StateContext as StateContext
  */
 enum class Screen(
     // Signature properties directly in the enum constructor
+    val isPickup: Boolean = false,
+    val isDelivery: Boolean = false,
+    val isOfferPopup: Boolean = false,
+    val activityHint: ActivityHint = ActivityHint.NEUTRAL,
     val screenName: String = "",
     val requiredTexts: List<String> = emptyList(),
     val someOfTheseTexts: List<String> = emptyList(), // At least one text in this list must match
@@ -39,7 +44,8 @@ enum class Screen(
         requiredTexts = listOf("dash", "open navigation drawer", "safety", "help"),
         // ensure the screen has the button.
         someOfTheseTexts = listOf("dash now", "dash along the way", "schedule", "navigate"),
-        minTextCount = 5
+        minTextCount = 5,
+        activityHint = ActivityHint.INACTIVE
     ),
     SCHEDULE_VIEW(
         screenName = "Schedule",
@@ -60,7 +66,7 @@ enum class Screen(
     EARNINGS_VIEW(
         screenName = "Earnings",
         requiredTexts = listOf("earnings", "this week"),
-        someOfTheseTexts = listOf("past weeks", "balance", "cash out with dasherdirect")
+        someOfTheseTexts = listOf("past weeks", "balance", "cash out with dasherdirect"),
     ),
     RATINGS_VIEW(
         screenName = "Ratings",
@@ -132,6 +138,7 @@ enum class Screen(
             "select end time",
             "dashers needed until"
         ),
+        activityHint = ActivityHint.INACTIVE
     ),
 
     // --- Actively Dashing States ---
@@ -143,7 +150,8 @@ enum class Screen(
             "we'll look for orders along the way",
             "select end time",
             "accept"
-        )
+        ),
+        activityHint = ActivityHint.ACTIVE
     ),
     DASH_CONTROL(
         screenName = "Dash Control",
@@ -153,6 +161,7 @@ enum class Screen(
             "end dash",
             "you're dashing now"
         ),
+        activityHint = ActivityHint.ACTIVE
     ),
     ON_DASH_ALONG_THE_WAY(
         screenName = "Dash Along the Way",
@@ -162,7 +171,8 @@ enum class Screen(
             "up",
             "to zone",
             "spot saved until"
-        ), // "Navigate" button is also key
+        ),
+        activityHint = ActivityHint.ACTIVE
     ),
     TIMELINE_VIEW(
         screenName = "Timeline",
@@ -173,6 +183,7 @@ enum class Screen(
             "dash ends at",
             "add time"
         ),
+        activityHint = ActivityHint.ACTIVE
     ),
 
     // --- Navigation Views ---
@@ -191,13 +202,17 @@ enum class Screen(
             "accept",
             "decline",
             "read instructions on arrival"
-        )
+        ),
+        activityHint = ActivityHint.ACTIVE,
+        isPickup = true
     ),
     NAVIGATION_VIEW_TO_DROP_OFF(
         screenName = "Navigation to Drop Off",
         requiredTexts = listOf("heading to", "read instructions on arrival", "deliver by"),
         someOfTheseTexts = listOf("mi", "ft", "leave it at the door", "hand to customer"),
-        forbiddenTexts = listOf("accept", "decline")
+        forbiddenTexts = listOf("accept", "decline"),
+        activityHint = ActivityHint.ACTIVE,
+        isDelivery = true
     ),
 
 
@@ -213,7 +228,9 @@ enum class Screen(
             "mi",
             "ft",
         ),
-        minTextCount = 6 // Offer popups usually have a certain density of info
+        minTextCount = 6,
+        isOfferPopup = true,
+        activityHint = ActivityHint.ACTIVE
     ),
 //    // --- Active Delivery - Pickup Phase ---
 //    DELIVERY_NAVIGATION_TO_STORE(
@@ -221,11 +238,56 @@ enum class Screen(
 //        someOfTheseTexts = listOf("navigate", "directions"),
 //        forbiddenTexts = listOf("deliver to", "looking for offers", "complete delivery steps", "accept")
 //    ),
-    PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL(
+    PICKUP_DETAILS_PRE_ARRIVAL(
         requiredTexts = listOf("pickup from", "directions"),
         someOfTheseTexts = listOf("arrived at store", "directions"),
 //        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
+        isPickup = true,
+        activityHint = ActivityHint.ACTIVE
     ),
+    PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI(
+        requiredTexts = listOf(
+            "confirm at store",
+            "orders",
+            "you have",
+            "orders to pick up at",
+            "pick up each one to continue"
+        ),
+        isPickup = true,
+        activityHint = ActivityHint.ACTIVE,
+//        forbiddenTexts = listOf("confirm at store")
+    ),
+    PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE(
+        requiredTexts = listOf("order for", "pick up by"),
+        someOfTheseTexts = listOf("verify order", "continue with pickup", "confirm pickup"),
+//        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
+        isPickup = true,
+        activityHint = ActivityHint.ACTIVE
+    ),
+    PICKUP_DETAILS_VERIFY_PICKUP(
+        requiredTexts = listOf("verify order", "order for", "confirm pickup", "can't verify order"),
+        isPickup = true,
+        activityHint = ActivityHint.ACTIVE
+    ),
+    PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI(
+        requiredTexts = listOf(
+            "pick up",
+            "orders",
+            "you have",
+            "orders to pick up at",
+            "pick up each one to continue"
+        ),
+        forbiddenTexts = listOf("confirm at store", "customer"),
+        isPickup = true,
+        activityHint = ActivityHint.ACTIVE
+    ),
+    PICKUP_DETAILS_POST_ARRIVAL_SHOP(
+        requiredTexts = listOf("shop and deliver", "to shop", "done"),
+        isPickup = true,
+        activityHint = ActivityHint.ACTIVE
+//        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
+    ),
+
 //    DELIVERY_SHOP_AND_DELIVER_LIST(
 //        requiredTexts = listOf("shop and deliver", "to shop", "start shopping", "found item", "item unavailable")
 //    ),
@@ -291,7 +353,8 @@ enum class Screen(
             "current orders",
             "add time",
             "dash ends at"
-        )
+        ),
+        activityHint = ActivityHint.ACTIVE
     ),
 //
 //    DELIVERY_PROBLEM_REPORTING(

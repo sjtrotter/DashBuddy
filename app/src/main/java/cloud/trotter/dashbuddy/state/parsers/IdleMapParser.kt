@@ -8,7 +8,7 @@ object IdleMapParser {
     // This logic is moved from the DasherIdleOffline handler.
     // It now takes the full list of screen texts to be more robust.
     fun parse(screenTexts: List<String>): Pair<String?, DashType?> {
-        var zoneName: String?
+        val zoneName: String?
         var dashType: DashType? = null
 
         // Find Earning Type

@@ -8,7 +8,7 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 
 class ViewNavigation : StateHandler {
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
@@ -19,12 +19,12 @@ class ViewNavigation : StateHandler {
             Screen.MAIN_MAP_IDLE -> AppState.DASHER_ENDING_DASH_SESSION
             Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
             Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
-            Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
+            Screen.PICKUP_DETAILS_PRE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
             else -> currentState
         }
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
@@ -34,7 +34,7 @@ class ViewNavigation : StateHandler {
 //        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${context.dasherScreen?.screenName} Screen")
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState

@@ -7,11 +7,16 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.state.ClickInfo
-import cloud.trotter.dashbuddy.state.parsers.ClickParser
+import cloud.trotter.dashbuddy.data.current.CurrentEntity
+import cloud.trotter.dashbuddy.state.parsers.click.ClickInfo
+import cloud.trotter.dashbuddy.state.parsers.click.ClickParser
 import cloud.trotter.dashbuddy.state.screens.ScreenRecognizerV2
 import cloud.trotter.dashbuddy.util.AccNodeUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
 import cloud.trotter.dashbuddy.state.screens.Recognizer as ScreenRecognizer
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
@@ -38,13 +43,17 @@ object EventHandler {
     private var debouncedRootNode: AccessibilityNodeInfo? = null
     private var debouncedRootNodeTexts: List<String> = emptyList()
     private val _serviceFlow = MutableStateFlow<AccessibilityService?>(null)
+    private val currentRepo = DashBuddyApplication.currentRepo
+    private val eventScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     // This runnable will contain the logic to process the event after the delay.
     private val debounceRunnable = Runnable {
         Log.d(TAG, "Processing debounced event.")
         _serviceFlow.value?.let { activeService ->
             debouncedEvent?.let { event ->
-                processEvent(event, activeService, debouncedRootNode, debouncedRootNodeTexts)
+                eventScope.launch {
+                    processEvent(event, activeService, debouncedRootNode, debouncedRootNodeTexts)
+                }
             }
         }
     }
@@ -116,7 +125,9 @@ object EventHandler {
                 // Process this high-priority event right away.
                 val rootNodeTexts = mutableListOf<String>()
                 AccNodeUtils.extractTexts(rootNode, rootNodeTexts)
-                processEvent(event, service, rootNode, rootNodeTexts)
+                eventScope.launch {
+                    processEvent(event, service, rootNode, rootNodeTexts)
+                }
             }
 
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
@@ -154,7 +165,7 @@ object EventHandler {
      * This is the core logic that extracts data, recognizes the screen, and dispatches the state.
      * It's called either immediately (for clicks) or after a delay (for content changes).
      */
-    private fun processEvent(
+    private suspend fun processEvent(
         event: AccessibilityEvent,
         service: AccessibilityService,
         rootNodePassed: AccessibilityNodeInfo?,
@@ -164,6 +175,8 @@ object EventHandler {
         if (rootNode == null) {
             rootNode = service.rootInActiveWindow ?: return
         }
+
+        val currentDashState: CurrentEntity? = currentRepo.getCurrentDashState()
 
         val currentEventType = event.eventType
         Log.d(
@@ -197,13 +210,15 @@ object EventHandler {
             sourceNode = event.source,
             rootNodeTexts = rootNodeTexts,
             sourceNodeTexts = sourceNodeTexts,
-            clickInfo = clickInfo
+            clickInfo = clickInfo,
+            currentDashState = currentDashState,
         )
         val finalContext = tempContext.copy(
             dasherScreen = ScreenRecognizer.identify(tempContext, lastDasherScreen),
             screenInfo = ScreenRecognizerV2.identify(tempContext)
         )
 
+        Log.d(TAG, "TEST: Current dash state: $currentDashState")
         StateManager.dispatchEvent(finalContext)
 
         // Update the last known screen for context in the next recognition

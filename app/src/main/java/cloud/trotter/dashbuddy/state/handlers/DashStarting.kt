@@ -18,7 +18,7 @@ class DashStarting : StateHandler {
     private val dashZoneRepo = DashBuddyApplication.dashZoneRepo
     private val zoneRepo = DashBuddyApplication.zoneRepo
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d(tag, "Evaluating state for event...")
 
         // The main setup happens in enterState.
@@ -31,74 +31,72 @@ class DashStarting : StateHandler {
         }
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
         Log.i(tag, "Entering state: Initializing new dash from persisted CurrentEntity.")
 
-        StateManager.enqueueDbWork {
-            try {
-                // 1. Get the pre-dash info from the database, NOT the Manager.
-                val currentInfo = currentRepo.getCurrentDashState()
+        try {
+            // 1. Get the pre-dash info from the database, NOT the Manager.
+            val currentInfo = currentRepo.getCurrentDashState()
 
-                // The new failure condition: the zoneId was not persisted correctly.
-                if (currentInfo?.zoneId == null) {
-                    Log.e(tag, "Cannot start dash, zoneId from Current table is null.")
-                    DashBuddyApplication.sendBubbleMessage("Error: Zone not set.\nCannot start dash.")
-                    return@enqueueDbWork
-                }
-
-                val zoneId = currentInfo.zoneId
-                val dashType = currentInfo.dashType
-
-                // Get the zone name for the bubble message
-                val zone = zoneRepo.getZoneById(zoneId)
-                val zoneName = zone?.zoneName ?: "Unknown Zone"
-
-                Log.d(
-                    tag,
-                    "Preparing to start dash in zone: '$zoneName' (ID: $zoneId), type: '$dashType'."
-                )
-
-                // 2. Insert new DashEntity using the data from the Current table
-                val newDash = DashEntity(
-                    zoneId = zoneId,
-                    startTime = stateContext.timestamp,
-                    dashType = dashType
-                )
-                val dashId = dashRepo.insertDash(newDash)
-                if (dashId <= 0L) {
-                    Log.e(tag, "Failed to insert new dash. Received dashId: $dashId")
-                    DashBuddyApplication.sendBubbleMessage("Error: Could not start new dash session.")
-                    return@enqueueDbWork
-                }
-                Log.i(tag, "New dash created with ID: $dashId for zoneId: $zoneId")
-
-                // 3. Link the dash and zone (this logic is the same)
-                dashZoneRepo.linkDashToZone(dashId, zoneId, true, stateContext.timestamp)
-                Log.d(tag, "DashZone link created: $dashId -> $zoneId")
-
-                // 4. Update Current table to make the dash fully active
-                currentRepo.startNewActiveDash(
-                    dashId,
-                    zoneId,
-                    dashType,
-                    stateContext.timestamp,
-                )
-                Log.i(tag, "Current dash state updated. Dash successfully started.")
-
-                DashBuddyApplication.sendBubbleMessage("Dashing in $zoneName\n(${dashType?.displayName})")
-
-            } catch (e: Exception) {
-                Log.e(tag, "!!! CRITICAL ERROR during dash starting process !!!", e)
-                DashBuddyApplication.sendBubbleMessage("Error starting dash!\nCheck logs.")
+            // The new failure condition: the zoneId was not persisted correctly.
+            if (currentInfo?.zoneId == null) {
+                Log.e(tag, "Cannot start dash, zoneId from Current table is null.")
+                DashBuddyApplication.sendBubbleMessage("Error: Zone not set.\nCannot start dash.")
+                return
             }
+
+            val zoneId = currentInfo.zoneId
+            val dashType = currentInfo.dashType
+
+            // Get the zone name for the bubble message
+            val zone = zoneRepo.getZoneById(zoneId)
+            val zoneName = zone?.zoneName ?: "Unknown Zone"
+
+            Log.d(
+                tag,
+                "Preparing to start dash in zone: '$zoneName' (ID: $zoneId), type: '$dashType'."
+            )
+
+            // 2. Insert new DashEntity using the data from the Current table
+            val newDash = DashEntity(
+                zoneId = zoneId,
+                startTime = stateContext.timestamp,
+                dashType = dashType
+            )
+            val dashId = dashRepo.insertDash(newDash)
+            if (dashId <= 0L) {
+                Log.e(tag, "Failed to insert new dash. Received dashId: $dashId")
+                DashBuddyApplication.sendBubbleMessage("Error: Could not start new dash session.")
+                return
+            }
+            Log.i(tag, "New dash created with ID: $dashId for zoneId: $zoneId")
+
+            // 3. Link the dash and zone (this logic is the same)
+            dashZoneRepo.linkDashToZone(dashId, zoneId, true, stateContext.timestamp)
+            Log.d(tag, "DashZone link created: $dashId -> $zoneId")
+
+            // 4. Update Current table to make the dash fully active
+            currentRepo.startNewActiveDash(
+                dashId,
+                zoneId,
+                dashType,
+                stateContext.timestamp,
+            )
+            Log.i(tag, "Current dash state updated. Dash successfully started.")
+
+            DashBuddyApplication.sendBubbleMessage("Dashing in $zoneName\n(${dashType?.displayName})")
+
+        } catch (e: Exception) {
+            Log.e(tag, "!!! CRITICAL ERROR during dash starting process !!!", e)
+            DashBuddyApplication.sendBubbleMessage("Error starting dash!\nCheck logs.")
         }
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState

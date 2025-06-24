@@ -51,4 +51,16 @@ object UtilityFunctions {
         }
     }
 
+    /** Match two strings. */
+    fun stringsMatch(string1: String, string2: String): Boolean {
+        val normalizedString1 = normalize(string1)
+        val normalizedString2 = normalize(string2)
+        return normalizedString1.contains(normalizedString2)
+                || normalizedString2.contains(normalizedString1)
+    }
+
+    /** Normalize string by lowering case and removing all non-alphanumeric characters. */
+    private fun normalize(input: String): String {
+        return input.lowercase().replace(Regex("[^a-z0-9]"), "")
+    }
 }

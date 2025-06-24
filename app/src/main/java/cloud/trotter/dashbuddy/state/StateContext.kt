@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.state
 
 import android.content.Context as AndroidContext // Alias to avoid naming collision
 import android.view.accessibility.AccessibilityNodeInfo
+import cloud.trotter.dashbuddy.data.current.CurrentEntity
+import cloud.trotter.dashbuddy.state.parsers.click.ClickInfo
 import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
 // You'll also need your AppState enum, e.g.:
 // enum class AppState { UNKNOWN, STARTUP, LOGIN_SCREEN, MAIN_DASHBOARD, OFFER_POPUP, ON_DELIVERY, ... }
@@ -22,4 +24,5 @@ data class StateContext(
     val dasherScreen: DasherScreen? = null,
     val clickInfo: ClickInfo? = null,
     val screenInfo: ScreenInfo? = null,
+    val currentDashState: CurrentEntity? = null // The current dash state
 )

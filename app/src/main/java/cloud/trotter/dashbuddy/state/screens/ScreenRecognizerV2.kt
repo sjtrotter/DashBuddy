@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.state.ScreenInfo
 import cloud.trotter.dashbuddy.state.parsers.IdleMapParser
+import cloud.trotter.dashbuddy.state.parsers.PickupScreenParser
 
 object ScreenRecognizerV2 {
     private const val TAG = "ScreenRecognizerV2"
@@ -15,7 +16,11 @@ object ScreenRecognizerV2 {
         // High-priority, often modal or overlay screens
         Screen.OFFER_POPUP,
         Screen.DELIVERY_COMPLETED_DIALOG,
-        Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL,
+        Screen.PICKUP_DETAILS_PRE_ARRIVAL,
+        Screen.PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI,
+        Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP,
+        Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,
+        Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI,
 
         // Specific task screens
 //        Screen.DELIVERY_TAKE_PHOTO_UI,
@@ -75,10 +80,17 @@ object ScreenRecognizerV2 {
                             ?: ScreenInfo.Simple(screenCandidate) // Fallback
                     }
 
-                    Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL -> {
-                        val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
-                        parsedStore?.let { ScreenInfo.PickupDetails(screenCandidate, it) }
-                            ?: ScreenInfo.Simple(screenCandidate) // Fallback
+                    Screen.PICKUP_DETAILS_PRE_ARRIVAL,
+                    Screen.PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI,
+                    Screen.NAVIGATION_VIEW_TO_PICK_UP,
+                    Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP,
+                    Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,
+                    Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI -> {
+                        // val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
+                        // parsedStore?.let { ScreenInfo.PickupDetails(screenCandidate, it) }
+                        //     ?: ScreenInfo.Simple(screenCandidate) // Fallback
+                        return PickupScreenParser.parse(stateContext.rootNodeTexts, screenCandidate)
+
                     }
 
                     Screen.DELIVERY_COMPLETED_DIALOG -> {

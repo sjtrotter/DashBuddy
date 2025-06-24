@@ -1,12 +1,19 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.data.order.OrderStatus
+import cloud.trotter.dashbuddy.data.store.ParsedStore
+import cloud.trotter.dashbuddy.data.store.StoreEntity
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState
+import cloud.trotter.dashbuddy.state.ScreenInfo
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 //import cloud.trotter.dashbuddy.state.processing.CustomerProcessor
 //import cloud.trotter.dashbuddy.state.processing.StoreProcessor
 import cloud.trotter.dashbuddy.state.screens.Screen
+import cloud.trotter.dashbuddy.util.OrderMatcher
+import cloud.trotter.dashbuddy.util.UtilityFunctions
 
 /**
  * Manages the entire pickup phase, from offer acceptance to confirming the last pickup.
@@ -15,72 +22,177 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 class OnPickup : StateHandler {
 
     private val tag = this::class.simpleName ?: "OnPickupHandler"
+    private val currentRepo = DashBuddyApplication.currentRepo
+    private val orderRepo = DashBuddyApplication.orderRepo
+    private val storeRepo = DashBuddyApplication.storeRepo
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
-        Log.i(tag, "--- Pickup Phase Initiated ---")
-        // Initial processing can happen here if needed, but the real work is in processEvent.
-        processEvent(stateContext, currentState)
+        Log.i(tag, "--- Entering $tag ---")
+        // Determine the active order and set it as the focused order
+        val activeOrder = OrderMatcher.matchOrder(stateContext)
+        if (activeOrder != null) {
+            currentRepo.updateActiveOrderFocus(activeOrder)
+            Log.d(tag, "Focused order: $activeOrder")
+        } else {
+            Log.d(tag, "No active order found.")
+            return
+        }
+        updateFromContext(stateContext, currentState)
     }
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
-        Log.d(tag, "Processing screen: ${stateContext.dasherScreen?.name}")
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
 
-        // This handler is a dispatcher. It looks at the screen and decides what to do.
-        when (stateContext.dasherScreen) {
+        val screen = stateContext.screenInfo?.screen ?: return currentState
+        // Determine next state based on screen changes
+        return when {
+            // TODO: next two... order cancelled?
+//            screen == Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
+//            screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
+            // TODO: do we need to transition on dash control anymore?
+//            screen == Screen.DASH_CONTROL -> AppState.VIEWING_DASH_CONTROL
+            // TODO: this should never happen.
+//            screen == Screen.MAIN_MAP_IDLE -> AppState.DASHER_IDLE_OFFLINE
+            // TODO: we don't want to transition out for navigation.
+//            screen == Screen.NAVIGATION_VIEW -> AppState.VIEWING_NAVIGATION
+//              screen == Screen.PICKUP_DETAILS_PRE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
 
-            // It's a navigation screen with store info
-//            Screen.NAVIGATION_TO_STORE -> {
-//                StoreProcessor.processSecondaryStoreScreen(stateContext) // Use the "focus-only" processor
-//            }
+            // new offer presented.
+            screen == Screen.OFFER_POPUP -> AppState.SESSION_ACTIVE_OFFER_PRESENTED
 
-            // It's the primary pickup details screen
-//            Screen.DELIVERY_DETAILS_VIEW -> {
-//                StoreProcessor.processPrimaryStoreScreen(stateContext) // Use the "full-processing" processor
-//            }
+            // dasher viewing timeline and may switch tasks. need to transition.
+            screen == Screen.TIMELINE_VIEW -> AppState.VIEWING_TIMELINE
 
-            // It's a screen that shows the customer's name (e.g., after arriving)
-//            Screen.PICKUP_WITH_CUSTOMER_NAME -> {
-//                CustomerProcessor.processCustomerScreen(stateContext) // A new processor for customers
-//            }
-
-            // The user has tapped "Confirm Pickup"
-//            Screen.CONFIRM_PICKUP -> {
-//                // 1. Update the focused order's status to PICKED_UP
-//                val focusedOrderId = ...
-//                orderRepo.updateOrderStatus(focusedOrderId, OrderStatus.PICKED_UP)
-//
-//                // 2. Check if any more pickups remain in the active queue
-//                val remainingPickups = ...
-//                if (remainingPickups == 0) {
-//                    // All pickups are done! End this meta-state and move to the delivery phase.
-//                    Log.i(tag, "--- All Pickups Completed. Transitioning to Delivery Phase. ---")
-//                    return AppState.SESSION_ACTIVE_ON_DELIVERY
-//                }
-//            }
-
-            // The user is just looking at the map or dash controls; we do nothing and stay in this state.
-//            Screen.ONLINE_MAP, Screen.DASH_CONTROL -> {
-//                // No state change needed.
-//            }
+            // dasher went to a delivery screen.
+            screen.isDelivery -> AppState.SESSION_ACTIVE_ON_DELIVERY
 
             else -> {
-                // An unknown screen appeared, just wait.
+                if (stateContext.currentDashState?.activeOrderId == null) {
+                    Log.v(tag, "No active order. Attempting to match order...")
+                    val activeOrder = OrderMatcher.matchOrder(stateContext)
+                    if (activeOrder != null) {
+                        currentRepo.updateActiveOrderFocus(activeOrder)
+                        Log.d(tag, "Focused order: $activeOrder")
+                    } else {
+                        Log.d(tag, "No active order found.")
+                        return currentState
+                    }
+                }
+                updateFromContext(stateContext, currentState)
             }
         }
+    }
 
-        // Stay in this meta-state until all pickups are confirmed.
+    private suspend fun updateFromContext(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
+        // In here, we just update the activeOrder that we focused in enterState.
+        val activeOrderId =
+            currentRepo.getCurrentDashState()?.activeOrderId ?: return currentState.also {
+                Log.d(tag, "No active order to update.")
+            }
+        val screenInfo =
+            stateContext.screenInfo as? ScreenInfo.PickupDetails ?: return currentState.also {
+                Log.d(tag, "Screen info is not PickupDetails. Skipping update.")
+            }
+        val order = orderRepo.getOrderById(activeOrderId) ?: return currentState.also {
+            Log.w(tag, "!!! Could not retrieve active order $activeOrderId from database. !!!")
+        }
+
+        when (screenInfo.screen) {
+
+            Screen.NAVIGATION_VIEW_TO_PICK_UP,
+            Screen.PICKUP_DETAILS_PRE_ARRIVAL -> {
+                // ScreenInfo.PickupDetails(screen, storeName, storeAddress, null)
+                if (order.storeId == null) {
+                    val parsedStore = ParsedStore(
+                        screenInfo.storeName!!,
+                        screenInfo.storeAddress!!,
+                    )
+                    var storeId: Long? = null
+
+                    // 1. Search for existing stores at this exact address.
+                    val existingStoresAtAddress = storeRepo.getStoresByAddress(parsedStore.address)
+
+                    if (existingStoresAtAddress.isNotEmpty()) {
+                        // 2. If we have stores at this address, try to find a name match.
+                        for (existingStore in existingStoresAtAddress) {
+                            if (UtilityFunctions.stringsMatch(
+                                    existingStore.storeName,
+                                    parsedStore.storeName
+                                )
+                            ) {
+                                storeId = existingStore.id
+                                Log.i(
+                                    tag,
+                                    "Found existing store '${existingStore.storeName}' with same address. Using storeId: $storeId"
+                                )
+                                break
+                            }
+                        }
+                    }
+
+                    // 3. If no matching store was found, this is a new store. Upsert it.
+                    if (storeId == null) {
+                        Log.i(
+                            tag,
+                            "No existing store found at this address with a similar name. Creating a new store record."
+                        )
+                        val storeToUpsert = StoreEntity(
+                            storeName = parsedStore.storeName,
+                            address = parsedStore.address
+                        )
+                        storeId = storeRepo.upsertStore(storeToUpsert)
+                    }
+                    orderRepo.linkOrderToStore(activeOrderId, storeId)
+                    Log.i(tag, "Updated Order ID $activeOrderId with Store ID $storeId.")
+                }
+                if (order.status != OrderStatus.PICKUP_NAVIGATING) {
+                    orderRepo.updateOrderStatus(activeOrderId, OrderStatus.PICKUP_NAVIGATING)
+                    Log.i(tag, "Updated Order ID $activeOrderId to status: PICKUP_NAVIGATING")
+                }
+            }
+
+            Screen.PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI,
+            Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI -> {
+                // ScreenInfo.PickupDetails(screen, storeName, null, null)
+                // ...what exactly am i doing here?
+            }
+
+            Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE -> {
+                // ScreenInfo.PickupDetails(screen, storeName, null, customerHash)
+                if (order.customerNameHash == null && screenInfo.customerNameHash != null) {
+                    orderRepo.setCustomerNameHash(activeOrderId, screenInfo.customerNameHash)
+                    Log.i(
+                        tag,
+                        "Updated Order ID $activeOrderId with Customer Name Hash: ${screenInfo.customerNameHash}"
+                    )
+                }
+                if (order.status != OrderStatus.PICKUP_ARRIVED) {
+                    orderRepo.updateOrderStatus(activeOrderId, OrderStatus.PICKUP_ARRIVED)
+                    Log.i(tag, "Updated Order ID $activeOrderId to status: PICKUP_ARRIVED")
+                }
+            }
+
+            else -> {
+                Log.v(tag, "No specific update for screen ${screenInfo.screen}.")
+            }
+        }
         return currentState
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState
     ) {
-        Log.i(tag, "--- Pickup Phase Concluded ---")
+        Log.i(tag, "--- Exiting $tag ---")
     }
 }

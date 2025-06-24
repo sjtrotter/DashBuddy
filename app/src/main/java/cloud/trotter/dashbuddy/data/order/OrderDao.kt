@@ -128,4 +128,8 @@ interface OrderDao {
     """
     )
     fun getAllOrdersForDash(dashId: Long): Flow<List<OrderEntity>>
+
+    @Query("UPDATE orders SET customerNameHash = :customerNameHash WHERE id = :orderId")
+    suspend fun setCustomerNameHash(orderId: Long, customerNameHash: String)
+
 }

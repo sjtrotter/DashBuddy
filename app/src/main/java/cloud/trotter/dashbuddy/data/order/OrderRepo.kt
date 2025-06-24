@@ -125,4 +125,10 @@ class OrderRepo(private val orderDao: OrderDao) {
     fun getAllOrdersForDash(dashId: Long): Flow<List<OrderEntity>> {
         return orderDao.getAllOrdersForDash(dashId)
     }
+
+    suspend fun setCustomerNameHash(orderId: Long, customerNameHash: String) {
+        withContext(Dispatchers.IO) {
+            orderDao.setCustomerNameHash(orderId, customerNameHash)
+        }
+    }
 }

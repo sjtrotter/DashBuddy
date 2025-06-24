@@ -16,18 +16,29 @@ interface StateHandler {
      * @param stateContext the [StateContext] calling this handler.
      * @return this StateHandler instance if matched, null if not.
      */
-    fun processEvent(stateContext: StateContext, currentState: AppState): AppState
+    suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState
 
     /**
      * The actions for entering this state.
      * @param stateContext the [StateContext] calling this handler.
      */
-    fun enterState(stateContext: StateContext, currentState: AppState, previousState: AppState?)
+    suspend fun enterState(
+        stateContext: StateContext,
+        currentState: AppState,
+        previousState: AppState?
+    )
 
     /**
      * The actions for exiting this state.
      * @param stateContext the [StateContext] calling this handler.
      */
-    fun exitState(stateContext: StateContext, currentState: AppState, nextState: AppState)
+    suspend fun exitState(
+        stateContext: StateContext,
+        currentState: AppState,
+        nextState: AppState
+    )
 
 }

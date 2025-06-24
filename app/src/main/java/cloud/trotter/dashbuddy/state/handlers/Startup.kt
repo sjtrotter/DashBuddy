@@ -12,30 +12,31 @@ class Startup : StateHandler {
 
     private val currentRepo = DashBuddyApplication.currentRepo
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
 
         return currentState
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
         Log.d("${this::class.simpleName} State", "Entering state...")
-        StateManager.enqueueDbWork {
-            try {
-                // Get the current state from the DB, or create a default empty one
-                currentRepo.upsertCurrentDashState(CurrentEntity())
-            } catch (e: Exception) {
-                Log.e("Startup", "!!! Error initializing DashBuddy. !!!", e)
-            }
-            DashBuddyApplication.sendBubbleMessage("DashBuddy started!")
+        try {
+            // Get the current state from the DB, or create a default empty one
+            currentRepo.upsertCurrentDashState(CurrentEntity())
+        } catch (e: Exception) {
+            Log.e("Startup", "!!! Error initializing DashBuddy. !!!", e)
         }
+        DashBuddyApplication.sendBubbleMessage("DashBuddy started!")
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState

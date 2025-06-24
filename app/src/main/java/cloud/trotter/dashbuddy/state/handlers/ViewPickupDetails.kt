@@ -20,7 +20,7 @@ class ViewPickupDetails : StateHandler {
 
     private val tag = this::class.simpleName ?: "ViewPickupDetails"
 
-    override fun processEvent(
+    override suspend fun processEvent(
         stateContext: StateContext,
         currentState: AppState
     ): AppState {
@@ -38,93 +38,91 @@ class ViewPickupDetails : StateHandler {
         }
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
         Log.d(tag, "Entering state: DeliveryDetails")
 
-        StateManager.enqueueDbWork {
-            try {
-                // --- Initial Setup and Parsing ---
-                val current = currentRepo.getCurrentDashState()
-                val activeOrderQueue = current?.activeOrderQueue
-                if (current == null || (activeOrderQueue.isNullOrEmpty() && current.activeOrderId == null)) {
-                    Log.w(tag, "No active orders in queue. Cannot process.")
-                    return@enqueueDbWork
-                }
-
-                val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
-                if (parsedStore == null) {
-                    Log.w(tag, "Could not parse store details from the screen.")
-                    return@enqueueDbWork
-                }
-
-                var storeId: Long? = null
-
-                // --- NEW LOGIC: Search-First Strategy ---
-                // 1. Search for existing stores at this exact address.
-                val existingStoresAtAddress = storeRepo.getStoresByAddress(parsedStore.address)
-
-                if (existingStoresAtAddress.isNotEmpty()) {
-                    // 2. If we have stores at this address, try to find a name match.
-                    for (existingStore in existingStoresAtAddress) {
-                        if (namesMatch(existingStore.storeName, parsedStore.storeName)) {
-                            storeId = existingStore.id
-                            Log.i(
-                                tag,
-                                "Found existing store '${existingStore.storeName}' with same address. Using storeId: $storeId"
-                            )
-                            break
-                        }
-                    }
-                }
-
-                // 3. If no matching store was found, this is a new store. Upsert it.
-                if (storeId == null) {
-                    Log.i(
-                        tag,
-                        "No existing store found at this address with a similar name. Creating a new store record."
-                    )
-                    val storeToUpsert = StoreEntity(
-                        storeName = parsedStore.storeName,
-                        address = parsedStore.address
-                    )
-                    storeId = storeRepo.upsertStore(storeToUpsert)
-                }
-
-                // --- Order Matching and Linking (Same as before) ---
-                var matchedOrderId: Long? = null
-                val allPossibleOrderIds =
-                    (activeOrderQueue ?: emptyList()) + listOfNotNull(current.activeOrderId)
-
-                if (allPossibleOrderIds.size == 1) {
-                    matchedOrderId = allPossibleOrderIds.first()
-                } else {
-                    for (orderIdInQueue in allPossibleOrderIds.distinct()) {
-                        val orderFromQueue = orderRepo.getOrderById(orderIdInQueue)
-                        if (orderFromQueue != null &&
-                            namesMatch(orderFromQueue.storeName, parsedStore.storeName)
-                        ) {
-                            matchedOrderId = orderFromQueue.id
-                            break
-                        }
-                    }
-                }
-
-                if (matchedOrderId != null) {
-                    orderRepo.linkOrderToStore(matchedOrderId, storeId)
-                    Log.i(tag, "Updated Order ID $matchedOrderId with Store ID $storeId.")
-                    DashBuddyApplication.sendBubbleMessage("Active Order: $matchedOrderId: $storeId: ${parsedStore.storeName}")
-                    currentRepo.updateActiveOrderFocus(matchedOrderId)
-                } else {
-                    Log.w(tag, "Could not match the store on screen to any active order.")
-                }
-
-            } catch (e: Exception) {
-                Log.e(tag, "!!! CRITICAL error in DeliveryDetails enterState !!!", e)
+        try {
+            // --- Initial Setup and Parsing ---
+            val current = currentRepo.getCurrentDashState()
+            val activeOrderQueue = current?.activeOrderQueue
+            if (current == null || (activeOrderQueue.isNullOrEmpty() && current.activeOrderId == null)) {
+                Log.w(tag, "No active orders in queue. Cannot process.")
+                return
             }
+
+            val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
+            if (parsedStore == null) {
+                Log.w(tag, "Could not parse store details from the screen.")
+                return
+            }
+
+            var storeId: Long? = null
+
+            // --- NEW LOGIC: Search-First Strategy ---
+            // 1. Search for existing stores at this exact address.
+            val existingStoresAtAddress = storeRepo.getStoresByAddress(parsedStore.address)
+
+            if (existingStoresAtAddress.isNotEmpty()) {
+                // 2. If we have stores at this address, try to find a name match.
+                for (existingStore in existingStoresAtAddress) {
+                    if (namesMatch(existingStore.storeName, parsedStore.storeName)) {
+                        storeId = existingStore.id
+                        Log.i(
+                            tag,
+                            "Found existing store '${existingStore.storeName}' with same address. Using storeId: $storeId"
+                        )
+                        break
+                    }
+                }
+            }
+
+            // 3. If no matching store was found, this is a new store. Upsert it.
+            if (storeId == null) {
+                Log.i(
+                    tag,
+                    "No existing store found at this address with a similar name. Creating a new store record."
+                )
+                val storeToUpsert = StoreEntity(
+                    storeName = parsedStore.storeName,
+                    address = parsedStore.address
+                )
+                storeId = storeRepo.upsertStore(storeToUpsert)
+            }
+
+            // --- Order Matching and Linking (Same as before) ---
+            var matchedOrderId: Long? = null
+            val allPossibleOrderIds =
+                (activeOrderQueue ?: emptyList()) + listOfNotNull(current.activeOrderId)
+
+            if (allPossibleOrderIds.size == 1) {
+                matchedOrderId = allPossibleOrderIds.first()
+            } else {
+                for (orderIdInQueue in allPossibleOrderIds.distinct()) {
+                    val orderFromQueue = orderRepo.getOrderById(orderIdInQueue)
+                    if (orderFromQueue != null &&
+                        namesMatch(orderFromQueue.storeName, parsedStore.storeName)
+                    ) {
+                        matchedOrderId = orderFromQueue.id
+                        break
+                    }
+                }
+            }
+
+            if (matchedOrderId != null) {
+                orderRepo.linkOrderToStore(matchedOrderId, storeId)
+                Log.i(tag, "Updated Order ID $matchedOrderId with Store ID $storeId.")
+                DashBuddyApplication.sendBubbleMessage("Active Order: $matchedOrderId: $storeId: ${parsedStore.storeName}")
+                currentRepo.updateActiveOrderFocus(matchedOrderId)
+            } else {
+                Log.w(tag, "Could not match the store on screen to any active order.")
+            }
+
+        } catch (e: Exception) {
+            Log.e(tag, "!!! CRITICAL error in DeliveryDetails enterState !!!", e)
         }
     }
 
@@ -144,7 +142,7 @@ class ViewPickupDetails : StateHandler {
     }
 
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState

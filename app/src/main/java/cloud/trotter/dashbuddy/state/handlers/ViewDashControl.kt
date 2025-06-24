@@ -9,7 +9,7 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 
 class ViewDashControl : StateHandler {
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
@@ -19,23 +19,25 @@ class ViewDashControl : StateHandler {
         if (stateContext.dasherScreen == Screen.MAIN_MAP_IDLE) return AppState.DASHER_ENDING_DASH_SESSION
         if (stateContext.dasherScreen == Screen.ON_DASH_ALONG_THE_WAY) return AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
         if (stateContext.dasherScreen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER) return AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
-        if (stateContext.dasherScreen == Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL) return AppState.VIEWING_PICKUP_DETAILS
+        if (stateContext.dasherScreen == Screen.PICKUP_DETAILS_PRE_ARRIVAL) return AppState.VIEWING_PICKUP_DETAILS
         if (stateContext.dasherScreen == Screen.NAVIGATION_VIEW) return AppState.VIEWING_NAVIGATION
 
         return currentState
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
         Log.d("${this::class.simpleName} State", "Entering state...")
         // initialize components here
-        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${stateContext.dasherScreen?.screenName} Screen")
+        DashBuddyApplication.sendBubbleMessage(
+            "${currentState.displayName} State\n${stateContext.dasherScreen?.screenName} Screen"
+        )
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState

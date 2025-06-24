@@ -3,7 +3,6 @@ package cloud.trotter.dashbuddy.state.handlers
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.store.StoreEntity
 import cloud.trotter.dashbuddy.data.store.StoreParser
-import cloud.trotter.dashbuddy.state.StateManager
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
@@ -20,7 +19,7 @@ class NavigationToStore : StateHandler {
 
     private val tag = this::class.simpleName ?: "NavigationToStore"
 
-    override fun processEvent(
+    override suspend fun processEvent(
         stateContext: StateContext,
         currentState: AppState
     ): AppState {
@@ -30,100 +29,98 @@ class NavigationToStore : StateHandler {
         return when (stateContext.dasherScreen) {
             Screen.DASH_CONTROL -> AppState.VIEWING_DASH_CONTROL
 //            Screen.TIMELINE_VIEW -> maybe add for timeline eventually?
-            Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
+            Screen.PICKUP_DETAILS_PRE_ARRIVAL -> AppState.VIEWING_PICKUP_DETAILS
             Screen.OFFER_POPUP -> AppState.SESSION_ACTIVE_OFFER_PRESENTED
             else -> currentState
         }
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
         Log.d(tag, "Entering state: NavigationToStore")
 
-        StateManager.enqueueDbWork {
-            try {
-                // --- Initial Setup and Parsing ---
-                val current = currentRepo.getCurrentDashState()
-                val activeOrderQueue =
-                    current?.activeOrderQueue?.plus(listOfNotNull(current.activeOrderId))
-                if (current == null || (activeOrderQueue.isNullOrEmpty() && current.activeOrderId == null)) {
-                    Log.w(tag, "No active orders in queue. Cannot process.")
-                    return@enqueueDbWork
-                }
-
-                val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
-                if (parsedStore == null) {
-                    Log.w(tag, "Could not parse store details from the screen.")
-                    return@enqueueDbWork
-                }
-
-                var storeId: Long? = null
-
-                // --- NEW LOGIC: Search-First Strategy ---
-                // 1. Search for existing stores at this exact address.
-                val existingStoresAtAddress = storeRepo.getStoresByAddress(parsedStore.address)
-
-                if (existingStoresAtAddress.isNotEmpty()) {
-                    // 2. If we have stores at this address, try to find a name match.
-                    for (existingStore in existingStoresAtAddress) {
-                        if (namesMatch(existingStore.storeName, parsedStore.storeName)) {
-                            storeId = existingStore.id
-                            Log.i(
-                                tag,
-                                "Found existing store '${existingStore.storeName}' with same address. Using storeId: $storeId"
-                            )
-                            break
-                        }
-                    }
-                }
-
-                // 3. If no matching store was found, this is a new store. Upsert it.
-                if (storeId == null) {
-                    Log.i(
-                        tag,
-                        "No existing store found at this address with a similar name. Creating a new store record."
-                    )
-                    val storeToUpsert = StoreEntity(
-                        storeName = parsedStore.storeName,
-                        address = parsedStore.address
-                    )
-                    storeId = storeRepo.upsertStore(storeToUpsert)
-                }
-
-                // --- Order Matching and Linking (Same as before) ---
-                var matchedOrderId: Long? = null
-                val allPossibleOrderIds =
-                    (activeOrderQueue ?: emptyList()) + listOfNotNull(current.activeOrderId)
-
-                if (allPossibleOrderIds.size == 1) {
-                    matchedOrderId = allPossibleOrderIds.first()
-                } else {
-                    for (orderIdInQueue in allPossibleOrderIds.distinct()) {
-                        val orderFromQueue = orderRepo.getOrderById(orderIdInQueue)
-                        if (orderFromQueue != null &&
-                            namesMatch(orderFromQueue.storeName, parsedStore.storeName)
-                        ) {
-                            matchedOrderId = orderFromQueue.id
-                            break
-                        }
-                    }
-                }
-
-                if (matchedOrderId != null) {
-                    orderRepo.linkOrderToStore(matchedOrderId, storeId)
-                    Log.i(tag, "Updated Order ID $matchedOrderId with Store ID $storeId.")
-                    DashBuddyApplication.sendBubbleMessage("Active Order: $matchedOrderId: $storeId: ${parsedStore.storeName}")
-                    currentRepo.updateActiveOrderFocus(matchedOrderId)
-                } else {
-                    Log.w(tag, "Could not match the store on screen to any active order.")
-                }
-
-            } catch (e: Exception) {
-                Log.e(tag, "!!! CRITICAL error in DeliveryDetails enterState !!!", e)
+        try {
+            // --- Initial Setup and Parsing ---
+            val current = currentRepo.getCurrentDashState()
+            val activeOrderQueue =
+                current?.activeOrderQueue?.plus(listOfNotNull(current.activeOrderId))
+            if (current == null || (activeOrderQueue.isNullOrEmpty() && current.activeOrderId == null)) {
+                Log.w(tag, "No active orders in queue. Cannot process.")
+                return
             }
+
+            val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
+            if (parsedStore == null) {
+                Log.w(tag, "Could not parse store details from the screen.")
+                return
+            }
+
+            var storeId: Long? = null
+
+            // --- NEW LOGIC: Search-First Strategy ---
+            // 1. Search for existing stores at this exact address.
+            val existingStoresAtAddress = storeRepo.getStoresByAddress(parsedStore.address)
+
+            if (existingStoresAtAddress.isNotEmpty()) {
+                // 2. If we have stores at this address, try to find a name match.
+                for (existingStore in existingStoresAtAddress) {
+                    if (namesMatch(existingStore.storeName, parsedStore.storeName)) {
+                        storeId = existingStore.id
+                        Log.i(
+                            tag,
+                            "Found existing store '${existingStore.storeName}' with same address. Using storeId: $storeId"
+                        )
+                        break
+                    }
+                }
+            }
+
+            // 3. If no matching store was found, this is a new store. Upsert it.
+            if (storeId == null) {
+                Log.i(
+                    tag,
+                    "No existing store found at this address with a similar name. Creating a new store record."
+                )
+                val storeToUpsert = StoreEntity(
+                    storeName = parsedStore.storeName,
+                    address = parsedStore.address
+                )
+                storeId = storeRepo.upsertStore(storeToUpsert)
+            }
+
+            // --- Order Matching and Linking (Same as before) ---
+            var matchedOrderId: Long? = null
+            val allPossibleOrderIds =
+                (activeOrderQueue ?: emptyList()) + listOfNotNull(current.activeOrderId)
+
+            if (allPossibleOrderIds.size == 1) {
+                matchedOrderId = allPossibleOrderIds.first()
+            } else {
+                for (orderIdInQueue in allPossibleOrderIds.distinct()) {
+                    val orderFromQueue = orderRepo.getOrderById(orderIdInQueue)
+                    if (orderFromQueue != null &&
+                        namesMatch(orderFromQueue.storeName, parsedStore.storeName)
+                    ) {
+                        matchedOrderId = orderFromQueue.id
+                        break
+                    }
+                }
+            }
+
+            if (matchedOrderId != null) {
+                orderRepo.linkOrderToStore(matchedOrderId, storeId)
+                Log.i(tag, "Updated Order ID $matchedOrderId with Store ID $storeId.")
+                DashBuddyApplication.sendBubbleMessage("Active Order: $matchedOrderId: $storeId: ${parsedStore.storeName}")
+                currentRepo.updateActiveOrderFocus(matchedOrderId)
+            } else {
+                Log.w(tag, "Could not match the store on screen to any active order.")
+            }
+
+        } catch (e: Exception) {
+            Log.e(tag, "!!! CRITICAL error in DeliveryDetails enterState !!!", e)
         }
     }
 
@@ -143,11 +140,11 @@ class NavigationToStore : StateHandler {
     }
 
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState
     ) {
-        Log.d(tag, "Exiting DeliveryDetails state")
+        Log.d(tag, "Exiting NavigationToStore state")
     }
 }

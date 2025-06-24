@@ -1,6 +1,5 @@
-package cloud.trotter.dashbuddy.state.parsers
+package cloud.trotter.dashbuddy.state.parsers.click
 
-import cloud.trotter.dashbuddy.state.ClickInfo
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 object ClickParser {
@@ -18,23 +17,25 @@ object ClickParser {
         for (text in clickedTexts) {
             // Using `when` with `contains` makes this much more robust.
             when {
-                // CHANGE: Using `contains` instead of `equals`.
-                // This will match "Accept" as well as "Accept (32s)".
                 text.contains("Accept", ignoreCase = true) ||
                         text.contains("Add to route", ignoreCase = true) -> {
-                    return ClickInfo.ButtonClick(ClickInfo.ClickType.ACCEPT_OFFER)
+                    return ClickInfo.ButtonClick(ClickType.ACCEPT_OFFER)
                 }
 
-                // CHANGE: Using `contains` for Decline as well.
-                text.contains("Decline", ignoreCase = true) -> {
-                    return ClickInfo.ButtonClick(ClickInfo.ClickType.DECLINE_OFFER)
+                text.contains("Decline offer", ignoreCase = true) -> {
+                    return ClickInfo.ButtonClick(ClickType.DECLINE_OFFER)
+                }
+
+                text.contains("Decline order", ignoreCase = true) -> {
+                    return ClickInfo.ButtonClick(ClickType.DECLINE_ORDER)
                 }
 
                 // CHANGE: Using `startsWith` is more robust than a strict regex.
                 // This will match "$10.50" as well as "$10.50 view details".
                 text.trim().startsWith("$") -> {
-                    return ClickInfo.ButtonClick(ClickInfo.ClickType.VIEW_PAY_DETAILS)
+                    return ClickInfo.ButtonClick(ClickType.VIEW_PAY_DETAILS)
                 }
+                //
             }
         }
 

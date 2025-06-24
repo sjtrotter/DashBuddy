@@ -9,7 +9,10 @@ import cloud.trotter.dashbuddy.state.screens.Screen
 
 class ViewChat : StateHandler {
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
@@ -22,17 +25,19 @@ class ViewChat : StateHandler {
         return currentState
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
         Log.d("${this::class.simpleName} State", "Entering state...")
         // initialize components here
-        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${stateContext.dasherScreen?.screenName} Screen")
+        DashBuddyApplication.sendBubbleMessage(
+            "${currentState.displayName} State\n${stateContext.dasherScreen?.screenName} Screen"
+        )
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState

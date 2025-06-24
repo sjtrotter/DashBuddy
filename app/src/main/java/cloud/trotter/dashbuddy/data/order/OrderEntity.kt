@@ -58,6 +58,8 @@ data class OrderEntity(
     val badges: Set<OrderBadge> = emptySet(),
 
     // --- Delivery Details (populated after pickup/during dropoff) ---
+    /** The hash of the parsed customer name from the pickup/delivery screen. */
+    val customerNameHash: String? = null,
     /** The ID of the specific [CustomerEntity]. Null until identified and linked. */
     val customerId: Long? = null,
     /** Timestamp (milliseconds since epoch) when the delivery was completed. Null until completion. */

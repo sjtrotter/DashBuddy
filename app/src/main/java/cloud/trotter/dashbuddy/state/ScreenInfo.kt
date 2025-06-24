@@ -3,7 +3,6 @@ package cloud.trotter.dashbuddy.state
 import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
-import cloud.trotter.dashbuddy.data.store.ParsedStore
 import cloud.trotter.dashbuddy.state.screens.Screen
 
 /**
@@ -23,7 +22,9 @@ sealed class ScreenInfo {
     /** Contains the parsed store details from a Pickup Details screen. */
     data class PickupDetails(
         override val screen: Screen,
-        val parsedStore: ParsedStore
+        val storeName: String?,
+        val storeAddress: String?,
+        val customerNameHash: String?
     ) : ScreenInfo()
 
     /** Contains the parsed pay details from a Delivery Completed screen. */

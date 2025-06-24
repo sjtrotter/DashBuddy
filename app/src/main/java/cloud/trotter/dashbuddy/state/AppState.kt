@@ -13,11 +13,12 @@ import cloud.trotter.dashbuddy.state.handlers.AwaitingOffer
 import cloud.trotter.dashbuddy.state.handlers.DashAlongTheWay
 import cloud.trotter.dashbuddy.state.handlers.Unknown
 import cloud.trotter.dashbuddy.state.handlers.DasherIdleOffline
-import cloud.trotter.dashbuddy.state.handlers.DasherLogin
 import cloud.trotter.dashbuddy.state.handlers.OfferPresented
 import cloud.trotter.dashbuddy.state.handlers.DashStarting
 import cloud.trotter.dashbuddy.state.handlers.DashStopping
 import cloud.trotter.dashbuddy.state.handlers.DeliveryCompleted
+import cloud.trotter.dashbuddy.state.handlers.OnDelivery
+import cloud.trotter.dashbuddy.state.handlers.OnPickup
 import cloud.trotter.dashbuddy.state.handlers.ViewPickupDetails
 import cloud.trotter.dashbuddy.state.handlers.SetDashEndTime
 import cloud.trotter.dashbuddy.state.handlers.Startup
@@ -45,7 +46,8 @@ import cloud.trotter.dashbuddy.state.handlers.ViewTimeline
  */
 enum class AppState(
     val handler: StateHandler,
-    val displayName: String
+    val displayName: String,
+    val activityHint: ActivityHint = ActivityHint.NEUTRAL
 ) {
     UNKNOWN(
         handler = Unknown(),
@@ -54,32 +56,21 @@ enum class AppState(
 
     // --- App Lifecycle & Pre-Dash ---
     APP_INITIALIZING(
-        handler = Startup(), // Using your Startup handler
+        handler = Startup(),
         displayName = "Dashbuddy Started!"
     ),
 
-    //    AWAITING_DASHER_APP_FOCUS(
-//        handler = PlaceHolder(AWAITING_DASHER_APP_FOCUS), // Placeholder
-//        displayName = "Awaiting Dasher Focus"
-//    ),
-//    DASHER_APP_CLOSED_OR_BACKGROUNDED(
-//        handler = PlaceHolder(DASHER_APP_CLOSED_OR_BACKGROUNDED), // Placeholder
-//        displayName = "Dasher App Closed/Backgrounded"
-//    ),
-    DASHER_LOGIN_FLOW(
-        handler = DasherLogin(), // Placeholder
-        displayName = "Dasher Login Flow"
-    ),
     DASHER_IDLE_OFFLINE(
         handler = DasherIdleOffline(), // Placeholder
-        displayName = "Dasher Idle Offline"
+        displayName = "Dasher Idle Offline",
+        activityHint = ActivityHint.INACTIVE
     ),
 
-    //
-//    // --- Initiating a Dash ---
+    // --- Initiating a Dash ---
     DASHER_SETTING_END_TIME(
         handler = SetDashEndTime(),
-        displayName = "Set Dash End Time"
+        displayName = "Set Dash End Time",
+        activityHint = ActivityHint.INACTIVE
     ),
     DASHER_INITIATING_DASH_SESSION(
         handler = DashStarting(),
@@ -89,23 +80,38 @@ enum class AppState(
     // --- Active Dashing Session ---
     SESSION_ACTIVE_WAITING_FOR_OFFER(
         handler = AwaitingOffer(),
-        displayName = "Awaiting Offer"
+        displayName = "Awaiting Offer",
+        activityHint = ActivityHint.ACTIVE
     ),
     SESSION_ACTIVE_DASHING_ALONG_THE_WAY(
         handler = DashAlongTheWay(), // Placeholder
         displayName = "Dash Along the Way",
+        activityHint = ActivityHint.ACTIVE
     ),
     VIEWING_DASH_CONTROL(
         handler = ViewDashControl(),
-        displayName = "Viewing Dash Control"
+        displayName = "Viewing Dash Control",
+        activityHint = ActivityHint.ACTIVE
     ),
     SESSION_ACTIVE_OFFER_PRESENTED(
         handler = OfferPresented(),
-        displayName = "Session Active - Offer Presented"
+        displayName = "Session Active - Offer Presented",
+        activityHint = ActivityHint.ACTIVE
+    ),
+    SESSION_ACTIVE_ON_PICKUP(
+        handler = OnPickup(),
+        displayName = "Session Active - On Pickup",
+        activityHint = ActivityHint.ACTIVE
+    ),
+    SESSION_ACTIVE_ON_DELIVERY(
+        handler = OnDelivery(),
+        displayName = "Session Active - On Delivery",
+        activityHint = ActivityHint.ACTIVE
     ),
     VIEWING_TIMELINE(
         handler = ViewTimeline(),
-        displayName = "Viewing Timeline"
+        displayName = "Viewing Timeline",
+        activityHint = ActivityHint.ACTIVE
     ),
     VIEWING_NAVIGATION(
         handler = ViewNavigation(),
@@ -116,11 +122,13 @@ enum class AppState(
 //    // --- Active Delivery (after offer acceptance) ---
     DELIVERY_COMPLETED(
         handler = DeliveryCompleted(), // Placeholder
-        displayName = "Delivery Completed"
+        displayName = "Delivery Completed",
+        activityHint = ActivityHint.ACTIVE
     ),
     VIEWING_PICKUP_DETAILS(
         handler = ViewPickupDetails(),
-        displayName = "Viewing Pickup Details"
+        displayName = "Viewing Pickup Details",
+        activityHint = ActivityHint.ACTIVE
     ),
 //    DELIVERY_IN_PROGRESS_TO_STORE(
 //        handler = PlaceHolder(DELIVERY_IN_PROGRESS_TO_STORE), // Placeholder
@@ -155,7 +163,8 @@ enum class AppState(
     ),
     SESSION_ENDED_DISPLAYING_SUMMARY(
         handler = DashStopping(), // Using your SessionStop handler
-        displayName = "Session Ended - Summary"
+        displayName = "Session Ended - Summary",
+        activityHint = ActivityHint.INACTIVE
     ),
     VIEWING_RATINGS(
         handler = ViewRatings(),

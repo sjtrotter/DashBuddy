@@ -27,7 +27,10 @@ class DeliveryCompleted : StateHandler {
     private val tipRepo = DashBuddyApplication.tipRepo
     private val appPayRepo = DashBuddyApplication.appPayRepo
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
         Log.d(tag, "Evaluating event. Current Screen: ${stateContext.dasherScreen}")
 
         if (!wasPayRecorded && stateContext.rootNodeTexts.any {
@@ -35,130 +38,131 @@ class DeliveryCompleted : StateHandler {
             }) {
             Log.i(tag, "Pay breakdown detected. Attempting to parse pays.")
             val parsedPay = PayParser.parsePay(stateContext.rootNodeTexts)
-            StateManager.enqueueDbWork {
-                try {
-                    val completedCountOnScreen = parsedPay.customerTips.size
-                    if (completedCountOnScreen == 0) {
-                        Log.w(
-                            tag,
-                            "Pay breakdown was detected, but no customer tips were parsed. Aborting."
-                        )
-                        return@enqueueDbWork
-                    }
-                    Log.d(tag, "Detected $completedCountOnScreen completed deliver(ies) on screen.")
+            try {
+                val completedCountOnScreen = parsedPay.customerTips.size
+                if (completedCountOnScreen == 0) {
+                    Log.w(
+                        tag,
+                        "Pay breakdown was detected, but no customer tips were parsed. Aborting."
+                    )
+                    return currentState
+                }
+                Log.d(tag, "Detected $completedCountOnScreen completed deliver(ies) on screen.")
 
-                    val current = currentRepo.getCurrentDashState() ?: return@enqueueDbWork
-                    val activeOrders = current.activeOrderQueue
-                        .mapNotNull { orderRepo.getOrderById(it) }
-                        .filter { it.status != OrderStatus.COMPLETED }
+                val current = currentRepo.getCurrentDashState() ?: return currentState
+                val allActiveOrderIds =
+                    (current.activeOrderQueue + listOfNotNull(current.activeOrderId)).distinct()
 
-                    if (activeOrders.isEmpty()) {
-                        Log.w(tag, "Pay breakdown seen, but no non-completed orders in queue.")
-                        return@enqueueDbWork
-                    }
+                val activeOrders = allActiveOrderIds
+                    .mapNotNull { orderRepo.getOrderById(it) }
+                    .filter { it.status != OrderStatus.COMPLETED }
 
-                    // --- NEW: Sanity Check to Find the Correct Offer ---
-                    var matchedOfferId: Long? = null
-                    var ordersForMatchedOffer: List<OrderEntity> = emptyList()
+                if (activeOrders.isEmpty()) {
+                    Log.w(tag, "Pay breakdown seen, but no non-completed orders in queue.")
+                    return currentState
+                }
 
-                    // Find a candidate order from the first parsed tip to identify a potential offer
-                    val firstTipStoreName = parsedPay.customerTips.first().type
-                    val candidateOrders =
-                        activeOrders.filter { namesMatch(it.storeName, firstTipStoreName) }
+                // --- NEW: Sanity Check to Find the Correct Offer ---
+                var matchedOfferId: Long? = null
+                var ordersForMatchedOffer: List<OrderEntity> = emptyList()
 
-                    for (candidateOrder in candidateOrders) {
-                        val ordersInDbForOffer =
-                            orderRepo.getOrdersForOffer(candidateOrder.offerId).first()
+                // Find a candidate order from the first parsed tip to identify a potential offer
+                val firstTipStoreName = parsedPay.customerTips.first().type
+                val candidateOrders =
+                    activeOrders.filter { namesMatch(it.storeName, firstTipStoreName) }
 
-                        // THE SANITY CHECK: Does the number of orders in the database for this offer
-                        // match the number of completed deliveries we see on screen?
-                        if (ordersInDbForOffer.size == completedCountOnScreen) {
-                            // High-confidence match found!
-                            matchedOfferId = candidateOrder.offerId
-                            ordersForMatchedOffer = ordersInDbForOffer
-                            Log.i(
-                                tag,
-                                "Sanity Check Passed: Matched Offer #$matchedOfferId which has the expected $completedCountOnScreen order(s)."
-                            )
-                            break
-                        }
-                    }
+                for (candidateOrder in candidateOrders) {
+                    val ordersInDbForOffer =
+                        orderRepo.getOrdersForOffer(candidateOrder.offerId).first()
 
-                    if (matchedOfferId == null) {
-                        Log.e(
-                            tag,
-                            "Sanity Check FAILED: Could not find an active offer that matched the shape of the payout screen ($completedCountOnScreen deliveries). Aborting pay processing."
-                        )
-                        return@enqueueDbWork
-                    }
-                    // --- End of Sanity Check ---
-
-                    // if there is already AppPay for this offer, we can return
-                    // - we've already processed this pay screen.
-                    val existingAppPay = appPayRepo.getPayComponentsForOffer(matchedOfferId)
-                    if (existingAppPay.first().isNotEmpty()) {
+                    // THE SANITY CHECK: Does the number of orders in the database for this offer
+                    // match the number of completed deliveries we see on screen?
+                    if (ordersInDbForOffer.size == completedCountOnScreen) {
+                        // High-confidence match found!
+                        matchedOfferId = candidateOrder.offerId
+                        ordersForMatchedOffer = ordersInDbForOffer
                         Log.i(
                             tag,
-                            "Existing AppPay found for offer $matchedOfferId. Aborting pay processing."
+                            "Sanity Check Passed: Matched Offer #$matchedOfferId which has the expected $completedCountOnScreen order(s)."
                         )
-                        return@enqueueDbWork
+                        break
                     }
+                }
+
+                if (matchedOfferId == null) {
+                    Log.e(
+                        tag,
+                        "Sanity Check FAILED: Could not find an active offer that matched the shape of the payout screen ($completedCountOnScreen deliveries). Aborting pay processing."
+                    )
+                    return currentState
+                }
+                // --- End of Sanity Check ---
+
+                // if there is already AppPay for this offer, we can return
+                // - we've already processed this pay screen.
+                val existingAppPay = appPayRepo.getPayComponentsForOffer(matchedOfferId)
+                if (existingAppPay.first().isNotEmpty()) {
+                    Log.i(
+                        tag,
+                        "Existing AppPay found for offer $matchedOfferId. Aborting pay processing."
+                    )
+                    return currentState
+                }
 
 
-                    val completedOrderIds = mutableListOf<Long>()
+                val completedOrderIds = mutableListOf<Long>()
 
-                    // Now that we've confirmed the offer, process each tip against its orders.
-                    for (tipItem in parsedPay.customerTips) {
-                        val orderToComplete =
-                            ordersForMatchedOffer.find { namesMatch(it.storeName, tipItem.type) }
+                // Now that we've confirmed the offer, process each tip against its orders.
+                for (tipItem in parsedPay.customerTips) {
+                    val orderToComplete =
+                        ordersForMatchedOffer.find { namesMatch(it.storeName, tipItem.type) }
 
-                        if (orderToComplete != null) {
-                            Log.i(
-                                tag,
-                                "Processing completed order #${orderToComplete.id} ('${orderToComplete.storeName}')"
-                            )
-                            // Save the tip, linking to this order
-                            val tipEntity = TipEntity(
-                                orderId = orderToComplete.id,
-                                amount = tipItem.amount,
-                                type = TipType.IN_APP_INITIAL,
-                                timestamp = stateContext.timestamp
-                            )
-                            tipRepo.insert(tipEntity)
-
-                            completedOrderIds.add(orderToComplete.id)
-                        }
-                    }
-
-                    // Process App-level pay and link it to the confirmed Offer
-                    for (appPayItem in parsedPay.appPayComponents) {
-                        val payTypeId = appPayRepo.upsertPayType(appPayItem.type)
-                        val appPayEntity = AppPayEntity(
-                            offerId = matchedOfferId,
-                            payTypeId = payTypeId,
-                            amount = appPayItem.amount,
+                    if (orderToComplete != null) {
+                        Log.i(
+                            tag,
+                            "Processing completed order #${orderToComplete.id} ('${orderToComplete.storeName}')"
+                        )
+                        // Save the tip, linking to this order
+                        val tipEntity = TipEntity(
+                            orderId = orderToComplete.id,
+                            amount = tipItem.amount,
+                            type = TipType.IN_APP_INITIAL,
                             timestamp = stateContext.timestamp
                         )
-                        appPayRepo.insert(appPayEntity)
+                        tipRepo.insert(tipEntity)
+
+                        completedOrderIds.add(orderToComplete.id)
                     }
-
-                    // Remove all newly completed orders from the active queue
-                    if (completedOrderIds.isNotEmpty()) {
-                        for (orderId in completedOrderIds) {
-                            currentRepo.removeOrderFromQueue(orderId)
-                            orderRepo.updateOrderStatus(orderId, OrderStatus.COMPLETED)
-
-                        }
-                        Log.i(
-                            tag,
-                            "Removed completed order IDs $completedOrderIds from the queue, and marked them COMPLETED."
-                        )
-                    }
-                    wasPayRecorded = true
-
-                } catch (e: Exception) {
-                    Log.e(tag, "!!! CRITICAL error while processing pay breakdown !!!", e)
                 }
+
+                // Process App-level pay and link it to the confirmed Offer
+                for (appPayItem in parsedPay.appPayComponents) {
+                    val payTypeId = appPayRepo.upsertPayType(appPayItem.type)
+                    val appPayEntity = AppPayEntity(
+                        offerId = matchedOfferId,
+                        payTypeId = payTypeId,
+                        amount = appPayItem.amount,
+                        timestamp = stateContext.timestamp
+                    )
+                    appPayRepo.insert(appPayEntity)
+                }
+
+                // Remove all newly completed orders from the active queue
+                if (completedOrderIds.isNotEmpty()) {
+                    for (orderId in completedOrderIds) {
+                        currentRepo.removeOrderFromQueue(orderId)
+                        orderRepo.updateOrderStatus(orderId, OrderStatus.COMPLETED)
+
+                    }
+                    Log.i(
+                        tag,
+                        "Removed completed order IDs $completedOrderIds from the queue, and marked them COMPLETED."
+                    )
+                }
+                wasPayRecorded = true
+
+            } catch (e: Exception) {
+                Log.e(tag, "!!! CRITICAL error while processing pay breakdown !!!", e)
             }
 
         }
@@ -173,7 +177,7 @@ class DeliveryCompleted : StateHandler {
         }
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
@@ -196,20 +200,18 @@ class DeliveryCompleted : StateHandler {
 
         Log.d(tag, "Found potential button text: '$buttonText'. Attempting to click.")
 
-        StateManager.getScope().launch {
-            val clickSuccess =
-                AccNodeUtils.findAndClickNodeByText(stateContext.rootNode, buttonText.trim())
-            if (clickSuccess) {
-                Log.i(tag, "Successfully performed click on button with text: '$buttonText'")
-                DashBuddyApplication.sendBubbleMessage("Pay button clicked!")
-            } else {
-                Log.w(tag, "Failed to perform click on button with text: '$buttonText'")
-            }
-            wasClickAttempted = true
+        val clickSuccess =
+            AccNodeUtils.findAndClickNodeByText(stateContext.rootNode, buttonText.trim())
+        if (clickSuccess) {
+            Log.i(tag, "Successfully performed click on button with text: '$buttonText'")
+            DashBuddyApplication.sendBubbleMessage("Pay button clicked!")
+        } else {
+            Log.w(tag, "Failed to perform click on button with text: '$buttonText'")
         }
+        wasClickAttempted = true
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState

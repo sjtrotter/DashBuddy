@@ -14,7 +14,7 @@ object Recognizer {
         // High-priority, often modal or overlay screens
         Screen.OFFER_POPUP,
         Screen.DELIVERY_COMPLETED_DIALOG,
-        Screen.PICKUP_DETAILS_VIEW_BEFORE_ARRIVAL,
+        Screen.PICKUP_DETAILS_PRE_ARRIVAL,
 //        Screen.DECLINE_OFFER_CONFIRM_MODAL,
 //        Screen.DECLINE_OFFER_REASON_MODAL, // Added from your logs
 //        Screen.END_DASH_CONFIRMATION_DIALOG,

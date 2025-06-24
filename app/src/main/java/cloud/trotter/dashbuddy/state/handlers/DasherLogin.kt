@@ -8,14 +8,14 @@ import cloud.trotter.dashbuddy.state.StateHandler
 
 class DasherLogin : StateHandler {
 
-    override fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
         // process event here
 
         return currentState
     }
 
-    override fun enterState(
+    override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
@@ -25,7 +25,7 @@ class DasherLogin : StateHandler {
         DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${stateContext.dasherScreen?.screenName} Screen")
     }
 
-    override fun exitState(
+    override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,
         nextState: AppState
