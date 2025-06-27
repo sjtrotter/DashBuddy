@@ -1,4 +1,13 @@
+<!-- In res/values/themes.xml -->
 <resources>
-    <!-- Base application theme. -->
-    <style name="Theme.DashBuddy" parent="Theme.MaterialComponents.DayNight.DarkActionBar" />
+    <!--
+      Base application theme.
+      UPDATED: Changed parent to a Material 3 theme.
+      Using .NoActionBar because we are adding our own MaterialToolbar in the layout.
+    -->
+    <style name="Theme.DashBuddy" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- You can customize your M3 theme here if needed -->
+        <!-- Example: -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    </style>
 </resources>
