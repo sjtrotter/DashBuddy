@@ -3,12 +3,12 @@ package cloud.trotter.dashbuddy.state.handlers
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.data.dash.DashType
-import cloud.trotter.dashbuddy.state.ScreenInfo
+import cloud.trotter.dashbuddy.dasher.screen.ScreenInfo
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
-import cloud.trotter.dashbuddy.state.screens.Screen
+import cloud.trotter.dashbuddy.dasher.screen.Screen
 
 class DasherIdleOffline : StateHandler {
 
@@ -20,17 +20,14 @@ class DasherIdleOffline : StateHandler {
         currentState: AppState
     ): AppState {
         Log.d("${this::class.simpleName} State", "Evaluating state...")
-        // process event here
-
-        // add more specific things up here if needed.
 
         // Seems that the on dash map waiting for offer might recognize the main map idle screen
         // when backing out to dash control. putting this in to catch and re-orient.
-        if (stateContext.dasherScreen == Screen.DASH_CONTROL) return AppState.DASH_ACTIVE_ON_CONTROL
+        if (stateContext.screenInfo?.screen == Screen.DASH_CONTROL) return AppState.DASH_ACTIVE_ON_CONTROL
 
         // if a dash is not started:
-        if (stateContext.dasherScreen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ||
-            stateContext.dasherScreen == Screen.ON_DASH_ALONG_THE_WAY
+        if (stateContext.screenInfo?.screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ||
+            stateContext.screenInfo?.screen == Screen.ON_DASH_ALONG_THE_WAY
         )
             return AppState.DASH_STARTING
 
@@ -74,24 +71,6 @@ class DasherIdleOffline : StateHandler {
         previousState: AppState?
     ) {
         Log.d("${this::class.simpleName} State", "Entering state...")
-        // initialize components here
-
-//        val message = SpannableStringBuilder()
-//            .apply {
-//                val boldStart = length
-//                append("State:\t\t")
-//                setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), boldStart, length, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE)
-//            }
-//            .append("${currentState.displayName}\n")
-//            .apply {
-//                val boldStart = length
-//                append("Screen:\t")
-//                setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), boldStart, length, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE)
-//            }
-//            .append(context.dasherScreen?.screenName)
-
-        DashBuddyApplication.sendBubbleMessage("${currentState.displayName} State\n${stateContext.dasherScreen?.screenName} Screen")
-//        DashBuddyApplication.sendBubbleMessage(message)
     }
 
     override suspend fun exitState(

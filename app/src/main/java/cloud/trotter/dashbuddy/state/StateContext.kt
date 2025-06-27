@@ -3,10 +3,8 @@ package cloud.trotter.dashbuddy.state
 import android.content.Context as AndroidContext // Alias to avoid naming collision
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
-import cloud.trotter.dashbuddy.state.parsers.click.ClickInfo
-import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
-// You'll also need your AppState enum, e.g.:
-// enum class AppState { UNKNOWN, STARTUP, LOGIN_SCREEN, MAIN_DASHBOARD, OFFER_POPUP, ON_DELIVERY, ... }
+import cloud.trotter.dashbuddy.dasher.screen.ScreenInfo
+import cloud.trotter.dashbuddy.dasher.click.ClickInfo
 
 data class StateContext(
     val timestamp: Long,                        // When the event data was processed
@@ -20,9 +18,7 @@ data class StateContext(
     val sourceNode: AccessibilityNodeInfo?,     // The source node of the event (if any)
     val sourceClassName: CharSequence?,         // Class name of the view that fired the event
     val sourceNodeTexts: List<String>,          // Texts specifically from event.source (can be empty)
-    // the current Dasher screen, if any
-    val dasherScreen: DasherScreen? = null,
-    val clickInfo: ClickInfo? = null,
-    val screenInfo: ScreenInfo? = null,
-    val currentDashState: CurrentEntity? = null // The current dash state
+    val clickInfo: ClickInfo? = null,           // Click info for the event
+    val screenInfo: ScreenInfo? = null,         // Screen info for the event
+    val currentDashState: CurrentEntity? = null // The current dash state according to the database
 )

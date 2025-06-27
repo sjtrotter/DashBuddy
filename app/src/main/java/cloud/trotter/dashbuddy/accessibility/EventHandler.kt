@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.services.accessibility
+package cloud.trotter.dashbuddy.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
@@ -8,17 +8,16 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
-import cloud.trotter.dashbuddy.state.parsers.click.ClickInfo
-import cloud.trotter.dashbuddy.state.parsers.click.ClickParser
-import cloud.trotter.dashbuddy.state.screens.ScreenRecognizerV2
+import cloud.trotter.dashbuddy.dasher.click.ClickInfo
+import cloud.trotter.dashbuddy.dasher.click.ClickParser
+import cloud.trotter.dashbuddy.dasher.screen.ScreenRecognizerV2
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import cloud.trotter.dashbuddy.state.screens.Screen as DasherScreen
-import cloud.trotter.dashbuddy.state.screens.Recognizer as ScreenRecognizer
+import cloud.trotter.dashbuddy.dasher.screen.Screen as DasherScreen
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateManager as StateManager
 import java.util.Date
@@ -92,7 +91,6 @@ object EventHandler {
             rootNodeTexts = emptyList(),
             sourceNodeTexts = emptyList(),
             sourceNode = null,
-            dasherScreen = null
         )
         StateManager.initialize(initialContext)
     }
@@ -214,7 +212,6 @@ object EventHandler {
             currentDashState = currentDashState,
         )
         val finalContext = tempContext.copy(
-            dasherScreen = ScreenRecognizer.identify(tempContext, lastDasherScreen),
             screenInfo = ScreenRecognizerV2.identify(tempContext)
         )
 
@@ -222,7 +219,7 @@ object EventHandler {
         StateManager.dispatchEvent(finalContext)
 
         // Update the last known screen for context in the next recognition
-        lastDasherScreen = finalContext.dasherScreen
+        lastDasherScreen = finalContext.screenInfo?.screen
         // Make sure to clean up the event if it was the one we held onto
         if (event == debouncedEvent) {
             debouncedEvent = null

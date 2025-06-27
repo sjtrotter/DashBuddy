@@ -1,12 +1,14 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.dash.DashEntity
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
-import cloud.trotter.dashbuddy.state.screens.Screen
+import cloud.trotter.dashbuddy.dasher.screen.Screen
 
 class DashStarting : StateHandler {
 
@@ -33,6 +35,7 @@ class DashStarting : StateHandler {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
@@ -65,8 +68,8 @@ class DashStarting : StateHandler {
 
             // 2. Insert new DashEntity using the data from the Current table
             val newDash = DashEntity(
-                zoneId = zoneId,
                 startTime = stateContext.timestamp,
+                zoneId = zoneId,
                 dashType = dashType
             )
             val dashId = dashRepo.insertDash(newDash)

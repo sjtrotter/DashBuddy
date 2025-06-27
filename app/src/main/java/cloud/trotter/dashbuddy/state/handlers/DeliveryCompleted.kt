@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.order.OrderEntity
 import cloud.trotter.dashbuddy.data.order.OrderStatus
@@ -11,7 +13,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
-import cloud.trotter.dashbuddy.state.screens.Screen
+import cloud.trotter.dashbuddy.dasher.screen.Screen
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import cloud.trotter.dashbuddy.util.UtilityFunctions.stringsMatch
 import kotlinx.coroutines.flow.first
@@ -30,7 +32,7 @@ class DeliveryCompleted : StateHandler {
         stateContext: StateContext,
         currentState: AppState
     ): AppState {
-        Log.d(tag, "Evaluating event. Current Screen: ${stateContext.dasherScreen}")
+        Log.d(tag, "Evaluating event. Current Screen: ${stateContext.screenInfo?.screen?.name}")
 
         if (!wasPayRecorded && stateContext.rootNodeTexts.any {
                 it.contains("Customer Tips", ignoreCase = true)
@@ -180,12 +182,13 @@ class DeliveryCompleted : StateHandler {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
-        Log.i(tag, "Entering state. Screen: ${stateContext.dasherScreen?.screenName}")
+        Log.i(tag, "Entering state. Screen: ${stateContext.screenInfo?.screen?.name}")
         wasClickAttempted = false // Reset flag on entering state
 
         // The goal is to find the dollar amount button and click it.

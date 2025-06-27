@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.data.dash.DashEntity
@@ -8,7 +10,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
-import cloud.trotter.dashbuddy.state.screens.Screen
+import cloud.trotter.dashbuddy.dasher.screen.Screen
 
 class DashStopping : StateHandler {
 
@@ -19,12 +21,15 @@ class DashStopping : StateHandler {
     private val dashRepo = DashBuddyApplication.dashRepo
     private val zoneRepo = DashBuddyApplication.zoneRepo // Added ZoneRepository
 
-    override suspend fun processEvent(stateContext: StateContext, currentState: AppState): AppState {
+    override suspend fun processEvent(
+        stateContext: StateContext,
+        currentState: AppState
+    ): AppState {
         Log.d(tag, "Evaluating state for event...")
 
         // The primary logic of this state is in enterState.
         // Here, we just transition if the screen changes after the dash has been stopped.
-        if (stateContext.dasherScreen == Screen.MAIN_MAP_IDLE) {
+        if (stateContext.screenInfo?.screen == Screen.MAIN_MAP_IDLE) {
             Log.i(tag, "Screen is MAIN_MAP_IDLE, transitioning to DASHER_IDLE_OFFLINE.")
             return AppState.DASH_IDLE_OFFLINE
         }
@@ -35,6 +40,7 @@ class DashStopping : StateHandler {
         return currentState // Stay in DashStopping if screen hasn't settled to MAIN_MAP_IDLE yet
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
@@ -79,7 +85,7 @@ class DashStopping : StateHandler {
             }
 
             DashBuddyApplication.sendBubbleMessage(
-                "Ending Dash\nZone: ${currentZoneName ?: "Loading..."}"
+                "Ending Dash in $currentZoneName"
             )
 
             // Get the DashEntity to update
@@ -92,7 +98,7 @@ class DashStopping : StateHandler {
 
                 val endedDash = dash.copy(
                     stopTime = stopTime,
-                    duration = duration
+                    totalTime = duration
                     // TODO: Calculate other summary columns for DashEntity if needed
                     // e.g., totalOffers, acceptedOffers, totalPayout (might require querying offers)
                 )

@@ -6,12 +6,12 @@ import cloud.trotter.dashbuddy.data.store.ParsedStore
 import cloud.trotter.dashbuddy.data.store.StoreEntity
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState
-import cloud.trotter.dashbuddy.state.ScreenInfo
+import cloud.trotter.dashbuddy.dasher.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 //import cloud.trotter.dashbuddy.state.processing.CustomerProcessor
 //import cloud.trotter.dashbuddy.state.processing.StoreProcessor
-import cloud.trotter.dashbuddy.state.screens.Screen
+import cloud.trotter.dashbuddy.dasher.screen.Screen
 import cloud.trotter.dashbuddy.util.OrderMatcher
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 
@@ -68,6 +68,7 @@ class OnPickup : StateHandler {
 
             // dasher viewing timeline and may switch tasks. need to transition.
             screen == Screen.TIMELINE_VIEW -> AppState.DASH_ACTIVE_ON_TIMELINE
+            screen == Screen.DELIVERY_COMPLETED_DIALOG -> AppState.DASH_ACTIVE_DELIVERY_COMPLETED
 
             // dasher went to a delivery screen.
             screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY

@@ -1,18 +1,20 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.data.offer.OfferEntity
 import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.offer.OfferStatus
-import cloud.trotter.dashbuddy.state.parsers.click.ClickInfo
+import cloud.trotter.dashbuddy.dasher.click.ClickInfo
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
-import cloud.trotter.dashbuddy.state.parsers.click.ClickType
-import cloud.trotter.dashbuddy.state.screens.Screen
+import cloud.trotter.dashbuddy.dasher.click.ClickType
+import cloud.trotter.dashbuddy.dasher.screen.Screen
 import kotlinx.coroutines.flow.first
 import java.util.Locale
 
@@ -28,6 +30,7 @@ class OfferPresented : StateHandler {
     private val tag = this::class.simpleName ?: "OfferPresented"
 
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun processEvent(
         stateContext: StateContext,
         currentState: AppState
@@ -73,7 +76,10 @@ class OfferPresented : StateHandler {
                             offerRepo.getOfferById(offerId)?.let { offer ->
                                 offerRepo.deleteOffer(offer)
                             }
-                            currentRepo.updateLastOfferInfo(lastOfferId = null, lastOfferValue = null)
+                            currentRepo.updateLastOfferInfo(
+                                lastOfferId = null,
+                                lastOfferValue = null
+                            )
                             Log.i(tag, "Offer DELETED for ID: $offerId")
                             internalOfferId = null // Reset the internal ID after deletion
                             DashBuddyApplication.sendBubbleMessage("Order Declined!")
@@ -158,6 +164,7 @@ class OfferPresented : StateHandler {
 
             screen == Screen.DASH_CONTROL -> AppState.DASH_ACTIVE_ON_CONTROL
             screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
+            screen == Screen.DELIVERY_COMPLETED_DIALOG -> AppState.DASH_ACTIVE_DELIVERY_COMPLETED
 
             screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
             screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
@@ -165,6 +172,7 @@ class OfferPresented : StateHandler {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
@@ -235,6 +243,7 @@ class OfferPresented : StateHandler {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun exitState(
         stateContext: StateContext,
         currentState: AppState,

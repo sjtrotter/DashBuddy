@@ -130,7 +130,7 @@ object StateManager {
         currentKnownState: AppState,
         context: StateContext
     ): AppState {
-        val identifiedScreen = context.dasherScreen
+        val identifiedScreen = context.screenInfo?.screen
 
         // --- 1. RECONCILIATION (Highest Priority) ---
         // First, ensure our active/inactive session state is correct.
