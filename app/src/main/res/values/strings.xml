@@ -4,9 +4,23 @@
     <string name="log_level">Log Level</string>
     <string name="save_log">Save Log</string>
     <string name="share_log">Share Log</string>
-    <string name="accessibility_service_description">
-    DashBuddy reads information from the Dasher app screen to automatically track your miles, log offer details, and record your earnings.
+    <string name="accessibility_service_description">"     DashBuddy reads information from the Dasher app screen to automatically track your miles, log offer details, and record your earnings.      This service never collects passwords or personal information. This permission is required to enable automatic tracking features. "</string>
+    <!-- Strings for the Permissions Screen -->
+    <string name="welcome">Welcome to DashBuddy!</string>
+    <string name="dashbuddy_explainer">We make tracking your dashes easier!         Interactions in this app happen within its Bubble.  In addition to notifications, we also need to ask for some other permissions.         Please enable the following services:</string>
 
-    This service never collects passwords or personal information. This permission is required to enable automatic tracking features.
-</string>
+    <string name="post_notifications">Post Notifications</string>
+    <string name="post_notifications_explainer">Allows DashBuddy to show important alerts and the floating bubble button. After enabling, tap the bubble button in the notification to start the service.</string>
+
+    <string name="accessibility_service">Accessibility Service</string>
+    <string name="accessibility_service_explainer">This is the core permission. It allows the app to read screen text from the Dasher app to automatically log offer details, track dash progress, and provide overlays.</string>
+
+    <string name="location_access">Location Access</string>
+    <string name="location_access_explainer">Needed to track mileage for tax purposes and to provide accurate delivery time estimates. Your location is only tracked during an active dash.</string>
+
+    <string name="notification_access">Notification Access</string>
+    <string name="notification_access_explainer">Required to see new order notifications and tip-added alerts when the Dasher app is in the background. This helps ensure no opportunities are missed.</string>
+
+    <string name="enable">Enable</string>
+    <string name="enabled">Enabled</string>
 </resources>

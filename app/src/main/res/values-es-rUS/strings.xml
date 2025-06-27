@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DashBuddy</string>
+    <string name="share_log">Compartir registro</string>
+    <string name="accessibility_service_description">DashBuddy lee la información de la pantalla de la app Dasher para rastrear automáticamente tus millas, registrar los detalles de las ofertas y tus ganancias. Este servicio nunca recopila contraseñas ni información personal. Se requiere este permiso para habilitar las funciones de rastreo automático.</string>
+    <string name="this_is_the_bubble">¡Esta es la burbuja!</string>
+    <string name="log_level">Nivel de registro</string>
+    <string name="save_log">Guardar registro</string>
+    <string name="welcome">¡Bienvenido a DashBuddy!</string>
+    <string name="dashbuddy_explainer">¡Te facilitamos el seguimiento de tus carreras! Las interacciones en esta app ocurren dentro de su burbuja. Además de las notificaciones, también necesitamos solicitar otros permisos. Por favor, activa los siguientes servicios:</string>
+    <string name="post_notifications">Notificaciones de publicaciones</string>
+    <string name="post_notifications_explainer">Permite que DashBuddy muestre alertas importantes y el botón de burbuja flotante. Tras habilitarlo, toque el botón de burbuja en la notificación para iniciar el servicio.</string>
+    <string name="accessibility_service">Servicio de Accesibilidad</string>
+    <string name="accessibility_service_explainer">Este es el permiso principal. Permite que la aplicación lea el texto de la pantalla de Dasher para registrar automáticamente los detalles de las ofertas, seguir el progreso del dash y proporcionar superposiciones.</string>
+    <string name="location_access">Acceso a la ubicación</string>
+    <string name="location_access_explainer">Necesario para el seguimiento del kilometraje a efectos fiscales y para proporcionar estimaciones precisas del tiempo de entrega. Su ubicación solo se registra durante una carrera activa.</string>
+    <string name="notification_access">Acceso a notificaciones</string>
+    <string name="notification_access_explainer">Se requiere para ver las notificaciones de nuevos pedidos y las alertas de propinas cuando la aplicación Dasher está en segundo plano. Esto ayuda a garantizar que no se pierdan oportunidades.</string>
+    <string name="enable">permitir</string>
+    <string name="enabled">Activada</string>
+</resources>
