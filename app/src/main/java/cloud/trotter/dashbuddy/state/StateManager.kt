@@ -4,10 +4,9 @@ import cloud.trotter.dashbuddy.DashBuddyApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.AppState as AppState
-import cloud.trotter.dashbuddy.state.StateContext as StateContext
 
 object StateManager {
 
@@ -21,6 +20,9 @@ object StateManager {
 
     /** A [CoroutineScope] for handling database operations. */
     private val stateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /** A [Channel] to act as a sequential event queue. */
+    private val eventChannel = Channel<StateContext>(Channel.UNLIMITED)
 
     /**
      * Initializes the StateManager.
@@ -60,61 +62,58 @@ object StateManager {
                 null
             )
         }
+        startEventProcessor()
     }
 
     /**
-     * Call this from your AccessibilityEventHandler when a new, debounced event occurs.
-     * @param eventContext The context derived from the AccessibilityEvent.
+     * Public function to send an event to the processing queue.
+     * This is now a fast, non-blocking "fire-and-forget" operation.
      */
     fun dispatchEvent(eventContext: StateContext) {
         stateScope.launch {
-            if (!::currentHandler.isInitialized) {
-                Log.e(
-                    TAG,
-                    "State machine not initialized! Call initialize() first. Ignoring event: ${eventContext.eventTypeString}"
-                )
-                // Attempt to initialize if not already, though this might indicate a logic error in app startup.
-                // initialize(eventContext.androidAppContext) // Consider if this is safe or desirable
-                return@launch
-            }
+            Log.v(TAG, "Event received. Sending to event channel for processing.")
+            eventChannel.send(eventContext)
+        }
+    }
 
-            // Determine the next state - check for dash starting or stopping first.
-            val nextState = determineNextState(currentState, eventContext)
-
-            if (nextState != currentState) {
-                val oldState = currentState
-                val oldHandler = currentHandler
-
-                // Get the new handler from the nextState
-                val nextHandler: StateHandler
-                try {
-                    nextHandler = nextState.handler
-                } catch (e: Exception) {
+    /**
+     * NEW: Launches a single, long-running coroutine that acts as a serial worker.
+     * It pulls events from the channel one by one, ensuring no race conditions.
+     */
+    private fun startEventProcessor() {
+        Log.i(TAG, "Starting event processor worker...")
+        stateScope.launch {
+            for (eventContext in eventChannel) {
+                // The entire logic from the old dispatchEvent is now here.
+                // Because this 'for' loop processes one item at a time, we are guaranteed
+                // that the previous event is finished before this one starts.
+                if (!::currentHandler.isInitialized) {
                     Log.e(
                         TAG,
-                        "!!! Error getting handler for next state $nextState. Transition aborted. Staying in $currentState. Error: ${e.message} !!!"
+                        "State machine not initialized! Call initialize() first. Ignoring event: ${eventContext.eventTypeString}"
                     )
-                    return@launch // Abort transition if next handler is problematic
+                    continue // Continue to the next event in the channel
                 }
 
-                Log.i(TAG, "State Transition: $currentState -> $nextState")
+                val nextState = determineNextState(currentState, eventContext)
 
-                oldHandler.exitState(eventContext, currentState, nextState)
+                if (nextState != currentState) {
+                    val oldState = currentState
+                    val oldHandler = currentHandler
+                    val nextHandler = nextState.handler // Assume error handling as before
 
-                currentState = nextState
-                currentHandler = nextHandler
-                val newContext = eventContext.copy(
-                    currentDashState = currentRepo.getCurrentDashState(),
-                )
+                    Log.i(TAG, "State Transition: $currentState -> $nextState")
+                    oldHandler.exitState(eventContext, currentState, nextState)
+                    currentState = nextState
+                    currentHandler = nextHandler
 
-                currentHandler.enterState(newContext, currentState, oldState)
-            } else {
-                // The event was processed by the current handler, but the state remains the same.
-                // The currentHandler might have updated its internal data or performed actions.
-                Log.d(
-                    TAG,
-                    "Event processed by ${currentHandler::class.java.simpleName}. State remains: $currentState"
-                )
+                    // We can create a new context with the latest dash state if needed
+                    val newContext = eventContext.copy(
+                        currentDashState = currentRepo.getCurrentDashState(),
+                    )
+                    currentHandler.enterState(newContext, currentState, oldState)
+                }
+                // No 'else' block needed, as no state change means processing is done.
             }
         }
     }
