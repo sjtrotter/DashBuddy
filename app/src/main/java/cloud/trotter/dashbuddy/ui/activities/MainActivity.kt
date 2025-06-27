@@ -1,62 +1,200 @@
 package cloud.trotter.dashbuddy.ui.activities
 
+import android.Manifest
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.Manifest
+import android.provider.Settings
+import android.text.TextUtils
+import android.util.TypedValue
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.AttrRes
+import androidx.annotation.ColorInt
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.databinding.ActivityMainBinding
+import cloud.trotter.dashbuddy.accessibility.DashBuddyAccessibility
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class MainActivity : AppCompatActivity() {
 
-    private val requestPermissionLauncher =
+    private lateinit var binding: ActivityMainBinding
+    private val tag = "MainActivity"
+
+    private val requestNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
-            if (isGranted) {
-                Log.d("MainActivity", "POST_NOTIFICATIONS permission granted.")
-                // Permission is granted. You can now safely start your service
-                // or expect notifications to work.
-                (applicationContext as? DashBuddyApplication)?.startBubbleService()
-            } else {
-                Log.w("MainActivity", "POST_NOTIFICATIONS permission denied.")
-                // Explain to the user why the feature is unavailable without the permission
-                // or direct them to settings.
-            }
+            Log.i(
+                tag,
+                if (isGranted) "POST_NOTIFICATIONS permission granted." else "POST_NOTIFICATIONS permission denied."
+            )
+            // onResume will handle the UI update.
         }
 
-    private fun askNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { // TIRAMISU is API 33
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                Log.d("MainActivity", "POST_NOTIFICATIONS permission already granted.")
-                (applicationContext as? DashBuddyApplication)?.startBubbleService()
-            } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-                // Show an educational UI to the user explaining why you need the permission
-                // Then, request the permission again. For simplicity here, just requesting:
-                Log.d(
-                    "MainActivity",
-                    "Showing rationale and requesting POST_NOTIFICATIONS permission."
-                )
-                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    private val requestLocationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+            val coarseLocationGranted =
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+            if (fineLocationGranted) {
+                Log.i(tag, "ACCESS_FINE_LOCATION permission granted.")
+            } else if (coarseLocationGranted) {
+                Log.i(tag, "ACCESS_COARSE_LOCATION permission granted.")
             } else {
-                // Directly ask for the permission
-                Log.d("MainActivity", "Requesting POST_NOTIFICATIONS permission.")
-                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                Log.w(tag, "Location permission was denied.")
             }
-        } else {
-            // Below API 33, the permission is granted by default at install time
-            Log.d("MainActivity", "Below API 33, no runtime permission needed for notifications.")
-            (applicationContext as? DashBuddyApplication)?.startBubbleService()
+            // onResume will handle the UI update.
         }
-    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        askNotificationPermission()
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        setSupportActionBar(binding.toolbar)
+        Log.i(tag, "MainActivity created.")
+
+        setupClickListeners()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d(tag, "Resuming MainActivity, checking all permission statuses.")
+        checkAllPermissions()
+    }
+
+    private fun setupClickListeners() {
+        binding.btnEnableAccessibility.setOnClickListener {
+            Log.d(tag, "Accessibility button clicked. Opening settings.")
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
+        binding.btnEnablePostNotifications.setOnClickListener {
+            Log.d(tag, "Post Notifications button clicked.")
+            requestPostNotificationsPermission()
+        }
+
+        binding.btnEnableLocation.setOnClickListener {
+            Log.d(tag, "Location button clicked.")
+            requestLocationPermissions()
+        }
+
+        binding.btnEnableNotificationListener.setOnClickListener {
+            Log.d(tag, "Notification Listener button clicked. Opening settings.")
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+    }
+
+    private fun checkAllPermissions() {
+        // Post Notifications Check
+        val areNotificationsEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
+        updateCardView(
+            binding.cardPostNotification,
+            binding.btnEnablePostNotifications,
+            areNotificationsEnabled,
+            "Post Notifications"
+        )
+
+        // Accessibility Service Check
+        val isAccessibilityEnabled =
+            isAccessibilityServiceEnabled(this, DashBuddyAccessibility::class.java)
+        updateCardView(
+            binding.cardAccessibility,
+            binding.btnEnableAccessibility,
+            isAccessibilityEnabled,
+            "Accessibility"
+        )
+
+        // Location Check
+        val isLocationEnabled = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        updateCardView(
+            binding.cardLocation,
+            binding.btnEnableLocation,
+            isLocationEnabled,
+            "Location"
+        )
+
+        // Notification Listener Service Check
+        val isNotificationListenerEnabled = isNotificationServiceEnabled()
+        updateCardView(
+            binding.cardNotificationListener,
+            binding.btnEnableNotificationListener,
+            isNotificationListenerEnabled,
+            "Notification Listener"
+        )
+    }
+
+    private fun requestPostNotificationsPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private fun requestLocationPermissions() {
+        requestLocationPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
+    }
+
+    private fun updateCardView(
+        card: com.google.android.material.card.MaterialCardView,
+        button: com.google.android.material.button.MaterialButton,
+        isEnabled: Boolean,
+        permissionName: String
+    ) {
+        if (isEnabled) {
+            card.setCardBackgroundColor(resolveColorAttr(com.google.android.material.R.attr.colorSurfaceContainer))
+            button.text = getString(R.string.enabled)
+            button.isEnabled = false
+            Log.d(tag, "$permissionName permission is GRANTED.")
+        } else {
+            card.setCardBackgroundColor(resolveColorAttr(com.google.android.material.R.attr.colorErrorContainer))
+            button.text = getString(R.string.enable)
+            button.isEnabled = true
+            Log.d(tag, "$permissionName permission is DENIED.")
+        }
+    }
+
+    @ColorInt
+    private fun resolveColorAttr(@AttrRes colorAttr: Int): Int {
+        val typedValue = TypedValue()
+        theme.resolveAttribute(colorAttr, typedValue, true)
+        return typedValue.data
+    }
+
+    private fun isAccessibilityServiceEnabled(context: Context, service: Class<*>): Boolean {
+        val expectedComponentName = ComponentName(context, service)
+        val enabledServicesSetting = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        val colonSplitter = TextUtils.SimpleStringSplitter(':')
+        colonSplitter.setString(enabledServicesSetting)
+        while (colonSplitter.hasNext()) {
+            val componentNameString = colonSplitter.next()
+            val enabledComponentName = ComponentName.unflattenFromString(componentNameString)
+            if (enabledComponentName != null && enabledComponentName == expectedComponentName) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun isNotificationServiceEnabled(): Boolean {
+        val componentName =
+            ComponentName(this, "cloud.trotter.dashbuddy.services.YourNotificationListenerService")
+        val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+        return flat?.contains(componentName.flattenToString()) == true
     }
 }
