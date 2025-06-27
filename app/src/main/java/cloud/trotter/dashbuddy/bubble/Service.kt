@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.content.pm.ShortcutInfo
 import android.os.Build
 import android.os.IBinder
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.content.ContextCompat
@@ -69,7 +70,8 @@ class Service : Service() {
 
         // 2. Define the "Person" representing DashBuddy
         dashBuddyNotificationIcon = IconCompat.createWithResource(
-            DashBuddyApplication.context, R.drawable.bag_red_idle)
+            DashBuddyApplication.context, R.drawable.bag_red_idle
+        )
 
         dashBuddyPersonIcon =
             IconCompat.createWithContentUri("android.resource://${packageName}/${R.drawable.bag_red_idle}")
@@ -87,7 +89,8 @@ class Service : Service() {
         Log.d(TAG, "Initialized LocusId: $dashBuddyLocusId")
 
         // 3. Create and push the dynamic shortcut for the bubble
-        val shortcutIntent = Intent(DashBuddyApplication.context, BubbleActivity::class.java).apply {
+        val shortcutIntent =
+            Intent(DashBuddyApplication.context, BubbleActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
             }
         bubbleShortcut = ShortcutInfoCompat.Builder(DashBuddyApplication.context, SHORTCUT_ID)
@@ -110,6 +113,7 @@ class Service : Service() {
         Log.d(TAG, "onCreate: BubbleService created successfully.")
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         isServiceRunningIntentional = true // Mark that the service is now intentionally running
         Log.d(TAG, "onStartCommand: BubbleService started.")
@@ -123,7 +127,8 @@ class Service : Service() {
             "Messenger Service",
             NotificationManager.IMPORTANCE_LOW,
             "Messenger Service",
-            false)
+            false
+        )
 
         val notification =
             NotificationCompat.Builder(DashBuddyApplication.context, SERVICE_CHANNEL_ID)
@@ -135,19 +140,10 @@ class Service : Service() {
         postNotification(messageToShow, true)
 
         try {
-            val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val serviceType =
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            } else {
-                // For API < 34, no specific foregroundServiceType needed for startForeground for bubbles
-                // if the manifest has foregroundServiceType="specialUse"
-                0 // No specific type, but the manifest declaration counts.
-            }
             // If serviceType is 0 for API < 34, just call startForeground(id, notification)
-            if (serviceType != 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(SERVICE_NOTIFICATION_ID, notification, serviceType)
-            } else {
-                startForeground(SERVICE_NOTIFICATION_ID, notification)
-            }
+            startForeground(SERVICE_NOTIFICATION_ID, notification, serviceType)
             Log.d(TAG, "Service started in foreground with message: '$messageToShow'")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting foreground service", e)
@@ -160,7 +156,8 @@ class Service : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        isServiceRunningIntentional = false // Mark that the service is no longer intentionally running
+        isServiceRunningIntentional =
+            false // Mark that the service is no longer intentionally running
         areComponentsInitialized = false
 //        if (DashBuddyApplication.bubbleService == this) {
 //            DashBuddyApplication.bubbleService = null // Clear static reference
@@ -200,14 +197,23 @@ class Service : Service() {
      * Public method to show a new message in the bubble.
      * If the service is not running, it will attempt to start it with this message.
      */
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun showMessageInBubble(message: CharSequence, expand: Boolean = false) {
         Log.d(TAG, "showMessageInBubble called with message: '$message'")
 
-        Log.d(TAG, "Service Running: $isServiceRunningIntentional, Components Initialized: $areComponentsInitialized")
+        Log.d(
+            TAG,
+            "Service Running: $isServiceRunningIntentional, Components Initialized: $areComponentsInitialized"
+        )
         if (!isServiceRunningIntentional || !areComponentsInitialized) {
-            Log.w(TAG, "Service not running or not initialized. Attempting to start service with this message.")
-            val startIntent = Intent(DashBuddyApplication.context,
-                cloud.trotter.dashbuddy.bubble.Service::class.java).apply {
+            Log.w(
+                TAG,
+                "Service not running or not initialized. Attempting to start service with this message."
+            )
+            val startIntent = Intent(
+                DashBuddyApplication.context,
+                cloud.trotter.dashbuddy.bubble.Service::class.java
+            ).apply {
                 putExtra(EXTRA_MESSAGE, message) // Pass the message to onStartCommand
             }
             ContextCompat.startForegroundService(DashBuddyApplication.context, startIntent)
@@ -224,22 +230,21 @@ class Service : Service() {
         Log.d(TAG, "Added message to DashLogRepository.")
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun postNotification(message: CharSequence, expand: Boolean) {
         val activityOptions = ActivityOptions.makeBasic()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            activityOptions.setPendingIntentCreatorBackgroundActivityStartMode(
-                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
-            )
-        }
+        activityOptions.pendingIntentCreatorBackgroundActivityStartMode =
+            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS
 
         val bubbleContentPendingIntent = PendingIntent.getActivity(
             DashBuddyApplication.context,
             0,
             Intent(
                 DashBuddyApplication.context,
-                BubbleActivity::class.java),
+                BubbleActivity::class.java
+            ),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-                activityOptions.toBundle()
+            activityOptions.toBundle()
         )
 
         val newNotification = BubbleNotification.create(

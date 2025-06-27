@@ -57,6 +57,7 @@ data class CurrentEntity(
     val offersReceived: Int? = null,
     val offersAccepted: Int? = null,
     val offersDeclined: Int? = null,
+    val totalDashMiles: Double? = null,
     val lastUpdate: Long? = null,
 
     /** The ID of the specific OrderEntity the dasher is currently working on. Null if between tasks. */

@@ -5,10 +5,13 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
 import cloud.trotter.dashbuddy.data.current.CurrentRepo
+import cloud.trotter.dashbuddy.data.customer.CustomerRepo
 import cloud.trotter.dashbuddy.data.dash.DashRepo
 import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneRepo
 import cloud.trotter.dashbuddy.data.offer.OfferRepo
@@ -34,6 +37,7 @@ class DashBuddyApplication : Application() {
             get() = DashBuddyDatabase.getDatabase(context)
 
         val currentRepo: CurrentRepo by lazy { CurrentRepo(database.currentDashDao()) }
+        val customerRepo: CustomerRepo by lazy { CustomerRepo(database.customerDao()) }
         val dashRepo: DashRepo by lazy { DashRepo(database.dashDao()) }
         val dashZoneRepo: DashZoneRepo by lazy { DashZoneRepo(database.dashZoneDao()) }
         val offerRepo: OfferRepo by lazy { OfferRepo(database.offerDao()) }
@@ -46,14 +50,14 @@ class DashBuddyApplication : Application() {
         //        val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
 
         val notificationManager: NotificationManager
-            get() = instance.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            get() = instance.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         var bubbleService: BubbleService? = null
 
         val appPreferences: SharedPreferences by lazy {
             instance.getSharedPreferences(
                 "DashBuddyPrefs",
-                Context.MODE_PRIVATE
+                MODE_PRIVATE
             )
         }
 
@@ -74,9 +78,10 @@ class DashBuddyApplication : Application() {
             return levelName?.let { LogLevel.valueOf(it) } ?: LogLevel.INFO
         }
 
+        @RequiresApi(Build.VERSION_CODES.BAKLAVA)
         fun sendBubbleMessage(message: CharSequence) {
             if (bubbleService != null &&
-                cloud.trotter.dashbuddy.bubble.Service.isServiceRunningIntentional
+                BubbleService.isServiceRunningIntentional
             ) {
                 bubbleService?.showMessageInBubble(message, false)
             } else {

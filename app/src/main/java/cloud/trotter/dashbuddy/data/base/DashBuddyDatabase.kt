@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import cloud.trotter.dashbuddy.data.current.CurrentDao
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
+import cloud.trotter.dashbuddy.data.customer.CustomerDao
 import cloud.trotter.dashbuddy.data.customer.CustomerEntity
 import cloud.trotter.dashbuddy.data.dash.DashDao
 import cloud.trotter.dashbuddy.data.dash.DashEntity
@@ -40,22 +41,23 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
         TipEntity::class,
         ZoneEntity::class,
     ],
-    version = 11, // Start with version 1
+    version = 13, // Start with version 1
     exportSchema = false // Set to true if you plan to use schema for testing migrations
 // For production, schema export is recommended.
 )
 @TypeConverters(DataTypeConverters::class)
 abstract class DashBuddyDatabase : RoomDatabase() {
     // Abstract methods for each of your DAOs
-    abstract fun zoneDao(): ZoneDao
+    abstract fun appPayDao(): AppPayDao
+    abstract fun currentDashDao(): CurrentDao
+    abstract fun customerDao(): CustomerDao
     abstract fun dashDao(): DashDao
     abstract fun dashZoneDao(): DashZoneDao
-    abstract fun currentDashDao(): CurrentDao
     abstract fun offerDao(): OfferDao
     abstract fun orderDao(): OrderDao
-    abstract fun appPayDao(): AppPayDao
-    abstract fun tipDao(): TipDao
     abstract fun storeDao(): StoreDao
+    abstract fun tipDao(): TipDao
+    abstract fun zoneDao(): ZoneDao
 
     companion object {
         @Volatile

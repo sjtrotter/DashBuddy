@@ -11,14 +11,14 @@ import java.util.Date
  * @property id The unique identifier for the dash session.
  * @property startTime Timestamp (milliseconds since epoch) when this dash session officially started.
  * @property stopTime Timestamp (milliseconds since epoch) when this dash session ended. Nullable if somehow not recorded.
- * @property duration Total duration of the dash in milliseconds. Can be calculated (endTimeMillis - startTimeMillis).
+ * @property totalTime Total duration of the dash in milliseconds. Can be calculated (endTimeMillis - startTimeMillis).
  * @property activeTime Active time during the dash in milliseconds (time spent on deliveries). From Dash Summary.
  * @property totalDistance Total distance traveled during this dash.
+ * @property activeDistance Total distance traveled while on a delivery during this dash.
  * @property dashType Earning mode for this dash, e.g., "Per Offer", "By Time".
  * @property totalEarnings Final total earnings for this dash from the Dash Summary.
- * @property basePay Breakdown of earnings: Base pay from DoorDash.
- * @property tips Breakdown of earnings: Total tips received.
- * @property incentivesPay Breakdown of earnings: Other incentive pay (e.g., peak pay).
+ * @property doordashPay Breakdown of earnings: Base pay from DoorDash.
+ * @property customerTips Breakdown of earnings: Total tips received.
  * @property deliveriesCompleted Total number of deliveries completed in this dash (from Dash Summary).
  * @property offersReceived Total number of offers received during this dash (can be aggregated).
  * @property offersAccepted Total number of offers accepted during this dash (can be aggregated).
@@ -49,14 +49,17 @@ data class DashEntity(
     /** The zone where the dasher started the dash. */
     val zoneId: Long? = null,
 
-    /** Total duration of the dash in milliseconds. Can be calculated (endTimeMillis - startTimeMillis). */
-    val duration: Long? = null,
+    /** Total duration of the dash in hours. */
+    val totalTime: Long? = null,
 
     /** Active time during the dash in milliseconds (time spent on deliveries). From Dash Summary. */
     val activeTime: Long? = null,
 
     /** Total distance traveled during this dash. */
     val totalDistance: Double? = null,
+
+    /** Total distance traveled while on a delivery during this dash. */
+    val activeDistance: Double? = null,
 
     /** Earning mode for this dash, e.g., "Per Offer", "By Time". */
     val dashType: DashType? = DashType.PER_OFFER,
@@ -65,13 +68,10 @@ data class DashEntity(
     val totalEarnings: Double? = null,
 
     /** Breakdown of earnings: Base pay from DoorDash. */
-    val basePay: Double? = null,
+    val doordashPay: Double? = null,
 
     /** Breakdown of earnings: Total tips received. */
-    val tips: Double? = null,
-
-    /** Breakdown of earnings: Other incentive pay (e.g., peak pay). */
-    val incentivesPay: Double? = null,
+    val customerTips: Double? = null,
 
     /** Total number of deliveries completed in this dash (from Dash Summary). */
     val deliveriesCompleted: Int? = null,

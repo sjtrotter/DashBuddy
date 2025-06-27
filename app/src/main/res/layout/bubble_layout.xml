@@ -54,14 +54,6 @@
                 android:textSize="14sp"
                 android:visibility="gone" />
         </LinearLayout>
-
-        <ImageView
-            android:id="@+id/close_button"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:contentDescription="close button"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
-            android:visibility="visible" />
     </LinearLayout>
 
     <androidx.fragment.app.FragmentContainerView
