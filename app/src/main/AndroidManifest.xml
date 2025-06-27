@@ -15,18 +15,18 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.DashBuddy"
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="tiramisu">
-<!--        <activity-->
-<!--            android:name=".BubbleActivity"-->
-<!--            android:exported="true"-->
-<!--            android:theme="@style/BubbleTheme">-->
-<!--        </activity>-->
+        <!--        <activity-->
+        <!--            android:name=".BubbleActivity"-->
+        <!--            android:exported="true"-->
+        <!--            android:theme="@style/BubbleTheme">-->
+        <!--        </activity>-->
         <activity
             android:name=".ui.activities.BubbleActivity"
             android:exported="true"
@@ -55,9 +55,9 @@
         </service>
 
         <service
-            android:name=".services.accessibility.DashBuddyAccessibility"
+            android:name=".accessibility.DashBuddyAccessibility"
             android:exported="true"
-            android:label="DashBuddy Accessibility Service"
+            android:label="DashBuddy"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

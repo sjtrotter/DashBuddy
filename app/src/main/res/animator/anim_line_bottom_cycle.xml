@@ -1,0 +1,51 @@
+<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="6000"
+    android:startOffset="100"
+    android:repeatCount="infinite"
+    android:repeatMode="restart">
+
+    <propertyValuesHolder android:propertyName="scaleX">
+        <keyframe android:fraction="0.0" android:value="1.0" />
+        <keyframe android:fraction="0.12" android:value="0.0" />
+        <keyframe android:fraction="0.20" android:value="0.0" />
+        <keyframe android:fraction="0.32" android:value="1.0" />
+        <keyframe android:fraction="0.37" android:value="1.0" />
+        <keyframe android:fraction="0.49" android:value="0.0" />
+        <keyframe android:fraction="0.57" android:value="0.0" />
+        <keyframe android:fraction="0.69" android:value="1.0" />
+        <keyframe android:fraction="0.74" android:value="1.0" />
+        <keyframe android:fraction="0.86" android:value="0.0" />
+        <keyframe android:fraction="0.91" android:value="0.0" />
+        <keyframe android:fraction="0.99" android:value="1.0" />
+        <keyframe android:fraction="1.0" android:value="1.0" />
+    </propertyValuesHolder>
+
+    <propertyValuesHolder android:propertyName="translateX">
+        <!-- Shrink towards left -->
+        <keyframe android:fraction="0.0" android:value="0" />
+        <keyframe android:fraction="0.12" android:value="-260" />
+        <!-- Move Up/Right -->
+        <keyframe android:fraction="0.20" android:value="20" />
+        <keyframe android:fraction="0.37" android:value="20" />
+        <!-- Shrink towards left -->
+        <keyframe android:fraction="0.49" android:value="-240" />
+        <!-- Move Down/Left -->
+        <keyframe android:fraction="0.57" android:value="-20" />
+        <keyframe android:fraction="0.74" android:value="-20" />
+        <!-- Shrink towards left -->
+        <keyframe android:fraction="0.86" android:value="-280" />
+        <!-- Return to Center -->
+        <keyframe android:fraction="0.91" android:value="0" />
+        <keyframe android:fraction="1.0" android:value="0" />
+    </propertyValuesHolder>
+
+    <propertyValuesHolder android:propertyName="translateY">
+        <keyframe android:fraction="0.12" android:value="0" />
+        <keyframe android:fraction="0.20" android:value="-20" />
+        <keyframe android:fraction="0.49" android:value="-20" />
+        <keyframe android:fraction="0.57" android:value="20" />
+        <keyframe android:fraction="0.86" android:value="20" />
+        <keyframe android:fraction="0.91" android:value="0" />
+        <keyframe android:fraction="1.0" android:value="0" />
+    </propertyValuesHolder>
+</objectAnimator>

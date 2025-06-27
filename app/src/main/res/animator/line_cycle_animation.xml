@@ -1,0 +1,61 @@
+<objectAnimator
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="6000"
+    android:repeatCount="infinite"
+    android:repeatMode="restart">
+
+    <!--
+      This property animates the "slide-in" and "slide-out" effect using scaleX.
+      0 = invisible, 1 = fully visible. The pivotX in the vector makes it scale from the right.
+    -->
+    <propertyValuesHolder android:propertyName="scaleX">
+        <!-- Phase 1: Shrink at origin -->
+        <keyframe android:fraction="0.0" android:value="1.0" />
+        <keyframe android:fraction="0.12" android:value="0.0" /> <!-- 0.7s: Gone -->
+
+        <!-- Phase 2: Stay gone while moving up/right, then grow -->
+        <keyframe android:fraction="0.20" android:value="0.0" /> <!-- 1.2s: In position -->
+        <keyframe android:fraction="0.32" android:value="1.0" /> <!-- 1.9s: Grown -->
+
+        <!-- Phase 3: Pause, then shrink -->
+        <keyframe android:fraction="0.37" android:value="1.0" /> <!-- 2.2s: Pause ends -->
+        <keyframe android:fraction="0.49" android:value="0.0" /> <!-- 2.9s: Gone -->
+
+        <!-- Phase 4: Stay gone while moving down/left, then grow -->
+        <keyframe android:fraction="0.57" android:value="0.0" /> <!-- 3.4s: In position -->
+        <keyframe android:fraction="0.69" android:value="1.0" /> <!-- 4.1s: Grown -->
+
+        <!-- Phase 5: Pause, then shrink -->
+        <keyframe android:fraction="0.74" android:value="1.0" /> <!-- 4.4s: Pause ends -->
+        <keyframe android:fraction="0.86" android:value="0.0" /> <!-- 5.1s: Gone -->
+
+        <!-- Phase 6: Stay gone while moving to origin, then grow -->
+        <keyframe android:fraction="0.91" android:value="0.0" /> <!-- 5.4s: In position -->
+        <keyframe android:fraction="0.99" android:value="1.0" /> <!-- 5.9s: Grown -->
+
+        <!-- Phase 7: Long pause at origin -->
+        <keyframe android:fraction="1.0" android:value="1.0" /> <!-- 6.0s: Loop restarts -->
+    </propertyValuesHolder>
+
+    <!-- This property controls the horizontal movement (translateX). -->
+    <propertyValuesHolder android:propertyName="translateX">
+        <keyframe android:fraction="0.12" android:value="0" />
+        <keyframe android:fraction="0.20" android:value="20" /> <!-- Move Right -->
+        <keyframe android:fraction="0.49" android:value="20" />
+        <keyframe android:fraction="0.57" android:value="-20" /> <!-- Move Left -->
+        <keyframe android:fraction="0.86" android:value="-20" />
+        <keyframe android:fraction="0.91" android:value="0" /> <!-- Return to Center -->
+        <keyframe android:fraction="1.0" android:value="0" />
+    </propertyValuesHolder>
+
+    <!-- This property controls the vertical movement (translateY). -->
+    <propertyValuesHolder android:propertyName="translateY">
+        <keyframe android:fraction="0.12" android:value="0" />
+        <keyframe android:fraction="0.20" android:value="-20" /> <!-- Move Up -->
+        <keyframe android:fraction="0.49" android:value="-20" />
+        <keyframe android:fraction="0.57" android:value="20" /> <!-- Move Down -->
+        <keyframe android:fraction="0.86" android:value="20" />
+        <keyframe android:fraction="0.91" android:value="0" /> <!-- Return to Center -->
+        <keyframe android:fraction="1.0" android:value="0" />
+    </propertyValuesHolder>
+</objectAnimator>

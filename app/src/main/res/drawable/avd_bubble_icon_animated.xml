@@ -1,0 +1,14 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_bubble_icon_base">
+
+    <!-- Target the top speed line and apply its animation cycle -->
+    <target
+        android:name="speed_line_top"
+        android:animation="@animator/anim_line_top_cycle" />
+
+    <!-- Target the bottom speed line and apply its animation cycle -->
+    <target
+        android:name="speed_line_bottom"
+        android:animation="@animator/anim_line_bottom_cycle" />
+
+</animated-vector>
