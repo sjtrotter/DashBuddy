@@ -1,10 +1,9 @@
-package cloud.trotter.dashbuddy.services.accessibility
+package cloud.trotter.dashbuddy.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
-import cloud.trotter.dashbuddy.services.accessibility.EventHandler as EventHandler
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class DashBuddyAccessibility : AccessibilityService() {

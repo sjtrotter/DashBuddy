@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state.parsers.click
+package cloud.trotter.dashbuddy.dasher.click
 
 import cloud.trotter.dashbuddy.log.Logger as Log
 

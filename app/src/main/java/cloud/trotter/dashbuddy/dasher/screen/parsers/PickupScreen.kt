@@ -1,11 +1,11 @@
-package cloud.trotter.dashbuddy.state.parsers
+package cloud.trotter.dashbuddy.dasher.screen.parsers
 
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.screens.Screen
-import cloud.trotter.dashbuddy.state.ScreenInfo
+import cloud.trotter.dashbuddy.dasher.screen.Screen
+import cloud.trotter.dashbuddy.dasher.screen.ScreenInfo
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 
-object PickupScreenParser {
+object PickupScreen {
     private val tag = this::class.simpleName ?: "PickupScreenParser"
 
     /**

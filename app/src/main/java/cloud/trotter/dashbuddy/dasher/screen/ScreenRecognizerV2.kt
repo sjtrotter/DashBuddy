@@ -1,13 +1,11 @@
-package cloud.trotter.dashbuddy.state.screens
+package cloud.trotter.dashbuddy.dasher.screen
 
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.pay.PayParser
-import cloud.trotter.dashbuddy.data.store.StoreParser
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.StateContext
-import cloud.trotter.dashbuddy.state.ScreenInfo
-import cloud.trotter.dashbuddy.state.parsers.IdleMapParser
-import cloud.trotter.dashbuddy.state.parsers.PickupScreenParser
+import cloud.trotter.dashbuddy.dasher.screen.parsers.IdleMapParser
+import cloud.trotter.dashbuddy.dasher.screen.parsers.PickupScreen
 
 object ScreenRecognizerV2 {
     private const val TAG = "ScreenRecognizerV2"
@@ -89,7 +87,7 @@ object ScreenRecognizerV2 {
                         // val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
                         // parsedStore?.let { ScreenInfo.PickupDetails(screenCandidate, it) }
                         //     ?: ScreenInfo.Simple(screenCandidate) // Fallback
-                        return PickupScreenParser.parse(stateContext.rootNodeTexts, screenCandidate)
+                        return PickupScreen.parse(stateContext.rootNodeTexts, screenCandidate)
 
                     }
 

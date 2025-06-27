@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state.parsers.click
+package cloud.trotter.dashbuddy.dasher.click
 
 /**
  * An enumeration of the specific, actionable buttons we care about.

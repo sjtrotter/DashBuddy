@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state.parsers.click
+package cloud.trotter.dashbuddy.dasher.click
 
 /**
  * A sealed class to represent a parsed click event from the UI.

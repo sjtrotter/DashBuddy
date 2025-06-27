@@ -1,9 +1,8 @@
-package cloud.trotter.dashbuddy.state
+package cloud.trotter.dashbuddy.dasher.screen
 
 import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
-import cloud.trotter.dashbuddy.state.screens.Screen
 
 /**
  * A sealed class representing the result of a screen recognition.

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state.screens // Package for the Screen enum
+package cloud.trotter.dashbuddy.dasher.screen // Package for the Screen enum
 
 import cloud.trotter.dashbuddy.state.ActivityHint
 import java.util.Locale
@@ -13,7 +13,6 @@ enum class Screen(
     // Signature properties directly in the enum constructor
     val isPickup: Boolean = false,
     val isDelivery: Boolean = false,
-    val isOfferPopup: Boolean = false,
     val activityHint: ActivityHint = ActivityHint.NEUTRAL,
     val screenName: String = "",
     val requiredTexts: List<String> = emptyList(),
@@ -229,10 +228,10 @@ enum class Screen(
             "ft",
         ),
         minTextCount = 6,
-        isOfferPopup = true,
         activityHint = ActivityHint.ACTIVE
     ),
-//    // --- Active Delivery - Pickup Phase ---
+
+    // --- Active Delivery - Pickup Phase ---
 //    DELIVERY_NAVIGATION_TO_STORE(
 //        requiredTexts = listOf("heading to", "pick up by"), // "mi" and "min" are good indicators of navigation
 //        someOfTheseTexts = listOf("navigate", "directions"),
@@ -265,7 +264,8 @@ enum class Screen(
         activityHint = ActivityHint.ACTIVE
     ),
     PICKUP_DETAILS_VERIFY_PICKUP(
-        requiredTexts = listOf("verify order", "order for", "confirm pickup", "can't verify order"),
+        requiredTexts = listOf("verify order", "order for", "confirm pickup", "can’t verify order"),
+        forbiddenTexts = listOf("pick up by"),
         isPickup = true,
         activityHint = ActivityHint.ACTIVE
     ),
@@ -288,7 +288,7 @@ enum class Screen(
 //        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
     ),
 
-//    DELIVERY_SHOP_AND_DELIVER_LIST(
+    //    DELIVERY_SHOP_AND_DELIVER_LIST(
 //        requiredTexts = listOf("shop and deliver", "to shop", "start shopping", "found item", "item unavailable")
 //    ),
 //    DELIVERY_SHOP_AND_DELIVER_SCANNING(
