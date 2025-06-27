@@ -44,15 +44,19 @@ object Notification {
         desiredHeight: Int = 600,
         autoExpandAndSuppress: Boolean = false
     ): Notification {
-        Log.d("BubbleNotificationHelper", "Creating messaging bubble notification with message: '$messageText', Locus ID: $locusId")
+        Log.d(
+            "BubbleNotificationHelper",
+            "Creating messaging bubble notification with message: '$messageText', Locus ID: $locusId"
+        )
 
         // 1. Create the BubbleMetadata
-        val bubbleMetadataBuilder = NotificationCompat.BubbleMetadata.Builder(contentIntent, bubbleIcon)
-            .setDesiredHeight(desiredHeight)
-            .setIntent(contentIntent)
-            .setIcon(bubbleIcon)
-            .setSuppressNotification(autoExpandAndSuppress)
-            .setAutoExpandBubble(autoExpandAndSuppress)
+        val bubbleMetadataBuilder =
+            NotificationCompat.BubbleMetadata.Builder(contentIntent, bubbleIcon)
+                .setDesiredHeight(desiredHeight)
+                .setIntent(contentIntent)
+                .setIcon(bubbleIcon)
+                .setSuppressNotification(autoExpandAndSuppress)
+                .setAutoExpandBubble(autoExpandAndSuppress)
 
         val bubbleMetadata = bubbleMetadataBuilder.build()
 
