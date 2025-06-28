@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.accessibility
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -79,18 +78,10 @@ object EventHandler {
     )
 
     /** Initialize the state machine. */
-    fun initializeStateManager(context: Context) {
+    fun initializeStateManager() {
         val initialContext = StateContext(
             timestamp = Date().time,
-            androidAppContext = context,
-            eventType = null,
             eventTypeString = "INITIALIZATION",
-            packageName = null,
-            rootNode = null,
-            sourceClassName = null,
-            rootNodeTexts = emptyList(),
-            sourceNodeTexts = emptyList(),
-            sourceNode = null,
         )
         StateManager.initialize(initialContext)
     }
@@ -199,7 +190,6 @@ object EventHandler {
             clickInfo = ClickParser.parse(sourceNodeTexts)
         val tempContext = StateContext(
             timestamp = Date().time,
-            androidAppContext = DashBuddyApplication.context,
             eventType = currentEventType,
             eventTypeString = AccessibilityEvent.eventTypeToString(currentEventType),
             packageName = event.packageName,
@@ -215,7 +205,7 @@ object EventHandler {
             screenInfo = ScreenRecognizerV2.identify(tempContext)
         )
 
-        Log.d(TAG, "TEST: Current dash state: $currentDashState")
+        Log.d(TAG, "Sending event to StateManager with context: $finalContext")
         StateManager.dispatchEvent(finalContext)
 
         // Update the last known screen for context in the next recognition
@@ -223,14 +213,6 @@ object EventHandler {
         // Make sure to clean up the event if it was the one we held onto
         if (event == debouncedEvent) {
             debouncedEvent = null
-        }
-
-        // Testing ScreenRecognizerV2
-        try {
-            val screenInfoV2 = ScreenRecognizerV2.identify(finalContext)
-            Log.i(TAG, "[V2-TEST] Recognized ScreenInfo: $screenInfoV2")
-        } catch (e: Exception) {
-            Log.e(TAG, "[V2-TEST] Exception while recognizing screen", e)
         }
     }
 
