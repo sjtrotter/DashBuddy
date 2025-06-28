@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.TypedValue
+import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.AttrRes
 import androidx.annotation.ColorInt
@@ -19,6 +20,7 @@ import androidx.core.content.ContextCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.ActivityMainBinding
 import cloud.trotter.dashbuddy.accessibility.DashBuddyAccessibility
+import cloud.trotter.dashbuddy.bubble.Service as BubbleService
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class MainActivity : AppCompatActivity() {
@@ -88,6 +90,14 @@ class MainActivity : AppCompatActivity() {
             Log.d(tag, "Notification Listener button clicked. Opening settings.")
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
+
+        binding.btnShowBubble.setOnClickListener {
+            Log.d(tag, "Show Bubble button clicked.")
+            val intent = Intent(this, BubbleService::class.java).apply {
+                putExtra(BubbleService.EXTRA_MESSAGE, "Welcome to DashBuddy!")
+            }
+            ContextCompat.startForegroundService(this, intent)
+        }
     }
 
     private fun checkAllPermissions() {
@@ -99,6 +109,9 @@ class MainActivity : AppCompatActivity() {
             areNotificationsEnabled,
             "Post Notifications"
         )
+        // Also update the visibility of the "Show Bubble" button
+        binding.btnShowBubble.visibility = if (areNotificationsEnabled) View.VISIBLE else View.GONE
+
 
         // Accessibility Service Check
         val isAccessibilityEnabled =

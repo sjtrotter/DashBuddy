@@ -50,7 +50,6 @@
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginBottom="16dp"/>
 
-            <!-- Post Notifications Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_post_notification"
                 android:layout_width="match_parent"
@@ -59,54 +58,70 @@
                 app:cardUseCompatPadding="true"
                 app:strokeWidth="0dp">
 
-                <LinearLayout
+                <RelativeLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
                     android:padding="16dp">
 
                     <LinearLayout
+                        android:id="@+id/post_notification_content"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:orientation="vertical">
 
-                        <ImageView
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:src="@drawable/ic_notifications"
-                            app:tint="?attr/colorOnSurfaceVariant"
-                            android:layout_marginEnd="16dp"
-                            android:contentDescription="@string/post_notifications"/>
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <ImageView
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:src="@drawable/ic_notifications"
+                                app:tint="?attr/colorOnSurfaceVariant"
+                                android:layout_marginEnd="16dp"
+                                android:contentDescription="@string/post_notifications"/>
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/post_notifications"
+                                android:textAppearance="?attr/textAppearanceTitleMedium"
+                                android:textColor="?attr/colorOnSurface"/>
+                        </LinearLayout>
 
                         <TextView
-                            android:layout_width="0dp"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/post_notifications"
-                            android:textAppearance="?attr/textAppearanceTitleMedium"
-                            android:textColor="?attr/colorOnSurface"/>
+                            android:layout_marginTop="8dp"
+                            android:text="@string/post_notifications_explainer"
+                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:layout_marginBottom="16dp"/>
                     </LinearLayout>
 
-                    <TextView
-                        android:layout_width="match_parent"
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_show_bubble"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/post_notifications_explainer"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant"
-                        android:layout_marginBottom="16dp"/>
+                        android:layout_below="@id/post_notification_content"
+                        android:layout_alignParentStart="true"
+                        android:text="@string/show_bubble"
+                        android:visibility="gone" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_enable_post_notifications"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_gravity="end"
+                        android:layout_below="@id/post_notification_content"
+                        android:layout_alignParentEnd="true"
                         android:text="@string/enable" />
-                </LinearLayout>
+                </RelativeLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Accessibility Service Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_accessibility"
                 android:layout_width="match_parent"
@@ -162,7 +177,6 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Location Access Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_location"
                 android:layout_width="match_parent"
@@ -218,7 +232,6 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Notification Listener Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_notification_listener"
                 android:layout_width="match_parent"
