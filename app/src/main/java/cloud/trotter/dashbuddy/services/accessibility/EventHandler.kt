@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.accessibility
+package cloud.trotter.dashbuddy.services.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.os.Handler

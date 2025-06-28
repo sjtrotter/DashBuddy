@@ -46,7 +46,7 @@
         </activity>
 
         <service
-            android:name=".bubble.Service"
+            android:name=".services.bubble.Service"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property
@@ -55,7 +55,7 @@
         </service>
 
         <service
-            android:name=".accessibility.DashBuddyAccessibility"
+            android:name=".services.accessibility.DashBuddyAccessibility"
             android:exported="true"
             android:label="DashBuddy"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">

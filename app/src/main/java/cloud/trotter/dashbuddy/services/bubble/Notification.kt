@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.bubble // You can choose your package structure
+package cloud.trotter.dashbuddy.services.bubble // You can choose your package structure
 
 import android.app.Notification
 import android.app.PendingIntent
