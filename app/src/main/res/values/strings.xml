@@ -29,4 +29,10 @@
     <string name="total">Total</string>
     <string name="order_at_store_and_status">Order at %1$s: %2$s</string>
     <string name="show_bubble">Show Bubble</string>
+    <string name="total_miles_format" translatable="false">Total: %1$s</string>
+    <string name="actual_stats_time" translatable="false">Time: %1$s</string>
+    <string name="actual_stats_distance" translatable="false">Distance: %1$s</string>
+    <string name="actual_stats_per_mile" translatable="false">$/mi: %1$s</string>
+    <string name="actual_stats_per_hour" translatable="false">$/hr: %1$s</string>
+    <string name="doordash_pays" translatable="false">Doordash Pay(s)</string>
 </resources>

@@ -127,7 +127,7 @@ class DeliveryCompleted : StateHandler {
                         val tipEntity = TipEntity(
                             orderId = orderToComplete.id,
                             amount = tipItem.amount,
-                            type = TipType.IN_APP_INITIAL,
+                            type = TipType.INITIAL_TIP,
                             timestamp = stateContext.timestamp
                         )
                         tipRepo.insert(tipEntity)

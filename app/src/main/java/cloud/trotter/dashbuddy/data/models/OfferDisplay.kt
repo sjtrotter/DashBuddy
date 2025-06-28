@@ -1,11 +1,16 @@
 package cloud.trotter.dashbuddy.data.models
 
-// Represents a single offer for display, including its pay breakdown and orders.
 data class OfferDisplay(
+    // Unexpanded
     val summaryText: String,
     val status: String,
-    val payLines: List<ReceiptLineItem>,
-    val orders: List<OrderDisplay>,
-    val total: String,
+    val totalAmount: String,
+    val totalMiles: String,
+    val offerBadges: Set<Int> = emptySet(),
+
+    // Expanded
+    val payLines: List<ReceiptLineItem> = emptyList(),
+    val orders: List<OrderDisplay> = emptyList(),
+    val actualStats: ActualStats?,
     var isExpanded: Boolean = false
 )

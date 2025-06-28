@@ -1,23 +1,38 @@
 package cloud.trotter.dashbuddy.data.order
 
+import cloud.trotter.dashbuddy.R
+
 /**
  * Represents various textual badges that apply to a specific order/leg within an offer,
  * such as equipment requirements or specific handling notes for that part of the delivery.
  */
 enum class OrderBadge(
-    val badgeText: String // The exact text to match on the screen (case-insensitive)
+    val badgeText: String,          // The exact text to match on the screen (case-insensitive)
+    val iconResId: Int? = null,     // The resource ID of the corresponding icon to display
 ) {
     /** Indicates that a Red Card is required for this specific order (e.g., for payment at the store). */
-    RED_CARD(badgeText = "Red Card required"),
+    RED_CARD(
+        badgeText = "Red Card required",
+        iconResId = R.drawable.ic_badge_red_card
+    ),
 
     /** Indicates this specific order is a large catering order, often requiring more space or different handling. */
-    LARGE_ORDER(badgeText = "Large Order - Catering"),
+    LARGE_ORDER(
+        badgeText = "Large Order - Catering",
+        iconResId = R.drawable.ic_badge_large_order
+    ),
 
     /** Indicates a pizza bag is required for this specific order. */
-    PIZZA_BAG(badgeText = "Pizza bag required"),
+    PIZZA_BAG(
+        badgeText = "Pizza bag required",
+        iconResId = R.drawable.ic_badge_pizza_bag
+    ),
 
     /** Indicates this specific order contains alcohol and may require ID check at pickup or dropoff for this leg. */
-    ALCOHOL(badgeText = "Alcohol");
+    ALCOHOL(
+        badgeText = "Alcohol",
+        iconResId = R.drawable.ic_badge_alcohol
+    );
 
     companion object {
         /**

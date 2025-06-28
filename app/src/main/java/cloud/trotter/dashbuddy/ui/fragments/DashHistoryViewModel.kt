@@ -1,9 +1,9 @@
-// in DashHistoryViewModel.kt
 package cloud.trotter.dashbuddy.ui.fragments
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.data.dash.DashRepo
+import cloud.trotter.dashbuddy.data.models.ActualStats
 import cloud.trotter.dashbuddy.data.models.DashSummary
 import cloud.trotter.dashbuddy.data.models.OfferDisplay
 import cloud.trotter.dashbuddy.data.models.OrderDisplay
@@ -12,11 +12,13 @@ import cloud.trotter.dashbuddy.data.offer.OfferRepo
 import cloud.trotter.dashbuddy.data.order.OrderRepo
 import cloud.trotter.dashbuddy.data.pay.AppPayRepo
 import cloud.trotter.dashbuddy.data.pay.TipRepo
+import cloud.trotter.dashbuddy.data.pay.TipType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class DashHistoryViewModel(
     private val dashRepo: DashRepo,
@@ -38,48 +40,96 @@ class DashHistoryViewModel(
                         val appPays = appPayRepo.getPayComponentsForOfferList(offer.id)
                         val orders = orderRepo.getOrdersForOfferList(offer.id)
 
-                        val payLines = appPays.map { appPay ->
-                            val payType = appPayRepo.getPayTypeById(appPay.payTypeId)
-                            ReceiptLineItem(
-                                label = payType?.name ?: "Unknown Pay",
-                                amount = String.format(Locale.US, "$%.2f", appPay.amount)
-                            )
-                        }
+                        val totalAppPay = appPays.sumOf { it.amount }
+                        var totalTips = 0.0
+                        val totalActualMiles = orders.sumOf { it.mileage ?: 0.0 }
 
                         val orderDisplays = orders.map { order ->
-                            val tips = tipRepo.getTipsForOrderList(order.id)
-                            val tipLines = tips.map { tip ->
+                            val existingTips = tipRepo.getTipsForOrderList(order.id)
+                            val orderMiles = order.mileage ?: 0.0
+
+                            // Ensure a receipt line is created for every possible tip type.
+                            val allTipTypes = TipType.entries
+                            val tipLines = allTipTypes.map { tipType ->
+                                val existingTip = existingTips.find { it.type == tipType }
                                 ReceiptLineItem(
-                                    label = tip.type.name.replace("_", " ").lowercase(Locale.US)
-                                        .replaceFirstChar { it.titlecase(Locale.US) },
-                                    amount = String.format(Locale.US, "$%.2f", tip.amount)
+                                    label = tipType.name.replace("_", " ").lowercase(Locale.US)
+                                        .replaceFirstChar {
+                                            if (it.isLowerCase()) it.titlecase(
+                                                Locale.US
+                                            ) else it.toString()
+                                        },
+                                    amount = String.format(
+                                        Locale.US,
+                                        "$%.2f",
+                                        existingTip?.amount ?: 0.0
+                                    )
                                 )
                             }
+
+                            val orderTotalTips = existingTips.sumOf { it.amount }
+                            totalTips += orderTotalTips
+
+                            val uniqueOrderIcons = order.badges.mapNotNull { it.iconResId }.toSet()
+
                             OrderDisplay(
-                                storeName = order.storeName,
-                                status = order.status.name.lowercase(Locale.US)
-                                    .replaceFirstChar { it.titlecase(Locale.US) },
-                                tipLines = tipLines
+                                summaryText = "${order.storeName} - ${
+                                    String.format(
+                                        Locale.US,
+                                        "%.1f mi",
+                                        orderMiles
+                                    )
+                                } (${
+                                    order.status.name.lowercase(Locale.US).replaceFirstChar {
+                                        if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString()
+                                    }
+                                })",
+                                tipLines = tipLines,
+                                orderBadges = uniqueOrderIcons
                             )
                         }
 
-                        val totalPay = appPays.sumOf { it.amount } + orders.sumOf { order ->
-                            tipRepo.getTipsForOrderList(order.id).sumOf { it.amount }
-                        }
+                        val totalActualPay = totalAppPay + totalTips
+                        val offerDurationMillis =
+                            (dash.stopTime ?: System.currentTimeMillis()) - dash.startTime
+                        val offerDurationHours =
+                            if (offerDurationMillis > 0) offerDurationMillis.toDouble() / 3_600_000.0 else 0.0
+
+                        val actualStats = ActualStats(
+                            time = formatDuration(offerDurationMillis),
+                            distance = "${String.format(Locale.US, "%.1f", totalActualMiles)} mi",
+                            dollarsPerMile = if (totalActualMiles > 0) String.format(
+                                Locale.US,
+                                "$%.2f/mi",
+                                totalActualPay / totalActualMiles
+                            ) else "$0.00/mi",
+                            dollarsPerHour = if (offerDurationHours > 0) String.format(
+                                Locale.US,
+                                "$%.2f/hr",
+                                totalActualPay / offerDurationHours
+                            ) else "$0.00/hr"
+                        )
+
+                        val uniqueOfferIcons = offer.badges.mapNotNull { it.iconResId }.toSet()
 
                         OfferDisplay(
-                            summaryText = "Offered ${
-                                String.format(
-                                    Locale.US,
-                                    "$%.2f",
-                                    offer.payAmount
+                            summaryText = "Offer: ${orders.joinToString(" & ") { it.storeName }}",
+                            status = "(${
+                                offer.status.name.replace("_", " ").lowercase(Locale.US)
+                                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+                            })",
+                            totalAmount = String.format(Locale.US, "$%.2f", totalActualPay),
+                            totalMiles = String.format(Locale.US, "%.1f mi", totalActualMiles),
+                            offerBadges = uniqueOfferIcons,
+                            payLines = appPays.map { appPay ->
+                                val payType = appPayRepo.getPayTypeById(appPay.payTypeId)
+                                ReceiptLineItem(
+                                    label = payType?.name ?: "Unknown Pay",
+                                    amount = String.format(Locale.US, "$%.2f", appPay.amount)
                                 )
-                            } for ${orders.joinToString(" & ") { it.storeName }}",
-                            status = offer.status.name.replace("_", " ").lowercase(Locale.US)
-                                .replaceFirstChar { it.titlecase(Locale.US) },
-                            payLines = payLines,
+                            },
                             orders = orderDisplays,
-                            total = String.format(Locale.US, "$%.2f", totalPay)
+                            actualStats = actualStats
                         )
                     }
 
@@ -96,6 +146,13 @@ class DashHistoryViewModel(
                 _dashSummaries.value = summaries
             }
         }
+    }
+
+    private fun formatDuration(millis: Long): String {
+        if (millis < 0) return "0 hr 00 min"
+        val hours = TimeUnit.MILLISECONDS.toHours(millis)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(millis) % 60
+        return String.format(Locale.US, "%d hr %02d min", hours, minutes)
     }
 
     fun toggleDashExpanded(dashId: Long) {

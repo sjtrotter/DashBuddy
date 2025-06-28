@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.data.offer
 
+import cloud.trotter.dashbuddy.R
+
 /**
  * Represents various textual badges or indicators that can appear on a DoorDash offer screen.
  * Each badge has a matching strategy: exact text, contains text, or a regex pattern.
@@ -8,12 +10,14 @@ enum class OfferBadge(
     val displayName: String,
     val exactMatchText: String? = null, // For exact (ignore case) string matching
     val containsText: String? = null,   // For contains (ignore case) string matching
-    val regexPattern: Regex? = null     // For regex pattern matching
+    val regexPattern: Regex? = null,    // For regex pattern matching
+    val iconResId: Int? = null          // Optional icon resource ID
 ) {
     /** Indicates the offer is marked as high paying by DoorDash. */
     HIGH_PAYING(
         displayName = "High Paying",
-        regexPattern = Regex("""High-paying (shopping )?offer!""", RegexOption.IGNORE_CASE)
+        regexPattern = Regex("""High-paying (shopping )?offer!""", RegexOption.IGNORE_CASE),
+        iconResId = R.drawable.ic_badge_dollar_plus
     ),
 
     /** Indicates priority access due to Dasher status (Platinum, Gold, Silver) or Pro Shopper ratings. */
@@ -22,7 +26,8 @@ enum class OfferBadge(
         regexPattern = Regex(
             """your\s+(Platinum|Gold|Silver)\s+status|Pro Shopper ratings gave you priority""",
             RegexOption.IGNORE_CASE
-        )
+        ),
+        iconResId = R.drawable.ic_badge_priority_access
     ),
 
     /** Indicates all orders in a stacked offer are from a single store. */
@@ -58,31 +63,36 @@ enum class OfferBadge(
     /** Indicates the order requires the Dasher to be 18+. */
     AGE_RESTRICTED_18_PLUS(
         displayName = "Age Restricted 18+",
-        exactMatchText = "Must be 18+ to accept order"
+        exactMatchText = "Must be 18+ to accept order",
+        iconResId = R.drawable.ic_badge_id_check
     ),
 
     /** Indicates the order requires the Dasher to be 21+ (often for alcohol). */
     AGE_RESTRICTED_21_PLUS(
         displayName = "Age Restricted 21+",
-        exactMatchText = "Must be 21+ to accept order"
+        exactMatchText = "Must be 21+ to accept order",
+        iconResId = R.drawable.ic_badge_id_check
     ),
 
     /** Indicates the Dasher must check the recipient's ID. */
     CHECK_RECIPIENT_ID(
         displayName = "Check Recipient ID",
-        exactMatchText = "Check recipient's ID"
+        exactMatchText = "Check recipient's ID",
+        iconResId = R.drawable.ic_badge_id_check
     ),
 
     /** Indicates the order includes alcohol (often part of 'Contains restricted items'). */
     INCLUDES_ALCOHOL(
         displayName = "Includes Alcohol",
-        containsText = "including alcohol"
+        containsText = "including alcohol",
+        iconResId = R.drawable.ic_badge_alcohol
     ),
 
     /** Indicates a cash on delivery (COD) order. */
     COLLECT_CASH(
         displayName = "Collect Cash",
-        exactMatchText = "Collect cash from customer"
+        exactMatchText = "Collect cash from customer",
+        iconResId = R.drawable.ic_badge_collect_cash
     ),
 
     /** Indicates the order might involve processing returns (often for alcohol or retail). */

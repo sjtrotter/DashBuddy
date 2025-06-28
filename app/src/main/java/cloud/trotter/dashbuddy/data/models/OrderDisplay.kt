@@ -1,8 +1,7 @@
 package cloud.trotter.dashbuddy.data.models
 
-// Represents a single order for display, including its tip breakdown.
 data class OrderDisplay(
-    val storeName: String,
-    val status: String,
-    val tipLines: List<ReceiptLineItem>
+    val summaryText: String, // e.g., "Store 1 - x.x mi (Completed)"
+    val tipLines: List<ReceiptLineItem>,
+    val orderBadges: Set<Int> = emptySet()
 )

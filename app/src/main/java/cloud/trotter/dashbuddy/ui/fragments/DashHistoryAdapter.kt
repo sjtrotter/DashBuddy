@@ -3,33 +3,35 @@ package cloud.trotter.dashbuddy.ui.fragments
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.LinearLayout
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.data.models.DashSummary
 import cloud.trotter.dashbuddy.data.models.OfferDisplay
 import cloud.trotter.dashbuddy.data.models.OrderDisplay
 import cloud.trotter.dashbuddy.data.models.ReceiptLineItem
 import cloud.trotter.dashbuddy.databinding.ItemDashSummaryBinding
-import cloud.trotter.dashbuddy.databinding.ItemDashSummaryOfferDetailsBinding
-import cloud.trotter.dashbuddy.databinding.ItemDashSummaryOrderDetailsBinding
 import cloud.trotter.dashbuddy.databinding.ItemDashSummaryReceiptLineBinding
+import cloud.trotter.dashbuddy.databinding.ItemOfferDisplayBinding
+import cloud.trotter.dashbuddy.databinding.ItemOrderDetailsBinding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class DashHistoryAdapter(
     private val onDashClicked: (Long) -> Unit,
-    private val onOfferClicked: (Long, String) -> Unit
+    private val onOfferClicked: (Long, String) -> Unit,
+    private val onOfferInfoClicked: (String) -> Unit
 ) : ListAdapter<DashSummary, DashHistoryAdapter.DashSummaryViewHolder>(DashSummaryDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DashSummaryViewHolder {
         val binding =
             ItemDashSummaryBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return DashSummaryViewHolder(binding, onDashClicked, onOfferClicked)
+        return DashSummaryViewHolder(binding, onDashClicked, onOfferClicked, onOfferInfoClicked)
     }
 
     override fun onBindViewHolder(holder: DashSummaryViewHolder, position: Int) {
@@ -39,10 +41,12 @@ class DashHistoryAdapter(
     class DashSummaryViewHolder(
         private val binding: ItemDashSummaryBinding,
         private val onDashClicked: (Long) -> Unit,
-        private val onOfferClicked: (Long, String) -> Unit
+        private val onOfferClicked: (Long, String) -> Unit,
+        private val onOfferInfoClicked: (String) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(dashSummary: DashSummary) {
+            val context = binding.root.context
             val dateFormat = SimpleDateFormat("MMM", Locale.getDefault())
             val dayFormat = SimpleDateFormat("d", Locale.getDefault())
             val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -51,40 +55,35 @@ class DashHistoryAdapter(
                 dateFormat.format(Date(dashSummary.startTime)).uppercase(Locale.getDefault())
             binding.dashDay.text = dayFormat.format(Date(dashSummary.startTime))
 
-            binding.dashEarnings.text =
-                String.format(Locale.getDefault(), "$%.2f", dashSummary.totalEarned)
+            binding.dashEarnings.text = String.format(Locale.US, "$%.2f", dashSummary.totalEarned)
             val startTime = timeFormat.format(Date(dashSummary.startTime))
             val endTime = dashSummary.endTime?.let { timeFormat.format(Date(it)) } ?: "In Progress"
             binding.dashTime.text =
-                DashBuddyApplication.context.getString(
-                    R.string.start_time_stop_time,
-                    startTime,
-                    endTime
-                )
+                context.getString(R.string.start_time_stop_time, startTime, endTime)
 
-            binding.dashStats.text = DashBuddyApplication.context.getString(
-                R.string.orders_miles, dashSummary.deliveryCount, String.format(
-                    Locale.getDefault(),
-                    "%.2f",
-                    dashSummary.totalMiles
-                )
+            binding.dashStats.text = context.getString(
+                R.string.orders_miles,
+                dashSummary.deliveryCount,
+                String.format(Locale.US, "%.2f", dashSummary.totalMiles)
             )
+
+            binding.dashHeaderClickable.setOnClickListener { onDashClicked(dashSummary.dashId) }
 
             if (dashSummary.isExpanded) {
                 binding.offersRecyclerView.visibility = View.VISIBLE
-                val offerAdapter = OfferAdapter(dashSummary.offerDisplays) { offerSummary ->
-                    onOfferClicked(dashSummary.dashId, offerSummary)
-                }
-                binding.offersRecyclerView.apply {
-                    layoutManager = LinearLayoutManager(binding.root.context)
-                    adapter = offerAdapter
-                }
+                val offerAdapter = OfferAdapter(
+                    onOfferClicked = { offerSummary ->
+                        onOfferClicked(
+                            dashSummary.dashId,
+                            offerSummary
+                        )
+                    },
+                    onOfferInfoClicked = onOfferInfoClicked
+                )
+                binding.offersRecyclerView.adapter = offerAdapter
+                offerAdapter.submitList(dashSummary.offerDisplays)
             } else {
                 binding.offersRecyclerView.visibility = View.GONE
-            }
-
-            binding.root.setOnClickListener {
-                onDashClicked(dashSummary.dashId)
             }
         }
     }
@@ -99,21 +98,14 @@ class DashHistoryAdapter(
 }
 
 class OfferAdapter(
-    offers: List<OfferDisplay>,
-    private val onOfferClicked: (String) -> Unit
+    private val onOfferClicked: (String) -> Unit,
+    private val onOfferInfoClicked: (String) -> Unit
 ) : ListAdapter<OfferDisplay, OfferAdapter.OfferViewHolder>(OfferDiffCallback()) {
 
-    init {
-        submitList(offers)
-    }
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OfferViewHolder {
-        val binding = ItemDashSummaryOfferDetailsBinding.inflate(
-            LayoutInflater.from(parent.context),
-            parent,
-            false
-        )
-        return OfferViewHolder(binding, onOfferClicked)
+        val binding =
+            ItemOfferDisplayBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        return OfferViewHolder(binding, onOfferClicked, onOfferInfoClicked)
     }
 
     override fun onBindViewHolder(holder: OfferViewHolder, position: Int) {
@@ -121,30 +113,70 @@ class OfferAdapter(
     }
 
     class OfferViewHolder(
-        private val binding: ItemDashSummaryOfferDetailsBinding,
-        private val onOfferClicked: (String) -> Unit
+        private val binding: ItemOfferDisplayBinding,
+        private val onOfferClicked: (String) -> Unit,
+        private val onOfferInfoClicked: (String) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
+
         fun bind(offer: OfferDisplay) {
-            binding.offerSummary.text =
-                DashBuddyApplication.context.getString(
-                    R.string.offer_summary_status,
-                    offer.summaryText,
-                    offer.status
-                )
-            binding.root.setOnClickListener { onOfferClicked(offer.summaryText) }
+            val context = binding.root.context
+            binding.offerSummaryText.text =
+                context.getString(R.string.offer_summary_status, offer.summaryText, offer.status)
+            binding.totalMilesText.text =
+                context.getString(R.string.total_miles_format, offer.totalMiles)
+            binding.totalAmountText.text = offer.totalAmount
+
+            binding.offerHeaderSection.setOnClickListener { onOfferClicked(offer.summaryText) }
+            binding.offerInfoButton.setOnClickListener { onOfferInfoClicked(offer.summaryText) }
+
+            addIconsToContainer(binding.offerBadgeContainer, offer.offerBadges)
 
             if (offer.isExpanded) {
                 binding.offerDetailsContainer.visibility = View.VISIBLE
+
+                binding.doordashPayHeader.receiptHeaderTitle.text =
+                    context.getString(R.string.doordash_pays)
+
+                binding.payLinesRecyclerView.layoutManager = LinearLayoutManager(context)
                 binding.payLinesRecyclerView.adapter = ReceiptLineAdapter(offer.payLines)
+
+                binding.ordersRecyclerView.layoutManager = LinearLayoutManager(context)
                 binding.ordersRecyclerView.adapter = OrderAdapter(offer.orders)
 
-                // *** THIS IS THE ONLY CHANGE, AS PER YOUR CODE ***
-                // The manual padding is removed. The alignment is now correctly handled by the XML layout.
-                binding.totalLine.label.text =
-                    DashBuddyApplication.context.getString(R.string.total)
-                binding.totalLine.amount.text = offer.total
+                // ****************** CORRECTED STATS BINDING ******************
+                offer.actualStats?.let { stats ->
+                    binding.actualStatsTime.text =
+                        context.getString(R.string.actual_stats_time, stats.time)
+                    binding.actualStatsDistance.text =
+                        context.getString(R.string.actual_stats_distance, stats.distance)
+                    binding.actualStatsPerMile.text =
+                        context.getString(R.string.actual_stats_per_mile, stats.dollarsPerMile)
+                    binding.actualStatsPerHour.text =
+                        context.getString(R.string.actual_stats_per_hour, stats.dollarsPerHour)
+                }
+                // **********************************************************
+
             } else {
                 binding.offerDetailsContainer.visibility = View.GONE
+            }
+        }
+
+        private fun addIconsToContainer(container: LinearLayout, iconResIds: Set<Int>) {
+            container.removeAllViews()
+            val context = container.context
+            iconResIds.forEach { resId ->
+                val imageView = ImageView(context).apply {
+                    setImageResource(resId)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        height = 60
+                        width = 60
+                        marginEnd = 8
+                    }
+                }
+                container.addView(imageView)
             }
         }
     }
@@ -160,59 +192,52 @@ class OfferAdapter(
 
 class OrderAdapter(private val orders: List<OrderDisplay>) :
     RecyclerView.Adapter<OrderAdapter.OrderViewHolder>() {
+
+    class OrderViewHolder(val binding: ItemOrderDetailsBinding) :
+        RecyclerView.ViewHolder(binding.root)
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OrderViewHolder {
-        val binding = ItemDashSummaryOrderDetailsBinding.inflate(
-            LayoutInflater.from(parent.context),
-            parent,
-            false
-        )
+        val binding =
+            ItemOrderDetailsBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return OrderViewHolder(binding)
     }
 
     override fun onBindViewHolder(holder: OrderViewHolder, position: Int) {
-        holder.bind(orders[position])
+        val order = orders[position]
+        val context = holder.itemView.context
+
+        holder.binding.orderHeader.receiptHeaderTitle.text = order.summaryText
+
+        holder.binding.tipLinesRecyclerView.apply {
+            layoutManager = LinearLayoutManager(context)
+            adapter = ReceiptLineAdapter(order.tipLines)
+            isNestedScrollingEnabled = false
+        }
     }
 
     override fun getItemCount(): Int = orders.size
-
-    class OrderViewHolder(private val binding: ItemDashSummaryOrderDetailsBinding) :
-        RecyclerView.ViewHolder(binding.root) {
-        fun bind(order: OrderDisplay) {
-            binding.orderSummary.text =
-                DashBuddyApplication.context.getString(
-                    R.string.order_at_store_and_status,
-                    order.storeName,
-                    order.status
-                )
-            binding.tipLinesRecyclerView.adapter = ReceiptLineAdapter(order.tipLines)
-        }
-    }
 }
 
 class ReceiptLineAdapter(private val items: List<ReceiptLineItem>) :
     RecyclerView.Adapter<ReceiptLineAdapter.ReceiptLineViewHolder>() {
+
+    class ReceiptLineViewHolder(val binding: ItemDashSummaryReceiptLineBinding) :
+        RecyclerView.ViewHolder(binding.root)
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ReceiptLineViewHolder {
-        val binding =
-            ItemDashSummaryReceiptLineBinding.inflate(
-                LayoutInflater.from(parent.context),
-                parent,
-                false
-            )
+        val binding = ItemDashSummaryReceiptLineBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
+        )
         return ReceiptLineViewHolder(binding)
     }
 
     override fun onBindViewHolder(holder: ReceiptLineViewHolder, position: Int) {
-        holder.bind(items[position])
+        val item = items[position]
+        holder.binding.label.text = item.label
+        holder.binding.amount.text = item.amount
     }
 
     override fun getItemCount(): Int = items.size
-
-    class ReceiptLineViewHolder(private val binding: ItemDashSummaryReceiptLineBinding) :
-        RecyclerView.ViewHolder(binding.root) {
-        fun bind(item: ReceiptLineItem) {
-            // This is correct. The XML layout handles the formatting.
-            binding.label.text = item.label
-            binding.amount.text = item.amount
-        }
-    }
 }
