@@ -49,7 +49,7 @@ class DashBuddyAccessibility : AccessibilityService() {
         }
         this.serviceInfo = info
 
-        eventHandler.initializeStateManager(applicationContext)
+        eventHandler.initializeStateManager()
         eventHandler.setServiceInstance(this)
 
         Log.d(tag, "Accessibility service connected")
