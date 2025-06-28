@@ -5,6 +5,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /**
  * A data class to hold structured information about a single UI element (node).
+ * This class is currently unused; it is kept for reference, in case we decide to use
+ * it to extract data from events from the Accessibility Service later on.
  */
 data class UiNode(
     val text: String? = null,
