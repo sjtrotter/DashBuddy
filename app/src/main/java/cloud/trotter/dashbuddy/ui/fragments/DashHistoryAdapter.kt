@@ -137,8 +137,11 @@ class OfferAdapter(
                 binding.offerDetailsContainer.visibility = View.VISIBLE
                 binding.payLinesRecyclerView.adapter = ReceiptLineAdapter(offer.payLines)
                 binding.ordersRecyclerView.adapter = OrderAdapter(offer.orders)
+
+                // *** THIS IS THE ONLY CHANGE, AS PER YOUR CODE ***
+                // The manual padding is removed. The alignment is now correctly handled by the XML layout.
                 binding.totalLine.label.text =
-                    DashBuddyApplication.context.getString(R.string.total).padEnd(25, '.')
+                    DashBuddyApplication.context.getString(R.string.total)
                 binding.totalLine.amount.text = offer.total
             } else {
                 binding.offerDetailsContainer.visibility = View.GONE
@@ -207,7 +210,7 @@ class ReceiptLineAdapter(private val items: List<ReceiptLineItem>) :
     class ReceiptLineViewHolder(private val binding: ItemDashSummaryReceiptLineBinding) :
         RecyclerView.ViewHolder(binding.root) {
         fun bind(item: ReceiptLineItem) {
-            // No more padding logic here. The XML handles alignment.
+            // This is correct. The XML layout handles the formatting.
             binding.label.text = item.label
             binding.amount.text = item.amount
         }

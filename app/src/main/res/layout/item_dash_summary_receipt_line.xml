@@ -4,16 +4,27 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
+    android:gravity="bottom"
     android:paddingStart="16dp"
-    android:paddingEnd="8dp">
+    android:paddingEnd="8dp"
+    android:minHeight="24dp">
 
     <TextView
         android:id="@+id/label"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
         android:fontFamily="monospace"
-        tools:text="Base Pay..................." />
+        tools:text="Base Pay" />
+
+    <View
+        android:id="@+id/dotted_line_view"
+        android:layout_width="0dp"
+        android:layout_height="5dp"
+        android:layout_weight="1"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:layout_marginBottom="3dp"
+        android:background="@drawable/bg_dotted_line" />
 
     <TextView
         android:id="@+id/amount"
@@ -21,4 +32,5 @@
         android:layout_height="wrap_content"
         android:fontFamily="monospace"
         tools:text="$5.00" />
+
 </LinearLayout>
