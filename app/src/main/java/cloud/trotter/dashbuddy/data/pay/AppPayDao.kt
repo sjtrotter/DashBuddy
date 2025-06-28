@@ -25,6 +25,9 @@ interface AppPayDao {
 
     @Query("SELECT * FROM app_pays WHERE offerId = :offerId")
     suspend fun getPayComponentsForOfferList(offerId: Long): List<AppPayEntity>
+
+    @Query("SELECT * FROM app_pay_types WHERE id = :id LIMIT 1")
+    suspend fun getPayTypeById(id: Long): AppPayType?
 }
 
 

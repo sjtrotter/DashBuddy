@@ -23,4 +23,9 @@
 
     <string name="enable">Enable</string>
     <string name="enabled">Enabled</string>
+    <string name="start_time_stop_time" translatable="false">%1$s - %2$s</string>
+    <string name="orders_miles">%1$d Orders • %2$s Miles</string>
+    <string name="offer_summary_status" translatable="false">%1$s: %2$s</string>
+    <string name="total">Total</string>
+    <string name="order_at_store_and_status">Order at %1$s: %2$s</string>
 </resources>

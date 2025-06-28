@@ -5,7 +5,6 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import cloud.trotter.dashbuddy.data.models.DashSummary
 import kotlinx.coroutines.flow.Flow
 
 /**

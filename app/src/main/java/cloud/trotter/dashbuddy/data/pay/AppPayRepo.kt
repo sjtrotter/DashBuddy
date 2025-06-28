@@ -45,4 +45,9 @@ class AppPayRepo(private val appPayDao: AppPayDao) {
         }
     }
 
+    suspend fun getPayTypeById(id: Long): AppPayType? {
+        return withContext(Dispatchers.IO) {
+            appPayDao.getPayTypeById(id)
+        }
+    }
 }

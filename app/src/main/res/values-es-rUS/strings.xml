@@ -18,4 +18,7 @@
     <string name="notification_access_explainer">Se requiere para ver las notificaciones de nuevos pedidos y las alertas de propinas cuando la aplicación Dasher está en segundo plano. Esto ayuda a garantizar que no se pierdan oportunidades.</string>
     <string name="enable">permitir</string>
     <string name="enabled">Activada</string>
+    <string name="total">Total</string>
+    <string name="orders_miles">%1$d Pedidos • %2$s Millas</string>
+    <string name="order_at_store_and_status">Ordene en %1$s: %2$s</string>
 </resources>
