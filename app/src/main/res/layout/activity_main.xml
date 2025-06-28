@@ -40,7 +40,7 @@
                 android:text="@string/welcome"
                 android:textAppearance="?attr/textAppearanceTitleMedium"
                 android:textColor="?attr/colorOnSurface"
-                android:layout_marginBottom="8dp"/>
+                android:layout_marginBottom="8dp" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -48,7 +48,7 @@
                 android:text="@string/dashbuddy_explainer"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:textColor="?attr/colorOnSurfaceVariant"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginBottom="16dp" />
 
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_post_notification"
@@ -73,7 +73,8 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:gravity="center_vertical"
-                            android:orientation="horizontal">
+                            android:orientation="horizontal"
+                            tools:ignore="UseCompoundDrawables">
 
                             <ImageView
                                 android:layout_width="24dp"
@@ -81,7 +82,7 @@
                                 android:src="@drawable/ic_notifications"
                                 app:tint="?attr/colorOnSurfaceVariant"
                                 android:layout_marginEnd="16dp"
-                                android:contentDescription="@string/post_notifications"/>
+                                android:contentDescription="@string/post_notifications" />
 
                             <TextView
                                 android:layout_width="0dp"
@@ -89,7 +90,7 @@
                                 android:layout_weight="1"
                                 android:text="@string/post_notifications"
                                 android:textAppearance="?attr/textAppearanceTitleMedium"
-                                android:textColor="?attr/colorOnSurface"/>
+                                android:textColor="?attr/colorOnSurface" />
                         </LinearLayout>
 
                         <TextView
@@ -99,7 +100,7 @@
                             android:text="@string/post_notifications_explainer"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:layout_marginBottom="16dp"/>
+                            android:layout_marginBottom="16dp" />
                     </LinearLayout>
 
                     <com.google.android.material.button.MaterialButton
@@ -140,7 +141,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:orientation="horizontal"
+                        tools:ignore="UseCompoundDrawables">
 
                         <ImageView
                             android:layout_width="24dp"
@@ -156,7 +158,7 @@
                             android:layout_weight="1"
                             android:text="@string/accessibility_service"
                             android:textAppearance="?attr/textAppearanceTitleMedium"
-                            android:textColor="?attr/colorOnSurface"/>
+                            android:textColor="?attr/colorOnSurface" />
                     </LinearLayout>
 
                     <TextView
@@ -166,7 +168,7 @@
                         android:text="@string/accessibility_service_explainer"
                         android:textAppearance="?attr/textAppearanceBodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant"
-                        android:layout_marginBottom="16dp"/>
+                        android:layout_marginBottom="16dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_enable_accessibility"
@@ -195,7 +197,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:orientation="horizontal"
+                        tools:ignore="UseCompoundDrawables">
 
                         <ImageView
                             android:layout_width="24dp"
@@ -203,7 +206,7 @@
                             android:src="@drawable/ic_location"
                             app:tint="?attr/colorOnSurfaceVariant"
                             android:layout_marginEnd="16dp"
-                            android:contentDescription="@string/location_access"/>
+                            android:contentDescription="@string/location_access" />
 
                         <TextView
                             android:layout_width="0dp"
@@ -211,7 +214,7 @@
                             android:layout_weight="1"
                             android:text="@string/location_access"
                             android:textAppearance="?attr/textAppearanceTitleMedium"
-                            android:textColor="?attr/colorOnSurface"/>
+                            android:textColor="?attr/colorOnSurface" />
                     </LinearLayout>
 
                     <TextView
@@ -221,7 +224,7 @@
                         android:text="@string/location_access_explainer"
                         android:textAppearance="?attr/textAppearanceBodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant"
-                        android:layout_marginBottom="16dp"/>
+                        android:layout_marginBottom="16dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_enable_location"
@@ -245,11 +248,13 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="16dp">
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:orientation="horizontal"
+                        tools:ignore="UseCompoundDrawables">
 
                         <ImageView
                             android:layout_width="24dp"
@@ -257,7 +262,7 @@
                             android:src="@drawable/ic_read_notifications"
                             app:tint="?attr/colorOnSurfaceVariant"
                             android:layout_marginEnd="16dp"
-                            android:contentDescription="@string/notification_access"/>
+                            android:contentDescription="@string/notification_access" />
 
                         <TextView
                             android:layout_width="0dp"
@@ -265,7 +270,7 @@
                             android:layout_weight="1"
                             android:text="@string/notification_access"
                             android:textAppearance="?attr/textAppearanceTitleMedium"
-                            android:textColor="?attr/colorOnSurface"/>
+                            android:textColor="?attr/colorOnSurface" />
                     </LinearLayout>
 
                     <TextView
@@ -275,7 +280,7 @@
                         android:text="@string/notification_access_explainer"
                         android:textAppearance="?attr/textAppearanceBodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant"
-                        android:layout_marginBottom="16dp"/>
+                        android:layout_marginBottom="16dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_enable_notification_listener"
