@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.dasher.click
+package cloud.trotter.dashbuddy.services.accessibility.click
 
 /**
  * An enumeration of the specific, actionable buttons we care about.

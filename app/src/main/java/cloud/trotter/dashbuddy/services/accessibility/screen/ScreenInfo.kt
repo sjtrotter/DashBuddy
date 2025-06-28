@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.dasher.screen
+package cloud.trotter.dashbuddy.services.accessibility.screen
 
 import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer

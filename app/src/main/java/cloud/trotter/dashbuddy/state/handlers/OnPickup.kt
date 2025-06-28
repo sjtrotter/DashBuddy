@@ -6,12 +6,12 @@ import cloud.trotter.dashbuddy.data.store.ParsedStore
 import cloud.trotter.dashbuddy.data.store.StoreEntity
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState
-import cloud.trotter.dashbuddy.dasher.screen.ScreenInfo
+import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 //import cloud.trotter.dashbuddy.state.processing.CustomerProcessor
 //import cloud.trotter.dashbuddy.state.processing.StoreProcessor
-import cloud.trotter.dashbuddy.dasher.screen.Screen
+import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.util.OrderMatcher
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 

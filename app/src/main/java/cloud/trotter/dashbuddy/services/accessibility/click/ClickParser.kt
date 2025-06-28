@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.dasher.click
+package cloud.trotter.dashbuddy.services.accessibility.click
 
 import cloud.trotter.dashbuddy.log.Logger as Log
 

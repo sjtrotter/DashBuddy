@@ -8,13 +8,13 @@ import cloud.trotter.dashbuddy.data.offer.OfferEntity
 import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.offer.OfferStatus
-import cloud.trotter.dashbuddy.dasher.click.ClickInfo
+import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
-import cloud.trotter.dashbuddy.dasher.click.ClickType
-import cloud.trotter.dashbuddy.dasher.screen.Screen
+import cloud.trotter.dashbuddy.services.accessibility.click.ClickType
+import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import kotlinx.coroutines.flow.first
 import java.util.Locale
 

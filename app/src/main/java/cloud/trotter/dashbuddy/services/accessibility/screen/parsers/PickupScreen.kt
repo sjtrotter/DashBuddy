@@ -1,8 +1,8 @@
-package cloud.trotter.dashbuddy.dasher.screen.parsers
+package cloud.trotter.dashbuddy.services.accessibility.screen.parsers
 
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.dasher.screen.Screen
-import cloud.trotter.dashbuddy.dasher.screen.ScreenInfo
+import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
+import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 
 object PickupScreen {

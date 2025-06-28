@@ -13,7 +13,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
-import cloud.trotter.dashbuddy.dasher.screen.Screen
+import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import cloud.trotter.dashbuddy.util.UtilityFunctions.stringsMatch
 import kotlinx.coroutines.flow.first

@@ -7,16 +7,16 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
-import cloud.trotter.dashbuddy.dasher.click.ClickInfo
-import cloud.trotter.dashbuddy.dasher.click.ClickParser
-import cloud.trotter.dashbuddy.dasher.screen.ScreenRecognizerV2
+import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
+import cloud.trotter.dashbuddy.services.accessibility.click.ClickParser
+import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenRecognizerV2
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import cloud.trotter.dashbuddy.dasher.screen.Screen as DasherScreen
+import cloud.trotter.dashbuddy.services.accessibility.screen.Screen as DasherScreen
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateManager as StateManager
 import java.util.Date

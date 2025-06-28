@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.dasher.screen
+package cloud.trotter.dashbuddy.services.accessibility.screen
 
 import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.log.Logger as Log

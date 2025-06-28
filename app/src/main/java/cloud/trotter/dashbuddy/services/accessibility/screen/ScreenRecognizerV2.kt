@@ -1,11 +1,11 @@
-package cloud.trotter.dashbuddy.dasher.screen
+package cloud.trotter.dashbuddy.services.accessibility.screen
 
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.StateContext
-import cloud.trotter.dashbuddy.dasher.screen.parsers.IdleMapParser
-import cloud.trotter.dashbuddy.dasher.screen.parsers.PickupScreen
+import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.IdleMapParser
+import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.PickupScreen
 
 object ScreenRecognizerV2 {
     private const val TAG = "ScreenRecognizerV2"

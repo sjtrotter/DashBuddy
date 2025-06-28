@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.dasher.screen // Package for the Screen enum
+package cloud.trotter.dashbuddy.services.accessibility.screen // Package for the Screen enum
 
 import cloud.trotter.dashbuddy.state.ActivityHint
 import java.util.Locale

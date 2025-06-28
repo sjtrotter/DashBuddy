@@ -2,8 +2,8 @@ package cloud.trotter.dashbuddy.state
 
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
-import cloud.trotter.dashbuddy.dasher.screen.ScreenInfo
-import cloud.trotter.dashbuddy.dasher.click.ClickInfo
+import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
+import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
 
 data class StateContext(
     val timestamp: Long,                                // When the event data was processed
