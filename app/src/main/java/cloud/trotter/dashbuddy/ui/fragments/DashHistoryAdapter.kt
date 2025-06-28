@@ -18,7 +18,8 @@ import cloud.trotter.dashbuddy.databinding.ItemDashSummaryOfferDetailsBinding
 import cloud.trotter.dashbuddy.databinding.ItemDashSummaryOrderDetailsBinding
 import cloud.trotter.dashbuddy.databinding.ItemDashSummaryReceiptLineBinding
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 class DashHistoryAdapter(
     private val onDashClicked: (Long) -> Unit,
