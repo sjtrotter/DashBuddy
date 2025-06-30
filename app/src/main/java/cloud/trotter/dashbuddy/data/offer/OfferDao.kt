@@ -66,6 +66,9 @@ interface OfferDao {
     @Query("UPDATE offers SET status = :newStatus WHERE id = :offerId")
     suspend fun updateOfferStatus(offerId: Long, newStatus: OfferStatus)
 
+    @Query("UPDATE offers SET acceptTime = :acceptTime WHERE id = :offerId")
+    suspend fun updateOfferAcceptTime(offerId: Long, acceptTime: Long)
+
     @Query("SELECT * FROM offers WHERE status = :status ORDER BY timestamp DESC")
     fun getOffersByStatus(status: String): Flow<List<OfferEntity>>
 

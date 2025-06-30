@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.data.models
 
 data class OfferDisplay(
+    val offerId: Long, // <-- ADD THIS LINE
     // Unexpanded
     val summaryText: String,
     val status: String,

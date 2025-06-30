@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.util
 
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.data.order.OrderEntity
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.StateContext
@@ -23,8 +24,12 @@ object OrderMatcher {
     suspend fun matchOrder(stateContext: StateContext): Long? {
         Log.d(tag, "Attempting to match order with prioritized strategy...")
 
-        val screenInfo = stateContext.screenInfo as? ScreenInfo.PickupDetails ?: return null
-        val dashState = stateContext.currentDashState ?: return null
+        val screenInfo = stateContext.screenInfo as? ScreenInfo.OrderDetails ?: return null.also {
+            Log.w(tag, "Matcher failed: Screen info is not of type ScreenInfo.OrderDetails.")
+        }
+        val dashState = stateContext.currentDashState ?: return null.also {
+            Log.w(tag, "Matcher failed: Dash state is null.")
+        }
 
         val possibleOrderIds = buildList {
             dashState.activeOrderId?.let { add(it) }
@@ -34,9 +39,23 @@ object OrderMatcher {
         if (possibleOrderIds.isEmpty()) return null
 
         val allPossibleOrders = possibleOrderIds.mapNotNull { orderRepo.getOrderById(it) }
-        val eligibleOrders = allPossibleOrders.filter { order ->
-            !order.status.isPickedUp && !order.status.isDelivered &&
-                    !order.status.isCancelled && !order.status.isUnassigned
+        var eligibleOrders: List<OrderEntity> = emptyList()
+        if (stateContext.screenInfo.screen.isPickup) {
+            eligibleOrders = allPossibleOrders.filter { order ->
+                !order.status.isPickedUp && !order.status.isDelivered &&
+                        !order.status.isCancelled && !order.status.isUnassigned
+            }
+        } else if (stateContext.screenInfo.screen.isDelivery) {
+            eligibleOrders = allPossibleOrders.filter { order ->
+                order.status.isPickedUp && !order.status.isDelivered &&
+                        !order.status.isCancelled && !order.status.isUnassigned
+            }
+        }
+        if (eligibleOrders.isEmpty()) return null.also {
+            Log.w(
+                tag,
+                "Matcher failed: No eligible orders found: ${stateContext.screenInfo}"
+            )
         }
         Log.v(
             tag,

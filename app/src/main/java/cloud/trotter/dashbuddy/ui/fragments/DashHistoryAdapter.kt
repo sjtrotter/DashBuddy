@@ -22,9 +22,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// ***** MODIFIED SIGNATURE *****
 class DashHistoryAdapter(
     private val onDashClicked: (Long) -> Unit,
-    private val onOfferClicked: (Long, String) -> Unit,
+    private val onOfferClicked: (Long, Long) -> Unit, // Changed String to Long
     private val onOfferInfoClicked: (String) -> Unit
 ) : ListAdapter<DashSummary, DashHistoryAdapter.DashSummaryViewHolder>(DashSummaryDiffCallback()) {
 
@@ -41,7 +42,7 @@ class DashHistoryAdapter(
     class DashSummaryViewHolder(
         private val binding: ItemDashSummaryBinding,
         private val onDashClicked: (Long) -> Unit,
-        private val onOfferClicked: (Long, String) -> Unit,
+        private val onOfferClicked: (Long, Long) -> Unit, // Changed String to Long
         private val onOfferInfoClicked: (String) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
@@ -72,12 +73,8 @@ class DashHistoryAdapter(
             if (dashSummary.isExpanded) {
                 binding.offersRecyclerView.visibility = View.VISIBLE
                 val offerAdapter = OfferAdapter(
-                    onOfferClicked = { offerSummary ->
-                        onOfferClicked(
-                            dashSummary.dashId,
-                            offerSummary
-                        )
-                    },
+                    // ***** MODIFIED LAMBDA *****
+                    onOfferClicked = { offerId -> onOfferClicked(dashSummary.dashId, offerId) },
                     onOfferInfoClicked = onOfferInfoClicked
                 )
                 binding.offersRecyclerView.adapter = offerAdapter
@@ -97,8 +94,9 @@ class DashHistoryAdapter(
     }
 }
 
+// ***** MODIFIED SIGNATURE *****
 class OfferAdapter(
-    private val onOfferClicked: (String) -> Unit,
+    private val onOfferClicked: (Long) -> Unit, // Changed String to Long
     private val onOfferInfoClicked: (String) -> Unit
 ) : ListAdapter<OfferDisplay, OfferAdapter.OfferViewHolder>(OfferDiffCallback()) {
 
@@ -114,7 +112,7 @@ class OfferAdapter(
 
     class OfferViewHolder(
         private val binding: ItemOfferDisplayBinding,
-        private val onOfferClicked: (String) -> Unit,
+        private val onOfferClicked: (Long) -> Unit, // Changed String to Long
         private val onOfferInfoClicked: (String) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
@@ -126,7 +124,8 @@ class OfferAdapter(
                 context.getString(R.string.total_miles_format, offer.totalMiles)
             binding.totalAmountText.text = offer.totalAmount
 
-            binding.offerHeaderSection.setOnClickListener { onOfferClicked(offer.summaryText) }
+            // ***** MODIFIED CLICK LISTENER *****
+            binding.offerHeaderSection.setOnClickListener { onOfferClicked(offer.offerId) }
             binding.offerInfoButton.setOnClickListener { onOfferInfoClicked(offer.summaryText) }
 
             addIconsToContainer(binding.offerBadgeContainer, offer.offerBadges)
@@ -143,7 +142,6 @@ class OfferAdapter(
                 binding.ordersRecyclerView.layoutManager = LinearLayoutManager(context)
                 binding.ordersRecyclerView.adapter = OrderAdapter(offer.orders)
 
-                // ****************** CORRECTED STATS BINDING ******************
                 offer.actualStats?.let { stats ->
                     binding.actualStatsTime.text =
                         context.getString(R.string.actual_stats_time, stats.time)
@@ -154,8 +152,6 @@ class OfferAdapter(
                     binding.actualStatsPerHour.text =
                         context.getString(R.string.actual_stats_per_hour, stats.dollarsPerHour)
                 }
-                // **********************************************************
-
             } else {
                 binding.offerDetailsContainer.visibility = View.GONE
             }
@@ -183,13 +179,15 @@ class OfferAdapter(
 
     class OfferDiffCallback : DiffUtil.ItemCallback<OfferDisplay>() {
         override fun areItemsTheSame(oldItem: OfferDisplay, newItem: OfferDisplay): Boolean =
-            oldItem.summaryText == newItem.summaryText
+            // ***** USE THE UNIQUE ID *****
+            oldItem.offerId == newItem.offerId
 
         override fun areContentsTheSame(oldItem: OfferDisplay, newItem: OfferDisplay): Boolean =
             oldItem == newItem
     }
 }
 
+// ... The rest of the file (OrderAdapter, ReceiptLineAdapter) is unchanged
 class OrderAdapter(private val orders: List<OrderDisplay>) :
     RecyclerView.Adapter<OrderAdapter.OrderViewHolder>() {
 
@@ -208,6 +206,8 @@ class OrderAdapter(private val orders: List<OrderDisplay>) :
 
         holder.binding.orderHeader.receiptHeaderTitle.text = order.summaryText
 
+        addIconsToContainer(holder.binding.orderBadgeContainer, order.orderBadges)
+
         holder.binding.tipLinesRecyclerView.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = ReceiptLineAdapter(order.tipLines)
@@ -216,6 +216,25 @@ class OrderAdapter(private val orders: List<OrderDisplay>) :
     }
 
     override fun getItemCount(): Int = orders.size
+
+    private fun addIconsToContainer(container: LinearLayout, iconResIds: Set<Int>) {
+        container.removeAllViews()
+        val context = container.context
+        iconResIds.forEach { resId ->
+            val imageView = ImageView(context).apply {
+                setImageResource(resId)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    height = 48
+                    width = 48
+                    marginEnd = 8
+                }
+            }
+            container.addView(imageView)
+        }
+    }
 }
 
 class ReceiptLineAdapter(private val items: List<ReceiptLineItem>) :

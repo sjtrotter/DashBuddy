@@ -114,6 +114,9 @@ data class OfferEntity(
      */
     val status: OfferStatus = OfferStatus.SEEN, // Default to SEEN when first logged
 
+    /** The timestamp when this offer was accepted. */
+    val acceptTime: Long? = null,
+
     /** The initial countdown timer value displayed on the offer screen (e.g., 36 seconds). */
     val initialCountdownSeconds: Int? = null,
 

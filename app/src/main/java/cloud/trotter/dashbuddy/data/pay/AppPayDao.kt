@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AppPayDao {
+    @Query("SELECT * FROM app_pay_types")
+    fun getAllPayTypes(): Flow<List<AppPayType>>
+
+    @Query("SELECT * FROM app_pays ORDER BY id DESC")
+    fun getAllAppPays(): Flow<List<AppPayEntity>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE) // If name exists, IGNORE insert
     suspend fun insertPayType(payType: AppPayType): Long
 

@@ -89,7 +89,6 @@ interface OrderDao {
         """
         UPDATE orders 
         SET 
-            status = 'COMPLETED', 
             customerId = :customerId, 
             completionTimestamp = :completionTimestamp 
         WHERE id = :orderId

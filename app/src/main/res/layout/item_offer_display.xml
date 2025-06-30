@@ -68,28 +68,31 @@
             <include
                 android:id="@+id/doordash_pay_header"
                 layout="@layout/item_receipt_header" />
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/pay_lines_recycler_view"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 tools:listitem="@layout/item_dash_summary_receipt_line" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="?attr/colorOutlineVariant"
-                android:layout_marginTop="8dp"/>
+                android:layout_marginTop="8dp" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/orders_recycler_view"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                tools:listitem="@layout/item_order_details"/>
+                tools:listitem="@layout/item_order_details" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="?attr/colorOutlineVariant"
-                android:layout_marginTop="8dp"/>
+                android:layout_marginTop="8dp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -105,18 +108,21 @@
                     android:layout_height="wrap_content"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     tools:text="Time: 0 hr 32 min" />
+
                 <TextView
                     android:id="@+id/actual_stats_distance"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     tools:text="Distance: 5.2 mi" />
+
                 <TextView
                     android:id="@+id/actual_stats_per_mile"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     tools:text="$/mi: $3.03/mi" />
+
                 <TextView
                     android:id="@+id/actual_stats_per_hour"
                     android:layout_width="wrap_content"

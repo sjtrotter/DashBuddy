@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.services.accessibility.screen
 
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.pay.PayParser
+import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.DeliveryScreen
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.IdleMapParser
@@ -14,23 +15,18 @@ object ScreenRecognizerV2 {
         // High-priority, often modal or overlay screens
         Screen.OFFER_POPUP,
         Screen.DELIVERY_COMPLETED_DIALOG,
+
+        // Pickup Flow
         Screen.PICKUP_DETAILS_PRE_ARRIVAL,
         Screen.PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI,
         Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP,
         Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,
         Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI,
+        Screen.PICKUP_DETAILS_VERIFY_PICKUP,
 
-        // Specific task screens
-//        Screen.DELIVERY_TAKE_PHOTO_UI,
-//        Screen.DELIVERY_REVIEW_PHOTO_UI,
-//        Screen.DELIVERY_TAKE_RECEIPT_PHOTO,
-//        Screen.DELIVERY_REVIEW_RECEIPT_PHOTO,
-//        Screen.DELIVERY_SHOP_AND_DELIVER_SCANNING,
-//        Screen.DELIVERY_SHOP_AND_DELIVER_ITEM_UNAVAILABLE,
-//        Screen.DELIVERY_SHOP_AND_DELIVER_CHECKOUT,
-//        Screen.DELIVERY_COMPLETE_STEPS_LIST,
-//        Screen.DELIVERY_SHOP_AND_DELIVER_LIST,
-//        Screen.DELIVERY_PROBLEM_REPORTING,
+        // Dropoff Flow
+        Screen.DROPOFF_DETAILS_PRE_ARRIVAL,
+//        Screen.DROPOFF_DETAILS_POST_ARRIVAL,
 
         // Broader active states
         Screen.NAVIGATION_VIEW_TO_PICK_UP,
@@ -43,7 +39,7 @@ object ScreenRecognizerV2 {
 //        Screen.DASH_PAUSED_SCREEN,
 
         // Post-dash or pre-dash setup
-//        Screen.DASH_SUMMARY_SCREEN,
+        Screen.DASH_SUMMARY_SCREEN,
         Screen.SET_DASH_END_TIME,
 
         // Main app sections when idle/offline
@@ -71,19 +67,14 @@ object ScreenRecognizerV2 {
                 Log.i(TAG, "V2 Matched Screen: $screenCandidate")
 
                 // This is where we delegate to the correct parser
-                return when (screenCandidate) {
-                    Screen.OFFER_POPUP -> {
+                return when {
+                    screenCandidate == Screen.OFFER_POPUP -> {
                         val parsedOffer = OfferParser.parseOffer(stateContext.rootNodeTexts)
                         parsedOffer?.let { ScreenInfo.Offer(screenCandidate, it) }
                             ?: ScreenInfo.Simple(screenCandidate) // Fallback
                     }
 
-                    Screen.PICKUP_DETAILS_PRE_ARRIVAL,
-                    Screen.PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI,
-                    Screen.NAVIGATION_VIEW_TO_PICK_UP,
-                    Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP,
-                    Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,
-                    Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI -> {
+                    screenCandidate.isPickup -> {
                         // val parsedStore = StoreParser.parseStoreDetails(stateContext.rootNodeTexts)
                         // parsedStore?.let { ScreenInfo.PickupDetails(screenCandidate, it) }
                         //     ?: ScreenInfo.Simple(screenCandidate) // Fallback
@@ -91,12 +82,16 @@ object ScreenRecognizerV2 {
 
                     }
 
-                    Screen.DELIVERY_COMPLETED_DIALOG -> {
+                    screenCandidate.isDelivery -> {
+                        return DeliveryScreen.parse(stateContext.rootNodeTexts, screenCandidate)
+                    }
+
+                    screenCandidate == Screen.DELIVERY_COMPLETED_DIALOG -> {
                         val parsedPay = PayParser.parsePay(stateContext.rootNodeTexts)
                         ScreenInfo.DeliveryCompleted(screenCandidate, parsedPay)
                     }
 
-                    Screen.MAIN_MAP_IDLE -> {
+                    screenCandidate == Screen.MAIN_MAP_IDLE -> {
                         val (zone, type) = IdleMapParser.parse(stateContext.rootNodeTexts)
                         ScreenInfo.IdleMap(screenCandidate, zone, type)
                     }

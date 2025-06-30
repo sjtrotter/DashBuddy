@@ -49,6 +49,7 @@ class OfferPresented : StateHandler {
                         Log.i(tag, "'Accept/Add to Route' button clicked for offer ID: $offerId")
                         try {
                             offerRepo.updateOfferStatus(offerId, OfferStatus.ACCEPTED)
+                            offerRepo.updateOfferAcceptTime(offerId, stateContext.timestamp)
                             Log.i(tag, "Offer status updated to ACCEPTED for ID: $offerId")
                             DashBuddyApplication.sendBubbleMessage("Offer Accepted!")
                             offerDecided = true

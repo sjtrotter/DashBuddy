@@ -19,11 +19,12 @@ sealed class ScreenInfo {
     data class Offer(override val screen: Screen, val parsedOffer: ParsedOffer) : ScreenInfo()
 
     /** Contains the parsed store details from a Pickup Details screen. */
-    data class PickupDetails(
+    data class OrderDetails(
         override val screen: Screen,
-        val storeName: String?,
-        val storeAddress: String?,
-        val customerNameHash: String?
+        val storeName: String? = null,
+        val storeAddress: String? = null,
+        val customerNameHash: String? = null,
+        val customerAddressHash: String? = null,
     ) : ScreenInfo()
 
     /** Contains the parsed pay details from a Delivery Completed screen. */

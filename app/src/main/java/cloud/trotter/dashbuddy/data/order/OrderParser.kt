@@ -164,7 +164,7 @@ object OrderParser {
 
             for (sub in 0 until numOrdersFromPattern) {
                 val newParsedOrder = ParsedOrder(
-                    orderType = orderType.typeName,
+                    orderType = orderType,
                     storeName = storeName,
                     itemCount = itemsInThisOrderLeg,
                     isItemCountEstimated = isItemCountEstimated,

@@ -14,8 +14,8 @@ import cloud.trotter.dashbuddy.data.pay.AppPayRepo
 import cloud.trotter.dashbuddy.data.pay.TipRepo
 import cloud.trotter.dashbuddy.data.pay.TipType
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -28,30 +28,37 @@ class DashHistoryViewModel(
     private val tipRepo: TipRepo
 ) : ViewModel() {
 
-    private val _dashSummaries = MutableStateFlow<List<DashSummary>>(emptyList())
-    val dashSummaries: StateFlow<List<DashSummary>> = _dashSummaries.asStateFlow()
+    private val _internalState = MutableStateFlow<List<DashSummary>>(emptyList())
+    val dashSummaries = _internalState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            dashRepo.allDashes.collect { dashes ->
-                val summaries = dashes.map { dash ->
-                    val offers = offerRepo.getOffersForDashList(dash.id)
-                    val offerDisplays = offers.map { offer ->
-                        val appPays = appPayRepo.getPayComponentsForOfferList(offer.id)
-                        val orders = orderRepo.getOrdersForOfferList(offer.id)
+            combine(
+                dashRepo.allDashes,
+                offerRepo.getAllOffers(),
+                orderRepo.getAllOrders(),
+                tipRepo.allTips,
+                appPayRepo.allAppPays
+            ) { dashes, offers, orders, tips, appPays ->
+                val previousState = _internalState.value
 
-                        val totalAppPay = appPays.sumOf { it.amount }
+                dashes.map { dash ->
+                    val dashOffers = offers.filter { it.dashId == dash.id }
+                    val offerDisplays = dashOffers.map { offer ->
+                        val offerOrders = orders.filter { it.offerId == offer.id }
+                        val offerAppPays = appPays.filter { it.offerId == offer.id }
+
+                        val totalAppPay = offerAppPays.sumOf { it.amount }
                         var totalTips = 0.0
-                        val totalActualMiles = orders.sumOf { it.mileage ?: 0.0 }
+                        val totalActualMiles = offerOrders.sumOf { it.mileage ?: 0.0 }
 
-                        val orderDisplays = orders.map { order ->
-                            val existingTips = tipRepo.getTipsForOrderList(order.id)
+                        val orderDisplays = offerOrders.map { order ->
+                            val orderTips = tips.filter { it.orderId == order.id }
                             val orderMiles = order.mileage ?: 0.0
 
-                            // Ensure a receipt line is created for every possible tip type.
                             val allTipTypes = TipType.entries
                             val tipLines = allTipTypes.map { tipType ->
-                                val existingTip = existingTips.find { it.type == tipType }
+                                val existingTip = orderTips.find { it.type == tipType }
                                 ReceiptLineItem(
                                     label = tipType.name.replace("_", " ").lowercase(Locale.US)
                                         .replaceFirstChar {
@@ -66,10 +73,7 @@ class DashHistoryViewModel(
                                     )
                                 )
                             }
-
-                            val orderTotalTips = existingTips.sumOf { it.amount }
-                            totalTips += orderTotalTips
-
+                            totalTips += orderTips.sumOf { it.amount }
                             val uniqueOrderIcons = order.badges.mapNotNull { it.iconResId }.toSet()
 
                             OrderDisplay(
@@ -90,8 +94,18 @@ class DashHistoryViewModel(
                         }
 
                         val totalActualPay = totalAppPay + totalTips
-                        val offerDurationMillis =
-                            (dash.stopTime ?: System.currentTimeMillis()) - dash.startTime
+
+                        // Find the timestamp of the last completed order in this offer
+                        val offerEndTime =
+                            offerOrders.mapNotNull { it.completionTimestamp }.maxOrNull()
+                                ?: System.currentTimeMillis()
+
+                        // ****************** NULL GUARD ADDED ******************
+                        // If acceptTime is null, default to the endTime to produce a safe duration of 0
+                        val offerStartTime = offer.acceptTime ?: offerEndTime
+                        // ******************************************************
+
+                        val offerDurationMillis = offerEndTime - offerStartTime
                         val offerDurationHours =
                             if (offerDurationMillis > 0) offerDurationMillis.toDouble() / 3_600_000.0 else 0.0
 
@@ -109,11 +123,11 @@ class DashHistoryViewModel(
                                 totalActualPay / offerDurationHours
                             ) else "$0.00/hr"
                         )
-
                         val uniqueOfferIcons = offer.badges.mapNotNull { it.iconResId }.toSet()
 
                         OfferDisplay(
-                            summaryText = "Offer: ${orders.joinToString(" & ") { it.storeName }}",
+                            offerId = offer.id,
+                            summaryText = offerOrders.joinToString(" & ") { it.storeName },
                             status = "(${
                                 offer.status.name.replace("_", " ").lowercase(Locale.US)
                                     .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
@@ -121,7 +135,7 @@ class DashHistoryViewModel(
                             totalAmount = String.format(Locale.US, "$%.2f", totalActualPay),
                             totalMiles = String.format(Locale.US, "%.1f mi", totalActualMiles),
                             offerBadges = uniqueOfferIcons,
-                            payLines = appPays.map { appPay ->
+                            payLines = offerAppPays.map { appPay ->
                                 val payType = appPayRepo.getPayTypeById(appPay.payTypeId)
                                 ReceiptLineItem(
                                     label = payType?.name ?: "Unknown Pay",
@@ -129,7 +143,10 @@ class DashHistoryViewModel(
                                 )
                             },
                             orders = orderDisplays,
-                            actualStats = actualStats
+                            actualStats = actualStats,
+                            isExpanded = previousState.find { it.dashId == dash.id }
+                                ?.offerDisplays?.find { it.offerId == offer.id }?.isExpanded
+                                ?: false
                         )
                     }
 
@@ -140,10 +157,13 @@ class DashHistoryViewModel(
                         totalEarned = dash.totalEarnings ?: 0.0,
                         deliveryCount = dash.deliveriesCompleted ?: 0,
                         totalMiles = dash.totalDistance ?: 0.0,
-                        offerDisplays = offerDisplays
+                        offerDisplays = offerDisplays,
+                        isExpanded = previousState.find { it.dashId == dash.id }?.isExpanded
+                            ?: false
                     )
                 }
-                _dashSummaries.value = summaries
+            }.collect { updatedSummaries ->
+                _internalState.value = updatedSummaries
             }
         }
     }
@@ -156,16 +176,18 @@ class DashHistoryViewModel(
     }
 
     fun toggleDashExpanded(dashId: Long) {
-        _dashSummaries.value = _dashSummaries.value.map {
+        val current = _internalState.value
+        _internalState.value = current.map {
             if (it.dashId == dashId) it.copy(isExpanded = !it.isExpanded) else it
         }
     }
 
-    fun toggleOfferExpanded(dashId: Long, offerSummary: String) {
-        _dashSummaries.value = _dashSummaries.value.map { dash ->
+    fun toggleOfferExpanded(dashId: Long, offerId: Long) {
+        val current = _internalState.value
+        _internalState.value = current.map { dash ->
             if (dash.dashId == dashId) {
                 dash.copy(offerDisplays = dash.offerDisplays.map { offer ->
-                    if (offer.summaryText == offerSummary) offer.copy(isExpanded = !offer.isExpanded) else offer
+                    if (offer.offerId == offerId) offer.copy(isExpanded = !offer.isExpanded) else offer
                 })
             } else {
                 dash

@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 
 class TipRepo(private val tipDao: TipDao) {
 
+    val allTips: Flow<List<TipEntity>> = tipDao.getAllTips()
+
     suspend fun insert(tip: TipEntity): Long {
         return withContext(Dispatchers.IO) {
             tipDao.insert(tip)

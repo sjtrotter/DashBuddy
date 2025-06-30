@@ -153,7 +153,11 @@ class DeliveryCompleted : StateHandler {
                     for (orderId in completedOrderIds) {
                         currentRepo.removeOrderFromQueue(orderId)
                         orderRepo.updateOrderStatus(orderId, OrderStatus.COMPLETED)
-
+                        orderRepo.markOrderAsCompleted(
+                            orderId,
+                            null,
+                            stateContext.timestamp
+                        )
                     }
                     Log.i(
                         tag,

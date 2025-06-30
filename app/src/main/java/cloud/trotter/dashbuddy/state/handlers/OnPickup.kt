@@ -70,6 +70,10 @@ class OnPickup : StateHandler {
             screen == Screen.TIMELINE_VIEW -> AppState.DASH_ACTIVE_ON_TIMELINE
             screen == Screen.DELIVERY_COMPLETED_DIALOG -> AppState.DASH_ACTIVE_DELIVERY_COMPLETED
 
+            // main map idle?
+            screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
+
+
             // dasher went to a delivery screen.
             screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
 
@@ -100,7 +104,7 @@ class OnPickup : StateHandler {
                 Log.d(tag, "No active order to update.")
             }
         val screenInfo =
-            stateContext.screenInfo as? ScreenInfo.PickupDetails ?: return currentState.also {
+            stateContext.screenInfo as? ScreenInfo.OrderDetails ?: return currentState.also {
                 Log.d(tag, "Screen info is not PickupDetails. Skipping update.")
             }
         val order = orderRepo.getOrderById(activeOrderId) ?: return currentState.also {

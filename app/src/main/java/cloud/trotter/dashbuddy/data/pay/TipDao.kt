@@ -14,6 +14,9 @@ interface TipDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(tips: List<TipEntity>): List<Long>
 
+    @Query("SELECT * FROM customer_tips ORDER BY orderId")
+    fun getAllTips(): Flow<List<TipEntity>>
+
     @Query("SELECT * FROM customer_tips WHERE orderId = :orderId")
     fun getTipsForOrder(orderId: Long): Flow<List<TipEntity>>
 

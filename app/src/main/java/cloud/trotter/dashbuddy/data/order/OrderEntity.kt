@@ -49,7 +49,7 @@ data class OrderEntity(
     /** The ID of the specific [StoreEntity]. Null until identified and linked. */
     val storeId: Long? = null,
     /** The type of order (e.g., "Pickup", "Shop for items"). */
-    val orderType: String,
+    val orderType: OrderType,
     /** The number of items reported for this order. */
     val itemCount: Int = 0,
     /** Indicates if the item count was estimated (e.g., from a multi-order pattern). */

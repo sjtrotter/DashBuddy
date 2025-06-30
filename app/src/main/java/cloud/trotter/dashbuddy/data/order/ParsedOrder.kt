@@ -4,7 +4,7 @@ data class ParsedOrder(
     /** The index of this order in the offer. */
     val orderIndex: Int,
     /** The type of order. */
-    val orderType: String,
+    val orderType: OrderType,
     /** The name of the store for this order. */
     val storeName: String,
     /** The number of items in this order. */
@@ -16,12 +16,13 @@ data class ParsedOrder(
 ) {
     fun toOrderEntity(offerId: Long): OrderEntity {
         return OrderEntity(
+            offerId = offerId,
             orderIndex = orderIndex,
-            orderType = orderType,
             storeName = storeName,
+            orderType = orderType,
             itemCount = itemCount,
             isItemCountEstimated = isItemCountEstimated,
-            offerId = offerId,
+            badges = badges,
         )
     }
 }

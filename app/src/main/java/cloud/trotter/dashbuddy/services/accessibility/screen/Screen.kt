@@ -30,7 +30,7 @@ enum class Screen(
     // --- Startup / Login / Offline States ---
     APP_STARTING_OR_LOADING(
         screenName = "App Startup",
-        someOfTheseTexts = listOf("starting…", "signing in…", "loading…"),
+        someOfTheseTexts = listOf("starting…", "signing in…"),
         maxTextCount = 7 // Usually few texts on these screens, helps differentiate
     ),
     LOGIN_SCREEN(
@@ -118,17 +118,7 @@ enum class Screen(
         )
     ),
 
-    //    ACCOUNT_DETAILS_VIEW(
-//        requiredTexts = listOf("account details", "edit account", "vehicles") // Example keywords
-//    ),
-//    PROMOS_VIEW(
-//        requiredTexts = listOf("promos", "challenges", "peak pay") // Example keywords
-//    ),
-//    DASHER_HELP_VIEW(
-//        requiredTexts = listOf("help", "faq", "contact support") // Example keywords
-//    ),
-//
-    // --- Starting a Dash Workflow ---
+    // --- Starting or Ending a Dash Workflow ---
     SET_DASH_END_TIME(
         screenName = "Set Dash End Time",
         requiredTexts = listOf(
@@ -138,6 +128,22 @@ enum class Screen(
             "dashers needed until"
         ),
         activityHint = ActivityHint.INACTIVE
+    ),
+    DASH_SUMMARY_SCREEN(
+        screenName = "Dash Summary",
+        requiredTexts = listOf(
+            "Dash summary",
+            "Start time",
+            "Active Time",
+            "Dash Time",
+            "Deliveries Completed",
+            "Dash total",
+            "Done"
+        ),
+        someOfTheseTexts = listOf(
+            "am",
+            "pm",
+        )
     ),
 
     // --- Actively Dashing States ---
@@ -232,11 +238,6 @@ enum class Screen(
     ),
 
     // --- Active Delivery - Pickup Phase ---
-//    DELIVERY_NAVIGATION_TO_STORE(
-//        requiredTexts = listOf("heading to", "pick up by"), // "mi" and "min" are good indicators of navigation
-//        someOfTheseTexts = listOf("navigate", "directions"),
-//        forbiddenTexts = listOf("deliver to", "looking for offers", "complete delivery steps", "accept")
-//    ),
     PICKUP_DETAILS_PRE_ARRIVAL(
         requiredTexts = listOf("pickup from", "directions"),
         someOfTheseTexts = listOf("arrived at store", "directions"),
@@ -288,60 +289,16 @@ enum class Screen(
 //        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
     ),
 
-    //    DELIVERY_SHOP_AND_DELIVER_LIST(
-//        requiredTexts = listOf("shop and deliver", "to shop", "start shopping", "found item", "item unavailable")
-//    ),
-//    DELIVERY_SHOP_AND_DELIVER_SCANNING(
-//        requiredTexts = listOf("scan barcode", "enter barcode manually")
-//    ),
-//    DELIVERY_SHOP_AND_DELIVER_ITEM_UNAVAILABLE(
-//        requiredTexts = listOf("item unavailable", "substitute item", "remove item")
-//    ),
-//    DELIVERY_SHOP_AND_DELIVER_CHECKOUT(
-//        requiredTexts = listOf("proceed to checkout", "pay with red card", "enter total")
-//    ),
-//    DELIVERY_TAKE_RECEIPT_PHOTO(
-//        requiredTexts = listOf("take receipt photo", "capture image"),
-//        someOfTheseTexts = listOf("protect your rating", "no receipt", "submit photo")
-//    ),
-//    DELIVERY_REVIEW_RECEIPT_PHOTO(
-//        requiredTexts = listOf("retake", "submit photo"), // "Is this photo clear?"
-//        someOfTheseTexts = listOf("is this photo clear?")
-//    ),
-//    DELIVERY_WAITING_AT_STORE_DIALOG(
-//        requiredTexts = listOf("what's causing your wait?")
-//    ),
-//    DELIVERY_CONFIRM_PICKUP_DIALOG( // "Confirm order was picked up" or "Slide after pickup"
-//        requiredTexts = listOf("confirm", "go back"),
-//        someOfTheseTexts = listOf("confirm order was picked up", "slide after pickup")
-//    ),
-//
-//    // --- Active Delivery - Drop-off Phase ---
-//    DELIVERY_NAVIGATION_TO_CUSTOMER(
-//        requiredTexts = listOf("deliver by", "heading to"), // Often has customer name/initial
-//        someOfTheseTexts = listOf("navigate", "directions"),
-//        forbiddenTexts = listOf("pick up by", "pickup from", "looking for offers", "complete delivery steps", "accept")
-//    ),
-//    DELIVERY_ARRIVED_AT_CUSTOMER(
-//        requiredTexts = listOf("deliver to"), // "I've arrived at recipient"
-//        someOfTheseTexts = listOf("i've arrived at recipient", "complete delivery steps"),
-//        forbiddenTexts = listOf("pick up by", "pickup from")
-//    ),
-//    DELIVERY_COMPLETE_STEPS_LIST(
-//        requiredTexts = listOf("complete delivery steps"),
-//        someOfTheseTexts = listOf("leave it at my door", "take photo", "handed order to customer", "confirm delivery")
-//    ),
-//    DELIVERY_TAKE_PHOTO_UI( // For drop-off photo
-//        requiredTexts = listOf("take photo", "capture image"),
-//        forbiddenTexts = listOf("receipt", "deliver to customer") // Differentiate from receipt and main steps list
-//    ),
-//    DELIVERY_REVIEW_PHOTO_UI( // For drop-off photo
-//        requiredTexts = listOf("retake", "submit photo", "confirm delivery"),
-//        someOfTheseTexts = listOf("is this photo clear?")
-//    ),
-//    DELIVERY_CONFIRM_DIALOG( // Final confirmation after all steps
-//        requiredTexts = listOf("confirm delivery", "complete")
-//    ),
+    // --- Active Delivery - Dropoff Phase ---
+    DROPOFF_DETAILS_PRE_ARRIVAL(
+        requiredTexts = listOf("Deliver to", "by", "settings"),
+        someOfTheseTexts = listOf("Leave it at the door", "am", "pm"),
+        isDelivery = true,
+        activityHint = ActivityHint.ACTIVE
+    ),
+
+
+    // --- Post-Delivery ---
     DELIVERY_COMPLETED_DIALOG(
         screenName = "Delivery Completed",
         requiredTexts = listOf("completed", "$"),
@@ -356,31 +313,6 @@ enum class Screen(
         ),
         activityHint = ActivityHint.ACTIVE
     ),
-//
-//    DELIVERY_PROBLEM_REPORTING(
-//        requiredTexts = listOf("report issue", "can't reach customer") // Example
-//    ),
-//
-//    // --- Pausing / Ending Dash ---
-//    DASH_PAUSED_SCREEN(
-//        requiredTexts = listOf("dash paused", "resume dash", "end dash")
-//    ),
-//    END_DASH_CONFIRMATION_DIALOG(
-//        requiredTexts = listOf("end your current dash?", "end dash", "go back")
-//    ),
-//    DASH_SUMMARY_SCREEN(
-//        requiredTexts = listOf("dash summary", "total earnings"),
-//        someOfTheseTexts = listOf("deliveries completed", "this dash:", "duration", "view details")
-//    ),
-//
-//    // --- Other In-Dash States ---
-//    CHAT_VIEW( // Could be with customer or support
-//        requiredTexts = listOf("type a message"),
-//        someOfTheseTexts = listOf("send", "customer support")
-//    ),
-//    SAFETY_TOOLKIT_VIEW(
-//        requiredTexts = listOf("safety toolkit", "share my location") // Example
-//    )
     ;
 
     /**

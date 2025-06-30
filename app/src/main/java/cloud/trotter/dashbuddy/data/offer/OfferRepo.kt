@@ -161,6 +161,13 @@ class OfferRepo(private val offerDao: OfferDao) {
         }
     }
 
+    /** Updates the accept time of a specific offer. */
+    suspend fun updateOfferAcceptTime(offerId: Long, acceptTime: Long) {
+        withContext(Dispatchers.IO) {
+            offerDao.updateOfferAcceptTime(offerId, acceptTime)
+        }
+    }
+
     /**
      * Retrieves offers filtered by status as an observable Flow.
      *

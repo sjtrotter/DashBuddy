@@ -187,7 +187,6 @@ class CurrentRepo(private val currentDao: CurrentDao) {
         }
     }
 
-
     /**
      * Convenience function to start a new dash session.
      * Initializes the entire CurrentEntity row.

@@ -1,11 +1,16 @@
 package cloud.trotter.dashbuddy.data.pay
 
 import androidx.room.Transaction
+import cloud.trotter.dashbuddy.data.dash.DashEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 
 class AppPayRepo(private val appPayDao: AppPayDao) {
+    /**
+     * Retrieves all [AppPayEntity]s, ordered by start time descending, as an observable Flow.
+     */
+    val allAppPays: Flow<List<AppPayEntity>> = appPayDao.getAllAppPays()
 
     /**
      * Retrieves an AppPayType by name. If it doesn't exist, it creates it.

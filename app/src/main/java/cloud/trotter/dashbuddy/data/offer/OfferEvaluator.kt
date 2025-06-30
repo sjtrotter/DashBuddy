@@ -72,7 +72,7 @@ object OfferEvaluator {
             else -> Triple(0.3f, 0.2f, 0.2f)
         }
         val hasShopForItemsOrder =
-            parsedOffer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS.typeName }
+            parsedOffer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }
         val (itemCountWeight, distanceWeight, timeWeight) = if (hasShopForItemsOrder) {
             Triple(0.15f, 0.075f, 0.075f)
         } else {
