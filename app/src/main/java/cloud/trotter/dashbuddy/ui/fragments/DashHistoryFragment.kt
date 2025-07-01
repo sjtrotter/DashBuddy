@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.ui.fragments
 
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,9 +12,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.databinding.FragmentDashHistoryBinding
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.datepicker.MaterialDatePicker
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class DashHistoryFragment : Fragment() {
 
@@ -32,8 +34,8 @@ class DashHistoryFragment : Fragment() {
                         app.dashRepo,
                         app.offerRepo,
                         app.orderRepo,
-                        app.appPayRepo,
-                        app.tipRepo
+                        app.tipRepo,
+                        app.appPayRepo
                     ) as T
                 }
                 throw IllegalArgumentException("Unknown ViewModel class")
@@ -59,50 +61,62 @@ class DashHistoryFragment : Fragment() {
 
     private fun setupRecyclerView() {
         dashHistoryAdapter = DashHistoryAdapter(
-            onDashClicked = { dashId -> viewModel.toggleDashExpanded(dashId) },
-            onOfferClicked = { dashId, offerSummary ->
-                viewModel.toggleOfferExpanded(
-                    dashId,
-                    offerSummary
-                )
-            },
-            onOfferInfoClicked = { offerSummary ->
-                // TODO: Find the actual offer stats and display them in a dialog
-                Log.d("DashHistoryFragment", "Info icon clicked for offer: $offerSummary")
-                showOfferInfoDialog(offerSummary)
-            }
+            onMonthClicked = { timestamp -> showMonthPicker(timestamp) },
+            onDayClicked = { dayId -> viewModel.toggleDayExpansion(dayId) },
+            onDashClicked = { dashId -> viewModel.toggleDashExpansion(dashId) }
         )
+
+        val layoutManager = LinearLayoutManager(context)
         binding.dashHistoryRecyclerView.apply {
-            layoutManager = LinearLayoutManager(context)
+            this.layoutManager = layoutManager
             adapter = dashHistoryAdapter
-            // Prevents nested RecyclerViews from creating their own scroll behavior
-            isNestedScrollingEnabled = false
+            // Add the sticky header decoration
+            addItemDecoration(
+                StickyMonthHeaderDecoration(
+                    dashHistoryAdapter,
+                    binding.root
+                )
+            )
+            addItemDecoration(StickyHistoryHeaderDecoration(dashHistoryAdapter))
+
         }
     }
 
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.dashSummaries.collectLatest { summaries ->
+            viewModel.historyListItems.collectLatest { summaries ->
                 dashHistoryAdapter.submitList(summaries)
             }
         }
     }
 
-    private fun showOfferInfoDialog(offerSummary: String) {
-        // This is a placeholder. A real implementation would fetch the detailed
-        // "Offer Stats" from the ViewModel based on the offerSummary (which acts as a unique ID here)
-        // and format them nicely in the dialog message.
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Offer Details")
-            .setMessage("Showing original stats for:\n$offerSummary\n\n(Full stats implementation is pending)")
-            .setPositiveButton("OK", null)
-            .show()
-    }
+    private fun showMonthPicker(currentTimestamp: Long) {
+        val datePicker = MaterialDatePicker.Builder.datePicker()
+            .setTitleText("Select a Month")
+            .setSelection(currentTimestamp)
+            .build()
 
+        datePicker.addOnPositiveButtonClickListener { selection ->
+            // Find the position of the corresponding month header and scroll to it
+            val calendar = Calendar.getInstance()
+            calendar.timeInMillis = selection
+            val targetMonthYear =
+                SimpleDateFormat("MMMM yyyy", Locale.US).format(calendar.time).uppercase()
+
+            val position = dashHistoryAdapter.currentList.indexOfFirst {
+                it is cloud.trotter.dashbuddy.data.models.MonthHeaderItem && it.monthYear == targetMonthYear
+            }
+            if (position != -1) {
+                (binding.dashHistoryRecyclerView.layoutManager as LinearLayoutManager)
+                    .scrollToPositionWithOffset(position, 0)
+            }
+        }
+
+        datePicker.show(childFragmentManager, datePicker.toString())
+    }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        // To avoid memory leaks, especially with RecyclerView adapters
         binding.dashHistoryRecyclerView.adapter = null
         _binding = null
     }

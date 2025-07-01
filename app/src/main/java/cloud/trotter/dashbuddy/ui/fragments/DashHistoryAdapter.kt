@@ -9,151 +9,172 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.data.models.DashSummary
-import cloud.trotter.dashbuddy.data.models.OfferDisplay
-import cloud.trotter.dashbuddy.data.models.OrderDisplay
-import cloud.trotter.dashbuddy.data.models.ReceiptLineItem
-import cloud.trotter.dashbuddy.databinding.ItemDashSummaryBinding
-import cloud.trotter.dashbuddy.databinding.ItemDashSummaryReceiptLineBinding
-import cloud.trotter.dashbuddy.databinding.ItemOfferDisplayBinding
-import cloud.trotter.dashbuddy.databinding.ItemOrderDetailsBinding
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import cloud.trotter.dashbuddy.data.models.DashItem
+import cloud.trotter.dashbuddy.data.models.DaySummaryItem
+import cloud.trotter.dashbuddy.data.models.HistoryListItem
+import cloud.trotter.dashbuddy.data.models.MonthHeaderItem
+import cloud.trotter.dashbuddy.data.models.OfferItem
+import cloud.trotter.dashbuddy.data.offer.OfferStatus
+import cloud.trotter.dashbuddy.databinding.ItemDashHistoryDashBinding
+import cloud.trotter.dashbuddy.databinding.ItemDashHistoryOfferBinding
+import cloud.trotter.dashbuddy.databinding.ItemDayGroupBinding
+import cloud.trotter.dashbuddy.databinding.ItemMonthHeaderBinding
+import cloud.trotter.dashbuddy.log.Logger as Log
 
-// ***** MODIFIED SIGNATURE *****
 class DashHistoryAdapter(
-    private val onDashClicked: (Long) -> Unit,
-    private val onOfferClicked: (Long, Long) -> Unit, // Changed String to Long
-    private val onOfferInfoClicked: (String) -> Unit
-) : ListAdapter<DashSummary, DashHistoryAdapter.DashSummaryViewHolder>(DashSummaryDiffCallback()) {
+    private val onMonthClicked: (Long) -> Unit,
+    private val onDayClicked: (Long) -> Unit,
+    private val onDashClicked: (Long) -> Unit
+) : ListAdapter<HistoryListItem, RecyclerView.ViewHolder>(HistoryDiffCallback()) {
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DashSummaryViewHolder {
-        val binding =
-            ItemDashSummaryBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return DashSummaryViewHolder(binding, onDashClicked, onOfferClicked, onOfferInfoClicked)
+    private val vtMonth = 0
+    private val vtDay = 1
+
+    override fun getItemViewType(position: Int): Int {
+        return when (getItem(position)) {
+            is MonthHeaderItem -> vtMonth
+            is DaySummaryItem -> vtDay
+            else -> throw IllegalStateException("Unexpected item type at position $position")
+        }
     }
 
-    override fun onBindViewHolder(holder: DashSummaryViewHolder, position: Int) {
-        holder.bind(getItem(position))
-    }
-
-    class DashSummaryViewHolder(
-        private val binding: ItemDashSummaryBinding,
-        private val onDashClicked: (Long) -> Unit,
-        private val onOfferClicked: (Long, Long) -> Unit, // Changed String to Long
-        private val onOfferInfoClicked: (String) -> Unit
-    ) : RecyclerView.ViewHolder(binding.root) {
-
-        fun bind(dashSummary: DashSummary) {
-            val context = binding.root.context
-            val dateFormat = SimpleDateFormat("MMM", Locale.getDefault())
-            val dayFormat = SimpleDateFormat("d", Locale.getDefault())
-            val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-
-            binding.dashMonth.text =
-                dateFormat.format(Date(dashSummary.startTime)).uppercase(Locale.getDefault())
-            binding.dashDay.text = dayFormat.format(Date(dashSummary.startTime))
-
-            binding.dashEarnings.text = String.format(Locale.US, "$%.2f", dashSummary.totalEarned)
-            val startTime = timeFormat.format(Date(dashSummary.startTime))
-            val endTime = dashSummary.endTime?.let { timeFormat.format(Date(it)) } ?: "In Progress"
-            binding.dashTime.text =
-                context.getString(R.string.start_time_stop_time, startTime, endTime)
-
-            binding.dashStats.text = context.getString(
-                R.string.orders_miles,
-                dashSummary.deliveryCount,
-                String.format(Locale.US, "%.2f", dashSummary.totalMiles)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return when (viewType) {
+            vtMonth -> MonthViewHolder(
+                ItemMonthHeaderBinding.inflate(inflater, parent, false),
+                onMonthClicked
             )
 
-            binding.dashHeaderClickable.setOnClickListener { onDashClicked(dashSummary.dashId) }
+            vtDay -> DayViewHolder(
+                ItemDayGroupBinding.inflate(inflater, parent, false),
+                onDayClicked,
+                onDashClicked
+            )
 
-            if (dashSummary.isExpanded) {
-                binding.offersRecyclerView.visibility = View.VISIBLE
-                val offerAdapter = OfferAdapter(
-                    // ***** MODIFIED LAMBDA *****
-                    onOfferClicked = { offerId -> onOfferClicked(dashSummary.dashId, offerId) },
-                    onOfferInfoClicked = onOfferInfoClicked
-                )
-                binding.offersRecyclerView.adapter = offerAdapter
-                offerAdapter.submitList(dashSummary.offerDisplays)
-            } else {
-                binding.offersRecyclerView.visibility = View.GONE
+            else -> throw IllegalArgumentException("Invalid view type")
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (val item = getItem(position)) {
+            is MonthHeaderItem -> (holder as MonthViewHolder).bind(item)
+            is DaySummaryItem -> (holder as DayViewHolder).bind(item)
+            else -> Log.d("DashHistoryAdapter", "Unexpected item type: $item")
+        }
+    }
+
+    class MonthViewHolder(
+        private val binding: ItemMonthHeaderBinding,
+        private val onMonthClicked: (Long) -> Unit
+    ) : RecyclerView.ViewHolder(binding.root) {
+        fun bind(item: MonthHeaderItem) {
+            binding.monthHeaderText.text = item.monthYear
+            binding.root.setOnClickListener { onMonthClicked(item.timestamp) }
+        }
+    }
+
+    class DayViewHolder(
+        private val binding: ItemDayGroupBinding,
+        private val onDayClicked: (Long) -> Unit,
+        private val onDashClicked: (Long) -> Unit
+    ) : RecyclerView.ViewHolder(binding.root) {
+        fun bind(item: DaySummaryItem) {
+            binding.dayOfMonthText.text = item.dayOfMonth
+            binding.dayOfWeekText.text = item.dayOfWeek
+            binding.dayTotalEarningsText.text = item.totalEarnings
+            binding.dayStatsLine1Text.text = item.statsLine1
+            binding.dayStatsLine2Text.text = item.statsLine2
+            binding.daySummaryHeader.setOnClickListener { onDayClicked(item.dateTimestamp) }
+
+            binding.dashesRecyclerView.visibility = if (item.isExpanded) View.VISIBLE else View.GONE
+            if (item.isExpanded) {
+                val dashAdapter = InnerDashAdapter(onDashClicked)
+                binding.dashesRecyclerView.apply {
+                    layoutManager = LinearLayoutManager(context)
+                    adapter = dashAdapter
+                }
+                dashAdapter.submitList(item.dashes)
             }
         }
     }
 
-    class DashSummaryDiffCallback : DiffUtil.ItemCallback<DashSummary>() {
-        override fun areItemsTheSame(oldItem: DashSummary, newItem: DashSummary): Boolean =
-            oldItem.dashId == newItem.dashId
+    class HistoryDiffCallback : DiffUtil.ItemCallback<HistoryListItem>() {
+        override fun areItemsTheSame(oldItem: HistoryListItem, newItem: HistoryListItem) =
+            oldItem.id == newItem.id
 
-        override fun areContentsTheSame(oldItem: DashSummary, newItem: DashSummary): Boolean =
+        override fun areContentsTheSame(oldItem: HistoryListItem, newItem: HistoryListItem) =
             oldItem == newItem
     }
 }
 
-// ***** MODIFIED SIGNATURE *****
-class OfferAdapter(
-    private val onOfferClicked: (Long) -> Unit, // Changed String to Long
-    private val onOfferInfoClicked: (String) -> Unit
-) : ListAdapter<OfferDisplay, OfferAdapter.OfferViewHolder>(OfferDiffCallback()) {
+private class InnerDashAdapter(private val onDashClicked: (Long) -> Unit) :
+    ListAdapter<DashItem, InnerDashAdapter.DashViewHolder>(DashDiffCallback()) {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = DashViewHolder(
+        ItemDashHistoryDashBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
+        ), onDashClicked
+    )
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OfferViewHolder {
-        val binding =
-            ItemOfferDisplayBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return OfferViewHolder(binding, onOfferClicked, onOfferInfoClicked)
-    }
-
-    override fun onBindViewHolder(holder: OfferViewHolder, position: Int) {
+    override fun onBindViewHolder(holder: DashViewHolder, position: Int) =
         holder.bind(getItem(position))
+
+    class DashViewHolder(
+        private val binding: ItemDashHistoryDashBinding,
+        private val onDashClicked: (Long) -> Unit
+    ) : RecyclerView.ViewHolder(binding.root) {
+        fun bind(item: DashItem) {
+            binding.dashTimeRangeText.text = item.timeRange
+            binding.dashDurationText.text = item.duration
+            binding.dashHeader.setOnClickListener { onDashClicked(item.dashId) }
+            binding.offersRecyclerView.visibility = if (item.isExpanded) View.VISIBLE else View.GONE
+            if (item.isExpanded) {
+                val offerAdapter = InnerOfferAdapter()
+                binding.offersRecyclerView.apply {
+                    layoutManager = LinearLayoutManager(context)
+                    adapter = offerAdapter
+                }
+                offerAdapter.submitList(item.offers)
+            }
+        }
     }
 
-    class OfferViewHolder(
-        private val binding: ItemOfferDisplayBinding,
-        private val onOfferClicked: (Long) -> Unit, // Changed String to Long
-        private val onOfferInfoClicked: (String) -> Unit
-    ) : RecyclerView.ViewHolder(binding.root) {
+    class DashDiffCallback : DiffUtil.ItemCallback<DashItem>() {
+        override fun areItemsTheSame(oldItem: DashItem, newItem: DashItem) =
+            oldItem.id == newItem.id
 
-        fun bind(offer: OfferDisplay) {
-            val context = binding.root.context
-            binding.offerSummaryText.text =
-                context.getString(R.string.offer_summary_status, offer.summaryText, offer.status)
-            binding.totalMilesText.text =
-                context.getString(R.string.total_miles_format, offer.totalMiles)
-            binding.totalAmountText.text = offer.totalAmount
+        override fun areContentsTheSame(oldItem: DashItem, newItem: DashItem) = oldItem == newItem
+    }
+}
 
-            // ***** MODIFIED CLICK LISTENER *****
-            binding.offerHeaderSection.setOnClickListener { onOfferClicked(offer.offerId) }
-            binding.offerInfoButton.setOnClickListener { onOfferInfoClicked(offer.summaryText) }
+private class InnerOfferAdapter :
+    ListAdapter<OfferItem, InnerOfferAdapter.OfferViewHolder>(OfferDiffCallback()) {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = OfferViewHolder(
+        ItemDashHistoryOfferBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
+        )
+    )
 
-            addIconsToContainer(binding.offerBadgeContainer, offer.offerBadges)
+    override fun onBindViewHolder(holder: OfferViewHolder, position: Int) =
+        holder.bind(getItem(position))
 
-            if (offer.isExpanded) {
-                binding.offerDetailsContainer.visibility = View.VISIBLE
-
-                binding.doordashPayHeader.receiptHeaderTitle.text =
-                    context.getString(R.string.doordash_pays)
-
-                binding.payLinesRecyclerView.layoutManager = LinearLayoutManager(context)
-                binding.payLinesRecyclerView.adapter = ReceiptLineAdapter(offer.payLines)
-
-                binding.ordersRecyclerView.layoutManager = LinearLayoutManager(context)
-                binding.ordersRecyclerView.adapter = OrderAdapter(offer.orders)
-
-                offer.actualStats?.let { stats ->
-                    binding.actualStatsTime.text =
-                        context.getString(R.string.actual_stats_time, stats.time)
-                    binding.actualStatsDistance.text =
-                        context.getString(R.string.actual_stats_distance, stats.distance)
-                    binding.actualStatsPerMile.text =
-                        context.getString(R.string.actual_stats_per_mile, stats.dollarsPerMile)
-                    binding.actualStatsPerHour.text =
-                        context.getString(R.string.actual_stats_per_hour, stats.dollarsPerHour)
-                }
+    class OfferViewHolder(private val binding: ItemDashHistoryOfferBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+        fun bind(item: OfferItem) {
+            if (item.status == OfferStatus.DECLINED_USER) {
+                binding.offerSummaryText.text = "${item.summaryText} (Declined)"
+                binding.offerPayMilesText.visibility = View.GONE
+                binding.offerBadgeContainer.visibility = View.GONE
             } else {
-                binding.offerDetailsContainer.visibility = View.GONE
+                binding.offerSummaryText.text = item.summaryText
+                binding.offerPayMilesText.text = item.payAndMiles
+                binding.offerPayMilesText.visibility = View.VISIBLE
+                binding.offerBadgeContainer.visibility = View.VISIBLE
+                addIconsToContainer(binding.offerBadgeContainer, item.aggregatedBadges)
             }
         }
 
@@ -161,102 +182,18 @@ class OfferAdapter(
             container.removeAllViews()
             val context = container.context
             iconResIds.forEach { resId ->
-                val imageView = ImageView(context).apply {
+                container.addView(ImageView(context).apply {
                     setImageResource(resId)
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        height = 60
-                        width = 60
-                        marginEnd = 8
-                    }
-                }
-                container.addView(imageView)
+                    layoutParams = LinearLayout.LayoutParams(48, 48).apply { marginEnd = 8 }
+                })
             }
         }
     }
 
-    class OfferDiffCallback : DiffUtil.ItemCallback<OfferDisplay>() {
-        override fun areItemsTheSame(oldItem: OfferDisplay, newItem: OfferDisplay): Boolean =
-            // ***** USE THE UNIQUE ID *****
-            oldItem.offerId == newItem.offerId
+    class OfferDiffCallback : DiffUtil.ItemCallback<OfferItem>() {
+        override fun areItemsTheSame(oldItem: OfferItem, newItem: OfferItem) =
+            oldItem.id == newItem.id
 
-        override fun areContentsTheSame(oldItem: OfferDisplay, newItem: OfferDisplay): Boolean =
-            oldItem == newItem
+        override fun areContentsTheSame(oldItem: OfferItem, newItem: OfferItem) = oldItem == newItem
     }
-}
-
-// ... The rest of the file (OrderAdapter, ReceiptLineAdapter) is unchanged
-class OrderAdapter(private val orders: List<OrderDisplay>) :
-    RecyclerView.Adapter<OrderAdapter.OrderViewHolder>() {
-
-    class OrderViewHolder(val binding: ItemOrderDetailsBinding) :
-        RecyclerView.ViewHolder(binding.root)
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OrderViewHolder {
-        val binding =
-            ItemOrderDetailsBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return OrderViewHolder(binding)
-    }
-
-    override fun onBindViewHolder(holder: OrderViewHolder, position: Int) {
-        val order = orders[position]
-        val context = holder.itemView.context
-
-        holder.binding.orderHeader.receiptHeaderTitle.text = order.summaryText
-
-        addIconsToContainer(holder.binding.orderBadgeContainer, order.orderBadges)
-
-        holder.binding.tipLinesRecyclerView.apply {
-            layoutManager = LinearLayoutManager(context)
-            adapter = ReceiptLineAdapter(order.tipLines)
-            isNestedScrollingEnabled = false
-        }
-    }
-
-    override fun getItemCount(): Int = orders.size
-
-    private fun addIconsToContainer(container: LinearLayout, iconResIds: Set<Int>) {
-        container.removeAllViews()
-        val context = container.context
-        iconResIds.forEach { resId ->
-            val imageView = ImageView(context).apply {
-                setImageResource(resId)
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    height = 48
-                    width = 48
-                    marginEnd = 8
-                }
-            }
-            container.addView(imageView)
-        }
-    }
-}
-
-class ReceiptLineAdapter(private val items: List<ReceiptLineItem>) :
-    RecyclerView.Adapter<ReceiptLineAdapter.ReceiptLineViewHolder>() {
-
-    class ReceiptLineViewHolder(val binding: ItemDashSummaryReceiptLineBinding) :
-        RecyclerView.ViewHolder(binding.root)
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ReceiptLineViewHolder {
-        val binding = ItemDashSummaryReceiptLineBinding.inflate(
-            LayoutInflater.from(parent.context),
-            parent,
-            false
-        )
-        return ReceiptLineViewHolder(binding)
-    }
-
-    override fun onBindViewHolder(holder: ReceiptLineViewHolder, position: Int) {
-        val item = items[position]
-        holder.binding.label.text = item.label
-        holder.binding.amount.text = item.amount
-    }
-
-    override fun getItemCount(): Int = items.size
 }
