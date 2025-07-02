@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.data.current.CurrentRepo
 import cloud.trotter.dashbuddy.data.customer.CustomerRepo
 import cloud.trotter.dashbuddy.data.dash.DashRepo
 import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneRepo
+import cloud.trotter.dashbuddy.data.models.dash.history.DashHistoryRepository
 import cloud.trotter.dashbuddy.data.offer.OfferRepo
 import cloud.trotter.dashbuddy.data.order.OrderRepo
 import cloud.trotter.dashbuddy.data.pay.AppPayRepo
@@ -47,7 +48,15 @@ class DashBuddyApplication : Application() {
         val tipRepo: TipRepo by lazy { TipRepo(database.tipDao()) }
         val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
 
-        //        val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
+        val dashHistoryRepository by lazy {
+            DashHistoryRepository(
+                dashRepo,
+                offerRepo,
+                orderRepo,
+                appPayRepo,
+                tipRepo
+            )
+        }
 
         val notificationManager: NotificationManager
             get() = instance.getSystemService(NOTIFICATION_SERVICE) as NotificationManager

@@ -11,6 +11,9 @@ class AppPayRepo(private val appPayDao: AppPayDao) {
      */
     val allAppPays: Flow<List<AppPayEntity>> = appPayDao.getAllAppPays()
 
+    /** Retrieves all [AppPayType]s, ordered by name ascending, as an observable Flow. */
+    val allAppPayTypes: Flow<List<AppPayType>> = appPayDao.getAllPayTypes()
+
     /**
      * Retrieves an AppPayType by name. If it doesn't exist, it creates it.
      * This ensures you always get a valid ID for a given pay type name.

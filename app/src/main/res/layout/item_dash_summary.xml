@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="8dp"
-    app:cardElevation="4dp"
+    app:cardElevation="2dp"
     app:cardCornerRadius="8dp">
 
     <LinearLayout
@@ -20,47 +20,11 @@
             android:orientation="horizontal"
             android:padding="16dp">
 
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:id="@+id/date_section"
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:background="?attr/colorPrimaryContainer">
-
-                <TextView
-                    android:id="@+id/dash_month"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/colorPrimary"
-                    android:gravity="center"
-                    android:padding="4dp"
-                    android:textAppearance="?attr/textAppearanceLabelMedium"
-                    android:textColor="?attr/colorOnPrimary"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"
-                    tools:text="JUN" />
-
-                <TextView
-                    android:id="@+id/dash_day"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceDisplaySmall"
-                    android:textColor="?attr/colorOnPrimaryContainer"
-                    android:textStyle="bold"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/dash_month"
-                    tools:text="27" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
             <LinearLayout
                 android:id="@+id/summary_section"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:layout_marginStart="16dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -89,6 +53,14 @@
                     android:textColor="?attr/colorOnSurfaceVariant"
                     tools:text="12 Orders • 44.21 Miles" />
             </LinearLayout>
+
+            <ImageView
+                android:id="@+id/expand_icon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                app:srcCompat="@drawable/ic_expand_more" />
+
         </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView

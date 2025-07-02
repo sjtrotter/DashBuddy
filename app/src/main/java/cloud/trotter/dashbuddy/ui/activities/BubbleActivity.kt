@@ -9,7 +9,7 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.BubbleLayoutBinding // CORRECTED: Import the binding class that matches bubble_layout.xml
 import cloud.trotter.dashbuddy.ui.fragments.DashLogFragment
 import cloud.trotter.dashbuddy.ui.fragments.DebugLogFragment
-import cloud.trotter.dashbuddy.ui.fragments.DashHistoryFragment
+import cloud.trotter.dashbuddy.ui.fragments.dashhistory.DashHistoryFragment
 import cloud.trotter.dashbuddy.ui.fragments.SettingsFragment
 import cloud.trotter.dashbuddy.ui.fragments.StatisticsFragment
 import cloud.trotter.dashbuddy.log.Logger as Log
