@@ -69,7 +69,6 @@ class DashStarting : StateHandler {
             // 2. Insert new DashEntity using the data from the Current table
             val newDash = DashEntity(
                 startTime = stateContext.timestamp,
-                zoneId = zoneId,
                 dashType = dashType
             )
             val dashId = dashRepo.insertDash(newDash)

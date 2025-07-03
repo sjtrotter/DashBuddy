@@ -309,7 +309,10 @@ enum class Screen(
             "dash summary",
             "current orders",
             "add time",
-            "dash ends at"
+            "dash ends at",
+            "active time",
+            "dash time",
+            "completed deliveries"
         ),
         activityHint = ActivityHint.ACTIVE
     ),
