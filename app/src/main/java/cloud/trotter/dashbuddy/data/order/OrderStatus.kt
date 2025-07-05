@@ -10,6 +10,13 @@ enum class OrderStatus(
     val isCancelled: Boolean = false,
     val isUnassigned: Boolean = false,
 ) {
+    /** Seen, not yet accepted. */
+    SEEN(
+        isPickedUp = false,
+        isDelivered = false,
+        isCompleted = false,
+    ),
+
     /** Pending, not yet started. */
     PENDING(
         isPickedUp = false,
