@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.state.handlers.DashStarting
 import cloud.trotter.dashbuddy.state.handlers.DashStopping
 import cloud.trotter.dashbuddy.state.handlers.DeliveryCompleted
 import cloud.trotter.dashbuddy.state.handlers.OnDelivery
+import cloud.trotter.dashbuddy.state.handlers.OnNavigation
 import cloud.trotter.dashbuddy.state.handlers.OnPickup
 import cloud.trotter.dashbuddy.state.handlers.Startup
 import cloud.trotter.dashbuddy.state.handlers.ViewDashControl
@@ -86,6 +87,11 @@ enum class AppState(
     DASH_ACTIVE_ON_CONTROL(
         handler = ViewDashControl(),
         displayName = "Dash Control",
+        activityHint = ActivityHint.ACTIVE
+    ),
+    DASH_ACTIVE_ON_NAVIGATION(
+        handler = OnNavigation(),
+        displayName = "Dash Active - On Navigation",
         activityHint = ActivityHint.ACTIVE
     ),
     DASH_ACTIVE_ON_PICKUP(

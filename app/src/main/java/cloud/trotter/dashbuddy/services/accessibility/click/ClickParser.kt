@@ -20,7 +20,7 @@ object ClickParser {
                 // --- Offer Handling ---
                 trimmedText.contains("Accept", ignoreCase = true) ||
                         trimmedText.contains("Add to route", ignoreCase = true) ->
-                            return ClickInfo.ButtonClick(ClickType.ACCEPT_OFFER)
+                    return ClickInfo.ButtonClick(ClickType.ACCEPT_OFFER)
 
                 trimmedText.equals("Decline", ignoreCase = true) ->
                     return ClickInfo.ButtonClick(ClickType.DECLINE_OFFER_INITIAL)

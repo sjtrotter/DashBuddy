@@ -13,6 +13,7 @@ enum class Screen(
     // Signature properties directly in the enum constructor
     val isPickup: Boolean = false,
     val isDelivery: Boolean = false,
+    val isNavigating: Boolean = false,
     val activityHint: ActivityHint = ActivityHint.NEUTRAL,
     val screenName: String = "",
     val requiredTexts: List<String> = emptyList(),
@@ -197,7 +198,8 @@ enum class Screen(
         screenName = "Generic Navigation",
         requiredTexts = listOf("min", "exit"),
         someOfTheseTexts = listOf("mi", "ft"),
-        forbiddenTexts = listOf("accept", "decline")
+        forbiddenTexts = listOf("accept", "decline"),
+        isNavigating = true,
     ),
     NAVIGATION_VIEW_TO_PICK_UP(
         screenName = "Navigation to Pick Up",
@@ -209,7 +211,8 @@ enum class Screen(
             "read instructions on arrival"
         ),
         activityHint = ActivityHint.ACTIVE,
-        isPickup = true
+        isPickup = true,
+        isNavigating = true
     ),
     NAVIGATION_VIEW_TO_DROP_OFF(
         screenName = "Navigation to Drop Off",
@@ -217,7 +220,8 @@ enum class Screen(
         someOfTheseTexts = listOf("mi", "ft", "leave it at the door", "hand to customer"),
         forbiddenTexts = listOf("accept", "decline"),
         activityHint = ActivityHint.ACTIVE,
-        isDelivery = true
+        isDelivery = true,
+        isNavigating = true
     ),
 
 
@@ -234,6 +238,12 @@ enum class Screen(
             "ft",
         ),
         minTextCount = 6,
+        activityHint = ActivityHint.ACTIVE
+    ),
+
+    OFFER_POPUP_CONFIRM_DECLINE(
+        screenName = "Offer Decline Confirmation",
+        requiredTexts = listOf("Are you sure you want to decline", "acceptance rate"),
         activityHint = ActivityHint.ACTIVE
     ),
 

@@ -13,6 +13,7 @@ object ScreenRecognizerV2 {
 
     private val screenCheckOrder: List<Screen> = listOf(
         // High-priority, often modal or overlay screens
+        Screen.OFFER_POPUP_CONFIRM_DECLINE,
         Screen.OFFER_POPUP,
         Screen.DELIVERY_COMPLETED_DIALOG,
 
