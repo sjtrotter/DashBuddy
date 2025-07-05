@@ -20,7 +20,6 @@ import java.util.Locale
 class OfferPresented : StateHandler {
 
     private var internalOfferId: Long? = null
-    private var offerDecided: Boolean = false
     private var screenClicked: Screen? = null
     private var isClicked: Boolean = false
 
@@ -82,7 +81,6 @@ class OfferPresented : StateHandler {
         Log.d(tag, "Entering state...")
         // Reset flags for the new offer presentation
         internalOfferId = null
-        offerDecided = false
         screenClicked = null
         isClicked = false
 
@@ -161,9 +159,9 @@ class OfferPresented : StateHandler {
 
         val finalOfferId: Long = internalOfferId!!
 
-
-        if (isClicked) {
-            try {// we logged a click while in the offer flow.
+        try {
+            if (isClicked) {
+                // we logged a click while in the offer flow.
                 if (screenClicked == Screen.OFFER_POPUP) {
                     // we accepted the offer.
                     offerRepo.updateOfferStatus(finalOfferId, OfferStatus.ACCEPTED)
@@ -180,14 +178,15 @@ class OfferPresented : StateHandler {
                     offerRepo.updateOfferStatus(finalOfferId, OfferStatus.DECLINED_USER)
                     Log.i(tag, "Offer #$finalOfferId declined by user.")
                 }
-            } catch (e: Exception) {
-                Log.e(tag, "!!! CRITICAL ERROR during offer processing !!!", e)
-                DashBuddyApplication.sendBubbleMessage("Error processing offer!\nCheck logs.")
+
+            } else {
+                // we didn't log a click while in the offer flow.
+                offerRepo.updateOfferStatus(finalOfferId, OfferStatus.DECLINED_TIMEOUT)
+                Log.i(tag, "Offer #$finalOfferId declined by timeout.")
             }
-        } else {
-            // we didn't log a click while in the offer flow.
-            offerRepo.updateOfferStatus(finalOfferId, OfferStatus.DECLINED_TIMEOUT)
-            Log.i(tag, "Offer #$finalOfferId declined by timeout.")
+        } catch (e: Exception) {
+            Log.e(tag, "!!! CRITICAL ERROR during offer processing !!!", e)
+            DashBuddyApplication.sendBubbleMessage("Error processing offer!\nCheck logs.")
         }
 
         // Reset state for the next time this handler is used
