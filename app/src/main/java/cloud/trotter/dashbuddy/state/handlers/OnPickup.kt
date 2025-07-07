@@ -1,16 +1,14 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.order.OrderStatus
-import cloud.trotter.dashbuddy.data.store.ParsedStore
 import cloud.trotter.dashbuddy.data.store.StoreEntity
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
-//import cloud.trotter.dashbuddy.state.processing.CustomerProcessor
-//import cloud.trotter.dashbuddy.state.processing.StoreProcessor
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.util.OrderMatcher
 import cloud.trotter.dashbuddy.util.UtilityFunctions
@@ -25,12 +23,16 @@ class OnPickup : StateHandler {
     private val currentRepo = DashBuddyApplication.currentRepo
     private val orderRepo = DashBuddyApplication.orderRepo
     private val storeRepo = DashBuddyApplication.storeRepo
+    private var isClicked: Boolean = false
+    private var screenClicked: Screen? = null
 
     override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
+        isClicked = false
+        screenClicked = null
         Log.i(tag, "--- Entering $tag ---")
         // Determine the active order and set it as the focused order
         val activeOrder = OrderMatcher.matchOrder(stateContext)
@@ -50,8 +52,23 @@ class OnPickup : StateHandler {
     ): AppState {
 
         val screen = stateContext.screenInfo?.screen ?: return currentState
+
+        // set click, if click detected.
+        // (for now, just going to set click and log the screen that was clicked)
+        // (will worry about resetting click later on with more data)
+        if (stateContext.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+            isClicked = true
+            screenClicked = screen
+            Log.d(tag, "Screen clicked: $screen")
+        }
+
         // Determine next state based on screen changes
         return when {
+            // todo: if click is set on specific screens and we are no longer onPickup, send to picked-up handler
+            screen == Screen.PICKUP_DETAILS_PICKED_UP -> AppState.DASH_ACTIVE_PICKED_UP
+            // this isn't the only screen that can indicate the order was picked up.
+            // need to dev the rest. (esp. shop orders, and multi-pickup orders)
+
             // TODO: next two... order cancelled?
 //            screen == Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
 //            screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
@@ -99,87 +116,103 @@ class OnPickup : StateHandler {
         currentState: AppState
     ): AppState {
         // In here, we just update the activeOrder that we focused in enterState.
+        // (or, re-focused just before this)
         val activeOrderId =
             currentRepo.getCurrentDashState()?.activeOrderId ?: return currentState.also {
-                Log.d(tag, "No active order to update.")
+                Log.w(tag, "!!! No active order to update. !!!")
             }
         val screenInfo =
             stateContext.screenInfo as? ScreenInfo.OrderDetails ?: return currentState.also {
-                Log.d(tag, "Screen info is not PickupDetails. Skipping update.")
+                Log.d(
+                    tag,
+                    "Screen info is not PickupDetails: ${stateContext.screenInfo}. Skipping update."
+                )
             }
         val order = orderRepo.getOrderById(activeOrderId) ?: return currentState.also {
             Log.w(tag, "!!! Could not retrieve active order $activeOrderId from database. !!!")
         }
 
+        // first, updates based on data we have from the PickupDetails.
+        // if we have the data for the store, and the storeId for order is null, parse and set it.
+        if (screenInfo.storeName != null &&
+            screenInfo.storeAddress != null &&
+            order.storeId == null
+        ) {
+            var storeId: Long? = null
+            // check for existing stores at this address.
+            val existingStoresAtAddress = storeRepo.getStoresByAddress(screenInfo.storeAddress)
+            if (existingStoresAtAddress.isNotEmpty()) {
+                // we found stores at this address. try to find a name match.
+                for (existingStore in existingStoresAtAddress) {
+                    if (UtilityFunctions.stringsMatch(
+                            existingStore.storeName,
+                            screenInfo.storeName
+                        )
+                    ) {
+                        // found this store at this address, set the storeId.
+                        storeId = existingStore.id
+                        Log.i(
+                            tag,
+                            "Found existing store '${
+                                existingStore.storeName
+                            }' with same address. Using storeId: $storeId"
+                        )
+                        break
+                    }
+
+                }
+            }
+            // if no matching store found, this is a new store. upsert it.
+            if (storeId == null) {
+                Log.i(
+                    tag,
+                    "No existing store found at this address with a similar name. Creating a new store record."
+                )
+                val storeToUpsert = StoreEntity(
+                    storeName = screenInfo.storeName,
+                    address = screenInfo.storeAddress
+                )
+                storeId = storeRepo.upsertStore(storeToUpsert)
+            }
+            // now link the order to the store.
+            orderRepo.linkOrderToStore(activeOrderId, storeId)
+            Log.i(
+                tag, "Updated Order ID $activeOrderId with Store ID $storeId: ${
+                    screenInfo.storeName
+                } at ${
+                    screenInfo.storeAddress
+                }."
+            )
+        }
+
+        // if we have a customer name hash and the order doesn't have one, set it.
+        if (screenInfo.customerNameHash != null && order.customerNameHash == null) {
+            orderRepo.setCustomerNameHash(
+                activeOrderId, screenInfo.customerNameHash
+            )
+            Log.i(
+                tag,
+                "Updated Order ID $activeOrderId with customer name hash: ${
+                    screenInfo.customerNameHash
+                }."
+            )
+        }
+
+        // now, update the order status based on the screen we are on.
         when (screenInfo.screen) {
 
             Screen.NAVIGATION_VIEW_TO_PICK_UP,
-            Screen.PICKUP_DETAILS_PRE_ARRIVAL -> {
-                // ScreenInfo.PickupDetails(screen, storeName, storeAddress, null)
-                if (order.storeId == null) {
-                    val parsedStore = ParsedStore(
-                        screenInfo.storeName!!,
-                        screenInfo.storeAddress!!,
-                    )
-                    var storeId: Long? = null
-
-                    // 1. Search for existing stores at this exact address.
-                    val existingStoresAtAddress = storeRepo.getStoresByAddress(parsedStore.address)
-
-                    if (existingStoresAtAddress.isNotEmpty()) {
-                        // 2. If we have stores at this address, try to find a name match.
-                        for (existingStore in existingStoresAtAddress) {
-                            if (UtilityFunctions.stringsMatch(
-                                    existingStore.storeName,
-                                    parsedStore.storeName
-                                )
-                            ) {
-                                storeId = existingStore.id
-                                Log.i(
-                                    tag,
-                                    "Found existing store '${existingStore.storeName}' with same address. Using storeId: $storeId"
-                                )
-                                break
-                            }
-                        }
-                    }
-
-                    // 3. If no matching store was found, this is a new store. Upsert it.
-                    if (storeId == null) {
-                        Log.i(
-                            tag,
-                            "No existing store found at this address with a similar name. Creating a new store record."
-                        )
-                        val storeToUpsert = StoreEntity(
-                            storeName = parsedStore.storeName,
-                            address = parsedStore.address
-                        )
-                        storeId = storeRepo.upsertStore(storeToUpsert)
-                    }
-                    orderRepo.linkOrderToStore(activeOrderId, storeId)
-                    Log.i(tag, "Updated Order ID $activeOrderId with Store ID $storeId.")
-                }
+            Screen.PICKUP_DETAILS_PRE_ARRIVAL,
+            Screen.PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI -> {
                 if (order.status != OrderStatus.PICKUP_NAVIGATING) {
                     orderRepo.updateOrderStatus(activeOrderId, OrderStatus.PICKUP_NAVIGATING)
                     Log.i(tag, "Updated Order ID $activeOrderId to status: PICKUP_NAVIGATING")
                 }
             }
 
-            Screen.PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI,
-            Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI -> {
-                // ScreenInfo.PickupDetails(screen, storeName, null, null)
-                // ...what exactly am i doing here?
-            }
-
-            Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE -> {
-                // ScreenInfo.PickupDetails(screen, storeName, null, customerHash)
-                if (order.customerNameHash == null && screenInfo.customerNameHash != null) {
-                    orderRepo.setCustomerNameHash(activeOrderId, screenInfo.customerNameHash)
-                    Log.i(
-                        tag,
-                        "Updated Order ID $activeOrderId with Customer Name Hash: ${screenInfo.customerNameHash}"
-                    )
-                }
+            Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,
+            Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI,
+            Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP -> {
                 if (order.status != OrderStatus.PICKUP_ARRIVED) {
                     orderRepo.updateOrderStatus(activeOrderId, OrderStatus.PICKUP_ARRIVED)
                     Log.i(tag, "Updated Order ID $activeOrderId to status: PICKUP_ARRIVED")
