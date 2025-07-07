@@ -153,11 +153,7 @@ class DeliveryCompleted : StateHandler {
                     for (orderId in completedOrderIds) {
                         currentRepo.removeOrderFromQueue(orderId)
                         orderRepo.updateOrderStatus(orderId, OrderStatus.COMPLETED)
-                        orderRepo.markOrderAsCompleted(
-                            orderId,
-                            null,
-                            stateContext.timestamp
-                        )
+                        orderRepo.updateCompletionTimestamp(orderId, stateContext.timestamp)
                     }
                     Log.i(
                         tag,
@@ -194,6 +190,7 @@ class DeliveryCompleted : StateHandler {
     ) {
         Log.i(tag, "Entering state. Screen: ${stateContext.screenInfo?.screen?.name}")
         wasClickAttempted = false // Reset flag on entering state
+        wasPayRecorded = false // Reset flag on entering state
 
         // The goal is to find the dollar amount button and click it.
         // The button's text is the dollar amount itself.
@@ -211,7 +208,10 @@ class DeliveryCompleted : StateHandler {
         Log.d(tag, "Found potential button text: '$buttonText'. Attempting to click.")
 
         val clickSuccess =
-            AccNodeUtils.findAndClickNodeByText(stateContext.rootNode, buttonText.trim())
+            AccNodeUtils.findAndClickNodeByText(
+                stateContext.rootNode,
+                buttonText.trim()
+            )
         if (clickSuccess) {
             Log.i(tag, "Successfully performed click on button with text: '$buttonText'")
             DashBuddyApplication.sendBubbleMessage("Pay button clicked!")
@@ -228,5 +228,6 @@ class DeliveryCompleted : StateHandler {
     ) {
         Log.i(tag, "Exiting state to $nextState")
         wasClickAttempted = false // Reset flag
+        wasPayRecorded = false // Reset flag
     }
 }
