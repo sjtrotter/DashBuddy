@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.state.handlers.DeliveryCompleted
 import cloud.trotter.dashbuddy.state.handlers.OnDelivery
 import cloud.trotter.dashbuddy.state.handlers.OnNavigation
 import cloud.trotter.dashbuddy.state.handlers.OnPickup
+import cloud.trotter.dashbuddy.state.handlers.OrderPickedUp
 import cloud.trotter.dashbuddy.state.handlers.Startup
 import cloud.trotter.dashbuddy.state.handlers.ViewDashControl
 import cloud.trotter.dashbuddy.state.handlers.ViewEarnings
@@ -97,6 +98,11 @@ enum class AppState(
     DASH_ACTIVE_ON_PICKUP(
         handler = OnPickup(),
         displayName = "Dash Active - On Pickup",
+        activityHint = ActivityHint.ACTIVE
+    ),
+    DASH_ACTIVE_PICKED_UP(
+        handler = OrderPickedUp(),
+        displayName = "Dash Active - Order Picked Up",
         activityHint = ActivityHint.ACTIVE
     ),
     DASH_ACTIVE_ON_DELIVERY(

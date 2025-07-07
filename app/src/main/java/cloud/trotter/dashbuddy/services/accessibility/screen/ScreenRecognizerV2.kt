@@ -24,6 +24,7 @@ object ScreenRecognizerV2 {
         Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,
         Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI,
         Screen.PICKUP_DETAILS_VERIFY_PICKUP,
+        Screen.PICKUP_DETAILS_PICKED_UP,
 
         // Dropoff Flow
         Screen.DROPOFF_DETAILS_PRE_ARRIVAL,

@@ -224,7 +224,6 @@ enum class Screen(
         isNavigating = true
     ),
 
-
     // --- Offer Handling ---
     OFFER_POPUP(
         screenName = "Offer",
@@ -297,6 +296,11 @@ enum class Screen(
         isPickup = true,
         activityHint = ActivityHint.ACTIVE
 //        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
+    ),
+    PICKUP_DETAILS_PICKED_UP(
+        requiredTexts = listOf("Confirm pickup", "Loading…"),
+        isPickup = true,
+        activityHint = ActivityHint.ACTIVE
     ),
 
     // --- Active Delivery - Dropoff Phase ---

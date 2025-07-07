@@ -35,12 +35,19 @@ class OrderPickedUp : StateHandler {
         stateContext: StateContext,
         currentState: AppState
     ): AppState {
-        // After pickup, we should be navigating to the delivery
-        if (stateContext.screenInfo?.screen?.isDelivery == true) {
-            return AppState.DASH_ACTIVE_ON_DELIVERY
+
+        val screen = stateContext.screenInfo?.screen ?: return currentState
+
+        return when {
+            // after pickup, we *should* be on delivery.
+            screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
+            // but, we might have a stacked order.
+            screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
+            // or, maybe something went wrong and we're on the map.
+            screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.DASH_ACTIVE_AWAITING_OFFER
+            else -> currentState
+
         }
-        // Fallback in case the screen doesn't immediately change
-        return currentState
     }
 
     override suspend fun exitState(
