@@ -82,19 +82,17 @@ interface OrderDao {
      * Updates all delivery-related fields for an order upon completion.
      *
      * @param orderId The ID of the order to update.
-     * @param customerId The ID of the customer (can be null).
      * @param completionTimestamp The timestamp of completion.
      */
     @Query(
         """
         UPDATE orders 
         SET 
-            customerId = :customerId, 
             completionTimestamp = :completionTimestamp 
         WHERE id = :orderId
     """
     )
-    suspend fun markOrderAsCompleted(orderId: Long, customerId: Long?, completionTimestamp: Long)
+    suspend fun updateCompletionTimestamp(orderId: Long, completionTimestamp: Long)
 
     /**
      * Retrieves all "active" orders for a given dash that are not yet completed.

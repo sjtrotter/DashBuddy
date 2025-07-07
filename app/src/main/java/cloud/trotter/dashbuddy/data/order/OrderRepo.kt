@@ -104,9 +104,9 @@ class OrderRepo(private val orderDao: OrderDao) {
     /**
      * Updates all delivery-related fields for an order upon completion.
      */
-    suspend fun markOrderAsCompleted(orderId: Long, customerId: Long?, completionTimestamp: Long) {
+    suspend fun updateCompletionTimestamp(orderId: Long, completionTimestamp: Long) {
         withContext(Dispatchers.IO) {
-            orderDao.markOrderAsCompleted(orderId, customerId, completionTimestamp)
+            orderDao.updateCompletionTimestamp(orderId, completionTimestamp)
         }
     }
 
