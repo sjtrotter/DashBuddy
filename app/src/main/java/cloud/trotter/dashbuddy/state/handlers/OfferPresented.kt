@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.data.offer.OfferEntity
 import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.offer.OfferStatus
+import cloud.trotter.dashbuddy.data.order.OrderStatus
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
@@ -172,6 +173,9 @@ class OfferPresented : StateHandler {
                         val orderIds = orders.map { it.id }
                         currentRepo.addOrdersToQueue(orderIds)
                         Log.i(tag, "Added order IDs $orderIds to the active queue.")
+                        for (orderId in orderIds) {
+                            orderRepo.updateOrderStatus(orderId, OrderStatus.PENDING)
+                        }
                     }
                 } else if (screenClicked == Screen.OFFER_POPUP_CONFIRM_DECLINE) {
                     // we declined the offer.
