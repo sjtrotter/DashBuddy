@@ -36,7 +36,14 @@ object OrderMatcher {
             addAll(dashState.activeOrderQueue)
         }.distinct()
 
-        if (possibleOrderIds.isEmpty()) return null
+        if (possibleOrderIds.isEmpty()) return null.also {
+            Log.w(tag, "Matcher failed: No active orders found in dash state: $possibleOrderIds")
+        }
+
+        // if there is only one order, that's it, we can just return it
+        if (possibleOrderIds.size == 1) return possibleOrderIds.first().also {
+            Log.d(tag, "Matcher found only one active order: $it. Returning it.")
+        }
 
         val allPossibleOrders = possibleOrderIds.mapNotNull { orderRepo.getOrderById(it) }
         var eligibleOrders: List<OrderEntity> = emptyList()
