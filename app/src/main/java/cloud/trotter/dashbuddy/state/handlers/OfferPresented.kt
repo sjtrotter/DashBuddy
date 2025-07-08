@@ -22,6 +22,7 @@ class OfferPresented : StateHandler {
 
     private var internalOfferId: Long? = null
     private var screenClicked: Screen? = null
+    private var previousScreen: Screen? = null
     private var isClicked: Boolean = false
 
     private val currentRepo = DashBuddyApplication.currentRepo
@@ -42,8 +43,8 @@ class OfferPresented : StateHandler {
 
         if (stateContext.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && !isClicked) {
             isClicked = true
-            screenClicked = screen
-            Log.d(tag, "Clicked on screen: $screen")
+            screenClicked = previousScreen
+            Log.d(tag, "Clicked on screen: $screenClicked")
         }
 
         // reset the click if the screen changes but we are still in the offer flow.
@@ -52,10 +53,12 @@ class OfferPresented : StateHandler {
         if (stillInOfferFlow && isClicked && (screenClicked != screen)) {
             isClicked = false
             screenClicked = null
+            previousScreen = screen
             return currentState
         }
 
         // Determine next state based on screen changes
+        previousScreen = screen
         return when {
             screen ==
                     Screen.ON_DASH_MAP_WAITING_FOR_OFFER
@@ -83,6 +86,8 @@ class OfferPresented : StateHandler {
         // Reset flags for the new offer presentation
         internalOfferId = null
         screenClicked = null
+        screenClicked = null
+        previousScreen = null
         isClicked = false
 
         try {
@@ -196,6 +201,7 @@ class OfferPresented : StateHandler {
         // Reset state for the next time this handler is used
         internalOfferId = null
         screenClicked = null
+        previousScreen = null
         isClicked = false
     }
 }
