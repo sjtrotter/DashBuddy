@@ -2,13 +2,23 @@ package cloud.trotter.dashbuddy.ui.fragments.dashhistory
 
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.content.res.AppCompatResources.getDrawable
+import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.FragmentDashHistoryBinding
+import cloud.trotter.dashbuddy.ui.activities.BubbleActivity
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.adapters.DashHistoryAdapter
 
 class DashHistoryFragment : Fragment() {
@@ -17,9 +27,7 @@ class DashHistoryFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: DashHistoryViewModel by viewModels {
-        // Get the facade repository
         val dashHistoryRepository = DashBuddyApplication.dashHistoryRepository
-        // Provide the facade repository to the ViewModel via the Factory
         DashHistoryViewModelFactory(dashHistoryRepository)
     }
 
@@ -38,6 +46,52 @@ class DashHistoryFragment : Fragment() {
 
         setupRecyclerView()
         observeViewModel()
+        setupMenu()
+    }
+
+    private fun setupMenu() {
+        (activity as? AppCompatActivity)?.supportActionBar?.title =
+            "History" // Clear title to make room for menu items
+
+        // Set the navigation icon for the toolbar
+        val toolbar =
+            (activity as? BubbleActivity)?.findViewById<androidx.appcompat.widget.Toolbar>(R.id.bubble_toolbar)
+        toolbar?.navigationIcon =
+            getDrawable(DashBuddyApplication.context, R.drawable.ic_menu_toolbar_history)
+
+        val menuHost = requireActivity()
+        menuHost.addMenuProvider(object : MenuProvider {
+            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                menuInflater.inflate(R.menu.dash_history_menu, menu)
+            }
+
+            override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                return when (menuItem.itemId) {
+                    R.id.menu_prev_month -> {
+                        Toast.makeText(context, "Previous Month Clicked", Toast.LENGTH_SHORT).show()
+                        true
+                    }
+
+                    R.id.menu_month_year_title -> {
+                        Toast.makeText(context, "Month/Year Title Clicked", Toast.LENGTH_SHORT)
+                            .show()
+                        true
+                    }
+
+                    R.id.menu_next_month -> {
+                        Toast.makeText(context, "Next Month Clicked", Toast.LENGTH_SHORT).show()
+                        true
+                    }
+
+                    R.id.menu_export_history -> {
+                        Toast.makeText(context, "Export Clicked", Toast.LENGTH_SHORT).show()
+                        true
+                    }
+
+                    else -> false
+                }
+            }
+        }, viewLifecycleOwner, Lifecycle.State.RESUMED)
     }
 
     private fun setupRecyclerView() {
@@ -45,23 +99,17 @@ class DashHistoryFragment : Fragment() {
         binding.dashHistoryRecyclerView.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = dashHistoryAdapter
-            // Optional: Add the sticky header ItemDecoration here later
         }
     }
 
     private fun observeViewModel() {
-        // Observe the LiveData from the ViewModel.
-        // When the data changes (because a Flow emitted a new list),
-        // this block will execute and update the adapter.
         viewModel.daySummaries.observe(viewLifecycleOwner) { daySummaries ->
-            // Let the ListAdapter handle the diffing and animations
             dashHistoryAdapter.submitList(daySummaries)
         }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        // Avoid memory leaks by nulling out the binding
         _binding = null
     }
 }

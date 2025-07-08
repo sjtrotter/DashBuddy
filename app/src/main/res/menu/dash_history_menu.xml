@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/menu_prev_month"
+        android:icon="@drawable/ic_chevron_left"
+        android:title="Previous Month"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_month_year_title"
+        android:title="July 2025"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_next_month"
+        android:icon="@drawable/ic_chevron_right"
+        android:title="Next Month"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_export_history"
+        android:icon="@android:drawable/ic_menu_save"
+        android:title="Export"
+        android:orderInCategory="100"
+        app:showAsAction="always" />
+</menu>
