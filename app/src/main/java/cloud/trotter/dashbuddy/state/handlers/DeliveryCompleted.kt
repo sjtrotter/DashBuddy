@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
 import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
+import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import cloud.trotter.dashbuddy.util.UtilityFunctions.stringsMatch
 import kotlinx.coroutines.flow.first
@@ -178,8 +179,34 @@ class DeliveryCompleted : StateHandler {
             screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
             screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY
 
-            else -> currentState // Stay in this state by default until a known transition occurs
+            else -> processPayBreakdown(stateContext, currentState)
         }
+    }
+
+    private fun processPayBreakdown(stateContext: StateContext, currentState: AppState): AppState {
+        if (wasPayRecorded) {
+            return currentState.also {
+                Log.d(tag, "Pay breakdown already processed. Skipping update.")
+            }
+        }
+        val screenInfo =
+            stateContext.screenInfo as? ScreenInfo.DeliveryCompleted ?: return currentState.also {
+                Log.d(
+                    tag,
+                    "Screen info is not DeliveryCompleted: ${stateContext.screenInfo}. Skipping update."
+                )
+            }
+        if (!stateContext.rootNodeTexts.any { it.contains("Customer Tips", ignoreCase = true) }) {
+            return currentState.also {
+                Log.d(tag, "Pay breakdown not detected. Skipping update.")
+            }
+        }
+
+        Log.d(tag, " --- Processing pay breakdown --- ")
+        val appPayComponents = screenInfo.parsedPay.appPayComponents
+        val customerTips = screenInfo.parsedPay.customerTips
+
+        return currentState
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
