@@ -18,12 +18,13 @@ object UtilityFunctions {
                 LocalTime.parse(timeText, formatter12Hour)
             } catch (e: Exception) {
                 try {
-                    Log.d("UtilityFunctions.parseTimeTextToMillis", "Trying 24-hour format.")
+                    Log.d("UtilityFunctions.parseTimeTextToMillis", "Trying 24-hour format.", e)
                     LocalTime.parse(timeText, formatter24Hour)
                 } catch (e2: Exception) {
                     Log.w(
                         "UtilityFunctions.parseTimeTextToMillis",
-                        "Could not parse time text '$timeText' with either 12-hour or 24-hour formats."
+                        "Could not parse time text '$timeText' with either 12-hour or 24-hour formats.",
+                        e2
                     )
                     return null // Could not parse with known formats
                 }
@@ -144,5 +145,10 @@ object UtilityFunctions {
             .replace("Apt/Suite: ", "")
             .trim()
             .takeIf { it.isNotBlank() }
+    }
+
+    fun formatCurrency(totalEarnings: Double): String {
+        return String.format(Locale.getDefault(), "%.2f", totalEarnings)
+
     }
 }

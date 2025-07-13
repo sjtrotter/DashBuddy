@@ -34,6 +34,12 @@ interface AppPayDao {
 
     @Query("SELECT * FROM app_pay_types WHERE id = :id LIMIT 1")
     suspend fun getPayTypeById(id: Long): AppPayType?
+
+    @Query("SELECT SUM(amount) FROM app_pays WHERE offerId IN (:offerIds)")
+    fun getTotalAppPayForOffersFlow(offerIds: List<Long>): Flow<Double?>
+
+    @Query("SELECT * FROM app_pays WHERE offerId IN (:offerIds)")
+    fun getPayComponentsForOffersFlow(offerIds: List<Long>): Flow<List<AppPayEntity>>
 }
 
 

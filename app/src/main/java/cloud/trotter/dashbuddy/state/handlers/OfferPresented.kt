@@ -171,6 +171,7 @@ class OfferPresented : StateHandler {
                 if (screenClicked == Screen.OFFER_POPUP) {
                     // we accepted the offer.
                     offerRepo.updateOfferStatus(finalOfferId, OfferStatus.ACCEPTED)
+                    offerRepo.updateOfferAcceptTime(finalOfferId, stateContext.timestamp)
                     Log.i(tag, "Offer #$finalOfferId accepted.")
                     // add the orders to the queue.
                     val orders = orderRepo.getOrdersForOffer(finalOfferId).first()

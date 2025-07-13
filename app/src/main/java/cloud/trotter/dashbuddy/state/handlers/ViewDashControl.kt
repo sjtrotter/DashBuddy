@@ -23,6 +23,7 @@ class ViewDashControl : StateHandler {
                     screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ->
                 AppState.DASH_ACTIVE_AWAITING_OFFER
 
+            screen == Screen.OFFER_POPUP -> AppState.DASH_ACTIVE_OFFER_PRESENTED
             screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
             screen == Screen.TIMELINE_VIEW -> AppState.DASH_ACTIVE_ON_TIMELINE
 

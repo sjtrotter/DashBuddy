@@ -25,6 +25,7 @@ class ViewTimeline : StateHandler {
 
             screen == Screen.DASH_CONTROL -> AppState.DASH_ACTIVE_ON_CONTROL
             screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
+            screen == Screen.OFFER_POPUP -> AppState.DASH_ACTIVE_OFFER_PRESENTED
 
             screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
             screen.isDelivery -> AppState.DASH_ACTIVE_ON_DELIVERY

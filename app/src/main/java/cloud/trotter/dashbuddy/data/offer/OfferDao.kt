@@ -57,6 +57,9 @@ interface OfferDao {
     @Query("SELECT * FROM offers WHERE dashId = :dashId ORDER BY timestamp DESC")
     suspend fun getOffersForDashList(dashId: Long): List<OfferEntity>
 
+    @Query("SELECT * FROM offers WHERE dashId IN (:dashIds) ORDER BY timestamp DESC")
+    fun getOffersForDashesFlow(dashIds: List<Long>): Flow<List<OfferEntity>>
+
     @Query("SELECT * FROM offers ORDER BY timestamp DESC")
     fun getAllOffers(): Flow<List<OfferEntity>>
 

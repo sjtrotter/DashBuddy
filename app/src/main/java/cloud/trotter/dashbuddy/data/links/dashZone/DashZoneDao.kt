@@ -80,4 +80,16 @@ interface DashZoneDao {
      */
     @Query("DELETE FROM dash_zone_link WHERE dashId = :dashId")
     suspend fun deleteZoneLinksForDash(dashId: Long)
+
+    /**
+     * Reactively counts the number of unique zones for a given list of dash IDs.
+     * @param dashIds The list of dash IDs to count unique zones for.
+     * @return A Flow emitting the count of unique zones as an Int.
+     */
+    @Query("SELECT COUNT(DISTINCT zoneId) FROM dash_zone_link WHERE dashId IN (:dashIds)")
+    fun getUniqueZoneCountForDashesFlow(dashIds: List<Long>): Flow<Int>
+
+    // Add this function to get all links for a list of dashes at once.
+    @Query("SELECT * FROM dash_zone_link WHERE dashId IN (:dashIds)")
+    fun getLinksForDashesFlow(dashIds: List<Long>): Flow<List<DashZoneEntity>>
 }

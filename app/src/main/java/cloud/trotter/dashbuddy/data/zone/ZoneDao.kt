@@ -46,4 +46,7 @@ interface ZoneDao {
     @Query("SELECT * FROM zones ORDER BY zoneName ASC")
     fun getAllZones(): Flow<List<ZoneEntity>>
 
+    // Add this function to get all relevant zones at once.
+    @Query("SELECT * FROM zones WHERE id IN (:zoneIds)")
+    fun getZonesByIdsFlow(zoneIds: List<Long>): Flow<List<ZoneEntity>>
 }

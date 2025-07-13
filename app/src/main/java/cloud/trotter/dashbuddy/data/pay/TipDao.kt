@@ -22,4 +22,16 @@ interface TipDao {
 
     @Query("SELECT * FROM customer_tips WHERE orderId = :orderId")
     suspend fun getTipsForOrderList(orderId: Long): List<TipEntity>
+
+    @Query(
+        """
+        SELECT SUM(T.amount) FROM customer_tips AS T
+        INNER JOIN orders AS O ON T.orderId = O.id
+        WHERE O.offerId IN (:offerIds)
+    """
+    )
+    fun getTotalTipsForOffersFlow(offerIds: List<Long>): Flow<Double?>
+
+    @Query("SELECT * FROM customer_tips WHERE orderId IN (:orderIds)")
+    fun getTipsForOrdersFlow(orderIds: List<Long>): Flow<List<TipEntity>>
 }

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    tools:context=".ui.fragments.dashhistory.DashHistoryFragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <include
+            android:id="@+id/summary_card"
+            layout="@layout/item_dash_history_stats_card" />
+
+        <GridLayout
+            android:id="@+id/months_grid_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:columnCount="3"
+            android:alignmentMode="alignMargins"
+            android:useDefaultMargins="true">
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_1"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_1" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_2"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_2" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_3"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_3" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_4"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_4" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_5"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_5" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_6"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_6" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_7"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_7" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_8"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_8" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_9"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_9" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_10"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_10" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_11"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_11" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/month_card_12"
+                style="@style/MonthCardStyle">
+
+                <include
+                    layout="@layout/item_dash_history_annual_month"
+                    android:id="@+id/month_content_12" />
+            </com.google.android.material.card.MaterialCardView>
+
+        </GridLayout>
+    </LinearLayout>
+</ScrollView>

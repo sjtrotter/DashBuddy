@@ -42,6 +42,15 @@ interface OrderDao {
     @Query("SELECT * FROM orders WHERE offerId = :offerId ORDER BY orderIndex ASC")
     suspend fun getOrdersForOfferList(offerId: Long): List<OrderEntity>
 
+    /**
+     * Retrieves all orders associated with a given list of offer IDs.
+     * This is useful for fetching all related orders for a set of dashes at once.
+     * @param offerIds The list of offer IDs to fetch orders for.
+     * @return A Flow emitting a list of matching OrderEntities.
+     */
+    @Query("SELECT * FROM orders WHERE offerId IN (:offerIds)")
+    fun getOrdersForOffersFlow(offerIds: List<Long>): Flow<List<OrderEntity>>
+
     @Query("SELECT * FROM orders ORDER BY offerId ASC, orderIndex ASC")
     fun getAllOrders(): Flow<List<OrderEntity>>
 
@@ -128,5 +137,8 @@ interface OrderDao {
 
     @Query("UPDATE orders SET customerNameHash = :customerNameHash WHERE id = :orderId")
     suspend fun setCustomerNameHash(orderId: Long, customerNameHash: String)
+
+    @Query("SELECT SUM(mileage) FROM orders WHERE offerId IN (:offerIds)")
+    fun getTotalActiveMilesForOffersFlow(offerIds: List<Long>): Flow<Double?>
 
 }

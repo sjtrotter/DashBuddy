@@ -19,6 +19,8 @@ class ViewEarnings : StateHandler {
 
         if (stateContext.screenInfo?.screen == Screen.DASH_CONTROL) return AppState.DASH_ACTIVE_ON_CONTROL
         if (stateContext.screenInfo?.screen == Screen.MAIN_MAP_IDLE) return AppState.DASH_IDLE_OFFLINE
+        if (stateContext.screenInfo?.screen == Screen.TIMELINE_VIEW) return AppState.DASH_ACTIVE_ON_TIMELINE
+        if (stateContext.screenInfo?.screen == Screen.OFFER_POPUP) return AppState.DASH_ACTIVE_OFFER_PRESENTED
 
         return currentState
     }

@@ -3,26 +3,33 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
-        android:id="@+id/menu_prev_month"
+        android:id="@+id/menu_prev"
         android:icon="@drawable/ic_chevron_left"
-        android:title="Previous Month"
+        android:title="@string/previous"
         app:showAsAction="always" />
 
     <item
-        android:id="@+id/menu_month_year_title"
-        android:title="July 2025"
-        app:showAsAction="always" />
+        android:id="@+id/menu_today"
+        android:icon="@drawable/ic_history_today"
+        android:title="@string/go_to_current"
+        app:showAsAction="ifRoom" />
 
     <item
-        android:id="@+id/menu_next_month"
+        android:id="@+id/menu_next"
         android:icon="@drawable/ic_chevron_right"
-        android:title="Next Month"
+        android:title="@string/next"
         app:showAsAction="always" />
 
     <item
-        android:id="@+id/menu_export_history"
-        android:icon="@android:drawable/ic_menu_save"
-        android:title="Export"
-        android:orderInCategory="100"
+        android:id="@+id/menu_month"
+        android:icon="@drawable/ic_shopping_bag_speed"
+        android:title="@string/active_total"
         app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_export"
+        android:icon="@drawable/ic_file_export"
+        android:title="@string/export"
+        android:orderInCategory="100"
+        app:showAsAction="ifRoom" />
 </menu>

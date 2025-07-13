@@ -8,6 +8,7 @@ import androidx.navigation.ui.setupWithNavController
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.ActivityBubbleBinding
+import cloud.trotter.dashbuddy.ui.interfaces.DebugModeToggleListener
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
