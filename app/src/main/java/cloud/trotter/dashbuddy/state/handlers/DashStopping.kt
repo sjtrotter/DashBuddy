@@ -1,11 +1,13 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.data.dash.DashEntity
 import cloud.trotter.dashbuddy.data.zone.ZoneEntity
+import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
@@ -87,6 +89,10 @@ class DashStopping : StateHandler {
             DashBuddyApplication.sendBubbleMessage(
                 "Ending Dash in $currentZoneName"
             )
+
+            // Stop the location service.
+            val serviceIntent = Intent(DashBuddyApplication.context, LocationService::class.java)
+            DashBuddyApplication.context.stopService(serviceIntent)
 
             // Get the DashEntity to update
             val dash: DashEntity? = dashRepo.getDashById(current.dashId)

@@ -289,4 +289,11 @@ class CurrentRepo(private val currentDao: CurrentDao) {
             Log.i(tag, "Upserted pre-dash info. ZoneID: $newZoneId, Mode: $newDashType")
         }
     }
+
+    // Add this function to expose the DAO method
+    suspend fun updateLastLocation(latitude: Double, longitude: Double) {
+        withContext(Dispatchers.IO) {
+            currentDao.updateLastLocation(latitude, longitude, System.currentTimeMillis())
+        }
+    }
 }

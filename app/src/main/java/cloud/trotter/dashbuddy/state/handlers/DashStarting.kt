@@ -1,9 +1,12 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.dash.DashEntity
+import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppState as AppState
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
@@ -30,6 +33,12 @@ class DashStarting : StateHandler {
         return when (stateContext.screenInfo?.screen) {
             Screen.ON_DASH_MAP_WAITING_FOR_OFFER, Screen.ON_DASH_ALONG_THE_WAY ->
                 AppState.DASH_ACTIVE_AWAITING_OFFER
+
+            Screen.OFFER_POPUP ->
+                AppState.DASH_ACTIVE_OFFER_PRESENTED
+
+            Screen.DASH_SUMMARY_SCREEN, Screen.MAIN_MAP_IDLE ->
+                AppState.DASH_STOPPING
 
             else -> currentState
         }
@@ -90,8 +99,13 @@ class DashStarting : StateHandler {
                 dashType,
                 stateContext.timestamp,
             )
-            Log.i(tag, "Current dash state updated. Dash successfully started.")
+            Log.i(tag, "Current dash state updated.")
 
+            // 5. Start location service to track mileage.
+            val serviceIntent = Intent(DashBuddyApplication.context, LocationService::class.java)
+            ContextCompat.startForegroundService(DashBuddyApplication.context, serviceIntent)
+
+            // 6. Send a success bubble message
             DashBuddyApplication.sendBubbleMessage("Dashing in $zoneName\n(${dashType?.displayName})")
 
         } catch (e: Exception) {

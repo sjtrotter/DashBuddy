@@ -65,5 +65,9 @@ data class CurrentEntity(
     val activeOrderId: Long? = null,
 
     /** A queue of OrderEntity IDs that have been accepted but are not yet complete. */
-    val activeOrderQueue: List<Long> = emptyList()
+    val activeOrderQueue: List<Long> = emptyList(),
+
+    /** Location information for mileage tracking. */
+    val lastLatitude: Double? = null,
+    val lastLongitude: Double? = null,
 )

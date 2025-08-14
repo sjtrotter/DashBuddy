@@ -141,4 +141,7 @@ interface OrderDao {
     @Query("SELECT SUM(mileage) FROM orders WHERE offerId IN (:offerIds)")
     fun getTotalActiveMilesForOffersFlow(offerIds: List<Long>): Flow<Double?>
 
+    // Add this query to increment the mileage for an order
+    @Query("UPDATE orders SET mileage = COALESCE(mileage, 0.0) + :mileageToAdd WHERE id = :orderId")
+    suspend fun incrementOrderMileage(orderId: Long, mileageToAdd: Double)
 }

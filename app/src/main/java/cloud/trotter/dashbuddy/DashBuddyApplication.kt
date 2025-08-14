@@ -21,7 +21,7 @@ import cloud.trotter.dashbuddy.data.pay.AppPayRepo
 import cloud.trotter.dashbuddy.data.pay.TipRepo
 import cloud.trotter.dashbuddy.data.store.StoreRepo
 import cloud.trotter.dashbuddy.data.zone.ZoneRepo
-import cloud.trotter.dashbuddy.services.bubble.Service as BubbleService
+import cloud.trotter.dashbuddy.services.bubble.BubbleService as BubbleService
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
 

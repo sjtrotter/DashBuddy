@@ -13,7 +13,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 /**
  * Helper object to create bubble-specific notifications.
  */
-object Notification {
+object BubbleNotification {
 
     /**
      * Creates a notification configured for display as a bubble.

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.data.order // Or your specific repository package
 
+import cloud.trotter.dashbuddy.log.Logger as Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -11,6 +12,8 @@ import kotlinx.coroutines.withContext
  * @property orderDao The Data Access Object for orders.
  */
 class OrderRepo(private val orderDao: OrderDao) {
+
+    private val tag = "OrderRepo"
 
     // --- Basic CUD (Create, Update, Delete) ---
 
@@ -129,6 +132,14 @@ class OrderRepo(private val orderDao: OrderDao) {
     suspend fun setCustomerNameHash(orderId: Long, customerNameHash: String) {
         withContext(Dispatchers.IO) {
             orderDao.setCustomerNameHash(orderId, customerNameHash)
+        }
+    }
+
+    // Add this function to expose the DAO method
+    suspend fun incrementOrderMileage(orderId: Long, mileageToAdd: Double) {
+        withContext(Dispatchers.IO) {
+            Log.d(tag, "Incrementing mileage for Order ID $orderId by $mileageToAdd miles.")
+            orderDao.incrementOrderMileage(orderId, mileageToAdd)
         }
     }
 }

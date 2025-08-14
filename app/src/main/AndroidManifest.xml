@@ -46,7 +46,7 @@
         </activity>
 
         <service
-            android:name=".services.bubble.Service"
+            android:name=".services.bubble.BubbleService"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property
@@ -67,6 +67,11 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- Add this inside the <application> tag in your AndroidManifest.xml -->
+
+        <service
+            android:name=".services.LocationService"
+            android:foregroundServiceType="location" />
 
     </application>
 

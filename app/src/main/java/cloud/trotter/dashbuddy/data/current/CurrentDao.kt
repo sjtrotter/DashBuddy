@@ -86,4 +86,8 @@ interface CurrentDao {
         newQueue: List<Long>,
         timestamp: Long
     )
+
+    // Add this query to update the last known location coordinates
+    @Query("UPDATE current_dash SET lastLatitude = :latitude, lastLongitude = :longitude, lastUpdate = :timestamp WHERE id = 1")
+    suspend fun updateLastLocation(latitude: Double, longitude: Double, timestamp: Long)
 }

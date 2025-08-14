@@ -20,7 +20,7 @@ import androidx.core.content.ContextCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.ActivityMainBinding
 import cloud.trotter.dashbuddy.services.accessibility.DashBuddyAccessibility
-import cloud.trotter.dashbuddy.services.bubble.Service as BubbleService
+import cloud.trotter.dashbuddy.services.bubble.BubbleService as BubbleService
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class MainActivity : AppCompatActivity() {

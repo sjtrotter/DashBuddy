@@ -22,10 +22,9 @@ import cloud.trotter.dashbuddy.ui.activities.BubbleActivity
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.data.log.dash.DashLogRepo
-import cloud.trotter.dashbuddy.services.bubble.Notification as BubbleNotification
 import cloud.trotter.dashbuddy.log.Logger as Log
 
-class Service : Service() {
+class BubbleService : Service() {
     private lateinit var notificationManager: NotificationManager
     private lateinit var dashBuddyPerson: Person
     private lateinit var bubbleShortcut: ShortcutInfoCompat
@@ -212,7 +211,7 @@ class Service : Service() {
             )
             val startIntent = Intent(
                 DashBuddyApplication.context,
-                cloud.trotter.dashbuddy.services.bubble.Service::class.java
+                cloud.trotter.dashbuddy.services.bubble.BubbleService::class.java
             ).apply {
                 putExtra(EXTRA_MESSAGE, message) // Pass the message to onStartCommand
             }

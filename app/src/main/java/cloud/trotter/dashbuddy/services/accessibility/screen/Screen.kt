@@ -150,7 +150,7 @@ enum class Screen(
     // --- Actively Dashing States ---
     ON_DASH_MAP_WAITING_FOR_OFFER(
         screenName = "Waiting for Offer",
-        requiredTexts = listOf("looking for offers", "this dash", "timeline"),
+        requiredTexts = listOf("looking for offers", "this dash"),
         forbiddenTexts = listOf(
             "dash now",
             "we'll look for orders along the way",
@@ -174,7 +174,6 @@ enum class Screen(
         requiredTexts = listOf(
             "we'll look for orders along the way",
             "navigate",
-            "up",
             "to zone",
             "spot saved until"
         ),
@@ -326,7 +325,9 @@ enum class Screen(
             "dash ends at",
             "active time",
             "dash time",
-            "completed deliveries"
+            "completed deliveries",
+            "looking for offers",
+            "promotions"
         ),
         activityHint = ActivityHint.ACTIVE
     ),

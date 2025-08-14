@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import cloud.trotter.dashbuddy.data.current.CurrentDao
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.data.customer.CustomerDao
@@ -27,6 +29,14 @@ import cloud.trotter.dashbuddy.data.store.StoreDao
 import cloud.trotter.dashbuddy.data.zone.ZoneDao
 import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 
+private val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add the new columns to the existing current_dash table
+        db.execSQL("ALTER TABLE current_dash ADD COLUMN lastLatitude REAL")
+        db.execSQL("ALTER TABLE current_dash ADD COLUMN lastLongitude REAL")
+    }
+}
+
 @Database(
     entities = [
         AppPayEntity::class,
@@ -41,7 +51,7 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
         TipEntity::class,
         ZoneEntity::class,
     ],
-    version = 15, // Start with version 1
+    version = 16, // Start with version 1
     exportSchema = false // Set to true if you plan to use schema for testing migrations
 // For production, schema export is recommended.
 )
@@ -71,6 +81,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
                     DashBuddyDatabase::class.java,
                     DATABASE_NAME
                 )
+                    .addMigrations(MIGRATION_15_16)
                     // For now, if a migration is needed, destroy and rebuild the database.
                     // TODO: Implement proper migrations for production releases.
                     .fallbackToDestructiveMigration(true)
