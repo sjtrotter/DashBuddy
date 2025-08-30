@@ -17,17 +17,17 @@ object OfferEvaluator {
 
     // --- Normalization Parameters (Constants) ---
     private const val MIN_PAYOUT_FOR_SCORING = 2.0
-    private const val MAX_PAYOUT_FOR_SCORING = 11.02
+    private const val MAX_PAYOUT_FOR_SCORING = 15.875
     private const val MIN_DISTANCE_FOR_SCORING = 0.5
-    private const val MAX_DISTANCE_FOR_SCORING = 14.08
-    private const val MIN_DELIVERY_TIME_FOR_SCORING = 6.20
-    private const val MAX_DELIVERY_TIME_FOR_SCORING = 33.79
-    private const val MIN_DOLLAR_PER_MILE_FOR_SCORING = 0.7
-    private const val MAX_DOLLAR_PER_MILE_FOR_SCORING = 3.0
-    private const val MIN_DOLLAR_PER_HOUR_FOR_SCORING = 7.25
-    private const val MAX_DOLLAR_PER_HOUR_FOR_SCORING = 30.0
+    private const val MAX_DISTANCE_FOR_SCORING = 15.2125
+    private const val MIN_DELIVERY_TIME_FOR_SCORING = 10.0
+    private const val MAX_DELIVERY_TIME_FOR_SCORING = 47.809
+    private const val MIN_DOLLAR_PER_MILE_FOR_SCORING = 0.67
+    private const val MAX_DOLLAR_PER_MILE_FOR_SCORING = 3.864063
+    private const val MIN_DOLLAR_PER_HOUR_FOR_SCORING = 10.00
+    private const val MAX_DOLLAR_PER_HOUR_FOR_SCORING = 32.02188
     private const val MIN_ITEMS_FOR_SCORING = 1.0
-    private const val MAX_ITEMS_FOR_SCORING = 30.0
+    private const val MAX_ITEMS_FOR_SCORING = 9.5
 
     private val sharedPreferences by lazy {
         DashBuddyApplication.instance.getSharedPreferences("dashbuddyPrefs", Context.MODE_PRIVATE)
@@ -35,7 +35,7 @@ object OfferEvaluator {
 
     /**
      * Evaluates a parsed offer, builds the OfferEntity, and creates a formatted summary message.
-     * @return An EvaluationResult containing both the OfferEntity and the SpannableString bubble message.
+     * @return An [EvaluationResult] containing both the [OfferEntity] and the [SpannableString] bubble message.
      */
     fun evaluateOffer(
         parsedOffer: ParsedOffer,
