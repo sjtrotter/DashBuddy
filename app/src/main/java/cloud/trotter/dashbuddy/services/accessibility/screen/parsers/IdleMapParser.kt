@@ -22,11 +22,14 @@ object IdleMapParser {
             }
         }
 
-        var zonePreIndex = screenTexts.indexOfFirst { it.contains("Promos", ignoreCase = true) }
+        var zonePreIndex = screenTexts.indexOfFirst { it.contains("This week", ignoreCase = true) }
+
+        if (zonePreIndex == -1) {
+            zonePreIndex = screenTexts.indexOfFirst { it.contains("Promos", ignoreCase = true) }
+        }
         if (zonePreIndex == -1) {
             zonePreIndex = screenTexts.indexOfFirst { it.contains("Help", ignoreCase = true) }
         }
-
         zoneName = if (zonePreIndex != -1) {
             screenTexts[zonePreIndex + 1]
         } else {

@@ -41,9 +41,17 @@ enum class Screen(
     ),
     MAIN_MAP_IDLE(
         screenName = "Main Map Idle",
-        requiredTexts = listOf("dash", "open navigation drawer", "safety", "help"),
+        requiredTexts = listOf("dash", "home", "help", "this week"),
         // ensure the screen has the button.
-        someOfTheseTexts = listOf("dash now", "dash along the way", "schedule", "navigate"),
+        someOfTheseTexts = listOf(
+            "dash",
+            "dash now to check for offers",
+            "dash now and head to zone",
+            "head to zone, offers are waiting",
+            "schedule",
+            "navigate"
+        ),
+        forbiddenTexts = listOf("you're dashing now"),
         minTextCount = 5,
         activityHint = ActivityHint.INACTIVE
     ),
