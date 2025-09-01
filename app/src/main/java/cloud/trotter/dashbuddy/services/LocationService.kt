@@ -106,7 +106,12 @@ class LocationService : Service() {
             if (distanceInMiles > 0.001) {
                 Log.d(tag, "Distance calculated: $distanceInMiles miles")
                 currentDash.dashId?.let { dashRepo.incrementDashMileage(it, distanceInMiles) }
-                currentDash.activeOrderId?.let { orderRepo.incrementOrderMileage(it, distanceInMiles) }
+                currentDash.activeOrderId?.let {
+                    orderRepo.incrementOrderMileage(
+                        it,
+                        distanceInMiles
+                    )
+                }
             }
         }
 
@@ -114,15 +119,20 @@ class LocationService : Service() {
     }
 
     private fun locationFlow(): Flow<Location> = callbackFlow {
-        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
             Log.e(tag, "Location permission not granted. Cannot start updates.")
             close(SecurityException("Location permission not granted."))
             return@callbackFlow
         }
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000L).apply {
-            setMinUpdateIntervalMillis(5000L)
-        }.build()
+        val locationRequest =
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000L).apply {
+                setMinUpdateIntervalMillis(5000L)
+            }.build()
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
@@ -133,7 +143,11 @@ class LocationService : Service() {
             }
         }
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            Looper.getMainLooper()
+        )
 
         awaitClose {
             Log.i(tag, "Location flow cancelled. Removing updates.")
