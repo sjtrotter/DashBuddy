@@ -4,20 +4,21 @@ import android.text.SpannableString
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update // For concise updates
 
-/**
- * A singleton repository to manage and provide access to the list of dash log messages.
- * This allows different parts of the app (like a Service and a ViewModel) to interact
- * with the same log data.
- */
 object DebugLogRepo {
 
-    // Private MutableStateFlow to hold the list of log items.
-    // Initialized with an empty list.
-    private val _logMessagesFlow = MutableStateFlow<List<DebugLogItem>>(emptyList())
+    private const val MAX_LOG_LINES = 1000
 
-    // Public immutable StateFlow that UI components or ViewModels can observe.
+    // 1. Use an ArrayDeque as the internal, mutable source of truth.
+    //    It is highly efficient at adding to the end and removing from the front.
+    private val logMessagesDeque = ArrayDeque<DebugLogItem>(MAX_LOG_LINES)
+
+    // 2. Add a lock for thread safety. StateFlow's 'update' was handling this
+    //    for you, but since we are managing the list manually, we must add one.
+    private val lock = Any()
+
+    // 3. The StateFlow still holds an immutable List for observers.
+    private val _logMessagesFlow = MutableStateFlow<List<DebugLogItem>>(emptyList())
     val logMessagesFlow: StateFlow<List<DebugLogItem>> = _logMessagesFlow.asStateFlow()
 
     /**
@@ -33,28 +34,38 @@ object DebugLogRepo {
         }
         val newItem = DebugLogItem(spannableMessage)
 
-        // Update the flow by adding the new item to the current list
-        _logMessagesFlow.update { currentList ->
-            currentList + newItem
+        // 4. Update the internal deque inside the lock
+        synchronized(lock) {
+            // If the deque is full, remove the oldest item first
+            if (logMessagesDeque.size >= MAX_LOG_LINES) {
+                logMessagesDeque.removeFirst()
+            }
+            // Add the new item to the end
+            logMessagesDeque.addLast(newItem)
+
+            // 5. Update the StateFlow with a new immutable list *after*
+            //    the efficient update. This is the *only* copy operation.
+            _logMessagesFlow.value = logMessagesDeque.toList()
         }
-        // Or, if you prefer the older way:
-        // _logMessagesFlow.value = _logMessagesFlow.value + newItem
     }
 
     /**
      * Clears all messages from the dash log.
-     * Typically called when a new dash starts.
      */
     fun clearLogMessages() {
-        _logMessagesFlow.value = emptyList()
+        synchronized(lock) {
+            logMessagesDeque.clear()
+            _logMessagesFlow.value = emptyList()
+        }
     }
 
     /**
      * Gets the current list of messages directly (non-Flow).
-     * Useful for contexts where a Flow is not ideal for a one-time read,
-     * though observing the flow is generally preferred for UI.
      */
     fun getCurrentLogMessages(): List<DebugLogItem> {
-        return _logMessagesFlow.value
+        synchronized(lock) {
+            // Return a copy for thread safety
+            return logMessagesDeque.toList()
+        }
     }
 }

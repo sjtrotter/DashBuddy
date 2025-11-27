@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.services.accessibility.screen
 import cloud.trotter.dashbuddy.data.offer.OfferParser
 import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.DeliveryScreen
+import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.IdleMapNodeParser
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.IdleMapParser
@@ -94,7 +95,7 @@ object ScreenRecognizerV2 {
                     }
 
                     screenCandidate == Screen.MAIN_MAP_IDLE -> {
-                        val (zone, type) = IdleMapParser.parse(stateContext.rootNodeTexts)
+                        val (zone, type) = IdleMapNodeParser.parse(stateContext.rootUiNode)
                         ScreenInfo.IdleMap(screenCandidate, zone, type)
                     }
 

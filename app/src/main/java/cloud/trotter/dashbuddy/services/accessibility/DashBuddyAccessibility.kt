@@ -3,7 +3,9 @@ package cloud.trotter.dashbuddy.services.accessibility
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
+import android.os.Build
 import android.view.accessibility.AccessibilityEvent
+import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class DashBuddyAccessibility : AccessibilityService() {
@@ -17,6 +19,7 @@ class DashBuddyAccessibility : AccessibilityService() {
         eventHandler = EventHandler
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val rootNode = rootInActiveWindow
         if (event != null && rootNode != null) {

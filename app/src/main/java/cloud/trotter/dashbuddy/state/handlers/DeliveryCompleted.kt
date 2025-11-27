@@ -222,7 +222,7 @@ class DeliveryCompleted : StateHandler {
         // The goal is to find the dollar amount button and click it.
         // The button's text is the dollar amount itself.
         // We look for any text that starts with a '$'.
-        val buttonText = stateContext.rootNodeTexts.find { it.trim().startsWith("$") }
+        val buttonText = stateContext.rootNodeTexts.find { it.trim().startsWith("This offer") }
 
         if (buttonText == null) {
             Log.w(

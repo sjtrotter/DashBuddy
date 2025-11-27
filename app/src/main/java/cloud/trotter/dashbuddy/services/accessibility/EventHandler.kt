@@ -1,10 +1,12 @@
 package cloud.trotter.dashbuddy.services.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
@@ -45,6 +47,7 @@ object EventHandler {
     private val eventScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     // This runnable will contain the logic to process the event after the delay.
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private val debounceRunnable = Runnable {
         Log.d(TAG, "Processing debounced event.")
         _serviceFlow.value?.let { activeService ->
@@ -90,6 +93,7 @@ object EventHandler {
      * Main entry point for handling events from the AccessibilityService.
      * It decides whether to process an event immediately or to debounce it.
      */
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun handleEvent(
         event: AccessibilityEvent,
         service: AccessibilityService,
@@ -154,6 +158,7 @@ object EventHandler {
      * This is the core logic that extracts data, recognizes the screen, and dispatches the state.
      * It's called either immediately (for clicks) or after a delay (for content changes).
      */
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private suspend fun processEvent(
         event: AccessibilityEvent,
         service: AccessibilityService,
@@ -164,6 +169,9 @@ object EventHandler {
         if (rootNode == null) {
             rootNode = service.rootInActiveWindow ?: return
         }
+
+        val uiNodeTree = UiNode.from(rootNode)
+        Log.d(TAG, "UI Node Tree: $uiNodeTree")
 
         val currentDashState: CurrentEntity? = currentRepo.getCurrentDashState()
 
@@ -194,6 +202,7 @@ object EventHandler {
             eventTypeString = AccessibilityEvent.eventTypeToString(currentEventType),
             packageName = event.packageName,
             rootNode = rootNode,
+            rootUiNode = uiNodeTree,
             sourceClassName = event.className,
             sourceNode = event.source,
             rootNodeTexts = rootNodeTexts,

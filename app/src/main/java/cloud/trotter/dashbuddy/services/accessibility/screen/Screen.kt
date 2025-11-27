@@ -1,8 +1,10 @@
 package cloud.trotter.dashbuddy.services.accessibility.screen // Package for the Screen enum
 
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.state.ActivityHint
 import java.util.Locale
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 /**
  * Represents distinct UI screens identified within the Dasher application.
@@ -22,7 +24,8 @@ enum class Screen(
     val minTextCount: Int = 0, // Min number of texts expected on the screen (from root)
     val maxTextCount: Int = Int.MAX_VALUE, // Max number of texts
     // Custom matcher lambda for more complex logic beyond simple text checks for this screen
-    val customMatcher: ((screenTexts: List<String>, sourceTexts: List<String>, context: StateContext) -> Boolean)? = null
+    val customMatcher: ((screenTexts: List<String>, sourceTexts: List<String>, context: StateContext) -> Boolean)? = null,
+    val nodeMatcher: ((rootNode: UiNode) -> Boolean)? = null,
 ) {
     UNKNOWN(
         screenName = "UNKNOWN"
@@ -32,7 +35,17 @@ enum class Screen(
     APP_STARTING_OR_LOADING(
         screenName = "App Startup",
         someOfTheseTexts = listOf("starting…", "signing in…"),
-        maxTextCount = 7 // Usually few texts on these screens, helps differentiate
+        maxTextCount = 7, // Usually few texts on these screens, helps differentiate
+        nodeMatcher = { root ->
+            val hasStartingText =
+                root.hasNode { it.text == "Starting…" && it.className == "android.widget.TextView" }
+            val hasCancelButton =
+                root.hasNode { it.text == "Cancel" && it.className == "android.widget.Button" }
+            if (hasStartingText && hasCancelButton) {
+                Log.d("Screen", "Found starting text and cancel button, matched App Startup")
+            }
+            hasStartingText && hasCancelButton
+        }
     ),
     LOGIN_SCREEN(
         screenName = "Login",
@@ -43,6 +56,23 @@ enum class Screen(
         screenName = "Main Map Idle",
         requiredTexts = listOf("dash", "home", "help", "this week"),
         // ensure the screen has the button.
+        nodeMatcher = { root ->
+            // Check for several unique and stable elements on the screen.
+            // This is much more reliable than just checking for a list of words.
+            val hasNavTabs = root.hasNode { it.text == "Home" } &&
+                    root.hasNode { it.text == "Schedule" } &&
+                    root.hasNode { it.text == "Earnings" } &&
+                    root.hasNode { it.text == "Ratings" }
+
+            val hasTopBarElements = root.hasNode { it.contentDescription == "Side Menu" } &&
+                    root.hasNode { it.contentDescription == "Earnings Mode Switcher" }
+
+            // The screen is only a match if both the top bar and nav tabs are present.
+            if (hasNavTabs && hasTopBarElements) {
+                Log.d("Screen", "Found nav tabs and top bar elements, matched Main Map Idle")
+            }
+            hasNavTabs && hasTopBarElements
+        },
         someOfTheseTexts = listOf(
             "dash",
             "dash now to check for offers",
@@ -322,7 +352,21 @@ enum class Screen(
     // --- Post-Delivery ---
     DELIVERY_COMPLETED_DIALOG(
         screenName = "Delivery Completed",
-        requiredTexts = listOf("completed", "$"),
+        nodeMatcher = { root ->
+            // Check for the main identifying texts
+            val hasDashSummaryText = root.hasNode { it.text == "This dash so far" }
+            val hasOfferSummaryText = root.hasNode { it.text == "This offer" }
+
+            // Check specifically for the "Continue dashing" button
+            val hasContinueButton = root.findNode {
+                it.className == "android.widget.Button" &&
+                        it.hasNode { child -> child.text == "Continue dashing" }
+            } != null
+
+            // All three conditions must be met
+            hasDashSummaryText && hasOfferSummaryText && hasContinueButton
+        },
+        requiredTexts = listOf("this offer", "continue", "this dash so far"),
         someOfTheseTexts = listOf("delivery", "deliveries", "done", "continue"),
         forbiddenTexts = listOf(
             "accept",
@@ -350,6 +394,13 @@ enum class Screen(
         // UNKNOWN screen matches nothing by definition, it's a fallback.
         if (this == UNKNOWN) return false
 
+        // *** Prioritize the nodeMatcher if it exists
+        this.nodeMatcher?.let { matcher ->
+            context.rootUiNode?.let { rootNode ->
+                Log.d("Screen", "Using nodeMatcher for $screenName")
+                return matcher(rootNode)
+            }
+        }
         // Use screenTexts from context for primary matching
         val textsToSearch =
             context.rootNodeTexts.joinToString(separator = " | ").lowercase(Locale.getDefault())

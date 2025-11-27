@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.state
 
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
 
@@ -11,6 +12,7 @@ data class StateContext(
     val eventTypeString: String,                        // For logging/debugging, e.g., "TYPE_WINDOW_CONTENT_CHANGED"
     val packageName: CharSequence? = null,              // e.g., "com.doordash.driverapp"
     val rootNode: AccessibilityNodeInfo? = null,        // The root node of the current window
+    val rootUiNode: UiNode? = null,                     // A structured representation of the root node
     val rootNodeTexts: List<String> = emptyList(),      // All texts extracted from the current window (rootInActiveWindow)
     val sourceNode: AccessibilityNodeInfo? = null,      // The source node of the event (if any)
     val sourceClassName: CharSequence? = null,          // Class name of the view that fired the event

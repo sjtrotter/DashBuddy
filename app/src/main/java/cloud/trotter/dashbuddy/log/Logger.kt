@@ -243,20 +243,22 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
 
     private fun pruneOldLogs() {
         val rotatedFiles = logDirectory?.listFiles { file ->
-            file.name.startsWith(ROTATED_LOG_FILE_PREFIX) && file.name.endsWith(
-                LOG_FILE_NAME.substringAfterLast(
-                    '.',
-                    ""
-                )
-            )
+            file.name.startsWith(ROTATED_LOG_FILE_PREFIX) && file.name.endsWith(".txt")
         }?.sortedByDescending { it.lastModified() }
+
         if (rotatedFiles != null && rotatedFiles.size > maxRotatedLogFiles) {
             android.util.Log.i(
                 "Logger",
-                "Pruning. Max: $maxRotatedLogFiles, Found: ${rotatedFiles.size}"
+                "Pruning old logs. Max allowed: $maxRotatedLogFiles, Found: ${rotatedFiles.size}"
             )
-            rotatedFiles.subList(maxRotatedLogFiles, rotatedFiles.size)
-                .forEach { android.util.Log.d("Logger", "Would delete: ${it.name}") }
+            val filesToDelete = rotatedFiles.subList(maxRotatedLogFiles, rotatedFiles.size)
+            filesToDelete.forEach { file ->
+                if (file.delete()) {
+                    android.util.Log.d("Logger", "Deleted old log file: ${file.name}")
+                } else {
+                    android.util.Log.w("Logger", "Failed to delete old log file: ${file.name}")
+                }
+            }
         }
     }
 
