@@ -6,13 +6,14 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.ListAdapter
 import cloud.trotter.dashbuddy.databinding.FragmentDashHistoryAnnualContentBinding
 import cloud.trotter.dashbuddy.log.Logger
+import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashStateViewModel
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.HistoryPage
 
 class AnnualAdapter(
     private val fragment: Fragment,
     private val stateViewModel: DashStateViewModel,
-    private val annualViewModel: AnnualViewModel, // Pass in the specialist ViewModel
+    private val historyRepo: DashHistoryRepo, // Inject Repo
     private val onMonthClicked: (Int) -> Unit
 ) : ListAdapter<HistoryPage.Annual, AnnualPageViewHolder>(AnnualPageDiffCallback()) {
 
@@ -23,22 +24,28 @@ class AnnualAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AnnualPageViewHolder {
-        Logger.d(tag, "onCreateViewHolder for AnnualPage")
         val inflater = LayoutInflater.from(parent.context)
         val binding = FragmentDashHistoryAnnualContentBinding.inflate(inflater, parent, false)
-        // Pass the ViewModel to the ViewHolder
         return AnnualPageViewHolder(
             binding,
             fragment,
             stateViewModel,
-            annualViewModel,
             onMonthClicked
         )
     }
 
     override fun onBindViewHolder(holder: AnnualPageViewHolder, position: Int) {
-        Logger.d(tag, "onBindViewHolder for position: $position")
-        // The ViewHolder now handles everything with just the position
-        holder.bind()
+        // 1. Calculate the specific Year for this page
+        // We use the reference date (2020) and add the offset
+        val yearOffset = position - START_POSITION
+        val pageYear = DashStateViewModel.REFERENCE_MONTH_DATE.year + yearOffset
+
+        Logger.v(tag, "Binding position $position to year $pageYear")
+        holder.bind(pageYear, historyRepo)
+    }
+
+    override fun onViewRecycled(holder: AnnualPageViewHolder) {
+        holder.unbind()
+        super.onViewRecycled(holder)
     }
 }

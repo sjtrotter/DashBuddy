@@ -9,10 +9,12 @@ import androidx.recyclerview.widget.RecyclerView
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.FragmentDashHistoryMonthlyContentBinding
 import cloud.trotter.dashbuddy.databinding.ItemDashHistoryMonthlyDayBinding
+import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashStateViewModel
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.StatDisplayMode
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.SummaryStats
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -24,10 +26,10 @@ class MonthlyPageViewHolder(
     private val binding: FragmentDashHistoryMonthlyContentBinding,
     private val fragment: Fragment,
     private val stateViewModel: DashStateViewModel,
-    private val monthlyViewModel: MonthlyViewModel,
     private val onDayClicked: (Int) -> Unit
 ) : RecyclerView.ViewHolder(binding.root) {
 
+    private var dataJob: Job? = null
     private val dayCellBindings: List<View>
     private val weekRowBindings: List<View>
 
@@ -35,7 +37,6 @@ class MonthlyPageViewHolder(
         binding.summaryCard.chipStatMode.setOnClickListener {
             stateViewModel.toggleStatMode()
         }
-        // Collect all the week rows and day cells into lists for easy access
         weekRowBindings = listOf(
             binding.weekRow1, binding.weekRow2, binding.weekRow3,
             binding.weekRow4, binding.weekRow5, binding.weekRow6
@@ -43,17 +44,25 @@ class MonthlyPageViewHolder(
         dayCellBindings = weekRowBindings.flatMap { (it as ViewGroup).touchables }
     }
 
-    fun bind() {
-        // Observe the combined data from our ViewModels
-        fragment.viewLifecycleOwner.lifecycleScope.launch {
+    fun bind(year: Int, month: Int, repo: DashHistoryRepo) {
+        unbind()
+
+        dataJob = fragment.viewLifecycleOwner.lifecycleScope.launch {
             combine(
-                monthlyViewModel.monthlyDisplay,
+                repo.getMonthlyDisplayFlow(year, month), // Fetch specific month
                 stateViewModel.statDisplayMode
             ) { display, mode ->
                 bindData(display, mode)
             }.collect()
         }
     }
+
+    fun unbind() {
+        dataJob?.cancel()
+    }
+
+    // ... (Keep bindData, updateSummaryCard, updateCalendarGrid exactly as they are) ...
+    // ... No changes needed below this line ...
 
     private fun bindData(display: MonthlyDisplay, mode: StatDisplayMode) {
         updateSummaryCard(display.stats, mode)

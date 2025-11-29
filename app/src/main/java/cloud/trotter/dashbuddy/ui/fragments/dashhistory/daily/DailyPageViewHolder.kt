@@ -15,51 +15,66 @@ import cloud.trotter.dashbuddy.databinding.FragmentDashHistoryDailyContentBindin
 import cloud.trotter.dashbuddy.databinding.ItemDashHistoryDailyDashBinding
 import cloud.trotter.dashbuddy.databinding.ItemDashHistoryDailyOfferBinding
 import cloud.trotter.dashbuddy.databinding.ItemDashHistoryDailyReceiptLineBinding
+import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashStateViewModel
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.StatDisplayMode
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.SummaryStats
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.util.Locale
 
 class DailyPageViewHolder(
-    private val binding: FragmentDashHistoryDailyContentBinding, // The binding for the whole page
+    private val binding: FragmentDashHistoryDailyContentBinding,
     private val fragment: Fragment,
-    private val stateViewModel: DashStateViewModel,
-    private val dailyViewModel: DailyViewModel
+    private val stateViewModel: DashStateViewModel
 ) : RecyclerView.ViewHolder(binding.root) {
 
     private val dashAdapter = DashAdapter()
+
+    // We keep track of the job so we can cancel it if the user swipes fast
+    private var dataJob: Job? = null
 
     init {
         binding.summaryCard.chipStatMode.setOnClickListener {
             stateViewModel.toggleStatMode()
         }
-        // Set up the main RecyclerView for the list of dashes
         binding.dashesRecyclerView.adapter = dashAdapter
     }
 
     /**
-     * Main entry point from the DailyAdapter. Starts the data observation process.
+     * Binds this specific page to a specific Date.
+     * It fetches its OWN data, completely ignoring the currently selected global date.
      */
-    fun bind() {
-        fragment.viewLifecycleOwner.lifecycleScope.launch {
+    fun bind(date: LocalDate, repo: DashHistoryRepo) {
+        // 1. Cancel any previous data fetching for this view (important for recycling)
+        unbind()
+
+        // 2. Start a new job for this specific date
+        dataJob = fragment.viewLifecycleOwner.lifecycleScope.launch {
             combine(
-                dailyViewModel.dailyDisplay,
-                stateViewModel.statDisplayMode
+                repo.getDailyDisplayFlow(date), // Fetch data for THIS date
+                stateViewModel.statDisplayMode  // This is still global (Active/Total toggle)
             ) { display, mode ->
                 bindData(display, mode)
             }.collect()
         }
     }
 
+    fun unbind() {
+        dataJob?.cancel()
+    }
+
     private fun bindData(display: DailyDisplay, mode: StatDisplayMode) {
         updateSummaryCard(display.stats, mode)
-        // Submit the list of dash summaries to the nested adapter
         dashAdapter.submitList(display.dashSummaries)
     }
+
+    // ... (Keep the rest of the file: updateSummaryCard, DashAdapter, OfferAdapter, etc.) ...
+    // ... (Ensure you copy the rest of the existing file here, no changes needed below this point) ...
 
     private fun updateSummaryCard(stats: SummaryStats, mode: StatDisplayMode) {
         val cardBinding = binding.summaryCard
@@ -108,8 +123,6 @@ class DailyPageViewHolder(
         }
     }
 
-    // --- NESTED ADAPTER AND VIEWHOLDER FOR DASHES ---
-
     inner class DashAdapter :
         ListAdapter<DailyDisplay.DashSummary, DashItemViewHolder>(DashSummaryDiffCallback()) {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DashItemViewHolder {
@@ -150,8 +163,6 @@ class DailyPageViewHolder(
                 .setDuration(300).start()
         }
     }
-
-    // --- NESTED ADAPTER AND VIEWHOLDER FOR OFFERS ---
 
     inner class OfferAdapter :
         ListAdapter<DailyDisplay.OfferSummary, OfferItemViewHolder>(OfferSummaryDiffCallback()) {
@@ -206,8 +217,6 @@ class DailyPageViewHolder(
         }
     }
 
-    // --- NESTED ADAPTER AND VIEWHOLDER FOR RECEIPT LINES ---
-
     inner class ReceiptLineAdapter :
         ListAdapter<DailyDisplay.ReceiptLine, ReceiptLineViewHolder>(ReceiptLineDiffCallback()) {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ReceiptLineViewHolder {
@@ -229,8 +238,6 @@ class DailyPageViewHolder(
             binding.amount.text = receiptLine.amount
         }
     }
-
-    // --- DIFF CALLBACKS FOR NESTED ADAPTERS ---
 
     class DashSummaryDiffCallback : DiffUtil.ItemCallback<DailyDisplay.DashSummary>() {
         override fun areItemsTheSame(

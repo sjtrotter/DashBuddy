@@ -18,11 +18,13 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.annual.AnnualDisplay
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.daily.DailyDisplay
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.monthly.MonthlyDisplay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.YearMonth
@@ -115,7 +117,7 @@ class DashHistoryRepo(
                         }
                     }
                 }
-            }
+            }.flowOn(Dispatchers.Default)
     }
 
     /**
@@ -187,7 +189,7 @@ class DashHistoryRepo(
                         }
                     }
                 }
-            }
+            }.flowOn(Dispatchers.Default)
     }
 
     /**
@@ -271,7 +273,7 @@ class DashHistoryRepo(
                         }
                     }
                 }
-            }
+            }.flowOn(Dispatchers.Default)
     }
 
     // --- PRIVATE AGGREGATION & CALCULATION HELPERS ---

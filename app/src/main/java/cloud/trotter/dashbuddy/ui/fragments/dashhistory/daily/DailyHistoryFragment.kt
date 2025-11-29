@@ -22,16 +22,11 @@ class DailyHistoryFragment : Fragment(R.layout.fragment_dash_history_daily_viewp
 
     private val tag = "DailyHistoryFragment"
 
-    // Get the shared ViewModel from the parent fragment
     private val stateViewModel: DashStateViewModel by viewModels({ requireParentFragment() })
 
-    // Get this fragment's own specialist ViewModel using the new Factory
-    private val dailyViewModel: DailyViewModel by viewModels {
-        DailyViewModelFactory(
-            DashBuddyApplication.Companion.dashHistoryRepo, // Assuming this is your repo instance
-            stateViewModel
-        )
-    }
+    // NOTE: We don't need 'dailyViewModel' anymore because the Adapter fetches data directly!
+    // We just access the repo singleton directly to pass to the adapter.
+    private val historyRepo = DashBuddyApplication.dashHistoryRepo
 
     private var _binding: FragmentDashHistoryDailyViewpagerBinding? = null
     private val binding get() = _binding!!
@@ -50,14 +45,17 @@ class DailyHistoryFragment : Fragment(R.layout.fragment_dash_history_daily_viewp
         val dailyAdapter = DailyAdapter(
             fragment = this,
             stateViewModel = this.stateViewModel,
-            dailyViewModel = this.dailyViewModel
+            historyRepo = this.historyRepo // Pass repo here
         )
         binding.dailyViewPager.adapter = dailyAdapter
+        binding.dailyViewPager.offscreenPageLimit = 1
 
-        // Submit a placeholder list to enable "infinite" scrolling
-        dailyAdapter.submitList(List(20_000) { HistoryPage.Daily(
-            DailyDisplay.Companion.empty(
-                LocalDate.now())) })
+        // Submit placeholders
+        dailyAdapter.submitList(List(20_000) {
+            HistoryPage.Daily(
+                DailyDisplay.Companion.empty(LocalDate.now())
+            )
+        })
 
         binding.dailyViewPager.registerOnPageChangeCallback(object :
             ViewPager2.OnPageChangeCallback() {
@@ -68,6 +66,7 @@ class DailyHistoryFragment : Fragment(R.layout.fragment_dash_history_daily_viewp
         })
     }
 
+    // ... (Keep observeSwipeEvents and setInitialPosition exactly as they are) ...
     private fun observeSwipeEvents() {
         viewLifecycleOwner.lifecycleScope.launch {
             stateViewModel.swipeEvent.collect { direction ->
@@ -89,15 +88,11 @@ class DailyHistoryFragment : Fragment(R.layout.fragment_dash_history_daily_viewp
 
     private fun setInitialPosition() {
         viewLifecycleOwner.lifecycleScope.launch {
-            val year = stateViewModel.selectedYear.first()
-            val month = stateViewModel.selectedMonth.first() ?: 1
-            val day = stateViewModel.selectedDay.first() ?: 1
+            // Wait for the state to be ready
+            val selectedDate = stateViewModel.selectedDate.first()
 
-            val selectedDate = LocalDate.of(year, month, day)
-
-            // Calculate how many days have passed between our fixed reference date and the selected date
             val daysBetween =
-                ChronoUnit.DAYS.between(DashStateViewModel.Companion.REFERENCE_DAY_DATE, selectedDate)
+                ChronoUnit.DAYS.between(DashStateViewModel.REFERENCE_DAY_DATE, selectedDate)
 
             val targetPosition = (DailyAdapter.START_POSITION + daysBetween).toInt()
 

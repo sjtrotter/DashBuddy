@@ -9,10 +9,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.FragmentDashHistoryAnnualContentBinding
+import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashStateViewModel
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.StatDisplayMode
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.SummaryStats
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -24,9 +26,10 @@ class AnnualPageViewHolder(
     private val binding: FragmentDashHistoryAnnualContentBinding,
     private val fragment: Fragment,
     private val stateViewModel: DashStateViewModel,
-    private val annualViewModel: AnnualViewModel,
     private val onMonthClicked: (Int) -> Unit
 ) : RecyclerView.ViewHolder(binding.root) {
+
+    private var dataJob: Job? = null
 
     init {
         binding.summaryCard.chipStatMode.setOnClickListener {
@@ -34,26 +37,28 @@ class AnnualPageViewHolder(
         }
     }
 
-    /**
-     * The bind function is now much simpler. It doesn't need the position.
-     * It just starts the data observation process.
-     */
-    fun bind() {
-        // Launch a coroutine that combines the two flows we need to draw the screen.
-        fragment.viewLifecycleOwner.lifecycleScope.launch {
+    fun bind(year: Int, repo: DashHistoryRepo) {
+        unbind() // Cancel previous job
+
+        dataJob = fragment.viewLifecycleOwner.lifecycleScope.launch {
             combine(
-                annualViewModel.annualDisplay,
+                repo.getAnnualDisplayFlow(year), // Fetch specific year
                 stateViewModel.statDisplayMode
             ) { display, mode ->
-                // When either the data or the display mode changes, re-bind the UI.
                 bindData(display, mode)
             }.collect()
         }
     }
 
+    fun unbind() {
+        dataJob?.cancel()
+    }
+
+    // ... (Keep bindData, updateSummaryCard, updateMonthCards exactly as they are) ...
+    // No changes needed below this line, just ensure you include the existing code.
+
     private fun bindData(display: AnnualDisplay, mode: StatDisplayMode) {
         updateSummaryCard(display.stats, mode)
-        // Pass the year from the display model to correctly check against the current date
         updateMonthCards(display.monthSummaries, display.year)
     }
 
@@ -128,13 +133,10 @@ class AnnualPageViewHolder(
                 bindingForMonth.textMonthEarnings.visibility = View.VISIBLE
                 bindingForMonth.textMonthEarnings.text = "$${floor(summary.totalEarnings).toInt()}"
             } else {
-                // This month has no data, so we show an icon.
                 bindingForMonth.iconMonthStatus.visibility = View.VISIBLE
                 bindingForMonth.textMonthEarnings.visibility = View.GONE
 
-                // Check if the month is in the future relative to today.
                 if (year > currentYear || (year == currentYear && summary.month > currentMonth)) {
-                    // It's a future month.
                     bindingForMonth.iconMonthStatus.setImageResource(R.drawable.ic_menu_toolbar_history)
                     val neutralColor = ContextCompat.getColor(
                         binding.root.context,
@@ -145,7 +147,6 @@ class AnnualPageViewHolder(
                         ColorStateList.valueOf(neutralColor)
                     )
                 } else {
-                    // It's a past month with no dashes.
                     bindingForMonth.iconMonthStatus.setImageResource(R.drawable.ic_cancel)
                     val errorColor = ContextCompat.getColor(
                         binding.root.context,
