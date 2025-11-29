@@ -10,3 +10,5 @@ Most boilerplate code is written by Gemini, with logical edits made by me.
 - With the recent major update to doordash UI, things have broken:
     - dash detection (now fixed)
     - earnings tracking (still broke)
+
+Note: The Notification Service is not yet functional and you don't need it at this time.
