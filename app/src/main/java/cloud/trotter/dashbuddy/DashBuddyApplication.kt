@@ -51,11 +51,11 @@ class DashBuddyApplication : Application() {
         val dashHistoryRepo by lazy {
             DashHistoryRepo(
                 dashDao = database.dashDao(),
-                dashZoneDao = database.dashZoneDao(),
-                offerDao = database.offerDao(),
-                orderDao = database.orderDao(),
-                tipDao = database.tipDao(),
-                appPayDao = database.appPayDao(),
+//                dashZoneDao = database.dashZoneDao(),
+//                offerDao = database.offerDao(),
+//                orderDao = database.orderDao(),
+//                tipDao = database.tipDao(),
+//                appPayDao = database.appPayDao(),
                 zoneDao = database.zoneDao(),
             )
         }

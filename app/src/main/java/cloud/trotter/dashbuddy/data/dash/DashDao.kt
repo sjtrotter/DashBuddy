@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -87,4 +88,9 @@ interface DashDao {
     // Add this query to increment the totalDistance for a dash
     @Query("UPDATE dashes SET totalDistance = COALESCE(totalDistance, 0.0) + :mileageToAdd WHERE id = :dashId")
     suspend fun incrementDashMileage(dashId: Long, mileageToAdd: Double)
+
+    // Add this to DashDao.kt
+    @Transaction
+    @Query("SELECT * FROM dashes WHERE startTime >= :start AND startTime <= :end")
+    fun getDashCompositesFlow(start: Long, end: Long): Flow<List<DashComposite>>
 }
