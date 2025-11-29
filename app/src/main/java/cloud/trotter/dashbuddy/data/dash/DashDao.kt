@@ -6,6 +6,10 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import cloud.trotter.dashbuddy.data.stats.DashStatsTuple
+import cloud.trotter.dashbuddy.data.stats.OfferStatsTuple
+import cloud.trotter.dashbuddy.data.stats.OrderStatsTuple
+import cloud.trotter.dashbuddy.data.stats.PayStatsTuple
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -93,4 +97,22 @@ interface DashDao {
     @Transaction
     @Query("SELECT * FROM dashes WHERE startTime >= :start AND startTime <= :end")
     fun getDashCompositesFlow(start: Long, end: Long): Flow<List<DashComposite>>
+
+    // --- FAST STATS QUERIES (Lightweight) ---
+
+    @Query("SELECT id, startTime, stopTime, totalDistance FROM dashes WHERE startTime >= :start AND startTime <= :end")
+    fun getDashStats(start: Long, end: Long): Flow<List<DashStatsTuple>>
+
+    @Query("SELECT id, dashId, acceptTime, status, timestamp FROM offers WHERE timestamp >= :start AND timestamp <= :end")
+    fun getOfferStats(start: Long, end: Long): Flow<List<OfferStatsTuple>>
+
+    @Query("SELECT id, offerId, completionTimestamp, mileage FROM orders WHERE completionTimestamp >= :start AND completionTimestamp <= :end")
+    fun getOrderStats(start: Long, end: Long): Flow<List<OrderStatsTuple>>
+
+    @Query("SELECT offerId, amount FROM app_pays WHERE timestamp >= :start AND timestamp <= :end")
+    fun getAppPayStats(start: Long, end: Long): Flow<List<PayStatsTuple>>
+
+    // NOTE: We alias 'orderId' to 'offerId' so we can reuse the PayStatsTuple class
+    @Query("SELECT orderId as offerId, amount FROM customer_tips WHERE timestamp >= :start AND timestamp <= :end")
+    fun getTipStats(start: Long, end: Long): Flow<List<PayStatsTuple>>
 }
