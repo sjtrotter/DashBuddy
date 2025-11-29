@@ -13,13 +13,11 @@ import kotlinx.coroutines.flow.stateIn
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnnualViewModel(
     private val historyRepo: DashHistoryRepo,
-    stateViewModel: DashStateViewModel // It needs the shared state to know which year to show
+    stateViewModel: DashStateViewModel
 ) : ViewModel() {
 
-    /**
-     * A single, reactive flow that provides the complete AnnualDisplay model.
-     * It automatically updates whenever the selected year in the DashStateViewModel changes.
-     */
+    // Optimized: Only reloads when 'selectedYear' changes.
+    // Ignores Day/Month changes because 'selectedYear' is distinct.
     val annualDisplay: StateFlow<AnnualDisplay> =
         stateViewModel.selectedYear.flatMapLatest { year ->
             historyRepo.getAnnualDisplayFlow(year)
