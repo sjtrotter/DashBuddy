@@ -182,7 +182,8 @@ enum class Screen(
         someOfTheseTexts = listOf(
             "am",
             "pm",
-        )
+        ),
+        activityHint = ActivityHint.INACTIVE
     ),
 
     // --- Actively Dashing States ---

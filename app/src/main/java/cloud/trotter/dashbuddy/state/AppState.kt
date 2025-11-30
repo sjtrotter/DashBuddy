@@ -21,6 +21,7 @@ import cloud.trotter.dashbuddy.state.handlers.OnDelivery
 import cloud.trotter.dashbuddy.state.handlers.OnNavigation
 import cloud.trotter.dashbuddy.state.handlers.OnPickup
 import cloud.trotter.dashbuddy.state.handlers.OrderPickedUp
+import cloud.trotter.dashbuddy.state.handlers.PostDelivery
 import cloud.trotter.dashbuddy.state.handlers.Startup
 import cloud.trotter.dashbuddy.state.handlers.ViewDashControl
 import cloud.trotter.dashbuddy.state.handlers.ViewEarnings
@@ -65,7 +66,7 @@ enum class AppState(
     DASH_IDLE_ON_EARNINGS(
         handler = ViewEarnings(),
         displayName = "Viewing Earnings",
-        activityHint = ActivityHint.INACTIVE
+        activityHint = ActivityHint.NEUTRAL
     ),
 
     // --- Initiating a Dash ---
@@ -108,6 +109,11 @@ enum class AppState(
     DASH_ACTIVE_ON_DELIVERY(
         handler = OnDelivery(),
         displayName = "Dash Active - On Delivery",
+        activityHint = ActivityHint.ACTIVE
+    ),
+    DASH_POST_DELIVERY(
+        handler = PostDelivery(),
+        displayName = "Post Delivery",
         activityHint = ActivityHint.ACTIVE
     ),
     DASH_ACTIVE_ON_TIMELINE(

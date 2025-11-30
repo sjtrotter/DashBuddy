@@ -1,13 +1,12 @@
 package cloud.trotter.dashbuddy.services.accessibility.screen
 
 import cloud.trotter.dashbuddy.data.offer.OfferParser
-import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.DeliveryScreen
+import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.DeliverySummaryParser
 import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.IdleMapNodeParser
-import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.StateContext
-import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.IdleMapParser
 import cloud.trotter.dashbuddy.services.accessibility.screen.parsers.PickupScreen
+import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 object ScreenRecognizerV2 {
     private const val TAG = "ScreenRecognizerV2"
@@ -90,7 +89,8 @@ object ScreenRecognizerV2 {
                     }
 
                     screenCandidate == Screen.DELIVERY_COMPLETED_DIALOG -> {
-                        val parsedPay = PayParser.parsePay(stateContext.rootNodeTexts)
+                        // Use the new Node-based parser
+                        val parsedPay = DeliverySummaryParser.parse(stateContext.rootUiNode)
                         ScreenInfo.DeliveryCompleted(screenCandidate, parsedPay)
                     }
 

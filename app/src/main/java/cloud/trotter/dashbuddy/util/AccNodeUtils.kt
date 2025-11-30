@@ -12,15 +12,12 @@ object AccNodeUtils {
 
     /**
      * Recursively extracts identifying structural info (class name, view ID) from nodes.
-     * This helps differentiate screens with identical text but different layouts.
      */
     fun extractStructure(nodeInfo: AccessibilityNodeInfo?, builder: StringBuilder) {
         if (nodeInfo == null || !nodeInfo.isVisibleToUser) return
 
         builder.append(nodeInfo.className)
         builder.append(nodeInfo.viewIdResourceName)
-        // Add other stable attributes if needed (e.g., isClickable)
-        // builder.append(nodeInfo.isClickable)
 
         for (i in 0 until nodeInfo.childCount) {
             extractStructure(nodeInfo.getChild(i), builder)
@@ -48,78 +45,86 @@ object AccNodeUtils {
     }
 
     /**
-     * Finds a node containing the exact specified text and performs a click action on it
-     * or its first clickable parent.
-     *
-     * @param searchStartNode The node to start the search from. For best results, this should be
-     * the root node of the window from `getRootInActiveWindow()`.
-     * @param textToFind The exact text of the node to be clicked.
-     * @return `true` if the node was found and the click action was successfully performed, `false` otherwise.
+     * Finds a node containing the exact specified text and performs a click action.
+     * Uses the robust 'clickNode' strategy (Self -> Parent -> Sibling).
      */
     fun findAndClickNodeByText(
         searchStartNode: AccessibilityNodeInfo?,
         textToFind: String
     ): Boolean {
         if (searchStartNode == null) {
-            Log.w(TAG, "Cannot perform click, the provided searchStartNode is null.")
+            Log.w(TAG, "Cannot perform click, searchStartNode is null.")
             return false
         }
 
-        Log.d(TAG, "Searching for node with exact text: '$textToFind'")
-
-        // Use the built-in, optimized find method instead of custom recursion.
+        Log.d(TAG, "Searching for node with text: '$textToFind'")
         val foundNodes = searchStartNode.findAccessibilityNodeInfosByText(textToFind)
 
         if (foundNodes.isNullOrEmpty()) {
-            Log.w(
-                TAG,
-                "Node with text '$textToFind' not found in the provided search node's hierarchy."
-            )
+            Log.w(TAG, "Text '$textToFind' not found.")
             return false
         }
 
-        // Use the first node found.
+        // Use the first match found
         val targetNode = foundNodes[0]
-        Log.d(TAG, "Node with text found. Finding its clickable ancestor...")
-        val clickableNode = findClickableParent(targetNode)
+        return clickNode(targetNode)
+    }
 
-        if (clickableNode != null) {
-            Log.i(
-                TAG,
-                "Performing CLICK action on node for text: '$textToFind' (Clickable parent: ${clickableNode.className})"
-            )
-            val success = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            if (!success) {
-                Log.e(TAG, "performAction(ACTION_CLICK) failed for node with text: '$textToFind'")
-            }
-            // It's good practice to recycle nodes you obtain from a find... call.
-            return success
-        } else {
-            Log.w(
-                TAG,
-                "Node with text '$textToFind' was found, but neither it nor its parents are clickable."
-            )
+    /**
+     * ROBUST CLICK STRATEGY:
+     * 1. Try the node itself.
+     * 2. Try walking up the tree to find a clickable parent (Ancestor Strategy).
+     * 3. Try walking the parent's other children to find a clickable sibling (Lateral Strategy).
+     *
+     * @param node The specific node we want to interact with.
+     * @return `true` if a click action was successfully sent to *some* node.
+     */
+    fun clickNode(node: AccessibilityNodeInfo?): Boolean {
+        if (node == null) {
+            Log.w(TAG, "Cannot click: node is null.")
             return false
         }
+
+        // Strategy 1 & 2: Self or Parent
+        val clickableAncestor = findClickableCandidate(node)
+        if (clickableAncestor != null) {
+            Log.i(TAG, "Clicking ancestor/self (Class: ${clickableAncestor.className})")
+            return clickableAncestor.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+
+        // Strategy 3: Lateral Search (Siblings)
+        // If the text and the container aren't clickable, maybe there is an icon NEXT to the text.
+        Log.d(TAG, "Ancestor click failed. Attempting lateral search (siblings)...")
+
+        val parent = node.parent
+        if (parent != null) {
+            for (i in 0 until parent.childCount) {
+                val sibling = parent.getChild(i) ?: continue
+
+                // Don't check the node itself again, only siblings
+                if (sibling != node && sibling.isClickable) {
+                    Log.i(TAG, "Found clickable sibling! (Class: ${sibling.className}). Clicking.")
+                    return sibling.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+            }
+        }
+
+        Log.w(TAG, "Failed to find any clickable candidate (Self, Ancestor, or Sibling).")
+        return false
     }
 
     /**
      * Traverses up from the given node to find the first ancestor (or the node itself)
      * that is clickable.
-     *
-     * @param node The starting node.
-     * @return The clickable node, or null if none are found up to the root.
      */
-    private fun findClickableParent(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+    private fun findClickableCandidate(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
         var currentNode = node
         while (currentNode != null) {
             if (currentNode.isClickable) {
                 return currentNode
             }
-            // Important: We are just getting a reference, not creating a new node,
-            // so we don't recycle the original 'node' parameter here.
             currentNode = currentNode.parent
         }
-        return null // No clickable parent found
+        return null
     }
 }
