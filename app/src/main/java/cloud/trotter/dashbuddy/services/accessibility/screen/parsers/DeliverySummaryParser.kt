@@ -18,44 +18,40 @@ object DeliverySummaryParser {
         val appPayComponents = mutableListOf<ParsedPayItem>()
         val customerTips = mutableListOf<ParsedPayItem>()
 
-        // 1. Find the RecyclerView that contains the breakdown.
-        // Strategy: Look for a RecyclerView that contains a child with text "DoorDash pay" or "Customer tips".
+        // 1. Find the breakdown container (RecyclerView)
         val payListContainer = rootNode.findNode { node ->
             (node.className == "androidx.recyclerview.widget.RecyclerView" || node.className == "android.widget.LinearLayout") &&
                     (node.hasNode {
-                        it.text?.contains(
+                        it.text?.equals(
                             "DoorDash pay",
                             ignoreCase = true
                         ) == true
-                    } ||
-                            node.hasNode {
-                                it.text?.contains(
-                                    "Customer tips",
-                                    ignoreCase = true
-                                ) == true
-                            })
+                    } && node.hasNode {
+                        it.text?.equals(
+                            "Customer tips",
+                            ignoreCase = true
+                        ) == true
+                    })
         }
 
         if (payListContainer == null) {
-            Log.d(
-                TAG,
-                "Could not find pay breakdown container (RecyclerView). Details might be collapsed."
-            )
+            Log.d(TAG, "Breakdown container not found (collapsed or missing).")
             return ParsedPay(emptyList(), emptyList())
         }
 
-        Log.d(TAG, "Found Pay Container. Parsing children...")
+        Log.d(TAG, "Parsing breakdown container...")
         var currentMode = PayMode.NONE
 
-        // 2. Iterate through the rows (children of the RecyclerView)
+        // 2. Iterate through children (rows)
         for (childRow in payListContainer.children) {
-            // Flatten the text in this row to see what we are dealing with
+            // CRITICAL FIX: Flatten the entire subtree of this row to find ALL text nodes.
+            // The previous version only looked at direct children, missing nested TextViews.
             val textsInRow =
                 childRow.findNodes { !it.text.isNullOrEmpty() }.map { it.text!!.trim() }
 
             if (textsInRow.isEmpty()) continue
 
-            // A. Check for Headers to switch modes
+            // A. Detect Section Headers
             if (textsInRow.any { it.equals("DoorDash pay", ignoreCase = true) }) {
                 currentMode = PayMode.APP_PAY
                 continue
@@ -65,23 +61,29 @@ object DeliverySummaryParser {
                 continue
             }
 
-            // B. Extract Data if we are in a valid mode
-            // We expect pairs like ["Base pay", "$2.00"] or ["PF Chang's", "$7.45"]
+            // B. Extract Data (Label + Amount)
             if (currentMode != PayMode.NONE) {
+                // Heuristic: Look for a '$' amount and a non-'$' label.
                 val amountString = textsInRow.find { it.startsWith("$") }
-                val labelString = textsInRow.find { !it.startsWith("$") }
+
+                // The label is typically the FIRST text that isn't the amount.
+                val labelString = textsInRow.find {
+                    !it.startsWith("$") &&
+                            !it.equals("DoorDash pay", ignoreCase = true) &&
+                            !it.equals("Customer tips", ignoreCase = true) &&
+                            !it.equals("Total", ignoreCase = true)
+                }
 
                 if (amountString != null && labelString != null) {
                     val amount = parseAmount(amountString)
                     if (amount != null) {
                         val item = ParsedPayItem(labelString, amount)
-                        Log.d(TAG, "Parsed Item ($currentMode): $item")
-
                         if (currentMode == PayMode.APP_PAY) {
                             appPayComponents.add(item)
                         } else {
                             customerTips.add(item)
                         }
+                        Log.d(TAG, "Parsed ($currentMode): $labelString -> $amount")
                     }
                 }
             }
