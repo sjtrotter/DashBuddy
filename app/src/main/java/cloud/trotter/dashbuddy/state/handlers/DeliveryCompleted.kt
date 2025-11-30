@@ -171,9 +171,10 @@ class DeliveryCompleted : StateHandler {
                 val candidateOrders =
                     activeOrders.filter { stringsMatch(it.storeName, firstStoreName) }
                 for (candidateOrder in candidateOrders) {
-                    val ordersInDb = orderRepo.getOrdersForOffer(candidateOrder.offerId).first()
+                    val ordersInDb = candidateOrder.offerId?.let { orderRepo.getOrdersForOffer(it) }
+                        ?.first()
                     // Relaxed Match: If we found orders for this store, assume it's the one.
-                    if (ordersInDb.isNotEmpty()) {
+                    if (ordersInDb?.isNotEmpty() == true) {
                         matchedOfferId = candidateOrder.offerId
                         ordersForMatchedOffer = ordersInDb
                         break

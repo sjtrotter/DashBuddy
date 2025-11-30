@@ -41,7 +41,7 @@ data class OrderEntity(
 
     // --- Offer & Pickup Details (known at offer time) ---
     /** The ID of the [OfferEntity] this order belongs to. */
-    val offerId: Long,
+    val offerId: Long?,
     /** The index of this order within the offer's list (e.g., for stacked orders). */
     val orderIndex: Int,
     /** The parsed store name from the offer screen. */

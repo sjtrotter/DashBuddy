@@ -27,7 +27,7 @@ data class TipEntity(
     val id: Long = 0,
 
     /** The ID of the parent [OrderEntity] this tip is for. */
-    val orderId: Long,
+    val orderId: Long?,
 
     /** The amount of this specific tip instance. */
     val amount: Double,

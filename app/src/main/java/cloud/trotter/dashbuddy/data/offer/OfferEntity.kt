@@ -57,13 +57,13 @@ data class OfferEntity(
     val id: Long = 0,
 
     /** The ID of the Dash session this offer belongs to. */
-    val dashId: Long,
+    val dashId: Long?,
 
     /** The active zone in the dash. (slight de-normalization)
      * meant to represent the zone the dasher is attached to, to give
      * context to what you can be offered when assigned to that zone.
      */
-    val zoneId: Long,
+    val zoneId: Long?,
 
     /** A hash generated from core offer details
      *  (store, pay, distance, type, items)

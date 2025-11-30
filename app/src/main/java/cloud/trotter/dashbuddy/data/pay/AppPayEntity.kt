@@ -33,7 +33,7 @@ data class AppPayEntity(
     val id: Long = 0,
 
     /** The ID of the parent [OfferEntity] this pay component belongs to. */
-    val offerId: Long,
+    val offerId: Long?,
 
     /** The ID of the [AppPayType] that this pay component represents. */
     val payTypeId: Long,
