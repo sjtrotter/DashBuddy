@@ -5,6 +5,7 @@ import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.order.OrderEntity
 import cloud.trotter.dashbuddy.data.order.OrderStatus
+import cloud.trotter.dashbuddy.data.order.OrderType
 import cloud.trotter.dashbuddy.data.pay.AppPayEntity
 import cloud.trotter.dashbuddy.data.pay.TipEntity
 import cloud.trotter.dashbuddy.data.pay.TipType
@@ -15,15 +16,13 @@ import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.util.AccNodeUtils
-import cloud.trotter.dashbuddy.util.UtilityFunctions.stringsMatch
-import kotlinx.coroutines.flow.first
 
 class DeliveryCompleted : StateHandler {
 
     private val tag = "DeliveryCompletedHandler"
 
     // Repositories
-    private val currentRepo = DashBuddyApplication.currentRepo
+//    private val currentRepo = DashBuddyApplication.currentRepo
     private val orderRepo = DashBuddyApplication.orderRepo
     private val tipRepo = DashBuddyApplication.tipRepo
     private val appPayRepo = DashBuddyApplication.appPayRepo
@@ -139,96 +138,51 @@ class DeliveryCompleted : StateHandler {
         stateContext: StateContext,
         screenInfo: ScreenInfo.DeliveryCompleted
     ) {
-        Log.i(tag, "Commiting Pay Data to Database...")
+        Log.i(tag, "Commiting Pay Data to Database (Paradigm: Always Record)...")
         val parsedPay = screenInfo.parsedPay
 
         try {
-            val current = currentRepo.getCurrentDashState()
-            if (current?.dashId == null) {
-                Log.w(tag, "Cannot record pay: No active Dash ID found.")
-                return
-            }
-
-            val allActiveOrderIds =
-                (current.activeOrderQueue + listOfNotNull(current.activeOrderId)).distinct()
-            val activeOrders = allActiveOrderIds
-                .mapNotNull { orderRepo.getOrderById(it) }
-                .filter { it.status != OrderStatus.COMPLETED }
-
-            if (activeOrders.isEmpty()) {
-                Log.w(tag, "No active orders found to match pay against.")
-                return
-            }
-
-            // Match Logic
-            val firstStoreName = parsedPay.customerTips.firstOrNull()?.type
-                ?: parsedPay.appPayComponents.firstOrNull()?.type
-
-            var matchedOfferId: Long? = null
-            var ordersForMatchedOffer: List<OrderEntity> = emptyList()
-
-            if (firstStoreName != null) {
-                val candidateOrders =
-                    activeOrders.filter { stringsMatch(it.storeName, firstStoreName) }
-                for (candidateOrder in candidateOrders) {
-                    val ordersInDb = candidateOrder.offerId?.let { orderRepo.getOrdersForOffer(it) }
-                        ?.first()
-                    // Relaxed Match: If we found orders for this store, assume it's the one.
-                    if (ordersInDb?.isNotEmpty() == true) {
-                        matchedOfferId = candidateOrder.offerId
-                        ordersForMatchedOffer = ordersInDb
-                        break
-                    }
-                }
-            }
-
-            if (matchedOfferId == null) {
-                Log.e(tag, "Sanity Check FAILED: Could not match pay to an offer.")
-                return
-            }
-
-            // Duplicate Check
-            val existingAppPay = appPayRepo.getPayComponentsForOffer(matchedOfferId)
-            if (existingAppPay.first().isNotEmpty()) {
-                Log.i(tag, "Pay already exists for Offer #$matchedOfferId. Skipping insert.")
-                return
-            }
-
-            // Insert Tips
+            // 1. Create Orders & Tips
+            // We create a new "Completed" order for every store found in the tips section.
+            // This ensures we always verify the order exists, even if orphaned.
             for (tipItem in parsedPay.customerTips) {
-                val order = ordersForMatchedOffer.find { stringsMatch(it.storeName, tipItem.type) }
-                if (order != null) {
-                    tipRepo.insert(
-                        TipEntity(
-                            0,
-                            order.id,
-                            tipItem.amount,
-                            TipType.INITIAL_TIP,
-                            stateContext.timestamp
-                        )
-                    )
-                }
+                val newOrder = OrderEntity(
+                    offerId = null, // Orphaned: Matching to Offer happens later
+                    orderIndex = 0,
+                    storeName = tipItem.type,
+                    orderType = OrderType.PICKUP, // Default safe type
+                    status = OrderStatus.COMPLETED,
+                    completionTimestamp = stateContext.timestamp
+                )
+
+                // Insert the order to get its new ID
+                val newOrderId = orderRepo.insertOrder(newOrder)
+                Log.i(tag, "Created new Order #$newOrderId for store '${tipItem.type}'")
+
+                // Link the tip to this new order
+                val newTip = TipEntity(
+                    orderId = newOrderId,
+                    amount = tipItem.amount,
+                    type = TipType.INITIAL_TIP,
+                    timestamp = stateContext.timestamp
+                )
+                tipRepo.insert(newTip)
+                Log.i(tag, " -> Recorded tip: $${tipItem.amount}")
+                DashBuddyApplication.sendBubbleMessage("Order Recorded: ${tipItem.type} - $${tipItem.amount}")
             }
 
-            // Insert App Pay
+            // 2. Create App Pay
+            // We create app pay entries orphaned from any offer.
             for (appPayItem in parsedPay.appPayComponents) {
                 val typeId = appPayRepo.upsertPayType(appPayItem.type)
-                appPayRepo.insert(
-                    AppPayEntity(
-                        0,
-                        matchedOfferId,
-                        typeId,
-                        appPayItem.amount,
-                        stateContext.timestamp
-                    )
+                val newAppPay = AppPayEntity(
+                    offerId = null, // Orphaned: Matching to Offer happens later
+                    payTypeId = typeId,
+                    amount = appPayItem.amount,
+                    timestamp = stateContext.timestamp
                 )
-            }
-
-            // Cleanup Status
-            for (order in ordersForMatchedOffer) {
-                currentRepo.removeOrderFromQueue(order.id)
-                orderRepo.updateOrderStatus(order.id, OrderStatus.COMPLETED)
-                orderRepo.updateCompletionTimestamp(order.id, stateContext.timestamp)
+                appPayRepo.insert(newAppPay)
+                Log.i(tag, "Recorded App Pay: ${appPayItem.type} -> $${appPayItem.amount}")
             }
 
             DashBuddyApplication.sendBubbleMessage("Delivery Recorded: $${parsedPay}")
