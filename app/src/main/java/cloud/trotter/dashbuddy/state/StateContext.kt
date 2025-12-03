@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
 
 data class StateContext(
     val timestamp: Long,                                // When the event data was processed
+    val odometerReading: Double? = null,                // The current odometer reading
     val eventType: Int? = null,                         // e.g., AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
     val eventTypeString: String,                        // For logging/debugging, e.g., "TYPE_WINDOW_CONTENT_CHANGED"
     val packageName: CharSequence? = null,              // e.g., "com.doordash.driverapp"

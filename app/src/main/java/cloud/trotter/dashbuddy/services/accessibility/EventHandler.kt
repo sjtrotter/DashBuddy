@@ -9,6 +9,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
+import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickParser
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenRecognizerV2
@@ -198,6 +199,7 @@ object EventHandler {
             clickInfo = ClickParser.parse(sourceNodeTexts)
         val tempContext = StateContext(
             timestamp = Date().time,
+            odometerReading = LocationService.getCurrentOdometer(DashBuddyApplication.context),
             eventType = currentEventType,
             eventTypeString = AccessibilityEvent.eventTypeToString(currentEventType),
             packageName = event.packageName,

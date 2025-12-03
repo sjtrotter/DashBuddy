@@ -115,7 +115,9 @@ class OfferPresented : StateHandler {
                     current.zoneId,
                     stateContext.timestamp
                 )
-                val offerToInsert: OfferEntity = evaluationResult.offerEntity
+                val offerToInsert: OfferEntity = evaluationResult.offerEntity.copy(
+                    odometerReading = stateContext.odometerReading
+                )
                 val newOfferId = offerRepo.insertOffer(offerToInsert)
                 internalOfferId = newOfferId
                 if (newOfferId > 0) {

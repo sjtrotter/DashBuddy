@@ -64,6 +64,8 @@ data class OrderEntity(
     val customerId: Long? = null,
     /** The calculated mileage from the mileage tracker service. */
     val mileage: Double? = null,
+    /** The odometer reading when the order was completed. */
+    val odometerReading: Double? = null,
     /** Timestamp (milliseconds since epoch) when the delivery was completed. Null until completion. */
     val completionTimestamp: Long? = null,
     /** The current status of this order's lifecycle. */

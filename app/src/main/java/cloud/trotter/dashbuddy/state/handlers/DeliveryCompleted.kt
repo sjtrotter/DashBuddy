@@ -152,6 +152,7 @@ class DeliveryCompleted : StateHandler {
                     storeName = tipItem.type,
                     orderType = OrderType.PICKUP, // Default safe type
                     status = OrderStatus.COMPLETED,
+                    odometerReading = stateContext.odometerReading,
                     completionTimestamp = stateContext.timestamp
                 )
 

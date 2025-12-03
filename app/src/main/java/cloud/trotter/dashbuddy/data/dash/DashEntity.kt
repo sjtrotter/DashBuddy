@@ -27,6 +27,12 @@ data class DashEntity(
     /** Timestamp (milliseconds since epoch) when this dash session ended. Nullable if somehow not recorded. */
     val stopTime: Long? = null,
 
+    /** The odometer reading when the order was completed. */
+    val odometerStart: Double? = null,
+
+    /** The odometer reading when the order was completed. */
+    val odometerStop: Double? = null,
+
     /** Total distance traveled during this dash. */
     val totalDistance: Double? = null,
 

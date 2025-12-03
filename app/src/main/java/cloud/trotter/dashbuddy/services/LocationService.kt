@@ -5,14 +5,15 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
-import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.data.current.CurrentRepo
@@ -20,125 +21,123 @@ import cloud.trotter.dashbuddy.data.dash.DashRepo
 import cloud.trotter.dashbuddy.data.order.OrderRepo
 import com.google.android.gms.location.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.*
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class LocationService : Service() {
 
     private val tag = "LocationService"
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var locationTrackingJob: Job? = null
 
+    // --- Dependencies ---
     private lateinit var currentRepo: CurrentRepo
     private lateinit var dashRepo: DashRepo
     private lateinit var orderRepo: OrderRepo
-
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
 
+    // --- State ---
+    private var lastLocation: Location? = null
+    private var currentOdometer: Double = 0.0
+
+    // --- Constants ---
+    private val prefsName = "dashbuddy_odometer_prefs"
+    private val keyOdometer = "odometer_reading_miles"
+    private val keyLastLat = "last_latitude"
+    private val keyLastLon = "last_longitude"
+
+    private val cooldownLimitMS = 10 * 60 * 1000L // 10 Minutes
+    private var lastKeepAliveTime: Long = 0L
+    private var cooldownJob: Job? = null
+
     companion object {
+        const val ACTION_KEEP_ALIVE = "cloud.trotter.dashbuddy.services.KEEP_ALIVE"
         const val NOTIFICATION_CHANNEL_ID = "LocationServiceChannel"
         const val NOTIFICATION_ID = 101
+
+        // Static helper for StateContext
+        fun getCurrentOdometer(context: Context): Double {
+            val prefs =
+                context.getSharedPreferences("dashbuddy_odometer_prefs", MODE_PRIVATE)
+            return prefs.getFloat("odometer_reading_miles", 0.0f).toDouble()
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(tag, "onCreate called")
+        Log.d(tag, "LocationService Created")
+
         currentRepo = DashBuddyApplication.currentRepo
         dashRepo = DashBuddyApplication.dashRepo
         orderRepo = DashBuddyApplication.orderRepo
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        restoreOdometerState()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(tag, "onStartCommand called")
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification("Tracking location for active dash..."))
+        if (intent?.action == ACTION_KEEP_ALIVE) {
+            handleKeepAlive()
+        } else {
+            // Standard Start (likely from Accessibility Service via startService)
+            Log.i(tag, "Starting Odometer Service")
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, createNotification())
 
-        locationTrackingJob?.cancel()
-        locationTrackingJob = serviceScope.launch {
-            observeDashState()
+            // Start tracking immediately.
+            startLocationUpdates()
+
+            // Initial keep-alive kick
+            handleKeepAlive()
         }
 
         return START_STICKY
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeDashState() {
-        Log.i(tag, "Starting to observe dash state.")
-        currentRepo.currentDashStateFlow
-            // --- THIS IS THE FIX ---
-            // 1. Map the flow to only the boolean `isActive` state.
-            .map { it?.isActive == true && it.dashId != null }
-            // 2. Only proceed if this boolean value has actually changed (e.g., from false to true).
-            //    This will ignore updates to lastLatitude/lastLongitude.
-            .distinctUntilChanged()
-            .flatMapLatest { isActive ->
-                if (isActive) {
-                    Log.i(tag, "Dash is now active. Starting location updates.")
-                    locationFlow()
-                } else {
-                    Log.i(tag, "Dash is no longer active. Stopping location updates.")
-                    emptyFlow()
-                }
-            }
-            // --- END OF FIX ---
-            .catch { e -> Log.e(tag, "Error in location flow: ${e.message}") }
-            .onEach { location ->
-                processNewLocation(location)
-            }
-            .launchIn(serviceScope)
-    }
+    private fun handleKeepAlive() {
+        lastKeepAliveTime = System.currentTimeMillis()
 
-    private suspend fun processNewLocation(newLocation: Location) {
-        val currentDash = currentRepo.getCurrentDashState() ?: return
-        val lastLat = currentDash.lastLatitude
-        val lastLon = currentDash.lastLongitude
-
-        if (lastLat != null && lastLon != null) {
-            val lastLocation = Location("").apply {
-                latitude = lastLat
-                longitude = lastLon
-            }
-            val distanceInMiles = newLocation.distanceTo(lastLocation) / 1609.34
-
-            if (distanceInMiles > 0.001) {
-                Log.d(tag, "Distance calculated: $distanceInMiles miles")
-                currentDash.dashId?.let { dashRepo.incrementDashMileage(it, distanceInMiles) }
-                currentDash.activeOrderId?.let {
-                    orderRepo.incrementOrderMileage(
-                        it,
-                        distanceInMiles
-                    )
-                }
+        // Reset/Restart the cooldown monitor
+        cooldownJob?.cancel()
+        cooldownJob = serviceScope.launch {
+            while (isActive) {
+                delay(60_000L) // Check every minute
+                checkCooldown()
             }
         }
-
-        currentRepo.updateLastLocation(newLocation.latitude, newLocation.longitude)
     }
 
-    private fun locationFlow(): Flow<Location> = callbackFlow {
-        if (ContextCompat.checkSelfPermission(
-                applicationContext,
+    private fun checkCooldown() {
+        val timeSinceActivity = System.currentTimeMillis() - lastKeepAliveTime
+        if (timeSinceActivity > cooldownLimitMS) {
+            Log.i(
+                tag,
+                "Cooldown expired ($timeSinceActivity ms) and no active dash. Stopping Odometer."
+            )
+            stopSelf()
+            serviceScope.cancel()
+        }
+    }
+
+    private fun startLocationUpdates() {
+        if (ActivityCompat.checkSelfPermission(
+                this,
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            Log.e(tag, "Location permission not granted. Cannot start updates.")
-            close(SecurityException("Location permission not granted."))
-            return@callbackFlow
+            Log.e(tag, "Location permission missing. Stopping service.")
+            stopSelf()
+            return
         }
 
         val locationRequest =
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000L).apply {
-                setMinUpdateIntervalMillis(5000L)
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L).apply {
+                setMinUpdateIntervalMillis(2000L)
             }.build()
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
-                locationResult.lastLocation?.let {
-                    Log.v(tag, "New location received: $it")
-                    trySend(it)
+                locationResult.lastLocation?.let { location ->
+                    serviceScope.launch { processNewLocation(location) }
                 }
             }
         }
@@ -148,40 +147,85 @@ class LocationService : Service() {
             locationCallback,
             Looper.getMainLooper()
         )
+    }
 
-        awaitClose {
-            Log.i(tag, "Location flow cancelled. Removing updates.")
-            fusedLocationClient.removeLocationUpdates(locationCallback)
+    private suspend fun processNewLocation(location: Location) {
+        // 1. Calculate Delta
+        var distanceMiles = 0.0
+
+        if (lastLocation != null) {
+            val distanceMeters = location.distanceTo(lastLocation!!)
+
+            // Noise Filter (ignore tiny GPS jitter < 5m)
+            if (distanceMeters > 5) {
+                distanceMiles = distanceMeters * 0.000621371
+            }
+        } else {
+            Log.i(tag, "Odometer anchor set: ${location.latitude}, ${location.longitude}")
+        }
+
+        // 2. Update Odometer (Always)
+        if (distanceMiles > 0 || lastLocation == null) {
+            if (distanceMiles > 0) currentOdometer += distanceMiles
+            saveOdometerState(location)
+        }
+
+        lastLocation = location
+    }
+
+    private fun restoreOdometerState() {
+        val prefs = getSharedPreferences(prefsName, MODE_PRIVATE)
+        currentOdometer = prefs.getFloat(keyOdometer, 0.0f).toDouble()
+
+        if (prefs.contains(keyLastLat) && prefs.contains(keyLastLon)) {
+            val lat = prefs.getFloat(keyLastLat, 0.0f).toDouble()
+            val lon = prefs.getFloat(keyLastLon, 0.0f).toDouble()
+            lastLocation = Location("gps_restored").apply {
+                latitude = lat
+                longitude = lon
+                time = System.currentTimeMillis()
+            }
+            Log.i(tag, "Restored Odometer: $currentOdometer miles.")
+        }
+    }
+
+    private fun saveOdometerState(location: Location) {
+        getSharedPreferences(prefsName, MODE_PRIVATE).edit {
+            putFloat(keyOdometer, currentOdometer.toFloat())
+            putFloat(keyLastLat, location.latitude.toFloat())
+            putFloat(keyLastLon, location.longitude.toFloat())
         }
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val serviceChannel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "DashBuddy Location Service",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(serviceChannel)
-        }
+        val serviceChannel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            "DashBuddy Location Service",
+            NotificationManager.IMPORTANCE_LOW
+        )
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(serviceChannel)
     }
 
-    private fun createNotification(text: String): Notification {
+    private fun createNotification(): Notification {
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("Dash In Progress")
-            .setContentText(text)
+            .setContentTitle("Odometer Active")
+            .setContentText("")
             .setSmallIcon(R.drawable.ic_location)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(tag, "onDestroy called")
+        Log.i(tag, "Odometer Service Destroyed")
         serviceScope.cancel()
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (_: Exception) {
+            // Ignore
+        }
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 }

@@ -104,11 +104,4 @@ class DashRepo(private val dashDao: DashDao) {
         } // Use warn for destructive actions dashDao.clearAllDashes() } }
     }
 
-    // Add this function to expose the DAO method
-    suspend fun incrementDashMileage(dashId: Long, mileageToAdd: Double) {
-        withContext(Dispatchers.IO) {
-            Log.d(tag, "Incrementing mileage for Dash ID $dashId by $mileageToAdd miles.")
-            dashDao.incrementDashMileage(dashId, mileageToAdd)
-        }
-    }
 }

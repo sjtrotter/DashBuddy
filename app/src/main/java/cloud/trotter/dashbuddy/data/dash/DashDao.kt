@@ -89,10 +89,6 @@ interface DashDao {
     @Query("DELETE FROM dashes")
     suspend fun clearAllDashes()
 
-    // Add this query to increment the totalDistance for a dash
-    @Query("UPDATE dashes SET totalDistance = COALESCE(totalDistance, 0.0) + :mileageToAdd WHERE id = :dashId")
-    suspend fun incrementDashMileage(dashId: Long, mileageToAdd: Double)
-
     // Add this to DashDao.kt
     @Transaction
     @Query("SELECT * FROM dashes WHERE startTime >= :start AND startTime <= :end")

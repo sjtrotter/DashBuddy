@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
+import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class DashBuddyAccessibility : AccessibilityService() {
@@ -21,6 +22,15 @@ class DashBuddyAccessibility : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // --- TRIGGER: Keep the Odometer Service Alive ---
+        try {
+            val keepAliveIntent = Intent(this, LocationService::class.java).apply {
+                action = LocationService.ACTION_KEEP_ALIVE
+            }
+            startService(keepAliveIntent)
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to send Keep Alive to LocationService", e)
+        }
         val rootNode = rootInActiveWindow
         if (event != null && rootNode != null) {
             eventHandler.handleEvent(event, this, rootNode)

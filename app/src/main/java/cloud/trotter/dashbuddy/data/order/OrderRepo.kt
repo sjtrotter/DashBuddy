@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.data.order // Or your specific repository package
 
-import cloud.trotter.dashbuddy.log.Logger as Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -135,11 +134,4 @@ class OrderRepo(private val orderDao: OrderDao) {
         }
     }
 
-    // Add this function to expose the DAO method
-    suspend fun incrementOrderMileage(orderId: Long, mileageToAdd: Double) {
-        withContext(Dispatchers.IO) {
-            Log.d(tag, "Incrementing mileage for Order ID $orderId by $mileageToAdd miles.")
-            orderDao.incrementOrderMileage(orderId, mileageToAdd)
-        }
-    }
 }

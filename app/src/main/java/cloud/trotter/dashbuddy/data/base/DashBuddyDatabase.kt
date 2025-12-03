@@ -43,7 +43,7 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
         TipEntity::class,
         ZoneEntity::class,
     ],
-    version = 17,
+    version = 19,
     exportSchema = false // Set to true if you plan to use schema for testing migrations
 // For production, schema export is recommended.
 )

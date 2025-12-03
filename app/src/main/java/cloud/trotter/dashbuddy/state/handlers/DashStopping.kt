@@ -104,6 +104,7 @@ class DashStopping : StateHandler {
 
                 val endedDash = dash.copy(
                     stopTime = stopTime,
+                    odometerStop = stateContext.odometerReading
                     // TODO: Calculate other summary columns for DashEntity if needed
                     // e.g., totalOffers, acceptedOffers, totalPayout (might require querying offers)
                 )

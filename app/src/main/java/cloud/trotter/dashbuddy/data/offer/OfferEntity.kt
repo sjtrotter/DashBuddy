@@ -117,6 +117,9 @@ data class OfferEntity(
     /** The timestamp when this offer was accepted. */
     val acceptTime: Long? = null,
 
+    /** The odometer reading when the order was completed. */
+    val odometerReading: Double? = null,
+
     /** The initial countdown timer value displayed on the offer screen (e.g., 36 seconds). */
     val initialCountdownSeconds: Int? = null,
 
@@ -124,7 +127,7 @@ data class OfferEntity(
     val dollarsPerMile: Double? = null,
     val dollarsPerHour: Double? = null,
 
-    /** Your app's calculated score for this offer. */
+    /** The calculated score for this offer. */
     val calculatedScore: Double? = null,
 
     /** User-defined quality or notes for this offer. */
