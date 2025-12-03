@@ -21,7 +21,7 @@ data class UiNode(
     val boundsInScreen: Rect = Rect(),
     val parent: UiNode? = null, // Can be useful for hierarchy
     val children: MutableList<UiNode> = mutableListOf(),
-    val originalNode: AccessibilityNodeInfo,
+    val originalNode: AccessibilityNodeInfo? = null,
 ) {
     /**
      * This method is for debugging. It gets called automatically by Log.d()

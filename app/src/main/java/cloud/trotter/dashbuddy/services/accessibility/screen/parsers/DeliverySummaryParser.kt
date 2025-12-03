@@ -18,89 +18,86 @@ object DeliverySummaryParser {
         val appPayComponents = mutableListOf<ParsedPayItem>()
         val customerTips = mutableListOf<ParsedPayItem>()
 
-        // 1. Find all candidates that look like the pay container
+        // 1. Find candidates
         val candidates = rootNode.findNodes { node ->
             (node.className == "androidx.recyclerview.widget.RecyclerView" || node.className == "android.widget.LinearLayout") &&
-                    (node.hasNode {
-                        it.text?.equals("DoorDash pay", ignoreCase = true) == true
-                    } && node.hasNode {
-                        it.text?.equals("Customer tips", ignoreCase = true) == true
-                    })
+                    (node.hasNode { it.text?.equals("DoorDash pay", ignoreCase = true) == true } &&
+                            node.hasNode {
+                                it.text?.equals(
+                                    "Customer tips",
+                                    ignoreCase = true
+                                ) == true
+                            })
         }
 
-        // FIX: Prioritize RecyclerView over LinearLayout to avoid selecting the wrapper
+        // Prioritize RecyclerView
         val payListContainer =
             candidates.find { it.className == "androidx.recyclerview.widget.RecyclerView" }
                 ?: candidates.firstOrNull()
 
         if (payListContainer == null) {
-            // Only log this if we actually expected to be on the screen (reduced noise)
-            Log.d(TAG, "Breakdown container not found (collapsed or missing).")
             return ParsedPay(emptyList(), emptyList())
         }
 
-        Log.d(
-            TAG,
-            "Parsing breakdown container: ${payListContainer.className} with ${payListContainer.children.size} children"
-        )
+        // 2. Flatten ALL text from the container into a single list.
+        // This solves the issue where multiple items are grouped into a single "Row" view.
+        val allTexts = payListContainer.findNodes { !it.text.isNullOrEmpty() }
+            .map { it.text!!.trim() }
+
+        Log.d(TAG, "Parsing linear text stream: $allTexts")
+
         var currentMode = PayMode.NONE
+        var i = 0
 
-        // 2. Iterate through children (rows)
-        for ((index, childRow) in payListContainer.children.withIndex()) {
-            val textsInRow =
-                childRow.findNodes { !it.text.isNullOrEmpty() }.map { it.text!!.trim() }
+        // 3. Linear Scan
+        while (i < allTexts.size) {
+            val text = allTexts[i]
 
-            if (textsInRow.isEmpty()) continue
-
-            // LOGGING: See exactly what the parser sees for this row
-            Log.d(TAG, "Row $index texts: $textsInRow")
-
-            // A. Detect Section Headers
-            if (textsInRow.any { it.equals("DoorDash pay", ignoreCase = true) }) {
-                Log.d(TAG, "-> Switching mode to APP_PAY")
+            // A. Check for Mode Switching Headers
+            if (text.equals("DoorDash pay", ignoreCase = true)) {
                 currentMode = PayMode.APP_PAY
+                i++
                 continue
             }
-            if (textsInRow.any { it.equals("Customer tips", ignoreCase = true) }) {
-                Log.d(TAG, "-> Switching mode to TIPS")
+            if (text.equals("Customer tips", ignoreCase = true)) {
                 currentMode = PayMode.TIPS
+                i++
                 continue
             }
 
             // B. Extract Data (Label + Amount)
+            // We look for a label (current text) followed immediately by an amount (next text)
             if (currentMode != PayMode.NONE) {
-                // Heuristic: Look for a '$' amount and a non-'$' label.
-                val amountString = textsInRow.find { it.startsWith("$") }
+                // Ensure we have a "next" item to check
+                if (i + 1 < allTexts.size) {
+                    val nextText = allTexts[i + 1]
 
-                // The label is typically the FIRST text that isn't the amount.
-                val labelString = textsInRow.find {
-                    !it.startsWith("$") &&
-                            !it.equals("DoorDash pay", ignoreCase = true) &&
-                            !it.equals("Customer tips", ignoreCase = true) &&
-                            !it.equals("Total", ignoreCase = true) &&
-                            !it.equals(
-                                "Base pay",
-                                ignoreCase = true
-                            ) // Optional: prevent label matching itself if logic changes
-                }
+                    // Guard clauses to ensure 'text' is actually a label
+                    val isLabelInvalid = text.startsWith("$") ||
+                            text.equals("Total", ignoreCase = true) ||
+                            text.equals("This offer", ignoreCase = true)
 
-                if (amountString != null && labelString != null) {
-                    val amount = parseAmount(amountString)
-                    if (amount != null) {
-                        val item = ParsedPayItem(labelString, amount)
-                        if (currentMode == PayMode.APP_PAY) {
-                            appPayComponents.add(item)
-                        } else {
-                            customerTips.add(item)
+                    if (!isLabelInvalid && nextText.startsWith("$")) {
+                        val amount = parseAmount(nextText)
+                        if (amount != null) {
+                            val item = ParsedPayItem(text, amount)
+                            if (currentMode == PayMode.APP_PAY) {
+                                appPayComponents.add(item)
+                            } else {
+                                customerTips.add(item)
+                            }
+                            Log.i(TAG, "Parsed ($currentMode): $text -> $amount")
+
+                            // Successfully parsed a pair, skip both
+                            i += 2
+                            continue
                         }
-                        Log.i(TAG, "Parsed ($currentMode): $labelString -> $amount")
-                    } else {
-                        Log.w(TAG, "Failed to parse amount from: $amountString")
                     }
-                } else {
-                    Log.d(TAG, "Skipping row (incomplete data): $textsInRow")
                 }
             }
+
+            // Move to next token if no match found
+            i++
         }
 
         return ParsedPay(appPayComponents, customerTips)
