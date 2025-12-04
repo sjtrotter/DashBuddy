@@ -40,7 +40,6 @@ object DeliverySummaryParser {
         }
 
         // 2. Flatten ALL text from the container into a single list.
-        // This solves the issue where multiple items are grouped into a single "Row" view.
         val allTexts = payListContainer.findNodes { !it.text.isNullOrEmpty() }
             .map { it.text!!.trim() }
 
@@ -65,30 +64,41 @@ object DeliverySummaryParser {
                 continue
             }
 
-            // B. Extract Data (Label + Amount)
-            // We look for a label (current text) followed immediately by an amount (next text)
+            // B. Extract Data (Label + Amount/Status)
             if (currentMode != PayMode.NONE) {
                 // Ensure we have a "next" item to check
                 if (i + 1 < allTexts.size) {
                     val nextText = allTexts[i + 1]
 
-                    // Guard clauses to ensure 'text' is actually a label
+                    // Guard clauses to ensure 'text' is actually a label (not a price or reserved word)
                     val isLabelInvalid = text.startsWith("$") ||
                             text.equals("Total", ignoreCase = true) ||
-                            text.equals("This offer", ignoreCase = true)
+                            text.equals("This offer", ignoreCase = true) ||
+                            text.equals(
+                                "Ineligible",
+                                ignoreCase = true
+                            ) // "Ineligible" shouldn't be a label
 
-                    if (!isLabelInvalid && nextText.startsWith("$")) {
-                        val amount = parseAmount(nextText)
-                        if (amount != null) {
-                            val item = ParsedPayItem(text, amount)
-                            if (currentMode == PayMode.APP_PAY) {
-                                appPayComponents.add(item)
-                            } else {
-                                customerTips.add(item)
+                    if (!isLabelInvalid) {
+                        // Scenario 1: Standard Price ($5.00)
+                        if (nextText.startsWith("$")) {
+                            val amount = parseAmount(nextText)
+                            if (amount != null) {
+                                addPayItem(
+                                    currentMode,
+                                    text,
+                                    amount,
+                                    appPayComponents,
+                                    customerTips
+                                )
+                                i += 2
+                                continue
                             }
-                            Log.i(TAG, "Parsed ($currentMode): $text -> $amount")
-
-                            // Successfully parsed a pair, skip both
+                        }
+                        // Scenario 2: Ineligible Status (Treat as $0.00)
+                        else if (nextText.equals("Ineligible", ignoreCase = true)) {
+                            addPayItem(currentMode, text, 0.0, appPayComponents, customerTips)
+                            Log.i(TAG, "Parsed ($currentMode): $text -> 0.0 (Ineligible)")
                             i += 2
                             continue
                         }
@@ -101,6 +111,22 @@ object DeliverySummaryParser {
         }
 
         return ParsedPay(appPayComponents, customerTips)
+    }
+
+    private fun addPayItem(
+        mode: PayMode,
+        label: String,
+        amount: Double,
+        appPayList: MutableList<ParsedPayItem>,
+        tipList: MutableList<ParsedPayItem>
+    ) {
+        val item = ParsedPayItem(label, amount)
+        if (mode == PayMode.APP_PAY) {
+            appPayList.add(item)
+        } else {
+            tipList.add(item)
+        }
+        Log.i(TAG, "Parsed ($mode): $label -> $amount")
     }
 
     private fun parseAmount(text: String): Double? {
