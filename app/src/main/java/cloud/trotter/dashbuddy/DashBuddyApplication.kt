@@ -13,6 +13,9 @@ import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
 import cloud.trotter.dashbuddy.data.current.CurrentRepo
 import cloud.trotter.dashbuddy.data.customer.CustomerRepo
 import cloud.trotter.dashbuddy.data.dash.DashRepo
+import cloud.trotter.dashbuddy.data.event.DropoffEventRepo
+import cloud.trotter.dashbuddy.data.event.OfferEventRepo
+import cloud.trotter.dashbuddy.data.event.PickupEventRepo
 import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneRepo
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
 import cloud.trotter.dashbuddy.data.offer.OfferRepo
@@ -47,6 +50,9 @@ class DashBuddyApplication : Application() {
         val appPayRepo: AppPayRepo by lazy { AppPayRepo(database.appPayDao()) }
         val tipRepo: TipRepo by lazy { TipRepo(database.tipDao()) }
         val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
+        val pickupEventRepo: PickupEventRepo by lazy { PickupEventRepo(database.pickupEventDao()) }
+        val dropoffEventRepo: DropoffEventRepo by lazy { DropoffEventRepo(database.dropoffEventDao()) }
+        val offerEventRepo: OfferEventRepo by lazy { OfferEventRepo(database.offerEventDao()) }
 
         val dashHistoryRepo by lazy {
             DashHistoryRepo(

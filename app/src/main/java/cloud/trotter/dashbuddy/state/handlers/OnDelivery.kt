@@ -1,99 +1,119 @@
 package cloud.trotter.dashbuddy.state.handlers
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.data.event.DropoffEventEntity
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.AppState
-import cloud.trotter.dashbuddy.state.StateContext as StateContext
-import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.util.OrderMatcher
+import cloud.trotter.dashbuddy.state.AppState
+import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.state.StateHandler
 
 /**
- * Manages the entire pickup phase, from offer acceptance to confirming the last pickup.
- * It acts as a dispatcher, reacting to whatever screen the Dasher app shows.
+ * Manages the delivery phase events.
+ * Logs navigation and arrival status to the database for timeline reconstruction.
  */
 class OnDelivery : StateHandler {
 
-    private val tag = this::class.simpleName ?: "OnDeliveryHandler"
-    private val currentRepo = DashBuddyApplication.currentRepo
-    private val orderRepo = DashBuddyApplication.orderRepo
+    private val tag = "OnDeliveryHandler"
 
+    // Dependencies
+    private val currentRepo = DashBuddyApplication.currentRepo
+
+    // Assumes you've added this to DashBuddyApplication
+    private val dropoffEventRepo = DashBuddyApplication.dropoffEventRepo
+
+    // Deduplication State
+    private var lastLoggedCustomer: String? = null
+    private var lastLoggedStatus: String? = null
+
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun enterState(
         stateContext: StateContext,
         currentState: AppState,
         previousState: AppState?
     ) {
-        Log.i(tag, "--- Entering $tag ---")
-        // Determine the active order and set it as the focused order
-        val activeOrder = OrderMatcher.matchOrder(stateContext)
-        if (activeOrder != null) {
-            currentRepo.updateActiveOrderFocus(activeOrder)
-            Log.d(tag, "Focused order: $activeOrder")
-        } else {
-            Log.d(tag, "No active order found.")
-            return
-        }
-        updateFromContext(stateContext, currentState)
+        Log.i(tag, "--- Entering Delivery Phase ---")
+        // Reset memory
+        lastLoggedCustomer = null
+        lastLoggedStatus = null
+
+        captureDropoffEvent(stateContext)
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun processEvent(
         stateContext: StateContext,
         currentState: AppState
     ): AppState {
-        Log.d(tag, "Processing screen: ${stateContext.screenInfo?.screen?.name}")
-
         val screen = stateContext.screenInfo?.screen ?: return currentState
-        // Determine next state based on screen changes
-        return when {
-            // TODO: below - cancelled order? why would we get to waiting for offer from here?
-//            screen == Screen.ON_DASH_ALONG_THE_WAY -> AppState.SESSION_ACTIVE_DASHING_ALONG_THE_WAY
-//            screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER -> AppState.SESSION_ACTIVE_WAITING_FOR_OFFER
-            // TODO: do we need to transition on dash control anymore?
-//            screen == Screen.DASH_CONTROL -> AppState.VIEWING_DASH_CONTROL
-            // TODO: hm.. if the dash ends right away, we *could* transition to this state.
-            screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
-            screen == Screen.OFFER_POPUP -> AppState.DASH_ACTIVE_OFFER_PRESENTED
-            screen == Screen.DELIVERY_COMPLETED_DIALOG -> AppState.DASH_ACTIVE_DELIVERY_COMPLETED
-            screen == Screen.TIMELINE_VIEW -> AppState.DASH_ACTIVE_ON_TIMELINE
 
+        return when {
+            // --- Transitions OUT of Delivery ---
+
+            // Delivery Completed (The "Receipt")
+            screen == Screen.DELIVERY_COMPLETED_DIALOG -> AppState.DASH_ACTIVE_DELIVERY_COMPLETED
+
+            // Moved back to Pickup (Stacked orders?)
             screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP
+
+            // Interruptions
+            screen == Screen.OFFER_POPUP -> AppState.DASH_ACTIVE_OFFER_PRESENTED
+            screen == Screen.TIMELINE_VIEW -> AppState.DASH_ACTIVE_ON_TIMELINE
+            screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
+
+            // --- Stay IN Delivery ---
             else -> {
-                if (stateContext.currentDashState?.activeOrderId == null) {
-                    Log.v(tag, "No active order. Attempting to match order...")
-                    val activeOrder = OrderMatcher.matchOrder(stateContext)
-                    if (activeOrder != null) {
-                        currentRepo.updateActiveOrderFocus(activeOrder)
-                        Log.d(tag, "Focused order: $activeOrder")
-                    } else {
-                        Log.d(tag, "No active order found.")
-                        return currentState
-                    }
-                }
-                updateFromContext(stateContext, currentState)
+                captureDropoffEvent(stateContext)
+                currentState
             }
         }
     }
 
-    private suspend fun updateFromContext(
-        stateContext: StateContext,
-        currentState: AppState
-    ): AppState {
-        // In here, we just update the activeOrder that we focused in enterState.
-        val activeOrderId =
-            currentRepo.getCurrentDashState()?.activeOrderId ?: return currentState.also {
-                Log.d(tag, "No active order to update.")
-            }
-        val screenInfo =
-            stateContext.screenInfo as? ScreenInfo.OrderDetails ?: return currentState.also {
-                Log.d(tag, "Screen info is not PickupDetails. Skipping update.")
-            }
-        val order = orderRepo.getOrderById(activeOrderId) ?: return currentState.also {
-            Log.w(tag, "!!! Could not retrieve active order $activeOrderId from database. !!!")
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    private suspend fun captureDropoffEvent(context: StateContext) {
+        val details = context.screenInfo as? ScreenInfo.OrderDetails ?: return
+
+        // Note: Check your ScreenInfo definition.
+        // We use storeName/customerName depending on how you map the generic text.
+        // Assuming 'storeName' field is reused for the primary title (Customer Name)
+        val customerName = details.storeName
+
+        if (customerName.isNullOrBlank()) return
+
+        // Map Screen to Status
+        val currentStatus = when (context.screenInfo.screen) {
+            Screen.NAVIGATION_VIEW_TO_DROP_OFF -> "NAVIGATING"
+            Screen.DROPOFF_DETAILS_PRE_ARRIVAL -> "NAVIGATING" // or "PRE_ARRIVAL"
+            // If you add POST_ARRIVAL screens later, map them to "ARRIVED"
+            else -> "UNKNOWN"
         }
 
-        // create the screen handlers where we update the order status etc.
-        return currentState
+        // Deduplication
+        if (customerName == lastLoggedCustomer && currentStatus == lastLoggedStatus) {
+            return
+        }
+
+        Log.i(tag, "Logging Dropoff Event: $customerName is now $currentStatus")
+        DashBuddyApplication.sendBubbleMessage("On Delivery for $customerName - $currentStatus")
+
+        val currentDash = currentRepo.getCurrentDashState()
+
+        val event = DropoffEventEntity(
+            dashId = currentDash?.dashId,
+            rawCustomerName = customerName,
+            rawAddress = details.storeAddress, // Assuming this maps to subtitle/address
+            status = currentStatus,
+            odometerReading = context.odometerReading
+        )
+
+        dropoffEventRepo.insert(event)
+
+        // Update Memory
+        lastLoggedCustomer = customerName
+        lastLoggedStatus = currentStatus
     }
 
     override suspend fun exitState(
@@ -101,6 +121,6 @@ class OnDelivery : StateHandler {
         currentState: AppState,
         nextState: AppState
     ) {
-        Log.i(tag, "--- Delivery Phase Concluded ---")
+        Log.i(tag, "--- Exiting Delivery Phase ---")
     }
 }
