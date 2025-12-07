@@ -34,7 +34,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 object EventHandler {
 
     private const val TAG = "EventHandler"
-    private const val DEBOUNCE_DELAY_MS = 200L // Delay for content changes
+    private const val DEBOUNCE_DELAY_MS = 50L // Delay for content changes
 
     // --- State for new debouncing and fingerprinting logic ---
     private val handler = Handler(Looper.getMainLooper())
