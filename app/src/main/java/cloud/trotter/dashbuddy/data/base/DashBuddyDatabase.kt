@@ -13,6 +13,8 @@ import cloud.trotter.dashbuddy.data.customer.CustomerDao
 import cloud.trotter.dashbuddy.data.customer.CustomerEntity
 import cloud.trotter.dashbuddy.data.dash.DashDao
 import cloud.trotter.dashbuddy.data.dash.DashEntity
+import cloud.trotter.dashbuddy.data.event.DashEventDao
+import cloud.trotter.dashbuddy.data.event.DashEventEntity
 import cloud.trotter.dashbuddy.data.event.DropoffEventDao
 import cloud.trotter.dashbuddy.data.event.DropoffEventEntity
 import cloud.trotter.dashbuddy.data.event.OfferEventDao
@@ -42,6 +44,7 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
         CurrentEntity::class,
         CustomerEntity::class,
         DashEntity::class,
+        DashEventEntity::class,
         DashZoneEntity::class,
         DropoffEventEntity::class,
         OfferEntity::class,
@@ -52,7 +55,7 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
         TipEntity::class,
         ZoneEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = false // Set to true if you plan to use schema for testing migrations
 // For production, schema export is recommended.
 )
@@ -63,6 +66,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
     abstract fun currentDashDao(): CurrentDao
     abstract fun customerDao(): CustomerDao
     abstract fun dashDao(): DashDao
+    abstract fun dashEventDao(): DashEventDao
     abstract fun dashZoneDao(): DashZoneDao
     abstract fun dropoffEventDao(): DropoffEventDao
     abstract fun offerDao(): OfferDao

@@ -35,10 +35,14 @@ object EventHandler {
 
     private const val TAG = "EventHandler"
     private const val DEBOUNCE_DELAY_MS = 50L // Delay for content changes
+    private const val MAX_DEBOUNCE_WAIT_MS = 300L // Force update after this time
 
     // --- State for new debouncing and fingerprinting logic ---
     private val handler = Handler(Looper.getMainLooper())
     private var lastFingerprint: ScreenFingerprint? = null
+
+    // NEW: Track when we last actually processed a frame
+    private var lastProcessTimestamp: Long = 0L
     private var lastDasherScreen: DasherScreen? = null
     private var debouncedEvent: AccessibilityEvent? = null
     private var debouncedRootNode: AccessibilityNodeInfo? = null
@@ -47,17 +51,25 @@ object EventHandler {
     private val currentRepo = DashBuddyApplication.currentRepo
     private val eventScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    // This runnable will contain the logic to process the event after the delay.
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private val debounceRunnable = Runnable {
         Log.d(TAG, "Processing debounced event.")
+        processDebouncedEvent() // Extracted to a helper function
+    }
+
+    // Helper to actually run the logic and update the timestamp
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    private fun processDebouncedEvent() {
         _serviceFlow.value?.let { activeService ->
             debouncedEvent?.let { event ->
+                lastProcessTimestamp = System.currentTimeMillis() // Reset timer
                 eventScope.launch {
                     processEvent(event, activeService, debouncedRootNode, debouncedRootNodeTexts)
                 }
             }
         }
+        debouncedEvent = null
+        debouncedRootNode = null
     }
 
     fun setServiceInstance(service: AccessibilityService) {
@@ -98,25 +110,22 @@ object EventHandler {
     fun handleEvent(
         event: AccessibilityEvent,
         service: AccessibilityService,
-        rootNode: AccessibilityNodeInfo
+//        rootNode: AccessibilityNodeInfo
     ) {
-        if (event.packageName != "com.doordash.driverapp") {
-            return
-        }
+        if (event.packageName?.toString() != "com.doordash.driverapp") return
+
+        // Safe fetch
+        val rootNode = service.rootInActiveWindow ?: return
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                Log.v(
-                    TAG,
-                    "High-priority event '${
-                        AccessibilityEvent.eventTypeToString(event.eventType)
-                    }' received. Processing immediately."
-                )
-                // Cancel any pending debounced event because this new event is more important.
+                Log.v(TAG, "High-priority event. Processing immediately.")
                 handler.removeCallbacks(debounceRunnable)
-                debouncedEvent = null
-                // Process this high-priority event right away.
+
+                // Update timestamp so we don't double-process immediately after
+                lastProcessTimestamp = System.currentTimeMillis()
+
                 val rootNodeTexts = mutableListOf<String>()
                 AccNodeUtils.extractTexts(rootNode, rootNodeTexts)
                 eventScope.launch {
@@ -131,26 +140,37 @@ object EventHandler {
                     createScreenFingerprint(rootNode, rootNodeTexts, event.source)
 
                 if (currentFingerprint == lastFingerprint) {
-                    // This is a truly redundant update, ignore it.
-                    Log.v(TAG, "Content changed but fingerprint is identical. Ignoring.")
                     return
                 }
-                // The screen has changed, update the fingerprint.
                 lastFingerprint = currentFingerprint
 
-                // The screen is different, so we want to process this event.
-                // However, we'll wait briefly to batch any other rapid-fire changes.
-                Log.v(TAG, "Content changed with new fingerprint. Debouncing...")
-                handler.removeCallbacks(debounceRunnable)
-                debouncedEvent = event // Store a copy of the new event
-                debouncedRootNode = rootNode // Store a copy of the root node
+                // --- THE FIX IS HERE ---
+                val now = System.currentTimeMillis()
+                val timeSinceLastProcess = now - lastProcessTimestamp
+
+                // Store event data for the runnable
+                debouncedEvent = event
+                debouncedRootNode = rootNode
                 debouncedRootNodeTexts = rootNodeTexts
-                handler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS)
+
+                if (timeSinceLastProcess > MAX_DEBOUNCE_WAIT_MS) {
+                    // It has been too long since we looked at the screen.
+                    // Force an update NOW, ignoring the debounce delay.
+                    Log.d(
+                        TAG,
+                        "Debounce starvation detected (Wait > ${MAX_DEBOUNCE_WAIT_MS}ms). Forcing update."
+                    )
+                    handler.removeCallbacks(debounceRunnable)
+                    debounceRunnable.run()
+                } else {
+                    // Standard Debounce
+                    handler.removeCallbacks(debounceRunnable)
+                    handler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS)
+                }
             }
 
             else -> {
-                // For any other event type, we can choose to ignore or handle as needed.
-                // For now, we ignore to reduce noise.
+
             }
         }
     }

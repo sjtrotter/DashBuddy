@@ -2,7 +2,7 @@
     android:accessibilityEventTypes="typeAllMask"
     android:packageNames="com.doordash.driverapp"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:notificationTimeout="100"
+    android:notificationTimeout="0"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
-    android:accessibilityFlags="flagReportViewIds" />
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows" />

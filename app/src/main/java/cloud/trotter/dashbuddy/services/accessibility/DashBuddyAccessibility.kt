@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.services.accessibility
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
@@ -22,19 +21,22 @@ class DashBuddyAccessibility : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
+
         // --- TRIGGER: Keep the Odometer Service Alive ---
-        try {
-            val keepAliveIntent = Intent(this, LocationService::class.java).apply {
-                action = LocationService.ACTION_KEEP_ALIVE
-            }
-            startService(keepAliveIntent)
-        } catch (e: Exception) {
-            Log.e(tag, "Failed to send Keep Alive to LocationService", e)
-        }
-        val rootNode = rootInActiveWindow
-        if (event != null && rootNode != null) {
-            eventHandler.handleEvent(event, this, rootNode)
-        }
+//        try {
+//            val keepAliveIntent = Intent(this, LocationService::class.java).apply {
+//                action = LocationService.ACTION_KEEP_ALIVE
+//            }
+//            startService(keepAliveIntent)
+//        } catch (e: Exception) {
+//            Log.e(tag, "Failed to send Keep Alive to LocationService", e)
+//        }
+
+        // OPTIMIZATION: Do NOT fetch rootInActiveWindow here.
+        // Just pass the event and the service ('this').
+        // Let the EventHandler decide when to pay the cost of fetching the screen.
+        eventHandler.handleEvent(event, this)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -53,19 +55,14 @@ class DashBuddyAccessibility : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        val info = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPES_ALL_MASK
-            packageNames = arrayOf("com.doordash.driverapp")
-            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
 
-        }
-        this.serviceInfo = info
+        // REMOVED: Manual AccessibilityServiceInfo configuration.
+        // We now rely entirely on accessibility_service_config.xml.
+        // This ensures flags like flagReportViewIds are not overwritten.
 
         eventHandler.initializeStateManager()
         eventHandler.setServiceInstance(this)
 
         Log.d(tag, "Accessibility service connected")
     }
-
 }
