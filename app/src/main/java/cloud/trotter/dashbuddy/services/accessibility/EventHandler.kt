@@ -25,46 +25,59 @@ import cloud.trotter.dashbuddy.state.StateManager as StateManager
 import java.util.Date
 import java.util.Objects
 import cloud.trotter.dashbuddy.log.Logger as Log
+import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * Singleton object to handle accessibility events.
- * This allows for centralized processing and state management
- * related to detected events.
- */
 object EventHandler {
 
     private const val TAG = "EventHandler"
-    private const val DEBOUNCE_DELAY_MS = 50L // Delay for content changes
-    private const val MAX_DEBOUNCE_WAIT_MS = 300L // Force update after this time
+    private const val DEBOUNCE_DELAY_MS = 50L
+    private const val MAX_DEBOUNCE_WAIT_MS = 300L
 
-    // --- State for new debouncing and fingerprinting logic ---
     private val handler = Handler(Looper.getMainLooper())
     private var lastFingerprint: ScreenFingerprint? = null
 
-    // NEW: Track when we last actually processed a frame
     private var lastProcessTimestamp: Long = 0L
     private var lastDasherScreen: DasherScreen? = null
+
+    // Debug counter to track queue depth
+    private val pendingTaskCount = AtomicInteger(0)
+
     private var debouncedEvent: AccessibilityEvent? = null
     private var debouncedRootNode: AccessibilityNodeInfo? = null
     private var debouncedRootNodeTexts: List<String> = emptyList()
+
     private val _serviceFlow = MutableStateFlow<AccessibilityService?>(null)
     private val currentRepo = DashBuddyApplication.currentRepo
-    private val eventScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    // *** FIX: Use Default (Background) dispatcher to prevent Main Thread starvation ***
+    private val eventScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private val debounceRunnable = Runnable {
-        Log.d(TAG, "Processing debounced event.")
-        processDebouncedEvent() // Extracted to a helper function
+        Log.d(TAG, "DEBUG: Debounce Runnable executing on Main Thread.")
+        processDebouncedEvent()
     }
 
-    // Helper to actually run the logic and update the timestamp
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun processDebouncedEvent() {
         _serviceFlow.value?.let { activeService ->
             debouncedEvent?.let { event ->
-                lastProcessTimestamp = System.currentTimeMillis() // Reset timer
+                lastProcessTimestamp = System.currentTimeMillis()
+
+                val count = pendingTaskCount.incrementAndGet()
+                Log.d(TAG, "DEBUG: Launching background process. Queue depth: $count")
+
                 eventScope.launch {
-                    processEvent(event, activeService, debouncedRootNode, debouncedRootNodeTexts)
+                    try {
+                        processEvent(
+                            event,
+                            activeService,
+                            debouncedRootNode,
+                            debouncedRootNodeTexts
+                        )
+                    } finally {
+                        pendingTaskCount.decrementAndGet()
+                    }
                 }
             }
         }
@@ -80,10 +93,6 @@ object EventHandler {
         _serviceFlow.value = null
     }
 
-    /**
-     * A data class to hold a robust signature of the screen state.
-     * It includes text, structure, and source node information for accurate comparison.
-     */
     private data class ScreenFingerprint(
         val rootNodeTexts: List<String>,
         val rootTextsHash: Int,
@@ -93,7 +102,6 @@ object EventHandler {
         val sourceNodeText: CharSequence?
     )
 
-    /** Initialize the state machine. */
     fun initializeStateManager() {
         val initialContext = StateContext(
             timestamp = Date().time,
@@ -102,34 +110,43 @@ object EventHandler {
         StateManager.initialize(initialContext)
     }
 
-    /**
-     * Main entry point for handling events from the AccessibilityService.
-     * It decides whether to process an event immediately or to debounce it.
-     */
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun handleEvent(
         event: AccessibilityEvent,
         service: AccessibilityService,
-//        rootNode: AccessibilityNodeInfo
+        // rootNode is passed via manual call in Service
     ) {
+        // Log immediately to prove event reception
+        // Log.v(TAG, "VERBOSE :: EVENT RECEIVED :: ${AccessibilityEvent.eventTypeToString(event.eventType)}")
+
         if (event.packageName?.toString() != "com.doordash.driverapp") return
 
-        // Safe fetch
-        val rootNode = service.rootInActiveWindow ?: return
+        // Capture immediately as requested
+        val rootNode = service.rootInActiveWindow
+
+        if (rootNode == null) {
+            Log.w(TAG, "DEBUG: rootInActiveWindow returned NULL. Ignoring event.")
+            return
+        }
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                Log.v(TAG, "High-priority event. Processing immediately.")
+                Log.i(TAG, "DEBUG: High Priority Event. Processing Immediately.")
                 handler.removeCallbacks(debounceRunnable)
 
-                // Update timestamp so we don't double-process immediately after
                 lastProcessTimestamp = System.currentTimeMillis()
 
                 val rootNodeTexts = mutableListOf<String>()
                 AccNodeUtils.extractTexts(rootNode, rootNodeTexts)
+
+                pendingTaskCount.incrementAndGet()
                 eventScope.launch {
-                    processEvent(event, service, rootNode, rootNodeTexts)
+                    try {
+                        processEvent(event, service, rootNode, rootNodeTexts)
+                    } finally {
+                        pendingTaskCount.decrementAndGet()
+                    }
                 }
             }
 
@@ -144,41 +161,31 @@ object EventHandler {
                 }
                 lastFingerprint = currentFingerprint
 
-                // --- THE FIX IS HERE ---
                 val now = System.currentTimeMillis()
                 val timeSinceLastProcess = now - lastProcessTimestamp
 
-                // Store event data for the runnable
                 debouncedEvent = event
                 debouncedRootNode = rootNode
                 debouncedRootNodeTexts = rootNodeTexts
 
                 if (timeSinceLastProcess > MAX_DEBOUNCE_WAIT_MS) {
-                    // It has been too long since we looked at the screen.
-                    // Force an update NOW, ignoring the debounce delay.
-                    Log.d(
+                    Log.w(
                         TAG,
-                        "Debounce starvation detected (Wait > ${MAX_DEBOUNCE_WAIT_MS}ms). Forcing update."
+                        "DEBUG: Starvation detected (Wait > ${timeSinceLastProcess}ms). Forcing Runnable."
                     )
                     handler.removeCallbacks(debounceRunnable)
-                    debounceRunnable.run()
+                    debounceRunnable.run() // Runs synchronously on Main Thread, but launches coroutine on Default
                 } else {
-                    // Standard Debounce
+                    // Log.d(TAG, "DEBUG: Debouncing (Wait: ${timeSinceLastProcess}ms)")
                     handler.removeCallbacks(debounceRunnable)
                     handler.postDelayed(debounceRunnable, DEBOUNCE_DELAY_MS)
                 }
             }
 
-            else -> {
-
-            }
+            else -> {}
         }
     }
 
-    /**
-     * This is the core logic that extracts data, recognizes the screen, and dispatches the state.
-     * It's called either immediately (for clicks) or after a delay (for content changes).
-     */
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private suspend fun processEvent(
         event: AccessibilityEvent,
@@ -186,37 +193,35 @@ object EventHandler {
         rootNodePassed: AccessibilityNodeInfo?,
         rootNodeTexts: List<String>
     ) {
+        Log.d(TAG, "DEBUG: processEvent STARTED on ${Thread.currentThread().name}")
+
         var rootNode = rootNodePassed
         if (rootNode == null) {
-            rootNode = service.rootInActiveWindow ?: return
+            Log.w(TAG, "DEBUG: RootNode passed was null. Attempting fetch...")
+            rootNode = service.rootInActiveWindow ?: run {
+                Log.e(TAG, "DEBUG: Fetch failed. Aborting processEvent.")
+                return
+            }
         }
+
+        // Just confirming we got here
+        val nodeCount = rootNode.childCount
+        Log.v(TAG, "DEBUG: RootNode valid. Child count: $nodeCount")
 
         val uiNodeTree = UiNode.from(rootNode)
         Log.d(TAG, "UI Node Tree: $uiNodeTree")
 
+        // ... rest of your logic ...
         val currentDashState: CurrentEntity? = currentRepo.getCurrentDashState()
-
         val currentEventType = event.eventType
-        Log.d(
-            TAG,
-            "--- Processing Event: ${AccessibilityEvent.eventTypeToString(currentEventType)} ---"
-        )
 
         val sourceNodeTexts = mutableListOf<String>()
         event.source?.let { AccNodeUtils.extractTexts(it, sourceNodeTexts) }
 
-        if (rootNodeTexts.isNotEmpty()) {
-            Log.d(TAG, "Screen texts: ${rootNodeTexts.joinToString(" | ")}")
-        } else {
-            Log.d(TAG, "No screen texts extracted.")
-        }
-        if (sourceNodeTexts.isNotEmpty()) {
-            Log.d(TAG, "Source texts: ${sourceNodeTexts.joinToString(" | ")}")
-        }
-
         var clickInfo: ClickInfo = ClickInfo.NoClick
         if (currentEventType == AccessibilityEvent.TYPE_VIEW_CLICKED)
             clickInfo = ClickParser.parse(sourceNodeTexts)
+
         val tempContext = StateContext(
             timestamp = Date().time,
             odometerReading = LocationService.getCurrentOdometer(DashBuddyApplication.context),
@@ -232,33 +237,27 @@ object EventHandler {
             clickInfo = clickInfo,
             currentDashState = currentDashState,
         )
+
         val finalContext = tempContext.copy(
             screenInfo = ScreenRecognizerV2.identify(tempContext)
         )
 
-        Log.d(TAG, "Sending event to StateManager with context: $finalContext")
+        Log.d(TAG, "Sending event to StateManager: ${finalContext.screenInfo?.screen}")
         StateManager.dispatchEvent(finalContext)
 
-        // Update the last known screen for context in the next recognition
         lastDasherScreen = finalContext.screenInfo?.screen
-        // Make sure to clean up the event if it was the one we held onto
         if (event == debouncedEvent) {
             debouncedEvent = null
         }
     }
 
-    /**
-     * Creates a detailed fingerprint of the current screen state.
-     */
     private fun createScreenFingerprint(
         rootNode: AccessibilityNodeInfo,
         rootNodeTexts: List<String>,
         sourceNode: AccessibilityNodeInfo?
     ): ScreenFingerprint {
-
         val structureInfo = StringBuilder()
         AccNodeUtils.extractStructure(rootNode, structureInfo)
-
         return ScreenFingerprint(
             rootNodeTexts = rootNodeTexts,
             rootTextsHash = Objects.hash(rootNodeTexts),
