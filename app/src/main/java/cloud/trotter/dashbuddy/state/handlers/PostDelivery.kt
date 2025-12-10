@@ -17,7 +17,7 @@ class PostDelivery : StateHandler {
 
         // 1. IGNORE the summary screen.
         // We just recorded it. We sit here until the user dismisses it.
-        if (screen == Screen.DELIVERY_COMPLETED_DIALOG) {
+        if (screen == Screen.DELIVERY_SUMMARY_EXPANDED || screen == Screen.DELIVERY_SUMMARY_COLLAPSED) {
             return currentState
         }
 

@@ -10,7 +10,7 @@ class DropoffEventRepo(private val dropoffEventDao: DropoffEventDao) {
 
     suspend fun insert(event: DropoffEventEntity): Long {
         return withContext(Dispatchers.IO) {
-            Log.v(tag, "Inserting dropoff event: ${event.rawCustomerName} - ${event.status}")
+            Log.v(tag, "Inserting dropoff event: ${event.customerNameHash} - ${event.status}")
             dropoffEventDao.insert(event)
         }
     }

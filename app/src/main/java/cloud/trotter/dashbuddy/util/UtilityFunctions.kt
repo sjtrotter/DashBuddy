@@ -43,7 +43,7 @@ object UtilityFunctions {
                 offerTimeCal.add(Calendar.DAY_OF_YEAR, 1)
             }
             offerTimeCal.timeInMillis
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -53,7 +53,7 @@ object UtilityFunctions {
             val digest = MessageDigest.getInstance("SHA-256")
             val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
             hashBytes.fold("") { str, it -> str + "%02x".format(it) }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             input
         }
     }
@@ -150,5 +150,26 @@ object UtilityFunctions {
     fun formatCurrency(totalEarnings: Double): String {
         return String.format(Locale.getDefault(), "%.2f", totalEarnings)
 
+    }
+
+    /**
+     * Parses a string containing a currency value (e.g. "$1,234.50") into a Double.
+     * Removes '$' symbols and commas.
+     * * @param text The string to parse.
+     * @return The numeric value, or null if parsing fails.
+     */
+    fun parseCurrency(text: String?): Double? {
+        if (text.isNullOrBlank()) return null
+
+        return try {
+            // Remove common currency formatting characters
+            val cleanText = text.replace("$", "")
+                .replace(",", "")
+                .trim()
+
+            cleanText.toDoubleOrNull()
+        } catch (_: Exception) {
+            null
+        }
     }
 }

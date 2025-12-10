@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.data.base
 
 import androidx.room.TypeConverter
 import cloud.trotter.dashbuddy.data.dash.DashType
+import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
+import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.offer.OfferBadge
 import cloud.trotter.dashbuddy.data.offer.OfferStatus
 import cloud.trotter.dashbuddy.data.order.OrderBadge
@@ -29,7 +31,7 @@ class DataTypeConverters {
             ?.mapNotNull { part ->
                 try {
                     OfferBadge.valueOf(part.trim())
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     null
                 }
             }
@@ -55,7 +57,7 @@ class DataTypeConverters {
             ?.mapNotNull { part ->
                 try {
                     OrderBadge.valueOf(part.trim())
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     null
                 }
             }
@@ -121,5 +123,25 @@ class DataTypeConverters {
     fun toOrderStatus(statusString: String): OrderStatus {
         // Converts "PICKUP_CONFIRMED" back to OrderStatus.PICKUP_CONFIRMED.
         return enumValueOf<OrderStatus>(statusString)
+    }
+
+    @TypeConverter
+    fun fromPickupStatus(status: PickupStatus): String = status.name
+
+    @TypeConverter
+    fun toPickupStatus(value: String): PickupStatus = try {
+        enumValueOf<PickupStatus>(value)
+    } catch (_: Exception) {
+        PickupStatus.UNKNOWN
+    }
+
+    @TypeConverter
+    fun fromDropoffStatus(status: DropoffStatus): String = status.name
+
+    @TypeConverter
+    fun toDropoffStatus(value: String): DropoffStatus = try {
+        enumValueOf<DropoffStatus>(value)
+    } catch (_: Exception) {
+        DropoffStatus.UNKNOWN
     }
 }

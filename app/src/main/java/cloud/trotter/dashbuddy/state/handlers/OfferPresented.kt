@@ -45,7 +45,8 @@ class OfferPresented : StateHandler {
 
             screen == Screen.DASH_CONTROL -> AppState.DASH_ACTIVE_ON_CONTROL
             screen == Screen.MAIN_MAP_IDLE -> AppState.DASH_IDLE_OFFLINE
-            screen == Screen.DELIVERY_COMPLETED_DIALOG -> AppState.DASH_ACTIVE_DELIVERY_COMPLETED
+            screen == Screen.DELIVERY_SUMMARY_COLLAPSED -> AppState.DASH_ACTIVE_DELIVERY_COMPLETED
+            screen == Screen.DELIVERY_SUMMARY_EXPANDED -> AppState.DASH_POST_DELIVERY
 
             screen.isNavigating -> AppState.DASH_ACTIVE_ON_NAVIGATION
             screen.isPickup -> AppState.DASH_ACTIVE_ON_PICKUP

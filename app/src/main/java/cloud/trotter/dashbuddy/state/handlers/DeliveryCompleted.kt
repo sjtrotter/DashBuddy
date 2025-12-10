@@ -10,27 +10,58 @@ import cloud.trotter.dashbuddy.data.pay.AppPayEntity
 import cloud.trotter.dashbuddy.data.pay.TipEntity
 import cloud.trotter.dashbuddy.data.pay.TipType
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.AppState as AppState
-import cloud.trotter.dashbuddy.state.StateContext as StateContext
-import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
+import cloud.trotter.dashbuddy.state.AppState
+import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.state.StateHandler
 import cloud.trotter.dashbuddy.util.AccNodeUtils
+import kotlinx.coroutines.delay
 
 class DeliveryCompleted : StateHandler {
 
     private val tag = "DeliveryCompletedHandler"
-
-    // Repositories
-//    private val currentRepo = DashBuddyApplication.currentRepo
     private val orderRepo = DashBuddyApplication.orderRepo
     private val tipRepo = DashBuddyApplication.tipRepo
     private val appPayRepo = DashBuddyApplication.appPayRepo
 
-    /**
-     * PASSIVE LOOP:
-     * We do NOT click here. We only check if the data has appeared.
-     */
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    override suspend fun enterState(
+        stateContext: StateContext,
+        currentState: AppState,
+        previousState: AppState?
+    ) {
+        val screen = stateContext.screenInfo?.screen
+        Log.i(tag, "Entering DeliveryCompleted. Initial Screen: $screen")
+
+        // STRATEGY: Check -> Wait -> Act
+        if (screen == Screen.DELIVERY_SUMMARY_COLLAPSED) {
+            Log.i(tag, "Screen is Collapsed. Waiting for UI to settle...")
+
+            // 1. Wait for animation/load (Your idea: Delay before clicking)
+            delay(500)
+
+            // 2. Perform the Click
+            // Target the specific container you identified: id=expandable_view
+            val root = stateContext.rootUiNode
+            val expandButton = root?.findNode {
+                it.viewIdResourceName?.endsWith("expandable_view") == true
+            } ?: root?.findNode {
+                it.text?.startsWith("This offer") == true
+            }
+
+            if (expandButton != null) {
+                Log.i(
+                    tag,
+                    "Attempting to expand details via '${expandButton.viewIdResourceName ?: "text"}'"
+                )
+                AccNodeUtils.clickNode(expandButton.originalNode)
+            } else {
+                Log.w(tag, "Could not find expand button!")
+            }
+        }
+    }
+
     override suspend fun processEvent(
         stateContext: StateContext,
         currentState: AppState
@@ -38,78 +69,29 @@ class DeliveryCompleted : StateHandler {
         val screenInfo = stateContext.screenInfo
         val screen = screenInfo?.screen
 
-        // 1. EXIT STRATEGIES (Higher Priority)
-        // If the screen changed, we must leave.
-        when {
-            screen == Screen.OFFER_POPUP -> return AppState.DASH_ACTIVE_OFFER_PRESENTED
-
-            screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ||
-                    screen == Screen.ON_DASH_ALONG_THE_WAY ||
-                    screen == Screen.MAIN_MAP_IDLE -> return AppState.DASH_ACTIVE_AWAITING_OFFER
-
-            screen?.isPickup == true -> return AppState.DASH_ACTIVE_ON_PICKUP
-            screen?.isDelivery == true -> return AppState.DASH_ACTIVE_ON_DELIVERY
+        // 1. EXIT STRATEGIES (User navigated away)
+        if (screen == Screen.MAIN_MAP_IDLE || screen == Screen.OFFER_POPUP) {
+            return AppState.DASH_ACTIVE_AWAITING_OFFER
         }
 
-        // 2. CHECK FOR PAY DATA
-        // Only proceed if we are actually on the Delivery Completed screen.
+        // 2. SUCCESS STRATEGY (Data Detected)
+        // If the Matcher successfully parsed the expanded data, we move to record it.
         if (screenInfo is ScreenInfo.DeliveryCompleted) {
             val hasData = screenInfo.parsedPay.appPayComponents.isNotEmpty() ||
                     screenInfo.parsedPay.customerTips.isNotEmpty()
 
             if (hasData) {
-                Log.i(tag, "Pay data detected. Transitioning to POST_DELIVERY to record.")
+                Log.i(tag, "Expanded Data Detected! Transitioning to Record.")
                 return AppState.DASH_POST_DELIVERY
             }
         }
 
-        // 3. NO DATA YET? JUST WAIT.
-        // We performed the click in 'enterState'. Now we wait for the UI to update.
-        // If the click failed, we rely on the user to manually click it, which will
-        // trigger a new event, landing us back here to check 'hasData' again.
+        // 3. WAITING STRATEGY
+        // If we remain in COLLAPSED, we just wait.
+        // If the click failed, the user will likely tap it themselves, triggering a new event.
         return currentState
     }
 
-    /**
-     * THE ACTION:
-     * Run exactly ONCE when we first enter the screen.
-     */
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
-    override suspend fun enterState(
-        stateContext: StateContext,
-        currentState: AppState,
-        previousState: AppState?
-    ) {
-        Log.i(tag, "Entering state: DeliveryCompleted")
-
-        val screenInfo = stateContext.screenInfo as? ScreenInfo.DeliveryCompleted
-        val hasData = screenInfo?.parsedPay?.let {
-            it.appPayComponents.isNotEmpty() || it.customerTips.isNotEmpty()
-        } ?: false
-
-        if (hasData) {
-            Log.i(
-                tag,
-                "Data already visible on entry. No click needed. Waiting for processEvent..."
-            )
-            return
-        }
-
-        Log.i(tag, "Data hidden on entry. Attempting ONE click on 'This offer'...")
-        val expandButton = stateContext.rootUiNode?.findNode {
-            it.text?.startsWith("This offer") == true
-        }
-
-        if (expandButton != null) {
-            val success = AccNodeUtils.clickNode(expandButton.originalNode)
-            if (success) Log.i(tag, "Click sent.")
-        }
-    }
-
-    /**
-     * THE SIDE EFFECT:
-     * Record data ONLY when we successfully exit to the POST_DELIVERY state.
-     */
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override suspend fun exitState(
         stateContext: StateContext,
@@ -120,18 +102,9 @@ class DeliveryCompleted : StateHandler {
             val screenInfo = stateContext.screenInfo
             if (screenInfo is ScreenInfo.DeliveryCompleted) {
                 recordPayData(stateContext, screenInfo)
-            } else {
-                Log.e(
-                    tag,
-                    "Transitioned to POST_DELIVERY but screen info was not DeliveryCompleted! Data lost."
-                )
             }
-        } else {
-            Log.i(tag, "Exiting DeliveryCompleted without recording (Next State: $nextState).")
         }
     }
-
-    // --- HELPER: DATABASE RECORDING ---
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private suspend fun recordPayData(

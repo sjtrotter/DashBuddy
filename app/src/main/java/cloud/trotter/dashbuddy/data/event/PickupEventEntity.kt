@@ -5,6 +5,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import cloud.trotter.dashbuddy.data.dash.DashEntity
+import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 
 @Entity(
     tableName = "pickup_events",
@@ -35,7 +36,7 @@ data class PickupEventEntity(
     val rawAddress: String? = null,
 
     /** The state of the pickup: "NAVIGATING", "ARRIVED", "SHOPPING", etc. */
-    val status: String,
+    val status: PickupStatus = PickupStatus.UNKNOWN,
 
     /** The odometer reading at the time of the event. */
     val odometerReading: Double? = null,

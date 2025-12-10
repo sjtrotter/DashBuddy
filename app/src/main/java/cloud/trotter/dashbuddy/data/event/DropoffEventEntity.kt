@@ -5,6 +5,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import cloud.trotter.dashbuddy.data.dash.DashEntity
+import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
 
 @Entity(
     tableName = "dropoff_events",
@@ -29,13 +30,13 @@ data class DropoffEventEntity(
     val timestamp: Long = System.currentTimeMillis(),
 
     /** The customer name (or "Deliver to...") as seen on screen. */
-    val rawCustomerName: String,
+    val customerNameHash: String,
 
     /** The address if available. */
-    val rawAddress: String? = null,
+    val addressHash: String? = null,
 
     /** The state of the drop-off: "NAVIGATING", "ARRIVED", "CONFIRMING", etc. */
-    val status: String,
+    val status: DropoffStatus = DropoffStatus.UNKNOWN,
 
     /** The odometer reading at the time of the event. */
     val odometerReading: Double? = null,

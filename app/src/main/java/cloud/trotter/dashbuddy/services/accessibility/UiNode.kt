@@ -13,6 +13,7 @@ import androidx.annotation.RequiresApi
 data class UiNode(
     val text: String? = null,
     val contentDescription: String? = null,
+    val stateDescription: String? = null,
     val viewIdResourceName: String? = null, // e.g., "com.doordash.driverapp:id/accept_button"
     val className: String? = null,           // e.g., "android.widget.Button"
     val isClickable: Boolean = false,
@@ -43,10 +44,11 @@ data class UiNode(
         val id = node.viewIdResourceName?.substringAfter("id/") ?: "no_id"
         val desc = node.contentDescription?.let { "desc='$it'" } ?: ""
         val txt = node.text?.let { "text='$it'" } ?: ""
+        val state = node.stateDescription?.let { "state='$it'" }
         val identifier = listOf(txt, desc).filter { it.isNotEmpty() }.joinToString(", ")
 
         builder.append(indentation)
-            .append("UiNode($identifier, id=$id, class=${node.className})\n")
+            .append("UiNode($identifier, id=$id, state=${state}, class=${node.className})\n")
 
         for (child in node.children) {
             appendNode(builder, child, indent + 1)
@@ -112,6 +114,7 @@ data class UiNode(
             val currentUiNode = UiNode(
                 text = accNode.text?.toString(),
                 contentDescription = accNode.contentDescription?.toString(),
+                stateDescription = accNode.stateDescription?.toString(),
                 viewIdResourceName = accNode.viewIdResourceName,
                 className = accNode.className?.toString(),
                 isClickable = accNode.isClickable,

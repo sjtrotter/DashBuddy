@@ -10,6 +10,9 @@ import cloud.trotter.dashbuddy.log.Logger as Log
  * Represents distinct UI screens identified within the Dasher application.
  * Each enum constant holds its own criteria (signature) for matching.
  * The `matches` method is used by the ScreenRecognizer to determine the current screen.
+ *
+ * NOTE: Refactoring to make this enum simple, identifying the screen and flags and
+ * lifting the matching logic out into separate [ScreenMatcher]s.
  */
 enum class Screen(
     // Signature properties directly in the enum constructor
@@ -27,80 +30,22 @@ enum class Screen(
     val customMatcher: ((screenTexts: List<String>, sourceTexts: List<String>, context: StateContext) -> Boolean)? = null,
     val nodeMatcher: ((rootNode: UiNode) -> Boolean)? = null,
 ) {
-    UNKNOWN(
-        screenName = "UNKNOWN"
-    ), // Default, matches nothing specifically or used as a fallback
+    /** Default screen, matches nothing specifically or used as a fallback. */
+    UNKNOWN(screenName = "UNKNOWN"),
 
     // --- Startup / Login / Offline States ---
-    APP_STARTING_OR_LOADING(
-        screenName = "App Startup",
-        someOfTheseTexts = listOf("starting…", "signing in…"),
-        maxTextCount = 7, // Usually few texts on these screens, helps differentiate
-        nodeMatcher = { root ->
-            val hasStartingText =
-                root.hasNode { it.text == "Starting…" && it.className == "android.widget.TextView" }
-            val hasCancelButton =
-                root.hasNode { it.text == "Cancel" && it.className == "android.widget.Button" }
-            if (hasStartingText && hasCancelButton) {
-                Log.d("Screen", "Found starting text and cancel button, matched App Startup")
-            }
-            hasStartingText && hasCancelButton
-        }
-    ),
-    LOGIN_SCREEN(
-        screenName = "Login",
-        requiredTexts = listOf("phone number", "email", "continue", "sign in with google"),
-        forbiddenTexts = listOf("dash now", "looking for offers")
-    ),
-    MAIN_MAP_IDLE(
-        screenName = "Main Map Idle",
-        requiredTexts = listOf("dash", "home", "help", "this week"),
-        // ensure the screen has the button.
-        nodeMatcher = { root ->
-            // Check for several unique and stable elements on the screen.
-            // This is much more reliable than just checking for a list of words.
-            val hasNavTabs = root.hasNode { it.text == "Home" } &&
-                    root.hasNode { it.text == "Schedule" } &&
-                    root.hasNode { it.text == "Earnings" } &&
-                    root.hasNode { it.text == "Ratings" }
 
-            val hasTopBarElements = root.hasNode { it.contentDescription == "Side Menu" } &&
-                    root.hasNode { it.contentDescription == "Earnings Mode Switcher" }
+    /** The app startup screen. */
+    APP_STARTING_OR_LOADING(screenName = "App Startup"),
 
-            // The screen is only a match if both the top bar and nav tabs are present.
-            if (hasNavTabs && hasTopBarElements) {
-                Log.d("Screen", "Found nav tabs and top bar elements, matched Main Map Idle")
-            }
-            hasNavTabs && hasTopBarElements
-        },
-        someOfTheseTexts = listOf(
-            "dash",
-            "dash now to check for offers",
-            "dash now and head to zone",
-            "head to zone, offers are waiting",
-            "schedule",
-            "navigate"
-        ),
-        forbiddenTexts = listOf("you're dashing now"),
-        minTextCount = 5,
-        activityHint = ActivityHint.INACTIVE
-    ),
-    SCHEDULE_VIEW(
-        screenName = "Schedule",
-        requiredTexts = listOf(
-            "schedule",
-            "sun",
-            "mon",
-            "tue",
-            "wed",
-            "thu",
-            "fri",
-            "sat",
-            "locations"
-        ),
-//        someOfTheseTexts = listOf("available slots", "sun", "mon", "tue", "wed", "thu", "fri", "sat")
-        minTextCount = 23
-    ),
+    // took out login screen, no real reason to match it.
+
+    /** The main idle map screen. */
+    MAIN_MAP_IDLE(screenName = "Main Map Idle", activityHint = ActivityHint.INACTIVE),
+
+    /** The scheduling screen. */
+    SCHEDULE_VIEW(screenName = "Schedule"),
+
     EARNINGS_VIEW(
         screenName = "Earnings",
         requiredTexts = listOf("earnings", "this week"),
@@ -143,19 +88,9 @@ enum class Screen(
             "chat with support"
         ),
     ),
-    MAIN_MENU_VIEW(
-        screenName = "Main Menu",
-        requiredTexts = listOf(
-            "dash",
-            "schedule",
-            "earnings",
-            "ratings",
-            "account",
-            "dash preferences",
-            "settings",
-            "log out"
-        )
-    ),
+
+    // Removed main menu; using the nodes, there is no way to discern if the menu is open
+    // also, it's not really needed anyway.
 
     // --- Starting or Ending a Dash Workflow ---
     SET_DASH_END_TIME(
@@ -239,24 +174,18 @@ enum class Screen(
         forbiddenTexts = listOf("accept", "decline"),
         isNavigating = true,
     ),
+
+    /** Navigating, but to a pickup location. */
     NAVIGATION_VIEW_TO_PICK_UP(
         screenName = "Navigation to Pick Up",
-        requiredTexts = listOf("heading to", "pick up instructions", "pick up by"),
-        someOfTheseTexts = listOf("mi", "ft"),
-        forbiddenTexts = listOf(
-            "accept",
-            "decline",
-            "read instructions on arrival"
-        ),
         activityHint = ActivityHint.ACTIVE,
         isPickup = true,
         isNavigating = true
     ),
+
+    /** Navigating, but to a dropoff location. */
     NAVIGATION_VIEW_TO_DROP_OFF(
         screenName = "Navigation to Drop Off",
-        requiredTexts = listOf("heading to", "read instructions on arrival", "deliver by"),
-        someOfTheseTexts = listOf("mi", "ft", "leave it at the door", "hand to customer"),
-        forbiddenTexts = listOf("accept", "decline"),
         activityHint = ActivityHint.ACTIVE,
         isDelivery = true,
         isNavigating = true
@@ -285,14 +214,12 @@ enum class Screen(
     ),
 
     // --- Active Delivery - Pickup Phase ---
-    PICKUP_DETAILS_PRE_ARRIVAL(
-        requiredTexts = listOf("pickup from", "directions"),
-        someOfTheseTexts = listOf("arrived at store", "directions"),
-//        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
-        isPickup = true,
-        activityHint = ActivityHint.ACTIVE
-    ),
+
+    /** Prior to arrival at pickup location. */
+    PICKUP_DETAILS_PRE_ARRIVAL(isPickup = true, activityHint = ActivityHint.ACTIVE),
+
     PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI(
+        // this one is weird af. needs work. -- the nodes show that it might be an overlay type screen.
         requiredTexts = listOf(
             "confirm at store",
             "orders",
@@ -304,13 +231,10 @@ enum class Screen(
         activityHint = ActivityHint.ACTIVE,
 //        forbiddenTexts = listOf("confirm at store")
     ),
-    PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE(
-        requiredTexts = listOf("order for", "pick up by"),
-        someOfTheseTexts = listOf("verify order", "continue with pickup", "confirm pickup"),
-//        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
-        isPickup = true,
-        activityHint = ActivityHint.ACTIVE
-    ),
+
+    /** After arrival at pickup location. */
+    PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE(isPickup = true, activityHint = ActivityHint.ACTIVE),
+
     PICKUP_DETAILS_VERIFY_PICKUP(
         requiredTexts = listOf("verify order", "order for", "confirm pickup", "can’t verify order"),
         forbiddenTexts = listOf("pick up by"),
@@ -329,12 +253,10 @@ enum class Screen(
         isPickup = true,
         activityHint = ActivityHint.ACTIVE
     ),
-    PICKUP_DETAILS_POST_ARRIVAL_SHOP(
-        requiredTexts = listOf("shop and deliver", "to shop", "done"),
-        isPickup = true,
-        activityHint = ActivityHint.ACTIVE
-//        forbiddenTexts = listOf("offer", "heading to customer", "deliver to", "looking for offers", "accept")
-    ),
+
+    /** Arrival at store for shopping order. */
+    PICKUP_DETAILS_POST_ARRIVAL_SHOP(isPickup = true, activityHint = ActivityHint.ACTIVE),
+
     PICKUP_DETAILS_PICKED_UP(
         requiredTexts = listOf("Confirm pickup", "Loading…"),
         isPickup = true,
@@ -342,46 +264,22 @@ enum class Screen(
     ),
 
     // --- Active Delivery - Dropoff Phase ---
-    DROPOFF_DETAILS_PRE_ARRIVAL(
-        requiredTexts = listOf("Deliver to", "by", "settings"),
-        someOfTheseTexts = listOf("Leave it at the door", "am", "pm"),
-        isDelivery = true,
-        activityHint = ActivityHint.ACTIVE
-    ),
+
+    /** The dropoff details screen before arrival at dropoff location. */
+    DROPOFF_DETAILS_PRE_ARRIVAL(isDelivery = true, activityHint = ActivityHint.ACTIVE),
 
 
     // --- Post-Delivery ---
-    DELIVERY_COMPLETED_DIALOG(
-        screenName = "Delivery Completed",
-        nodeMatcher = { root ->
-            // Check for the main identifying texts
-            val hasDashSummaryText = root.hasNode { it.text == "This dash so far" }
-            val hasOfferSummaryText = root.hasNode { it.text == "This offer" }
 
-            // Check specifically for the "Continue dashing" button
-            val hasContinueButton = root.findNode {
-                it.className == "android.widget.Button" &&
-                        it.hasNode { child -> child.text == "Continue dashing" }
-            } != null
+    /** Initial state with breakdown data hidden. */
+    DELIVERY_SUMMARY_COLLAPSED(
+        screenName = "Delivery Summary (Collapsed)",
+        activityHint = ActivityHint.ACTIVE
+    ),
 
-            // All three conditions must be met
-            hasDashSummaryText && hasOfferSummaryText && hasContinueButton
-        },
-        requiredTexts = listOf("this offer", "continue", "this dash so far"),
-        someOfTheseTexts = listOf("delivery", "deliveries", "done", "continue"),
-        forbiddenTexts = listOf(
-            "accept",
-            "decline",
-            "dash summary",
-            "current orders",
-            "add time",
-            "dash ends at",
-            "active time",
-            "dash time",
-            "completed deliveries",
-            "looking for offers",
-            "promotions"
-        ),
+    /** 2. Final State (Data visible -> Parse this!) */
+    DELIVERY_SUMMARY_EXPANDED(
+        screenName = "Delivery Summary (Expanded)",
         activityHint = ActivityHint.ACTIVE
     ),
     ;
