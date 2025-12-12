@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class DashBuddyAccessibility : AccessibilityService() {
@@ -22,6 +21,11 @@ class DashBuddyAccessibility : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+
+        if (event.packageName != "com.doordash.driverapp") {
+            Log.d(tag, "Ignoring event from ${event.packageName}")
+            return
+        }
 
         // --- TRIGGER: Keep the Odometer Service Alive ---
 //        try {
