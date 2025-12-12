@@ -153,23 +153,53 @@ object UtilityFunctions {
     }
 
     /**
-     * Parses a string containing a currency value (e.g. "$1,234.50") into a Double.
-     * Removes '$' symbols and commas.
-     * * @param text The string to parse.
-     * @return The numeric value, or null if parsing fails.
+     * Parses currency strings, handling prefixes like "+" and suffixes like "+".
+     * Examples: "$10.50", "+$4.00", "$7.75+ Total..."
      */
     fun parseCurrency(text: String?): Double? {
         if (text.isNullOrBlank()) return null
-
         return try {
-            // Remove common currency formatting characters
+            // 1. Clean the string of symbols
             val cleanText = text.replace("$", "")
+                .replace("+", "")
                 .replace(",", "")
                 .trim()
 
-            cleanText.toDoubleOrNull()
+            // 2. Handle "7.75 Total" by taking the first token
+            val numberPart = cleanText.split(" ").firstOrNull()
+
+            numberPart?.toDoubleOrNull()
         } catch (_: Exception) {
             null
         }
+    }
+
+    /**
+     * Parses distance strings, handling "Additional" prefix.
+     * Examples: "5.5 mi", "Additional 2.6 mi", "500 ft"
+     */
+    fun parseDistance(text: String?): Double? {
+        if (text.isNullOrBlank()) return null
+
+        // Find the first valid number (decimal or integer)
+        val numberRegex = Regex("(\\d+(?:\\.\\d+)?)")
+        val numberString = numberRegex.find(text)?.value ?: return null
+        val number = numberString.toDoubleOrNull() ?: return null
+
+        // Convert feet to miles if needed
+        val isFeet = text.contains("ft", true)
+        return if (isFeet) number / 5280.0 else number
+    }
+
+    /**
+     * Parses item counts from various formats.
+     * Examples: "(2 items)", "(2 orders)", "(3 items • 4 units)"
+     */
+    fun parseItemCount(text: String?): Int? {
+        if (text.isNullOrBlank()) return null
+
+        // Grab the first number associated with item/order/unit
+        val regex = Regex("\\((\\d+)\\s*(?:item|order|unit)", RegexOption.IGNORE_CASE)
+        return regex.find(text)?.groupValues?.get(1)?.toIntOrNull()
     }
 }
