@@ -19,50 +19,69 @@ class DasherIdleOffline : StateHandler {
         stateContext: StateContext,
         currentState: AppState
     ): AppState {
-        Log.d("${this::class.simpleName} State", "Evaluating state...")
+        // 1. Safety Checks & Transitions
+        val screen = stateContext.screenInfo?.screen
 
-        // Seems that the on dash map waiting for offer might recognize the main map idle screen
-        // when backing out to dash control. putting this in to catch and re-orient.
-        if (stateContext.screenInfo?.screen == Screen.DASH_CONTROL) return AppState.DASH_ACTIVE_ON_CONTROL
+        if (screen == Screen.DASH_CONTROL) {
+            return AppState.DASH_ACTIVE_ON_CONTROL
+        }
 
-        // if a dash is not started:
-        if (stateContext.screenInfo?.screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ||
-            stateContext.screenInfo?.screen == Screen.ON_DASH_ALONG_THE_WAY
-        )
+        if (screen == Screen.ON_DASH_MAP_WAITING_FOR_OFFER ||
+            screen == Screen.ON_DASH_ALONG_THE_WAY
+        ) {
             return AppState.DASH_STARTING
+        }
 
+        // 2. Data Extraction
+        // We reuse ScreenInfo.IdleMap for both the Main Map and the Set End Time screen
         if (stateContext.screenInfo is ScreenInfo.IdleMap) {
-            try {
-                // Get the current state from the DB, or create a default empty one
-                val currentData = currentRepo.getCurrentDashState() ?: CurrentEntity()
-
-                // Get the new data from the screen parser
-                val newZoneId =
-                    stateContext.screenInfo.zoneName?.let { zoneRepo.getOrInsertZone(it) }
-
-                val newDashType = stateContext.screenInfo.dashType ?: DashType.PER_OFFER.also {
-                    Log.d("DasherIdleOffline", "DashType is null, defaulting to PER_OFFER")
-                }
-
-                // Check if an update is actually needed
-                val needsUpdate =
-                    (currentData.zoneId != newZoneId) || (currentData.dashType != newDashType)
-
-                if (needsUpdate) {
-                    // If and only if something changed, perform a SINGLE update
-                    // with both new values.
-                    currentRepo.updatePreDashInfo(newZoneId, newDashType)
-                    Log.i("DasherIdleOffline", "Pre-dash info changed, updating Current table.")
-                }
-
-            } catch (e: Exception) {
-                Log.e("DasherIdleOffline", "!!! Error updating pre-dash zone/type data. !!!", e)
-            }
-        } else {
-            Log.d("DasherIdleOffline", "ScreenInfo is not IdleMap: ${stateContext.screenInfo}")
+            updatePreDashData(
+                rawZoneName = stateContext.screenInfo.zoneName,
+                rawDashType = stateContext.screenInfo.dashType
+            )
         }
 
         return currentState
+    }
+
+    /**
+     * Helper to centralize the DB update logic.
+     * Handles zone insertion and prevents unnecessary DB writes.
+     */
+    private suspend fun updatePreDashData(rawZoneName: String?, rawDashType: DashType?) {
+        try {
+            // Get current state or create default
+            val currentData = currentRepo.getCurrentDashState() ?: CurrentEntity()
+
+            // 1. Resolve Zone ID
+            // If rawZoneName is null, keep the existing ID.
+            // If it's new, get/insert it.
+            val resolvedZoneId = if (rawZoneName != null) {
+                zoneRepo.getOrInsertZone(rawZoneName)
+            } else {
+                currentData.zoneId
+            }
+
+            // 2. Resolve Dash Type
+            // If the screen didn't provide a type (e.g. Set End Time screen),
+            // keep the existing one. Default to PER_OFFER only if absolutely nothing exists.
+            val resolvedDashType = rawDashType ?: currentData.dashType ?: DashType.PER_OFFER
+
+            // 3. Update only if changed
+            val needsUpdate = (currentData.zoneId != resolvedZoneId) ||
+                    (currentData.dashType != resolvedDashType)
+
+            if (needsUpdate) {
+                currentRepo.updatePreDashInfo(resolvedZoneId, resolvedDashType)
+                Log.i(
+                    "DasherIdleOffline",
+                    "Updated Pre-Dash: Zone=$rawZoneName, Type=$resolvedDashType"
+                )
+            }
+
+        } catch (e: Exception) {
+            Log.e("DasherIdleOffline", "Error updating pre-dash data", e)
+        }
     }
 
     override suspend fun enterState(
@@ -70,7 +89,7 @@ class DasherIdleOffline : StateHandler {
         currentState: AppState,
         previousState: AppState?
     ) {
-        Log.d("${this::class.simpleName} State", "Entering state...")
+        Log.d("${this::class.simpleName}", "Entering Idle Offline State")
     }
 
     override suspend fun exitState(
@@ -78,6 +97,6 @@ class DasherIdleOffline : StateHandler {
         currentState: AppState,
         nextState: AppState
     ) {
-        Log.d("${this::class.simpleName} State", "Exiting state...")
+        // No-op
     }
 }

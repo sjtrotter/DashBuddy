@@ -93,16 +93,10 @@ enum class Screen(
     // also, it's not really needed anyway.
 
     // --- Starting or Ending a Dash Workflow ---
-    SET_DASH_END_TIME(
-        screenName = "Set Dash End Time",
-        requiredTexts = listOf(
-            "navigate up",
-            "dash now",
-            "select end time",
-            "dashers needed until"
-        ),
-        activityHint = ActivityHint.INACTIVE
-    ),
+
+    /** This screen after Dash is clicked, when Dash Anytime is enabled. */
+    SET_DASH_END_TIME(screenName = "Set Dash End Time", activityHint = ActivityHint.INACTIVE),
+
     DASH_SUMMARY_SCREEN(
         screenName = "Dash Summary",
         requiredTexts = listOf(
