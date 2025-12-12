@@ -1,40 +1,56 @@
 package cloud.trotter.dashbuddy.services.accessibility.screen
 
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.AppStartupMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.DeliverySummaryMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.DropoffNavigationMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.IdleMapMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.LegacyEnumMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.PickupArrivalMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.PickupNavigationMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.PickupPreArrivalMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.PickupShoppingMatcher
-import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.ScheduleMatcher
+import cloud.trotter.dashbuddy.services.accessibility.screen.matchers.*
 import cloud.trotter.dashbuddy.state.StateContext
 
 object ScreenRecognizerV2 {
 
-    // The Registry
-    private val matchers: List<ScreenMatcher> = listOf(
-        // New, efficient matchers
-        AppStartupMatcher(),
-        DeliverySummaryMatcher(),
-        DropoffNavigationMatcher(),
-        IdleMapMatcher(),
-        // LegacyEnumMatcher (below)
-        PickupArrivalMatcher(),
-        PickupNavigationMatcher(),
-        PickupPreArrivalMatcher(),
-        PickupShoppingMatcher(),
-        ScheduleMatcher(),
-        // Add in matchers as they are created.
-
-        // The catch-all for everything else defined in your Enum
-        *Screen.entries.map { LegacyEnumMatcher(it) }.toTypedArray()
+    // Define the list of screens we have ALREADY converted to dedicated Matchers.
+    // We must exclude these from the Legacy list to prevent "Empty Enum" false positives.
+    private val REFACTORED_SCREENS = setOf(
+        Screen.APP_STARTING_OR_LOADING,
+        Screen.MAIN_MAP_IDLE,
+        Screen.SCHEDULE_VIEW,
+        Screen.NAVIGATION_VIEW_TO_PICK_UP,
+        Screen.NAVIGATION_VIEW_TO_DROP_OFF,
+//        Screen.OFFER_POPUP,
+        Screen.PICKUP_DETAILS_PRE_ARRIVAL,
+        Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP,
+        Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,
+        Screen.DROPOFF_DETAILS_PRE_ARRIVAL,
+        Screen.DELIVERY_SUMMARY_COLLAPSED,
+        Screen.DELIVERY_SUMMARY_EXPANDED,
+        Screen.SET_DASH_END_TIME,
+        // Add others here as you finish refactoring them (e.g. PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE)
     )
 
+    private val matchers: List<ScreenMatcher> = buildList {
+        // 1. Add New, Efficient Matchers
+        add(AppStartupMatcher())
+        add(DeliverySummaryMatcher())
+        add(DropoffNavigationMatcher())
+        add(IdleMapMatcher())
+        add(OfferMatcher())
+        add(PickupArrivalMatcher())
+        add(PickupNavigationMatcher())
+        // add(PickupConfirmMatcher()) // Don't forget to add this if you implemented it!
+        add(PickupShoppingMatcher())
+        add(ScheduleMatcher())
+        add(PickupPreArrivalMatcher())
+        add(DropoffPreArrivalMatcher())
+        add(SetDashEndTimeMatcher())
+
+        // 2. Add Legacy Bridge (Filtering out the ones we just added above)
+        // This prevents the "Empty Enum" bug.
+        val legacy = Screen.entries
+            .filterNot { it in REFACTORED_SCREENS }
+            .filterNot { it == Screen.UNKNOWN } // Skip UNKNOWN
+            .map { LegacyEnumMatcher(it) }
+
+        addAll(legacy)
+    }
+
     fun identify(stateContext: StateContext): ScreenInfo {
-        // Find the first matcher that returns a non-null ScreenInfo
         return matchers
             .sortedByDescending { it.priority }
             .firstNotNullOfOrNull { it.matches(stateContext) }
