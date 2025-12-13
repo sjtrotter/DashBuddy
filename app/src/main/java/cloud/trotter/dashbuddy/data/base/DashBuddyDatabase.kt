@@ -13,6 +13,8 @@ import cloud.trotter.dashbuddy.data.customer.CustomerDao
 import cloud.trotter.dashbuddy.data.customer.CustomerEntity
 import cloud.trotter.dashbuddy.data.dash.DashDao
 import cloud.trotter.dashbuddy.data.dash.DashEntity
+import cloud.trotter.dashbuddy.data.event.AppEventDao
+import cloud.trotter.dashbuddy.data.event.AppEventEntity
 import cloud.trotter.dashbuddy.data.event.DashEventDao
 import cloud.trotter.dashbuddy.data.event.DashEventEntity
 import cloud.trotter.dashbuddy.data.event.DropoffEventDao
@@ -39,6 +41,7 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 
 @Database(
     entities = [
+        AppEventEntity::class,
         AppPayEntity::class,
         AppPayType::class,
         CurrentEntity::class,
@@ -55,13 +58,14 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
         TipEntity::class,
         ZoneEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = false // Set to true if you plan to use schema for testing migrations
 // For production, schema export is recommended.
 )
 @TypeConverters(DataTypeConverters::class)
 abstract class DashBuddyDatabase : RoomDatabase() {
     // Abstract methods for each of your DAOs
+    abstract fun appEventDao(): AppEventDao
     abstract fun appPayDao(): AppPayDao
     abstract fun currentDashDao(): CurrentDao
     abstract fun customerDao(): CustomerDao
@@ -82,6 +86,29 @@ abstract class DashBuddyDatabase : RoomDatabase() {
         private var INSTANCE: DashBuddyDatabase? = null
         private const val DATABASE_NAME = "dashbuddy_database"
 
+        val MIGRATION_22_23 = object : androidx.room.migration.Migration(22, 23) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                // This SQL matches perfectly because Enums are stored as TEXT
+                db.execSQL(
+                    """
+            CREATE TABLE IF NOT EXISTS `app_events` (
+                `sequenceId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                `aggregateId` TEXT, 
+                `eventType` TEXT NOT NULL, 
+                `eventPayload` TEXT NOT NULL, 
+                `occurredAt` INTEGER NOT NULL, 
+                `metadata` TEXT
+            )
+            """.trimIndent()
+                )
+
+                // Indices
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_app_events_aggregateId` ON `app_events` (`aggregateId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_app_events_eventType` ON `app_events` (`eventType`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_app_events_occurredAt` ON `app_events` (`occurredAt`)")
+            }
+        }
+
         fun getDatabase(context: Context): DashBuddyDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -90,6 +117,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     // .addMigrations(MIGRATION_15_16)
+                    .addMigrations(MIGRATION_22_23)
                     // For now, if a migration is needed, destroy and rebuild the database.
                     // TODO: Implement proper migrations for production releases.
                     .fallbackToDestructiveMigration(true)

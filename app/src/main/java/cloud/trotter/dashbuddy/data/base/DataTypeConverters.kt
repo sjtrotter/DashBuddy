@@ -144,4 +144,20 @@ class DataTypeConverters {
     } catch (_: Exception) {
         DropoffStatus.UNKNOWN
     }
+
+    @TypeConverter
+    fun fromAppEventType(type: cloud.trotter.dashbuddy.data.event.AppEventType): String {
+        return type.name
+    }
+
+    @TypeConverter
+    fun toAppEventType(value: String): cloud.trotter.dashbuddy.data.event.AppEventType {
+        return try {
+            enumValueOf<cloud.trotter.dashbuddy.data.event.AppEventType>(value)
+        } catch (_: Exception) {
+            // Fallback for version safety: If we remove an enum later,
+            // old logs default to ERROR or a specific UNKNOWN type.
+            cloud.trotter.dashbuddy.data.event.AppEventType.ERROR_OCCURRED
+        }
+    }
 }
