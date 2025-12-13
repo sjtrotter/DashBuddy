@@ -13,7 +13,6 @@ import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
 import cloud.trotter.dashbuddy.data.current.CurrentRepo
 import cloud.trotter.dashbuddy.data.customer.CustomerRepo
 import cloud.trotter.dashbuddy.data.dash.DashRepo
-import cloud.trotter.dashbuddy.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.data.event.DashEventRepo
 import cloud.trotter.dashbuddy.data.event.DropoffEventRepo
 import cloud.trotter.dashbuddy.data.event.OfferEventRepo
@@ -26,9 +25,10 @@ import cloud.trotter.dashbuddy.data.pay.AppPayRepo
 import cloud.trotter.dashbuddy.data.pay.TipRepo
 import cloud.trotter.dashbuddy.data.store.StoreRepo
 import cloud.trotter.dashbuddy.data.zone.ZoneRepo
-import cloud.trotter.dashbuddy.services.bubble.BubbleService as BubbleService
+import cloud.trotter.dashbuddy.services.bubble.BubbleService
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
+import cloud.trotter.dashbuddy.data.event.AppEventRepo // Import your new Repo
 
 class DashBuddyApplication : Application() {
 
@@ -42,6 +42,7 @@ class DashBuddyApplication : Application() {
         val database: DashBuddyDatabase
             get() = DashBuddyDatabase.getDatabase(context)
 
+        // --- Repositories ---
         val currentRepo: CurrentRepo by lazy { CurrentRepo(database.currentDashDao()) }
         val customerRepo: CustomerRepo by lazy { CustomerRepo(database.customerDao()) }
         val dashRepo: DashRepo by lazy { DashRepo(database.dashDao()) }
@@ -56,16 +57,13 @@ class DashBuddyApplication : Application() {
         val dropoffEventRepo: DropoffEventRepo by lazy { DropoffEventRepo(database.dropoffEventDao()) }
         val offerEventRepo: OfferEventRepo by lazy { OfferEventRepo(database.offerEventDao()) }
         val dashEventRepo: DashEventRepo by lazy { DashEventRepo(database.dashEventDao()) }
+
+        // NEW: The Unified Event Repo
         val appEventRepo: AppEventRepo by lazy { AppEventRepo(database.appEventDao()) }
 
         val dashHistoryRepo by lazy {
             DashHistoryRepo(
                 dashDao = database.dashDao(),
-//                dashZoneDao = database.dashZoneDao(),
-//                offerDao = database.offerDao(),
-//                orderDao = database.orderDao(),
-//                tipDao = database.tipDao(),
-//                appPayDao = database.appPayDao(),
                 zoneDao = database.zoneDao(),
             )
         }
@@ -76,11 +74,10 @@ class DashBuddyApplication : Application() {
         var bubbleService: BubbleService? = null
 
         val appPreferences: SharedPreferences by lazy {
-            instance.getSharedPreferences(
-                "DashBuddyPrefs",
-                MODE_PRIVATE
-            )
+            instance.getSharedPreferences("DashBuddyPrefs", MODE_PRIVATE)
         }
+
+        // --- Settings Helpers ---
 
         fun setDebugMode(enabled: Boolean) {
             appPreferences.edit { putBoolean("debugMode", enabled) }
@@ -99,11 +96,44 @@ class DashBuddyApplication : Application() {
             return levelName?.let { LogLevel.valueOf(it) } ?: LogLevel.INFO
         }
 
+        // --- CRASH RECOVERY (NEW) ---
+
+        private const val KEY_CRASH_STATE_JSON = "crash_recovery_state_json"
+        private const val KEY_CRASH_TIMESTAMP = "crash_recovery_timestamp"
+        private const val STATE_EXPIRY_MS = 30 * 60 * 1000L // 30 Minutes
+
+        fun saveCrashRecoveryState(json: String) {
+            appPreferences.edit {
+                putString(KEY_CRASH_STATE_JSON, json)
+                putLong(KEY_CRASH_TIMESTAMP, System.currentTimeMillis())
+            }
+        }
+
+        fun getCrashRecoveryState(): String? {
+            val savedTime = appPreferences.getLong(KEY_CRASH_TIMESTAMP, 0)
+            val now = System.currentTimeMillis()
+
+            // If state is too old (e.g., from yesterday), ignore it.
+            if (now - savedTime > STATE_EXPIRY_MS) {
+                clearCrashRecoveryState()
+                return null
+            }
+
+            return appPreferences.getString(KEY_CRASH_STATE_JSON, null)
+        }
+
+        fun clearCrashRecoveryState() {
+            appPreferences.edit {
+                remove(KEY_CRASH_STATE_JSON)
+                remove(KEY_CRASH_TIMESTAMP)
+            }
+        }
+
+        // --- Services ---
+
         @RequiresApi(Build.VERSION_CODES.BAKLAVA)
         fun sendBubbleMessage(message: CharSequence) {
-            if (bubbleService != null &&
-                BubbleService.isServiceRunningIntentional
-            ) {
+            if (bubbleService != null && BubbleService.isServiceRunningIntentional) {
                 bubbleService?.showMessageInBubble(message, false)
             } else {
                 val serviceIntent = Intent(context, BubbleService::class.java)
@@ -111,16 +141,12 @@ class DashBuddyApplication : Application() {
                 ContextCompat.startForegroundService(context, serviceIntent)
             }
         }
-
     }
 
     override fun onCreate() {
         super.onCreate()
-        instance = this // Initialize the instance
-//        startBubbleService()
+        instance = this
 
-        // TODO: set initial log level and debug mode here.
-        // or, don't actually, use the initialize method below?
         setDebugMode(true)
         setLogLevel(LogLevel.DEBUG)
 
@@ -137,21 +163,6 @@ class DashBuddyApplication : Application() {
         val serviceIntent = Intent(this, BubbleService::class.java)
         serviceIntent.putExtra(BubbleService.EXTRA_MESSAGE, "DashBuddy is active!")
         startForegroundService(serviceIntent)
-//        val handler = Handler(Looper.getMainLooper())
-//        handler.postDelayed({
-//            Log.d("DashBuddyApp", "Executing delayed task to update bubble.")
-//            if (bubbleService == null) {
-//                Log.e("DashBuddyApp", "bubbleService is NULL. Cannot update bubble.")
-//                return@postDelayed // Exit if service is null
-//            }
-//            try {
-//                bubbleService?.showMessageInBubble("Delayed!", false) // No '!!' needed due to the check above
-//                Log.d("DashBuddyApp", "'Delayed!' notification posted successfully (or attempt made).")
-//            } catch (e: Exception) {
-//                Log.e("DashBuddyApp", "Exception during bubbleService.post()", e)
-//            }
-//
-//        }, TimeUnit.SECONDS.toMillis(10))
     }
 
     override fun onTerminate() {

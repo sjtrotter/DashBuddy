@@ -17,6 +17,14 @@ sealed class ScreenInfo {
     /** A generic type for all screens that don't require pre-parsing. */
     data class Simple(override val screen: Screen) : ScreenInfo()
 
+    /** Contains details from the Waiting for Offer screen. */
+    data class WaitingForOffer(
+        override val screen: Screen,
+        val currentDashPay: Double?,      // e.g. 7.50 (if visible)
+        val waitTimeEstimate: String?,    // e.g. "1-4 min"
+        val isHeadingBackToZone: Boolean  // true if "Heading back to zone" text is present
+    ) : ScreenInfo()
+
     /** Contains the parsed offer details from an Offer Popup screen. */
     data class Offer(override val screen: Screen, val parsedOffer: ParsedOffer) : ScreenInfo()
 
@@ -57,5 +65,15 @@ sealed class ScreenInfo {
         override val screen: Screen,
         val zoneName: String?,
         val dashType: DashType?,
+    ) : ScreenInfo()
+
+    data class DashSummary(
+        override val screen: Screen,
+        val totalEarnings: Double?,     // 28.00
+        val weeklyEarnings: Double?,    // 495.62
+        val offersAccepted: Int,        // 3
+        val offersTotal: Int,           // 10
+        val onlineDurationMillis: Long, // 4560000
+        val estimatedStartTime: Long    // context.timestamp - duration
     ) : ScreenInfo()
 }

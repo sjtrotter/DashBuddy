@@ -97,23 +97,8 @@ enum class Screen(
     /** This screen after Dash is clicked, when Dash Anytime is enabled. */
     SET_DASH_END_TIME(screenName = "Set Dash End Time", activityHint = ActivityHint.INACTIVE),
 
-    DASH_SUMMARY_SCREEN(
-        screenName = "Dash Summary",
-        requiredTexts = listOf(
-            "Dash summary",
-            "Start time",
-            "Active Time",
-            "Dash Time",
-            "Deliveries Completed",
-            "Dash total",
-            "Done"
-        ),
-        someOfTheseTexts = listOf(
-            "am",
-            "pm",
-        ),
-        activityHint = ActivityHint.INACTIVE
-    ),
+    /** The screen at the end of a dash. */
+    DASH_SUMMARY_SCREEN(screenName = "Dash Summary", activityHint = ActivityHint.INACTIVE),
 
     // --- Actively Dashing States ---
     ON_DASH_MAP_WAITING_FOR_OFFER(

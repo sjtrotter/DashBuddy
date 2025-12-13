@@ -21,6 +21,8 @@ object ScreenRecognizerV2 {
         Screen.DELIVERY_SUMMARY_COLLAPSED,
         Screen.DELIVERY_SUMMARY_EXPANDED,
         Screen.SET_DASH_END_TIME,
+        Screen.DASH_SUMMARY_SCREEN,
+        Screen.ON_DASH_MAP_WAITING_FOR_OFFER,
         // Add others here as you finish refactoring them (e.g. PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE)
     )
 
@@ -39,6 +41,8 @@ object ScreenRecognizerV2 {
         add(PickupPreArrivalMatcher())
         add(DropoffPreArrivalMatcher())
         add(SetDashEndTimeMatcher())
+        add(DashSummaryMatcher())
+        add(WaitingForOfferMatcher())
 
         // 2. Add Legacy Bridge (Filtering out the ones we just added above)
         // This prevents the "Empty Enum" bug.

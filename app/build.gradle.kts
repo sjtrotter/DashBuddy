@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.play.services.location)
+    implementation(libs.google.code.gson)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

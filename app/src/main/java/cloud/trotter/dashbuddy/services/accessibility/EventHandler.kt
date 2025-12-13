@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickParser
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenRecognizerV2
+import cloud.trotter.dashbuddy.statev2.StateManagerV2
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -93,6 +94,10 @@ object EventHandler {
         _serviceFlow.value = null
     }
 
+    fun getServiceInstance(): AccessibilityService? {
+        return _serviceFlow.value
+    }
+
     private data class ScreenFingerprint(
         val rootNodeTexts: List<String>,
         val rootTextsHash: Int,
@@ -108,6 +113,7 @@ object EventHandler {
             eventTypeString = "INITIALIZATION",
         )
         StateManager.initialize(initialContext)
+        StateManagerV2.initialize()
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -244,6 +250,7 @@ object EventHandler {
 
         Log.d(TAG, "Sending event to StateManager: ${finalContext.screenInfo?.screen}")
         StateManager.dispatchEvent(finalContext)
+        StateManagerV2.dispatch(finalContext)
 
         lastDasherScreen = finalContext.screenInfo?.screen
         if (event == debouncedEvent) {
