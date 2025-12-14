@@ -15,6 +15,7 @@ import android.accessibilityservice.AccessibilityService
 import android.view.Display
 import cloud.trotter.dashbuddy.services.accessibility.EventHandler
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Environment
 import java.io.File
 import java.io.FileOutputStream
@@ -127,23 +128,33 @@ object StateManagerV2 {
             val mainExecutor =
                 androidx.core.content.ContextCompat.getMainExecutor(DashBuddyApplication.context)
 
-            service.takeScreenshot(
-                Display.DEFAULT_DISPLAY,
-                mainExecutor,
-                object : AccessibilityService.TakeScreenshotCallback {
-                    override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
-                        // 1. Save the file (Synchronously on this background thread)
-                        saveBitmapToFile(result, effect.filenamePrefix)
+            try {
+                service.takeScreenshot(
+                    Display.DEFAULT_DISPLAY,
+                    mainExecutor,
+                    object : AccessibilityService.TakeScreenshotCallback {
+                        override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                            // 1. Save the file (Synchronously on this background thread)
+                            saveBitmapToFile(result, effect.filenamePrefix)
 
-                        // 2. CLEANUP: Critical to prevent memory leaks!
-                        result.hardwareBuffer.close()
-                    }
+                            // 2. CLEANUP: Critical to prevent memory leaks!
+                            result.hardwareBuffer.close()
+                        }
 
-                    override fun onFailure(errorCode: Int) {
-                        Log.e(TAG, "Screenshot Failed: Error $errorCode")
+                        override fun onFailure(errorCode: Int) {
+                            Log.e(TAG, "Screenshot Failed: Error $errorCode")
+                        }
                     }
-                }
-            )
+                )
+            } catch (e: SecurityException) {
+                Log.e(
+                    TAG,
+                    "Screenshot Failed: Permission denied. Missing android:canTakeScreenshot='true' in config.",
+                    e
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Screenshot Failed: Unexpected error.", e)
+            }
         }
     }
 

@@ -129,6 +129,25 @@ class DashBuddyApplication : Application() {
             }
         }
 
+        fun createMetadata(odometer: Double?): String {
+            val batteryManager =
+                context.getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
+            val batteryLevel =
+                batteryManager.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            val appVersion = packageInfo.versionName
+
+            val metadata = cloud.trotter.dashbuddy.data.event.EventMetadata(
+                odometer = odometer,
+                batteryLevel = batteryLevel,
+                appVersion = appVersion,
+                networkType = "UNKNOWN" // You can add connectivity check later
+            )
+
+            return com.google.gson.Gson().toJson(metadata)
+        }
+
         // --- Services ---
 
         @RequiresApi(Build.VERSION_CODES.BAKLAVA)

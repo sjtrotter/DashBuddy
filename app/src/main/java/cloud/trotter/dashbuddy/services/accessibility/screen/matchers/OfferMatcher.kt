@@ -65,6 +65,10 @@ class OfferMatcher : ScreenMatcher {
             }
         }
 
+        val dueByTimeMillis = timeText?.let {
+            UtilityFunctions.parseTimeTextToMillis(it)
+        }
+
         if (payAmount == null) return null // Critical failure
 
         // --- 3. PARSE ORDERS (The Spaghetti Replacement) ---
@@ -186,6 +190,7 @@ class OfferMatcher : ScreenMatcher {
             distanceMiles = distanceMiles,
             itemCount = orders.sumOf { it.itemCount },
             dueByTimeText = timeText,
+            dueByTimeMillis = dueByTimeMillis,
             badges = OfferBadge.findAllBadgesInScreen(context.rootNodeTexts), // Global badges
             orders = orders,
             rawExtractedTexts = "ID-Parsed"

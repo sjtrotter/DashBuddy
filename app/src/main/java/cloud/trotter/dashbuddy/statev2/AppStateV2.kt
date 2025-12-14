@@ -56,6 +56,7 @@ sealed class AppStateV2 {
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
         val storeName: String,
+        val customerNameHash: String? = null,
         val status: PickupStatus = PickupStatus.UNKNOWN,
         val arrivalConfirmed: Boolean = false,
         val orders: List<String> = emptyList()
