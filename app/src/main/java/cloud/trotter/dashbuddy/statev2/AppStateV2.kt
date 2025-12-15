@@ -47,7 +47,7 @@ sealed class AppStateV2 {
     data class OfferPresented(
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
-        val rawOfferText: String,
+        val rawOfferText: String?,
         val merchantName: String?,
         val amount: Double?
     ) : AppStateV2()
