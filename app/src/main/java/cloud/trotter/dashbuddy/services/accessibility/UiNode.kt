@@ -97,6 +97,35 @@ data class UiNode(
         return this.findNode(predicate) != null
     }
 
+    /**
+     * Generates a hash code based ONLY on the structural identity of the node and its children.
+     * It ignores mutable text/descriptions but respects ClassName, ID, and Hierarchy.
+     * Use this to detect if the "Layout" has changed.
+     */
+    fun getStructuralHashCode(): Int {
+        var result = className?.hashCode() ?: 0
+        result = 31 * result + (viewIdResourceName?.hashCode() ?: 0)
+        // We intentionally IGNORE text, contentDescription, etc. for the structural hash
+
+        // Recursively add children structure
+        for (child in children) {
+            result = 31 * result + child.getStructuralHashCode()
+        }
+        return result
+    }
+
+    /** * Generates a hash code based on Content (Text).
+     * Use this to detect if the "Data" on the screen has changed.
+     */
+    fun getContentHashCode(): Int {
+        var result = text?.hashCode() ?: 0
+        result = 31 * result + (contentDescription?.hashCode() ?: 0)
+        for (child in children) {
+            result = 31 * result + child.getContentHashCode()
+        }
+        return result
+    }
+
     companion object {
         /**
          * This is the factory method that:

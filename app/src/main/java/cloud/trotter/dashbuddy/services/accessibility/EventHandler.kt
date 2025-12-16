@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
+import androidx.core.util.ObjectsCompat.equals
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.services.LocationService
@@ -39,6 +40,8 @@ object EventHandler {
 
     private var lastProcessTimestamp: Long = 0L
     private var lastDasherScreen: DasherScreen? = null
+    private var lastContentHash: Int? = null
+    private var lastStructureHash: Int? = null
 
     // Debug counter to track queue depth
     private val pendingTaskCount = AtomicInteger(0)
@@ -233,10 +236,38 @@ object EventHandler {
         val nodeCount = rootNode.childCount
         Log.v(TAG, "DEBUG: RootNode valid. Child count: $nodeCount")
 
-        val uiNodeTree = UiNode.from(rootNode)
-        Log.d(TAG, "UI Node Tree: $uiNodeTree")
+        val uiNodeTree = UiNode.from(rootNode) ?: return
+//        Log.d(TAG, "UI Node Tree: $uiNodeTree")
 
-        // ... rest of your logic ...
+        // 2. Calculate Fingerprint from the Tree
+        val currentStructureHash = uiNodeTree.getStructuralHashCode()
+        val currentContentHash = uiNodeTree.getContentHashCode()
+
+        Log.d(
+            TAG,
+            "DEBUG: Current Structure: $currentStructureHash ; Current Content: $currentContentHash"
+        )
+        Log.d(TAG, "DEBUG: Last Structure: $lastStructureHash ; Last Content: $lastContentHash")
+
+        Log.d(
+            TAG,
+            "DEBUG: Last Structure Equal: ${equals(lastStructureHash, currentStructureHash)} ; " +
+                    "Last Content Equal: ${equals(lastContentHash, currentContentHash)}"
+        )
+
+        // 3. Compare with Last Fingerprint
+        if (equals(lastStructureHash, currentStructureHash) && equals(
+                lastContentHash,
+                currentContentHash
+            )
+        ) {
+            Log.d(TAG, "DEBUG: Nothing changed. (would be) Returning early.")
+//            return // Nothing changed
+        }
+
+        lastStructureHash = currentStructureHash
+        lastContentHash = currentContentHash
+
         val currentDashState: CurrentEntity? = currentRepo.getCurrentDashState()
         val currentEventType = event.eventType
 
