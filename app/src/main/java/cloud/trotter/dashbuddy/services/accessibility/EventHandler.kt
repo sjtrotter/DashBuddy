@@ -131,6 +131,25 @@ object EventHandler {
 
         if (event.packageName?.toString() != "com.doordash.driverapp") return
 
+        if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
+            val text = event.text.joinToString(" ")
+//            if (text.contains("tip", true) || text.contains("added", true)) {
+            // testing for all notifications for now.
+            val context = StateContext(
+                timestamp = Date().time,
+                eventType = event.eventType,
+                eventTypeString = AccessibilityEvent.eventTypeToString(event.eventType),
+                packageName = event.packageName,
+                rootNode = null,
+                rootUiNode = null,
+                sourceClassName = event.className,
+                sourceNode = event.source,
+                notificationText = text
+            )
+            StateManagerV2.dispatch(context)
+//            }
+        }
+
         // Capture immediately as requested
         val rootNode = service.rootInActiveWindow
 
@@ -192,24 +211,6 @@ object EventHandler {
                 }
             }
 
-            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
-                val text = event.text.joinToString(" ")
-                if (text.contains("tip", true) || text.contains("added", true)) {
-                    val context = StateContext(
-                        timestamp = Date().time,
-                        eventType = event.eventType,
-                        eventTypeString = AccessibilityEvent.eventTypeToString(event.eventType),
-                        packageName = event.packageName,
-                        rootNode = null,
-                        rootUiNode = null,
-                        sourceClassName = event.className,
-                        sourceNode = event.source,
-                        notificationText = text
-                    )
-                    StateManagerV2.dispatch(context)
-                }
-            }
-
             else -> {}
         }
     }
@@ -256,14 +257,15 @@ object EventHandler {
         )
 
         // 3. Compare with Last Fingerprint
-        if (equals(lastStructureHash, currentStructureHash) && equals(
-                lastContentHash,
-                currentContentHash
-            )
+        if (equals(lastStructureHash, currentStructureHash) &&
+            equals(lastContentHash, currentContentHash)
         ) {
             Log.d(TAG, "DEBUG: Nothing changed. (would be) Returning early.")
-//            return // Nothing changed
+            return // Nothing changed
         }
+
+        Log.d(TAG, "UI Node Tree: $uiNodeTree")
+
 
         lastStructureHash = currentStructureHash
         lastContentHash = currentContentHash
