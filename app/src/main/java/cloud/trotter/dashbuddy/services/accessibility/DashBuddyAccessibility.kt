@@ -57,6 +57,7 @@ class DashBuddyAccessibility : AccessibilityService() {
         Log.d(tag, "Accessibility service destroyed")
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onServiceConnected() {
         super.onServiceConnected()
 
