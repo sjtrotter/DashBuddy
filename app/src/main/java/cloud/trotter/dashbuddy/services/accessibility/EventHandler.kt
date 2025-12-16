@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen as DasherScreen
 import cloud.trotter.dashbuddy.state.StateContext as StateContext
-import cloud.trotter.dashbuddy.state.StateManager as StateManager
+//import cloud.trotter.dashbuddy.state.StateManager as StateManager
 import java.util.Date
 import java.util.Objects
 import cloud.trotter.dashbuddy.log.Logger as Log
@@ -107,12 +107,13 @@ object EventHandler {
         val sourceNodeText: CharSequence?
     )
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun initializeStateManager() {
-        val initialContext = StateContext(
-            timestamp = Date().time,
-            eventTypeString = "INITIALIZATION",
-        )
-        StateManager.initialize(initialContext)
+//        val initialContext = StateContext(
+//            timestamp = Date().time,
+//            eventTypeString = "INITIALIZATION",
+//        )
+//        StateManager.initialize(initialContext)
         StateManagerV2.initialize()
     }
 
@@ -188,6 +189,24 @@ object EventHandler {
                 }
             }
 
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
+                val text = event.text.joinToString(" ")
+                if (text.contains("tip", true) || text.contains("added", true)) {
+                    val context = StateContext(
+                        timestamp = Date().time,
+                        eventType = event.eventType,
+                        eventTypeString = AccessibilityEvent.eventTypeToString(event.eventType),
+                        packageName = event.packageName,
+                        rootNode = null,
+                        rootUiNode = null,
+                        sourceClassName = event.className,
+                        sourceNode = event.source,
+                        notificationText = text
+                    )
+                    StateManagerV2.dispatch(context)
+                }
+            }
+
             else -> {}
         }
     }
@@ -249,7 +268,7 @@ object EventHandler {
         )
 
         Log.d(TAG, "Sending event to StateManager: ${finalContext.screenInfo?.screen}")
-        StateManager.dispatchEvent(finalContext)
+//        StateManager.dispatchEvent(finalContext)
         StateManagerV2.dispatch(finalContext)
 
         lastDasherScreen = finalContext.screenInfo?.screen

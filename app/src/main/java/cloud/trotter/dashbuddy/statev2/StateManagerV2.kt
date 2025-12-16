@@ -11,15 +11,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.log.Logger as Log
-import android.accessibilityservice.AccessibilityService
-import android.view.Display
-import cloud.trotter.dashbuddy.services.accessibility.EventHandler
-import android.graphics.Bitmap
 import android.os.Build
-import android.os.Environment
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
+import androidx.annotation.RequiresApi
+import cloud.trotter.dashbuddy.statev2.effects.ScreenShot
+import cloud.trotter.dashbuddy.statev2.effects.TipEffectHandler
 
 object StateManagerV2 {
 
@@ -50,6 +45,7 @@ object StateManagerV2 {
     private val _state = MutableStateFlow<AppStateV2>(AppStateV2.Initializing)
     val state = _state.asStateFlow()
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun initialize() {
         Log.i(TAG, "Initializing V2 State Machine...")
         restoreState()
@@ -63,6 +59,7 @@ object StateManagerV2 {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun startProcessor() {
         scope.launch {
             for (context in inputChannel) { // Now receiving StateContext
@@ -95,6 +92,7 @@ object StateManagerV2 {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun executeEffect(effect: AppEffect) {
         when (effect) {
             is AppEffect.LogEvent -> {
@@ -106,103 +104,23 @@ object StateManagerV2 {
 
             is AppEffect.UpdateBubble -> {
                 Log.i(TAG, "Bubble Update: ${effect.text}")
-                // DashBuddyApplication.sendBubbleMessage(effect.text)
+                DashBuddyApplication.sendBubbleMessage(effect.text)
             }
 
             is AppEffect.CaptureScreenshot -> {
-                captureScreenshot(effect)
+                ScreenShot.capture(scope, effect)
             }
 
             is AppEffect.PlayNotificationSound -> {
                 // Play sound logic
             }
-        }
-    }
 
-    // --- Helper: Screenshot Execution ---
-
-    private fun captureScreenshot(effect: AppEffect.CaptureScreenshot) {
-        scope.launch(Dispatchers.IO) {
-            val service = EventHandler.getServiceInstance() ?: return@launch
-
-            val mainExecutor =
-                androidx.core.content.ContextCompat.getMainExecutor(DashBuddyApplication.context)
-
-            try {
-                service.takeScreenshot(
-                    Display.DEFAULT_DISPLAY,
-                    mainExecutor,
-                    object : AccessibilityService.TakeScreenshotCallback {
-                        override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
-                            // 1. Save the file (Synchronously on this background thread)
-                            saveBitmapToFile(result, effect.filenamePrefix)
-
-                            // 2. CLEANUP: Critical to prevent memory leaks!
-                            result.hardwareBuffer.close()
-                        }
-
-                        override fun onFailure(errorCode: Int) {
-                            Log.e(TAG, "Screenshot Failed: Error $errorCode")
-                        }
-                    }
-                )
-            } catch (e: SecurityException) {
-                Log.e(
-                    TAG,
-                    "Screenshot Failed: Permission denied. Missing android:canTakeScreenshot='true' in config.",
-                    e
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "Screenshot Failed: Unexpected error.", e)
+            is AppEffect.ProcessTipNotification -> {
+                TipEffectHandler.process(scope, effect)
             }
         }
     }
 
-    /**
-     * Converts the hardware buffer to a PNG and saves it to the app's private "Screenshots" folder.
-     */
-    private fun saveBitmapToFile(result: AccessibilityService.ScreenshotResult, filename: String) {
-        try {
-            // 1. Wrap the hardware buffer in a Bitmap
-            // We check for null because wrapping can fail if the buffer is invalid
-            val bitmap = Bitmap.wrapHardwareBuffer(result.hardwareBuffer, result.colorSpace)
-            if (bitmap == null) {
-                Log.e(TAG, "Failed to wrap hardware buffer in Bitmap.")
-                return
-            }
-
-            // 2. Prepare the Directory: /Android/data/cloud.trotter.dashbuddy/files/Pictures/DashBuddyScreenshots
-            val dir = File(
-                DashBuddyApplication.context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                "DashBuddyScreenshots"
-            )
-            if (!dir.exists()) {
-                dir.mkdirs()
-            }
-
-            // 3. Create the File
-            // Ensure filename ends in .png
-            val safeName = if (filename.endsWith(".png")) filename else "$filename.png"
-            val file = File(dir, safeName)
-
-            // 4. Write to Disk
-            FileOutputStream(file).use { out ->
-                // Compress format: PNG (Lossless) or JPEG (Smaller).
-                // PNG is better for text/UI screenshots.
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
-
-            Log.i(TAG, "Screenshot saved: ${file.absolutePath}")
-
-            // Note: We do NOT recycle the bitmap here because it is backed by the HardwareBuffer,
-            // which we close in the caller (onSuccess).
-
-        } catch (e: IOException) {
-            Log.e(TAG, "Failed to save screenshot to disk", e)
-        } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error saving screenshot", e)
-        }
-    }
     // --- Persistence (Crash Recovery) ---
 
     private fun saveState(state: AppStateV2) {

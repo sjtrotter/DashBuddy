@@ -5,6 +5,7 @@ enum class AppEventType {
     DASH_START,
     DASH_STOP,
     ZONE_SWITCH,
+    NOTIFICATION_RECEIVED,
 //    APP_FOREGROUND,
 //    APP_BACKGROUND,
 

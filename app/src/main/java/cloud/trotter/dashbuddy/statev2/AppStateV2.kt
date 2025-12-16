@@ -65,8 +65,8 @@ sealed class AppStateV2 {
     data class OnDelivery(
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
-        val customerName: String? = null,
-        val dropoffAddress: String? = null
+        val customerNameHash: String? = null,
+        val customerAddresHash: String? = null
     ) : AppStateV2()
 
     data class PostDelivery(

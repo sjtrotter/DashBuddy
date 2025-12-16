@@ -52,6 +52,7 @@ class RuntimeTypeAdapterFactory<T> private constructor(
             subtypeToDelegate[subtype] = delegate
         }
 
+        @Suppress("UNCHECKED_CAST")
         return object : TypeAdapter<R>() {
             @Throws(IOException::class)
             override fun read(`in`: JsonReader): R {

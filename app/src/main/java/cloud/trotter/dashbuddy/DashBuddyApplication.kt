@@ -29,6 +29,7 @@ import cloud.trotter.dashbuddy.services.bubble.BubbleService
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.data.event.AppEventRepo // Import your new Repo
+import cloud.trotter.dashbuddy.services.LocationService
 
 class DashBuddyApplication : Application() {
 
@@ -129,9 +130,10 @@ class DashBuddyApplication : Application() {
             }
         }
 
-        fun createMetadata(odometer: Double?): String {
+        fun createMetadata(): String {
+            val odometer = LocationService.getCurrentOdometer(context)
             val batteryManager =
-                context.getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
+                context.getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
             val batteryLevel =
                 batteryManager.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
 

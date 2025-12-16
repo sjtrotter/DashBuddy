@@ -2,19 +2,19 @@ package cloud.trotter.dashbuddy.statev2.reducers
 
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.statev2.AppStateV2
-import cloud.trotter.dashbuddy.statev2.reducers.MainReducer.Transition
+import cloud.trotter.dashbuddy.statev2.Reducer
 
 object InitializingReducer {
-    fun reduce(state: AppStateV2.Initializing, input: ScreenInfo): Transition {
+
+    // LOGIC: We are initializing, looking for the Map.
+    fun reduce(
+        state: AppStateV2.Initializing,
+        input: ScreenInfo
+    ): Reducer.Transition? {
         return if (input is ScreenInfo.IdleMap) {
-            Transition(
-                AppStateV2.IdleOffline(
-                    lastKnownZone = input.zoneName,
-                    dashType = input.dashType
-                )
-            )
+            IdleReducer.transitionTo(state, input, isRecovery = false)
         } else {
-            Transition(state)
+            null
         }
     }
 }

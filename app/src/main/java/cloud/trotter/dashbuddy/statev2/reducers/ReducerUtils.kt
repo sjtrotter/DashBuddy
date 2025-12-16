@@ -6,20 +6,31 @@ import cloud.trotter.dashbuddy.data.event.AppEventType
 import com.google.gson.Gson
 
 object ReducerUtils {
-    val gson = Gson()
 
+    private val gson = Gson()
+
+    /**
+     * Creates a standardized event entity with "Fresh" sensor data.
+     * This bypasses the StateContext and grabs the odometer right now.
+     */
     fun createEvent(
         dashId: String?,
         type: AppEventType,
-        payload: String,
-        odometer: Double?
+        payload: Any, // Can be String or Object (will be JSON-ified)
+        timestamp: Long = System.currentTimeMillis()
     ): AppEventEntity {
+
+        val metadataJson = DashBuddyApplication.createMetadata()
+
+        // 3. SERIALIZE PAYLOAD
+        val payloadStr = payload as? String ?: gson.toJson(payload)
+
         return AppEventEntity(
             aggregateId = dashId,
             eventType = type,
-            eventPayload = payload,
-            occurredAt = System.currentTimeMillis(),
-            metadata = DashBuddyApplication.createMetadata(odometer)
+            eventPayload = payloadStr,
+            occurredAt = timestamp,
+            metadata = metadataJson
         )
     }
 }

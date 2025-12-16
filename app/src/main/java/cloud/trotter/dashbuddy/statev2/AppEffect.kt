@@ -16,4 +16,6 @@ sealed class AppEffect {
         val filenamePrefix: String, // e.g. "offer" or "payout"
         val metadata: String? = null // Optional context
     ) : AppEffect()
+
+    data class ProcessTipNotification(val rawText: String) : AppEffect()
 }

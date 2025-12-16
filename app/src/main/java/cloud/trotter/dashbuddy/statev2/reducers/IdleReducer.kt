@@ -5,65 +5,64 @@ import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.statev2.AppEffect
 import cloud.trotter.dashbuddy.statev2.AppStateV2
-import cloud.trotter.dashbuddy.statev2.reducers.MainReducer.Transition
-import java.util.UUID
+import cloud.trotter.dashbuddy.statev2.Reducer
 
 object IdleReducer {
+
+    // --- FACTORY (Entry Point) ---
+    fun transitionTo(
+        oldState: AppStateV2,
+        input: ScreenInfo.IdleMap,
+        isRecovery: Boolean
+    ): Reducer.Transition {
+        val newState = AppStateV2.IdleOffline(
+            lastKnownZone = input.zoneName,
+            dashType = input.dashType
+        )
+
+        val effects = mutableListOf<AppEffect>()
+
+        // If we were previously in a Dash, this is a STOP event.
+        if (oldState.dashId != null) {
+            val stopEvent = ReducerUtils.createEvent(
+                dashId = oldState.dashId!!,
+                type = AppEventType.DASH_STOP,
+                payload = "Return to Map"
+            )
+            effects.add(AppEffect.LogEvent(stopEvent))
+            effects.add(AppEffect.UpdateBubble("Dash Ended"))
+        }
+
+        return Reducer.Transition(newState, effects)
+    }
+
+    // --- REDUCER (Behavior) ---
     fun reduce(
         state: AppStateV2.IdleOffline,
         input: ScreenInfo,
         context: StateContext
-    ): Transition {
+    ): Reducer.Transition? {
         return when (input) {
-            // Zone Update
             is ScreenInfo.IdleMap -> {
-                if ((state.lastKnownZone != input.zoneName && input.zoneName != null) ||
-                    state.dashType != input.dashType
-                ) {
-                    Transition(
+                // Internal Update
+                if (state.lastKnownZone != input.zoneName || state.dashType != input.dashType) {
+                    Reducer.Transition(
                         state.copy(
-                            lastKnownZone = input.zoneName ?: state.lastKnownZone,
+                            lastKnownZone = input.zoneName,
                             dashType = input.dashType
                         )
                     )
                 } else {
-                    Transition(state)
+                    Reducer.Transition(state)
                 }
             }
-            // START DASH
+
             is ScreenInfo.WaitingForOffer -> {
-                val newDashId = UUID.randomUUID().toString()
-
-                val newState = AppStateV2.AwaitingOffer(
-                    dashId = newDashId,
-                    currentSessionPay = input.currentDashPay,
-                    waitTimeEstimate = input.waitTimeEstimate,
-                    isHeadingBackToZone = input.isHeadingBackToZone
-                )
-
-                val startPayload = mapOf(
-                    "zone" to state.lastKnownZone,
-                    "type" to state.dashType,
-                    "start_screen" to "WaitingForOffer"
-                )
-
-                val startEvent = ReducerUtils.createEvent(
-                    newDashId,
-                    AppEventType.DASH_START,
-                    ReducerUtils.gson.toJson(startPayload),
-                    context.odometerReading
-                )
-
-                Transition(
-                    newState,
-                    listOf(
-                        AppEffect.LogEvent(startEvent),
-                        AppEffect.UpdateBubble("Dash Started! Good luck.")
-                    )
-                )
+                // START DASH
+                AwaitingReducer.transitionTo(state, input, isRecovery = false)
             }
 
-            else -> Transition(state)
+            else -> null
         }
     }
 }
