@@ -54,7 +54,7 @@ object StateManagerV2 {
 
     fun dispatch(context: StateContext) {
         // We still only care if there is valid screen info, but we send the WHOLE context.
-        if (context.screenInfo != null) {
+        if (context.screenInfo != null || context.notificationText != null) {
             inputChannel.trySend(context)
         }
     }
