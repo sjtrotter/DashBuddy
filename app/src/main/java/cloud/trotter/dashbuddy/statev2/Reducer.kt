@@ -15,7 +15,7 @@ object Reducer {
 
     fun reduce(currentState: AppStateV2, context: StateContext): Transition {
         // --- 0. SIDE CHANNEL INTERCEPTORS (Notifications) ---
-        if (context.notificationText != null) {
+        if (context.notification != null) { // Check the new object
             val sideChannelTransition = NotificationHandler.handle(currentState, context)
             if (sideChannelTransition != null) {
                 return sideChannelTransition

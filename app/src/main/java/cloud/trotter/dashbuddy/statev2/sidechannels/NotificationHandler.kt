@@ -13,26 +13,24 @@ object NotificationHandler {
         currentState: AppStateV2,
         context: StateContext
     ): Reducer.Transition? {
-        val text = context.notificationText ?: return null
+        val notif = context.notification ?: return null
+        val fullText = notif.toFullString()
 
         val effects = mutableListOf<AppEffect>()
 
-        // 1. Always Log the Raw Notification (for debugging/audit)
+        // 1. Log Event
         val logEvent = ReducerUtils.createEvent(
-            dashId = null, // Notifications are often async/outside a specific dash context
-            type = AppEventType.NOTIFICATION_RECEIVED, // Ensure this exists in AppEventType!
-            payload = text
+            dashId = null,
+            type = AppEventType.NOTIFICATION_RECEIVED,
+            payload = fullText
         )
         effects.add(AppEffect.LogEvent(logEvent))
 
-        // 2. Check for Specific "Tip Added" Logic
-        if (text.contains("tip", ignoreCase = true) && text.contains("added", ignoreCase = true)) {
-            // We found a tip! Delegate the parsing to an Effect.
-            // We do NOT parse here because Reducers must be fast and synchronous.
-            effects.add(AppEffect.ProcessTipNotification(text))
+        // 2. Logic (Tip Detection)
+        if (fullText.contains("tip", true) && fullText.contains("added", true)) {
+            effects.add(AppEffect.ProcessTipNotification(fullText))
         }
 
-        // Return the transition (State stays same, effects are queued)
         return Reducer.Transition(currentState, effects)
     }
 }

@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
+import cloud.trotter.dashbuddy.services.accessibility.notification.NotificationInfo
 
 data class StateContext(
     val timestamp: Long,                                // When the event data was processed
@@ -21,5 +22,6 @@ data class StateContext(
     val clickInfo: ClickInfo? = null,                   // Click info for the event
     val screenInfo: ScreenInfo? = null,                 // Screen info for the event
     val currentDashState: CurrentEntity? = null,         // The current dash state according to the database
-    val notificationText: String? = null                // The text of the notification (if any)
+//    val notificationText: String? = null,                // The text of the notification (if any)
+    val notification: NotificationInfo? = null,
 )

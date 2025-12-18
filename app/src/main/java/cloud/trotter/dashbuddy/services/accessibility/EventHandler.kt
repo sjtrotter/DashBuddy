@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
 import cloud.trotter.dashbuddy.services.accessibility.click.ClickParser
+import cloud.trotter.dashbuddy.services.accessibility.notification.NotificationParser
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenRecognizerV2
 import cloud.trotter.dashbuddy.statev2.StateManagerV2
 import cloud.trotter.dashbuddy.util.AccNodeUtils
@@ -131,23 +132,32 @@ object EventHandler {
 
         if (event.packageName?.toString() != "com.doordash.driverapp") return
 
+// 1. NOTIFICATION PIPELINE
         if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-            val text = event.text.joinToString(" ")
-//            if (text.contains("tip", true) || text.contains("added", true)) {
-            // testing for all notifications for now.
-            val context = StateContext(
-                timestamp = Date().time,
-                eventType = event.eventType,
-                eventTypeString = AccessibilityEvent.eventTypeToString(event.eventType),
-                packageName = event.packageName,
-                rootNode = null,
-                rootUiNode = null,
-                sourceClassName = event.className,
-                sourceNode = event.source,
-                notificationText = text
-            )
-            StateManagerV2.dispatch(context)
-//            }
+            Log.d(TAG, "DEBUG: Processing Notification Event...") // Log A
+
+            val notificationInfo = NotificationParser.parse(event)
+
+            if (notificationInfo != null) {
+                Log.i(
+                    TAG,
+                    "DEBUG: Notification Parsed: ${notificationInfo.toFullString()}"
+                ) // Log B
+
+                val context = StateContext(
+                    timestamp = Date().time,
+                    eventType = event.eventType,
+                    eventTypeString = "NOTIFICATION",
+                    packageName = event.packageName,
+                    rootNode = null,
+                    rootUiNode = null,
+                    notification = notificationInfo
+                )
+                StateManagerV2.dispatch(context)
+            } else {
+                Log.w(TAG, "DEBUG: Notification event received but parsed empty.")
+            }
+            return // Stop here
         }
 
         // Capture immediately as requested
