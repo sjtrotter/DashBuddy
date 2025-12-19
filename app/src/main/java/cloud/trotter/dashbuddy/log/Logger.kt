@@ -16,7 +16,7 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
     private const val LOG_FILE_NAME = "app_log.txt"
     private const val ROTATED_LOG_FILE_PREFIX = "app_log_rotated_"
     private const val MAX_FILE_SIZE_MB_DEFAULT = 2.3
-    private const val MAX_ROTATED_FILES_DEFAULT = 20
+    private const val MAX_ROTATED_FILES_DEFAULT = 50
 
     private var currentLogFile: File? = null
     private var logDirectory: File? = null
@@ -131,7 +131,7 @@ object Logger : SharedPreferences.OnSharedPreferenceChangeListener {
         val newLevel = if (savedLevelName != null) {
             try {
                 LogLevel.valueOf(savedLevelName)
-            } catch (e: IllegalArgumentException) {
+            } catch (_: IllegalArgumentException) {
                 android.util.Log.w(
                     "Logger",
                     "Invalid log level string '$savedLevelName' in SharedPreferences. Using previous."
