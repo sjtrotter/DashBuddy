@@ -35,6 +35,7 @@ object AwaitingReducer {
 
             val event = ReducerUtils.createEvent(dashId, AppEventType.DASH_START, payload)
             effects.add(AppEffect.LogEvent(event))
+            effects.add(AppEffect.StartOdometer)
             effects.add(AppEffect.UpdateBubble("Dash Started!"))
         }
 

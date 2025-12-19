@@ -30,6 +30,7 @@ object IdleReducer {
                 payload = "Return to Map"
             )
             effects.add(AppEffect.LogEvent(stopEvent))
+            effects.add(AppEffect.StopOdometer)
             effects.add(AppEffect.UpdateBubble("Dash Ended"))
         }
 

@@ -32,6 +32,7 @@ object SummaryReducer {
         )
 
         effects.add(AppEffect.LogEvent(event))
+        effects.add(AppEffect.StopOdometer)
 
         val earningStr = input.totalEarnings?.let { "$$it" } ?: "Unknown"
         effects.add(AppEffect.UpdateBubble("Dash Ended. Total: $earningStr"))

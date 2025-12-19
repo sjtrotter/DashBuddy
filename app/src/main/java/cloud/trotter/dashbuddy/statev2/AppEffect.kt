@@ -22,4 +22,7 @@ sealed class AppEffect {
     // Dash Paused!
     data class ScheduleTimeout(val timestamp: Long, val type: String) : AppEffect()
     data class CancelTimeout(val type: String) : AppEffect()
+
+    data object StartOdometer : AppEffect()
+    data object StopOdometer : AppEffect()
 }
