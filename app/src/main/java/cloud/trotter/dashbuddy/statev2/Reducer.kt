@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.statev2.reducers.*
 import cloud.trotter.dashbuddy.statev2.sidechannels.NotificationHandler
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 object Reducer {
 
@@ -22,6 +23,25 @@ object Reducer {
             }
         }
 
+        // --- 0.5 DASH PAUSED
+        if (context.isTimeout && currentState is AppStateV2.DashPaused) {
+            Log.i("Reducer", "Handling Dash Pause Timeout -> Forcing Idle")
+
+            // Force transition to Idle (Dash Ended)
+            return IdleReducer.transitionTo(
+                oldState = currentState,
+                // Create dummy info since we aren't looking at a screen
+                input = ScreenInfo.IdleMap(
+                    screen = Screen.MAIN_MAP_IDLE,
+                    zoneName = "Unknown",
+                    dashType = null
+                ),
+                isRecovery = false
+            ).copy(
+                effects = listOf(AppEffect.UpdateBubble("Dash Ended (Timeout)"))
+            )
+        }
+
         val input = context.screenInfo ?: return Transition(currentState)
         if (input.screen == Screen.UNKNOWN) return Transition(currentState)
 
@@ -36,6 +56,7 @@ object Reducer {
             is AppStateV2.OnDelivery -> DeliveryReducer.reduce(currentState, input)
             is AppStateV2.PostDelivery -> PostDeliveryReducer.reduce(currentState, input)
             is AppStateV2.PostDash -> SummaryReducer.reduce(currentState, input)
+            is AppStateV2.DashPaused -> DashPausedReducer.reduce(currentState, input)
             is AppStateV2.PausedOrInterrupted -> null // Let anchors catch us up
         }
 
@@ -97,6 +118,12 @@ object Reducer {
             is ScreenInfo.DashSummary -> {
                 if (state !is AppStateV2.PostDash)
                     SummaryReducer.transitionTo(state, input, isRecovery = true)
+                else null
+            }
+
+            is ScreenInfo.DashPaused -> {
+                if (state !is AppStateV2.DashPaused)
+                    DashPausedReducer.transitionTo(state, input, isRecovery = true)
                 else null
             }
 

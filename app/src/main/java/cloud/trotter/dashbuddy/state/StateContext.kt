@@ -21,7 +21,7 @@ data class StateContext(
     val sourceNodeTexts: List<String> = emptyList(),    // Texts specifically from event.source (can be empty)
     val clickInfo: ClickInfo? = null,                   // Click info for the event
     val screenInfo: ScreenInfo? = null,                 // Screen info for the event
-    val currentDashState: CurrentEntity? = null,         // The current dash state according to the database
-//    val notificationText: String? = null,                // The text of the notification (if any)
-    val notification: NotificationInfo? = null,
+    val currentDashState: CurrentEntity? = null,        // The current dash state according to the database
+    val notification: NotificationInfo? = null,         // Notification info for the event
+    val isTimeout: Boolean = false,                     // True if this is a timeout event
 )

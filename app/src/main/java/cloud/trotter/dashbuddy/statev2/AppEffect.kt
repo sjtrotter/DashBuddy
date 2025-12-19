@@ -18,4 +18,8 @@ sealed class AppEffect {
     ) : AppEffect()
 
     data class ProcessTipNotification(val rawText: String) : AppEffect()
+
+    // Dash Paused!
+    data class ScheduleTimeout(val timestamp: Long, val type: String) : AppEffect()
+    data class CancelTimeout(val type: String) : AppEffect()
 }

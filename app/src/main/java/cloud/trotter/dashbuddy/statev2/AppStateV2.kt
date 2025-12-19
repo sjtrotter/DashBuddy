@@ -66,7 +66,7 @@ sealed class AppStateV2 {
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
         val customerNameHash: String? = null,
-        val customerAddresHash: String? = null
+        val customerAddressHash: String? = null
     ) : AppStateV2()
 
     data class PostDelivery(
@@ -81,5 +81,12 @@ sealed class AppStateV2 {
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
         val previousState: AppStateV2
+    ) : AppStateV2()
+
+    data class DashPaused(
+        override val timestamp: Long = System.currentTimeMillis(),
+        override val dashId: String?,
+        val pausedAt: Long = System.currentTimeMillis(),
+        val expectedEndAt: Long
     ) : AppStateV2()
 }

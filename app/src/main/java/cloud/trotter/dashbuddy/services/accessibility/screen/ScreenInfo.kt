@@ -76,4 +76,10 @@ sealed class ScreenInfo {
         val onlineDurationMillis: Long, // 4560000
         val estimatedStartTime: Long    // context.timestamp - duration
     ) : ScreenInfo()
+
+    data class DashPaused(
+        override val screen: Screen,
+        val remainingMillis: Long,
+        val rawTimeText: String
+    ) : ScreenInfo()
 }

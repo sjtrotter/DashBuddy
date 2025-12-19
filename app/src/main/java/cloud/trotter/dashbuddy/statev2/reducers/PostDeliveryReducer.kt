@@ -77,6 +77,11 @@ object PostDeliveryReducer {
                 SummaryReducer.transitionTo(state, input, isRecovery = false)
             }
 
+            is ScreenInfo.DashPaused -> {
+                // User set dash to pause after delivery
+                DashPausedReducer.transitionTo(state, input, isRecovery = false)
+            }
+
             else -> null
         }
     }

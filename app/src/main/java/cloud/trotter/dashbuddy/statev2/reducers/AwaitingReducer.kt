@@ -59,6 +59,12 @@ object AwaitingReducer {
 
             is ScreenInfo.Offer -> OfferReducer.transitionTo(state, input, isRecovery = false)
             is ScreenInfo.IdleMap -> IdleReducer.transitionTo(state, input, isRecovery = false)
+            is ScreenInfo.DashPaused -> DashPausedReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
+
             else -> null
         }
     }

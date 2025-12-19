@@ -26,20 +26,6 @@ class DashBuddyAccessibility : AccessibilityService() {
             Log.d(tag, "Ignoring event from ${event.packageName}")
             return
         }
-
-        // --- TRIGGER: Keep the Odometer Service Alive ---
-//        try {
-//            val keepAliveIntent = Intent(this, LocationService::class.java).apply {
-//                action = LocationService.ACTION_KEEP_ALIVE
-//            }
-//            startService(keepAliveIntent)
-//        } catch (e: Exception) {
-//            Log.e(tag, "Failed to send Keep Alive to LocationService", e)
-//        }
-
-        // OPTIMIZATION: Do NOT fetch rootInActiveWindow here.
-        // Just pass the event and the service ('this').
-        // Let the EventHandler decide when to pay the cost of fetching the screen.
         eventHandler.handleEvent(event, this)
     }
 

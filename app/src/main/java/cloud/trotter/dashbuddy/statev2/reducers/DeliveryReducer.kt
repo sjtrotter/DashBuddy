@@ -19,7 +19,7 @@ object DeliveryReducer {
             // We initialize with nulls because hashes aren't readable text.
             // In the future, we can look up real names from the DB using the hash.
             customerNameHash = null,
-            customerAddresHash = null
+            customerAddressHash = null
         )
 
         val effects = mutableListOf<AppEffect>()

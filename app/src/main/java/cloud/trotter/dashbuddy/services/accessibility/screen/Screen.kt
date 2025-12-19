@@ -144,6 +144,9 @@ enum class Screen(
         activityHint = ActivityHint.ACTIVE
     ),
 
+    /** The paused dash screen. */
+    DASH_PAUSED(screenName = "Dash Paused", activityHint = ActivityHint.ACTIVE),
+
     // --- Navigation Views ---
     // Generic view. Match AFTER more specific views.
     NAVIGATION_VIEW(

@@ -128,11 +128,14 @@ object EventHandler {
         // rootNode is passed via manual call in Service
     ) {
         // Log immediately to prove event reception
-        // Log.v(TAG, "VERBOSE :: EVENT RECEIVED :: ${AccessibilityEvent.eventTypeToString(event.eventType)}")
+        Log.v(
+            TAG,
+            "VERBOSE :: EVENT RECEIVED :: ${AccessibilityEvent.eventTypeToString(event.eventType)}"
+        )
 
         if (event.packageName?.toString() != "com.doordash.driverapp") return
 
-// 1. NOTIFICATION PIPELINE
+        // 1. NOTIFICATION PIPELINE
         if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
             Log.d(TAG, "DEBUG: Processing Notification Event...") // Log A
 

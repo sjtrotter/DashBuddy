@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.data.event
 enum class AppEventType {
     // --- Session Lifecycle ---
     DASH_START,
+    DASH_PAUSED,
     DASH_STOP,
     ZONE_SWITCH,
     NOTIFICATION_RECEIVED,

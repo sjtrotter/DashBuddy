@@ -35,6 +35,7 @@ object StateManagerV2 {
                 .registerSubtype(AppStateV2.PostDelivery::class.java)
                 .registerSubtype(AppStateV2.PostDash::class.java)
                 .registerSubtype(AppStateV2.PausedOrInterrupted::class.java)
+                .registerSubtype(AppStateV2.DashPaused::class.java)
         )
         .create()
 
@@ -118,6 +119,15 @@ object StateManagerV2 {
             is AppEffect.ProcessTipNotification -> {
                 TipEffectHandler.process(scope, effect)
             }
+
+            is AppEffect.ScheduleTimeout -> {
+                TimeoutHandler.schedule(scope, effect.timestamp)
+            }
+
+            is AppEffect.CancelTimeout -> {
+                TimeoutHandler.cancel()
+            }
+
         }
     }
 
