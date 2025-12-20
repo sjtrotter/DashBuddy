@@ -5,8 +5,13 @@ import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.statev2.AppEffect
 import cloud.trotter.dashbuddy.statev2.AppStateV2
 import cloud.trotter.dashbuddy.statev2.Reducer
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object PostDeliveryReducer {
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     // --- FACTORY ---
     fun transitionTo(
@@ -16,7 +21,6 @@ object PostDeliveryReducer {
     ): Reducer.Transition {
         val total = input.parsedPay.total
 
-        // Deduplication: If we are simply refreshing the same payout screen, don't re-log.
         if (oldState is AppStateV2.PostDelivery && oldState.totalPay == total) {
             return Reducer.Transition(oldState)
         }
@@ -29,23 +33,37 @@ object PostDeliveryReducer {
 
         val effects = mutableListOf<AppEffect>()
 
-        // LOGIC: We always log this event because it represents a distinct financial transaction.
-        // Even in recovery, if we see a payout screen we haven't recorded, we should probably log it.
-        // (For now, we treat recovery same as normal flow to ensure data capture).
-
         effects.add(
             AppEffect.LogEvent(
                 ReducerUtils.createEvent(
                     dashId = oldState.dashId,
                     type = AppEventType.DELIVERY_COMPLETED,
-                    payload = input.parsedPay // Serializes the full pay breakdown
+                    payload = input.parsedPay
                 )
             )
         )
 
-        // UI & Screenshot
-        val filename = "payout_${total}_${System.currentTimeMillis()}"
+        // --- Custom Filename ---
+        // Format: 2025-12-20 - Dropoff - McDonald's (1234), Pizza Hut
+
+        // 1. Get names from customerTips (e.g. "McDonald's (1234)")
+        val merchants = input.parsedPay.customerTips
+            .map { it.type.trim() }
+            .distinct()
+            .joinToString(", ")
+            .ifEmpty { "Delivery" }
+
+        val date = dateFormat.format(Date())
+
+        // 2. Sanitize: Allow letters, numbers, spaces, parens, hyphens, commas, apostrophes.
+        // Strip mostly just illegal file chars like / \ : * ? " < > |
+        val safeMerchants = merchants.replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
+
+        val filename = "$date - Dropoff - $safeMerchants"
+
         effects.add(AppEffect.CaptureScreenshot(filename))
+        // -----------------------
+
         effects.add(AppEffect.UpdateBubble("Saved! $$total"))
 
         return Reducer.Transition(newState, effects)
@@ -57,30 +75,25 @@ object PostDeliveryReducer {
         input: ScreenInfo
     ): Reducer.Transition? {
         return when (input) {
-            is ScreenInfo.DeliveryCompleted -> {
-                // User is staring at the payout screen. No change.
-                Reducer.Transition(state)
-            }
+            is ScreenInfo.DeliveryCompleted -> Reducer.Transition(state)
+            is ScreenInfo.WaitingForOffer -> AwaitingReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
 
-            is ScreenInfo.WaitingForOffer -> {
-                // User clicked "Done" or "Resume Dash" -> Back to searching
-                AwaitingReducer.transitionTo(state, input, isRecovery = false)
-            }
+            is ScreenInfo.IdleMap -> IdleReducer.transitionTo(state, input, isRecovery = false)
+            is ScreenInfo.DashSummary -> SummaryReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
 
-            is ScreenInfo.IdleMap -> {
-                // User ended dash immediately after delivery
-                IdleReducer.transitionTo(state, input, isRecovery = false)
-            }
-
-            is ScreenInfo.DashSummary -> {
-                // User ended dash and is viewing summary
-                SummaryReducer.transitionTo(state, input, isRecovery = false)
-            }
-
-            is ScreenInfo.DashPaused -> {
-                // User set dash to pause after delivery
-                DashPausedReducer.transitionTo(state, input, isRecovery = false)
-            }
+            is ScreenInfo.DashPaused -> DashPausedReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
 
             else -> null
         }

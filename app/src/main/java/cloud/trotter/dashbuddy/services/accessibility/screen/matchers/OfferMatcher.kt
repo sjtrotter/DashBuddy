@@ -82,7 +82,9 @@ class OfferMatcher : ScreenMatcher {
             val primaryText = node.text ?: continue
 
             // Skip Dropoffs
-            if (primaryText.equals("Customer dropoff", true)) continue
+            if (primaryText.equals("Customer dropoff", true) ||
+                primaryText.equals("Business handoff", true)
+            ) continue
 
             // We found a Store! Now look at its surroundings (siblings/cousins).
             // The structure is usually:
@@ -197,7 +199,7 @@ class OfferMatcher : ScreenMatcher {
         )
         Log.i("OfferMatcher", "Matched offer: $parsedOffer")
 //        DashBuddyApplication.sendBubbleMessage("New parsed offer: $parsedOffer")
-        return null
-//        return ScreenInfo.Offer(Screen.OFFER_POPUP, parsedOffer)
+//        return null
+        return ScreenInfo.Offer(Screen.OFFER_POPUP, parsedOffer)
     }
 }

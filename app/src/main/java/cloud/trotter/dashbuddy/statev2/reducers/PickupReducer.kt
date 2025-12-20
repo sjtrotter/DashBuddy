@@ -49,6 +49,16 @@ object PickupReducer {
                 DeliveryReducer.transitionTo(state, input, isRecovery = false)
             }
 
+            is ScreenInfo.WaitingForOffer -> {
+                // Order cancelled or dasher unassigned
+                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+            }
+
+            is ScreenInfo.Offer -> {
+                // Offer popup while on pickup screens
+                OfferReducer.transitionTo(state, input, isRecovery = false)
+            }
+
             else -> null
         }
     }

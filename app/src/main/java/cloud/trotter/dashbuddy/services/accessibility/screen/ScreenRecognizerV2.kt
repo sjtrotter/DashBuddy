@@ -25,6 +25,7 @@ object ScreenRecognizerV2 {
         Screen.ON_DASH_MAP_WAITING_FOR_OFFER,
         Screen.DASH_PAUSED,
         Screen.ON_DASH_ALONG_THE_WAY,
+        Screen.OFFER_POPUP,
         // Add others here as you finish refactoring them (e.g. PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE)
     )
 

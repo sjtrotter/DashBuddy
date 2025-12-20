@@ -176,16 +176,16 @@ enum class Screen(
     // --- Offer Handling ---
     OFFER_POPUP(
         screenName = "Offer",
-        requiredTexts = listOf("decline", "$", "deliver by"),
-        someOfTheseTexts = listOf(
-            "guaranteed (incl. tips)",
-            "total will be higher",
-            "accept",
-            "add to route",
-            "mi",
-            "ft",
-        ),
-        minTextCount = 6,
+//        requiredTexts = listOf("decline", "$", "deliver by"),
+//        someOfTheseTexts = listOf(
+//            "guaranteed (incl. tips)",
+//            "total will be higher",
+//            "accept",
+//            "add to route",
+//            "mi",
+//            "ft",
+//        ),
+//        minTextCount = 6,
         activityHint = ActivityHint.ACTIVE
     ),
 

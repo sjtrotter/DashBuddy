@@ -60,6 +60,12 @@ object DeliveryReducer {
                 Reducer.Transition(state)
             }
 
+            // it looks like in practice sometimes the app goes to the awaiting offer state
+            // before it makes it to post delivery.
+            is ScreenInfo.WaitingForOffer -> {
+                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+            }
+
             is ScreenInfo.DeliveryCompleted -> {
                 // ARRIVED -> COMPLETED
                 PostDeliveryReducer.transitionTo(state, input, isRecovery = false)
