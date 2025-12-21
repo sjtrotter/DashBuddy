@@ -93,12 +93,10 @@ class OfferPresented : StateHandler {
             if (current?.dashId != null && current.zoneId != null) {
                 val evaluation = OfferEvaluator.evaluateOffer(
                     parsedOffer,
-                    current.dashId,
-                    current.zoneId,
                     stateContext.timestamp
                 )
                 // Send the bubble for user feedback
-                DashBuddyApplication.sendBubbleMessage(evaluation.bubbleMessage)
+//                DashBuddyApplication.sendBubbleMessage(evaluation.bubbleMessage)
             }
 
             // 5. Create and Insert the Event

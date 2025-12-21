@@ -1,16 +1,17 @@
 package cloud.trotter.dashbuddy.data.offer
 
 import android.content.Context
+import android.graphics.Color
 import android.graphics.Typeface
+import android.text.SpannableString
 import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
-import android.text.style.TabStopSpan
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.order.OrderType
 import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.util.ScoringUtils
-import android.text.SpannableString
 import java.util.Locale
 
 object OfferEvaluator {
@@ -33,21 +34,22 @@ object OfferEvaluator {
         DashBuddyApplication.instance.getSharedPreferences("dashbuddyPrefs", Context.MODE_PRIVATE)
     }
 
-    /**
-     * Evaluates a parsed offer, builds the OfferEntity, and creates a formatted summary message.
-     * @return An [EvaluationResult] containing both the [OfferEntity] and the [SpannableString] bubble message.
-     */
     fun evaluateOffer(
         parsedOffer: ParsedOffer,
-        dashId: Long,
-        zoneId: Long,
-        eventTimestamp: Long
-    ): EvaluationResult { // Changed return type
+        eventTimestamp: Long = System.currentTimeMillis()
+    ): SpannableString {
 
-        // --- All your calculation logic remains the same ---
+        // --- 1. Extract Data ---
         val currentPayout = parsedOffer.payAmount ?: 0.0
         val currentDistance = parsedOffer.distanceMiles ?: 1.0
         val currentItemCount = parsedOffer.itemCount.toDouble()
+
+        // Get Merchant Name(s)
+        val merchantName = if (parsedOffer.orders.isNotEmpty()) {
+            parsedOffer.orders.joinToString(" & ") { it.storeName }
+        } else {
+            "Unknown Store"
+        }
 
         var timeToCompleteMinutes: Long? = null
         if (parsedOffer.dueByTimeMillis != null) {
@@ -64,7 +66,7 @@ object OfferEvaluator {
         val dollarsPerMile = if (currentDistance > 0) currentPayout / currentDistance else 0.0
         val dollarsPerHour = currentPayout / (deliveryTimeForCalc / 60.0)
 
-        // --- All your weight and score calculation logic remains the same ---
+        // --- 2. Calculate Score (Existing Logic) ---
         val prioritizedMetric = sharedPreferences.getString("PrioritizedMetric", "Payout")
         val (basePayoutWeight, baseDollarPerMileWeight, baseDollarPerHourWeight) = when (prioritizedMetric) {
             "DollarPerMile" -> Triple(0.2f, 0.3f, 0.2f)
@@ -120,61 +122,58 @@ object OfferEvaluator {
                 dollarPerMileScore + dollarPerHourScore + itemCountScore) * 100
         val offerQuality = ScoringUtils.determineOfferQuality(totalScore)
 
-        // --- Build the OfferEntity ---
-        val offerEntity = parsedOffer.toOfferEntity(
-            dashId = dashId,
-            zoneId = zoneId,
-            timestamp = eventTimestamp,
-            calculatedScore = totalScore,
-            scoreText = offerQuality,
-            status = OfferStatus.SEEN,
-            dollarsPerMile = dollarsPerMile,
-            dollarsPerHour = dollarsPerHour
-        )
 
-        // --- Build the SpannableString Bubble Message ---
+        // --- 3. Build Pretty Output String ---
         val builder = SpannableStringBuilder()
-        val qualityStart = builder.length + "New offer: ".length
-        builder.append("New offer: $offerQuality")
-        builder.setSpan(
-            StyleSpan(Typeface.BOLD),
-            qualityStart,
-            builder.length,
-            SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE
+
+        // LINE 1: Quality & Score (e.g. "Good Offer (78.5)")
+        val headerText = "$offerQuality (${String.format(Locale.US, "%.0f", totalScore)})"
+        builder.append(headerText)
+        builder.setSpan(StyleSpan(Typeface.BOLD), 0, headerText.length, 0)
+        builder.setSpan(RelativeSizeSpan(1.3f), 0, headerText.length, 0)
+
+        // Color code the header based on quality (optional, green for good, red for bad)
+        val color = if (totalScore >= 70) Color.rgb(0, 150, 0) // Dark Green
+        else if (totalScore >= 40) Color.rgb(200, 140, 0) // Dark Orange
+        else Color.RED
+        builder.setSpan(ForegroundColorSpan(color), 0, headerText.length, 0)
+
+        builder.append("\n")
+
+        // LINE 2: Merchant Name (e.g. "Chick-fil-A")
+        val merchantStart = builder.length
+        builder.append(merchantName)
+        builder.setSpan(StyleSpan(Typeface.BOLD), merchantStart, builder.length, 0)
+        builder.setSpan(RelativeSizeSpan(1.1f), merchantStart, builder.length, 0)
+        builder.append("\n\n")
+
+        // DETAILS BLOCK
+        // Format:
+        // $8.50  •  5.2 mi  •  $1.63/mi
+        // 3 items •  22 min  •  $23.10/hr
+
+        val row1 = String.format(
+            Locale.US,
+            "$%.2f  •  %.1f mi  •  $%.2f/mi",
+            currentPayout,
+            currentDistance,
+            dollarsPerMile
         )
-        builder.setSpan(
-            RelativeSizeSpan(1.2f),
-            qualityStart,
-            builder.length,
-            SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE
+        builder.append(row1)
+        builder.append("\n")
+
+        val timeStr = timeToCompleteMinutes?.toString() ?: "?"
+        val row2 = String.format(
+            Locale.US,
+            "%.0f items  •  %s min  •  $%.2f/hr",
+            currentItemCount,
+            timeStr,
+            dollarsPerHour
         )
+        builder.append(row2)
 
-        // Add details with TabStopSpan for alignment
-        val tabStopPosition = 300 // in pixels, adjust as needed
-        val detailsMap = mapOf(
-            "Score" to String.format(Locale.getDefault(), "%.1f", totalScore),
-            "Payout" to String.format(Locale.getDefault(), "$%.2f", currentPayout),
-            "Distance" to String.format(Locale.getDefault(), "%.1f mi", currentDistance),
-            "Items" to parsedOffer.itemCount.toString(),
-            "Time" to "${timeToCompleteMinutes ?: "N/A"} min",
-            "$/mi" to String.format(Locale.getDefault(), "$%.2f", dollarsPerMile),
-            "$/hr" to String.format(Locale.getDefault(), "$%.2f", dollarsPerHour)
-        )
-
-        detailsMap.forEach { (label, value) ->
-            builder.append("\n${label}:\t${value}")
-        }
-
-        builder.setSpan(
-            TabStopSpan.Standard(tabStopPosition),
-            0,
-            builder.length,
-            SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE
-        )
-
-        // --- Log and Return EvaluationResult ---
-        Logger.i("OfferEvaluator", builder.toString().replace("\n", ", ").replace("\t", " "))
-
-        return EvaluationResult(offerEntity, SpannableString(builder)) // Return both objects
+        // --- Log and Return ---
+        Logger.i("OfferEvaluator", "Evaluated: $merchantName ($totalScore) -> $offerQuality")
+        return SpannableString(builder)
     }
 }

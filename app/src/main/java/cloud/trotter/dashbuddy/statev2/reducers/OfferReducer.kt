@@ -47,6 +47,8 @@ object OfferReducer {
 
             effects.add(AppEffect.CaptureScreenshot(filename))
             // ----------------------------
+            // NEW: Evaluate the offer!
+            effects.add(AppEffect.EvaluateOffer(input.parsedOffer))
         }
 
         return Reducer.Transition(newState, effects)

@@ -72,6 +72,13 @@ object DeliveryReducer {
             }
             // Note: If user cancels, we might see IdleMap or WaitingForOffer.
             // The Main Reducer's Anchor logic will catch that.
+
+            is ScreenInfo.DashPaused -> DashPausedReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
+
             else -> null
         }
     }

@@ -72,6 +72,18 @@ object AwaitingReducer {
                 isRecovery = false
             )
 
+            is ScreenInfo.PickupDetails -> PickupReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
+
+            is ScreenInfo.DashSummary -> SummaryReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
+
             else -> null
         }
     }

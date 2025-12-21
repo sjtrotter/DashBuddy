@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.log.Logger as Log
 import android.os.Build
 import androidx.annotation.RequiresApi
+import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
 import cloud.trotter.dashbuddy.statev2.effects.OdometerEffect
 import cloud.trotter.dashbuddy.statev2.effects.ScreenShot
 import cloud.trotter.dashbuddy.statev2.effects.TipEffectHandler
@@ -135,6 +136,12 @@ object StateManagerV2 {
 
             is AppEffect.StopOdometer -> {
                 OdometerEffect.shutDown()
+            }
+
+            is AppEffect.EvaluateOffer -> {
+                DashBuddyApplication.sendBubbleMessage(
+                    OfferEvaluator.evaluateOffer(effect.parsedOffer)
+                )
             }
         }
     }

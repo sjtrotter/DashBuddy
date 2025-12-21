@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.statev2
 
 import cloud.trotter.dashbuddy.data.event.AppEventEntity
+import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 
 sealed class AppEffect {
     // 1. Log to Database (The Core of Event Sourcing)
@@ -25,4 +26,5 @@ sealed class AppEffect {
 
     data object StartOdometer : AppEffect()
     data object StopOdometer : AppEffect()
+    data class EvaluateOffer(val parsedOffer: ParsedOffer) : AppEffect()
 }

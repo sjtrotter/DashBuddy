@@ -75,6 +75,12 @@ object DashPausedReducer {
                 t.copy(effects = t.effects + AppEffect.CancelTimeout("DASH_PAUSE_TIMER"))
             }
 
+            is ScreenInfo.DeliveryCompleted -> PostDeliveryReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
+
             else -> null
         }
     }
