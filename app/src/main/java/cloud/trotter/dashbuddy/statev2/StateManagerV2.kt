@@ -143,6 +143,12 @@ object StateManagerV2 {
                     OfferEvaluator.evaluateOffer(effect.parsedOffer)
                 )
             }
+
+            is AppEffect.ClickNode -> {
+                Log.i(TAG, "Executing Effect: Clicking Node (${effect.description})")
+                // Use your existing robust utility
+                cloud.trotter.dashbuddy.util.AccNodeUtils.clickNode(effect.node.originalNode)
+            }
         }
     }
 

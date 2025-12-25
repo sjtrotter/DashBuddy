@@ -22,10 +22,12 @@ class DashBuddyAccessibility : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-        if (event.packageName != "com.doordash.driverapp") {
+        val validPackages = setOf("com.doordash.driverapp")
+        if (event.packageName?.toString() !in validPackages) {
             Log.d(tag, "Ignoring event from ${event.packageName}")
             return
         }
+
         eventHandler.handleEvent(event, this)
     }
 

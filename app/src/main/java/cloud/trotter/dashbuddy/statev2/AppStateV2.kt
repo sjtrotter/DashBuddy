@@ -49,7 +49,8 @@ sealed class AppStateV2 {
         override val dashId: String?,
         val rawOfferText: String?,
         val merchantName: String?,
-        val amount: Double?
+        val amount: Double?,
+        val currentOfferHash: String
     ) : AppStateV2()
 
     data class OnPickup(

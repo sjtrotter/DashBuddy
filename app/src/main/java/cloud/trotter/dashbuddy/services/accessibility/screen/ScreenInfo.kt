@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 
 /**
  * A sealed class representing the result of a screen recognition.
@@ -57,7 +58,8 @@ sealed class ScreenInfo {
     /** Contains the parsed pay details from a Delivery Completed screen. */
     data class DeliveryCompleted(
         override val screen: Screen,
-        val parsedPay: ParsedPay
+        val parsedPay: ParsedPay,
+        val expandButton: UiNode? = null
     ) : ScreenInfo()
 
     /** Contains the extracted zone and earning type from the Idle Map screen. */

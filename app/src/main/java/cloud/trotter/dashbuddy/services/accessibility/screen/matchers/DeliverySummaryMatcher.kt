@@ -94,9 +94,16 @@ class DeliverySummaryMatcher : ScreenMatcher {
             }
         }
 
+        val expandButton = root.findNode {
+            it.viewIdResourceName?.endsWith("expandable_view") == true
+        } ?: root.findNode {
+            it.text?.startsWith("This offer") == true
+        }
+
         return ScreenInfo.DeliveryCompleted(
             screen = Screen.DELIVERY_SUMMARY_EXPANDED,
-            parsedPay = ParsedPay(appPayItems, tipItems)
+            parsedPay = ParsedPay(appPayItems, tipItems),
+            expandButton = expandButton,
         )
     }
 }

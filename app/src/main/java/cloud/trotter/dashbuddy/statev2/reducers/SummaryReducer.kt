@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.statev2.AppEffect
 import cloud.trotter.dashbuddy.statev2.AppStateV2
 import cloud.trotter.dashbuddy.statev2.Reducer
+import cloud.trotter.dashbuddy.util.UtilityFunctions
 
 object SummaryReducer {
 
@@ -34,9 +35,10 @@ object SummaryReducer {
         effects.add(AppEffect.LogEvent(event))
         effects.add(AppEffect.StopOdometer)
 
-        val earningStr = input.totalEarnings?.let { "$$it" } ?: "Unknown"
+        val earningStr =
+            input.totalEarnings?.let { UtilityFunctions.formatCurrency(it) } ?: "Unknown"
         effects.add(AppEffect.UpdateBubble("Dash Ended. Total: $earningStr"))
-        effects.add(AppEffect.CaptureScreenshot("dash_summary_${System.currentTimeMillis()}"))
+        effects.add(AppEffect.CaptureScreenshot("DashSummary - ${input.totalEarnings}"))
 
         return Reducer.Transition(newState, effects)
     }

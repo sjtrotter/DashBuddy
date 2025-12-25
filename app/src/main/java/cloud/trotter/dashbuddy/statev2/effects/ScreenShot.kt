@@ -14,6 +14,8 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 object ScreenShot {
 
@@ -79,9 +81,12 @@ object ScreenShot {
             }
 
             // 3. Create the File
+            // prefix the datetime format
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HHmm", Locale.US)
             // Ensure filename ends in .png
             val safeName = if (filename.endsWith(".png")) filename else "$filename.png"
-            val file = File(dir, safeName)
+            val fullName = "$dateFormat $safeName"
+            val file = File(dir, fullName)
 
             // 4. Write to Disk
             FileOutputStream(file).use { out ->

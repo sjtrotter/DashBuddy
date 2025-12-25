@@ -133,7 +133,8 @@ object EventHandler {
             "VERBOSE :: EVENT RECEIVED :: ${AccessibilityEvent.eventTypeToString(event.eventType)}"
         )
 
-        if (event.packageName?.toString() != "com.doordash.driverapp") return
+        val validPackages = setOf("com.doordash.driverapp")
+        if (event.packageName?.toString() !in validPackages) return
 
         // 1. NOTIFICATION PIPELINE
         if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {

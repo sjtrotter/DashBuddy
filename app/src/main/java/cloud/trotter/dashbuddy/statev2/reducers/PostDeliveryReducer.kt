@@ -5,13 +5,9 @@ import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.statev2.AppEffect
 import cloud.trotter.dashbuddy.statev2.AppStateV2
 import cloud.trotter.dashbuddy.statev2.Reducer
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import cloud.trotter.dashbuddy.util.UtilityFunctions
 
 object PostDeliveryReducer {
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     // --- FACTORY ---
     fun transitionTo(
@@ -28,7 +24,7 @@ object PostDeliveryReducer {
         val newState = AppStateV2.PostDelivery(
             dashId = oldState.dashId,
             totalPay = total,
-            summaryText = "Paid: $$total"
+            summaryText = "Paid: ${UtilityFunctions.formatCurrency(total)}"
         )
 
         val effects = mutableListOf<AppEffect>()
@@ -43,6 +39,11 @@ object PostDeliveryReducer {
             )
         )
 
+        if (input.expandButton != null) {
+            // Return the transition with the Click Effect
+            effects.add(AppEffect.ClickNode(input.expandButton, "Expand Delivery Details"))
+        }
+
         // --- Custom Filename ---
         // Format: 2025-12-20 - Dropoff - McDonald's (1234), Pizza Hut
 
@@ -53,18 +54,16 @@ object PostDeliveryReducer {
             .joinToString(", ")
             .ifEmpty { "Delivery" }
 
-        val date = dateFormat.format(Date())
-
         // 2. Sanitize: Allow letters, numbers, spaces, parens, hyphens, commas, apostrophes.
         // Strip mostly just illegal file chars like / \ : * ? " < > |
         val safeMerchants = merchants.replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
 
-        val filename = "$date - Dropoff - $safeMerchants"
+        val filename = "Dropoff - $safeMerchants"
 
         effects.add(AppEffect.CaptureScreenshot(filename))
         // -----------------------
 
-        effects.add(AppEffect.UpdateBubble("Saved! $$total"))
+        effects.add(AppEffect.UpdateBubble("Saved! ${UtilityFunctions.formatCurrency(total)}"))
 
         return Reducer.Transition(newState, effects)
     }

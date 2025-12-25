@@ -5,13 +5,8 @@ import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.statev2.AppEffect
 import cloud.trotter.dashbuddy.statev2.AppStateV2
 import cloud.trotter.dashbuddy.statev2.Reducer
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 object OfferReducer {
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     fun transitionTo(
         oldState: AppStateV2,
@@ -24,7 +19,8 @@ object OfferReducer {
             dashId = oldState.dashId,
             rawOfferText = input.parsedOffer.rawExtractedTexts,
             merchantName = merchantName,
-            amount = input.parsedOffer.payAmount
+            amount = input.parsedOffer.payAmount,
+            currentOfferHash = input.parsedOffer.offerHash
         )
 
         val effects = mutableListOf<AppEffect>()
@@ -40,10 +36,9 @@ object OfferReducer {
             )
 
             // --- NEW: Custom Filename ---
-            val date = dateFormat.format(Date())
             // Sanitize merchant name for filename (remove slashes, colons, etc)
             val safeMerchant = merchantName.replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
-            val filename = "$date - Offer - $safeMerchant"
+            val filename = "Offer - $safeMerchant"
 
             effects.add(AppEffect.CaptureScreenshot(filename))
             // ----------------------------
@@ -57,7 +52,16 @@ object OfferReducer {
     // ... (reduce function remains same) ...
     fun reduce(state: AppStateV2.OfferPresented, input: ScreenInfo): Reducer.Transition? {
         return when (input) {
-            is ScreenInfo.Offer -> Reducer.Transition(state)
+            is ScreenInfo.Offer -> {
+                // If the hash is different, it's a new/modified offer (Pay changed, distance changed, etc.)
+                if (input.parsedOffer.offerHash != state.currentOfferHash) {
+                    transitionTo(state, input, isRecovery = false)
+                } else {
+                    // Hash matches, it's the exact same offer (just timer counting down), do nothing
+                    Reducer.Transition(state)
+                }
+            }
+
             is ScreenInfo.PickupDetails -> PickupReducer.transitionTo(
                 state,
                 input,
