@@ -17,8 +17,7 @@ object OdometerEffect {
                 DashBuddyApplication.context,
                 LocationService::class.java
             )
-            intent.action = LocationService.ACTION_KEEP_ALIVE
-            DashBuddyApplication.context.startService(intent)
+            DashBuddyApplication.context.startForegroundService(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Odometer", e)
         }
