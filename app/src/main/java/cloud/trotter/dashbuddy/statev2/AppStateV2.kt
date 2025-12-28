@@ -70,6 +70,11 @@ sealed class AppStateV2 {
         val customerAddressHash: String? = null
     ) : AppStateV2()
 
+    data class ExpandingDeliverySummary(
+        override val timestamp: Long = System.currentTimeMillis(),
+        override val dashId: String? = null
+    ) : AppStateV2()
+
     data class PostDelivery(
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,

@@ -39,11 +39,6 @@ object PostDeliveryReducer {
             )
         )
 
-        if (input.expandButton != null) {
-            // Return the transition with the Click Effect
-            effects.add(AppEffect.ClickNode(input.expandButton, "Expand Delivery Details"))
-        }
-
         // --- Custom Filename ---
         // Format: 2025-12-20 - Dropoff - McDonald's (1234), Pizza Hut
 

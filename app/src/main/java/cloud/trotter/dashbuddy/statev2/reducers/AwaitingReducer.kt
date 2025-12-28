@@ -66,6 +66,12 @@ object AwaitingReducer {
                 isRecovery = false
             )
 
+            is ScreenInfo.DeliverySummaryCollapsed -> ExpandingReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
+
             is ScreenInfo.DeliveryCompleted -> PostDeliveryReducer.transitionTo(
                 state,
                 input,

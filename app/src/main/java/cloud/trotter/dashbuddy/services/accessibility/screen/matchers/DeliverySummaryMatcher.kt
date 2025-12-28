@@ -44,7 +44,19 @@ class DeliverySummaryMatcher : ScreenMatcher {
 
         // If headers are missing, we are Collapsed.
         if (!hasDoorDashPay || !hasTips) {
-            return ScreenInfo.Simple(Screen.DELIVERY_SUMMARY_COLLAPSED)
+            val expandButton = root.findNode {
+                it.viewIdResourceName?.endsWith("expandable_view") == true
+            } ?: root.findNode {
+                it.text?.startsWith("This offer") == true
+            }
+            return if (expandButton != null) {
+                ScreenInfo.DeliverySummaryCollapsed(
+                    screen = Screen.DELIVERY_SUMMARY_COLLAPSED,
+                    expandButton = expandButton
+                )
+            } else {
+                ScreenInfo.Simple(Screen.DELIVERY_SUMMARY_COLLAPSED)
+            }
         }
 
         // --- 3. PARSING (Expanded Mode) ---
@@ -94,16 +106,9 @@ class DeliverySummaryMatcher : ScreenMatcher {
             }
         }
 
-        val expandButton = root.findNode {
-            it.viewIdResourceName?.endsWith("expandable_view") == true
-        } ?: root.findNode {
-            it.text?.startsWith("This offer") == true
-        }
-
         return ScreenInfo.DeliveryCompleted(
             screen = Screen.DELIVERY_SUMMARY_EXPANDED,
             parsedPay = ParsedPay(appPayItems, tipItems),
-            expandButton = expandButton,
         )
     }
 }

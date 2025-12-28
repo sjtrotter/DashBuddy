@@ -54,6 +54,7 @@ object Reducer {
             is AppStateV2.OfferPresented -> OfferReducer.reduce(currentState, input)
             is AppStateV2.OnPickup -> PickupReducer.reduce(currentState, input)
             is AppStateV2.OnDelivery -> DeliveryReducer.reduce(currentState, input)
+            is AppStateV2.ExpandingDeliverySummary -> ExpandingReducer.reduce(currentState, input)
             is AppStateV2.PostDelivery -> PostDeliveryReducer.reduce(currentState, input)
             is AppStateV2.PostDash -> SummaryReducer.reduce(currentState, input)
             is AppStateV2.DashPaused -> DashPausedReducer.reduce(currentState, input)
@@ -105,6 +106,12 @@ object Reducer {
             is ScreenInfo.DropoffDetails -> {
                 if (state !is AppStateV2.OnDelivery)
                     DeliveryReducer.transitionTo(state, input, isRecovery = true)
+                else null
+            }
+            // Anchor: Collapsed Delivery Summary
+            is ScreenInfo.DeliverySummaryCollapsed -> {
+                if (state !is AppStateV2.ExpandingDeliverySummary)
+                    ExpandingReducer.transitionTo(state, input, isRecovery = true)
                 else null
             }
             // Anchor: Payout Screen

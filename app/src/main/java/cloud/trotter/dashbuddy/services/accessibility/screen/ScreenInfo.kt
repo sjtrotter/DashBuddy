@@ -55,11 +55,15 @@ sealed class ScreenInfo {
         val status: DropoffStatus = DropoffStatus.UNKNOWN
     ) : ScreenInfo()
 
+    data class DeliverySummaryCollapsed(
+        override val screen: Screen,
+        val expandButton: UiNode
+    ) : ScreenInfo()
+
     /** Contains the parsed pay details from a Delivery Completed screen. */
     data class DeliveryCompleted(
         override val screen: Screen,
         val parsedPay: ParsedPay,
-        val expandButton: UiNode? = null
     ) : ScreenInfo()
 
     /** Contains the extracted zone and earning type from the Idle Map screen. */
