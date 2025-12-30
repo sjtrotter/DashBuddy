@@ -26,7 +26,10 @@ object ExpandingReducer {
         val effects = mutableListOf<AppEffect>()
         if (!isRecovery) {
             effects.add(
-                AppEffect.ClickNode(input.expandButton, "Expand Delivery Details")
+                AppEffect.Delayed(
+                    600,
+                    AppEffect.ClickNode(input.expandButton, "Expand Delivery Details")
+                )
             )
         }
 

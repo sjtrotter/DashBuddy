@@ -33,4 +33,7 @@ sealed class AppEffect {
         val node: UiNode,
         val description: String = "Auto-Click"
     ) : AppEffect()
+
+    data class Delayed(val delayMs: Long, val effect: AppEffect) : AppEffect()
+    data object SendKeepAlive : AppEffect()
 }

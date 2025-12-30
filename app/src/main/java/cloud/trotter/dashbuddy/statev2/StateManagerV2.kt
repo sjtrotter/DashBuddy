@@ -14,9 +14,11 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
+import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.statev2.effects.OdometerEffect
 import cloud.trotter.dashbuddy.statev2.effects.ScreenShot
 import cloud.trotter.dashbuddy.statev2.effects.TipEffectHandler
+import kotlinx.coroutines.delay
 
 object StateManagerV2 {
 
@@ -53,6 +55,28 @@ object StateManagerV2 {
         Log.i(TAG, "Initializing V2 State Machine...")
         restoreState()
         startProcessor()
+        startHeartbeat() // <--- NEW: Start the heartbeat
+    }
+
+    // NEW: The Heartbeat Loop
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    private fun startHeartbeat() {
+        scope.launch {
+            while (true) {
+                if (isActiveDash(_state.value)) {
+                    // Send Keep Alive every 5 minutes
+                    executeEffect(AppEffect.SendKeepAlive)
+                }
+                delay(5 * 60 * 1000L)
+            }
+        }
+    }
+
+    // Helper to determine if we should be tracking miles
+    private fun isActiveDash(state: AppStateV2): Boolean {
+        return state !is AppStateV2.IdleOffline &&
+                state !is AppStateV2.Initializing &&
+                state !is AppStateV2.PostDash
     }
 
     fun dispatch(context: StateContext) {
@@ -148,6 +172,27 @@ object StateManagerV2 {
                 Log.i(TAG, "Executing Effect: Clicking Node (${effect.description})")
                 // Use your existing robust utility
                 cloud.trotter.dashbuddy.util.AccNodeUtils.clickNode(effect.node.originalNode)
+            }
+
+            is AppEffect.Delayed -> {
+                scope.launch {
+                    delay(effect.delayMs)
+                    executeEffect(effect.effect) // Recursive call after delay
+                }
+            }
+
+            is AppEffect.SendKeepAlive -> {
+                try {
+                    val intent = android.content.Intent(
+                        DashBuddyApplication.context,
+                        LocationService::class.java
+                    ).apply {
+                        action = LocationService.ACTION_KEEP_ALIVE
+                    }
+                    DashBuddyApplication.context.startService(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to send KeepAlive", e)
+                }
             }
         }
     }

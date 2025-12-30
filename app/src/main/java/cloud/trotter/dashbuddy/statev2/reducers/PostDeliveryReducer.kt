@@ -55,7 +55,12 @@ object PostDeliveryReducer {
 
         val filename = "Dropoff - $safeMerchants"
 
-        effects.add(AppEffect.CaptureScreenshot(filename))
+        effects.add(
+            AppEffect.Delayed(
+                600,
+                AppEffect.CaptureScreenshot(filename)
+            )
+        )
         // -----------------------
 
         effects.add(AppEffect.UpdateBubble("Saved! ${UtilityFunctions.formatCurrency(total)}"))
