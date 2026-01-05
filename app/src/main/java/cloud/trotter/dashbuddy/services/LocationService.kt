@@ -48,6 +48,7 @@ class LocationService : Service() {
     private val cooldownLimitMS = 10 * 60 * 1000L // 10 Minutes
     private var lastKeepAliveTime: Long = 0L
     private var cooldownJob: Job? = null
+    private var isTracking = false // Add this state flag
 
     companion object {
         const val ACTION_KEEP_ALIVE = "cloud.trotter.dashbuddy.services.KEEP_ALIVE"
@@ -75,20 +76,19 @@ class LocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_KEEP_ALIVE) {
-            handleKeepAlive()
-        } else {
-            // Standard Start (likely from Accessibility Service via startService)
-            Log.i(tag, "Starting Odometer Service")
+        val isKeepAlive = intent?.action == ACTION_KEEP_ALIVE
+
+        // If it's a KeepAlive but we aren't tracking, treat it like a full start
+        if (!isKeepAlive || !isTracking) {
+            Log.i(tag, "Starting Odometer Service (Triggered by: ${intent?.action})")
             createNotificationChannel()
             startForeground(NOTIFICATION_ID, createNotification())
-
-            // Start tracking immediately.
             startLocationUpdates()
-
-            // Initial keep-alive kick
-            handleKeepAlive()
+            isTracking = true
         }
+
+        // Always handle the heartbeat logic
+        handleKeepAlive()
 
         return START_STICKY
     }
@@ -149,7 +149,7 @@ class LocationService : Service() {
         )
     }
 
-    private suspend fun processNewLocation(location: Location) {
+    private fun processNewLocation(location: Location) {
         // 1. Calculate Delta
         var distanceMiles = 0.0
 

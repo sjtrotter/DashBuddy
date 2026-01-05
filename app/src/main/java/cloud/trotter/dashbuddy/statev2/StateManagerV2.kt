@@ -189,7 +189,7 @@ object StateManagerV2 {
                     ).apply {
                         action = LocationService.ACTION_KEEP_ALIVE
                     }
-                    DashBuddyApplication.context.startService(intent)
+                    DashBuddyApplication.context.startForegroundService(intent)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to send KeepAlive", e)
                 }
