@@ -155,12 +155,13 @@ class BubbleService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        isServiceRunningIntentional =
-            false // Mark that the service is no longer intentionally running
+
         areComponentsInitialized = false
-//        if (DashBuddyApplication.bubbleService == this) {
-//            DashBuddyApplication.bubbleService = null // Clear static reference
-//        }
+        if (DashBuddyApplication.bubbleService == this) {
+            DashBuddyApplication.bubbleService = null // Clear static reference
+            isServiceRunningIntentional =
+                false // Mark that the service is no longer intentionally running
+        }
         Log.d(TAG, "onDestroy: BubbleService destroyed.")
     }
 
@@ -211,7 +212,7 @@ class BubbleService : Service() {
             )
             val startIntent = Intent(
                 DashBuddyApplication.context,
-                cloud.trotter.dashbuddy.services.bubble.BubbleService::class.java
+                BubbleService::class.java
             ).apply {
                 putExtra(EXTRA_MESSAGE, message) // Pass the message to onStartCommand
             }
