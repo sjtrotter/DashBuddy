@@ -1,11 +1,10 @@
 package cloud.trotter.dashbuddy.test
 
 import cloud.trotter.dashbuddy.services.accessibility.UiNode
+import java.lang.reflect.Field
 
 object LogToUiNodeParser {
 
-    // Regex to capture indentation and the attributes inside UiNode(...)
-    // Matches: "  UiNode(text='...', id=..., class=...)"
     private val nodeRegex = Regex("""^(\s*)UiNode\((.*)\)$""")
 
     fun parseLog(logContent: String): UiNode? {
@@ -15,7 +14,7 @@ object LogToUiNodeParser {
         val rootLine = lines.first()
         val rootNode = parseLine(rootLine) ?: return null
 
-        // Stack to keep track of parents: Pair(IndentationLevel, Node)
+        // Stack: Pair(IndentLevel, Node)
         val stack = ArrayDeque<Pair<Int, UiNode>>()
         stack.addFirst(0 to rootNode)
 
@@ -24,18 +23,22 @@ object LogToUiNodeParser {
             val match = nodeRegex.find(line) ?: continue
 
             val indentSpaces = match.groupValues[1].length
-            val indentLevel = indentSpaces / 2 // Assuming 2 spaces per indent
+            val indentLevel = indentSpaces / 2
             val node = parseLine(line) ?: continue
 
-            // Pop stack until we find the parent (indent level < current)
+            // 1. Pop stack until we find the parent
             while (stack.isNotEmpty() && stack.first().first >= indentLevel) {
                 stack.removeFirst()
             }
 
+            // 2. Link Parent <-> Child
             val parent = stack.firstOrNull()?.second
-            parent?.children?.add(node)
-            // Note: We can't set node.parent because `val parent` is immutable in your data class
-            // unless you change it to `var`. For parsers, children list is usually enough.
+            if (parent != null) {
+                parent.children.add(node)
+
+                // --- CRITICAL FIX: Set the parent reference using Reflection ---
+                setParent(node, parent)
+            }
 
             stack.addFirst(indentLevel to node)
         }
@@ -43,26 +46,40 @@ object LogToUiNodeParser {
         return rootNode
     }
 
+    // Helper to set immutable 'val parent' using reflection
+    private fun setParent(child: UiNode, parent: UiNode) {
+        try {
+            val parentField: Field = UiNode::class.java.getDeclaredField("parent")
+            parentField.isAccessible = true
+            parentField.set(child, parent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Fallback: If reflection fails, tests relying on .parent will fail.
+        }
+    }
+
     private fun parseLine(line: String): UiNode? {
         val match = nodeRegex.find(line) ?: return null
         val attributesStr = match.groupValues[2]
-        // e.g. "text='So far', id=no_id, class=android.widget.TextView"
 
         var text: String? = null
         var desc: String? = null
         var className: String? = null
         var resourceId: String? = null
 
-        // Naive parsing of the comma-separated attributes
-        // (This might fail if text contains commas, but works for your log format)
-        val attributes = attributesStr.split(", ")
+        // Robust attribute parsing handling commas inside quotes
+        // We use a regex to split by ", " only if not inside single quotes
+        val attrRegex = Regex("""(\w+)=('.*?'|[^,]+)(?:,\s*|$)""")
 
-        for (attr in attributes) {
-            when {
-                attr.startsWith("text='") -> text = attr.removePrefix("text='").removeSuffix("'")
-                attr.startsWith("desc='") -> desc = attr.removePrefix("desc='").removeSuffix("'")
-                attr.startsWith("class=") -> className = attr.removePrefix("class=")
-                attr.startsWith("id=") -> resourceId = attr.removePrefix("id=")
+        attrRegex.findAll(attributesStr).forEach { matchResult ->
+            val key = matchResult.groupValues[1]
+            val value = matchResult.groupValues[2]
+
+            when (key) {
+                "text" -> text = value.removeSurrounding("'")
+                "desc" -> desc = value.removeSurrounding("'")
+                "class" -> className = value
+                "id" -> resourceId = value
             }
         }
 
@@ -71,7 +88,8 @@ object LogToUiNodeParser {
             contentDescription = desc,
             viewIdResourceName = resourceId,
             className = className,
-            originalNode = null // Null for tests!
+            originalNode = null,
+            // parent = null // Parent is set later via reflection
         )
     }
 }
