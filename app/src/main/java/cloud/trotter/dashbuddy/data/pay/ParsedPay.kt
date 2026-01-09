@@ -8,6 +8,10 @@ data class ParsedPay(
     val appPayComponents: List<ParsedPayItem>, // For "Base Pay", "Peak Pay", etc.
     val customerTips: List<ParsedPayItem>      // For tips, where .type is the store name
 ) {
+    val totalBasePay: Double
+        get() = appPayComponents.sumOf { it.amount }
+    val totalTip: Double
+        get() = customerTips.sumOf { it.amount }
     val total: Double
-        get() = (appPayComponents.sumOf { it.amount } + customerTips.sumOf { it.amount })
+        get() = this.totalBasePay + this.totalTip
 }
