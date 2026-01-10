@@ -1,3 +1,5 @@
+package cloud.trotter.dashbuddy.statev2.effects
+
 import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.statev2.StateManagerV2
 import kotlinx.coroutines.CoroutineScope
