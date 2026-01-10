@@ -5,45 +5,61 @@ import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
 import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 class IdleMapMatcher : ScreenMatcher {
 
-    override val targetScreen = Screen.MAIN_MAP_IDLE
+    private val tag = "IdleMapMatcher"
 
-    // Priority 1: Check this after high-priority screens (Offers, Nav),
-    // but before generic fallbacks.
+    override val targetScreen = Screen.MAIN_MAP_IDLE
     override val priority = 1
 
     override fun matches(context: StateContext): ScreenInfo? {
         val root = context.rootUiNode ?: return null
 
-        // --- 1. MATCHING LOGIC ---
+        // --- 1. NEGATIVE MATCHING (Safety Guards) ---
 
-        // Criterion A: Must have the "Dash" button.
-        // This distinguishes the map from the "Drawer" or "Schedule" screens.
-        val hasDashButton = root.findNode {
-            it.text.equals("Dash", ignoreCase = true)
+        // Safety Guard 1: "Return to dash"
+        // If this button is visible, we are definitely NOT idle, we are in an active dash
+        // (likely navigating menus).
+        val isReturnToDash = root.findNode {
+            it.text.equals("Return to dash", ignoreCase = true)
         } != null
 
-        // Criterion B: Must have standard map/nav elements.
-        // We check for the Side Menu (ID is preferred, Desc is fallback)
+        if (isReturnToDash) {
+            Log.v(tag, "Match failed: 'Return to dash' button detected (Active Dash).")
+            return null
+        }
+
+        // --- 2. POSITIVE MATCHING (Structural Fingerprint) ---
+
+        // Criterion A: Earnings/Time Mode Switcher.
+        // This is the strongest indicator of "Idle" state. It allows switching between
+        // "Earn by Time" and "Earn by Offer", which is impossible during an active dash.
+        val hasEarningsSwitcher = root.findNode {
+            it.contentDescription == "Earnings Mode Switcher"
+        } != null
+
+        Log.v(tag, "Criterion A (Has Earnings Switcher): $hasEarningsSwitcher")
+
+        // Criterion B: Side Menu.
+        // Standard navigation element on the main map.
         val hasSideMenu = root.findNode {
             it.viewIdResourceName?.endsWith("side_nav_compose_view") == true ||
                     it.contentDescription == "Side Menu"
         } != null
 
-        // Criterion C: Earnings/Time Mode Switcher must be present.
-        // This ensures the screen is fully loaded and we can parse the Dash Type.
-        val hasEarningsSwitcher = root.findNode {
-            it.contentDescription == "Earnings Mode Switcher"
-        } != null
+        Log.v(tag, "Criterion B (Has Side Menu): $hasSideMenu")
 
-        // If we don't have these core elements, we aren't on the Idle Map.
-        if (!hasDashButton || !hasSideMenu || !hasEarningsSwitcher) {
+        // We removed the brittle check for "Dash" button text.
+        // If we have the Switcher + Menu, we are almost certainly on the Idle Map.
+        if (!hasEarningsSwitcher || !hasSideMenu) {
+            Log.d(tag, "Match failed. Missing structural elements.")
             return null
         }
 
-        // --- 2. PARSING LOGIC ---
+        // --- 3. PARSING LOGIC ---
+        Log.d(tag, "Match success! Parsing dash details...")
 
         // Parse Dash Type (Per Offer vs Earn by Time)
         var dashType: DashType? = null
@@ -53,16 +69,24 @@ class IdleMapMatcher : ScreenMatcher {
             dashType = DashType.BY_TIME
         }
 
+        Log.v(tag, "Parsed DashType: $dashType")
+
         // Parse Zone Name
-        // Strategy: Find the ScrollView at the top, grab the first text inside it.
-        // (Based on your logs: ScrollView -> TextView("TX: North Central"))
+        // Strategy: Find the ScrollView at the top.
+        // We filter out common UI prompts to find the actual location text.
         val scrollView = root.findNode { it.className == "android.widget.ScrollView" }
 
         val zoneName = scrollView?.children?.firstOrNull {
-            it.className == "android.widget.TextView" && !it.text.isNullOrBlank()
+            it.className == "android.widget.TextView" &&
+                    !it.text.isNullOrBlank() &&
+                    it.text != "Schedule your dash for later" && !it.text.contains(
+                "full right now",
+                ignoreCase = true
+            ) && !it.text.contains("Start your scheduled dash", ignoreCase = true)
         }?.text
 
-        // --- 3. RETURN RESULT ---
+        Log.v(tag, "Parsed ZoneName: '$zoneName'")
+
         return ScreenInfo.IdleMap(
             screen = Screen.MAIN_MAP_IDLE,
             zoneName = zoneName,
