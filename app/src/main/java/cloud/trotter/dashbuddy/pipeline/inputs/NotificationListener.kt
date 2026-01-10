@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.services.notification
+package cloud.trotter.dashbuddy.pipeline.inputs
 
 import android.os.Build
 import android.service.notification.NotificationListenerService
@@ -10,7 +10,7 @@ import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.statev2.StateManagerV2
 import java.util.Date
 
-class NotificationWatcherService : NotificationListenerService() {
+class NotificationListener : NotificationListenerService() {
 
     private val tag = "NotificationWatcher"
 

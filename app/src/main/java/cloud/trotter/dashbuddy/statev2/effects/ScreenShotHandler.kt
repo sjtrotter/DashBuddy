@@ -18,7 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-object ScreenShot {
+object ScreenShotHandler {
 
     const val TAG = "ScreenShotEffect"
 

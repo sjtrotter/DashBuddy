@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.statev2.effects.DefaultEffectHandler
+import cloud.trotter.dashbuddy.statev2.effects.EffectHandler
 import kotlinx.coroutines.delay
 
 object StateManagerV2 {

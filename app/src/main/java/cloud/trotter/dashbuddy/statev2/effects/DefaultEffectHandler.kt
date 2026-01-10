@@ -7,7 +7,6 @@ import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
 import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.statev2.AppEffect
-import cloud.trotter.dashbuddy.statev2.EffectHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -37,7 +36,7 @@ class DefaultEffectHandler : EffectHandler {
             }
 
             is AppEffect.CaptureScreenshot -> {
-                ScreenShot.capture(scope, effect)
+                ScreenShotHandler.capture(scope, effect)
             }
 
             is AppEffect.PlayNotificationSound -> {
@@ -57,11 +56,11 @@ class DefaultEffectHandler : EffectHandler {
             }
 
             is AppEffect.StartOdometer -> {
-                OdometerEffect.startUp()
+                OdometerEffectHandler.startUp()
             }
 
             is AppEffect.StopOdometer -> {
-                OdometerEffect.shutDown()
+                OdometerEffectHandler.shutDown()
             }
 
             is AppEffect.EvaluateOffer -> {

@@ -1,5 +1,6 @@
-package cloud.trotter.dashbuddy.statev2
+package cloud.trotter.dashbuddy.statev2.effects
 
+import cloud.trotter.dashbuddy.statev2.AppEffect
 import kotlinx.coroutines.CoroutineScope
 
 /**

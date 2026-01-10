@@ -1,20 +1,21 @@
-package cloud.trotter.dashbuddy.services.accessibility
+package cloud.trotter.dashbuddy.pipeline.inputs
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.log.Logger as Log
+import cloud.trotter.dashbuddy.log.Logger
+import cloud.trotter.dashbuddy.services.accessibility.EventHandler
 
-class DashBuddyAccessibility : AccessibilityService() {
+class AccessibilityListener : AccessibilityService() {
 
     private lateinit var eventHandler: EventHandler
     private val tag = "DashBuddyAccessibility"
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(tag, "Accessibility service created")
+        Logger.d(tag, "Accessibility service created")
         eventHandler = EventHandler
     }
 
@@ -24,7 +25,7 @@ class DashBuddyAccessibility : AccessibilityService() {
 
         val validPackages = setOf("com.doordash.driverapp")
         if (event.packageName?.toString() !in validPackages) {
-            Log.d(tag, "Ignoring event from ${event.packageName}")
+            Logger.d(tag, "Ignoring event from ${event.packageName}")
             return
         }
 
@@ -37,12 +38,12 @@ class DashBuddyAccessibility : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        Log.d(tag, "Accessibility service interrupted")
+        Logger.d(tag, "Accessibility service interrupted")
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(tag, "Accessibility service destroyed")
+        Logger.d(tag, "Accessibility service destroyed")
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -56,6 +57,6 @@ class DashBuddyAccessibility : AccessibilityService() {
         eventHandler.initializeStateManager()
         eventHandler.setServiceInstance(this)
 
-        Log.d(tag, "Accessibility service connected")
+        Logger.d(tag, "Accessibility service connected")
     }
 }

@@ -6,7 +6,7 @@ import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 
-object OdometerEffect {
+object OdometerEffectHandler {
 
     private const val TAG = "OdometerEffect"
 
