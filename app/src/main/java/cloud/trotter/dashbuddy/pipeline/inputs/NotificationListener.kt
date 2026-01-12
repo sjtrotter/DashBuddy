@@ -5,10 +5,8 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.log.Logger
+import cloud.trotter.dashbuddy.pipeline.Pipeline
 import cloud.trotter.dashbuddy.statev2.model.NotificationInfo
-import cloud.trotter.dashbuddy.statev2.StateManagerV2
-import cloud.trotter.dashbuddy.statev2.event.NotificationEvent
-import java.util.Date
 
 class NotificationListener : NotificationListenerService() {
 
@@ -46,14 +44,8 @@ class NotificationListener : NotificationListenerService() {
             timestamp = sbn.postTime
         )
 
-        // 4. Dispatch to V2 State Machine
-        // We create a Context that effectively says "The screen didn't change, but a notification arrived"
-        val stateEvent = NotificationEvent(
-            timestamp = Date().time,
-            notification = info,
-        )
-
-        StateManagerV2.dispatch(stateEvent)
+        // 4. Input to pipeline
+        Pipeline.onNotificationPosted(info)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {

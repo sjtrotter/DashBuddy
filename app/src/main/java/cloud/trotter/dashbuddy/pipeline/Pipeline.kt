@@ -6,25 +6,23 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.filters.EventDebouncer
+import cloud.trotter.dashbuddy.pipeline.filters.ScreenDiffer
 import cloud.trotter.dashbuddy.pipeline.processing.StateContextFactory
-import cloud.trotter.dashbuddy.statev2.model.NotificationInfo
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.statev2.StateManagerV2
+import cloud.trotter.dashbuddy.statev2.model.NotificationInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.log.Logger as Log
 
-/**
- * The Central Nervous System.
- * All inputs (Screen updates, Notifications) must pass through here.
- */
 object Pipeline {
 
     private const val TAG = "Pipeline"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    // --- 1. ACCESSIBILITY STREAM ---
+    private val differ = ScreenDiffer()
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private val debouncer = EventDebouncer(delayMs = 50L) { event, rootNode ->
@@ -51,33 +49,50 @@ object Pipeline {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
-    private fun processAccessibility(event: AccessibilityEvent, rootNode: AccessibilityNodeInfo) {
+    fun onNotificationPosted(info: NotificationInfo) {
         scope.launch {
             try {
-                // Transform & Dispatch
-                val context = StateContextFactory.createFromAccessibility(rootNode)
-                if (context != null) {
-                    StateManagerV2.dispatch(context)
-                }
+                Log.d(TAG, "Notification: ${info.title}")
+                val event = StateContextFactory.createFromNotification(info)
+                StateManagerV2.dispatch(event)
             } catch (e: Exception) {
-                Log.e(TAG, "Accessibility Pipeline Error", e)
+                Log.e(TAG, "Notification Pipeline Error", e)
             }
         }
     }
 
-    // --- 2. NOTIFICATION STREAM ---
-
-    fun onNotificationPosted(info: NotificationInfo) {
-        // Notifications are low frequency, so we don't need to debounce them.
-        // We just dispatch them immediately on the background thread.
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    private fun processAccessibility(event: AccessibilityEvent, rootNode: AccessibilityNodeInfo) {
         scope.launch {
             try {
-                Log.d(TAG, "Pipeline received notification: ${info.title}")
-                val context = StateContextFactory.createFromNotification(info)
-                StateManagerV2.dispatch(context)
+                // 1. CONVERT (Fast)
+                // We create the UiNode wrapper immediately.
+                Log.d(TAG, "Processing Accessibility Event: ${event.eventType}")
+                val uiNode = UiNode.from(rootNode) ?: return@launch
+
+                // 2. DIFF (Optimization)
+                // We check the hash of the UiNode BEFORE we do any heavy recognition logic.
+                val isClick = event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
+                Log.d(TAG, "Is Click: $isClick")
+
+                if (!isClick && !differ.hasChanged(uiNode)) {
+                    // Screen is identical to the last one processed.
+                    // Stop here to save CPU and Battery.
+                    Log.d(TAG, "Screen is identical to the last one processed. Skipping...")
+                    return@launch
+                }
+
+                // 3. PROCESS (Heavy)
+                // Now that we know it's new, we ask the Factory to analyze it.
+                val updateEvent = StateContextFactory.createFromAccessibility(uiNode)
+
+                Log.i(TAG, "Sending event to StateManager: ${updateEvent.screenInfo?.screen}")
+
+                // 4. DISPATCH
+                StateManagerV2.dispatch(updateEvent)
+
             } catch (e: Exception) {
-                Log.e(TAG, "Notification Pipeline Error", e)
+                Log.e(TAG, "Accessibility Pipeline Error", e)
             }
         }
     }

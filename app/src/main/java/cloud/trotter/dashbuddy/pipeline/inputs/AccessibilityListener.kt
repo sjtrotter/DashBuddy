@@ -1,22 +1,24 @@
 package cloud.trotter.dashbuddy.pipeline.inputs
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Intent
+//import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.log.Logger
-import cloud.trotter.dashbuddy.services.accessibility.EventHandler
+import cloud.trotter.dashbuddy.pipeline.Pipeline
+
+//import cloud.trotter.dashbuddy.services.accessibility.EventHandler
 
 class AccessibilityListener : AccessibilityService() {
 
-    private lateinit var eventHandler: EventHandler
+    //    private lateinit var eventHandler: EventHandler
     private val tag = "DashBuddyAccessibility"
 
     override fun onCreate() {
         super.onCreate()
         Logger.d(tag, "Accessibility service created")
-        eventHandler = EventHandler
+//        eventHandler = EventHandler
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -29,13 +31,15 @@ class AccessibilityListener : AccessibilityService() {
             return
         }
 
-        eventHandler.handleEvent(event, this)
+        Pipeline.onAccessibilityEvent(event, this)
+
+//        eventHandler.handleEvent(event, this)
     }
 
-    override fun onUnbind(intent: Intent?): Boolean {
-        eventHandler.clearServiceInstance()
-        return super.onUnbind(intent)
-    }
+//    override fun onUnbind(intent: Intent?): Boolean {
+//        eventHandler.clearServiceInstance()
+//        return super.onUnbind(intent)
+//    }
 
     override fun onInterrupt() {
         Logger.d(tag, "Accessibility service interrupted")
@@ -54,8 +58,8 @@ class AccessibilityListener : AccessibilityService() {
         // We now rely entirely on accessibility_service_config.xml.
         // This ensures flags like flagReportViewIds are not overwritten.
 
-        eventHandler.initializeStateManager()
-        eventHandler.setServiceInstance(this)
+//        eventHandler.initializeStateManager()
+//        eventHandler.setServiceInstance(this)
 
         Logger.d(tag, "Accessibility service connected")
     }
