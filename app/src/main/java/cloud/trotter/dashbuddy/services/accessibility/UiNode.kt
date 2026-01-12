@@ -102,28 +102,25 @@ data class UiNode(
      * It ignores mutable text/descriptions but respects ClassName, ID, and Hierarchy.
      * Use this to detect if the "Layout" has changed.
      */
-    fun getStructuralHashCode(): Int {
+    val structuralHash: Int by lazy {
         var result = className?.hashCode() ?: 0
         result = 31 * result + (viewIdResourceName?.hashCode() ?: 0)
-        // We intentionally IGNORE text, contentDescription, etc. for the structural hash
-
-        // Recursively add children structure
         for (child in children) {
-            result = 31 * result + child.getStructuralHashCode()
+            result = 31 * result + child.structuralHash
         }
-        return result
+        result
     }
 
     /** * Generates a hash code based on Content (Text).
      * Use this to detect if the "Data" on the screen has changed.
      */
-    fun getContentHashCode(): Int {
+    val contentHash: Int by lazy {
         var result = text?.hashCode() ?: 0
         result = 31 * result + (contentDescription?.hashCode() ?: 0)
         for (child in children) {
-            result = 31 * result + child.getContentHashCode()
+            result = 31 * result + child.contentHash
         }
-        return result
+        result
     }
 
     val allText: List<String> by lazy {

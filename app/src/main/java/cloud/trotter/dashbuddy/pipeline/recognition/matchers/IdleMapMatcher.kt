@@ -3,8 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class IdleMapMatcher : ScreenMatcher {
@@ -14,15 +14,13 @@ class IdleMapMatcher : ScreenMatcher {
     override val targetScreen = Screen.MAIN_MAP_IDLE
     override val priority = 1
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. NEGATIVE MATCHING (Safety Guards) ---
 
         // Safety Guard 1: "Return to dash"
         // If this button is visible, we are definitely NOT idle, we are in an active dash
         // (likely navigating menus).
-        val isReturnToDash = root.findNode {
+        val isReturnToDash = node.findNode {
             it.text.equals("Return to dash", ignoreCase = true)
         } != null
 
@@ -36,7 +34,7 @@ class IdleMapMatcher : ScreenMatcher {
         // Criterion A: Earnings/Time Mode Switcher.
         // This is the strongest indicator of "Idle" state. It allows switching between
         // "Earn by Time" and "Earn by Offer", which is impossible during an active dash.
-        val hasEarningsSwitcher = root.findNode {
+        val hasEarningsSwitcher = node.findNode {
             it.contentDescription == "Earnings Mode Switcher"
         } != null
 
@@ -44,7 +42,7 @@ class IdleMapMatcher : ScreenMatcher {
 
         // Criterion B: Side Menu.
         // Standard navigation element on the main map.
-        val hasSideMenu = root.findNode {
+        val hasSideMenu = node.findNode {
             it.viewIdResourceName?.endsWith("side_nav_compose_view") == true ||
                     it.contentDescription == "Side Menu"
         } != null
@@ -63,9 +61,9 @@ class IdleMapMatcher : ScreenMatcher {
 
         // Parse Dash Type (Per Offer vs Earn by Time)
         var dashType: DashType? = null
-        if (root.findNode { it.contentDescription == "Time mode off" } != null) {
+        if (node.findNode { it.contentDescription == "Time mode off" } != null) {
             dashType = DashType.PER_OFFER
-        } else if (root.findNode { it.contentDescription == "Time mode on" } != null) {
+        } else if (node.findNode { it.contentDescription == "Time mode on" } != null) {
             dashType = DashType.BY_TIME
         }
 
@@ -74,7 +72,7 @@ class IdleMapMatcher : ScreenMatcher {
         // Parse Zone Name
         // Strategy: Find the ScrollView at the top.
         // We filter out common UI prompts to find the actual location text.
-        val scrollView = root.findNode { it.className == "android.widget.ScrollView" }
+        val scrollView = node.findNode { it.className == "android.widget.ScrollView" }
 
         val zoneName = scrollView?.children?.firstOrNull {
             it.className == "android.widget.TextView" &&

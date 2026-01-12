@@ -224,8 +224,8 @@ object EventHandler {
 //        Log.d(TAG, "UI Node Tree: $uiNodeTree")
 
         // 2. Calculate Fingerprint from the Tree
-        val currentStructureHash = uiNodeTree.getStructuralHashCode()
-        val currentContentHash = uiNodeTree.getContentHashCode()
+        val currentStructureHash = uiNodeTree.structuralHash
+        val currentContentHash = uiNodeTree.contentHash
 
         Log.d(
             TAG,

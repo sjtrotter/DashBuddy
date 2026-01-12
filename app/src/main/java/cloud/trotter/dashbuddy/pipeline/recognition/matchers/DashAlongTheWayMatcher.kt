@@ -2,8 +2,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 
 class DashAlongTheWayMatcher : ScreenMatcher {
 
@@ -13,24 +13,22 @@ class DashAlongTheWayMatcher : ScreenMatcher {
     // Check this BEFORE the generic WaitingForOffer matcher
     override val priority = 2
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. ID-BASED MATCHING ---
         // Using the "Smoking Gun" IDs from your log
 
         // A. Specific Title: "We'll look for orders along the way"
-        val hasAlongWayTitle = root.hasNode {
+        val hasAlongWayTitle = node.hasNode {
             it.viewIdResourceName?.endsWith("bottom_view_info_ctd_v2_title") == true
         }
 
         // B. "Navigate" Button
-        val hasNavigateButton = root.hasNode {
+        val hasNavigateButton = node.hasNode {
             it.viewIdResourceName?.endsWith("navigate_button") == true
         }
 
         // C. Fallback: Spot Saved Info (if title varies)
-        val hasSpotSavedInfo = root.hasNode {
+        val hasSpotSavedInfo = node.hasNode {
             it.viewIdResourceName?.endsWith("bottom_view_info_title") == true
         }
 

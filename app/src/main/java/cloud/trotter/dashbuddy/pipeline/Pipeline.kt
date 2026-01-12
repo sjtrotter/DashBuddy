@@ -37,13 +37,13 @@ object Pipeline {
         val rootNode = service.rootInActiveWindow ?: return
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 debouncer.cancel()
                 processAccessibility(event, rootNode)
             }
 
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                 debouncer.submit(event, rootNode)
             }
 

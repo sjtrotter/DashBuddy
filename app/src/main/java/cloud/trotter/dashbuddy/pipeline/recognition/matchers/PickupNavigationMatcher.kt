@@ -3,8 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 
 class PickupNavigationMatcher : ScreenMatcher {
 
@@ -13,11 +13,9 @@ class PickupNavigationMatcher : ScreenMatcher {
     // High priority to catch this overlay state
     override val priority = 10
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // 1. ANCHOR: Find the Navigation Title ("Heading to...")
-        val navTitleNode = root.findNode {
+        val navTitleNode = node.findNode {
             it.viewIdResourceName?.endsWith("bottom_sheet_task_title") == true
         } ?: return null
 
@@ -31,7 +29,7 @@ class PickupNavigationMatcher : ScreenMatcher {
         }
 
         // Optional double-check: Look for "Pick up by" vs "Deliver by"
-        val timeNode = root.findNode {
+        val timeNode = node.findNode {
             it.viewIdResourceName?.endsWith("bottom_sheet_task_arrive_by") == true
         }
         if (timeNode?.text?.contains("Deliver by", ignoreCase = true) == true) {
@@ -45,9 +43,9 @@ class PickupNavigationMatcher : ScreenMatcher {
 
         // Address: Extract line 1 (and 2 if exists)
         val address1 =
-            root.findNode { it.viewIdResourceName?.endsWith("bottom_sheet_address_line_1") == true }?.text
+            node.findNode { it.viewIdResourceName?.endsWith("bottom_sheet_address_line_1") == true }?.text
         val address2 =
-            root.findNode { it.viewIdResourceName?.endsWith("bottom_sheet_address_line_2") == true }?.text
+            node.findNode { it.viewIdResourceName?.endsWith("bottom_sheet_address_line_2") == true }?.text
 
         val fullAddress = listOfNotNull(address1, address2)
             .filter { it.isNotBlank() }

@@ -2,8 +2,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 
 class ScheduleMatcher : ScreenMatcher {
 
@@ -12,23 +12,21 @@ class ScheduleMatcher : ScreenMatcher {
     // Priority 5: Lower than critical overlays (Offers), but specific enough to check before generic fallbacks.
     override val priority = 5
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // 1. Check for the Main Title "Schedule"
         // It appears as a TextView near the top
-        val hasTitle = root.findNode {
+        val hasTitle = node.findNode {
             it.text.equals("Schedule", ignoreCase = true) &&
                     it.className == "android.widget.TextView"
         } != null
 
         // 2. Check for the Tabs: "Available" and "Scheduled"
         // These are unique to this view.
-        val hasAvailableTab = root.findNode {
+        val hasAvailableTab = node.findNode {
             it.text.equals("Available", ignoreCase = true)
         } != null
 
-        val hasScheduledTab = root.findNode {
+        val hasScheduledTab = node.findNode {
             it.text.equals("Scheduled", ignoreCase = true)
         } != null
 

@@ -3,8 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 
 class PickupShoppingMatcher : ScreenMatcher {
 
@@ -14,12 +14,10 @@ class PickupShoppingMatcher : ScreenMatcher {
     // Priority 8: Similar to other Pickup detail screens
     override val priority = 8
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // 1. MATCHING: Main Title "Shop and Deliver"
         // This is a very strong signal.
-        val hasTitle = root.findNode {
+        val hasTitle = node.findNode {
             it.text.equals("Shop and Deliver", ignoreCase = true)
         } != null
 
@@ -27,12 +25,12 @@ class PickupShoppingMatcher : ScreenMatcher {
 
         // 2. MATCHING: Tabs ("To shop", "Done")
         // We look for the tab layout container or the specific tab texts.
-        val hasTabs = root.findNode {
+        val hasTabs = node.findNode {
             it.viewIdResourceName?.endsWith("tab_layout") == true
         } != null
 
         // Alternative Check: If IDs change, check for text "To shop"
-        val hasToShopText = root.findNode {
+        val hasToShopText = node.findNode {
             it.text?.startsWith("To shop", ignoreCase = true) == true
         } != null
 

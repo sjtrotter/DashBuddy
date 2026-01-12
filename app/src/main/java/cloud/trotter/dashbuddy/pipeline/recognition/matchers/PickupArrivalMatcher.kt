@@ -3,8 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 
 class PickupArrivalMatcher : ScreenMatcher {
@@ -15,11 +15,9 @@ class PickupArrivalMatcher : ScreenMatcher {
     // Priority 8 (Same as Pre-Arrival, they are mutually exclusive)
     override val priority = 8
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // 1. PRIMARY MATCHING: "Order for" + Customer Name
-        val labelNode = root.findNode {
+        val labelNode = node.findNode {
             it.viewIdResourceName?.endsWith("customer_name_label") == true &&
                     it.text?.contains("Order for", true) == true
         }
@@ -28,7 +26,7 @@ class PickupArrivalMatcher : ScreenMatcher {
 
         // 2. CONFIRMATION: Check Button Text
         // Should say "Confirm pickup", "Continue with pickup", or "Start pickup"
-        val buttonTextNode = root.findNode {
+        val buttonTextNode = node.findNode {
             it.viewIdResourceName?.endsWith("textView_prism_button_title") == true
         }
         val buttonText = buttonTextNode?.text ?: ""
@@ -43,7 +41,7 @@ class PickupArrivalMatcher : ScreenMatcher {
 
         // Customer Name (Stable ID)
         val customerNameNode =
-            root.findNode { it.viewIdResourceName?.endsWith("customer_name") == true }
+            node.findNode { it.viewIdResourceName?.endsWith("customer_name") == true }
         val rawCustomerName = customerNameNode?.text
         val customerHash = if (!rawCustomerName.isNullOrBlank()) {
             UtilityFunctions.generateSha256(rawCustomerName)
@@ -53,7 +51,7 @@ class PickupArrivalMatcher : ScreenMatcher {
         // We try to grab it, but we know it might be "Parking instructions".
         // Logic: If the text is short and doesn't contain "instructions", it's likely the store.
         val instructionTitleNode =
-            root.findNode { it.viewIdResourceName?.endsWith("instructions_title") == true }
+            node.findNode { it.viewIdResourceName?.endsWith("instructions_title") == true }
         val rawTitle = instructionTitleNode?.text
 
         val storeNameCandidate = if (

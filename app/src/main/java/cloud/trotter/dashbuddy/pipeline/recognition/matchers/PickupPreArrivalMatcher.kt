@@ -3,8 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 
 class PickupPreArrivalMatcher : ScreenMatcher {
 
@@ -13,14 +13,12 @@ class PickupPreArrivalMatcher : ScreenMatcher {
     // Priority 8: Check this after Navigation (10), but before Generic Map (1)
     override val priority = 8
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. PRIMARY MATCHING (Fail Fast) ---
 
         // Check Label: "Pickup from"
         // We strict match this to ensure we aren't on a Dropoff screen (which says "Delivery for")
-        val labelNode = root.findNode {
+        val labelNode = node.findNode {
             it.viewIdResourceName?.endsWith("user_name_label") == true &&
                     it.text?.contains("Pickup from", true) == true
         }
@@ -31,7 +29,7 @@ class PickupPreArrivalMatcher : ScreenMatcher {
 
         // Check Button Text: Look for the specific text ID
         // It should contain "Directions" OR "Arrived at store"
-        val buttonTextNode = root.findNode {
+        val buttonTextNode = node.findNode {
             it.viewIdResourceName?.endsWith("textView_prism_button_title") == true
         }
         val buttonText = buttonTextNode?.text ?: ""
@@ -47,14 +45,14 @@ class PickupPreArrivalMatcher : ScreenMatcher {
 
         // Store Name (ID: user_name)
         // Since we confirmed the "Pickup from" label exists, searching for 'user_name' is safe.
-        val storeNameNode = root.findNode { it.viewIdResourceName?.endsWith("user_name") == true }
+        val storeNameNode = node.findNode { it.viewIdResourceName?.endsWith("user_name") == true }
         val storeName = storeNameNode?.text
 
         // Address (IDs: address_line_1, address_line_2)
         val address1 =
-            root.findNode { it.viewIdResourceName?.endsWith("address_line_1") == true }?.text
+            node.findNode { it.viewIdResourceName?.endsWith("address_line_1") == true }?.text
         val address2 =
-            root.findNode { it.viewIdResourceName?.endsWith("address_line_2") == true }?.text
+            node.findNode { it.viewIdResourceName?.endsWith("address_line_2") == true }?.text
 
         // Validation: If vital data is missing, we shouldn't match
         if (storeName.isNullOrBlank()) {
@@ -67,7 +65,7 @@ class PickupPreArrivalMatcher : ScreenMatcher {
         val cleanAddress1 = if (address1.equals(storeName, ignoreCase = true)) null else address1
 
         val fullAddress = listOfNotNull(cleanAddress1, address2)
-            .filter { !it.isNullOrBlank() }
+            .filter { it.isNotBlank() }
             .joinToString(", ")
 
         // Validation: Ensure we actually have an address

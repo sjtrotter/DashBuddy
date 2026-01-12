@@ -2,8 +2,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 
 class AppStartupMatcher : ScreenMatcher {
 
@@ -11,11 +11,10 @@ class AppStartupMatcher : ScreenMatcher {
 
     override val priority = 20
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
+    override fun matches(node: UiNode): ScreenInfo? {
 
         // 1. Check for "Starting..." text
-        val hasStartingText = root.findNode {
+        val hasStartingText = node.findNode {
             it.text == "Starting…" && it.className == "android.widget.TextView"
         } != null
 
@@ -23,7 +22,7 @@ class AppStartupMatcher : ScreenMatcher {
         if (!hasStartingText) return null
 
         // 2. Check for "Cancel" button
-        val hasCancelButton = root.findNode {
+        val hasCancelButton = node.findNode {
             it.text == "Cancel" && it.className == "android.widget.Button"
         } != null
 

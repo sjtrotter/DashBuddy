@@ -3,8 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import cloud.trotter.dashbuddy.log.Logger as Log
 
@@ -16,12 +16,10 @@ class DropoffNavigationMatcher : ScreenMatcher {
     // High priority to catch this before generic maps
     override val priority = 10
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // 1. ANCHOR: Find the Navigation Title
         // Common ID: bottom_sheet_task_title
-        val navTitleNode = root.findNode {
+        val navTitleNode = node.findNode {
             it.viewIdResourceName?.endsWith("bottom_sheet_task_title") == true
         } ?: return null
 
@@ -47,9 +45,9 @@ class DropoffNavigationMatcher : ScreenMatcher {
 
         // Address: Line 1 + Line 2
         val address1 =
-            root.findNode { it.viewIdResourceName?.endsWith("bottom_sheet_address_line_1") == true }?.text
+            node.findNode { it.viewIdResourceName?.endsWith("bottom_sheet_address_line_1") == true }?.text
         val address2 =
-            root.findNode { it.viewIdResourceName?.endsWith("bottom_sheet_address_line_2") == true }?.text
+            node.findNode { it.viewIdResourceName?.endsWith("bottom_sheet_address_line_2") == true }?.text
 
         val rawAddress = listOfNotNull(address1, address2)
             .filter { it.isNotBlank() }

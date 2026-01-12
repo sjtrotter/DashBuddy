@@ -3,9 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
-import cloud.trotter.dashbuddy.util.UtilityFunctions // Assuming this is an object or class
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.util.UtilityFunctions
 import cloud.trotter.dashbuddy.log.Logger as Log
 import java.util.regex.Pattern
 
@@ -19,14 +18,12 @@ class DashSummaryMatcher : ScreenMatcher {
     private val offersPattern =
         Pattern.compile("(\\d+)\\s*out of\\s*(\\d+)", Pattern.CASE_INSENSITIVE)
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. MATCHING LOGIC ---
 
-        val hasTitle = root.findNode { it.text.equals("Dash summary", ignoreCase = true) } != null
+        val hasTitle = node.findNode { it.text.equals("Dash summary", ignoreCase = true) } != null
 
-        val hasDoneButton = root.findNode {
+        val hasDoneButton = node.findNode {
             it.viewIdResourceName?.endsWith("textView_prism_button_title") == true &&
                     it.text.equals("Done", ignoreCase = true)
         } != null
@@ -35,7 +32,7 @@ class DashSummaryMatcher : ScreenMatcher {
 
         // --- 2. PARSING LOGIC ---
 
-        val allNodes = root.flatten()
+        val allNodes = node.flatten()
 
         var totalEarnings: Double? = null
         var weeklyEarnings: Double? = null
@@ -87,7 +84,7 @@ class DashSummaryMatcher : ScreenMatcher {
         }
 
         // --- 3. CALCULATE START TIME ---
-        val startTime = context.timestamp - durationMillis
+        val startTime = System.currentTimeMillis() - durationMillis
 
         return ScreenInfo.DashSummary(
             screen = Screen.DASH_SUMMARY_SCREEN,

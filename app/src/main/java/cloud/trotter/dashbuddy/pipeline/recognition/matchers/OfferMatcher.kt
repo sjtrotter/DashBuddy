@@ -9,8 +9,8 @@ import cloud.trotter.dashbuddy.data.order.OrderType
 import cloud.trotter.dashbuddy.data.order.ParsedOrder
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import cloud.trotter.dashbuddy.log.Logger as Log
 
@@ -20,18 +20,16 @@ class OfferMatcher : ScreenMatcher {
     override val priority = 20
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. FAIL FAST CHECKS ---
-        if (root.findNode { it.viewIdResourceName?.endsWith("progress_bar") == true } != null) return null
-        if (root.findNode { it.text?.contains("sure you want to decline", true) == true } != null) {
+        if (node.findNode { it.viewIdResourceName?.endsWith("progress_bar") == true } != null) return null
+        if (node.findNode { it.text?.contains("sure you want to decline", true) == true } != null) {
             return ScreenInfo.Simple(Screen.OFFER_POPUP_CONFIRM_DECLINE)
         }
 
         // Must have Decline AND (Accept OR Add to route)
-        val hasDecline = root.findNode { it.text.equals("Decline", ignoreCase = true) } != null
-        val hasAccept = root.findNode {
+        val hasDecline = node.findNode { it.text.equals("Decline", ignoreCase = true) } != null
+        val hasAccept = node.findNode {
             val txt = it.text
             txt.equals("Accept", true) || txt.equals("Add to route", true)
         } != null
@@ -44,10 +42,10 @@ class OfferMatcher : ScreenMatcher {
         var timeText: String? = null
 
         // Scan text_field IDs (Standard UI)
-        val textFields = root.findNodes { it.viewIdResourceName?.endsWith("text_field") == true }
+        val textFields = node.findNodes { it.viewIdResourceName?.endsWith("text_field") == true }
 
         // Fallback: Scan all text if IDs missing (Legacy support)
-        val headerNodes = textFields.ifEmpty { root.findNodes { !it.text.isNullOrEmpty() } }
+        val headerNodes = textFields.ifEmpty { node.findNodes { !it.text.isNullOrEmpty() } }
 
         for (node in headerNodes) {
             val txt = node.text ?: continue
@@ -76,7 +74,7 @@ class OfferMatcher : ScreenMatcher {
 
         // Find all "display_name" nodes. These are strictly Stores or "Customer dropoff".
         val displayNodes =
-            root.findNodes { it.viewIdResourceName?.endsWith("display_name") == true }
+            node.findNodes { it.viewIdResourceName?.endsWith("display_name") == true }
 
         for (node in displayNodes) {
             val primaryText = node.text ?: continue
@@ -193,7 +191,7 @@ class OfferMatcher : ScreenMatcher {
             itemCount = orders.sumOf { it.itemCount },
             dueByTimeText = timeText,
             dueByTimeMillis = dueByTimeMillis,
-            badges = OfferBadge.findAllBadgesInScreen(context.rootNodeTexts), // Global badges
+            badges = OfferBadge.findAllBadgesInScreen(node.allText), // Global badges
             orders = orders,
             rawExtractedTexts = "ID-Parsed"
         )

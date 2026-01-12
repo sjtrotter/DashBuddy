@@ -2,35 +2,33 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.state.StateContext
 
 class DashPausedMatcher : ScreenMatcher {
 
     override val targetScreen = Screen.DASH_PAUSED
     override val priority = 10 // High priority (Specific state)
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. MATCHING LOGIC ---
         // We need strong anchors to confirm we are paused.
 
         // Anchor A: The specific Title
-        val hasTitle = root.findNode {
+        val hasTitle = node.findNode {
             it.text.equals("Dash Paused", ignoreCase = true)
         } != null
 
         // Anchor B: The Resume Button (ID is very reliable here)
-        val hasResumeButton = root.findNode {
+        val hasResumeButton = node.findNode {
             it.viewIdResourceName?.endsWith("resumeButton") == true &&
                     it.contentDescription.equals("Resume dash", ignoreCase = true)
         } != null
 
         // Anchor C: The Timer Node (ID matches your log)
         val progressNumberNode =
-            root.findNode { it.viewIdResourceName?.endsWith("progress_number") == true }
+            node.findNode { it.viewIdResourceName?.endsWith("progress_number") == true }
 
         Log.d(
             "DashPausedMatcher",

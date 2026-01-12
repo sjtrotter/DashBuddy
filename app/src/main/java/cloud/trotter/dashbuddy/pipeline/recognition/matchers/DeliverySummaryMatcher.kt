@@ -5,8 +5,7 @@ import cloud.trotter.dashbuddy.data.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenMatcher
-import cloud.trotter.dashbuddy.state.StateContext
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import cloud.trotter.dashbuddy.log.Logger as Log
 
@@ -19,15 +18,13 @@ class DeliverySummaryMatcher : ScreenMatcher {
     override val targetScreen = Screen.DELIVERY_SUMMARY_EXPANDED
     override val priority = 10
 
-    override fun matches(context: StateContext): ScreenInfo? {
-        val root = context.rootUiNode ?: return null
-
+    override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. ANCHORS (Is this the Summary Screen?) ---
-        val hasOfferTitle = root.findNode {
+        val hasOfferTitle = node.findNode {
             it.text.equals("This offer", ignoreCase = true)
         } != null
 
-        val hasContinueBtn = root.findNode {
+        val hasContinueBtn = node.findNode {
             it.text.equals("Continue dashing", ignoreCase = true)
         } != null
 
@@ -38,9 +35,9 @@ class DeliverySummaryMatcher : ScreenMatcher {
         // --- 2. STATE CHECK (Collapsed vs Expanded) ---
 
         // We look for the section headers that appear only when expanded
-        val doorDashPayHeader = root.findNode { it.text.equals("DoorDash pay", ignoreCase = true) }
+        val doorDashPayHeader = node.findNode { it.text.equals("DoorDash pay", ignoreCase = true) }
         val customerTipsHeader =
-            root.findNode { it.text.equals("Customer tips", ignoreCase = true) }
+            node.findNode { it.text.equals("Customer tips", ignoreCase = true) }
 
         val isExpanded = doorDashPayHeader != null && customerTipsHeader != null
 
@@ -52,7 +49,7 @@ class DeliverySummaryMatcher : ScreenMatcher {
             )
 
             // 1. Find the "This offer" text anchor
-            val offerTitleNode = root.findNode {
+            val offerTitleNode = node.findNode {
                 it.text.equals("This offer", ignoreCase = true)
             }
 
