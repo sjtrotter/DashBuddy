@@ -1,10 +1,10 @@
 package cloud.trotter.dashbuddy.statev2.sidechannels
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
-import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.statev2.AppEffect
 import cloud.trotter.dashbuddy.statev2.AppStateV2
 import cloud.trotter.dashbuddy.statev2.Reducer
+import cloud.trotter.dashbuddy.statev2.event.NotificationEvent
 import cloud.trotter.dashbuddy.statev2.reducers.ReducerUtils
 
 object NotificationHandler {
@@ -14,9 +14,9 @@ object NotificationHandler {
 
     fun handle(
         currentState: AppStateV2,
-        context: StateContext
-    ): Reducer.Transition? {
-        val notif = context.notification ?: return null
+        stateEvent: NotificationEvent,
+    ): Reducer.Transition {
+        val notif = stateEvent.notification
         val fullText = notif.toFullString()
 
         val effects = mutableListOf<AppEffect>()
@@ -35,10 +35,6 @@ object NotificationHandler {
         if (fullText.contains("tip", true) && fullText.contains("added", true)) {
             effects.add(AppEffect.ProcessTipNotification(fullText))
         }
-
-        // Return null if we ignored it (allows Reducer to proceed to Screen logic if needed,
-        // though usually notification events are standalone)
-        if (effects.isEmpty()) return null
 
         return Reducer.Transition(currentState, effects)
     }

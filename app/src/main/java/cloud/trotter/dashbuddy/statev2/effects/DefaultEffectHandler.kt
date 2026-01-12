@@ -48,7 +48,7 @@ class DefaultEffectHandler : EffectHandler {
             }
 
             is AppEffect.ScheduleTimeout -> {
-                TimeoutHandler.schedule(scope, effect.timestamp)
+                TimeoutHandler.schedule(scope, effect.timestamp, type = effect.type)
             }
 
             is AppEffect.CancelTimeout -> {

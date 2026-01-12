@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.statev2
 
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.state.StateContext
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +14,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.statev2.effects.DefaultEffectHandler
 import cloud.trotter.dashbuddy.statev2.effects.EffectHandler
+import cloud.trotter.dashbuddy.statev2.event.StateEvent
 import kotlinx.coroutines.delay
 
 object StateManagerV2 {
@@ -46,7 +46,7 @@ object StateManagerV2 {
         )
         .create()
 
-    private val inputChannel = Channel<StateContext>(Channel.UNLIMITED)
+    private val inputChannel = Channel<StateEvent>(Channel.UNLIMITED)
 
     private val _state = MutableStateFlow<AppStateV2>(AppStateV2.Initializing)
     val state = _state.asStateFlow()
@@ -78,20 +78,18 @@ object StateManagerV2 {
                 state !is AppStateV2.PostDash
     }
 
-    fun dispatch(context: StateContext) {
-        if (context.screenInfo != null || context.notification != null) {
-            inputChannel.trySend(context)
-        }
+    fun dispatch(stateEvent: StateEvent) {
+            inputChannel.trySend(stateEvent)
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun startProcessor() {
         scope.launch {
-            for (context in inputChannel) {
+            for (stateEvent in inputChannel) {
                 val currentState = _state.value
 
                 // 1. Reduce
-                val transition = Reducer.reduce(currentState, context)
+                val transition = Reducer.reduce(currentState, stateEvent)
 
                 // 2. Update State
                 if (transition.newState != currentState) {

@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.statev2.reducers
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.statev2.AppEffect
 import cloud.trotter.dashbuddy.statev2.AppStateV2
 import cloud.trotter.dashbuddy.statev2.Reducer
@@ -40,8 +39,7 @@ object IdleReducer {
     // --- REDUCER (Behavior) ---
     fun reduce(
         state: AppStateV2.IdleOffline,
-        input: ScreenInfo,
-        context: StateContext
+        input: ScreenInfo
     ): Reducer.Transition? {
         return when (input) {
             is ScreenInfo.IdleMap -> {

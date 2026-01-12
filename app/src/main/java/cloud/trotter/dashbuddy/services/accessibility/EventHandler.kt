@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenRecognizerV2
 import cloud.trotter.dashbuddy.statev2.StateManagerV2
+import cloud.trotter.dashbuddy.statev2.event.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -279,8 +280,13 @@ object EventHandler {
         )
 
         Log.d(TAG, "Sending event to StateManager: ${finalContext.screenInfo?.screen}")
-//        StateManager.dispatchEvent(finalContext)
-        StateManagerV2.dispatch(finalContext)
+        StateManagerV2.dispatch(
+            ScreenUpdateEvent(
+                timestamp = Date().time,
+                odometer = finalContext.odometerReading,
+                screenInfo = finalContext.screenInfo
+            )
+        )
 
         lastDasherScreen = finalContext.screenInfo?.screen
         if (event == debouncedEvent) {
