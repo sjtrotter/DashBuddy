@@ -4,8 +4,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.services.accessibility.UiNode
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
-import cloud.trotter.dashbuddy.services.accessibility.notification.NotificationInfo
+import cloud.trotter.dashbuddy.statev2.model.NotificationInfo
 
 data class StateContext(
     val timestamp: Long = System.currentTimeMillis(),                                // When the event data was processed
@@ -19,7 +18,6 @@ data class StateContext(
     val sourceNode: AccessibilityNodeInfo? = null,      // The source node of the event (if any)
     val sourceClassName: CharSequence? = null,          // Class name of the view that fired the event
     val sourceNodeTexts: List<String> = emptyList(),    // Texts specifically from event.source (can be empty)
-    val clickInfo: ClickInfo? = null,                   // Click info for the event
     val screenInfo: ScreenInfo? = null,                 // Screen info for the event
     val currentDashState: CurrentEntity? = null,        // The current dash state according to the database
     val notification: NotificationInfo? = null,         // Notification info for the event

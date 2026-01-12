@@ -11,9 +11,6 @@ import androidx.core.util.ObjectsCompat.equals
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.current.CurrentEntity
 import cloud.trotter.dashbuddy.services.LocationService
-import cloud.trotter.dashbuddy.services.accessibility.click.ClickInfo
-import cloud.trotter.dashbuddy.services.accessibility.click.ClickParser
-import cloud.trotter.dashbuddy.services.accessibility.notification.NotificationParser
 import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenRecognizerV2
 import cloud.trotter.dashbuddy.statev2.StateManagerV2
 import cloud.trotter.dashbuddy.util.AccNodeUtils
@@ -135,34 +132,6 @@ object EventHandler {
 
         val validPackages = setOf("com.doordash.driverapp")
         if (event.packageName?.toString() !in validPackages) return
-
-        // 1. NOTIFICATION PIPELINE
-        if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-            Log.d(TAG, "DEBUG: Processing Notification Event...") // Log A
-
-            val notificationInfo = NotificationParser.parse(event)
-
-            if (notificationInfo != null) {
-                Log.i(
-                    TAG,
-                    "DEBUG: Notification Parsed: ${notificationInfo.toFullString()}"
-                ) // Log B
-
-                val context = StateContext(
-                    timestamp = Date().time,
-                    eventType = event.eventType,
-                    eventTypeString = "NOTIFICATION",
-                    packageName = event.packageName,
-                    rootNode = null,
-                    rootUiNode = null,
-                    notification = notificationInfo
-                )
-                StateManagerV2.dispatch(context)
-            } else {
-                Log.w(TAG, "DEBUG: Notification event received but parsed empty.")
-            }
-            return // Stop here
-        }
 
         // Capture immediately as requested
         val rootNode = service.rootInActiveWindow
@@ -290,10 +259,6 @@ object EventHandler {
         val sourceNodeTexts = mutableListOf<String>()
         event.source?.let { AccNodeUtils.extractTexts(it, sourceNodeTexts) }
 
-        var clickInfo: ClickInfo = ClickInfo.NoClick
-        if (currentEventType == AccessibilityEvent.TYPE_VIEW_CLICKED)
-            clickInfo = ClickParser.parse(sourceNodeTexts)
-
         val tempContext = StateContext(
             timestamp = Date().time,
             odometerReading = LocationService.getCurrentOdometer(DashBuddyApplication.context),
@@ -306,7 +271,6 @@ object EventHandler {
             sourceNode = event.source,
             rootNodeTexts = rootNodeTexts,
             sourceNodeTexts = sourceNodeTexts,
-            clickInfo = clickInfo,
             currentDashState = currentDashState,
         )
 

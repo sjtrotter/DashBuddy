@@ -5,7 +5,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.log.Logger
-import cloud.trotter.dashbuddy.services.accessibility.notification.NotificationInfo
+import cloud.trotter.dashbuddy.statev2.model.NotificationInfo
 import cloud.trotter.dashbuddy.state.StateContext
 import cloud.trotter.dashbuddy.statev2.StateManagerV2
 import java.util.Date

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.services.accessibility.notification
+package cloud.trotter.dashbuddy.statev2.model
 
 data class NotificationInfo(
     val title: String,

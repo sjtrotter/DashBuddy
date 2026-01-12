@@ -7,7 +7,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.filters.EventDebouncer
 import cloud.trotter.dashbuddy.pipeline.processing.StateContextFactory
-import cloud.trotter.dashbuddy.services.accessibility.notification.NotificationInfo
+import cloud.trotter.dashbuddy.statev2.model.NotificationInfo
 import cloud.trotter.dashbuddy.statev2.StateManagerV2
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +56,7 @@ object Pipeline {
         scope.launch {
             try {
                 // Transform & Dispatch
-                val context = StateContextFactory.createFromAccessibility(event, rootNode)
+                val context = StateContextFactory.createFromAccessibility(rootNode)
                 if (context != null) {
                     StateManagerV2.dispatch(context)
                 }

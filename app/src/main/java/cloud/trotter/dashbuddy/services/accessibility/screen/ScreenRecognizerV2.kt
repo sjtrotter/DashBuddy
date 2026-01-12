@@ -13,7 +13,6 @@ object ScreenRecognizerV2 {
         Screen.SCHEDULE_VIEW,
         Screen.NAVIGATION_VIEW_TO_PICK_UP,
         Screen.NAVIGATION_VIEW_TO_DROP_OFF,
-//        Screen.OFFER_POPUP,
         Screen.PICKUP_DETAILS_PRE_ARRIVAL,
         Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP,
         Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,

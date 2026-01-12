@@ -7,8 +7,8 @@ import androidx.annotation.RequiresApi
 
 /**
  * A data class to hold structured information about a single UI element (node).
- * This class is currently unused; it is kept for reference, in case we decide to use
- * it to extract data from events from the Accessibility Service later on.
+ * Used to transcribe [AccessibilityNodeInfo] objects into a useful data structure
+ * for use within the DashBuddy app.
  */
 data class UiNode(
     val text: String? = null,
@@ -124,6 +124,21 @@ data class UiNode(
             result = 31 * result + child.getContentHashCode()
         }
         return result
+    }
+
+    val allText: List<String> by lazy {
+        val results = mutableListOf<String>()
+        collectText(this, results)
+        results
+    }
+
+    private fun collectText(node: UiNode, list: MutableList<String>) {
+        // Add current node's text
+        if (!node.text.isNullOrBlank()) list.add(node.text)
+        if (!node.contentDescription.isNullOrBlank()) list.add(node.contentDescription)
+
+        // Recursively add children's text
+        node.children.forEach { collectText(it, list) }
     }
 
     companion object {
