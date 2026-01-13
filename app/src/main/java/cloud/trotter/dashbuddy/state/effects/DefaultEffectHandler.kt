@@ -1,0 +1,100 @@
+package cloud.trotter.dashbuddy.state.effects
+
+import android.content.Intent
+import android.os.Build
+import androidx.annotation.RequiresApi
+import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
+import cloud.trotter.dashbuddy.services.LocationService
+import cloud.trotter.dashbuddy.state.AppEffect
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import cloud.trotter.dashbuddy.log.Logger as Log
+
+/**
+ * The Real-World implementation that interacts with Android Services, UI, and Hardware.
+ */
+class DefaultEffectHandler : EffectHandler {
+
+    private val tag = "DefaultEffectHandler"
+
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    override fun handle(effect: AppEffect, scope: CoroutineScope) {
+        when (effect) {
+            is AppEffect.LogEvent -> {
+                scope.launch(Dispatchers.IO) {
+                    Log.v(tag, "Logging Event: ${effect.event.eventType}")
+                    DashBuddyApplication.appEventRepo.insert(effect.event)
+                }
+            }
+
+            is AppEffect.UpdateBubble -> {
+                Log.i(tag, "Bubble Update: ${effect.text}")
+                DashBuddyApplication.sendBubbleMessage(effect.text)
+            }
+
+            is AppEffect.CaptureScreenshot -> {
+                ScreenShotHandler.capture(scope, effect)
+            }
+
+            is AppEffect.PlayNotificationSound -> {
+                // Play sound logic
+            }
+
+            is AppEffect.ProcessTipNotification -> {
+                TipEffectHandler.process(scope, effect)
+            }
+
+            is AppEffect.ScheduleTimeout -> {
+                TimeoutHandler.schedule(scope, effect.timestamp, type = effect.type)
+            }
+
+            is AppEffect.CancelTimeout -> {
+                TimeoutHandler.cancel()
+            }
+
+            is AppEffect.StartOdometer -> {
+                OdometerEffectHandler.startUp()
+            }
+
+            is AppEffect.StopOdometer -> {
+                OdometerEffectHandler.shutDown()
+            }
+
+            is AppEffect.EvaluateOffer -> {
+                DashBuddyApplication.sendBubbleMessage(
+                    OfferEvaluator.evaluateOffer(effect.parsedOffer)
+                )
+            }
+
+            is AppEffect.ClickNode -> {
+                Log.i(tag, "Executing Effect: Clicking Node (${effect.description})")
+                // Robust utility call
+                cloud.trotter.dashbuddy.util.AccNodeUtils.clickNode(effect.node.originalNode)
+            }
+
+            is AppEffect.Delayed -> {
+                scope.launch {
+                    delay(effect.delayMs)
+                    handle(effect.effect, scope) // Recursive call after delay
+                }
+            }
+
+            is AppEffect.SendKeepAlive -> {
+                try {
+                    val intent = Intent(
+                        DashBuddyApplication.context,
+                        LocationService::class.java
+                    ).apply {
+                        action = LocationService.ACTION_KEEP_ALIVE
+                    }
+                    DashBuddyApplication.context.startForegroundService(intent)
+                } catch (e: Exception) {
+                    Log.e(tag, "Failed to send KeepAlive", e)
+                }
+            }
+        }
+    }
+}

@@ -6,7 +6,7 @@ import android.service.notification.StatusBarNotification
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.pipeline.Pipeline
-import cloud.trotter.dashbuddy.statev2.model.NotificationInfo
+import cloud.trotter.dashbuddy.state.model.NotificationInfo
 
 class NotificationListener : NotificationListenerService() {
 

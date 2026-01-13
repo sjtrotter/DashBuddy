@@ -46,7 +46,7 @@
         </activity>
 
         <service
-            android:name=".services.bubble.BubbleService"
+            android:name=".ui.bubble.BubbleService"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property

@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
 import cloud.trotter.dashbuddy.data.pay.ParsedPayItem
-import cloud.trotter.dashbuddy.services.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher

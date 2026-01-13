@@ -25,11 +25,12 @@ import cloud.trotter.dashbuddy.data.pay.AppPayRepo
 import cloud.trotter.dashbuddy.data.pay.TipRepo
 import cloud.trotter.dashbuddy.data.store.StoreRepo
 import cloud.trotter.dashbuddy.data.zone.ZoneRepo
-import cloud.trotter.dashbuddy.services.bubble.BubbleService
+import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.data.event.AppEventRepo // Import your new Repo
 import cloud.trotter.dashbuddy.services.LocationService
+import cloud.trotter.dashbuddy.state.StateManagerV2
 
 class DashBuddyApplication : Application() {
 
@@ -176,6 +177,13 @@ class DashBuddyApplication : Application() {
             prefs = appPreferences,
             initialDefaultLogLevel = LogLevel.INFO,
         )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            StateManagerV2.initialize()
+            Log.i("DashBuddyApp", "StateManagerV2 initialized.")
+        } else {
+            Log.e("DashBuddyApp", "StateManagerV2 requires API 31 or higher.")
+        }
 
         Log.i("DashBuddyApp", "DashBuddyApplication initialized.")
     }

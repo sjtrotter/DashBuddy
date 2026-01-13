@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.filters
 
-import cloud.trotter.dashbuddy.services.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 
 class ScreenDiffer {
     private var lastStructure: Int? = null

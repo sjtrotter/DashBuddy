@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition
 
-import cloud.trotter.dashbuddy.services.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import java.util.Locale
 
 //import cloud.trotter.dashbuddy.log.Logger as Log

@@ -5,7 +5,7 @@ import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
-import cloud.trotter.dashbuddy.services.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 
 /**
  * A sealed class representing the result of a screen recognition.

@@ -4,7 +4,7 @@ import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.services.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 class IdleMapMatcher : ScreenMatcher {
