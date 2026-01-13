@@ -5,8 +5,8 @@ import android.graphics.Bitmap
 import android.os.Environment
 import android.view.Display
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.pipeline.inputs.AccessibilityListener
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.services.accessibility.EventHandler
 import cloud.trotter.dashbuddy.statev2.AppEffect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +24,7 @@ object ScreenShotHandler {
 
     fun capture(scope: CoroutineScope, effect: AppEffect.CaptureScreenshot) {
         scope.launch(Dispatchers.IO) {
-            val service = EventHandler.getServiceInstance() ?: return@launch
+            val service = AccessibilityListener.instance ?: return@launch
 
             val mainExecutor =
                 androidx.core.content.ContextCompat.getMainExecutor(DashBuddyApplication.context)

@@ -2,8 +2,6 @@ package cloud.trotter.dashbuddy.pipeline.recognition
 
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.*
 import cloud.trotter.dashbuddy.services.accessibility.UiNode
-import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
 
 object ScreenRecognizer {
 
@@ -24,12 +22,16 @@ object ScreenRecognizer {
         WaitingForOfferMatcher(),
         DashPausedMatcher(),
         DashAlongTheWayMatcher(),
-    )
+    ).sortedByDescending { it.priority }
+
+    private val legacy = Screen.entries
+        .filter { it.hasMatchingCriteria }
+        .map { LegacyEnumMatcher(it) }
 
     fun identify(node: UiNode): ScreenInfo {
         return matchers
-            .sortedByDescending { it.priority }
             .firstNotNullOfOrNull { it.matches(node) }
+            ?: legacy.firstNotNullOfOrNull { it.matches(node) }
             ?: ScreenInfo.Simple(Screen.UNKNOWN)
     }
 }

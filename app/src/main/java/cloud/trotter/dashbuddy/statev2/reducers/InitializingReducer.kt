@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.statev2.reducers
 
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.statev2.AppStateV2
 import cloud.trotter.dashbuddy.statev2.Reducer
 

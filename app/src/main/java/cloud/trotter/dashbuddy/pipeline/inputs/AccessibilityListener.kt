@@ -63,4 +63,14 @@ class AccessibilityListener : AccessibilityService() {
 
         Logger.d(tag, "Accessibility service connected")
     }
+
+    companion object {
+        // We use a volatile variable to ensure safe publishing across threads
+        @Volatile
+        private var _instance: AccessibilityListener? = null
+
+        // Public read-only property
+        val instance: AccessibilityListener?
+            get() = _instance
+    }
 }

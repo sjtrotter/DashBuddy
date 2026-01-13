@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.statev2
 
-import cloud.trotter.dashbuddy.services.accessibility.screen.Screen
-import cloud.trotter.dashbuddy.services.accessibility.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.Screen
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.statev2.event.NotificationEvent
 import cloud.trotter.dashbuddy.statev2.event.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.statev2.event.StateEvent
