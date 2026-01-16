@@ -35,7 +35,8 @@ class DeliverySummaryMatcher : ScreenMatcher {
         // --- 2. STATE CHECK (Collapsed vs Expanded) ---
 
         // We look for the section headers that appear only when expanded
-        val doorDashPayHeader = node.findNode { it.text.equals("DoorDash pay", ignoreCase = true) }
+        val doorDashPayHeader =
+            node.findNode { it.text.equals("DoorDash pay", ignoreCase = true) }
         val customerTipsHeader =
             node.findNode { it.text.equals("Customer tips", ignoreCase = true) }
 

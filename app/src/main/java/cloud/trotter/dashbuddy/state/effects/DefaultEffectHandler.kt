@@ -23,6 +23,12 @@ class DefaultEffectHandler : EffectHandler {
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun handle(effect: AppEffect, scope: CoroutineScope) {
         when (effect) {
+            is AppEffect.SequentialEffect -> {
+                effect.effects.forEach { childEffect ->
+                    handle(childEffect, scope)
+                }
+            }
+
             is AppEffect.LogEvent -> {
                 scope.launch(Dispatchers.IO) {
                     Log.v(tag, "Logging Event: ${effect.event.eventType}")
