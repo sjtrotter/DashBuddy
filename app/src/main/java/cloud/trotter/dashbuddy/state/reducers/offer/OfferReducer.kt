@@ -1,10 +1,15 @@
-package cloud.trotter.dashbuddy.state.reducers
+package cloud.trotter.dashbuddy.state.reducers.offer
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
+import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
+import cloud.trotter.dashbuddy.state.reducers.DashPausedReducer
+import cloud.trotter.dashbuddy.state.reducers.PickupReducer
+import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import kotlin.collections.plus
 
 object OfferReducer {
 

@@ -70,17 +70,20 @@ sealed class AppStateV2 {
         val customerAddressHash: String? = null
     ) : AppStateV2()
 
-    data class ExpandingDeliverySummary(
-        override val timestamp: Long = System.currentTimeMillis(),
-        override val dashId: String? = null
-    ) : AppStateV2()
-
     data class PostDelivery(
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
-        val totalPay: Double,
-        val summaryText: String // Store the raw text or extracted merchant for the UI
-    ) : AppStateV2()
+        val totalPay: Double = 0.0,
+        val summaryText: String = "", // Store the raw text or extracted merchant for the UI
+        val phase: Phase = Phase.STABILIZING,
+    ) : AppStateV2() {
+        enum class Phase {
+            STABILIZING,
+            CLICKING,
+            VERIFYING,
+            RECORDED,
+        }
+    }
 
     // --- 3. TRANSIENT ---
     data class PausedOrInterrupted(
@@ -93,6 +96,6 @@ sealed class AppStateV2 {
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
         val pausedAt: Long = System.currentTimeMillis(),
-        val expectedEndAt: Long
+        val durationMs: Long
     ) : AppStateV2()
 }

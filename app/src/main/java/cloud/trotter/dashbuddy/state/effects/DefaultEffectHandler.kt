@@ -4,9 +4,11 @@ import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.data.offer.OfferEvaluator
+import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import cloud.trotter.dashbuddy.services.LocationService
 import cloud.trotter.dashbuddy.state.AppEffect
+import cloud.trotter.dashbuddy.state.StateManagerV2
+import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -54,11 +56,11 @@ class DefaultEffectHandler : EffectHandler {
             }
 
             is AppEffect.ScheduleTimeout -> {
-                TimeoutHandler.schedule(scope, effect.timestamp, type = effect.type)
+                TimeoutHandler.schedule(scope, effect.durationMs, type = effect.type)
             }
 
             is AppEffect.CancelTimeout -> {
-                TimeoutHandler.cancel()
+                TimeoutHandler.cancel(effect.type)
             }
 
             is AppEffect.StartOdometer -> {
@@ -70,9 +72,9 @@ class DefaultEffectHandler : EffectHandler {
             }
 
             is AppEffect.EvaluateOffer -> {
-                DashBuddyApplication.sendBubbleMessage(
-                    OfferEvaluator.evaluateOffer(effect.parsedOffer)
-                )
+                val result = OfferEvaluator.evaluateOffer(effect.parsedOffer)
+                StateManagerV2.dispatch(OfferEvaluationEvent(result.offerAction))
+                DashBuddyApplication.sendBubbleMessage(result.bubbleMessage)
             }
 
             is AppEffect.ClickNode -> {

@@ -8,6 +8,9 @@ import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.reducers.*
 import cloud.trotter.dashbuddy.state.effects.NotificationHandler
+import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
+import cloud.trotter.dashbuddy.state.reducers.offer.OfferReducer
+import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 object Reducer {
@@ -18,30 +21,30 @@ object Reducer {
     )
 
     fun reduce(currentState: AppStateV2, stateEvent: StateEvent): Transition {
-        // --- 0. SIDE CHANNEL INTERCEPTORS (Notifications) ---
-
         return when (stateEvent) {
+
+            is OfferEvaluationEvent -> {
+                // eventually, transition to sub phase of OfferReducer to take action
+                return Transition(currentState)
+            }
+
             is NotificationEvent -> {
                 NotificationHandler.handle(currentState, stateEvent)
             }
 
-            // --- 0.5 DASH PAUSED
             is TimeoutEvent -> {
-                Log.i("Reducer", "Handling Timeout -> Forcing Idle")
+                Log.i("Reducer", "Handling Timeout: ${stateEvent.type}")
 
                 // Force transition to Idle (Dash Ended)
-                return IdleReducer.transitionTo(
-                    oldState = currentState,
-                    // Create dummy info since we aren't looking at a screen
-                    input = ScreenInfo.IdleMap(
-                        screen = Screen.MAIN_MAP_IDLE,
-                        zoneName = "Unknown",
-                        dashType = null
-                    ),
-                    isRecovery = false
-                ).copy(
-                    effects = listOf(AppEffect.UpdateBubble("Dash Ended (Timeout)"))
-                )
+                return when (currentState) {
+                    is AppStateV2.DashPaused ->
+                        DashPausedReducer.onTimeout(state = currentState, type = stateEvent.type)
+
+                    is AppStateV2.PostDelivery ->
+                        PostDeliveryReducer.onTimeout(state = currentState, event = stateEvent)
+
+                    else -> Transition(currentState)
+                }
             }
 
             is ScreenUpdateEvent -> {
@@ -57,11 +60,6 @@ object Reducer {
                     is AppStateV2.OfferPresented -> OfferReducer.reduce(currentState, input)
                     is AppStateV2.OnPickup -> PickupReducer.reduce(currentState, input)
                     is AppStateV2.OnDelivery -> DeliveryReducer.reduce(currentState, input)
-                    is AppStateV2.ExpandingDeliverySummary -> ExpandingReducer.reduce(
-                        currentState,
-                        input
-                    )
-
                     is AppStateV2.PostDelivery -> PostDeliveryReducer.reduce(currentState, input)
                     is AppStateV2.PostDash -> SummaryReducer.reduce(currentState, input)
                     is AppStateV2.DashPaused -> DashPausedReducer.reduce(currentState, input)
@@ -119,13 +117,12 @@ object Reducer {
             }
             // Anchor: Collapsed Delivery Summary
             is ScreenInfo.DeliverySummaryCollapsed -> {
-                if (state !is AppStateV2.ExpandingDeliverySummary)
-                    ExpandingReducer.transitionTo(state, input, isRecovery = true)
+                if (state !is AppStateV2.PostDelivery)
+                    PostDeliveryReducer.transitionTo(state, input, isRecovery = true)
                 else null
             }
             // Anchor: Payout Screen
             is ScreenInfo.DeliveryCompleted -> {
-                // We use dedupe logic inside transitionTo, but generally if we aren't in PostDelivery, we force it.
                 if (state !is AppStateV2.PostDelivery)
                     PostDeliveryReducer.transitionTo(state, input, isRecovery = true)
                 else null

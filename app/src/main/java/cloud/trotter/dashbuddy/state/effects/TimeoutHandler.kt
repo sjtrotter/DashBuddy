@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
+import cloud.trotter.dashbuddy.state.model.TimeoutType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -10,13 +11,12 @@ import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 object TimeoutHandler {
-    private var job: Job? = null
+    private val jobs = mutableMapOf<TimeoutType, Job>()
 
-    fun schedule(scope: CoroutineScope, timestamp: Long, type: String) {
-        job?.cancel() // Cancel old
-        job = scope.launch(Dispatchers.Default) {
-            val waitMs = timestamp - System.currentTimeMillis()
-            if (waitMs > 0) delay(waitMs)
+    fun schedule(scope: CoroutineScope, durationMs: Long, type: TimeoutType) {
+        jobs[type]?.cancel() // Cancel old
+        jobs[type] = scope.launch(Dispatchers.Default) {
+            delay(durationMs)
 
             // TIME IS UP!
             Log.w("TimeoutHandler", "Timer Expired! : $type")
@@ -28,10 +28,13 @@ object TimeoutHandler {
                     type = type
                 )
             )
+
+            // Clean up from the map
+            jobs.remove(type)
         }
     }
 
-    fun cancel() {
-        job?.cancel()
+    fun cancel(type: TimeoutType) {
+        jobs[type]?.cancel()
     }
 }

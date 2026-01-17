@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
+import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
 
 object DeliveryReducer {
 
@@ -67,7 +68,7 @@ object DeliveryReducer {
             }
 
             is ScreenInfo.DeliverySummaryCollapsed -> {
-                ExpandingReducer.transitionTo(state, input, isRecovery = false)
+                PostDeliveryReducer.transitionTo(state, input, isRecovery = false)
             }
 
             is ScreenInfo.DeliveryCompleted -> {

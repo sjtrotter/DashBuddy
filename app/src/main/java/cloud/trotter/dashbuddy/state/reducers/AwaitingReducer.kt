@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
+import cloud.trotter.dashbuddy.state.reducers.offer.OfferReducer
+import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
 import java.util.UUID
 
 object AwaitingReducer {
@@ -66,7 +68,7 @@ object AwaitingReducer {
                 isRecovery = false
             )
 
-            is ScreenInfo.DeliverySummaryCollapsed -> ExpandingReducer.transitionTo(
+            is ScreenInfo.DeliverySummaryCollapsed -> PostDeliveryReducer.transitionTo(
                 state,
                 input,
                 isRecovery = false

@@ -1,13 +1,13 @@
-package cloud.trotter.dashbuddy.data.offer
+package cloud.trotter.dashbuddy.state.model
 
 import android.text.SpannableString
 
 /**
  * A data class to hold the results of the offer evaluation process.
- * @param offerEntity The fully populated OfferEntity ready for database insertion.
+ * @param offerAction The action to take on the offer.
  * @param bubbleMessage A formatted SpannableString containing the evaluation summary.
  */
-data class EvaluationResult(
-    val offerEntity: OfferEntity,
+data class OfferEvaluation(
+    val offerAction: OfferAction,
     val bubbleMessage: SpannableString
 )

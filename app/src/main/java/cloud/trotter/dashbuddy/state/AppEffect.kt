@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.state
 import cloud.trotter.dashbuddy.data.event.AppEventEntity
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.state.model.TimeoutType
 
 sealed class AppEffect {
     // 1. Log to Database (The Core of Event Sourcing)
@@ -22,8 +23,8 @@ sealed class AppEffect {
     data class ProcessTipNotification(val rawText: String) : AppEffect()
 
     // Dash Paused!
-    data class ScheduleTimeout(val timestamp: Long, val type: String) : AppEffect()
-    data class CancelTimeout(val type: String) : AppEffect()
+    data class ScheduleTimeout(val durationMs: Long, val type: TimeoutType) : AppEffect()
+    data class CancelTimeout(val type: TimeoutType) : AppEffect()
 
     data object StartOdometer : AppEffect()
     data object StopOdometer : AppEffect()

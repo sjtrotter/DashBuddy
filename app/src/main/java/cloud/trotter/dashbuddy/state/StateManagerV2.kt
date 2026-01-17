@@ -39,7 +39,6 @@ object StateManagerV2 {
                 .registerSubtype(AppStateV2.OfferPresented::class.java)
                 .registerSubtype(AppStateV2.OnPickup::class.java)
                 .registerSubtype(AppStateV2.OnDelivery::class.java)
-                .registerSubtype(AppStateV2.ExpandingDeliverySummary::class.java)
                 .registerSubtype(AppStateV2.PostDelivery::class.java)
                 .registerSubtype(AppStateV2.DashPaused::class.java)
                 .registerSubtype(AppStateV2.PausedOrInterrupted::class.java)
