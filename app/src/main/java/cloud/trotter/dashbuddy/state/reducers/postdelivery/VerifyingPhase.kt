@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.reducers.postdelivery
 
+import cloud.trotter.dashbuddy.data.pay.ParsedPay
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
@@ -10,7 +11,14 @@ import cloud.trotter.dashbuddy.util.UtilityFunctions
 
 internal object VerifyingPhase {
 
-    // Entry 1: From Clicking (We don't know the pay yet)
+    // Helper to extract sanitized merchant names from the tips section
+    private fun extractMerchants(parsedPay: ParsedPay): String {
+        return parsedPay.customerTips.joinToString(", ") { it.type.trim() }
+            .ifEmpty { "Delivery" }
+            .replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
+    }
+
+    // Entry from CLICKING (No pay data yet)
     fun transitionTo(
         oldState: AppStateV2.PostDelivery,
         clickSent: Boolean
@@ -19,7 +27,7 @@ internal object VerifyingPhase {
             phase = AppStateV2.PostDelivery.Phase.VERIFYING,
             summaryText = "Verifying..."
         )
-        // If we clicked, allow 2s for animation.
+        // If we clicked, wait 2s for animation. If we didn't, 1s is enough.
         val waitTime = if (clickSent) 2000L else 1000L
 
         return Reducer.Transition(
@@ -28,19 +36,22 @@ internal object VerifyingPhase {
         )
     }
 
-    // Entry 2: From Manual Detection (We know the pay)
+    // Entry from MANUAL DETECTION (Recovery)
     fun transitionTo(
         oldState: AppStateV2.PostDelivery,
         input: ScreenInfo.DeliveryCompleted,
         clickSent: Boolean
     ): Reducer.Transition {
+        val merchants = extractMerchants(input.parsedPay)
+
         val newState = oldState.copy(
             phase = AppStateV2.PostDelivery.Phase.VERIFYING,
-            totalPay = input.parsedPay.total,
+            parsedPay = input.parsedPay,
+            merchantNames = merchants,
             summaryText = "Paid: ${UtilityFunctions.formatCurrency(input.parsedPay.total)}"
         )
-        val waitTime = if (clickSent) 2000L else 1000L
 
+        val waitTime = if (clickSent) 2000L else 1000L
         return Reducer.Transition(
             newState,
             listOf(AppEffect.ScheduleTimeout(waitTime, TimeoutType.VERIFY_PAY))
@@ -50,12 +61,30 @@ internal object VerifyingPhase {
     fun reduce(state: AppStateV2.PostDelivery, input: ScreenInfo): Reducer.Transition? {
         return when (input) {
             is ScreenInfo.DeliveryCompleted -> {
-                // If numbers changed (e.g. tip appeared), RESET timer!
-                if (input.parsedPay.total != state.totalPay) {
-                    transitionTo(state, input, clickSent = false)
-                } else null
+                // TRUST THE MATCHER: If we got this event, the data is valid.
+                val newPay = input.parsedPay
+                val currentTotal = newPay.total
+                val storedTotal = state.parsedPay?.total
+
+                // Only update if the total amount changed (e.g. tip popped in)
+                if (currentTotal != storedTotal) {
+                    val merchants = extractMerchants(newPay)
+
+                    val newState = state.copy(
+                        parsedPay = newPay,
+                        merchantNames = merchants,
+                        summaryText = "Paid: ${UtilityFunctions.formatCurrency(currentTotal)}"
+                    )
+
+                    // Reset timer to ensure stability
+                    return Reducer.Transition(
+                        newState,
+                        listOf(AppEffect.ScheduleTimeout(1000, TimeoutType.VERIFY_PAY))
+                    )
+                }
+                null
             }
-            // Ignore "Collapsed" screens (animation artifacts)
+
             is ScreenInfo.DeliverySummaryCollapsed -> null
             else -> null
         }
@@ -63,10 +92,7 @@ internal object VerifyingPhase {
 
     fun onTimeout(state: AppStateV2.PostDelivery, event: TimeoutEvent): Reducer.Transition? {
         if (event.type == TimeoutType.VERIFY_PAY) {
-            // Timer Done -> SAVE IT.
-            // Note: We need to grab the last known pay.
-            // If we came from Clicking and never saw 'DeliveryCompleted',
-            // totalPay might be null. (Safety check needed in RecordedPhase).
+            // Timer Done -> Move to record data
             return RecordedPhase.transitionTo(state)
         }
         return null

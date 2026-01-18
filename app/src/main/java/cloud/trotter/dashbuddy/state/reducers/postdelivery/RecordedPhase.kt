@@ -18,38 +18,66 @@ internal object RecordedPhase {
         val newState = state.copy(phase = AppStateV2.PostDelivery.Phase.RECORDED)
 
         val effects = mutableListOf<AppEffect>()
-        val pay = state.totalPay
 
-        // 1. Log Event
+        // 1. Data Snapshot
+        val payData = state.parsedPay
+        val total = state.totalPay
+        val merchants = state.merchantNames
+
+        // 2. Log Event (Save the full object to DB)
+        // This keeps your database clean and queryable later
         effects.add(
             AppEffect.LogEvent(
                 ReducerUtils.createEvent(
                     dashId = state.dashId,
                     type = AppEventType.DELIVERY_COMPLETED,
-                    // Note: Ideally pass the full ParsedPay object here if you cached it.
-                    // For now, logging the total.
-                    payload = mapOf("total" to pay)
+                    payload = payData ?: mapOf("total" to total, "error" to "Partial Data")
                 )
             )
         )
 
-        // 2. Screenshot with Custom Filename
-        // Note: You need access to the merchant names here.
-        // Ideally, 'AppStateV2.PostDelivery' should store 'merchants: String'
-        // populated during VerifyingPhase.
-        // For now, I'll use a generic fallback since we don't have the Input here.
-        val filename = "Dropoff - ${UtilityFunctions.formatCurrency(pay)}"
-
+        // 3. Screenshot
+        val filename = "Dropoff - $merchants"
         effects.add(AppEffect.CaptureScreenshot(filename))
 
-        // 3. Bubble Update
-        effects.add(AppEffect.UpdateBubble("Saved! ${UtilityFunctions.formatCurrency(pay)}"))
+        // 4. Bubble Update (The "Receipt")
+        val bubbleMessage = if (payData != null) {
+            generateReceiptText(payData, total)
+        } else {
+            "Saved: ${UtilityFunctions.formatCurrency(total)}\n(No breakdown found)"
+        }
+
+        effects.add(AppEffect.UpdateBubble(bubbleMessage))
 
         return Reducer.Transition(newState, effects)
     }
 
+    private fun generateReceiptText(
+        data: cloud.trotter.dashbuddy.data.pay.ParsedPay,
+        total: Double
+    ): String {
+        val sb = StringBuilder()
+
+        // Header
+        sb.append("Saved: ${UtilityFunctions.formatCurrency(total)}")
+
+        // App Pay Section
+        // e.g. "Base Pay • $2.50"
+        data.appPayComponents.forEach { item ->
+            sb.append("\n${item.type} • ${UtilityFunctions.formatCurrency(item.amount)}")
+        }
+
+        // Tips Section
+        // e.g. "McDonald's • $4.00"
+        // (The 'type' field in Tips usually contains the Merchant Name from the parser)
+        data.customerTips.forEach { item ->
+            sb.append("\nTip: ${item.type} • ${UtilityFunctions.formatCurrency(item.amount)}")
+        }
+
+        return sb.toString()
+    }
+
     fun reduce(state: AppStateV2.PostDelivery, input: ScreenInfo): Reducer.Transition? {
-        // Standard Exits
         return when (input) {
             is ScreenInfo.WaitingForOffer -> AwaitingReducer.transitionTo(state, input, false)
             is ScreenInfo.IdleMap -> IdleReducer.transitionTo(state, input, false)

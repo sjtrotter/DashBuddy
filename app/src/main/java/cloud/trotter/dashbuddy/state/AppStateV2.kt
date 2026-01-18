@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.state
 
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.dash.DashType
+import cloud.trotter.dashbuddy.data.pay.ParsedPay
 
 sealed class AppStateV2 {
     abstract val timestamp: Long
@@ -73,10 +74,19 @@ sealed class AppStateV2 {
     data class PostDelivery(
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
-        val totalPay: Double = 0.0,
-        val summaryText: String = "", // Store the raw text or extracted merchant for the UI
+
+        // --- NEW FIELDS ---
+        val parsedPay: ParsedPay? = null,
+        val merchantNames: String = "Delivery", // Cached for filename/display
+        val summaryText: String = "Processing...",
+
         val phase: Phase = Phase.STABILIZING,
     ) : AppStateV2() {
+
+        // Helper accessors for clean UI usage
+        val totalPay: Double
+            get() = parsedPay?.total ?: 0.0
+
         enum class Phase {
             STABILIZING,
             CLICKING,
