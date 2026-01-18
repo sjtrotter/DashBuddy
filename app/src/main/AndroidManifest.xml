@@ -70,7 +70,7 @@
         <!-- Add this inside the <application> tag in your AndroidManifest.xml -->
 
         <service
-            android:name=".services.LocationService"
+            android:name=".data.location.LocationService"
             android:foregroundServiceType="location" />
 
         <service
