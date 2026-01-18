@@ -1,178 +1,105 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.data.pay.ParsedPay
-import cloud.trotter.dashbuddy.data.pay.ParsedPayItem
+import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.util.UtilityFunctions
 import cloud.trotter.dashbuddy.log.Logger as Log
+import kotlin.math.abs
 
 class DeliverySummaryMatcher : ScreenMatcher {
+    override val targetScreen: Screen = Screen.DELIVERY_SUMMARY_EXPANDED
+    override val priority: Int = 20
 
     private val tag = "DeliverySummaryMatcher"
 
-    // We default to the Expanded screen as the target,
-    // but we might return COLLAPSED based on logic.
-    override val targetScreen = Screen.DELIVERY_SUMMARY_EXPANDED
-    override val priority = 10
-
     override fun matches(node: UiNode): ScreenInfo? {
-        // --- 1. ANCHORS (Is this the Summary Screen?) ---
-        val hasOfferTitle = node.findNode {
-            it.text.equals("This offer", ignoreCase = true)
-        } != null
 
-        val hasContinueBtn = node.findNode {
-            it.text.equals("Continue dashing", ignoreCase = true)
-        } != null
-
-        if (!hasOfferTitle || !hasContinueBtn) {
-            return null
+        // 1. Context Check
+        val hasContext = node.hasNode {
+            val text = it.text ?: ""
+            text.contains("This offer", ignoreCase = true) ||
+                    text.contains("Delivery Complete", ignoreCase = true)
         }
 
-        // --- 2. STATE CHECK (Collapsed vs Expanded) ---
+        if (!hasContext) return null
 
-        // We look for the section headers that appear only when expanded
-        val doorDashPayHeader =
-            node.findNode { it.text.equals("DoorDash pay", ignoreCase = true) }
-        val customerTipsHeader =
-            node.findNode { it.text.equals("Customer tips", ignoreCase = true) }
+        Log.d(tag, "Context found. Proceeding with analysis.")
 
-        val isExpanded = doorDashPayHeader != null && customerTipsHeader != null
-
-        // If headers are missing, we are Collapsed.
-        if (!isExpanded) {
-            Log.i(
-                tag,
-                "Headers missing. Attempting to find Expand Button relative to 'This offer'..."
-            )
-
-            // 1. Find the "This offer" text anchor
-            val offerTitleNode = node.findNode {
-                it.text.equals("This offer", ignoreCase = true)
+        // 2. Find the Correct Container
+        val earningsContainer = node.findNodes { it.hasId("earnings_container") }
+            .find { container ->
+                container.hasNode { it.text?.contains("This offer", ignoreCase = true) == true }
             }
 
-            var expandButton: UiNode? = null
+        Log.d(tag, "Target Earnings Container found: ${earningsContainer != null}")
 
-            if (offerTitleNode != null) {
-                // 2. Walk up the tree to find the container that holds the button.
-                // We do this to ensure we don't accidentally click the "This dash so far" expandable_view
-                var container = offerTitleNode.parent
-                var attempts = 0
+        // 3. Extract Headline Total (Validation)
+        val finalValueNode = earningsContainer?.findDescendantById("final_value")
+            ?: node.findDescendantById("final_value")
 
-                // Safety loop: Walk up max 3 levels to find the sibling button
-                while (container != null && expandButton == null && attempts < 3) {
-                    expandButton = container.children.find {
-                        it.viewIdResourceName?.endsWith("expandable_view") == true
-                    }
+        val headlineTotal = finalValueNode?.text?.replace("$", "")?.toDoubleOrNull()
 
-                    if (expandButton == null) {
-                        container = container.parent
-                        attempts++
-                    }
-                }
-            }
+        Log.d(tag, "Headline Total: $headlineTotal (Node text: ${finalValueNode?.text})")
 
-            // Fallback: If logic failed, try clicking the text itself
-            if (expandButton == null) {
+        // 4. Parse Breakdown
+        val parsedPay = PayParser.parsePayFromTree(node)
+        val breakdownTotal = parsedPay.total
+
+        Log.d(
+            tag,
+            "Parsed Breakdown Total: $breakdownTotal (Components: ${parsedPay.appPayComponents.size} app, ${parsedPay.customerTips.size} tips)"
+        )
+
+        // 5. Validation Logic
+        // We now enforce STRICT equality (within 2 cents).
+        // It must NOT be significantly lower (loading) OR significantly higher (bad parse).
+        val isValid = if (headlineTotal != null) {
+            val diff = abs(breakdownTotal - headlineTotal)
+            val isCloseEnough = diff <= 0.02
+
+            if (!isCloseEnough) {
                 Log.w(
                     tag,
-                    "Could not find specific 'expandable_view' sibling. Falling back to clicking the Title Text."
+                    "Validation FAILED: Mismatch! Breakdown ($breakdownTotal) vs Headline ($headlineTotal). Diff: $diff"
                 )
-                expandButton = offerTitleNode
             }
+            isCloseEnough
+        } else {
+            val hasData = parsedPay.appPayComponents.isNotEmpty()
+            if (!hasData) Log.w(
+                tag,
+                "Validation FAILED: No headline and no parsed app pay components."
+            )
+            hasData
+        }
 
-            return if (expandButton != null) {
-                Log.i(tag, "Returning COLLAPSED state with action to click: $expandButton")
-                ScreenInfo.DeliverySummaryCollapsed(
+        if (isValid) {
+            Log.i(tag, "Match Success: DELIVERY_SUMMARY_EXPANDED")
+            return ScreenInfo.DeliveryCompleted(
+                screen = Screen.DELIVERY_SUMMARY_EXPANDED,
+                parsedPay = parsedPay
+            )
+        } else {
+            // 6. Fallback: Collapsed / Loading
+            Log.d(tag, "Data invalid/incomplete. Attempting fallback to COLLAPSED state.")
+
+            val expandButton = earningsContainer?.findDescendantById("expandable_view")
+                ?: earningsContainer?.findDescendantById("expandable_layout")
+                ?: node.findNodes { it.hasId("expandable_view") }.lastOrNull()
+
+            if (expandButton != null) {
+                Log.i(tag, "Match Success: DELIVERY_SUMMARY_COLLAPSED (Found expand button)")
+                return ScreenInfo.DeliverySummaryCollapsed(
                     screen = Screen.DELIVERY_SUMMARY_COLLAPSED,
                     expandButton = expandButton
                 )
             } else {
-                Log.e(tag, "Returning COLLAPSED state but NO CLICK TARGET found.")
-                ScreenInfo.Simple(Screen.DELIVERY_SUMMARY_COLLAPSED)
+                Log.w(tag, "Fallback Failed: Could not find expand button.")
             }
         }
 
-// --- 3. ROBUST SECTION-BASED PARSING ---
-        Log.i(tag, "Expanded state detected. Parsing sections...")
-
-        val appPayItems = mutableListOf<ParsedPayItem>()
-        val tipItems = mutableListOf<ParsedPayItem>()
-
-        // The structure is typically:
-        // RecyclerView (expandable_items)
-        //   -> ViewGroup (Header: "DoorDash pay")
-        //   -> ViewGroup (Item: "Base pay", "$3.00")
-        //   -> ViewGroup (Item: "Arbitrary Pay", "$3.00")
-        //   -> ViewGroup (Header: "Customer tips")
-        //   -> ViewGroup (Item: "Walgreens", "$5.00")
-
-        // Strategy: Iterate through the children of the parent container (the RecyclerView).
-        // Use the headers as "Switch" signals.
-
-        // Find the common parent of the headers
-        val listContainer = doorDashPayHeader.parent?.parent
-        // Note: In your log: header -> parent(ViewGroup) -> parent(RecyclerView id=expandable_items)
-
-        if (listContainer != null && listContainer.children.isNotEmpty()) {
-            var currentSection = "NONE" // NONE, DD_PAY, TIPS
-
-            for (childContainer in listContainer.children) {
-                // Check if this child container holds a HEADER
-                val headerText = childContainer.findNode {
-                    it.text.equals("DoorDash pay", true) || it.text.equals("Customer tips", true)
-                }?.text
-
-                if (headerText != null) {
-                    if (headerText.equals("DoorDash pay", true)) {
-                        currentSection = "DD_PAY"
-                    } else if (headerText.equals("Customer tips", true)) {
-                        currentSection = "TIPS"
-                    }
-                    continue // Skip parsing the header row itself
-                }
-
-                // If it's not a header, it's a pay item row. Parse it!
-                // Look for name/value pairs inside this row
-                val nameNode = childContainer.findNode {
-                    it.viewIdResourceName?.endsWith("name") == true ||
-                            it.viewIdResourceName?.endsWith("pay_line_item_title") == true
-                }
-                val valueNode = childContainer.findNode {
-                    it.viewIdResourceName?.endsWith("value") == true ||
-                            it.viewIdResourceName?.endsWith("pay_line_item_value") == true
-                }
-
-                if (nameNode != null && valueNode != null) {
-                    val label = nameNode.text ?: "Unknown"
-                    val amountStr = valueNode.text ?: ""
-                    val amount = UtilityFunctions.parseCurrency(amountStr) ?: 0.0
-
-                    Log.v(tag, "Parsed Item in section $currentSection: '$label' -> $amount")
-
-                    if (currentSection == "DD_PAY") {
-                        appPayItems.add(ParsedPayItem(label, amount))
-                    } else if (currentSection == "TIPS") {
-                        tipItems.add(ParsedPayItem(label, amount))
-                    }
-                }
-            }
-        } else {
-            Log.e(tag, "Could not find list container for pay items.")
-        }
-
-        val result = ParsedPay(appPayItems, tipItems)
-        Log.i(
-            tag,
-            "Parsing Complete. Total DD: ${result.totalBasePay}, Total Tip: ${result.totalTip}"
-        )
-
-        return ScreenInfo.DeliveryCompleted(
-            screen = Screen.DELIVERY_SUMMARY_EXPANDED,
-            parsedPay = result,
-        )
+        return null
     }
 }
