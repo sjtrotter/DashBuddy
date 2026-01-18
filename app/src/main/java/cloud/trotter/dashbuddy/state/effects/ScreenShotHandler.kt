@@ -1,8 +1,10 @@
 package cloud.trotter.dashbuddy.state.effects
 
 import android.accessibilityservice.AccessibilityService
+import android.content.ContentValues
 import android.graphics.Bitmap
-import android.os.Environment
+import android.net.Uri
+import android.provider.MediaStore
 import android.view.Display
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.pipeline.inputs.AccessibilityListener
@@ -11,8 +13,6 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -35,10 +35,10 @@ object ScreenShotHandler {
                     mainExecutor,
                     object : AccessibilityService.TakeScreenshotCallback {
                         override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
-                            // 1. Save the file (Synchronously on this background thread)
-                            save(result, effect.filenamePrefix)
+                            // 1. Save using MediaStore (Synchronously on this background thread)
+                            saveToGallery(result, effect.filenamePrefix)
 
-                            // 2. CLEANUP: Critical to prevent memory leaks!
+                            // 2. CLEANUP: Critical!
                             result.hardwareBuffer.close()
                         }
 
@@ -48,11 +48,7 @@ object ScreenShotHandler {
                     }
                 )
             } catch (e: SecurityException) {
-                Log.e(
-                    TAG,
-                    "Screenshot Failed: Permission denied. Missing android:canTakeScreenshot='true' in config.",
-                    e
-                )
+                Log.e(TAG, "Screenshot Failed: Permission denied.", e)
             } catch (e: Exception) {
                 Log.e(TAG, "Screenshot Failed: Unexpected error.", e)
             }
@@ -60,52 +56,74 @@ object ScreenShotHandler {
     }
 
     /**
-     * Converts the hardware buffer to a PNG and saves it to the app's private "Screenshots" folder.
+     * Saves the screenshot to the public "Pictures/DashBuddy" folder using MediaStore.
+     * This makes it immediately visible in Gallery apps.
      */
-    private fun save(result: AccessibilityService.ScreenshotResult, filename: String) {
+    private fun saveToGallery(
+        result: AccessibilityService.ScreenshotResult,
+        filenamePrefix: String
+    ) {
+        val context = DashBuddyApplication.context
+        val resolver = context.contentResolver
+
         try {
-            // 1. Wrap the hardware buffer in a Bitmap
-            // We check for null because wrapping can fail if the buffer is invalid
-            val bitmap = Bitmap.wrapHardwareBuffer(result.hardwareBuffer, result.colorSpace)
+            // 1. Wrap Buffer
+            val bitmap = Bitmap.wrapHardwareBuffer(
+                result.hardwareBuffer,
+                result.colorSpace
+            )
             if (bitmap == null) {
-                Log.e(TAG, "Failed to wrap hardware buffer in Bitmap.")
+                Log.e(TAG, "Failed to wrap hardware buffer.")
                 return
             }
 
-            // 2. Prepare the Directory: /Android/data/cloud.trotter.dashbuddy/files/Pictures/DashBuddyScreenshots
-            val dir = File(
-                DashBuddyApplication.context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                "DashBuddyScreenshots"
-            )
-            if (!dir.exists()) {
-                dir.mkdirs()
-            }
-
-            // 3. Create the File
-            // prefix the datetime format
+            // 2. Generate Name
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HHmm", Locale.US)
-            // Ensure filename ends in .png
-            val safeName = if (filename.endsWith(".png")) filename else "$filename.png"
-            val fullName = "${dateFormat.format(Date())} $safeName"
-            val file = File(dir, fullName)
+            val timestamp = dateFormat.format(Date())
+            // Strip extension if passed in, we add it automatically
+            val cleanPrefix = filenamePrefix.removeSuffix(".png")
+            val displayName = "$timestamp $cleanPrefix.png"
 
-            // 4. Write to Disk
-            FileOutputStream(file).use { out ->
-                // Compress format: PNG (Lossless) or JPEG (Smaller).
-                // PNG is better for text/UI screenshots.
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            // 3. Prepare Metadata
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                // Organized Subfolder in Pictures
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/DashBuddy")
+
+                // Mark as pending so gallery doesn't ignore partial file
+                put(MediaStore.Images.Media.IS_PENDING, 1)
             }
 
-            Log.i(TAG, "Screenshot saved: ${file.absolutePath}")
+            // 4. Insert into MediaStore
+            val collection =
+                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
 
-            // Note: We do NOT recycle the bitmap here because it is backed by the HardwareBuffer,
-            // which we close in the caller (onSuccess).
+            val uri: Uri? = resolver.insert(collection, contentValues)
+
+            if (uri == null) {
+                Log.e(TAG, "Failed to create MediaStore entry.")
+                return
+            }
+
+            // 5. Write Data
+            resolver.openOutputStream(uri).use { out ->
+                if (out != null) {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+            }
+
+            // 6. Finish (Mark as not pending)
+            contentValues.clear()
+            contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, contentValues, null, null)
+
+            Log.i(TAG, "Screenshot saved to Gallery: Pictures/DashBuddy/$displayName")
 
         } catch (e: IOException) {
-            Log.e(TAG, "Failed to save screenshot to disk", e)
+            Log.e(TAG, "Failed to write screenshot to MediaStore", e)
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error saving screenshot", e)
         }
     }
-
 }
