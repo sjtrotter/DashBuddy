@@ -41,4 +41,6 @@
     <string name="export">Export</string>
     <string name="go_to_current">Go to Current</string>
     <string name="active_total">Active/Total</string>
+    <string name="ready_to_dash">Ready to Dash</string>
+    <string name="all_systems_go">All systems go.</string>
 </resources>

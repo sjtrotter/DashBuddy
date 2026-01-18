@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.ActivityMainBinding
 import cloud.trotter.dashbuddy.pipeline.inputs.AccessibilityListener
+import cloud.trotter.dashbuddy.pipeline.inputs.NotificationListener
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import cloud.trotter.dashbuddy.log.Logger as Log
 
@@ -67,7 +68,20 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         Log.d(tag, "Resuming MainActivity, checking all permission statuses.")
-        checkAllPermissions()
+        val allGranted = checkAllPermissions()
+        updateUiState(allGranted)
+    }
+
+    private fun updateUiState(allGranted: Boolean) {
+        if (allGranted) {
+            Log.i(tag, "All permissions granted. Showing Dashboard.")
+            binding.layoutPermissionsSetup.visibility = View.GONE
+            binding.layoutMainApp.visibility = View.VISIBLE
+        } else {
+            Log.i(tag, "Missing permissions. Showing Setup.")
+            binding.layoutPermissionsSetup.visibility = View.VISIBLE
+            binding.layoutMainApp.visibility = View.GONE
+        }
     }
 
     private fun setupClickListeners() {
@@ -100,7 +114,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkAllPermissions() {
+    /**
+     * Checks all permissions and updates the Setup cards.
+     * Returns TRUE if all required permissions are granted.
+     */
+    private fun checkAllPermissions(): Boolean {
+        var allGood = true
+
         // Post Notifications Check
         val areNotificationsEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
         updateCardView(
@@ -109,8 +129,7 @@ class MainActivity : AppCompatActivity() {
             areNotificationsEnabled,
             "Post Notifications"
         )
-        // Also update the visibility of the "Show Bubble" button
-        binding.btnShowBubble.visibility = if (areNotificationsEnabled) View.VISIBLE else View.GONE
+        if (!areNotificationsEnabled) allGood = false
 
 
         // Accessibility Service Check
@@ -122,6 +141,7 @@ class MainActivity : AppCompatActivity() {
             isAccessibilityEnabled,
             "Accessibility"
         )
+        if (!isAccessibilityEnabled) allGood = false
 
         // Location Check
         val isLocationEnabled = ContextCompat.checkSelfPermission(
@@ -134,6 +154,7 @@ class MainActivity : AppCompatActivity() {
             isLocationEnabled,
             "Location"
         )
+        if (!isLocationEnabled) allGood = false
 
         // Notification Listener Service Check
         val isNotificationListenerEnabled = isNotificationServiceEnabled()
@@ -143,6 +164,9 @@ class MainActivity : AppCompatActivity() {
             isNotificationListenerEnabled,
             "Notification Listener"
         )
+        if (!isNotificationListenerEnabled) allGood = false
+
+        return allGood
     }
 
     private fun requestPostNotificationsPermission() {
@@ -206,7 +230,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun isNotificationServiceEnabled(): Boolean {
         val componentName =
-            ComponentName(this, "cloud.trotter.dashbuddy.pipeline.inputs.NotificationListener")
+            ComponentName(this, NotificationListener::class.java)
         val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
         return flat?.contains(componentName.flattenToString()) == true
     }
