@@ -25,6 +25,36 @@ data class UiNode(
     val originalNode: AccessibilityNodeInfo? = null,
 ) {
     /**
+     * Checks if this node's ID ends with the given snippet.
+     * Use this to ignore the app package prefix (e.g. "com.doordash.driverapp:id/").
+     */
+    fun hasId(idSnippet: String): Boolean {
+        return viewIdResourceName?.endsWith(idSnippet) == true
+    }
+
+    /**
+     * Finds the first DIRECT child that matches the given ID snippet.
+     * Does not search deeper than level 1.
+     */
+    fun findChildById(idSnippet: String): UiNode? {
+        return children.find { it.hasId(idSnippet) }
+    }
+
+    /**
+     * Finds the first DESCENDANT (child, grandchild, etc.) that matches the given ID snippet.
+     * Uses depth-first search.
+     */
+    fun findDescendantById(idSnippet: String): UiNode? {
+        if (hasId(idSnippet)) return this
+
+        for (child in children) {
+            val found = child.findDescendantById(idSnippet)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    /**
      * This method is for debugging. It gets called automatically by Log.d()
      * to convert the whole tree into a nicely indented, readable string.
      * It is NOT part of the tree creation logic.
