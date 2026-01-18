@@ -206,7 +206,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun isNotificationServiceEnabled(): Boolean {
         val componentName =
-            ComponentName(this, "cloud.trotter.dashbuddy.services.YourNotificationListenerService")
+            ComponentName(this, "cloud.trotter.dashbuddy.pipeline.inputs.NotificationListener")
         val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
         return flat?.contains(componentName.flattenToString()) == true
     }
