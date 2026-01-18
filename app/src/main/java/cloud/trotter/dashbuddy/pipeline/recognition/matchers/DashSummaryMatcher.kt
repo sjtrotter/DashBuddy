@@ -13,77 +13,87 @@ class DashSummaryMatcher : ScreenMatcher {
     override val targetScreen = Screen.DASH_SUMMARY_SCREEN
     override val priority = 1
 
-    // Patterns for parsing
     private val timePattern = Pattern.compile("(\\d+)\\s*(hr|min)")
     private val offersPattern =
         Pattern.compile("(\\d+)\\s*out of\\s*(\\d+)", Pattern.CASE_INSENSITIVE)
 
+    private val tag = "DashSummaryMatcher"
+
     override fun matches(node: UiNode): ScreenInfo? {
-        // --- 1. MATCHING LOGIC ---
 
-        val hasTitle = node.findNode { it.text.equals("Dash summary", ignoreCase = true) } != null
-
-        val hasDoneButton = node.findNode {
-            it.viewIdResourceName?.endsWith("textView_prism_button_title") == true &&
-                    it.text.equals("Done", ignoreCase = true)
-        } != null
+        // 1. Identification
+        // Look for "Dash summary" title AND "Done" button
+        val hasTitle = node.hasNode { it.text.equals("Dash summary", ignoreCase = true) }
+        val hasDoneButton = node.hasNode {
+            it.hasId("textView_prism_button_title") && it.text.equals("Done", ignoreCase = true)
+        }
 
         if (!hasTitle || !hasDoneButton) return null
 
-        // --- 2. PARSING LOGIC ---
+        Log.d(tag, "Context found (Title & Done Button). Analyzing...")
 
-        val allNodes = node.flatten()
+        // 2. Extraction - Total Pay
+        // Targeted search for ID 'header_pay' which contains the Dash Total
+        val payNode = node.findDescendantById("header_pay")
+        val totalEarnings = payNode?.text?.let { UtilityFunctions.parseCurrency(it) }
 
-        var totalEarnings: Double? = null
-        var weeklyEarnings: Double? = null
+        Log.d(tag, "Dash Earnings: node='${payNode?.text}' -> parsed=$totalEarnings")
+
+        // 3. Extraction - Stats Rows
+        // We look for any node with ID 'name' (the label) and try to find its sibling 'value'
+        var durationMillis = 0L
         var offersAccepted = 0
         var offersTotal = 0
-        var durationMillis = 0L
+        var weeklyEarnings: Double? = null
 
-        for (i in allNodes.indices) {
-            val node = allNodes[i]
+        // Find all label nodes
+        val labelNodes = node.findNodes { it.hasId("name") }
 
-            // 2a. Capture Current Dash Earnings (No ID, starts with $)
-            if (totalEarnings == null &&
-                node.viewIdResourceName == null &&
-                node.text?.startsWith("$") == true && !node.text.contains(
-                    "Earnings",
-                    ignoreCase = true
-                )
-            ) {
-                // Using your existing utility function
-                totalEarnings = UtilityFunctions.parseCurrency(node.text)
-            }
+        for (labelNode in labelNodes) {
+            val label = labelNode.text ?: ""
+            // The value node is usually a sibling in the same parent container
+            val parent = labelNode.parent ?: continue
+            val valueNode = parent.findChildById("value") ?: continue
+            val valueText = valueNode.text ?: ""
 
-            // 2b. Capture Stats Rows (Name / Value pairs)
-            if (node.viewIdResourceName?.endsWith("name") == true) {
-                val label = node.text ?: ""
-                val valueNode = allNodes.getOrNull(i + 1)
+            Log.d(tag, "Found Row: '$label' -> '$valueText'")
 
-                if (valueNode?.viewIdResourceName?.endsWith("value") == true) {
-                    val valueText = valueNode.text ?: ""
+            when {
+                label.equals("Total online time", ignoreCase = true) -> {
+                    durationMillis = parseDurationToMillis(valueText)
+                }
 
-                    when {
-                        label.equals("Total online time", ignoreCase = true) -> {
-                            durationMillis = parseDurationToMillis(valueText)
-                        }
+                label.equals("Offers accepted", ignoreCase = true) -> {
+                    val (accepted, total) = parseOffers(valueText)
+                    offersAccepted = accepted
+                    offersTotal = total
+                }
 
-                        label.equals("Offers accepted", ignoreCase = true) -> {
-                            val (accepted, total) = parseOffers(valueText)
-                            offersAccepted = accepted
-                            offersTotal = total
-                        }
-
-                        label.equals("Earnings this week", ignoreCase = true) -> {
-                            // Using your existing utility function
-                            weeklyEarnings = UtilityFunctions.parseCurrency(valueText)
-                        }
-                    }
+                label.equals("Earnings this week", ignoreCase = true) -> {
+                    weeklyEarnings = UtilityFunctions.parseCurrency(valueText)
                 }
             }
         }
 
-        // --- 3. CALCULATE START TIME ---
+        Log.d(
+            tag,
+            "Parsed Stats: Time=${durationMillis}ms, Offers=$offersAccepted/$offersTotal, Weekly=$weeklyEarnings"
+        )
+
+        // 4. Sanity Check
+        // The current dash earnings cannot exceed the weekly earnings (since it includes them).
+        if (totalEarnings != null && weeklyEarnings != null) {
+            // Allow small delta (0.02) for floating point math weirdness,
+            // but generally Total must be <= Weekly.
+            if (totalEarnings > (weeklyEarnings + 0.02)) {
+                Log.w(
+                    tag,
+                    "Sanity Check FAILED: Dash Total ($totalEarnings) > Weekly Total ($weeklyEarnings). Ignoring invalid data."
+                )
+                return null
+            }
+        }
+
         val startTime = System.currentTimeMillis() - durationMillis
 
         return ScreenInfo.DashSummary(
@@ -94,16 +104,12 @@ class DashSummaryMatcher : ScreenMatcher {
             offersTotal = offersTotal,
             onlineDurationMillis = durationMillis,
             estimatedStartTime = startTime
-        ).also { Log.d("DashSummaryMatcher", "DashSummary: $it") }
+        ).also { Log.i(tag, "Match Success: $it") }
     }
 
-    /**
-     * Parses "1 hr 16 min" or "45 min" into milliseconds.
-     */
     private fun parseDurationToMillis(text: String): Long {
         var totalMillis = 0L
         val matcher = timePattern.matcher(text)
-
         while (matcher.find()) {
             val value = matcher.group(1)?.toLongOrNull() ?: 0L
             val unit = matcher.group(2) // "hr" or "min"
@@ -125,12 +131,5 @@ class DashSummaryMatcher : ScreenMatcher {
             return Pair(accepted, total)
         }
         return Pair(0, 0)
-    }
-
-    private fun UiNode.flatten(): List<UiNode> {
-        val result = mutableListOf<UiNode>()
-        result.add(this)
-        this.children.forEach { result.addAll(it.flatten()) }
-        return result
     }
 }
