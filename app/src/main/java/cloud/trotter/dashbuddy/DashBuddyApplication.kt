@@ -29,7 +29,7 @@ import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.data.event.AppEventRepo // Import your new Repo
-import cloud.trotter.dashbuddy.services.LocationService
+import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.state.StateManagerV2
 
 class DashBuddyApplication : Application() {

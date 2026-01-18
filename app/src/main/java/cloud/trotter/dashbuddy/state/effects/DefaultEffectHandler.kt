@@ -5,7 +5,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
-import cloud.trotter.dashbuddy.services.LocationService
+import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent

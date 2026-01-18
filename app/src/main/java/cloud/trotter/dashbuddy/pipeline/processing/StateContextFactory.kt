@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.pipeline.processing
 
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenRecognizer
-import cloud.trotter.dashbuddy.services.LocationService
+import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent

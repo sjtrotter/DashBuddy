@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.state.effects
 
 import android.content.Intent
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.services.LocationService
+import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 
