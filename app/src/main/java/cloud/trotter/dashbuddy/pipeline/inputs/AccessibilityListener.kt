@@ -47,6 +47,7 @@ class AccessibilityListener : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        _instance = null
         Logger.d(tag, "Accessibility service destroyed")
     }
 
@@ -54,13 +55,7 @@ class AccessibilityListener : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
 
-        // REMOVED: Manual AccessibilityServiceInfo configuration.
-        // We now rely entirely on accessibility_service_config.xml.
-        // This ensures flags like flagReportViewIds are not overwritten.
-
-//        eventHandler.initializeStateManager()
-//        eventHandler.setServiceInstance(this)
-
+        _instance = this
         Logger.d(tag, "Accessibility service connected")
     }
 
