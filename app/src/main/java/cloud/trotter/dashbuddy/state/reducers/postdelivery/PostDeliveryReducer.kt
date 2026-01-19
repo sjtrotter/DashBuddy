@@ -5,6 +5,9 @@ import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.AppStateV2.PostDelivery.Phase
 import cloud.trotter.dashbuddy.state.Reducer
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
+import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
+import cloud.trotter.dashbuddy.state.reducers.DeliveryReducer
+import cloud.trotter.dashbuddy.state.reducers.PickupReducer
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 object PostDeliveryReducer {
@@ -42,6 +45,24 @@ object PostDeliveryReducer {
     // --- MAIN ROUTER ---
 
     fun reduce(state: AppStateV2.PostDelivery, input: ScreenInfo): Reducer.Transition? {
+
+        val screenCheck = when (input) {
+            is ScreenInfo.WaitingForOffer ->
+                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+
+            is ScreenInfo.DropoffDetails ->
+                DeliveryReducer.transitionTo(state, input, isRecovery = false)
+
+            is ScreenInfo.PickupDetails ->
+                PickupReducer.transitionTo(state, input, isRecovery = false)
+
+            else -> null
+        }
+
+        if (screenCheck != null) {
+            return screenCheck
+        }
+
         return when (state.phase) {
             Phase.STABILIZING -> StabilizingPhase.reduce(state, input)
             Phase.CLICKING -> ClickingPhase.reduce(state, input)
