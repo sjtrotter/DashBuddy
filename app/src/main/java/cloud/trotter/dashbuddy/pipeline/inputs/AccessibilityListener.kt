@@ -1,24 +1,19 @@
 package cloud.trotter.dashbuddy.pipeline.inputs
 
 import android.accessibilityservice.AccessibilityService
-//import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.pipeline.Pipeline
 
-//import cloud.trotter.dashbuddy.services.accessibility.EventHandler
-
 class AccessibilityListener : AccessibilityService() {
 
-    //    private lateinit var eventHandler: EventHandler
     private val tag = "DashBuddyAccessibility"
 
     override fun onCreate() {
         super.onCreate()
         Logger.d(tag, "Accessibility service created")
-//        eventHandler = EventHandler
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -32,14 +27,7 @@ class AccessibilityListener : AccessibilityService() {
         }
 
         Pipeline.onAccessibilityEvent(event, this)
-
-//        eventHandler.handleEvent(event, this)
     }
-
-//    override fun onUnbind(intent: Intent?): Boolean {
-//        eventHandler.clearServiceInstance()
-//        return super.onUnbind(intent)
-//    }
 
     override fun onInterrupt() {
         Logger.d(tag, "Accessibility service interrupted")
@@ -60,11 +48,9 @@ class AccessibilityListener : AccessibilityService() {
     }
 
     companion object {
-        // We use a volatile variable to ensure safe publishing across threads
         @Volatile
         private var _instance: AccessibilityListener? = null
 
-        // Public read-only property
         val instance: AccessibilityListener?
             get() = _instance
     }
