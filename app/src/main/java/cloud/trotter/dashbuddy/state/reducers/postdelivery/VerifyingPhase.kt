@@ -27,8 +27,8 @@ internal object VerifyingPhase {
             phase = AppStateV2.PostDelivery.Phase.VERIFYING,
             summaryText = "Verifying..."
         )
-        // If we clicked, wait 2s for animation. If we didn't, 1s is enough.
-        val waitTime = if (clickSent) 2000L else 1000L
+        // If we clicked, wait 1s for animation. If we didn't, .5s is enough.
+        val waitTime = if (clickSent) 1000L else 500L
 
         return Reducer.Transition(
             newState,

@@ -5,8 +5,8 @@ import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.log.Logger as Log
 import kotlin.math.abs
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 class DeliverySummaryMatcher : ScreenMatcher {
     override val targetScreen: Screen = Screen.DELIVERY_SUMMARY_EXPANDED
@@ -44,7 +44,8 @@ class DeliverySummaryMatcher : ScreenMatcher {
         Log.d(tag, "Headline Total: $headlineTotal (Node text: ${finalValueNode?.text})")
 
         // 4. Parse Breakdown
-        val parsedPay = PayParser.parsePayFromTree(node)
+        val parsedScope = earningsContainer ?: node
+        val parsedPay = PayParser.parsePayFromTree(parsedScope)
         val breakdownTotal = parsedPay.total
 
         Log.d(

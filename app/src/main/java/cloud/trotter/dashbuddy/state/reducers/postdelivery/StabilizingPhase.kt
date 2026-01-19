@@ -17,10 +17,10 @@ internal object StabilizingPhase {
             dashId = oldState.dashId,
             phase = AppStateV2.PostDelivery.Phase.STABILIZING
         )
-        // Wait 1.5s to ensure screen isn't flickering
+        // Wait .5s to ensure screen isn't flickering
         return Reducer.Transition(
             newState,
-            listOf(AppEffect.ScheduleTimeout(1500, TimeoutType.EXPAND_STABILITY))
+            listOf(AppEffect.ScheduleTimeout(500, TimeoutType.EXPAND_STABILITY))
         )
     }
 
