@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="scoring_metrics">
+        <item>Total Payout</item>
+        <item>Dollars per Mile</item>
+        <item>Dollars per Hour</item>
+    </string-array>
+    <string-array name="scoring_metric_values">
+        <item>Payout</item>
+        <item>DollarPerMile</item>
+        <item>DollarPerHour</item>
+    </string-array>
+</resources>
