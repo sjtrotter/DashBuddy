@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import cloud.trotter.dashbuddy.data.Prefs
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import cloud.trotter.dashbuddy.util.PermissionUtils
 
@@ -40,10 +42,12 @@ fun DashboardScreen(
 
     // Reactive State: automatically updates UI when changed
     var hasPermissions by remember { mutableStateOf(false) }
+    var isFirstRun by remember { mutableStateOf(Prefs.isFirstRun) }
 
     // Check permissions every time the screen resumes
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         hasPermissions = PermissionUtils.hasAllEssentialPermissions(context)
+        isFirstRun = Prefs.isFirstRun
     }
 
     Scaffold(
@@ -59,63 +63,79 @@ fun DashboardScreen(
                 .padding(16.dp)
                 .fillMaxSize()
         ) {
-            if (hasPermissions) {
-                // HAPPY PATH: The "Ready" Card
-                StatusCard(
-                    title = "Ready to Dash",
-                    subtitle = "All systems go.",
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        val intent = Intent(context, BubbleService::class.java)
-                        context.startForegroundService(intent)
-                    }
-                ) {
-                    Text("Show Bubble")
+            when {
+                // CASE 1: Everything is Perfect
+                hasPermissions -> {
+                    StatusCard(
+                        title = "Ready to Dash",
+                        subtitle = "All systems go.",
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            val intent = Intent(context, BubbleService::class.java).apply {
+                                putExtra(BubbleService.EXTRA_MESSAGE, "Welcome!")
+                            }
+                            context.startForegroundService(intent)
+                        }
+                    ) { Text("Show Bubble") }
                 }
-            } else {
-                // ERROR PATH: The "Fix Me" Card
-                StatusCard(
-                    title = "Setup Required",
-                    subtitle = "Permissions missing. App paused.",
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    textColor = MaterialTheme.colorScheme.onErrorContainer
-                )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // CASE 2: First Run (Friendly Welcome)
+                isFirstRun -> {
+                    StatusCard(
+                        title = "Welcome to DashBuddy!",
+                        subtitle = "Let's get you set up with the permissions needed to automate your dash.",
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onNavigateToSetup
+                    ) { Text("Start Setup") }
+                }
 
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    onClick = onNavigateToSetup
-                ) {
-                    Text("Fix Permissions")
+                // CASE 3: Permissions Broken (Error State)
+                else -> {
+                    StatusCard(
+                        title = "Permissions Missing",
+                        subtitle = "Something essential was disabled. Please fix it to continue.",
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        textColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        onClick = onNavigateToSetup
+                    ) { Text("Fix Permissions") }
                 }
             }
         }
     }
 }
 
-// Reusable Component
 @Composable
 fun StatusCard(
     title: String,
     subtitle: String,
     containerColor: androidx.compose.ui.graphics.Color,
-    textColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onPrimaryContainer
+    // FIX: Remove the hardcoded default. Let Material decide.
+    textColor: androidx.compose.ui.graphics.Color = contentColorFor(containerColor)
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = containerColor),
+        colors = CardDefaults.cardColors(
+            containerColor = containerColor,
+            contentColor = textColor // Apply it here to the whole card
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
-            Text(text = title, style = MaterialTheme.typography.headlineMedium, color = textColor)
-            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = textColor)
+            // Remove 'color = textColor' overrides here so they inherit from the Card
+            Text(text = title, style = MaterialTheme.typography.headlineMedium)
+            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

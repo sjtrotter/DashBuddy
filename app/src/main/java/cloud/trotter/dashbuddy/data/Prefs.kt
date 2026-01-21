@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.data
 
+import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.state.model.config.EvaluationConfig
@@ -10,6 +11,10 @@ object Prefs {
     private val prefs by lazy {
         PreferenceManager.getDefaultSharedPreferences(DashBuddyApplication.context)
     }
+
+    var isFirstRun: Boolean
+        get() = prefs.getBoolean("is_first_run", true)
+        set(value) = prefs.edit { putBoolean("is_first_run", value) }
 
     // --- 1. EVALUATION (The Accountant) ---
     val evaluationConfig: EvaluationConfig
