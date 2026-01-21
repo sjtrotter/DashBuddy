@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.ksp)
@@ -47,29 +48,40 @@ android {
     buildFeatures {
         dataBinding = true
         viewBinding = true
+        compose = true
     }
 }
 
 dependencies {
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.junit)
 
-    implementation(libs.androidx.core.ktx)
+    debugImplementation(libs.androidx.ui.tooling)
+
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
-    implementation(libs.material)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    implementation(libs.androidx.room.paging)
+    implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.material.icons.extended)
+    implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.androidx.preference.ktx)
-    implementation(libs.play.services.location)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.paging)
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.google.code.gson)
-
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
+    implementation(libs.material)
+    implementation(libs.play.services.location)
+    implementation(platform(libs.androidx.compose.bom))
 
     ksp(libs.androidx.room.compiler)
+
+    testImplementation(libs.junit)
+
 }

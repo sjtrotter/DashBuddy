@@ -1,36 +1,31 @@
 package cloud.trotter.dashbuddy.ui.activities
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import androidx.navigation.NavController
-import androidx.navigation.fragment.NavHostFragment
-import androidx.navigation.ui.setupActionBarWithNavController
-import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.databinding.ActivityMainBinding
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge // This is the magic function
+import cloud.trotter.dashbuddy.ui.screens.DashboardScreen
+import cloud.trotter.dashbuddy.ui.theme.DashBuddyTheme
 
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var binding: ActivityMainBinding
-    private lateinit var navController: NavController
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
 
-        setSupportActionBar(binding.toolbar)
+        // 1. Enable Edge-to-Edge (Transparent status/nav bars)
+        enableEdgeToEdge()
 
-        // Wire up the Navigation
-        val navHostFragment = supportFragmentManager
-            .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-        navController = navHostFragment.navController
-
-        // Automatically updates Toolbar Title based on the active Fragment label
-        setupActionBarWithNavController(navController)
-    }
-
-    // Handles the "Back" arrow in the toolbar automatically
-    override fun onSupportNavigateUp(): Boolean {
-        return navController.navigateUp() || super.onSupportNavigateUp()
+        setContent {
+            DashBuddyTheme {
+                // 2. Show Dashboard
+                DashboardScreen(
+                    onNavigateToSettings = {
+                        // TODO: Add navigation logic
+                    },
+                    onNavigateToSetup = {
+                        // TODO: Add navigation logic
+                    }
+                )
+            }
+        }
     }
 }
