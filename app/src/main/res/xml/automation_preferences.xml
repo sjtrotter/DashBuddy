@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <androidx.preference.PreferenceCategory app:title="Offer Screen Automation">
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:key="pref_auto_accept_master"
+            app:title="Enable Auto-Accept" />
+
+        <EditTextPreference
+            app:defaultValue="10.00"
+            app:dependency="pref_auto_accept_master"
+            app:key="pref_aa_min_pay"
+            app:title="Min Pay to Accept" />
+
+        <EditTextPreference
+            app:defaultValue="2.00"
+            app:dependency="pref_auto_accept_master"
+            app:key="pref_aa_min_ratio"
+            app:title="Min $/Mile to Accept" />
+
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:key="pref_auto_decline_master"
+            app:title="Enable Auto-Decline" />
+
+        <EditTextPreference
+            app:defaultValue="3.50"
+            app:dependency="pref_auto_decline_master"
+            app:key="pref_ad_max_pay"
+            app:title="Decline if Pay Under" />
+    </androidx.preference.PreferenceCategory>
+
+    <androidx.preference.PreferenceCategory app:title="Post-Delivery Automation">
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="pref_auto_expand"
+            app:summary="Automatically clicks the dropdown to show tips"
+            app:title="Auto-Expand Pay Details" />
+    </androidx.preference.PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <androidx.preference.PreferenceCategory app:title="General">
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:key="pref_master_auto_pilot"
+            app:icon="@drawable/ic_menu_toolbar_tactics"
+            app:summary="Enable/Disable all automated clicks"
+            app:title="Master Auto-Pilot" />
+    </androidx.preference.PreferenceCategory>
+
+    <androidx.preference.PreferenceCategory app:title="Configuration">
+
+        <Preference
+            app:fragment="cloud.trotter.dashbuddy.ui.fragments.settings.EvaluationSettingsFragment"
+            app:icon="@drawable/ic_badge_dollar_plus"
+            app:key="screen_evaluation"
+            app:summary="Configure Pay, Distance, and Time targets"
+            app:title="Evaluation Strategy" />
+
+        <Preference
+            app:fragment="cloud.trotter.dashbuddy.ui.fragments.settings.AutomationSettingsFragment"
+            app:icon="@drawable/ic_shopping_bag_speed"
+            app:key="screen_automation"
+            app:summary="Auto-Accept, Decline, and Screen Interactions"
+            app:title="Automation Rules" />
+
+    </androidx.preference.PreferenceCategory>
+
+    <androidx.preference.PreferenceCategory app:title="Developer">
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:key="pref_debug_mode"
+            app:icon="@drawable/ic_menu_toolbar_debug"
+            app:summary="Enable verbose logging"
+            app:title="Debug Mode" />
+    </androidx.preference.PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>
