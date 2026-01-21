@@ -1,19 +1,21 @@
-package cloud.trotter.dashbuddy.ui.settings
+package cloud.trotter.dashbuddy.ui.settings.automation
 
 import android.os.Bundle
+import android.text.InputType
 import androidx.preference.EditTextPreference
+import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.util.ViewUtils
 
-class EvaluationSettingsFragment : PreferenceFragmentCompat() {
+class AutomationSettingsFragment : PreferenceFragmentCompat() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.evaluation_preferences, rootKey)
+        setPreferencesFromResource(R.xml.automation_preferences, rootKey)
 
-        setupInput("pref_market_max_pay", "Target: $")
-        setupInput("pref_market_max_dist", "Max: ", " mi")
-        setupInput("pref_market_target_hourly", "Goal: $", "/hr")
-        setupInput("pref_market_max_items", "Limit: ", " items")
+        // Setup inputs with dollar signs
+        setupInput("pref_aa_min_pay", "$")
+        setupInput("pref_aa_min_ratio", "$/mi ")
+        setupInput("pref_ad_max_pay", "$")
     }
 
     private fun setupInput(key: String, prefix: String = "", suffix: String = "") {
@@ -21,7 +23,7 @@ class EvaluationSettingsFragment : PreferenceFragmentCompat() {
 
         // 1. Dynamic Summary
         pref.summaryProvider =
-            androidx.preference.Preference.SummaryProvider<EditTextPreference> { preference ->
+            Preference.SummaryProvider<EditTextPreference> { preference ->
                 val text = preference.text
                 if (text.isNullOrEmpty()) "Not set" else "$prefix$text$suffix"
             }
@@ -29,7 +31,7 @@ class EvaluationSettingsFragment : PreferenceFragmentCompat() {
         // 2. Units in the Box!
         pref.setOnBindEditTextListener { editText ->
             editText.inputType =
-                android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
 
             // Generate the unit icons
             val prefixDrawable = if (prefix.isNotEmpty()) ViewUtils.createTextDrawable(

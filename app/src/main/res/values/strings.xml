@@ -44,4 +44,7 @@
     <string name="ready_to_dash">Ready to Dash</string>
     <string name="all_systems_go">All systems go.</string>
     <string name="settings">Settings</string>
+    <string name="edit">Edit</string>
+    <string name="description_goes_here">Description goes here...</string>
+    <string name="settings_content_frame">settings content frame</string>
 </resources>

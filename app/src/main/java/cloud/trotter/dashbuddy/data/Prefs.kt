@@ -16,14 +16,19 @@ object Prefs {
         get() = EvaluationConfig(
             prioritizedMetric = prefs.getString("pref_metric", "Payout") ?: "Payout",
 
-            // Baselines
-            maxExpectedPay = getDouble("pref_market_max_pay", 15.0),
-            maxWillingDistance = getDouble("pref_market_max_dist", 12.0),
-            targetHourlyRate = getDouble("pref_market_target_hourly", 25.0),
-            maxItemTolerance = getDouble("pref_market_max_items", 15.0),
+            // UPDATED: Read these as Ints (from SeekBars) and convert to Double
+            maxExpectedPay = getIntAsDouble("pref_market_max_pay", 15),
+            maxWillingDistance = getIntAsDouble("pref_market_max_dist", 12),
+            targetHourlyRate = getIntAsDouble("pref_market_target_hourly", 25),
+
+            // This might still be an EditText or SeekBar depending on your XML.
+            // If you changed it to SeekBar, use getIntAsDouble. If it's Text, use getDouble.
+            // Based on your last request, let's assume standard SeekBars for safety:
+            maxItemTolerance = getIntAsDouble("pref_market_max_items", 15),
+
             strictShoppingMode = prefs.getBoolean("pref_shopping_penalty_enabled", true),
 
-            // Weights (Stored as Int 0-100 in SeekBars, converted to Float 0.0-1.0)
+            // Weights (0-100)
             weightPay = getWeight("pref_weight_pay", 40),
             weightDistance = getWeight("pref_weight_distance", 30),
             weightTime = getWeight("pref_weight_time", 20),
@@ -32,12 +37,13 @@ object Prefs {
             multiStopPenalty = prefs.getInt("pref_weight_legs", 10).toFloat()
         )
 
-    // --- 2. AUTOMATION (The Offer Robot) ---
+    // --- 2. AUTOMATION ---
     val offerAutomationConfig: OfferAutomationConfig
         get() = OfferAutomationConfig(
             masterAutoPilotEnabled = prefs.getBoolean("pref_master_auto_pilot", false),
 
             autoAcceptEnabled = prefs.getBoolean("pref_auto_accept_master", false),
+            // These are likely still EditTexts (User types specific cents)
             autoAcceptMinPay = getDouble("pref_aa_min_pay", 10.0),
             autoAcceptMinRatio = getDouble("pref_aa_min_ratio", 2.0),
 
@@ -46,7 +52,7 @@ object Prefs {
             autoDeclineMinRatio = getDouble("pref_ad_min_ratio", 0.50)
         )
 
-    // --- 3. POST-DELIVERY (The Assistant) ---
+    // --- 3. POST-DELIVERY ---
     val postDeliveryConfig: PostDeliveryConfig
         get() = PostDeliveryConfig(
             masterAutoPilotEnabled = prefs.getBoolean("pref_master_auto_pilot", false),
@@ -54,11 +60,27 @@ object Prefs {
         )
 
     // --- Helpers ---
+
+    // For EditTextPreferences (Strings like "15.50")
     private fun getDouble(key: String, default: Double): Double {
         return try {
             prefs.getString(key, default.toString())?.toDoubleOrNull() ?: default
         } catch (e: Exception) {
             default
+        }
+    }
+
+    // NEW: For SeekBarPreferences (Ints like 15)
+    private fun getIntAsDouble(key: String, default: Int): Double {
+        return try {
+            prefs.getInt(key, default).toDouble()
+        } catch (e: Exception) {
+            // Fallback: If old string data still exists, try to parse it
+            try {
+                prefs.getString(key, default.toString())?.toDoubleOrNull() ?: default.toDouble()
+            } catch (e2: Exception) {
+                default.toDouble()
+            }
         }
     }
 

@@ -37,22 +37,23 @@
         android:id="@+id/fragment_settings"
         android:name="cloud.trotter.dashbuddy.ui.settings.SettingsFragment"
         android:label="Settings">
+
         <action
-            android:id="@+id/action_settings_to_evaluation"
-            app:destination="@id/fragment_evaluation_settings" />
+            android:id="@+id/action_settings_to_market"
+            app:destination="@id/fragment_market_settings" />
         <action
             android:id="@+id/action_settings_to_automation"
             app:destination="@id/fragment_automation_settings" />
     </fragment>
 
     <fragment
-        android:id="@+id/fragment_evaluation_settings"
-        android:name="cloud.trotter.dashbuddy.ui.fragments.settings.EvaluationSettingsFragment"
-        android:label="Evaluation Strategy" />
+        android:id="@+id/fragment_market_settings"
+        android:name="cloud.trotter.dashbuddy.ui.settings.market.MarketSettingsFragment"
+        android:label="Market Strategy" />
 
     <fragment
         android:id="@+id/fragment_automation_settings"
-        android:name="cloud.trotter.dashbuddy.ui.fragments.settings.AutomationSettingsFragment"
+        android:name="cloud.trotter.dashbuddy.ui.settings.automation.AutomationSettingsFragment"
         android:label="Automation Rules" />
 
 </navigation>

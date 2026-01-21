@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.settings // <--- CHECK PACKAGE NAME
+package cloud.trotter.dashbuddy.ui.settings
 
 import android.os.Bundle
 import androidx.navigation.fragment.findNavController
@@ -19,7 +19,7 @@ class SettingsFragment : PreferenceFragmentCompat(),
     ): Boolean {
         when (pref.key) {
             "screen_evaluation" -> {
-                findNavController().navigate(R.id.action_settings_to_evaluation)
+                findNavController().navigate(R.id.action_settings_to_market)
                 return true
             }
 
