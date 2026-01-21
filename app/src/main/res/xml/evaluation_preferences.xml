@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <androidx.preference.PreferenceCategory app:title="Market Baselines">
+        <ListPreference
+            app:defaultValue="Payout"
+            app:entries="@array/scoring_metrics"
+            app:entryValues="@array/scoring_metric_values"
+            app:key="pref_metric"
+            app:title="Primary Focus" />
+
+        <EditTextPreference
+            app:defaultValue="15.00"
+            app:key="pref_market_max_pay"
+            app:summary="The pay amount that deserves a perfect score (e.g. 15.00)"
+            app:title="Target High Pay" />
+
+        <EditTextPreference
+            app:defaultValue="12.0"
+            app:key="pref_market_max_dist"
+            app:summary="The furthest you want to drive (e.g. 12.0)"
+            app:title="Max Willing Distance" />
+
+        <EditTextPreference
+            app:defaultValue="25.00"
+            app:key="pref_market_target_hourly"
+            app:summary="Your hourly goal (e.g. 25.00)"
+            app:title="Target Hourly Wage" />
+    </androidx.preference.PreferenceCategory>
+
+    <androidx.preference.PreferenceCategory app:title="Workload &amp; Hassle">
+        <EditTextPreference
+            app:defaultValue="15"
+            app:key="pref_market_max_items"
+            app:summary="Item count where order becomes 'too big'"
+            app:title="Max Item Tolerance" />
+
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="pref_shopping_penalty_enabled"
+            app:summary="Penalize item counts heavily for Shop &amp; Deliver"
+            app:title="Strict Shopping Mode" />
+    </androidx.preference.PreferenceCategory>
+
+    <androidx.preference.PreferenceCategory app:title="Scoring Weights (0-100)">
+        <SeekBarPreference
+            android:max="100"
+            app:defaultValue="40"
+            app:key="pref_weight_pay"
+            app:showSeekBarValue="true"
+            app:title="Pay Importance" />
+
+        <SeekBarPreference
+            android:max="100"
+            app:defaultValue="30"
+            app:key="pref_weight_distance"
+            app:showSeekBarValue="true"
+            app:title="Distance Importance" />
+
+        <SeekBarPreference
+            android:max="100"
+            app:defaultValue="20"
+            app:key="pref_weight_time"
+            app:showSeekBarValue="true"
+            app:title="Time Importance" />
+
+        <SeekBarPreference
+            android:max="100"
+            app:defaultValue="10"
+            app:key="pref_weight_items"
+            app:showSeekBarValue="true"
+            app:title="Item Count Impact" />
+
+        <SeekBarPreference
+            android:max="50"
+            app:defaultValue="10"
+            app:key="pref_weight_legs"
+            app:showSeekBarValue="true"
+            app:summary="Points deducted per extra stop"
+            app:title="Multi-Stop Penalty" />
+    </androidx.preference.PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>

@@ -2,47 +2,67 @@ package cloud.trotter.dashbuddy.data
 
 import androidx.preference.PreferenceManager
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.state.model.config.EvaluationConfig
+import cloud.trotter.dashbuddy.state.model.config.OfferAutomationConfig
+import cloud.trotter.dashbuddy.state.model.config.PostDeliveryConfig
 
-/**
- * Single source of truth for all User Settings.
- */
 object Prefs {
-
     private val prefs by lazy {
         PreferenceManager.getDefaultSharedPreferences(DashBuddyApplication.context)
     }
 
-    // --- KEYS ---
-    // Must match app/src/main/res/xml/root_preferences.xml
-    private const val KEY_SCORING_METRIC = "pref_scoring_metric"
-    private const val KEY_MIN_PAY = "pref_min_pay_threshold"
-    private const val KEY_AUTO_PILOT = "pref_master_auto_pilot"
-    private const val KEY_SAFE_MODE = "pref_safe_mode"
-    private const val KEY_AUTO_EXPAND = "pref_auto_expand"
+    // --- 1. EVALUATION (The Accountant) ---
+    val evaluationConfig: EvaluationConfig
+        get() = EvaluationConfig(
+            prioritizedMetric = prefs.getString("pref_metric", "Payout") ?: "Payout",
 
-    // --- ACCESSORS ---
+            // Baselines
+            maxExpectedPay = getDouble("pref_market_max_pay", 15.0),
+            maxWillingDistance = getDouble("pref_market_max_dist", 12.0),
+            targetHourlyRate = getDouble("pref_market_target_hourly", 25.0),
+            maxItemTolerance = getDouble("pref_market_max_items", 15.0),
+            strictShoppingMode = prefs.getBoolean("pref_shopping_penalty_enabled", true),
 
-    val scoringMetric: String
-        get() = prefs.getString(KEY_SCORING_METRIC, "Payout") ?: "Payout"
+            // Weights (Stored as Int 0-100 in SeekBars, converted to Float 0.0-1.0)
+            weightPay = getWeight("pref_weight_pay", 40),
+            weightDistance = getWeight("pref_weight_distance", 30),
+            weightTime = getWeight("pref_weight_time", 20),
+            weightItemCount = getWeight("pref_weight_items", 10),
 
-    val minPayThreshold: Double
-        get() = prefs.getInt(KEY_MIN_PAY, 5).toDouble()
+            multiStopPenalty = prefs.getInt("pref_weight_legs", 10).toFloat()
+        )
 
-    val isAutoPilotEnabled: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_PILOT, false)
+    // --- 2. AUTOMATION (The Offer Robot) ---
+    val offerAutomationConfig: OfferAutomationConfig
+        get() = OfferAutomationConfig(
+            masterAutoPilotEnabled = prefs.getBoolean("pref_master_auto_pilot", false),
 
-    val isSafeModeEnabled: Boolean
-        get() = prefs.getBoolean(KEY_SAFE_MODE, true)
+            autoAcceptEnabled = prefs.getBoolean("pref_auto_accept_master", false),
+            autoAcceptMinPay = getDouble("pref_aa_min_pay", 10.0),
+            autoAcceptMinRatio = getDouble("pref_aa_min_ratio", 2.0),
 
-    val isAutoExpandEnabled: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_EXPAND, true)
+            autoDeclineEnabled = prefs.getBoolean("pref_auto_decline_master", false),
+            autoDeclineMaxPay = getDouble("pref_ad_max_pay", 3.50),
+            autoDeclineMinRatio = getDouble("pref_ad_min_ratio", 0.50)
+        )
 
-    // --- Helper for updating legacy OfferEvaluator logic ---
-    fun getScoringWeights(): Triple<Float, Float, Float> {
-        return when (scoringMetric) {
-            "DollarPerMile" -> Triple(0.2f, 0.3f, 0.2f)
-            "DollarPerHour" -> Triple(0.2f, 0.2f, 0.3f)
-            else -> Triple(0.3f, 0.2f, 0.2f) // Payout
+    // --- 3. POST-DELIVERY (The Assistant) ---
+    val postDeliveryConfig: PostDeliveryConfig
+        get() = PostDeliveryConfig(
+            masterAutoPilotEnabled = prefs.getBoolean("pref_master_auto_pilot", false),
+            autoExpandDetails = prefs.getBoolean("pref_auto_expand", true)
+        )
+
+    // --- Helpers ---
+    private fun getDouble(key: String, default: Double): Double {
+        return try {
+            prefs.getString(key, default.toString())?.toDoubleOrNull() ?: default
+        } catch (e: Exception) {
+            default
         }
+    }
+
+    private fun getWeight(key: String, default: Int): Float {
+        return prefs.getInt(key, default) / 100f
     }
 }

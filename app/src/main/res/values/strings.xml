@@ -43,4 +43,5 @@
     <string name="active_total">Active/Total</string>
     <string name="ready_to_dash">Ready to Dash</string>
     <string name="all_systems_go">All systems go.</string>
+    <string name="settings">Settings</string>
 </resources>
