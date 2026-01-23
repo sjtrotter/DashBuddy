@@ -8,17 +8,14 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.location.Location
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
-import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.data.current.CurrentRepo
-import cloud.trotter.dashbuddy.data.dash.DashRepo
-import cloud.trotter.dashbuddy.data.order.OrderRepo
 import cloud.trotter.dashbuddy.log.Logger
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -41,9 +38,6 @@ class LocationService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // --- Dependencies ---
-    private lateinit var currentRepo: CurrentRepo
-    private lateinit var dashRepo: DashRepo
-    private lateinit var orderRepo: OrderRepo
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
 
@@ -78,12 +72,7 @@ class LocationService : Service() {
     override fun onCreate() {
         super.onCreate()
         Logger.d(tag, "LocationService Created")
-
-        currentRepo = DashBuddyApplication.Companion.currentRepo
-        dashRepo = DashBuddyApplication.Companion.dashRepo
-        orderRepo = DashBuddyApplication.Companion.orderRepo
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-
         restoreOdometerState()
     }
 
@@ -94,7 +83,11 @@ class LocationService : Service() {
         if (!isKeepAlive || !isTracking) {
             Logger.i(tag, "Starting Odometer Service (Triggered by: ${intent?.action})")
             createNotificationChannel()
-            startForeground(NOTIFICATION_ID, createNotification())
+            startForeground(
+                NOTIFICATION_ID,
+                createNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            )
             startLocationUpdates()
             isTracking = true
         }
