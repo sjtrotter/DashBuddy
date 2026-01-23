@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.activities
+package cloud.trotter.dashbuddy.ui.bubble
 
 import android.content.Intent
 import android.os.Bundle
@@ -8,8 +8,8 @@ import androidx.navigation.ui.setupWithNavController
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.ActivityBubbleBinding
+import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.ui.interfaces.DebugModeToggleListener
-import cloud.trotter.dashbuddy.log.Logger as Log
 
 class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
 
@@ -54,7 +54,7 @@ class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
     override fun onResume() {
         super.onResume()
         updateDebugTabVisibility()
-        Log.d(TAG, "onResume: Debug tab visibility updated.")
+        Logger.d(TAG, "onResume: Debug tab visibility updated.")
     }
 
     // A single helper to handle navigation from intents
@@ -62,7 +62,7 @@ class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
         val targetTabId = intent?.getIntExtra(EXTRA_TARGET_TAB_ID, -1) ?: -1
         if (targetTabId != -1) {
             binding.bubbleBottomNav.selectedItemId = targetTabId
-            Log.d(TAG, "Navigated to tab: ${getFragmentName(targetTabId)}")
+            Logger.d(TAG, "Navigated to tab: ${getFragmentName(targetTabId)}")
         }
     }
 
@@ -75,9 +75,9 @@ class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
         if (debugTabMenuItem != null) {
             if (debugTabMenuItem.isVisible != isDebugModeEnabled) {
                 debugTabMenuItem.isVisible = isDebugModeEnabled
-                Log.i(TAG, "Debug tab visibility updated to: $isDebugModeEnabled")
+                Logger.i(TAG, "Debug tab visibility updated to: $isDebugModeEnabled")
                 if (!isDebugModeEnabled && binding.bubbleBottomNav.selectedItemId == R.id.nav_debug_log) {
-                    Log.d(
+                    Logger.d(
                         TAG,
                         "Debug mode turned off while debug tab was active. Switching to default."
                     )
@@ -85,7 +85,7 @@ class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
                 }
             }
         } else {
-            Log.w(TAG, "Could not find R.id.nav_debug_log menu item to set visibility.")
+            Logger.w(TAG, "Could not find R.id.nav_debug_log menu item to set visibility.")
         }
     }
 

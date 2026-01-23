@@ -18,7 +18,7 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.data.log.dash.DashLogAdapter
 import cloud.trotter.dashbuddy.data.log.dash.DashLogViewModel
 import cloud.trotter.dashbuddy.databinding.FragmentDashLogBinding
-import cloud.trotter.dashbuddy.ui.activities.BubbleActivity
+import cloud.trotter.dashbuddy.ui.bubble.BubbleActivity
 
 class DashLogFragment : Fragment() {
 

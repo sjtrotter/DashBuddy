@@ -1,7 +1,8 @@
-package cloud.trotter.dashbuddy.ui.screens
+package cloud.trotter.dashbuddy.ui.setup
 
 import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,40 +30,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import cloud.trotter.dashbuddy.data.Prefs
+import cloud.trotter.dashbuddy.ui.dashboard.DashboardViewModel
 import cloud.trotter.dashbuddy.util.PermissionUtils
 
 @Composable
-fun SetupScreen(onSetupComplete: () -> Unit) {
+fun SetupScreen(
+    // Reuse the DashboardVM because it owns the "First Run" state
+    viewModel: DashboardViewModel = hiltViewModel(),
+    onSetupComplete: () -> Unit
+) {
     val context = LocalContext.current
 
     // Track permission states
     var isPostNotifGranted by remember {
-        mutableStateOf(
-            PermissionUtils.hasPostNotificationsPermission(
-                context
-            )
-        )
+        mutableStateOf(PermissionUtils.hasPostNotificationsPermission(context))
     }
     var isAccessibilityGranted by remember {
-        mutableStateOf(
-            PermissionUtils.isAccessibilityServiceEnabled(
-                context
-            )
-        )
+        mutableStateOf(PermissionUtils.isAccessibilityServiceEnabled(context))
     }
     var isLocationGranted by remember { mutableStateOf(PermissionUtils.hasLocationPermission(context)) }
     var isListenerGranted by remember {
-        mutableStateOf(
-            PermissionUtils.isNotificationListenerEnabled(
-                context
-            )
-        )
+        mutableStateOf(PermissionUtils.isNotificationListenerEnabled(context))
     }
 
-    // Re-check whenever we come back to this screen (e.g. from Settings app)
+    // Re-check whenever we come back to this screen
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         isPostNotifGranted = PermissionUtils.hasPostNotificationsPermission(context)
         isAccessibilityGranted = PermissionUtils.isAccessibilityServiceEnabled(context)
@@ -70,7 +64,6 @@ fun SetupScreen(onSetupComplete: () -> Unit) {
         isListenerGranted = PermissionUtils.isNotificationListenerEnabled(context)
     }
 
-    // Launchers for Runtime Permissions
     val notifLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             isPostNotifGranted = it
@@ -89,9 +82,10 @@ fun SetupScreen(onSetupComplete: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                enabled = allGood, // Only enable if everything is green
+                enabled = allGood,
                 onClick = {
-                    Prefs.isFirstRun = false // Mark onboarding as done!
+                    // FIX: Use the ViewModel to update DataStore
+                    viewModel.completeSetup()
                     onSetupComplete()
                 }
             ) {
@@ -118,16 +112,15 @@ fun SetupScreen(onSetupComplete: () -> Unit) {
                 description = "So we can show the bubble.",
                 isGranted = isPostNotifGranted,
                 onClick = {
-                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    if (Build.VERSION.SDK_INT >= 33) {
                         notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     } else {
-                        // Older androids imply this, or send to settings
                         isPostNotifGranted = true
                     }
                 }
             )
 
-            // 2. Accessibility (System Service)
+            // 2. Accessibility
             PermissionItem(
                 title = "Accessibility Service",
                 description = "To read the screen and auto-click.",
@@ -152,7 +145,7 @@ fun SetupScreen(onSetupComplete: () -> Unit) {
                 }
             )
 
-            // 4. Notification Listener (System Service)
+            // 4. Notification Listener
             PermissionItem(
                 title = "Read Notifications",
                 description = "To detect incoming offers.",
@@ -174,7 +167,7 @@ fun PermissionItem(
 ) {
     Card(
         onClick = onClick,
-        enabled = !isGranted, // Disable click if already done
+        enabled = !isGranted,
         colors = CardDefaults.cardColors(
             containerColor = if (isGranted) MaterialTheme.colorScheme.surfaceContainerHigh
             else MaterialTheme.colorScheme.surfaceVariant

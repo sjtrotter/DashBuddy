@@ -13,25 +13,27 @@ import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
 import cloud.trotter.dashbuddy.data.current.CurrentRepo
 import cloud.trotter.dashbuddy.data.customer.CustomerRepo
 import cloud.trotter.dashbuddy.data.dash.DashRepo
+import cloud.trotter.dashbuddy.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.data.event.DashEventRepo
 import cloud.trotter.dashbuddy.data.event.DropoffEventRepo
 import cloud.trotter.dashbuddy.data.event.OfferEventRepo
 import cloud.trotter.dashbuddy.data.event.PickupEventRepo
 import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneRepo
-import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
+import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.data.offer.OfferRepo
 import cloud.trotter.dashbuddy.data.order.OrderRepo
 import cloud.trotter.dashbuddy.data.pay.AppPayRepo
 import cloud.trotter.dashbuddy.data.pay.TipRepo
 import cloud.trotter.dashbuddy.data.store.StoreRepo
 import cloud.trotter.dashbuddy.data.zone.ZoneRepo
+import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
+import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
+import dagger.hilt.android.HiltAndroidApp
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
-import cloud.trotter.dashbuddy.data.event.AppEventRepo // Import your new Repo
-import cloud.trotter.dashbuddy.data.location.LocationService
-import cloud.trotter.dashbuddy.state.StateManagerV2
 
+@HiltAndroidApp
 class DashBuddyApplication : Application() {
 
     companion object {

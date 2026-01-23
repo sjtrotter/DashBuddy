@@ -3,8 +3,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
 
@@ -37,16 +37,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlin {
-        compilerOptions {
-            jvmTarget.assign(JvmTarget.JVM_11)
-        }
-    }
-
     viewBinding.enable = true
 
     buildFeatures {
-        dataBinding = true
+//        dataBinding = true // testing to see if databindings need to be enabled
         viewBinding = true
         compose = true
     }
@@ -61,7 +55,9 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.fragment.ktx)
+    implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.material.icons.extended)
@@ -77,12 +73,22 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.google.code.gson)
+    implementation(libs.hilt.android)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.material)
     implementation(libs.play.services.location)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.reorderable)
 
     ksp(libs.androidx.room.compiler)
+    ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)
 
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.assign(JvmTarget.JVM_11)
+    }
 }

@@ -28,7 +28,7 @@
         <!--            android:theme="@style/BubbleTheme">-->
         <!--        </activity>-->
         <activity
-            android:name=".ui.activities.BubbleActivity"
+            android:name=".ui.bubble.BubbleActivity"
             android:exported="true"
             android:theme="@style/BubbleTheme"
             android:resizeableActivity="true"

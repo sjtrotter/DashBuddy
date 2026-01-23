@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.screens
+package cloud.trotter.dashbuddy.ui.dashboard
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Column
@@ -20,34 +20,40 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import cloud.trotter.dashbuddy.data.Prefs
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import cloud.trotter.dashbuddy.util.PermissionUtils
 
 @Composable
 fun DashboardScreen(
+    // 1. Inject the ViewModel via Hilt
+    viewModel: DashboardViewModel = hiltViewModel(),
     onNavigateToSettings: () -> Unit,
     onNavigateToSetup: () -> Unit
 ) {
     val context = LocalContext.current
+    val isFirstRun by viewModel.isFirstRun.collectAsState()
 
-    // Reactive State: automatically updates UI when changed
-    var hasPermissions by remember { mutableStateOf(false) }
-    var isFirstRun by remember { mutableStateOf(Prefs.isFirstRun) }
+    // Permissions State
+    // (We keep this local because it depends on the Activity Context re-checking)
+    var hasPermissions by remember { mutableStateOf<Boolean?>(null) }
 
     // Check permissions every time the screen resumes
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         hasPermissions = PermissionUtils.hasAllEssentialPermissions(context)
-        isFirstRun = Prefs.isFirstRun
+        // Note: We don't need to check isFirstRun here anymore,
+        // the ViewModel stream handles that automatically!
     }
 
     Scaffold(
@@ -64,8 +70,14 @@ fun DashboardScreen(
                 .fillMaxSize()
         ) {
             when {
+                // CASE 0: Loading (New) - Prevents the flicker
+                hasPermissions == null -> {
+                    // Render nothing, or a simple Box with a CircularProgressIndicator if you want
+                    // For now, an empty state is smoother than a wrong state.
+                }
+
                 // CASE 1: Everything is Perfect
-                hasPermissions -> {
+                hasPermissions == true -> {
                     StatusCard(
                         title = "Ready to Dash",
                         subtitle = "All systems go.",
@@ -121,19 +133,17 @@ fun DashboardScreen(
 fun StatusCard(
     title: String,
     subtitle: String,
-    containerColor: androidx.compose.ui.graphics.Color,
-    // FIX: Remove the hardcoded default. Let Material decide.
-    textColor: androidx.compose.ui.graphics.Color = contentColorFor(containerColor)
+    containerColor: Color,
+    textColor: Color = contentColorFor(containerColor)
 ) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = containerColor,
-            contentColor = textColor // Apply it here to the whole card
+            contentColor = textColor
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
-            // Remove 'color = textColor' overrides here so they inherit from the Card
             Text(text = title, style = MaterialTheme.typography.headlineMedium)
             Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
         }

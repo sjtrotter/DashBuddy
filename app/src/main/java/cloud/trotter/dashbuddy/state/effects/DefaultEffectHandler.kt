@@ -4,11 +4,11 @@ import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
+import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -73,8 +73,8 @@ class DefaultEffectHandler : EffectHandler {
 
             is AppEffect.EvaluateOffer -> {
                 val result = OfferEvaluator.evaluateOffer(effect.parsedOffer)
-                StateManagerV2.dispatch(OfferEvaluationEvent(result.offerAction))
-                DashBuddyApplication.sendBubbleMessage(result.bubbleMessage)
+                StateManagerV2.dispatch(OfferEvaluationEvent(result.action))
+                DashBuddyApplication.sendBubbleMessage(result.message)
             }
 
             is AppEffect.ClickNode -> {
