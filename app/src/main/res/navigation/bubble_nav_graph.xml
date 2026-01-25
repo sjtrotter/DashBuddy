@@ -10,11 +10,11 @@
         android:name="cloud.trotter.dashbuddy.ui.fragments.StatisticsFragment"
         android:label="Statistics"
         tools:layout="@layout/fragment_statistics" />
-    <fragment
-        android:id="@+id/nav_dash_history"
-        android:name="cloud.trotter.dashbuddy.ui.fragments.dashhistory.DashHistoryFragment"
-        android:label="Dash History"
-        tools:layout="@layout/fragment_dash_history" />
+    <!--    <fragment-->
+    <!--        android:id="@+id/nav_dash_history"-->
+    <!--        android:name="cloud.trotter.dashbuddy.ui.fragments.dashhistory.DashHistoryFragment"-->
+    <!--        android:label="Dash History"-->
+    <!--        tools:layout="@layout/fragment_dash_history" />-->
     <fragment
         android:id="@+id/nav_dash_log"
         android:name="cloud.trotter.dashbuddy.ui.fragments.DashLogFragment"

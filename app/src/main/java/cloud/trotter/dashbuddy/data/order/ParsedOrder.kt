@@ -13,16 +13,4 @@ data class ParsedOrder(
     val isItemCountEstimated: Boolean,
     /** The badge(s) associated with this order. */
     val badges: Set<OrderBadge>,
-) {
-    fun toOrderEntity(offerId: Long): OrderEntity {
-        return OrderEntity(
-            offerId = offerId,
-            orderIndex = orderIndex,
-            storeName = storeName,
-            orderType = orderType,
-            itemCount = itemCount,
-            isItemCountEstimated = isItemCountEstimated,
-            badges = badges,
-        )
-    }
-}
+)

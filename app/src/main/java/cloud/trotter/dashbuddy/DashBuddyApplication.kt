@@ -10,25 +10,10 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
-import cloud.trotter.dashbuddy.data.current.CurrentRepo
-import cloud.trotter.dashbuddy.data.customer.CustomerRepo
-import cloud.trotter.dashbuddy.data.dash.DashRepo
 import cloud.trotter.dashbuddy.data.event.AppEventRepo
-import cloud.trotter.dashbuddy.data.event.DashEventRepo
-import cloud.trotter.dashbuddy.data.event.DropoffEventRepo
-import cloud.trotter.dashbuddy.data.event.OfferEventRepo
-import cloud.trotter.dashbuddy.data.event.PickupEventRepo
-import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneRepo
 import cloud.trotter.dashbuddy.data.location.LocationService
-import cloud.trotter.dashbuddy.data.offer.OfferRepo
-import cloud.trotter.dashbuddy.data.order.OrderRepo
-import cloud.trotter.dashbuddy.data.pay.AppPayRepo
-import cloud.trotter.dashbuddy.data.pay.TipRepo
-import cloud.trotter.dashbuddy.data.store.StoreRepo
-import cloud.trotter.dashbuddy.data.zone.ZoneRepo
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
-import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
 import dagger.hilt.android.HiltAndroidApp
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
@@ -47,30 +32,8 @@ class DashBuddyApplication : Application() {
             get() = DashBuddyDatabase.getDatabase(context)
 
         // --- Repositories ---
-        val currentRepo: CurrentRepo by lazy { CurrentRepo(database.currentDashDao()) }
-        val customerRepo: CustomerRepo by lazy { CustomerRepo(database.customerDao()) }
-        val dashRepo: DashRepo by lazy { DashRepo(database.dashDao()) }
-        val dashZoneRepo: DashZoneRepo by lazy { DashZoneRepo(database.dashZoneDao()) }
-        val offerRepo: OfferRepo by lazy { OfferRepo(database.offerDao()) }
-        val orderRepo: OrderRepo by lazy { OrderRepo(database.orderDao()) }
-        val zoneRepo: ZoneRepo by lazy { ZoneRepo(database.zoneDao()) }
-        val appPayRepo: AppPayRepo by lazy { AppPayRepo(database.appPayDao()) }
-        val tipRepo: TipRepo by lazy { TipRepo(database.tipDao()) }
-        val storeRepo: StoreRepo by lazy { StoreRepo(database.storeDao()) }
-        val pickupEventRepo: PickupEventRepo by lazy { PickupEventRepo(database.pickupEventDao()) }
-        val dropoffEventRepo: DropoffEventRepo by lazy { DropoffEventRepo(database.dropoffEventDao()) }
-        val offerEventRepo: OfferEventRepo by lazy { OfferEventRepo(database.offerEventDao()) }
-        val dashEventRepo: DashEventRepo by lazy { DashEventRepo(database.dashEventDao()) }
-
         // NEW: The Unified Event Repo
         val appEventRepo: AppEventRepo by lazy { AppEventRepo(database.appEventDao()) }
-
-        val dashHistoryRepo by lazy {
-            DashHistoryRepo(
-                dashDao = database.dashDao(),
-                zoneDao = database.zoneDao(),
-            )
-        }
 
         val notificationManager: NotificationManager
             get() = instance.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -193,11 +156,11 @@ class DashBuddyApplication : Application() {
         Log.i("DashBuddyApp", "DashBuddyApplication initialized.")
     }
 
-    fun startBubbleService() {
-        val serviceIntent = Intent(this, BubbleService::class.java)
-        serviceIntent.putExtra(BubbleService.EXTRA_MESSAGE, "DashBuddy is active!")
-        startForegroundService(serviceIntent)
-    }
+//    fun startBubbleService() {
+//        val serviceIntent = Intent(this, BubbleService::class.java)
+//        serviceIntent.putExtra(BubbleService.EXTRA_MESSAGE, "DashBuddy is active!")
+//        startForegroundService(serviceIntent)
+//    }
 
     override fun onTerminate() {
         super.onTerminate()

@@ -7,56 +7,12 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 //import androidx.room.migration.Migration
 //import androidx.sqlite.db.SupportSQLiteDatabase
-import cloud.trotter.dashbuddy.data.current.CurrentDao
-import cloud.trotter.dashbuddy.data.current.CurrentEntity
-import cloud.trotter.dashbuddy.data.customer.CustomerDao
-import cloud.trotter.dashbuddy.data.customer.CustomerEntity
-import cloud.trotter.dashbuddy.data.dash.DashDao
-import cloud.trotter.dashbuddy.data.dash.DashEntity
 import cloud.trotter.dashbuddy.data.event.AppEventDao
 import cloud.trotter.dashbuddy.data.event.AppEventEntity
-import cloud.trotter.dashbuddy.data.event.DashEventDao
-import cloud.trotter.dashbuddy.data.event.DashEventEntity
-import cloud.trotter.dashbuddy.data.event.DropoffEventDao
-import cloud.trotter.dashbuddy.data.event.DropoffEventEntity
-import cloud.trotter.dashbuddy.data.event.OfferEventDao
-import cloud.trotter.dashbuddy.data.event.OfferEventEntity
-import cloud.trotter.dashbuddy.data.event.PickupEventDao
-import cloud.trotter.dashbuddy.data.event.PickupEventEntity
-import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneDao
-import cloud.trotter.dashbuddy.data.links.dashZone.DashZoneEntity
-import cloud.trotter.dashbuddy.data.offer.OfferDao
-import cloud.trotter.dashbuddy.data.offer.OfferEntity
-import cloud.trotter.dashbuddy.data.order.OrderDao
-import cloud.trotter.dashbuddy.data.order.OrderEntity
-import cloud.trotter.dashbuddy.data.pay.AppPayEntity
-import cloud.trotter.dashbuddy.data.pay.AppPayType
-import cloud.trotter.dashbuddy.data.pay.AppPayDao
-import cloud.trotter.dashbuddy.data.pay.TipEntity
-import cloud.trotter.dashbuddy.data.pay.TipDao
-import cloud.trotter.dashbuddy.data.store.StoreEntity
-import cloud.trotter.dashbuddy.data.store.StoreDao
-import cloud.trotter.dashbuddy.data.zone.ZoneDao
-import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 
 @Database(
     entities = [
         AppEventEntity::class,
-        AppPayEntity::class,
-        AppPayType::class,
-        CurrentEntity::class,
-        CustomerEntity::class,
-        DashEntity::class,
-        DashEventEntity::class,
-        DashZoneEntity::class,
-        DropoffEventEntity::class,
-        OfferEntity::class,
-        OfferEventEntity::class,
-        OrderEntity::class,
-        PickupEventEntity::class,
-        StoreEntity::class,
-        TipEntity::class,
-        ZoneEntity::class,
     ],
     version = 23,
     exportSchema = false // Set to true if you plan to use schema for testing migrations
@@ -66,20 +22,6 @@ import cloud.trotter.dashbuddy.data.zone.ZoneEntity
 abstract class DashBuddyDatabase : RoomDatabase() {
     // Abstract methods for each of your DAOs
     abstract fun appEventDao(): AppEventDao
-    abstract fun appPayDao(): AppPayDao
-    abstract fun currentDashDao(): CurrentDao
-    abstract fun customerDao(): CustomerDao
-    abstract fun dashDao(): DashDao
-    abstract fun dashEventDao(): DashEventDao
-    abstract fun dashZoneDao(): DashZoneDao
-    abstract fun dropoffEventDao(): DropoffEventDao
-    abstract fun offerDao(): OfferDao
-    abstract fun offerEventDao(): OfferEventDao
-    abstract fun orderDao(): OrderDao
-    abstract fun pickupEventDao(): PickupEventDao
-    abstract fun storeDao(): StoreDao
-    abstract fun tipDao(): TipDao
-    abstract fun zoneDao(): ZoneDao
 
     companion object {
         @Volatile
