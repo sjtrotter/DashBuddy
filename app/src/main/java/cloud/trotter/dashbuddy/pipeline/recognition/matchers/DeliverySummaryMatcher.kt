@@ -25,37 +25,44 @@ class DeliverySummaryMatcher : ScreenMatcher {
 
         if (!hasContext) return null
 
-        Log.d(tag, "Context found. Proceeding with analysis.")
-
         // 2. Find the Correct Container
         val earningsContainer = node.findNodes { it.hasId("earnings_container") }
             .find { container ->
                 container.hasNode { it.text?.contains("This offer", ignoreCase = true) == true }
             }
 
-        Log.d(tag, "Target Earnings Container found: ${earningsContainer != null}")
+        // Define the scope for searching (prefer container, fallback to root)
+        val searchScope = earningsContainer ?: node
 
-        // 3. Extract Headline Total (Validation)
+        // 3. Fast Fail: Check for "Anchor" Nodes
+        // If these text nodes are missing, the screen is definitely NOT expanded (or not loaded).
+        // We skip parsing entirely and check for the button immediately.
+        val hasDoorDashPay =
+            searchScope.hasNode { it.text?.contains("DoorDash pay", ignoreCase = true) == true }
+        val hasTips =
+            searchScope.hasNode { it.text?.contains("Customer tips", ignoreCase = true) == true }
+
+        if (!hasDoorDashPay || !hasTips) {
+            Log.d(
+                tag,
+                "Missing expanded anchors (DD Pay: $hasDoorDashPay, Tips: $hasTips). Checking for Collapsed state."
+            )
+            return attemptFallbackToCollapsed(node, earningsContainer)
+        }
+
+        Log.d(tag, "Anchors found. Proceeding to Parse.")
+
+        // 4. Extract Headline Total (Validation)
         val finalValueNode = earningsContainer?.findDescendantById("final_value")
             ?: node.findDescendantById("final_value")
 
         val headlineTotal = finalValueNode?.text?.replace("$", "")?.toDoubleOrNull()
 
-        Log.d(tag, "Headline Total: $headlineTotal (Node text: ${finalValueNode?.text})")
-
-        // 4. Parse Breakdown
-        val parsedScope = earningsContainer ?: node
-        val parsedPay = PayParser.parsePayFromTree(parsedScope)
+        // 5. Parse Breakdown
+        val parsedPay = PayParser.parsePayFromTree(searchScope)
         val breakdownTotal = parsedPay.total
 
-        Log.d(
-            tag,
-            "Parsed Breakdown Total: $breakdownTotal (Components: ${parsedPay.appPayComponents.size} app, ${parsedPay.customerTips.size} tips)"
-        )
-
-        // 5. Validation Logic
-        // We now enforce STRICT equality (within 2 cents).
-        // It must NOT be significantly lower (loading) OR significantly higher (bad parse).
+        // 6. Validation Logic
         val isValid = if (headlineTotal != null) {
             val diff = abs(breakdownTotal - headlineTotal)
             val isCloseEnough = diff <= 0.02
@@ -83,24 +90,37 @@ class DeliverySummaryMatcher : ScreenMatcher {
                 parsedPay = parsedPay
             )
         } else {
-            // 6. Fallback: Collapsed / Loading
-            Log.d(tag, "Data invalid/incomplete. Attempting fallback to COLLAPSED state.")
+            // If validation failed (e.g. mismatch), we can still try to fall back
+            // just in case it was a bad read of a collapsed screen.
+            Log.w(tag, "Data invalid despite anchors. Attempting fallback.")
+            return attemptFallbackToCollapsed(node, earningsContainer)
+        }
+    }
 
-            val expandButton = earningsContainer?.findDescendantById("expandable_view")
-                ?: earningsContainer?.findDescendantById("expandable_layout")
-                ?: node.findNodes { it.hasId("expandable_view") }.lastOrNull()
+    /**
+     * Helper to check if we are in the Collapsed state by locating the expand button.
+     */
+    private fun attemptFallbackToCollapsed(root: UiNode, container: UiNode?): ScreenInfo? {
+        val expandButton = findExpandButton(root, container)
 
-            if (expandButton != null) {
-                Log.i(tag, "Match Success: DELIVERY_SUMMARY_COLLAPSED (Found expand button)")
-                return ScreenInfo.DeliverySummaryCollapsed(
-                    screen = Screen.DELIVERY_SUMMARY_COLLAPSED,
-                    expandButton = expandButton
-                )
-            } else {
-                Log.w(tag, "Fallback Failed: Could not find expand button.")
-            }
+        if (expandButton != null) {
+            Log.i(tag, "Match Success: DELIVERY_SUMMARY_COLLAPSED (Found expand button)")
+            return ScreenInfo.DeliverySummaryCollapsed(
+                screen = Screen.DELIVERY_SUMMARY_COLLAPSED,
+                expandButton = expandButton
+            )
         }
 
+        Log.w(tag, "Fallback Failed: Could not find expand button.")
         return null
+    }
+
+    /**
+     * Encapsulated logic for finding the expand/collapse button
+     */
+    private fun findExpandButton(root: UiNode, container: UiNode?): UiNode? {
+        return container?.findDescendantById("expandable_view")
+            ?: container?.findDescendantById("expandable_layout")
+            ?: root.findNodes { it.hasId("expandable_view") }.lastOrNull()
     }
 }
