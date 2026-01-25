@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
+import cloud.trotter.dashbuddy.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.StateManagerV2
@@ -26,7 +26,7 @@ import cloud.trotter.dashbuddy.log.Logger as Log
  */
 @Singleton
 class DefaultEffectHandler @Inject constructor(
-    private val dashBuddyDatabase: DashBuddyDatabase,
+    private val appEventRepo: AppEventRepo,
     private val stateManagerV2: Lazy<StateManagerV2>,
     private val timeoutHandler: TimeoutHandler,
     @param:ApplicationContext private val context: Context,
@@ -46,7 +46,7 @@ class DefaultEffectHandler @Inject constructor(
             is AppEffect.LogEvent -> {
                 scope.launch(Dispatchers.IO) {
                     Log.v(tag, "Logging Event: ${effect.event.eventType}")
-                    dashBuddyDatabase.appEventDao().insert(effect.event)
+                    appEventRepo.insert(effect.event)
                 }
             }
 
