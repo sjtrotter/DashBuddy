@@ -11,10 +11,16 @@ object InitializingReducer {
         state: AppStateV2.Initializing,
         input: ScreenInfo
     ): Reducer.Transition? {
-        return if (input is ScreenInfo.IdleMap) {
-            IdleReducer.transitionTo(state, input, isRecovery = false)
-        } else {
-            null
+        return when (input) {
+            is ScreenInfo.IdleMap -> {
+                IdleReducer.transitionTo(state, input, isRecovery = false)
+            }
+
+            is ScreenInfo.WaitingForOffer -> {
+                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+            }
+
+            else -> null
         }
     }
 }

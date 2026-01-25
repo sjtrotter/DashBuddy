@@ -86,6 +86,12 @@ object AwaitingReducer {
                 isRecovery = false
             )
 
+            is ScreenInfo.DropoffDetails -> DeliveryReducer.transitionTo(
+                state,
+                input,
+                isRecovery = false
+            )
+
             is ScreenInfo.DashSummary -> SummaryReducer.transitionTo(
                 state,
                 input,
