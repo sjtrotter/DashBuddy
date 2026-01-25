@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Room
 import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
 import cloud.trotter.dashbuddy.data.event.AppEventDao
-// ... import all other DAOs here ...
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -13,28 +12,23 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Module
-@InstallIn(SingletonComponent::class) // This module lives as long as the App lives
+@InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
     @Provides
-    @Singleton // Make sure we only ever have ONE database instance
+    @Singleton
     fun provideDatabase(@ApplicationContext context: Context): DashBuddyDatabase {
         return Room.databaseBuilder(
             context,
             DashBuddyDatabase::class.java,
-            "dashbuddy-database"
+            "dashbuddy-v2.db"
         )
             .fallbackToDestructiveMigration(false)
             .build()
     }
 
-    // --- PROVIDE DAOs ---
-    // Hilt needs to know how to find the DAO. It asks the Database for it.
-
     @Provides
-    fun provideAppEventDao(database: DashBuddyDatabase): AppEventDao {
-        return database.appEventDao()
+    fun provideAppEventDao(db: DashBuddyDatabase): AppEventDao {
+        return db.appEventDao()
     }
-
-    // ... Repeat for EVERY DAO in your system (OrderDao, StoreDao, etc) ...
 }

@@ -6,8 +6,14 @@ import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.pipeline.Pipeline
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class AccessibilityListener : AccessibilityService() {
+
+    @Inject
+    lateinit var pipeline: Pipeline
 
     private val tag = "DashBuddyAccessibility"
 
@@ -26,7 +32,7 @@ class AccessibilityListener : AccessibilityService() {
             return
         }
 
-        Pipeline.onAccessibilityEvent(event, this)
+        pipeline.onAccessibilityEvent(event, this)
     }
 
     override fun onInterrupt() {

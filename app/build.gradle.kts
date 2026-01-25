@@ -16,10 +16,9 @@ android {
         applicationId = "cloud.trotter.dashbuddy"
         minSdk = 30
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "1.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -91,4 +90,8 @@ kotlin {
     compilerOptions {
         jvmTarget.assign(JvmTarget.JVM_11)
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

@@ -7,8 +7,14 @@ import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.pipeline.Pipeline
 import cloud.trotter.dashbuddy.state.model.NotificationInfo
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class NotificationListener : NotificationListenerService() {
+
+    @Inject
+    lateinit var pipeline: Pipeline
 
     private val tag = "NotificationWatcher"
 
@@ -45,7 +51,7 @@ class NotificationListener : NotificationListenerService() {
         )
 
         // 4. Input to pipeline
-        Pipeline.onNotificationPosted(info)
+        pipeline.onNotificationPosted(info)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {

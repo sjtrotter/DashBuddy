@@ -1,31 +1,30 @@
 package cloud.trotter.dashbuddy.state
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.state.effects.EffectHandler
+import cloud.trotter.dashbuddy.state.event.StateEvent
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
+import javax.inject.Singleton
 import cloud.trotter.dashbuddy.log.Logger as Log
-import android.os.Build
-import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.state.effects.DefaultEffectHandler
-import cloud.trotter.dashbuddy.state.effects.EffectHandler
-import cloud.trotter.dashbuddy.state.event.StateEvent
-import kotlinx.coroutines.delay
 
-object StateManagerV2 {
+@Singleton
+class StateManagerV2 @Inject constructor(
+    private val effectHandler: EffectHandler
+) {
 
-    private const val TAG = "StateManagerV2"
+    private val tag = "StateManagerV2"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-
-    // --- DEPENDENCY INJECTION POINT ---
-    // By default, use the real handler. Tests can overwrite this with a Mock.
-    var effectHandler: EffectHandler = DefaultEffectHandler()
-
     private val gson = Gson().newBuilder()
         .registerTypeAdapterFactory(
             cloud.trotter.dashbuddy.util.RuntimeTypeAdapterFactory.of(
@@ -52,7 +51,7 @@ object StateManagerV2 {
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun initialize() {
-        Log.i(TAG, "Initializing V2 State Machine...")
+        Log.i(tag, "Initializing V2 State Machine...")
         restoreState()
         startProcessor()
         startHeartbeat()
@@ -96,9 +95,9 @@ object StateManagerV2 {
                     val newClass = transition.newState::class.simpleName
 
                     if (oldClass != newClass) {
-                        Log.i(TAG, ">>> TRANSITION: $oldClass -> $newClass")
+                        Log.i(tag, ">>> TRANSITION: $oldClass -> $newClass")
                     } else {
-                        Log.v(TAG, "    Update within $newClass: ${transition.newState}")
+                        Log.v(tag, "    Update within $newClass: ${transition.newState}")
                     }
 
                     _state.value = transition.newState
@@ -120,7 +119,7 @@ object StateManagerV2 {
             val json = gson.toJson(state)
             DashBuddyApplication.saveCrashRecoveryState(json)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to save state", e)
+            Log.e(tag, "Failed to save state", e)
         }
     }
 
@@ -128,10 +127,10 @@ object StateManagerV2 {
         val json = DashBuddyApplication.getCrashRecoveryState()
         if (json != null) {
             try {
-                Log.i(TAG, "Restoring state from storage...")
+                Log.i(tag, "Restoring state from storage...")
                 _state.value = gson.fromJson(json, AppStateV2::class.java)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to restore state. Starting fresh.", e)
+                Log.w(tag, "Failed to restore state. Starting fresh.", e)
                 _state.value = AppStateV2.Initializing
             }
         } else {

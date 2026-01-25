@@ -9,17 +9,19 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
-import cloud.trotter.dashbuddy.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 @HiltAndroidApp
 class DashBuddyApplication : Application() {
+
+    @Inject
+    lateinit var stateManagerV2: StateManagerV2
 
     companion object {
         lateinit var instance: DashBuddyApplication
@@ -27,13 +29,6 @@ class DashBuddyApplication : Application() {
 
         val context: Context
             get() = instance.applicationContext
-
-        val database: DashBuddyDatabase
-            get() = DashBuddyDatabase.getDatabase(context)
-
-        // --- Repositories ---
-        // NEW: The Unified Event Repo
-        val appEventRepo: AppEventRepo by lazy { AppEventRepo(database.appEventDao()) }
 
         val notificationManager: NotificationManager
             get() = instance.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -147,7 +142,7 @@ class DashBuddyApplication : Application() {
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            StateManagerV2.initialize()
+            stateManagerV2.initialize()
             Log.i("DashBuddyApp", "StateManagerV2 initialized.")
         } else {
             Log.e("DashBuddyApp", "StateManagerV2 requires API 31 or higher.")

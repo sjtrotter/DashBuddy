@@ -1,15 +1,22 @@
 package cloud.trotter.dashbuddy.pipeline.processing
 
+import android.content.Context
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenRecognizer
 import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenRecognizer
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.state.model.NotificationInfo
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import cloud.trotter.dashbuddy.log.Logger as Log
 
-object StateContextFactory {
+@Singleton
+class StateContextFactory @Inject constructor(
+    @param:ApplicationContext private val context: Context
+) {
 
     fun createFromNotification(info: NotificationInfo): NotificationEvent {
         return NotificationEvent(
@@ -32,7 +39,7 @@ object StateContextFactory {
         return ScreenUpdateEvent(
             timestamp = System.currentTimeMillis(),
             screenInfo = screenInfo,
-            odometer = LocationService.getCurrentOdometer(DashBuddyApplication.context)
+            odometer = LocationService.getCurrentOdometer(context)
         )
     }
 }

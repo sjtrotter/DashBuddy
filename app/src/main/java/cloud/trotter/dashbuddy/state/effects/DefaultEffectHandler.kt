@@ -1,24 +1,36 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
 import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
+import dagger.Lazy
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import javax.inject.Inject
+import javax.inject.Singleton
 import cloud.trotter.dashbuddy.log.Logger as Log
 
 /**
  * The Real-World implementation that interacts with Android Services, UI, and Hardware.
  */
-class DefaultEffectHandler : EffectHandler {
+@Singleton
+class DefaultEffectHandler @Inject constructor(
+    private val dashBuddyDatabase: DashBuddyDatabase,
+    private val stateManagerV2: Lazy<StateManagerV2>,
+    private val timeoutHandler: TimeoutHandler,
+    @param:ApplicationContext private val context: Context,
+) : EffectHandler {
 
     private val tag = "DefaultEffectHandler"
 
@@ -34,7 +46,7 @@ class DefaultEffectHandler : EffectHandler {
             is AppEffect.LogEvent -> {
                 scope.launch(Dispatchers.IO) {
                     Log.v(tag, "Logging Event: ${effect.event.eventType}")
-                    DashBuddyApplication.appEventRepo.insert(effect.event)
+                    dashBuddyDatabase.appEventDao().insert(effect.event)
                 }
             }
 
@@ -56,11 +68,11 @@ class DefaultEffectHandler : EffectHandler {
             }
 
             is AppEffect.ScheduleTimeout -> {
-                TimeoutHandler.schedule(scope, effect.durationMs, type = effect.type)
+                timeoutHandler.schedule(scope, effect.durationMs, type = effect.type)
             }
 
             is AppEffect.CancelTimeout -> {
-                TimeoutHandler.cancel(effect.type)
+                timeoutHandler.cancel(effect.type)
             }
 
             is AppEffect.StartOdometer -> {
@@ -73,7 +85,7 @@ class DefaultEffectHandler : EffectHandler {
 
             is AppEffect.EvaluateOffer -> {
                 val result = OfferEvaluator.evaluateOffer(effect.parsedOffer)
-                StateManagerV2.dispatch(OfferEvaluationEvent(result.action))
+                stateManagerV2.get().dispatch(OfferEvaluationEvent(result.action))
                 DashBuddyApplication.sendBubbleMessage(result.message)
             }
 
@@ -93,12 +105,12 @@ class DefaultEffectHandler : EffectHandler {
             is AppEffect.SendKeepAlive -> {
                 try {
                     val intent = Intent(
-                        DashBuddyApplication.context,
+                        context,
                         LocationService::class.java
                     ).apply {
                         action = LocationService.ACTION_KEEP_ALIVE
                     }
-                    DashBuddyApplication.context.startForegroundService(intent)
+                    context.startForegroundService(intent)
                 } catch (e: Exception) {
                     Log.e(tag, "Failed to send KeepAlive", e)
                 }
