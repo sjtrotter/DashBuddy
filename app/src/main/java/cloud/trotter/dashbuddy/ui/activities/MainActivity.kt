@@ -1,36 +1,71 @@
 package cloud.trotter.dashbuddy.ui.activities
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import androidx.navigation.NavController
-import androidx.navigation.fragment.NavHostFragment
-import androidx.navigation.ui.setupActionBarWithNavController
-import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.databinding.ActivityMainBinding
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.Modifier
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import cloud.trotter.dashbuddy.ui.dashboard.DashboardScreen
+import cloud.trotter.dashbuddy.ui.navigation.Screen
+import cloud.trotter.dashbuddy.ui.settings.StrategySettingsScreen
+import cloud.trotter.dashbuddy.ui.setup.SetupScreen
+import cloud.trotter.dashbuddy.ui.theme.DashBuddyTheme
+import dagger.hilt.android.AndroidEntryPoint
 
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var binding: ActivityMainBinding
-    private lateinit var navController: NavController
-
+@AndroidEntryPoint // <--- 1. Hilt Entry Point
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        enableEdgeToEdge()
 
-        setSupportActionBar(binding.toolbar)
+        setContent {
+            DashBuddyTheme {
+                val navController = rememberNavController()
 
-        // Wire up the Navigation
-        val navHostFragment = supportFragmentManager
-            .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-        navController = navHostFragment.navController
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    // 2. Use NavHost inside Scaffold to handle system bars correctly
+                    NavHost(
+                        navController = navController,
+                        startDestination = Screen.Dashboard.route, // <--- Use Sealed Class
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
 
-        // Automatically updates Toolbar Title based on the active Fragment label
-        setupActionBarWithNavController(navController)
-    }
+                        // Screen 1: Dashboard
+                        composable(Screen.Dashboard.route) {
+                            DashboardScreen(
+                                onNavigateToSettings = {
+                                    // Navigate to the new Visualizer
+                                    navController.navigate(Screen.StrategySettings.route)
+                                },
+                                onNavigateToSetup = {
+                                    // Make sure you added 'data object Setup : Screen("setup")' to your Routes file!
+                                    navController.navigate("setup")
+                                }
+                            )
+                        }
 
-    // Handles the "Back" arrow in the toolbar automatically
-    override fun onSupportNavigateUp(): Boolean {
-        return navController.navigateUp() || super.onSupportNavigateUp()
+                        // Screen 2: Setup
+                        composable("setup") { // Use Screen.Setup.route if you added it
+                            SetupScreen(
+                                onSetupComplete = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+
+                        // Screen 3: Settings Strategy (The Visualizer)
+                        composable(Screen.StrategySettings.route) {
+                            StrategySettingsScreen()
+                        }
+                    }
+                }
+            }
+        }
     }
 }

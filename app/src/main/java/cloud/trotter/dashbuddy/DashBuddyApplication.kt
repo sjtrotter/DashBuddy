@@ -29,9 +29,11 @@ import cloud.trotter.dashbuddy.data.zone.ZoneRepo
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.DashHistoryRepo
+import dagger.hilt.android.HiltAndroidApp
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log
 
+@HiltAndroidApp
 class DashBuddyApplication : Application() {
 
     companion object {

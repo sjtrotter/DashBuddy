@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state.model.config
+package cloud.trotter.dashbuddy.model.config
 
 /**
  * Rules for the "Offer Robot".

@@ -25,9 +25,7 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.data.log.debug.DebugLogAdapter
 import cloud.trotter.dashbuddy.data.log.debug.DebugLogViewModel
 import cloud.trotter.dashbuddy.databinding.FragmentDebugLogBinding
-import cloud.trotter.dashbuddy.ui.activities.BubbleActivity
-import cloud.trotter.dashbuddy.log.Level as LogLevel
-import cloud.trotter.dashbuddy.log.Logger as Log
+import cloud.trotter.dashbuddy.ui.bubble.BubbleActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,6 +33,8 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import cloud.trotter.dashbuddy.log.Level as LogLevel
+import cloud.trotter.dashbuddy.log.Logger as Log
 
 class DebugLogFragment : Fragment() {
 

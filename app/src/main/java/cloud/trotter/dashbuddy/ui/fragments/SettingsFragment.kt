@@ -13,7 +13,7 @@ import androidx.fragment.app.Fragment
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.FragmentSettingsBinding
-import cloud.trotter.dashbuddy.ui.activities.BubbleActivity
+import cloud.trotter.dashbuddy.ui.bubble.BubbleActivity
 import cloud.trotter.dashbuddy.ui.interfaces.DebugModeToggleListener
 import cloud.trotter.dashbuddy.log.Level as LogLevel
 import cloud.trotter.dashbuddy.log.Logger as Log

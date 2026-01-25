@@ -10,7 +10,7 @@ import androidx.fragment.app.Fragment
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.FragmentStatisticsBinding
-import cloud.trotter.dashbuddy.ui.activities.BubbleActivity
+import cloud.trotter.dashbuddy.ui.bubble.BubbleActivity
 
 class StatisticsFragment : Fragment() {
 
