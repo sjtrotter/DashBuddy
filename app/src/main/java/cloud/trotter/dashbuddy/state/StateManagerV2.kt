@@ -10,7 +10,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -54,20 +53,6 @@ class StateManagerV2 @Inject constructor(
         Log.i(tag, "Initializing V2 State Machine...")
         restoreState()
         startProcessor()
-        startHeartbeat()
-    }
-
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
-    private fun startHeartbeat() {
-        scope.launch {
-            while (true) {
-                if (isActiveDash(_state.value)) {
-                    // We delegate this to the handler now
-                    effectHandler.handle(AppEffect.SendKeepAlive, scope)
-                }
-                delay(5 * 60 * 1000L)
-            }
-        }
     }
 
     private fun isActiveDash(state: AppStateV2): Boolean {

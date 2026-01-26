@@ -1,18 +1,14 @@
 package cloud.trotter.dashbuddy.state.effects
 
-import android.content.Context
-import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.event.AppEventRepo
-import cloud.trotter.dashbuddy.data.location.LocationService
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import dagger.Lazy
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -27,9 +23,9 @@ import cloud.trotter.dashbuddy.log.Logger as Log
 @Singleton
 class DefaultEffectHandler @Inject constructor(
     private val appEventRepo: AppEventRepo,
+    private val odometerEffectHandler: OdometerEffectHandler,
     private val stateManagerV2: Lazy<StateManagerV2>,
     private val timeoutHandler: TimeoutHandler,
-    @param:ApplicationContext private val context: Context,
 ) : EffectHandler {
 
     private val tag = "DefaultEffectHandler"
@@ -76,11 +72,11 @@ class DefaultEffectHandler @Inject constructor(
             }
 
             is AppEffect.StartOdometer -> {
-                OdometerEffectHandler.startUp()
+                odometerEffectHandler.startUp()
             }
 
             is AppEffect.StopOdometer -> {
-                OdometerEffectHandler.shutDown()
+                odometerEffectHandler.shutDown()
             }
 
             is AppEffect.EvaluateOffer -> {
@@ -99,20 +95,6 @@ class DefaultEffectHandler @Inject constructor(
                 scope.launch {
                     delay(effect.delayMs)
                     handle(effect.effect, scope) // Recursive call after delay
-                }
-            }
-
-            is AppEffect.SendKeepAlive -> {
-                try {
-                    val intent = Intent(
-                        context,
-                        LocationService::class.java
-                    ).apply {
-                        action = LocationService.ACTION_KEEP_ALIVE
-                    }
-                    context.startForegroundService(intent)
-                } catch (e: Exception) {
-                    Log.e(tag, "Failed to send KeepAlive", e)
                 }
             }
         }

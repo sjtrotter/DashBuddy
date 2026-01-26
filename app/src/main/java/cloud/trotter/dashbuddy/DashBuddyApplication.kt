@@ -9,7 +9,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import cloud.trotter.dashbuddy.data.location.LocationService
+import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import dagger.hilt.android.HiltAndroidApp
@@ -22,6 +22,10 @@ class DashBuddyApplication : Application() {
 
     @Inject
     lateinit var stateManagerV2: StateManagerV2
+
+    @Inject
+    lateinit var odometerRepository: OdometerRepository
+
 
     companion object {
         lateinit var instance: DashBuddyApplication
@@ -95,7 +99,7 @@ class DashBuddyApplication : Application() {
             if (!::instance.isInitialized) {
                 return "{ \"test_mode\": true }"
             }
-            val odometer = LocationService.getCurrentOdometer(context)
+            val odometer = instance.odometerRepository.getCurrentMiles()
             val batteryManager =
                 context.getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
             val batteryLevel =

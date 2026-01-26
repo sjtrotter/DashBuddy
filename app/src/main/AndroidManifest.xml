@@ -62,9 +62,9 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <service
-            android:name=".data.location.LocationService"
-            android:foregroundServiceType="location" />
+        <!--        <service-->
+        <!--            android:name=".data.location.LocationService"-->
+        <!--            android:foregroundServiceType="location" />-->
 
         <service
             android:name=".pipeline.inputs.NotificationListener"
