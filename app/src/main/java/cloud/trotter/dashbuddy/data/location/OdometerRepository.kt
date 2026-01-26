@@ -11,9 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.IOException
 import javax.inject.Inject
@@ -28,58 +27,61 @@ class OdometerRepository @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var trackingJob: Job? = null
 
-    // Key: Storing RAW METERS (Precision)
+    // Keys
     private val keyMeters = doublePreferencesKey("odometer_accumulated_meters")
+    private val keySessionAnchor = doublePreferencesKey("odometer_session_anchor") // <--- NEW
 
-    // State: Source of truth is RAM, backed by Disk
-    private val _meters = MutableStateFlow(0.0)
-    val meters = _meters.asStateFlow()
+    // State
+    private val _meters = MutableStateFlow(0.0) // Total Lifetime Meters
+    private val _anchor = MutableStateFlow(0.0) // The reading when Dash started
+
+    // Public Output: Session Miles (Reactive)
+    val sessionMeters = combine(_meters, _anchor) { current, anchor ->
+        (current - anchor).coerceAtLeast(0.0)
+    }
 
     private var lastLocation: Location? = null
-
-    // Constant for UI conversion
     private val metersToMiles = 0.000621371
 
     init {
-        // --- REACTIVE BINDING ---
-        // This ensures _meters is always in sync with DataStore on startup.
+        // Load BOTH values from disk on startup
         scope.launch {
             dataStore.data
                 .catch { exception ->
-                    if (exception is IOException) {
-                        Log.e("OdometerRepo", "Error reading preferences", exception)
-                        emit(emptyPreferences())
-                    } else {
-                        throw exception
-                    }
+                    if (exception is IOException) emit(emptyPreferences()) else throw exception
                 }
-                .map { preferences ->
-                    preferences[keyMeters] ?: 0.0
-                }
-                .collect { savedMeters ->
-                    // Only update if changed (prevents loops)
-                    if (_meters.value != savedMeters) {
-                        _meters.value = savedMeters
-                    }
+                .collect { prefs ->
+                    val savedMeters = prefs[keyMeters] ?: 0.0
+                    val savedAnchor = prefs[keySessionAnchor] ?: 0.0
+
+                    if (_meters.value != savedMeters) _meters.value = savedMeters
+                    if (_anchor.value != savedAnchor) _anchor.value = savedAnchor
                 }
         }
     }
 
+    /**
+     * Call this ONLY when a NEW dash starts (Transition from Idle -> Active).
+     * It sets the "Trip A" counter to 0 by moving the anchor to the current total.
+     */
+    fun resetSession() {
+        Log.i("OdometerRepo", "Resetting Session Odometer")
+        val currentTotal = _meters.value
+        _anchor.value = currentTotal
+        saveAnchor(currentTotal)
+    }
+
     fun startTracking() {
         if (trackingJob?.isActive == true) return
-
-        Log.i("OdometerRepo", "Starting Odometer Job...")
-
+        Log.i("OdometerRepo", "Starting GPS Tracking...")
         trackingJob = scope.launch {
-            locationDataSource.locationUpdates.collect { location ->
-                processLocation(location)
-            }
+            locationDataSource.locationUpdates.collect { processLocation(it) }
         }
     }
 
     fun stopTracking() {
         if (trackingJob?.isActive == true) {
-            Log.i("OdometerRepo", "Stopping Odometer Job.")
+            Log.i("OdometerRepo", "Stopping GPS Tracking.")
             trackingJob?.cancel()
             trackingJob = null
             lastLocation = null
@@ -87,46 +89,48 @@ class OdometerRepository @Inject constructor(
     }
 
     private fun processLocation(location: Location) {
-        // 1. Filter Bad GPS
         if (location.accuracy > 25f) return
 
-        // 2. Calculate Delta
         if (lastLocation != null) {
             val distanceMeters = location.distanceTo(lastLocation!!).toDouble()
-
-            // Noise Filter > 5m
             if (distanceMeters > 5) {
                 addMeters(distanceMeters)
             }
-        } else {
-            Log.i("OdometerRepo", "Anchor set: ${location.latitude}")
         }
         lastLocation = location
     }
 
     private fun addMeters(delta: Double) {
-        // Update Memory immediately (for UI responsiveness)
         val newTotal = _meters.value + delta
         _meters.value = newTotal
-
-        // Save to Disk (Async)
-        saveState(newTotal)
+        saveMeters(newTotal)
     }
 
-    private fun saveState(newTotal: Double) {
+    // --- Persistence ---
+
+    private fun saveMeters(newTotal: Double) {
         scope.launch {
             try {
-                dataStore.edit { preferences ->
-                    preferences[keyMeters] = newTotal
-                }
+                dataStore.edit { it[keyMeters] = newTotal }
             } catch (e: Exception) {
-                Log.e("OdometerRepo", "Failed to save odometer", e)
+                Log.e("OdometerRepo", "Failed to save meters", e)
+            }
+        }
+    }
+
+    private fun saveAnchor(newAnchor: Double) {
+        scope.launch {
+            try {
+                dataStore.edit { it[keySessionAnchor] = newAnchor }
+            } catch (e: Exception) {
+                Log.e("OdometerRepo", "Failed to save anchor", e)
             }
         }
     }
 
     // --- Helpers ---
+    fun getCurrentSessionMiles(): Double =
+        (_meters.value - _anchor.value).coerceAtLeast(0.0) * metersToMiles
 
-    // Calculated on the fly for UI/Logs
     fun getCurrentMiles(): Double = _meters.value * metersToMiles
 }

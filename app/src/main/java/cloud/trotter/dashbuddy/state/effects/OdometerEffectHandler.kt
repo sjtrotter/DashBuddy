@@ -32,6 +32,7 @@ class OdometerEffectHandler @Inject constructor(
         try {
             // 1. Start the Logic (Coroutines Job)
             odometerRepository.startTracking()
+            odometerRepository.resetSession()
 
             // 2. Post the Notification (User Trust UI)
             val notification = createNotification()
