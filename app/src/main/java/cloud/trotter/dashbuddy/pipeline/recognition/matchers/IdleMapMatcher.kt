@@ -1,13 +1,16 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.dash.DashType
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+import javax.inject.Inject
 
-class IdleMapMatcher : ScreenMatcher {
+//import cloud.trotter.dashbuddy.log.Logger as Log
+
+class IdleMapMatcher @Inject constructor() : ScreenMatcher {
 
     private val tag = "IdleMapMatcher"
 
@@ -25,7 +28,7 @@ class IdleMapMatcher : ScreenMatcher {
         } != null
 
         if (isReturnToDash) {
-            Log.v(tag, "Match failed: 'Return to dash' button detected (Active Dash).")
+            Timber.v("Match failed: 'Return to dash' button detected (Active Dash).")
             return null
         }
 
@@ -38,7 +41,7 @@ class IdleMapMatcher : ScreenMatcher {
             it.contentDescription == "Earnings Mode Switcher"
         } != null
 
-        Log.v(tag, "Criterion A (Has Earnings Switcher): $hasEarningsSwitcher")
+        Timber.v("Criterion A (Has Earnings Switcher): $hasEarningsSwitcher")
 
         // Criterion B: Side Menu.
         // Standard navigation element on the main map.
@@ -47,17 +50,17 @@ class IdleMapMatcher : ScreenMatcher {
                     it.contentDescription == "Side Menu"
         } != null
 
-        Log.v(tag, "Criterion B (Has Side Menu): $hasSideMenu")
+        Timber.v("Criterion B (Has Side Menu): $hasSideMenu")
 
         // We removed the brittle check for "Dash" button text.
         // If we have the Switcher + Menu, we are almost certainly on the Idle Map.
         if (!hasEarningsSwitcher || !hasSideMenu) {
-            Log.d(tag, "Match failed. Missing structural elements.")
+            Timber.d("Match failed. Missing structural elements.")
             return null
         }
 
         // --- 3. PARSING LOGIC ---
-        Log.d(tag, "Match success! Parsing dash details...")
+        Timber.d("Match success! Parsing dash details...")
 
         // Parse Dash Type (Per Offer vs Earn by Time)
         var dashType: DashType? = null
@@ -67,7 +70,7 @@ class IdleMapMatcher : ScreenMatcher {
             dashType = DashType.BY_TIME
         }
 
-        Log.v(tag, "Parsed DashType: $dashType")
+        Timber.v("Parsed DashType: $dashType")
 
         // Parse Zone Name
         // Strategy: Find the ScrollView at the top.
@@ -83,7 +86,7 @@ class IdleMapMatcher : ScreenMatcher {
             ) && !it.text.contains("Start your scheduled dash", ignoreCase = true)
         }?.text
 
-        Log.v(tag, "Parsed ZoneName: '$zoneName'")
+        Timber.v("Parsed ZoneName: '$zoneName'")
 
         return ScreenInfo.IdleMap(
             screen = Screen.MAIN_MAP_IDLE,

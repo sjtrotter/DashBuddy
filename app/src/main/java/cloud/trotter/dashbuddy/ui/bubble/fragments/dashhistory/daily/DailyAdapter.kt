@@ -34,7 +34,7 @@
 //        val dayOffset = position - START_POSITION
 //        val pageDate = DashStateViewModel.REFERENCE_DAY_DATE.plusDays(dayOffset.toLong())
 //
-//        Logger.v(tag, "Binding position $position to date $pageDate")
+//        Timber.v("Binding position $position to date $pageDate")
 //
 //        // 2. Pass that specific date to the ViewHolder
 //        holder.bind(pageDate, historyRepo)

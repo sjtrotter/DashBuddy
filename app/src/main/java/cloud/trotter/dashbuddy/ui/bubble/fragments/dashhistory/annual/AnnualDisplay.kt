@@ -1,6 +1,5 @@
-package cloud.trotter.dashbuddy.ui.fragments.dashhistory.annual
+package cloud.trotter.dashbuddy.ui.bubble.fragments.dashhistory.annual
 
-import cloud.trotter.dashbuddy.ui.fragments.dashhistory.common.SummaryStats
 import java.text.DateFormatSymbols
 
 /**
@@ -8,7 +7,7 @@ import java.text.DateFormatSymbols
  */
 data class AnnualDisplay(
     val year: Int,
-    val stats: SummaryStats,
+    val stats: cloud.trotter.dashbuddy.ui.bubble.fragments.dashhistory.common.SummaryStats,
     val monthSummaries: List<MonthInYearSummary>
 ) {
     /**
@@ -39,7 +38,7 @@ data class AnnualDisplay(
             }
             return AnnualDisplay(
                 year = year,
-                stats = SummaryStats(),
+                stats = _root_ide_package_.cloud.trotter.dashbuddy.ui.bubble.fragments.dashhistory.common.SummaryStats(),
                 monthSummaries = emptyMonths
             )
         }

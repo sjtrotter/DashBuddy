@@ -10,12 +10,17 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.data.log.LogRepository
+import cloud.trotter.dashbuddy.log.StateAwareTree
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import dagger.hilt.android.HiltAndroidApp
+import timber.log.Timber
 import javax.inject.Inject
+import javax.inject.Provider
 import cloud.trotter.dashbuddy.log.Level as LogLevel
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 @HiltAndroidApp
 class DashBuddyApplication : Application() {
@@ -26,6 +31,8 @@ class DashBuddyApplication : Application() {
     @Inject
     lateinit var odometerRepository: OdometerRepository
 
+    @Inject
+    lateinit var logRepository: LogRepository
 
     companion object {
         lateinit var instance: DashBuddyApplication
@@ -139,20 +146,35 @@ class DashBuddyApplication : Application() {
         setDebugMode(true)
         setLogLevel(LogLevel.DEBUG)
 
-        Log.initialize(
-            context = context,
-            prefs = appPreferences,
-            initialDefaultLogLevel = LogLevel.INFO,
-        )
+//        Log.initialize(
+//            context = context,
+//            prefs = appPreferences,
+//            initialDefaultLogLevel = LogLevel.INFO,
+//        )
+
+        val stateProvider = Provider {
+            try {
+                // If the state hasn't been emitted yet, this might throw or return null
+                stateManagerV2.state.value.javaClass.simpleName
+            } catch (_: Exception) {
+                "Uninitialized"
+            }
+        }
+
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+
+        Timber.plant(StateAwareTree(logRepository, stateProvider))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
             stateManagerV2.initialize()
-            Log.i("DashBuddyApp", "StateManagerV2 initialized.")
+            Timber.i("StateManagerV2 initialized.")
         } else {
-            Log.e("DashBuddyApp", "StateManagerV2 requires API 31 or higher.")
+            Timber.e("StateManagerV2 requires API 31 or higher.")
         }
 
-        Log.i("DashBuddyApp", "DashBuddyApplication initialized.")
+        Timber.i("DashBuddyApplication initialized.")
     }
 
 //    fun startBubbleService() {
@@ -161,8 +183,8 @@ class DashBuddyApplication : Application() {
 //        startForegroundService(serviceIntent)
 //    }
 
-    override fun onTerminate() {
-        super.onTerminate()
-        Log.close()
-    }
+//    override fun onTerminate() {
+//        super.onTerminate()
+//        Log.close()
+//    }
 }

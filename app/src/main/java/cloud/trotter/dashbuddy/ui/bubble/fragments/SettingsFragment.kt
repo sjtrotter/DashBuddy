@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.fragments
+package cloud.trotter.dashbuddy.ui.bubble.fragments
 
 import android.content.Context
 import android.os.Build
@@ -15,8 +15,10 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.FragmentSettingsBinding
 import cloud.trotter.dashbuddy.ui.bubble.BubbleActivity
 import cloud.trotter.dashbuddy.ui.interfaces.DebugModeToggleListener
+import timber.log.Timber
 import cloud.trotter.dashbuddy.log.Level as LogLevel
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 class SettingsFragment : Fragment() {
 
@@ -34,7 +36,7 @@ class SettingsFragment : Fragment() {
         if (context is DebugModeToggleListener) {
             listener = context
         } else {
-            Log.w(TAG, "$context must implement DebugModeToggleListener")
+            Timber.w("$context must implement DebugModeToggleListener")
         }
     }
 
@@ -67,19 +69,19 @@ class SettingsFragment : Fragment() {
     private fun setupDebugSwitch() {
         val isCurrentlyInDebugMode = DashBuddyApplication.getDebugMode()
         binding.switchDebugMode.isChecked = isCurrentlyInDebugMode
-        Log.d(TAG, "Initial Debug Mode switch state: $isCurrentlyInDebugMode")
+        Timber.d("Initial Debug Mode switch state: $isCurrentlyInDebugMode")
 
         binding.switchDebugMode.setOnCheckedChangeListener { _, isChecked ->
-            Log.i(TAG, "Debug Mode switch toggled to: $isChecked")
+            Timber.i("Debug Mode switch toggled to: $isChecked")
             DashBuddyApplication.setDebugMode(isChecked)
 
             if (isChecked) {
                 DashBuddyApplication.setLogLevel(LogLevel.VERBOSE)
-                Log.i(TAG, "Debug Mode ON: Log level set to VERBOSE by default.")
+                Timber.i("Debug Mode ON: Log level set to VERBOSE by default.")
                 DashBuddyApplication.sendBubbleMessage("Debug Mode ON\nLogs: VERBOSE")
             } else {
                 DashBuddyApplication.setLogLevel(LogLevel.INFO)
-                Log.i(TAG, "Debug Mode OFF: Log level set to INFO.")
+                Timber.i("Debug Mode OFF: Log level set to INFO.")
                 DashBuddyApplication.sendBubbleMessage("Debug Mode OFF\nLogs: INFO")
             }
 

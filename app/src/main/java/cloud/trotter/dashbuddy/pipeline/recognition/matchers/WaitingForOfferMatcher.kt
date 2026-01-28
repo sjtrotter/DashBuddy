@@ -1,12 +1,13 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import javax.inject.Inject
 
-class WaitingForOfferMatcher : ScreenMatcher {
+class WaitingForOfferMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.ON_DASH_MAP_WAITING_FOR_OFFER
     override val priority = 1

@@ -2,16 +2,24 @@ package cloud.trotter.dashbuddy.state
 
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.state.effects.NotificationHandler
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
+import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
-import cloud.trotter.dashbuddy.state.reducers.*
-import cloud.trotter.dashbuddy.state.effects.NotificationHandler
-import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
+import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
+import cloud.trotter.dashbuddy.state.reducers.DashPausedReducer
+import cloud.trotter.dashbuddy.state.reducers.DeliveryReducer
+import cloud.trotter.dashbuddy.state.reducers.IdleReducer
+import cloud.trotter.dashbuddy.state.reducers.InitializingReducer
+import cloud.trotter.dashbuddy.state.reducers.PickupReducer
+import cloud.trotter.dashbuddy.state.reducers.SummaryReducer
 import cloud.trotter.dashbuddy.state.reducers.offer.OfferReducer
 import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 object Reducer {
 
@@ -33,7 +41,7 @@ object Reducer {
             }
 
             is TimeoutEvent -> {
-                Log.i("Reducer", "Handling Timeout: ${stateEvent.type}")
+                Timber.i("Handling Timeout: ${stateEvent.type}")
 
                 // Force transition to Idle (Dash Ended)
                 return when (currentState) {

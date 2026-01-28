@@ -5,14 +5,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update // For concise updates
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * A singleton repository to manage and provide access to the list of dash log messages.
  * This allows different parts of the app (like a Service and a ViewModel) to interact
  * with the same log data.
  */
-object DashLogRepo {
-
+@Singleton // <--- Scoped to App Lifecycle
+class DashLogRepo @Inject constructor() { // <--- Injected Constructor
     // Private MutableStateFlow to hold the list of log items.
     // Initialized with an empty list.
     private val _logMessagesFlow = MutableStateFlow<List<DashLogItem>>(emptyList())
@@ -27,11 +29,8 @@ object DashLogRepo {
      * @param timestamp The time the message was generated (defaults to current time).
      */
     fun addLogMessage(message: CharSequence, timestamp: Long = System.currentTimeMillis()) {
-        val spannableMessage = if (message is SpannableString) {
-            message
-        } else {
-            SpannableString(message) // Ensure it's a SpannableString
-        }
+        val spannableMessage =
+            message as? SpannableString ?: SpannableString(message) // Ensure it's a SpannableString
         val newItem = DashLogItem(spannableMessage, timestamp)
 
         // Update the flow by adding the new item to the current list

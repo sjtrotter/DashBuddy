@@ -7,11 +7,11 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+//import cloud.trotter.dashbuddy.log.Logger as Log
 import java.util.regex.Pattern
 
 object TipEffectHandler {
-    private const val TAG = "TipEffectHandler"
 
     // Regex for: "A customer added $5.00 tip on a past McDonald's order delivered at 12/15, 1:30 PM"
     // Groups: 1=Amount, 2=Store, 3=Date, 4=Time, 5=AM/PM
@@ -32,7 +32,7 @@ object TipEffectHandler {
                     val timeStr = matcher.group(4)   // "1:30"
                     val amPm = matcher.group(5)      // "PM"
 
-                    Log.i(TAG, "Parsed Tip: $$amountStr from $storeName at $dateStr $timeStr $amPm")
+                    Timber.i("Parsed Tip: $$amountStr from $storeName at $dateStr $timeStr $amPm")
 
                     // TODO: Database Correlation Logic
                     // 1. Calculate approximate timestamp from dateStr/timeStr (assume current year, handle Year rollover)
@@ -44,10 +44,10 @@ object TipEffectHandler {
                     DashBuddyApplication.sendBubbleMessage("Nice! $$amountStr tip from $storeName")
 
                 } else {
-                    Log.w(TAG, "Failed to parse tip notification: ${effect.rawText}")
+                    Timber.w("Failed to parse tip notification: ${effect.rawText}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing tip notification", e)
+                Timber.e(e, "Error processing tip notification")
             }
         }
     }

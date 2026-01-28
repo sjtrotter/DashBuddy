@@ -14,10 +14,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 @Singleton
 class OdometerRepository @Inject constructor(
@@ -65,7 +67,7 @@ class OdometerRepository @Inject constructor(
      * It sets the "Trip A" counter to 0 by moving the anchor to the current total.
      */
     fun resetSession() {
-        Log.i("OdometerRepo", "Resetting Session Odometer")
+        Timber.i("Resetting Session Odometer")
         val currentTotal = _meters.value
         _anchor.value = currentTotal
         saveAnchor(currentTotal)
@@ -73,7 +75,7 @@ class OdometerRepository @Inject constructor(
 
     fun startTracking() {
         if (trackingJob?.isActive == true) return
-        Log.i("OdometerRepo", "Starting GPS Tracking...")
+        Timber.i("Starting GPS Tracking...")
         trackingJob = scope.launch {
             locationDataSource.locationUpdates.collect { processLocation(it) }
         }
@@ -81,7 +83,7 @@ class OdometerRepository @Inject constructor(
 
     fun stopTracking() {
         if (trackingJob?.isActive == true) {
-            Log.i("OdometerRepo", "Stopping GPS Tracking.")
+            Timber.i("Stopping GPS Tracking.")
             trackingJob?.cancel()
             trackingJob = null
             lastLocation = null
@@ -113,7 +115,7 @@ class OdometerRepository @Inject constructor(
             try {
                 dataStore.edit { it[keyMeters] = newTotal }
             } catch (e: Exception) {
-                Log.e("OdometerRepo", "Failed to save meters", e)
+                Timber.e(e, "Failed to save meters")
             }
         }
     }
@@ -123,7 +125,7 @@ class OdometerRepository @Inject constructor(
             try {
                 dataStore.edit { it[keySessionAnchor] = newAnchor }
             } catch (e: Exception) {
-                Log.e("OdometerRepo", "Failed to save anchor", e)
+                Timber.e(e, "Failed to save anchor")
             }
         }
     }

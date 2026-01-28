@@ -35,7 +35,7 @@
 //        // Calculate the specific date (Year + Month) for this page
 //        val pageDate = DashStateViewModel.REFERENCE_MONTH_DATE.plusMonths(monthOffset.toLong())
 //
-//        Logger.v(
+//        Timber.v(
 //            "MonthlyAdapter",
 //            "Binding position $position to ${pageDate.month} ${pageDate.year}"
 //        )

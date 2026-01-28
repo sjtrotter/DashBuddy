@@ -3,12 +3,16 @@ package cloud.trotter.dashbuddy.data.log.debug // Or your preferred ViewModel pa
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asLiveData
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class DebugLogViewModel : ViewModel() {
-
+@HiltViewModel
+class DebugLogViewModel @Inject constructor(
+    private val debugLogRepo: DebugLogRepo // <--- Injected!
+) : ViewModel() {
     // Expose the log messages from the repository.
     // Option 1: Expose as LiveData (common for Fragments observing ViewModels)
-    val logMessages: LiveData<List<DebugLogItem>> = DebugLogRepo.logMessagesFlow.asLiveData()
+    val logMessages: LiveData<List<DebugLogItem>> = debugLogRepo.logMessagesFlow.asLiveData()
 
     // Option 2: Expose as StateFlow directly (if your Fragment is set up to collect StateFlows lifecycle-awaresly)
     // val logMessages: StateFlow<List<DashLogItem>> = DashLogRepository.logMessagesFlow
@@ -18,7 +22,7 @@ class DebugLogViewModel : ViewModel() {
      * Typically called when a new dash starts.
      */
     fun clearLogMessages() {
-        DebugLogRepo.clearLogMessages()
+        debugLogRepo.clearLogMessages()
     }
 
     /**
@@ -29,6 +33,6 @@ class DebugLogViewModel : ViewModel() {
     fun addLogMessageViaViewModel(
         message: CharSequence,
     ) {
-        DebugLogRepo.addLogMessage(message)
+        debugLogRepo.addLogMessage(message)
     }
 }

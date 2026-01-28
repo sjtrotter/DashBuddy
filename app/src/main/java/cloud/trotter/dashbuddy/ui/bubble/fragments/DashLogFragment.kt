@@ -1,30 +1,31 @@
-package cloud.trotter.dashbuddy.ui.fragments
+package cloud.trotter.dashbuddy.ui.bubble.fragments
 
-import android.os.Bundle
-import android.view.LayoutInflater
 //import android.view.Menu
 //import android.view.MenuInflater
+//import androidx.core.view.MenuProvider
+//import androidx.lifecycle.Lifecycle
+import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources.getDrawable
-//import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-//import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.data.log.dash.DashLogAdapter
 import cloud.trotter.dashbuddy.data.log.dash.DashLogViewModel
 import cloud.trotter.dashbuddy.databinding.FragmentDashLogBinding
 import cloud.trotter.dashbuddy.ui.bubble.BubbleActivity
+import cloud.trotter.dashbuddy.ui.bubble.adapters.DashLogAdapter
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class DashLogFragment : Fragment() {
 
     private var _binding: FragmentDashLogBinding? = null
     private val binding get() = _binding!!
-
     private lateinit var dashLogAdapter: DashLogAdapter
     private val viewModel: DashLogViewModel by viewModels()
 

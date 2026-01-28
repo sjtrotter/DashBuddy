@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.logic
 
+//import cloud.trotter.dashbuddy.log.Logger
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
@@ -9,12 +10,12 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.state.model.OfferAction
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.order.OrderType
-import cloud.trotter.dashbuddy.log.Logger
+import cloud.trotter.dashbuddy.state.model.OfferAction
 import cloud.trotter.dashbuddy.state.model.OfferEvaluation
 import cloud.trotter.dashbuddy.util.ScoringUtils
+import timber.log.Timber
 import java.util.Locale
 
 object OfferEvaluator {
@@ -34,7 +35,7 @@ object OfferEvaluator {
     private const val MAX_ITEMS_FOR_SCORING = 9.5
 
     private val sharedPreferences by lazy {
-        DashBuddyApplication.Companion.instance.getSharedPreferences(
+        DashBuddyApplication.instance.getSharedPreferences(
             "dashbuddyPrefs", Context.MODE_PRIVATE
         )
     }
@@ -132,7 +133,7 @@ object OfferEvaluator {
         val builder = SpannableStringBuilder()
 
         // LINE 1: Quality & Score (e.g. "Good Offer (78.5)")
-        val headerText = "$offerQuality (${String.Companion.format(Locale.US, "%.0f", totalScore)})"
+        val headerText = "$offerQuality (${String.format(Locale.US, "%.0f", totalScore)})"
         builder.append(headerText)
         builder.setSpan(StyleSpan(Typeface.BOLD), 0, headerText.length, 0)
         builder.setSpan(RelativeSizeSpan(1.3f), 0, headerText.length, 0)
@@ -157,7 +158,7 @@ object OfferEvaluator {
         // $8.50  •  5.2 mi  •  $1.63/mi
         // 3 items •  22 min  •  $23.10/hr
 
-        val row1 = String.Companion.format(
+        val row1 = String.format(
             Locale.US,
             "$%.2f  •  %.1f mi  •  $%.2f/mi",
             currentPayout,
@@ -168,7 +169,7 @@ object OfferEvaluator {
         builder.append("\n")
 
         val timeStr = timeToCompleteMinutes?.toString() ?: "?"
-        val row2 = String.Companion.format(
+        val row2 = String.format(
             Locale.US,
             "%.0f items  •  %s min  •  $%.2f/hr",
             currentItemCount,
@@ -178,7 +179,7 @@ object OfferEvaluator {
         builder.append(row2)
 
         // --- Log and Return ---
-        Logger.i("OfferEvaluator", "Evaluated: $merchantName ($totalScore) -> $offerQuality")
+        Timber.i("Evaluated: $merchantName ($totalScore) -> $offerQuality")
         return OfferEvaluation(
             OfferAction.NOTHING,
             SpannableString(builder)

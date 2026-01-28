@@ -20,8 +20,8 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     application: Application,
     private val settingsRepository: SettingsRepository,
-    private val odometerRepository: OdometerRepository, // <--- Inject Odometer
-    private val stateManager: StateManagerV2            // <--- Inject State Machine
+    odometerRepository: OdometerRepository, // <--- Inject Odometer
+    stateManager: StateManagerV2            // <--- Inject State Machine
 ) : AndroidViewModel(application) {
 
     // --- STATE OBSERVABLES (Read Only) ---

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.fragments.dashhistory.common
+package cloud.trotter.dashbuddy.ui.bubble.fragments.dashhistory.common
 
 /**
  * A reusable data class that holds all the aggregate statistics

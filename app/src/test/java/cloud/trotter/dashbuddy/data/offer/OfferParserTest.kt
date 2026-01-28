@@ -364,7 +364,7 @@ class OfferParserTest {
         // Based on your current OfferParser: if orders.isEmpty() is true (which it will be here),
         // and payAmount and distanceMiles are null, it will return the ParsedOffer with nulls for those.
         // The final null check in your OfferParser is:
-        // if (orders.isEmpty()) { Log.w(TAG, "!!! No orders were parsed!"); return null }
+        // if (orders.isEmpty()) { Log.w("!!! No orders were parsed!"); return null }
         // So this test should expect null.
         assertNull(
             "Result should be null if orders are not parsed (and pay/distance might be missing)",

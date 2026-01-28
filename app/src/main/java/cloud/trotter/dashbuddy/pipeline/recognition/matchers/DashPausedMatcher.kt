@@ -1,12 +1,15 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+import javax.inject.Inject
 
-class DashPausedMatcher : ScreenMatcher {
+//import cloud.trotter.dashbuddy.log.Logger as Log
+
+class DashPausedMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.DASH_PAUSED
     override val priority = 10 // High priority (Specific state)
@@ -30,8 +33,7 @@ class DashPausedMatcher : ScreenMatcher {
         val progressNumberNode =
             node.findNode { it.viewIdResourceName?.endsWith("progress_number") == true }
 
-        Log.d(
-            "DashPausedMatcher",
+        Timber.v(
             "Checking... Title=$hasTitle, Btn=$hasResumeButton, Timer=$progressNumberNode"
         )
         if (!hasTitle || !hasResumeButton || progressNumberNode == null) {

@@ -13,16 +13,17 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 @Singleton
 class StateManagerV2 @Inject constructor(
     private val effectHandler: EffectHandler
 ) {
 
-    private val tag = "StateManagerV2"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val gson = Gson().newBuilder()
         .registerTypeAdapterFactory(
@@ -50,7 +51,7 @@ class StateManagerV2 @Inject constructor(
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun initialize() {
-        Log.i(tag, "Initializing V2 State Machine...")
+        Timber.i("Initializing V2 State Machine...")
         restoreState()
         startProcessor()
     }
@@ -80,9 +81,9 @@ class StateManagerV2 @Inject constructor(
                     val newClass = transition.newState::class.simpleName
 
                     if (oldClass != newClass) {
-                        Log.i(tag, ">>> TRANSITION: $oldClass -> $newClass")
+                        Timber.i(">>> TRANSITION: $oldClass -> $newClass")
                     } else {
-                        Log.v(tag, "    Update within $newClass: ${transition.newState}")
+                        Timber.v("    Update within $newClass: ${transition.newState}")
                     }
 
                     _state.value = transition.newState
@@ -104,7 +105,7 @@ class StateManagerV2 @Inject constructor(
             val json = gson.toJson(state)
             DashBuddyApplication.saveCrashRecoveryState(json)
         } catch (e: Exception) {
-            Log.e(tag, "Failed to save state", e)
+            Timber.e(e, "Failed to save state")
         }
     }
 
@@ -112,10 +113,10 @@ class StateManagerV2 @Inject constructor(
         val json = DashBuddyApplication.getCrashRecoveryState()
         if (json != null) {
             try {
-                Log.i(tag, "Restoring state from storage...")
+                Timber.i("Restoring state from storage...")
                 _state.value = gson.fromJson(json, AppStateV2::class.java)
             } catch (e: Exception) {
-                Log.w(tag, "Failed to restore state. Starting fresh.", e)
+                Timber.w(e, "Failed to restore state. Starting fresh.")
                 _state.value = AppStateV2.Initializing
             }
         } else {

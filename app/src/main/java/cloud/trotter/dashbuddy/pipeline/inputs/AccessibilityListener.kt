@@ -4,9 +4,10 @@ import android.accessibilityservice.AccessibilityService
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.log.Logger
+//import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.pipeline.Pipeline
 import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -15,11 +16,9 @@ class AccessibilityListener : AccessibilityService() {
     @Inject
     lateinit var pipeline: Pipeline
 
-    private val tag = "DashBuddyAccessibility"
-
     override fun onCreate() {
         super.onCreate()
-        Logger.d(tag, "Accessibility service created")
+        Timber.d("Accessibility service created")
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -28,7 +27,7 @@ class AccessibilityListener : AccessibilityService() {
 
         val validPackages = setOf("com.doordash.driverapp")
         if (event.packageName?.toString() !in validPackages) {
-            Logger.d(tag, "Ignoring event from ${event.packageName}")
+            Timber.d("Ignoring event from ${event.packageName}")
             return
         }
 
@@ -36,13 +35,13 @@ class AccessibilityListener : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        Logger.d(tag, "Accessibility service interrupted")
+        Timber.d("Accessibility service interrupted")
     }
 
     override fun onDestroy() {
         super.onDestroy()
         _instance = null
-        Logger.d(tag, "Accessibility service destroyed")
+        Timber.d("Accessibility service destroyed")
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -50,7 +49,7 @@ class AccessibilityListener : AccessibilityService() {
         super.onServiceConnected()
 
         _instance = this
-        Logger.d(tag, "Accessibility service connected")
+        Timber.d("Accessibility service connected")
     }
 
     companion object {

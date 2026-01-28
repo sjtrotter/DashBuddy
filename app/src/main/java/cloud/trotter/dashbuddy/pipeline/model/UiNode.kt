@@ -168,6 +168,60 @@ data class UiNode(
         node.children.forEach { collectText(it, list) }
     }
 
+    /**
+     * Serializes this node and its children to a formatted JSON string.
+     * SAFELY handles circular references by ignoring 'parent' and 'originalNode'.
+     */
+    fun toJson(): String {
+        return try {
+            toJsonObject().toString(2) // Indent with 2 spaces for readability
+        } catch (e: Exception) {
+            "{\"error\": \"Serialization failed: ${e.message}\"}"
+        }
+    }
+
+    /**
+     * Internal helper to recursive build the JSON tree.
+     * Uses org.json.JSONObject (Standard Android Library).
+     */
+    private fun toJsonObject(): org.json.JSONObject {
+        val json = org.json.JSONObject()
+        // Core Attributes
+        json.putOpt("text", text)
+        json.putOpt("desc", contentDescription)
+        json.putOpt("id", viewIdResourceName?.substringAfter("id/")) // Simplify ID
+        json.put("class", className?.substringAfterLast(".")) // Simplify ClassName
+
+        // Bounds (Custom format for readability)
+        json.put(
+            "bounds",
+            "[${boundsInScreen.left},${boundsInScreen.top}][${boundsInScreen.right},${boundsInScreen.bottom}]"
+        )
+
+        // Flags (Only include if true/relevant to reduce noise)
+        if (isClickable) json.put("clickable", true)
+        if (isEnabled) json.put("enabled", true)
+        if (isChecked != 0) json.put("checked", isChecked)
+
+        // Recursion: Children
+        if (children.isNotEmpty()) {
+            val childrenArray = org.json.JSONArray()
+            children.forEach { child ->
+                childrenArray.put(child.toJsonObject())
+            }
+            json.put("children", childrenArray)
+        }
+
+        return json
+    }
+
+    // Helper extension to handle nullable puts cleanly
+    private fun org.json.JSONObject.putOpt(key: String, value: Any?) {
+        if (value != null && (value !is String || value.isNotEmpty())) {
+            put(key, value)
+        }
+    }
+
     companion object {
         /**
          * This is the factory method that:

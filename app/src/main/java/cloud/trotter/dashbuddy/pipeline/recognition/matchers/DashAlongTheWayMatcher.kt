@@ -1,11 +1,12 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import javax.inject.Inject
 
-class DashAlongTheWayMatcher : ScreenMatcher {
+class DashAlongTheWayMatcher @Inject constructor() : ScreenMatcher {
 
     // functionally we are waiting for an offer, even if we are navigating
     override val targetScreen = Screen.ON_DASH_ALONG_THE_WAY

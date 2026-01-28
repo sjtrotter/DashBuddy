@@ -12,14 +12,19 @@ import cloud.trotter.dashbuddy.model.config.EvidenceConfig
 import cloud.trotter.dashbuddy.model.config.MetricType
 import cloud.trotter.dashbuddy.model.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.model.config.ScoringRule
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
+import javax.inject.Inject
+import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "dashbuddy_settings_v3")
 
-class SettingsRepository(private val context: Context) {
-
+@Singleton // <--- 1. Scope to App Lifecycle
+class SettingsRepository @Inject constructor(
+    @param:ApplicationContext private val context: Context
+) {
     private object Keys {
         // --- 1. Gates & General (KEEP) ---
         val IS_FIRST_RUN = booleanPreferencesKey("is_first_run")

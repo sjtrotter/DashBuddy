@@ -1,37 +1,28 @@
 package cloud.trotter.dashbuddy.pipeline.recognition
 
-import cloud.trotter.dashbuddy.pipeline.recognition.matchers.*
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.recognition.matchers.LegacyEnumMatcher
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object ScreenRecognizer {
+@Singleton
+class ScreenRecognizer @Inject constructor(
+    // 1. INJECTED: The new, Hilt-managed matchers (OfferMatcher, etc.)
+    injectedMatchers: Set<@JvmSuppressWildcards ScreenMatcher>
+) {
 
-    private val matchers = listOf(
-        AppStartupMatcher(),
-        DeliverySummaryMatcher(),
-        DropoffNavigationMatcher(),
-        IdleMapMatcher(),
-        OfferMatcher(),
-        PickupArrivalMatcher(),
-        PickupNavigationMatcher(),
-        PickupShoppingMatcher(),
-        ScheduleMatcher(),
-        PickupPreArrivalMatcher(),
-        DropoffPreArrivalMatcher(),
-        SetDashEndTimeMatcher(),
-        DashSummaryMatcher(),
-        WaitingForOfferMatcher(),
-        DashPausedMatcher(),
-        DashAlongTheWayMatcher(),
-    ).sortedByDescending { it.priority }
-
-    private val legacy = Screen.entries
+    // 2. MANUAL: The old enums that still have logic
+    private val legacyMatchers = Screen.entries
         .filter { it.hasMatchingCriteria }
         .map { LegacyEnumMatcher(it) }
 
+    // 3. MERGE: Combine both lists, sort by priority
+    private val allMatchers = (injectedMatchers + legacyMatchers)
+        .sortedByDescending { it.priority }
+
     fun identify(node: UiNode): ScreenInfo {
-        return matchers
-            .firstNotNullOfOrNull { it.matches(node) }
-            ?: legacy.firstNotNullOfOrNull { it.matches(node) }
+        // Iterate through the unified list
+        return allMatchers.firstNotNullOfOrNull { it.matches(node) }
             ?: ScreenInfo.Simple(Screen.UNKNOWN)
     }
 }

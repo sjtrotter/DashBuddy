@@ -7,8 +7,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.content.LocusIdCompat
 import androidx.core.graphics.drawable.IconCompat
+import timber.log.Timber
 import java.util.Date
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 /**
  * Helper object to create bubble-specific notifications.
@@ -44,8 +46,7 @@ object BubbleNotification {
         desiredHeight: Int = 600,
         autoExpandAndSuppress: Boolean = false
     ): Notification {
-        Log.d(
-            "BubbleNotificationHelper",
+        Timber.d(
             "Creating messaging bubble notification with message: '$messageText', Locus ID: $locusId"
         )
 

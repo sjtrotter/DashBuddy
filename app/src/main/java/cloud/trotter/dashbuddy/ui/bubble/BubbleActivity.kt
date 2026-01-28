@@ -8,16 +8,18 @@ import androidx.navigation.ui.setupWithNavController
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.databinding.ActivityBubbleBinding
-import cloud.trotter.dashbuddy.log.Logger
+//import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.ui.interfaces.DebugModeToggleListener
+import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
 
+@AndroidEntryPoint
 class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
 
     private lateinit var binding: ActivityBubbleBinding
 
     companion object {
         const val EXTRA_TARGET_TAB_ID = "cloud.trotter.dashbuddy.TARGET_TAB_ID"
-        private const val TAG = "BubbleActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,7 +56,7 @@ class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
     override fun onResume() {
         super.onResume()
         updateDebugTabVisibility()
-        Logger.d(TAG, "onResume: Debug tab visibility updated.")
+        Timber.d("onResume: Debug tab visibility updated.")
     }
 
     // A single helper to handle navigation from intents
@@ -62,7 +64,7 @@ class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
         val targetTabId = intent?.getIntExtra(EXTRA_TARGET_TAB_ID, -1) ?: -1
         if (targetTabId != -1) {
             binding.bubbleBottomNav.selectedItemId = targetTabId
-            Logger.d(TAG, "Navigated to tab: ${getFragmentName(targetTabId)}")
+            Timber.d("Navigated to tab: ${getFragmentName(targetTabId)}")
         }
     }
 
@@ -75,17 +77,16 @@ class BubbleActivity : AppCompatActivity(), DebugModeToggleListener {
         if (debugTabMenuItem != null) {
             if (debugTabMenuItem.isVisible != isDebugModeEnabled) {
                 debugTabMenuItem.isVisible = isDebugModeEnabled
-                Logger.i(TAG, "Debug tab visibility updated to: $isDebugModeEnabled")
+                Timber.i("Debug tab visibility updated to: $isDebugModeEnabled")
                 if (!isDebugModeEnabled && binding.bubbleBottomNav.selectedItemId == R.id.nav_debug_log) {
-                    Logger.d(
-                        TAG,
+                    Timber.d(
                         "Debug mode turned off while debug tab was active. Switching to default."
                     )
                     binding.bubbleBottomNav.selectedItemId = R.id.nav_dash_log
                 }
             }
         } else {
-            Logger.w(TAG, "Could not find R.id.nav_debug_log menu item to set visibility.")
+            Timber.w("Could not find R.id.nav_debug_log menu item to set visibility.")
         }
     }
 

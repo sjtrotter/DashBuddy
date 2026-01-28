@@ -38,7 +38,7 @@
 //        val yearOffset = position - START_POSITION
 //        val pageYear = DashStateViewModel.REFERENCE_MONTH_DATE.year + yearOffset
 //
-//        Logger.v(tag, "Binding position $position to year $pageYear")
+//        Timber.v(tag, "Binding position $position to year $pageYear")
 //        holder.bind(pageYear)
 //    }
 //

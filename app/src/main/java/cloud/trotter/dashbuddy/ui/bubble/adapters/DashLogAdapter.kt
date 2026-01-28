@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.log.dash // Or wherever you want to keep your adapters
+package cloud.trotter.dashbuddy.ui.bubble.adapters
 
 import android.view.LayoutInflater
 import android.view.View
@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.data.log.dash.DashLogItem
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -30,7 +31,8 @@ class DashLogAdapter :
 
     class LogMessageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val messageTextView: TextView = itemView.findViewById(R.id.log_message_text)
-        private val timestampTextView: TextView = itemView.findViewById(R.id.log_message_timestamp) // Optional
+        private val timestampTextView: TextView =
+            itemView.findViewById(R.id.log_message_timestamp) // Optional
 
         fun bind(logItem: DashLogItem, formatter: SimpleDateFormat) {
             messageTextView.text = logItem.message

@@ -42,6 +42,7 @@ android {
 //        dataBinding = true // testing to see if databindings need to be enabled
         viewBinding = true
         compose = true
+        buildConfig = true
     }
 }
 
@@ -77,8 +78,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.material)
     implementation(libs.play.services.location)
-    implementation(platform(libs.androidx.compose.bom))
     implementation(libs.reorderable)
+    implementation(libs.timber)
+    implementation(platform(libs.androidx.compose.bom))
 
     ksp(libs.androidx.room.compiler)
     ksp(libs.hilt.compiler)

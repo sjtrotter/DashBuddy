@@ -9,9 +9,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 @Singleton
 class TimeoutHandler @Inject constructor(
@@ -25,7 +27,7 @@ class TimeoutHandler @Inject constructor(
             delay(durationMs)
 
             // TIME IS UP!
-            Log.w("TimeoutHandler", "Timer Expired! : $type")
+            Timber.w("Timer Expired! : $type")
 
             // Inject a special context into the machine
             stateManagerV2.get().dispatch(

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.fragments
+package cloud.trotter.dashbuddy.ui.bubble.fragments
 
 import android.content.Intent
 import android.os.Bundle
@@ -22,19 +22,21 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.data.log.debug.DebugLogAdapter
 import cloud.trotter.dashbuddy.data.log.debug.DebugLogViewModel
 import cloud.trotter.dashbuddy.databinding.FragmentDebugLogBinding
 import cloud.trotter.dashbuddy.ui.bubble.BubbleActivity
+import cloud.trotter.dashbuddy.ui.bubble.adapters.DebugLogAdapter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import cloud.trotter.dashbuddy.log.Level as LogLevel
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 class DebugLogFragment : Fragment() {
 
@@ -43,10 +45,6 @@ class DebugLogFragment : Fragment() {
 
     private lateinit var debugLogAdapter: DebugLogAdapter
     private val viewModel: DebugLogViewModel by viewModels()
-
-    companion object {
-        private const val TAG = "DebugLogFragment"
-    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -97,13 +95,13 @@ class DebugLogFragment : Fragment() {
                 // Handle clicks on the action icons
                 return when (menuItem.itemId) {
                     R.id.menu_save_log -> {
-                        Log.i(TAG, "Save log button clicked.")
+                        Timber.i("Save log button clicked.")
                         saveLogToFile()
                         true // Signify that the event was handled
                     }
 
                     R.id.menu_share_log -> {
-                        Log.i(TAG, "Share log button clicked.")
+                        Timber.i("Share log button clicked.")
                         shareLog()
                         true // Signify that the event was handled
                     }
@@ -138,10 +136,10 @@ class DebugLogFragment : Fragment() {
                 val selectedLevelName = parent?.getItemAtPosition(position) as String
                 try {
                     val selectedLevel = LogLevel.valueOf(selectedLevelName)
-                    Log.i(TAG, "User selected new log level: $selectedLevel")
+                    Timber.i("User selected new log level: $selectedLevel")
                     DashBuddyApplication.setLogLevel(selectedLevel)
                 } catch (e: IllegalArgumentException) {
-                    Log.e(TAG, "Could not convert '$selectedLevelName' to LogLevel", e)
+                    Timber.e(e, "Could not convert '$selectedLevelName' to LogLevel")
                 }
             }
 
@@ -195,7 +193,7 @@ class DebugLogFragment : Fragment() {
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to save log file", e)
+                Timber.e(e, "Failed to save log file")
                 Toast.makeText(context, "Error: Could not save log file.", Toast.LENGTH_SHORT)
                     .show()
             }

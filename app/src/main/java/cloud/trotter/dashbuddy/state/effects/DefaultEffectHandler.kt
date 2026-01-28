@@ -13,9 +13,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 /**
  * The Real-World implementation that interacts with Android Services, UI, and Hardware.
@@ -41,13 +43,13 @@ class DefaultEffectHandler @Inject constructor(
 
             is AppEffect.LogEvent -> {
                 scope.launch(Dispatchers.IO) {
-                    Log.v(tag, "Logging Event: ${effect.event.eventType}")
+                    Timber.v("Logging Event: ${effect.event.eventType}")
                     appEventRepo.insert(effect.event)
                 }
             }
 
             is AppEffect.UpdateBubble -> {
-                Log.i(tag, "Bubble Update: ${effect.text}")
+                Timber.i("Bubble Update: ${effect.text}")
                 DashBuddyApplication.sendBubbleMessage(effect.text)
             }
 
@@ -86,7 +88,7 @@ class DefaultEffectHandler @Inject constructor(
             }
 
             is AppEffect.ClickNode -> {
-                Log.i(tag, "Executing Effect: Clicking Node (${effect.description})")
+                Timber.i("Executing Effect: Clicking Node (${effect.description})")
                 // Robust utility call
                 cloud.trotter.dashbuddy.util.AccNodeUtils.clickNode(effect.node.originalNode)
             }

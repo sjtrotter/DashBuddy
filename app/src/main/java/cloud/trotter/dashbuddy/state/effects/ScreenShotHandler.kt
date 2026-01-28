@@ -8,11 +8,12 @@ import android.provider.MediaStore
 import android.view.Display
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.pipeline.inputs.AccessibilityListener
-import cloud.trotter.dashbuddy.log.Logger as Log
+//import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppEffect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -43,14 +44,14 @@ object ScreenShotHandler {
                         }
 
                         override fun onFailure(errorCode: Int) {
-                            Log.e(TAG, "Screenshot Failed: Error $errorCode")
+                            Timber.e("Screenshot Failed: Error $errorCode")
                         }
                     }
                 )
             } catch (e: SecurityException) {
-                Log.e(TAG, "Screenshot Failed: Permission denied.", e)
+                Timber.e(e, "Screenshot Failed: Permission denied.")
             } catch (e: Exception) {
-                Log.e(TAG, "Screenshot Failed: Unexpected error.", e)
+                Timber.e(e, "Screenshot Failed: Unexpected error.")
             }
         }
     }
@@ -73,7 +74,7 @@ object ScreenShotHandler {
                 result.colorSpace
             )
             if (bitmap == null) {
-                Log.e(TAG, "Failed to wrap hardware buffer.")
+                Timber.e("Failed to wrap hardware buffer.")
                 return
             }
 
@@ -102,7 +103,7 @@ object ScreenShotHandler {
             val uri: Uri? = resolver.insert(collection, contentValues)
 
             if (uri == null) {
-                Log.e(TAG, "Failed to create MediaStore entry.")
+                Timber.e("Failed to create MediaStore entry.")
                 return
             }
 
@@ -118,12 +119,12 @@ object ScreenShotHandler {
             contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
             resolver.update(uri, contentValues, null, null)
 
-            Log.i(TAG, "Screenshot saved to Gallery: Pictures/DashBuddy/$displayName")
+            Timber.i("Screenshot saved to Gallery: Pictures/DashBuddy/$displayName")
 
         } catch (e: IOException) {
-            Log.e(TAG, "Failed to write screenshot to MediaStore", e)
+            Timber.e(e, "Failed to write screenshot to MediaStore")
         } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error saving screenshot", e)
+            Timber.e(e, "Unexpected error saving screenshot")
         }
     }
 }

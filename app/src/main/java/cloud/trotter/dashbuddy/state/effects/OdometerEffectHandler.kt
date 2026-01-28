@@ -8,9 +8,11 @@ import androidx.core.app.NotificationCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 @Singleton
 class OdometerEffectHandler @Inject constructor(
@@ -19,7 +21,6 @@ class OdometerEffectHandler @Inject constructor(
     private val notificationManager: NotificationManager // <--- Injected!
 ) {
 
-    private val tag = "OdometerEffect"
     private val notificationId = 101
     private val channelId = "LocationServiceChannel" // Keeping ID for compatibility
 
@@ -28,7 +29,7 @@ class OdometerEffectHandler @Inject constructor(
     }
 
     fun startUp() {
-        Log.i(tag, "Effect: Starting Odometer & Notification")
+        Timber.i("Effect: Starting Odometer & Notification")
         try {
             // 1. Start the Logic (Coroutines Job)
             odometerRepository.startTracking()
@@ -39,12 +40,12 @@ class OdometerEffectHandler @Inject constructor(
             notificationManager.notify(notificationId, notification)
 
         } catch (e: Exception) {
-            Log.e(tag, "Failed to start Odometer", e)
+            Timber.e(e, "Failed to start Odometer")
         }
     }
 
     fun shutDown() {
-        Log.i(tag, "Effect: Stopping Odometer")
+        Timber.i("Effect: Stopping Odometer")
         try {
             // 1. Stop the Logic (Kills GPS)
             odometerRepository.stopTracking()
@@ -53,7 +54,7 @@ class OdometerEffectHandler @Inject constructor(
             notificationManager.cancel(notificationId)
 
         } catch (e: Exception) {
-            Log.e(tag, "Failed to stop Odometer", e)
+            Timber.e(e, "Failed to stop Odometer")
         }
     }
 

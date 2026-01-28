@@ -13,9 +13,11 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 /**
  * The specific implementation that talks to Google's FusedLocationProviderClient.
@@ -43,17 +45,17 @@ class FusedLocationDataSource @Inject constructor(
             setMinUpdateDistanceMeters(5f)
         }.build()
 
-        Log.i("FusedLocation", "⚡ Starting GPS updates...")
+        Timber.i("⚡ Starting GPS updates...")
         fusedClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
             .addOnFailureListener { e ->
-                Log.e("FusedLocation", "Failed to start GPS", e)
+                Timber.e(e, "Failed to start GPS")
                 close(e)
             }
 
         // --- THE KILL SWITCH ---
         // This runs automatically when the collector (OdometerRepository) stops listening.
         awaitClose {
-            Log.i("FusedLocation", "🛑 Stopping GPS updates (Hardware Off)")
+            Timber.i("🛑 Stopping GPS updates (Hardware Off)")
             fusedClient.removeLocationUpdates(callback)
         }
     }

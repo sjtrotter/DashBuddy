@@ -5,10 +5,12 @@ import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
 import cloud.trotter.dashbuddy.util.UtilityFunctions
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+//import cloud.trotter.dashbuddy.log.Logger as Log
 import java.util.regex.Pattern
+import javax.inject.Inject
 
-class DashSummaryMatcher : ScreenMatcher {
+class DashSummaryMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.DASH_SUMMARY_SCREEN
     override val priority = 1
@@ -30,14 +32,14 @@ class DashSummaryMatcher : ScreenMatcher {
 
         if (!hasTitle || !hasDoneButton) return null
 
-        Log.d(tag, "Context found (Title & Done Button). Analyzing...")
+        Timber.d("Context found (Title & Done Button). Analyzing...")
 
         // 2. Extraction - Total Pay
         // Targeted search for ID 'header_pay' which contains the Dash Total
         val payNode = node.findDescendantById("header_pay")
         val totalEarnings = payNode?.text?.let { UtilityFunctions.parseCurrency(it) }
 
-        Log.d(tag, "Dash Earnings: node='${payNode?.text}' -> parsed=$totalEarnings")
+        Timber.d("Dash Earnings: node='${payNode?.text}' -> parsed=$totalEarnings")
 
         // 3. Extraction - Stats Rows
         // We look for any node with ID 'name' (the label) and try to find its sibling 'value'
@@ -56,7 +58,7 @@ class DashSummaryMatcher : ScreenMatcher {
             val valueNode = parent.findChildById("value") ?: continue
             val valueText = valueNode.text ?: ""
 
-            Log.d(tag, "Found Row: '$label' -> '$valueText'")
+            Timber.d("Found Row: '$label' -> '$valueText'")
 
             when {
                 label.equals("Total online time", ignoreCase = true) -> {
@@ -75,8 +77,7 @@ class DashSummaryMatcher : ScreenMatcher {
             }
         }
 
-        Log.d(
-            tag,
+        Timber.d(
             "Parsed Stats: Time=${durationMillis}ms, Offers=$offersAccepted/$offersTotal, Weekly=$weeklyEarnings"
         )
 
@@ -86,8 +87,7 @@ class DashSummaryMatcher : ScreenMatcher {
             // Allow small delta (0.02) for floating point math weirdness,
             // but generally Total must be <= Weekly.
             if (totalEarnings > (weeklyEarnings + 0.02)) {
-                Log.w(
-                    tag,
+                Timber.w(
                     "Sanity Check FAILED: Dash Total ($totalEarnings) > Weekly Total ($weeklyEarnings). Ignoring invalid data."
                 )
                 return null
@@ -104,7 +104,7 @@ class DashSummaryMatcher : ScreenMatcher {
             offersTotal = offersTotal,
             onlineDurationMillis = durationMillis,
             estimatedStartTime = startTime
-        ).also { Log.i(tag, "Match Success: $it") }
+        ).also { Timber.i("Match Success: $it") }
     }
 
     private fun parseDurationToMillis(text: String): Long {

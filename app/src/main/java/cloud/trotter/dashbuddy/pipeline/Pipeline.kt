@@ -15,9 +15,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.log.Logger as Log
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 @Singleton
 class Pipeline @Inject constructor(
@@ -25,7 +27,6 @@ class Pipeline @Inject constructor(
     private val stateContextFactory: StateContextFactory,
 ) {
 
-    private val tag = "Pipeline"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private val differ = ScreenDiffer()
@@ -58,11 +59,11 @@ class Pipeline @Inject constructor(
     fun onNotificationPosted(info: NotificationInfo) {
         scope.launch {
             try {
-                Log.d(tag, "Notification: ${info.title}")
+                Timber.d("Notification: ${info.title}")
                 val event = stateContextFactory.createFromNotification(info)
                 stateManagerV2.dispatch(event)
             } catch (e: Exception) {
-                Log.e(tag, "Notification Pipeline Error", e)
+                Timber.e(e, "Notification Pipeline Error")
             }
         }
     }
@@ -73,18 +74,18 @@ class Pipeline @Inject constructor(
             try {
                 // 1. CONVERT (Fast)
                 // We create the UiNode wrapper immediately.
-                Log.d(tag, "Processing Accessibility Event: ${event.eventType}")
+                Timber.d("Processing Accessibility Event: ${event.eventType}")
                 val uiNode = UiNode.from(rootNode) ?: return@launch
 
                 // 2. DIFF (Optimization)
                 // We check the hash of the UiNode BEFORE we do any heavy recognition logic.
                 val isClick = event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
-                Log.d(tag, "Is Click: $isClick")
+                Timber.d("Is Click: $isClick")
 
                 if (!isClick && !differ.hasChanged(uiNode)) {
                     // Screen is identical to the last one processed.
                     // Stop here to save CPU and Battery.
-                    Log.d(tag, "Screen is identical to the last one processed. Skipping...")
+                    Timber.d("Screen is identical to the last one processed. Skipping...")
                     return@launch
                 }
 
@@ -92,13 +93,13 @@ class Pipeline @Inject constructor(
                 // Now that we know it's new, we ask the Factory to analyze it.
                 val updateEvent = stateContextFactory.createFromAccessibility(uiNode)
 
-                Log.i(tag, "Sending event to StateManager: ${updateEvent.screenInfo?.screen}")
+                Timber.i("Sending event to StateManager: ${updateEvent.screenInfo?.screen}")
 
                 // 4. DISPATCH
                 stateManagerV2.dispatch(updateEvent)
 
             } catch (e: Exception) {
-                Log.e(tag, "Accessibility Pipeline Error", e)
+                Timber.e(e, "Accessibility Pipeline Error")
             }
         }
     }

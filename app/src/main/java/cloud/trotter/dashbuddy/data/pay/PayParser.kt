@@ -1,22 +1,24 @@
 package cloud.trotter.dashbuddy.data.pay
 
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object PayParser {
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
-    private const val TAG = "PayParser"
+@Singleton
+class PayParser @Inject constructor() {
 
     // Support both real IDs and Test Log IDs
-    private val TITLE_IDS = listOf("pay_line_item_title", "name")
-    private val VALUE_IDS = listOf("pay_line_item_value", "value")
+    private val titleIds = listOf("pay_line_item_title", "name")
+    private val valueIds = listOf("pay_line_item_value", "value")
 
     // Explicitly ignore these IDs to prevent "Partial Row" warnings
-    private val IGNORED_IDS = listOf("final_value", "section_title")
+    private val ignoredIds = listOf("final_value", "section_title")
 
     fun parsePayFromTree(root: UiNode): ParsedPay {
-        Log.d(
-            TAG,
+        Timber.d(
             "Starting recursive parse on root: ${root.className} (children: ${root.children.size})"
         )
 
@@ -32,17 +34,17 @@ object PayParser {
 
             // 1. Detect Section Headers
             if (text.equals("Customer tips", ignoreCase = true)) {
-                Log.d(TAG, "$indent[Header] 'Customer tips' -> Mode: TIPS")
+                Timber.d("$indent[Header] 'Customer tips' -> Mode: TIPS")
                 inTipsSection = true
             }
             if (text.equals("DoorDash pay", ignoreCase = true)) {
-                Log.d(TAG, "$indent[Header] 'DoorDash pay' -> Mode: APP PAY")
+                Timber.d("$indent[Header] 'DoorDash pay' -> Mode: APP PAY")
                 inTipsSection = false
             }
 
             // 2. Detect Rows (Container logic)
-            val titleNode = node.children.find { child -> TITLE_IDS.any { child.hasId(it) } }
-            val valueNode = node.children.find { child -> VALUE_IDS.any { child.hasId(it) } }
+            val titleNode = node.children.find { child -> titleIds.any { child.hasId(it) } }
+            val valueNode = node.children.find { child -> valueIds.any { child.hasId(it) } }
 
             // Debug: Check if we found anything resembling a row
             if (titleNode != null || valueNode != null) {
@@ -53,7 +55,7 @@ object PayParser {
                     val amount = amountStr.replace("$", "").toDoubleOrNull() ?: 0.0
 
                     // Nested log for the item found under the header
-                    Log.d(TAG, "$indent  -> Found Item: '$title' = $amount (Tips=$inTipsSection)")
+                    Timber.d("$indent  -> Found Item: '$title' = $amount (Tips=$inTipsSection)")
 
                     val item = ParsedPayItem(title, amount)
 
@@ -68,11 +70,10 @@ object PayParser {
                     // Partial Match Check
                     // Filter out known ignored nodes like the headline total itself
                     val isIgnored =
-                        node.children.any { child -> IGNORED_IDS.any { child.hasId(it) } }
+                        node.children.any { child -> ignoredIds.any { child.hasId(it) } }
 
                     if (!isIgnored) {
-                        Log.w(
-                            TAG,
+                        Timber.w(
                             "$indent  [WARN] Partial Row! TitleNode=${titleNode?.text}, ValueNode=${valueNode?.text}"
                         )
                     }
@@ -85,7 +86,7 @@ object PayParser {
 
         walk(root, 0)
 
-        Log.d(TAG, "Parse Complete. AppPay: ${appPay.size}, Tips: ${tips.size}")
+        Timber.d("Parse Complete. AppPay: ${appPay.size}, Tips: ${tips.size}")
         return ParsedPay(appPay, tips)
     }
 }

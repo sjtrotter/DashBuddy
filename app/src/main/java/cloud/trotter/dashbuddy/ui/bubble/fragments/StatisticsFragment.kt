@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.fragments
+package cloud.trotter.dashbuddy.ui.bubble.fragments
 
 import android.os.Bundle
 import android.view.LayoutInflater

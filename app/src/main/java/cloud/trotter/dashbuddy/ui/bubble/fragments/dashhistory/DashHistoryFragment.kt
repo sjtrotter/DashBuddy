@@ -33,7 +33,7 @@
 //
 //    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 //        super.onViewCreated(view, savedInstanceState)
-//        Log.d(tag, "onViewCreated")
+//        Log.d("onViewCreated")
 //
 //        setupMenu()
 //        observeViewTypeChanges()
@@ -43,7 +43,7 @@
 //    private fun observeViewTypeChanges() {
 //        viewLifecycleOwner.lifecycleScope.launch {
 //            stateViewModel.currentViewType.collectLatest { viewType ->
-//                Log.i(tag, "ViewType changed to $viewType, swapping child fragment.")
+//                Log.i("ViewType changed to $viewType, swapping child fragment.")
 //                val childFragment = when (viewType) {
 //                    HistoryViewType.ANNUAL -> AnnualHistoryFragment()
 //                    HistoryViewType.MONTHLY -> MonthlyHistoryFragment()
@@ -79,7 +79,7 @@
 //    }
 //
 //    private fun setupMenu() {
-//        Log.d(tag, "setupMenu")
+//        Log.d("setupMenu")
 //        val menuHost = requireActivity()
 //        menuHost.addMenuProvider(object : MenuProvider {
 //            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
@@ -143,7 +143,7 @@
 //            HistoryViewType.DAILY -> "${DateFormatSymbols.getInstance().months[(month ?: 1) - 1]} $day, $year"
 //        }
 //        activity.supportActionBar?.title = title
-//        Log.v(tag, "Toolbar title updated to: $title")
+//        Log.v("Toolbar title updated to: $title")
 //
 //        val navIconRes = when (viewType) {
 //            HistoryViewType.ANNUAL -> R.drawable.ic_history_year

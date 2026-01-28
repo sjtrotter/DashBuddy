@@ -8,7 +8,9 @@ import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
 import cloud.trotter.dashbuddy.state.reducers.DeliveryReducer
 import cloud.trotter.dashbuddy.state.reducers.PickupReducer
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 object PostDeliveryReducer {
 
@@ -36,7 +38,7 @@ object PostDeliveryReducer {
             }
 
             else -> {
-                Log.e("PostDelivery", "Invalid entry: ${input::class.simpleName}")
+                Timber.e("Invalid entry: ${input::class.simpleName}")
                 Reducer.Transition(oldState)
             }
         }

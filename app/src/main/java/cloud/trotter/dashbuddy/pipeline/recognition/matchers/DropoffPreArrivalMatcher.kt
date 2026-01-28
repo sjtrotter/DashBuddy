@@ -1,15 +1,16 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import javax.inject.Inject
 
 //import cloud.trotter.dashbuddy.log.Logger as Log
 
-class DropoffPreArrivalMatcher : ScreenMatcher {
+class DropoffPreArrivalMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.DROPOFF_DETAILS_PRE_ARRIVAL
     override val priority = 8
