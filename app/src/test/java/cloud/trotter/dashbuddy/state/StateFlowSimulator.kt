@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state
 
+import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
@@ -14,9 +15,10 @@ import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 
 class StateFlowSimulator {
 
+    private val payParser = PayParser()
     private val matchers: List<ScreenMatcher> = listOf(
         OfferMatcher(),
-        DeliverySummaryMatcher(),
+        DeliverySummaryMatcher(payParser),
         IdleMapMatcher(),
     )
 
@@ -39,7 +41,7 @@ class StateFlowSimulator {
         var matchesFound = 0
         var frameCount = 0
 
-        lines.forEachIndexed { index, line ->
+        lines.forEachIndexed { _, line ->
             if (line.contains("UI Node Tree:")) {
                 // Pass the frame index directly
                 val foundMatch = processFrame(frameCount, line)

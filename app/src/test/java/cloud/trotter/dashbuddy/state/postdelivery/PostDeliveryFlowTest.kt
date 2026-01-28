@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.postdelivery
 
+import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.DeliverySummaryMatcher
 import cloud.trotter.dashbuddy.state.AppEffect
@@ -14,7 +15,8 @@ import org.junit.Test
 
 class PostDeliveryFlowTest {
 
-    private val matcher = DeliverySummaryMatcher()
+    private val payParser: PayParser = PayParser()
+    private val matcher = DeliverySummaryMatcher(payParser)
 
     // --- REUSING YOUR LOGS ---
     // (I'm pasting the relevant ones here for the test context)

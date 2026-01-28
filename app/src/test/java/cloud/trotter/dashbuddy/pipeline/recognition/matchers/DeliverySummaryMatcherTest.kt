@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.data.pay.PayParser
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -11,7 +12,8 @@ import org.junit.Test
 
 class DeliverySummaryMatcherTest {
 
-    private val matcher = DeliverySummaryMatcher()
+    private val payParser = PayParser()
+    private val matcher = DeliverySummaryMatcher(payParser)
 
     // --- LOG SNAPSHOTS ---
 
