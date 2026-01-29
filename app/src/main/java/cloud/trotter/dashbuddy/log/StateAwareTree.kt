@@ -44,12 +44,12 @@ class StateAwareTree(
         }
 
         val level = when (priority) {
+            Log.VERBOSE -> "VERBOSE"
             Log.DEBUG -> "DEBUG"
             Log.INFO -> "INFO"
             Log.WARN -> "WARN"
             Log.ERROR -> "ERROR"
             Log.ASSERT -> "ASSERT"
-            Log.VERBOSE -> "VERBOSE"
             else -> "UNKNOWN"
         }
 
