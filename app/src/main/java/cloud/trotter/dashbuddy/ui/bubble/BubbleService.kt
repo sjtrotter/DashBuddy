@@ -33,7 +33,9 @@ class BubbleService : Service() {
     @Inject
     lateinit var dashLogRepo: DashLogRepo
 
-    private lateinit var notificationManager: NotificationManager
+    @Inject
+    lateinit var notificationManager: NotificationManager
+
     private lateinit var dashBuddyPerson: Person
     private lateinit var bubbleShortcut: ShortcutInfoCompat
     private lateinit var dashBuddyNotificationIcon: IconCompat
@@ -63,7 +65,6 @@ class BubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
         Timber.d("onCreate: BubbleService creating...")
-        notificationManager = DashBuddyApplication.notificationManager
 
         // 1. Create Notification Channel (essential)
         createNotificationChannel(

@@ -27,7 +27,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOdometerDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+    fun provideAppStateStore(@ApplicationContext context: Context): DataStore<Preferences> {
         return PreferenceDataStoreFactory.create(
             produceFile = { context.preferencesDataStoreFile(USER_PREFERENCES_NAME) }
         )

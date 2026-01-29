@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.state
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.data.state.StateRecoveryRepository
 import cloud.trotter.dashbuddy.state.effects.EffectHandler
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import com.google.gson.Gson
@@ -17,11 +17,10 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-//import cloud.trotter.dashbuddy.log.Logger as Log
-
 @Singleton
 class StateManagerV2 @Inject constructor(
-    private val effectHandler: EffectHandler
+    private val effectHandler: EffectHandler,
+    private val stateRecoveryRepository: StateRecoveryRepository
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -54,12 +53,6 @@ class StateManagerV2 @Inject constructor(
         Timber.i("Initializing V2 State Machine...")
         restoreState()
         startProcessor()
-    }
-
-    private fun isActiveDash(state: AppStateV2): Boolean {
-        return state !is AppStateV2.IdleOffline &&
-                state !is AppStateV2.Initializing &&
-                state !is AppStateV2.PostDash
     }
 
     fun dispatch(stateEvent: StateEvent) {
@@ -101,26 +94,36 @@ class StateManagerV2 @Inject constructor(
     // --- Persistence (Crash Recovery) ---
 
     private fun saveState(state: AppStateV2) {
-        try {
-            val json = gson.toJson(state)
-            DashBuddyApplication.saveCrashRecoveryState(json)
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to save state")
+        // Run IO on background thread
+        scope.launch(Dispatchers.IO) {
+            try {
+                val json = gson.toJson(state)
+                // Use the Repo, not the Application class
+                stateRecoveryRepository.saveState(json)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to save state")
+            }
         }
     }
 
     private fun restoreState() {
-        val json = DashBuddyApplication.getCrashRecoveryState()
-        if (json != null) {
-            try {
-                Timber.i("Restoring state from storage...")
-                _state.value = gson.fromJson(json, AppStateV2::class.java)
-            } catch (e: Exception) {
-                Timber.w(e, "Failed to restore state. Starting fresh.")
+        scope.launch(Dispatchers.IO) {
+            // Get fresh state (checks 30 min timeout internally)
+            val json = stateRecoveryRepository.getFreshState()
+
+            if (json != null) {
+                try {
+                    Timber.i("Restoring state from storage...")
+                    val restored = gson.fromJson(json, AppStateV2::class.java)
+                    _state.value = restored
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to restore state. Starting fresh.")
+                    _state.value = AppStateV2.Initializing
+                }
+            } else {
+                Timber.i("No valid previous state found. Starting fresh.")
                 _state.value = AppStateV2.Initializing
             }
-        } else {
-            _state.value = AppStateV2.Initializing
         }
     }
 }

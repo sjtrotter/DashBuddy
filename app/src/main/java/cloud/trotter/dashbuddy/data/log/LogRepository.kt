@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -87,10 +88,9 @@ class LogRepository @Inject constructor(
                 file.writeText(node.toJson())
 
                 // Log a reference so we know where to find it
-                appendLog("INFO/LogRepo: 📸 Saved UI Snapshot: ${file.name}\n")
-
+                Timber.tag("LogRepo").i("📸 Saved UI Snapshot: ${file.name}")
             } catch (e: Exception) {
-                appendLog("ERROR/LogRepo: Failed to save snapshot: ${e.message}\n")
+                Timber.tag("LogRepo").e(e, "Failed to save UI snapshot")
             }
         }
     }
