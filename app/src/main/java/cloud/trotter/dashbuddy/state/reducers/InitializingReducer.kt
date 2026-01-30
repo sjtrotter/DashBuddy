@@ -3,8 +3,14 @@ package cloud.trotter.dashbuddy.state.reducers
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object InitializingReducer {
+@Singleton
+class InitializingReducer @Inject constructor(
+    private val idleReducer: IdleReducer,
+    private val awaitingReducer: AwaitingReducer,
+) {
 
     // LOGIC: We are initializing, looking for the Map.
     fun reduce(
@@ -13,11 +19,11 @@ object InitializingReducer {
     ): Reducer.Transition? {
         return when (input) {
             is ScreenInfo.IdleMap -> {
-                IdleReducer.transitionTo(state, input, isRecovery = false)
+                idleReducer.transitionTo(state, input, isRecovery = false)
             }
 
             is ScreenInfo.WaitingForOffer -> {
-                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+                awaitingReducer.transitionTo(state, input, isRecovery = false)
             }
 
             else -> null

@@ -2,13 +2,21 @@ package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
 import cloud.trotter.dashbuddy.state.reducers.offer.OfferReducer
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object PickupReducer {
+@Singleton
+class PickupReducer @Inject constructor(
+    private val awaitingReducer: AwaitingReducer,
+    private val deliveryReducer: DeliveryReducer,
+    private val offerReducer: OfferReducer,
+) {
 
     fun transitionTo(
         oldState: AppStateV2,
@@ -43,7 +51,17 @@ object PickupReducer {
                     )
                 )
             )
-            effects.add(AppEffect.UpdateBubble("Pickup: $safeStoreName"))
+            val persona = when (input.status) {
+                PickupStatus.NAVIGATING -> ChatPersona.Navigator
+                PickupStatus.ARRIVED -> ChatPersona.Merchant(safeStoreName)
+                PickupStatus.CONFIRMED -> ChatPersona.Customer(
+                    input.customerNameHash?.take(6) ?: "Customer"
+                )
+
+                PickupStatus.SHOPPING -> ChatPersona.Shopper
+                else -> ChatPersona.Dispatcher
+            }
+            effects.add(AppEffect.UpdateBubble("Pickup: $safeStoreName", persona))
         }
 
         return Reducer.Transition(newState, effects)
@@ -58,15 +76,27 @@ object PickupReducer {
 
                 if (hasStoreChanged || hasStatusChanged) {
                     // Update State
+                    val storeName = if (hasStoreChanged) newStoreName else state.storeName
+
                     val nextState = state.copy(
-                        storeName = if (hasStoreChanged) newStoreName else state.storeName,
+                        storeName = storeName,
                         status = input.status
                     )
 
                     val effects = mutableListOf<AppEffect>()
 
                     // FIX 2: Trigger Bubble Update
-                    effects.add(AppEffect.UpdateBubble("Pickup: ${nextState.storeName}"))
+                    val persona = when (input.status) {
+                        PickupStatus.NAVIGATING -> ChatPersona.Navigator
+                        PickupStatus.ARRIVED -> ChatPersona.Merchant(storeName)
+                        PickupStatus.CONFIRMED -> ChatPersona.Customer(
+                            input.customerNameHash?.take(6) ?: "Customer"
+                        )
+
+                        PickupStatus.SHOPPING -> ChatPersona.Shopper
+                        else -> ChatPersona.Dispatcher
+                    }
+                    effects.add(AppEffect.UpdateBubble("Pickup: ${nextState.storeName}", persona))
 
                     // FIX 3: Log Significant Changes to Database
                     if (hasStatusChanged && input.status == PickupStatus.ARRIVED) {
@@ -104,15 +134,15 @@ object PickupReducer {
 
             // SUCCESS: Transition to Delivery
             is ScreenInfo.DropoffDetails -> {
-                DeliveryReducer.transitionTo(state, input, isRecovery = false)
+                deliveryReducer.transitionTo(state, input, isRecovery = false)
             }
 
             is ScreenInfo.WaitingForOffer -> {
-                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+                awaitingReducer.transitionTo(state, input, isRecovery = false)
             }
 
             is ScreenInfo.Offer -> {
-                OfferReducer.transitionTo(state, input, isRecovery = false)
+                offerReducer.transitionTo(state, input, isRecovery = false)
             }
 
             else -> null

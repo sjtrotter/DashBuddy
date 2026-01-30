@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -58,23 +59,18 @@ fun BubbleScreen(
             TopAppBar(
                 title = { Text(if (showFullChat) "Chat History" else "DashBuddy HUD") },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface, // Cleaner look
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 actions = {
-                    // Test Button to generate messages
                     IconButton(onClick = { viewModel.sendTestMessage() }) {
-                        Text(
-                            "MSG",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        Text("MSG", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
-                    // Toggle Full Chat
                     IconButton(onClick = { showFullChat = !showFullChat }) {
                         Icon(
                             imageVector = if (showFullChat) Icons.Default.Close else Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = "Toggle Chat"
+                            contentDescription = "Toggle Chat",
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -104,11 +100,15 @@ fun DashboardView(messages: List<ChatMessageEntity>, onOpenChat: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
-                .height(100.dp),
+                .height(80.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Text("Waiting for Offer...", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "Waiting for Offer...",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             }
         }
 
@@ -125,9 +125,10 @@ fun DashboardView(messages: List<ChatMessageEntity>, onOpenChat: () -> Unit) {
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
                 .clickable { onOpenChat() },
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface) // Standard surface
         ) {
-            Column(modifier = Modifier.padding(8.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 if (recentMessages.isEmpty()) {
                     Text(
                         "No messages yet.",
@@ -135,11 +136,22 @@ fun DashboardView(messages: List<ChatMessageEntity>, onOpenChat: () -> Unit) {
                     )
                 } else {
                     recentMessages.forEach { msg ->
-                        Text(
-                            text = "${msg.senderName}: ${msg.messageText}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        )
+                        // HELPER: Convert HTML -> "Good Offer // McDonalds"
+                        val preview = getPreviewText(msg.messageText)
+
+                        Row(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text(
+                                text = "${msg.senderName}: ",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = preview,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
                 Text(
@@ -148,7 +160,7 @@ fun DashboardView(messages: List<ChatMessageEntity>, onOpenChat: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .align(Alignment.End)
-                        .padding(top = 4.dp)
+                        .padding(top = 8.dp)
                 )
             }
         }
@@ -159,7 +171,6 @@ fun DashboardView(messages: List<ChatMessageEntity>, onOpenChat: () -> Unit) {
 fun FullChatView(messages: List<ChatMessageEntity>) {
     val listState = rememberLazyListState()
 
-    // Auto-scroll to bottom when new message arrives
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -181,40 +192,59 @@ fun FullChatView(messages: List<ChatMessageEntity>) {
 
 @Composable
 fun ChatBubble(message: ChatMessageEntity) {
-    val isSystem = message.senderId == "bot_dispatcher" // Or use your Persona IDs
+    // 1. Determine Sender Type
+    val isSystem = message.senderId == "bot_dispatcher"
+
+    // 2. Choose Colors (Dark Mode Friendly)
+    // System: Secondary Container (Muted Teal/Blue)
+    // User/Other: Surface Variant (Dark Gray)
+    val bubbleColor = if (isSystem) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+
+    val textColor = if (isSystem) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = if (isSystem) Arrangement.Start else Arrangement.Start
-        // Note: Usually User is Right, Bot is Left. Currently we only have Bots.
+        horizontalArrangement = Arrangement.Start
     ) {
         Column(
             modifier = Modifier
                 .background(
-                    color = if (isSystem) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    color = bubbleColor,
                     shape = MaterialTheme.shapes.medium
                 )
-                .padding(8.dp)
-                .fillMaxWidth(0.8f) // Limit width
+                .padding(12.dp)
+                .fillMaxWidth(0.85f) // Limit width slightly
         ) {
             Text(
                 text = message.senderName,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = textColor.copy(alpha = 0.7f) // Dim sender name
             )
+            // Use the rich HTML renderer we built
             HtmlText(
                 html = message.messageText,
-                modifier = Modifier.padding(8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = textColor
             )
         }
     }
 }
 
 @Composable
-fun HtmlText(html: String, modifier: Modifier = Modifier, color: Color) {
+fun HtmlText(
+    html: String,
+    modifier: Modifier = Modifier,
+    color: Color
+) {
     val androidTextColor = color.toArgb()
 
     AndroidView(
@@ -222,13 +252,38 @@ fun HtmlText(html: String, modifier: Modifier = Modifier, color: Color) {
         factory = { context ->
             TextView(context).apply {
                 setTextColor(androidTextColor)
-                textSize = 14f // Match your bodyMedium size
+                textSize = 16f
+                // Important: Enable link clicking if your HTML has links
+                movementMethod = android.text.method.LinkMovementMethod.getInstance()
             }
         },
         update = { textView ->
+            textView.setTextColor(androidTextColor)
             val spanned =
                 Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT)
             textView.text = spanned
         }
     )
+}
+
+/**
+ * Helper to flatten HTML into a single line preview.
+ * Replaces <br> and <p> with " // ".
+ */
+fun getPreviewText(html: String): String {
+    if (html.isBlank()) return ""
+
+    // 1. Quick replace of common block tags with a separator
+    val spacedHtml = html
+        .replace("<br>", " // ")
+        .replace("<br/>", " // ")
+        .replace("</p>", " // ")
+        .replace("</div>", " // ")
+
+    // 2. Strip all other tags
+    val spanned =
+        Html.fromHtml(spacedHtml, Html.FROM_HTML_MODE_COMPACT)
+
+    // 3. Clean up double separators or trailing whitespace
+    return spanned.toString().trim()
 }

@@ -20,7 +20,8 @@ import javax.inject.Singleton
 @Singleton
 class StateManagerV2 @Inject constructor(
     private val effectHandler: EffectHandler,
-    private val stateRecoveryRepository: StateRecoveryRepository
+    private val stateRecoveryRepository: StateRecoveryRepository,
+    private val reducer: Reducer,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -66,7 +67,7 @@ class StateManagerV2 @Inject constructor(
                 val currentState = _state.value
 
                 // 1. Reduce
-                val transition = Reducer.reduce(currentState, stateEvent)
+                val transition = reducer.reduce(currentState, stateEvent)
 
                 // 2. Update State
                 if (transition.newState != currentState) {

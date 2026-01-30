@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.state
 
 import cloud.trotter.dashbuddy.data.event.AppEventEntity
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.state.model.TimeoutType
 
@@ -10,7 +11,11 @@ sealed class AppEffect {
     data class LogEvent(val event: AppEventEntity) : AppEffect()
 
     // 2. Update UI (The Bubble)
-    data class UpdateBubble(val text: String, val isImportant: Boolean = false) : AppEffect()
+    data class UpdateBubble(
+        val text: String,
+        val persona: ChatPersona = ChatPersona.Dispatcher,
+        val expand: Boolean = false
+    ) : AppEffect()
 
     // 3. System Commands (e.g. "Keep Screen On", "Play Sound")
     data object PlayNotificationSound : AppEffect()

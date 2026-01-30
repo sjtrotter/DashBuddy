@@ -3,10 +3,12 @@ package cloud.trotter.dashbuddy.state.effects
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.data.event.AppEventRepo
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
+import cloud.trotter.dashbuddy.state.model.OfferAction
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.Lazy
 import kotlinx.coroutines.CoroutineScope
@@ -85,7 +87,12 @@ class DefaultEffectHandler @Inject constructor(
             is AppEffect.EvaluateOffer -> {
                 val result = OfferEvaluator.evaluateOffer(effect.parsedOffer)
                 stateManagerV2.get().dispatch(OfferEvaluationEvent(result.action))
-                bubbleManager.postMessage(result.message)
+                val persona = when (result.action) {
+                    OfferAction.ACCEPT -> ChatPersona.GoodOffer
+                    OfferAction.DECLINE -> ChatPersona.BadOffer
+                    OfferAction.NOTHING -> ChatPersona.Inspector
+                }
+                bubbleManager.postMessage(result.message, persona)
             }
 
             is AppEffect.ClickNode -> {
