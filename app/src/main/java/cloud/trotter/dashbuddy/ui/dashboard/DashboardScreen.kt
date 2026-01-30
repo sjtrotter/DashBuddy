@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.dashboard
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import cloud.trotter.dashbuddy.util.PermissionUtils
 
 @Composable
@@ -87,10 +85,7 @@ fun DashboardScreen(
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {
-                            val intent = Intent(context, BubbleService::class.java).apply {
-                                putExtra(BubbleService.EXTRA_MESSAGE, "Welcome!")
-                            }
-                            context.startForegroundService(intent)
+                            viewModel.showWelcomeBubble()
                         }
                     ) { Text("Show Bubble") }
                 }

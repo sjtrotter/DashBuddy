@@ -2,16 +2,12 @@ package cloud.trotter.dashbuddy
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.os.Build
-import androidx.annotation.RequiresApi
-import androidx.core.content.ContextCompat
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.data.log.LogRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
 import cloud.trotter.dashbuddy.log.StateAwareTree
 import cloud.trotter.dashbuddy.state.StateManagerV2
-import cloud.trotter.dashbuddy.ui.bubble.BubbleService
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 import javax.inject.Inject
@@ -41,8 +37,6 @@ class DashBuddyApplication : Application() {
         val context: Context
             get() = instance.applicationContext
 
-        var bubbleService: BubbleService? = null
-
         fun createMetadata(): String {
             // ... (Your existing metadata logic remains unchanged) ...
             if (!::instance.isInitialized) return "{ \"test_mode\": true }"
@@ -58,17 +52,6 @@ class DashBuddyApplication : Application() {
                 networkType = "UNKNOWN"
             )
             return com.google.gson.Gson().toJson(metadata)
-        }
-
-        @RequiresApi(Build.VERSION_CODES.BAKLAVA)
-        fun sendBubbleMessage(message: CharSequence) {
-            if (bubbleService != null && BubbleService.isServiceRunningIntentional) {
-                bubbleService?.showMessageInBubble(message, false)
-            } else {
-                val serviceIntent = Intent(context, BubbleService::class.java)
-                serviceIntent.putExtra(BubbleService.EXTRA_MESSAGE, message)
-                ContextCompat.startForegroundService(context, serviceIntent)
-            }
         }
     }
 

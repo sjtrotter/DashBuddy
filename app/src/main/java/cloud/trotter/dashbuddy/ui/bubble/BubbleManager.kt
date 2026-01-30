@@ -52,7 +52,7 @@ class BubbleManager @Inject constructor(
     }
 
     fun postMessage(
-        text: String,
+        text: CharSequence,
         persona: ChatPersona = ChatPersona.Dispatcher,
         expand: Boolean = false
     ) {
@@ -100,7 +100,7 @@ class BubbleManager @Inject constructor(
         ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
     }
 
-    private fun showNotification(text: String, persona: ChatPersona, expand: Boolean) {
+    private fun showNotification(text: CharSequence, persona: ChatPersona, expand: Boolean) {
         val androidPerson = Person.Builder()
             .setName(persona.name)
             .setKey(persona.id)
