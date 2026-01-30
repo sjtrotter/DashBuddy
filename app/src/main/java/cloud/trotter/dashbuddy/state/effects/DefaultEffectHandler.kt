@@ -2,12 +2,12 @@ package cloud.trotter.dashbuddy.state.effects
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
+import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.Lazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,9 +28,9 @@ class DefaultEffectHandler @Inject constructor(
     private val odometerEffectHandler: OdometerEffectHandler,
     private val stateManagerV2: Lazy<StateManagerV2>,
     private val timeoutHandler: TimeoutHandler,
+    private val tipEffectHandler: TipEffectHandler,
+    private val bubbleManager: BubbleManager,
 ) : EffectHandler {
-
-    private val tag = "DefaultEffectHandler"
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun handle(effect: AppEffect, scope: CoroutineScope) {
@@ -50,7 +50,8 @@ class DefaultEffectHandler @Inject constructor(
 
             is AppEffect.UpdateBubble -> {
                 Timber.i("Bubble Update: ${effect.text}")
-                DashBuddyApplication.sendBubbleMessage(effect.text)
+                // TODO: modify UpdateBubble to take a ChatPersona
+                bubbleManager.postMessage(effect.text)
             }
 
             is AppEffect.CaptureScreenshot -> {
@@ -62,7 +63,7 @@ class DefaultEffectHandler @Inject constructor(
             }
 
             is AppEffect.ProcessTipNotification -> {
-                TipEffectHandler.process(scope, effect)
+                tipEffectHandler.process(scope, effect)
             }
 
             is AppEffect.ScheduleTimeout -> {
@@ -84,7 +85,7 @@ class DefaultEffectHandler @Inject constructor(
             is AppEffect.EvaluateOffer -> {
                 val result = OfferEvaluator.evaluateOffer(effect.parsedOffer)
                 stateManagerV2.get().dispatch(OfferEvaluationEvent(result.action))
-                DashBuddyApplication.sendBubbleMessage(result.message)
+                bubbleManager.postMessage(result.message)
             }
 
             is AppEffect.ClickNode -> {

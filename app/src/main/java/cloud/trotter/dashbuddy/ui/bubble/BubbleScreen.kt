@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import android.text.Html
+import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,8 +37,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.data.chat.ChatMessageEntity
 
@@ -199,10 +204,31 @@ fun ChatBubble(message: ChatMessageEntity) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Text(
-                text = message.messageText,
-                style = MaterialTheme.typography.bodyMedium
+            HtmlText(
+                html = message.messageText,
+                modifier = Modifier.padding(8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
+}
+
+@Composable
+fun HtmlText(html: String, modifier: Modifier = Modifier, color: Color) {
+    val androidTextColor = color.toArgb()
+
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            TextView(context).apply {
+                setTextColor(androidTextColor)
+                textSize = 14f // Match your bodyMedium size
+            }
+        },
+        update = { textView ->
+            val spanned =
+                Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT)
+            textView.text = spanned
+        }
+    )
 }

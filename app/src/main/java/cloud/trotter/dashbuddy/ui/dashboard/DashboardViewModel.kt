@@ -5,9 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.AppStateV2.Initializing.isActive
 import cloud.trotter.dashbuddy.state.StateManagerV2
+import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,8 +22,9 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     application: Application,
     private val settingsRepository: SettingsRepository,
-    odometerRepository: OdometerRepository, // <--- Inject Odometer
-    stateManager: StateManagerV2            // <--- Inject State Machine
+    odometerRepository: OdometerRepository,
+    stateManager: StateManagerV2,
+    private val bubbleManager: BubbleManager,
 ) : AndroidViewModel(application) {
 
     // --- STATE OBSERVABLES (Read Only) ---
@@ -54,6 +57,16 @@ class DashboardViewModel @Inject constructor(
 
     fun completeSetup() = viewModelScope.launch {
         settingsRepository.setFirstRunComplete()
+    }
+
+    fun showWelcomeBubble() {
+        // We start a "Test Session" for them to play with
+        bubbleManager.startDash("manual_test_${System.currentTimeMillis()}")
+        bubbleManager.postMessage(
+            "Welcome to DashBuddy! The HUD is active.",
+            ChatPersona.Dispatcher,
+            expand = true
+        )
     }
 
     private fun getStatusText(state: AppStateV2): String {

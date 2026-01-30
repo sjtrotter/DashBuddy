@@ -25,8 +25,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject
 
-//import cloud.trotter.dashbuddy.log.Logger as Log
-
 @AndroidEntryPoint
 class BubbleService : Service() {
 
@@ -116,7 +114,7 @@ class BubbleService : Service() {
 
         // Make service instance accessible (if your design relies on this)
         // Be cautious with static references to services.
-        DashBuddyApplication.bubbleService = this
+//        DashBuddyApplication.bubbleService = this
         Timber.d("onCreate: BubbleService created successfully.")
     }
 
@@ -150,7 +148,7 @@ class BubbleService : Service() {
             val serviceType =
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             // If serviceType is 0 for API < 34, just call startForeground(id, notification)
-            startForeground(SERVICE_NOTIFICATION_ID, notification, serviceType)
+//            startForeground(SERVICE_NOTIFICATION_ID, notification, serviceType)
             Timber.d("Service started in foreground with message: '$messageToShow'")
         } catch (e: Exception) {
             Timber.e(e, "Error starting foreground service")
@@ -165,11 +163,11 @@ class BubbleService : Service() {
         super.onDestroy()
 
         areComponentsInitialized = false
-        if (DashBuddyApplication.bubbleService == this) {
-            DashBuddyApplication.bubbleService = null // Clear static reference
-            isServiceRunningIntentional =
-                false // Mark that the service is no longer intentionally running
-        }
+//        if (DashBuddyApplication.bubbleService == this) {
+//            DashBuddyApplication.bubbleService = null // Clear static reference
+//            isServiceRunningIntentional =
+//                false // Mark that the service is no longer intentionally running
+//        }
         Timber.d("onDestroy: BubbleService destroyed.")
     }
 

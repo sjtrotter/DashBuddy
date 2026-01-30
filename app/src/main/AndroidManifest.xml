@@ -41,15 +41,6 @@
         </activity>
 
         <service
-            android:name=".ui.bubble.BubbleService"
-            android:foregroundServiceType="specialUse"
-            android:exported="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="bubble" />
-        </service>
-
-        <service
             android:name=".pipeline.inputs.AccessibilityListener"
             android:exported="true"
             android:label="DashBuddy"
