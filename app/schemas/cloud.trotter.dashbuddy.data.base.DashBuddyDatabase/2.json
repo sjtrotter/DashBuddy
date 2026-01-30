@@ -1,0 +1,152 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "23dbaf9face8e424a9eef1b9e726f91f",
+    "entities": [
+      {
+        "tableName": "app_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sequenceId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `aggregateId` TEXT, `eventType` TEXT NOT NULL, `eventPayload` TEXT NOT NULL, `occurredAt` INTEGER NOT NULL, `metadata` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "sequenceId",
+            "columnName": "sequenceId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aggregateId",
+            "columnName": "aggregateId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "eventType",
+            "columnName": "eventType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventPayload",
+            "columnName": "eventPayload",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAt",
+            "columnName": "occurredAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metadata",
+            "columnName": "metadata",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "sequenceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_app_events_aggregateId",
+            "unique": false,
+            "columnNames": [
+              "aggregateId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_events_aggregateId` ON `${TABLE_NAME}` (`aggregateId`)"
+          },
+          {
+            "name": "index_app_events_eventType",
+            "unique": false,
+            "columnNames": [
+              "eventType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_events_eventType` ON `${TABLE_NAME}` (`eventType`)"
+          },
+          {
+            "name": "index_app_events_occurredAt",
+            "unique": false,
+            "columnNames": [
+              "occurredAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_events_occurredAt` ON `${TABLE_NAME}` (`occurredAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "chat_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `dashId` TEXT, `timestamp` INTEGER NOT NULL, `senderId` TEXT NOT NULL, `senderName` TEXT NOT NULL, `messageText` TEXT NOT NULL, `iconResId` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dashId",
+            "columnName": "dashId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderId",
+            "columnName": "senderId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderName",
+            "columnName": "senderName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageText",
+            "columnName": "messageText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iconResId",
+            "columnName": "iconResId",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chat_messages_dashId",
+            "unique": false,
+            "columnNames": [
+              "dashId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_dashId` ON `${TABLE_NAME}` (`dashId`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '23dbaf9face8e424a9eef1b9e726f91f')"
+    ]
+  }
+}
