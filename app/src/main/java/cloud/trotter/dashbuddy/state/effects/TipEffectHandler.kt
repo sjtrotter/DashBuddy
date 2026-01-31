@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 @Singleton // <--- Now an injectable class
 class TipEffectHandler @Inject constructor(
-    private val bubbleManager: BubbleManager // <--- Injected!
+    private val bubbleManager: BubbleManager
 ) {
 
     private val tipPattern = Pattern.compile(

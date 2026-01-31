@@ -32,7 +32,8 @@ class DefaultEffectHandler @Inject constructor(
     private val timeoutHandler: TimeoutHandler,
     private val tipEffectHandler: TipEffectHandler,
     private val bubbleManager: BubbleManager,
-    private val offerEvaluator: OfferEvaluator
+    private val offerEvaluator: OfferEvaluator,
+    private val screenShotHandler: ScreenShotHandler,
 ) : EffectHandler {
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -53,12 +54,11 @@ class DefaultEffectHandler @Inject constructor(
 
             is AppEffect.UpdateBubble -> {
                 Timber.i("Bubble Update: ${effect.text}")
-                // TODO: modify UpdateBubble to take a ChatPersona
                 bubbleManager.postMessage(effect.text, effect.persona)
             }
 
             is AppEffect.CaptureScreenshot -> {
-                ScreenShotHandler.capture(scope, effect)
+                screenShotHandler.capture(scope, effect)
             }
 
             is AppEffect.PlayNotificationSound -> {

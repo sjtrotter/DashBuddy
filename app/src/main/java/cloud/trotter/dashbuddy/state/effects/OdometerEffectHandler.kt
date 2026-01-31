@@ -12,8 +12,6 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-//import cloud.trotter.dashbuddy.log.Logger as Log
-
 @Singleton
 class OdometerEffectHandler @Inject constructor(
     @param:ApplicationContext private val context: Context,

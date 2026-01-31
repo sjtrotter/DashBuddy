@@ -18,10 +18,11 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object ScreenShotHandler {
-
-    const val TAG = "ScreenShotEffect"
+@Singleton
+class ScreenShotHandler @Inject constructor() {
 
     fun capture(scope: CoroutineScope, effect: AppEffect.CaptureScreenshot) {
         scope.launch(Dispatchers.IO) {

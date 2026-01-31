@@ -33,7 +33,8 @@ class Reducer @Inject constructor(
     private val postDeliveryReducer: PostDeliveryReducer,
     private val summaryReducer: SummaryReducer,
     private val dashPausedReducer: DashPausedReducer,
-    private val initializingReducer: InitializingReducer
+    private val initializingReducer: InitializingReducer,
+    private val notificationHandler: NotificationHandler,
 ) {
 
     data class Transition(
@@ -50,7 +51,7 @@ class Reducer @Inject constructor(
             }
 
             is NotificationEvent -> {
-                NotificationHandler.handle(currentState, stateEvent)
+                notificationHandler.handle(currentState, stateEvent)
             }
 
             is TimeoutEvent -> {
