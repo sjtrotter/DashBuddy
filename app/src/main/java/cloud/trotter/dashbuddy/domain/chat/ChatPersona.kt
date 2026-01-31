@@ -9,7 +9,8 @@ sealed class ChatPersona(
     @param:DrawableRes val iconResId: Int
 ) {
     // System / Dispatcher
-    data object Dispatcher : ChatPersona("bot_dispatcher", "DashBuddy", R.drawable.bag_red_idle)
+    data object Dispatcher :
+        ChatPersona("bot_dispatcher", "Dispatch", R.drawable.ic_chat_delivery_truck_speed)
 
     data object System : ChatPersona("sys_internal", "System", R.drawable.ic_chat_info)
 
@@ -24,13 +25,13 @@ sealed class ChatPersona(
     data object GoodOffer : ChatPersona(
         id = "bot_offer_good",
         name = "Great Catch!",
-        iconResId = R.drawable.ic_chat_check_circle // Or R.drawable.ic_check_circle
+        iconResId = R.drawable.ic_chat_receipt_long_check_circle
     )
 
     data object BadOffer : ChatPersona(
         id = "bot_offer_bad",
         name = "Hard Pass",
-        iconResId = R.drawable.ic_chat_cancel_circle
+        iconResId = R.drawable.ic_chat_receipt_long_cancel_circle
     )
 
     // 4. The Co-Pilot (Travel Phase)
@@ -51,7 +52,7 @@ sealed class ChatPersona(
     data object Inspector : ChatPersona(
         id = "bot_inspector",
         name = "Inspector",
-        iconResId = R.drawable.ic_chat_visibility //
+        iconResId = R.drawable.ic_chat_receipt_long_search //
     )
 
     //7. The Shopper

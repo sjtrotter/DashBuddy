@@ -1,20 +1,26 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
 import android.text.Html
+import android.text.format.DateFormat
 import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Close
@@ -37,14 +43,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.data.chat.ChatMessageEntity
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -181,59 +192,87 @@ fun FullChatView(messages: List<ChatMessageEntity>) {
         state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp),
-        verticalArrangement = Arrangement.Bottom
+            .padding(horizontal = 12.dp), // Little more breathing room
+        verticalArrangement = Arrangement.Bottom,
+        contentPadding = PaddingValues(bottom = 16.dp)
     ) {
         items(messages) { msg ->
             ChatBubble(msg)
+            Spacer(modifier = Modifier.height(8.dp)) // Space between bubbles
         }
     }
 }
 
 @Composable
 fun ChatBubble(message: ChatMessageEntity) {
-    // 1. Determine Sender Type
-    val isSystem = message.senderId == "bot_dispatcher"
+    val context = LocalContext.current
 
-    // 2. Choose Colors (Dark Mode Friendly)
-    // System: Secondary Container (Muted Teal/Blue)
-    // User/Other: Surface Variant (Dark Gray)
-    val bubbleColor = if (isSystem) {
-        MaterialTheme.colorScheme.secondaryContainer
+    // 1. Determine Identity & Colors
+    val isSystem = message.senderId.startsWith("bot_") || message.senderId == "sys_internal"
+
+    // Name Color: System gets Teal/Secondary, others get Primary
+    val nameColor = if (isSystem) {
+        MaterialTheme.colorScheme.secondary
     } else {
-        MaterialTheme.colorScheme.surfaceVariant
+        MaterialTheme.colorScheme.primary
     }
 
-    val textColor = if (isSystem) {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+    // formatted Time: "10:30 AM"
+    val timeString = remember(message.timestamp) {
+        DateFormat.getTimeFormat(context).format(Date(message.timestamp))
     }
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
         Column(
             modifier = Modifier
-                .background(
-                    color = bubbleColor,
-                    shape = MaterialTheme.shapes.medium
-                )
+                .fillMaxWidth() // Let bubble take width, but content constrains it
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) // Subtle BG
                 .padding(12.dp)
-                .fillMaxWidth(0.85f) // Limit width slightly
         ) {
-            Text(
-                text = message.senderName,
-                style = MaterialTheme.typography.labelSmall,
-                color = textColor.copy(alpha = 0.7f) // Dim sender name
-            )
-            // Use the rich HTML renderer we built
+            // --- HEADER ROW (Name | Icon | Time) ---
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 1. Name
+                Text(
+                    text = message.senderName,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = nameColor,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // 2. Icon (Small, tinted to match name)
+                Icon(
+                    painter = painterResource(id = message.iconResId),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = Color.Unspecified
+                )
+
+                Spacer(modifier = Modifier.weight(1f)) // Push timestamp to end
+
+                // 3. Timestamp
+                Text(
+                    text = timeString,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    fontSize = 10.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // --- MESSAGE BODY (HTML) ---
             HtmlText(
                 html = message.messageText,
-                color = textColor
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

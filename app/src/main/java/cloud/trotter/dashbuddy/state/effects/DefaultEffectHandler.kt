@@ -53,7 +53,7 @@ class DefaultEffectHandler @Inject constructor(
             is AppEffect.UpdateBubble -> {
                 Timber.i("Bubble Update: ${effect.text}")
                 // TODO: modify UpdateBubble to take a ChatPersona
-                bubbleManager.postMessage(effect.text)
+                bubbleManager.postMessage(effect.text, effect.persona)
             }
 
             is AppEffect.CaptureScreenshot -> {
