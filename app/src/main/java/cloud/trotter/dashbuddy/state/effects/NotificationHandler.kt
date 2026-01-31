@@ -6,11 +6,14 @@ import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object NotificationHandler {
+@Singleton
+class NotificationHandler @Inject constructor() {
 
     // Keywords to filter noise
-    private val KEYWORDS = listOf("New Order", "Tip", "Review", "Dasher", "Complete", "Paid")
+    private val keywords = listOf("New Order", "Tip", "Review", "Dasher", "Complete", "Paid")
 
     fun handle(
         currentState: AppStateV2,
@@ -22,7 +25,7 @@ object NotificationHandler {
         val effects = mutableListOf<AppEffect>()
 
         // 1. Log Event (Filtered)
-        if (KEYWORDS.any { fullText.contains(it, ignoreCase = true) }) {
+        if (keywords.any { fullText.contains(it, ignoreCase = true) }) {
             val logEvent = ReducerUtils.createEvent(
                 dashId = currentState.dashId,
                 type = AppEventType.NOTIFICATION_RECEIVED,

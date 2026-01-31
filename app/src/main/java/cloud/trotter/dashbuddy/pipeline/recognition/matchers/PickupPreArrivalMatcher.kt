@@ -1,12 +1,13 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import javax.inject.Inject
 
-class PickupPreArrivalMatcher : ScreenMatcher {
+class PickupPreArrivalMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.PICKUP_DETAILS_PRE_ARRIVAL
 

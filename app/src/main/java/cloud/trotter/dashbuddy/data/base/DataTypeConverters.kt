@@ -5,9 +5,7 @@ import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.offer.OfferBadge
-import cloud.trotter.dashbuddy.data.offer.OfferStatus
 import cloud.trotter.dashbuddy.data.order.OrderBadge
-import cloud.trotter.dashbuddy.data.order.OrderStatus
 
 /** Class used by the Room database to convert Kotlin data types to and from SQL types. */
 class DataTypeConverters {
@@ -96,33 +94,6 @@ class DataTypeConverters {
     @TypeConverter
     fun toDashType(name: String?): DashType? {
         return name?.let { DashType.valueOf(it) }
-    }
-
-    /** Converts the [OfferStatus] to a string for storage in the database. */
-    @TypeConverter
-    fun fromOfferStatus(status: OfferStatus): String {
-        return status.name
-    }
-
-    /** Converts the string from the database back to the [OfferStatus]. */
-    @TypeConverter
-    fun toOfferStatus(statusString: String): OfferStatus {
-        // Converts the string "ACCEPTED" from the database back to OfferStatus.ACCEPTED.
-        return enumValueOf<OfferStatus>(statusString)
-    }
-
-    /** Converts the [OrderStatus] to a string for storage in the database. */
-    @TypeConverter
-    fun fromOrderStatus(status: OrderStatus): String {
-        // Converts OrderStatus.PICKUP_CONFIRMED to "PICKUP_CONFIRMED".
-        return status.name
-    }
-
-    /** Converts the string from the database back to the [OrderStatus]. */
-    @TypeConverter
-    fun toOrderStatus(statusString: String): OrderStatus {
-        // Converts "PICKUP_CONFIRMED" back to OrderStatus.PICKUP_CONFIRMED.
-        return enumValueOf<OrderStatus>(statusString)
     }
 
     @TypeConverter

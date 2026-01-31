@@ -1,13 +1,14 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import javax.inject.Inject
 
-class PickupArrivalMatcher : ScreenMatcher {
+class PickupArrivalMatcher @Inject constructor() : ScreenMatcher {
 
     // Maps to your POST_ARRIVAL_PICKUP_SINGLE
     override val targetScreen = Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE

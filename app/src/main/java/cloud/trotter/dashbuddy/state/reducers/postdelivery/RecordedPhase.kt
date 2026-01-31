@@ -1,15 +1,12 @@
 package cloud.trotter.dashbuddy.state.reducers.postdelivery
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
-import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
-import cloud.trotter.dashbuddy.state.reducers.DashPausedReducer
-import cloud.trotter.dashbuddy.state.reducers.IdleReducer
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
-import cloud.trotter.dashbuddy.state.reducers.SummaryReducer
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 
 internal object RecordedPhase {
@@ -47,7 +44,7 @@ internal object RecordedPhase {
             "Saved: ${UtilityFunctions.formatCurrency(total)}\n(No breakdown found)"
         }
 
-        effects.add(AppEffect.UpdateBubble(bubbleMessage))
+        effects.add(AppEffect.UpdateBubble(bubbleMessage, ChatPersona.Earnings))
 
         return Reducer.Transition(newState, effects)
     }
@@ -78,12 +75,6 @@ internal object RecordedPhase {
     }
 
     fun reduce(state: AppStateV2.PostDelivery, input: ScreenInfo): Reducer.Transition? {
-        return when (input) {
-            is ScreenInfo.WaitingForOffer -> AwaitingReducer.transitionTo(state, input, false)
-            is ScreenInfo.IdleMap -> IdleReducer.transitionTo(state, input, false)
-            is ScreenInfo.DashSummary -> SummaryReducer.transitionTo(state, input, false)
-            is ScreenInfo.DashPaused -> DashPausedReducer.transitionTo(state, input, false)
-            else -> null
-        }
+        return null //let main reducer take care of this...?
     }
 }

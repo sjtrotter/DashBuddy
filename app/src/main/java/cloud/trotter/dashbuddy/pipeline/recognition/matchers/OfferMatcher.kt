@@ -7,14 +7,17 @@ import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.order.OrderBadge
 import cloud.trotter.dashbuddy.data.order.OrderType
 import cloud.trotter.dashbuddy.data.order.ParsedOrder
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+import javax.inject.Inject
 
-class OfferMatcher : ScreenMatcher {
+//import cloud.trotter.dashbuddy.log.Logger as Log
+
+class OfferMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.OFFER_POPUP
     override val priority = 20
@@ -195,7 +198,7 @@ class OfferMatcher : ScreenMatcher {
             orders = orders,
             rawExtractedTexts = "ID-Parsed"
         )
-        Log.i("OfferMatcher", "Matched offer: $parsedOffer")
+        Timber.i("Matched offer: $parsedOffer")
 //        DashBuddyApplication.sendBubbleMessage("New parsed offer: $parsedOffer")
 //        return null
         return ScreenInfo.Offer(Screen.OFFER_POPUP, parsedOffer)

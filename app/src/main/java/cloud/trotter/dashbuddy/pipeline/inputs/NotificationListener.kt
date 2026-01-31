@@ -4,16 +4,23 @@ import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.log.Logger
+//import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.pipeline.Pipeline
 import cloud.trotter.dashbuddy.state.model.NotificationInfo
+import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class NotificationListener : NotificationListenerService() {
+
+    @Inject
+    lateinit var pipeline: Pipeline
 
     private val tag = "NotificationWatcher"
 
     override fun onListenerConnected() {
-        Logger.i(tag, "Notification Listener Connected!")
+        Timber.i("Notification Listener Connected!")
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -33,7 +40,7 @@ class NotificationListener : NotificationListenerService() {
         val text = extras.getCharSequence("android.text")?.toString() ?: ""
         val bigText = extras.getCharSequence("android.bigText")?.toString()
 
-        Logger.d(tag, "Notification from $packageName: $title | $text")
+        Timber.d("Notification from $packageName: $title | $text")
 
         // 3. Map to your existing NotificationInfo object
         val info = NotificationInfo(
@@ -45,7 +52,7 @@ class NotificationListener : NotificationListenerService() {
         )
 
         // 4. Input to pipeline
-        Pipeline.onNotificationPosted(info)
+        pipeline.onNotificationPosted(info)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {

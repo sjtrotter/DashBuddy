@@ -1,14 +1,14 @@
 package cloud.trotter.dashbuddy.util
 
 import android.view.accessibility.AccessibilityNodeInfo
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+
+//import cloud.trotter.dashbuddy.log.Logger as Log
 
 /**
  * A utility object for performing actions on AccessibilityNodeInfo objects.
  */
 object AccNodeUtils {
-
-    private const val TAG = "AccNodeUtils"
 
     /**
      * Recursively extracts identifying structural info (class name, view ID) from nodes.
@@ -53,15 +53,15 @@ object AccNodeUtils {
         textToFind: String
     ): Boolean {
         if (searchStartNode == null) {
-            Log.w(TAG, "Cannot perform click, searchStartNode is null.")
+            Timber.w("Cannot perform click, searchStartNode is null.")
             return false
         }
 
-        Log.d(TAG, "Searching for node with text: '$textToFind'")
+        Timber.d("Searching for node with text: '$textToFind'")
         val foundNodes = searchStartNode.findAccessibilityNodeInfosByText(textToFind)
 
         if (foundNodes.isNullOrEmpty()) {
-            Log.w(TAG, "Text '$textToFind' not found.")
+            Timber.w("Text '$textToFind' not found.")
             return false
         }
 
@@ -81,20 +81,20 @@ object AccNodeUtils {
      */
     fun clickNode(node: AccessibilityNodeInfo?): Boolean {
         if (node == null) {
-            Log.w(TAG, "Cannot click: node is null.")
+            Timber.w("Cannot click: node is null.")
             return false
         }
 
         // Strategy 1 & 2: Self or Parent
         val clickableAncestor = findClickableCandidate(node)
         if (clickableAncestor != null) {
-            Log.i(TAG, "Clicking ancestor/self (Class: ${clickableAncestor.className})")
+            Timber.i("Clicking ancestor/self (Class: ${clickableAncestor.className})")
             return clickableAncestor.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }
 
         // Strategy 3: Lateral Search (Siblings)
         // If the text and the container aren't clickable, maybe there is an icon NEXT to the text.
-        Log.d(TAG, "Ancestor click failed. Attempting lateral search (siblings)...")
+        Timber.d("Ancestor click failed. Attempting lateral search (siblings)...")
 
         val parent = node.parent
         if (parent != null) {
@@ -103,13 +103,13 @@ object AccNodeUtils {
 
                 // Don't check the node itself again, only siblings
                 if (sibling != node && sibling.isClickable) {
-                    Log.i(TAG, "Found clickable sibling! (Class: ${sibling.className}). Clicking.")
+                    Timber.i("Found clickable sibling! (Class: ${sibling.className}). Clicking.")
                     return sibling.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 }
             }
         }
 
-        Log.w(TAG, "Failed to find any clickable candidate (Self, Ancestor, or Sibling).")
+        Timber.w("Failed to find any clickable candidate (Self, Ancestor, or Sibling).")
         return false
     }
 

@@ -7,22 +7,26 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.filters.EventDebouncer
 import cloud.trotter.dashbuddy.pipeline.filters.ScreenDiffer
-import cloud.trotter.dashbuddy.pipeline.processing.StateContextFactory
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.processing.StateContextFactory
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.model.NotificationInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object Pipeline {
+@Singleton
+class Pipeline @Inject constructor(
+    private val stateManagerV2: StateManagerV2,
+    private val stateContextFactory: StateContextFactory,
+    private val screenDiffer: ScreenDiffer,
+) {
 
-    private const val TAG = "Pipeline"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-
-    private val differ = ScreenDiffer()
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private val debouncer = EventDebouncer(delayMs = 50L) { event, rootNode ->
@@ -52,11 +56,11 @@ object Pipeline {
     fun onNotificationPosted(info: NotificationInfo) {
         scope.launch {
             try {
-                Log.d(TAG, "Notification: ${info.title}")
-                val event = StateContextFactory.createFromNotification(info)
-                StateManagerV2.dispatch(event)
+                Timber.d("Notification: ${info.title}")
+                val event = stateContextFactory.createFromNotification(info)
+                stateManagerV2.dispatch(event)
             } catch (e: Exception) {
-                Log.e(TAG, "Notification Pipeline Error", e)
+                Timber.e(e, "Notification Pipeline Error")
             }
         }
     }
@@ -67,32 +71,32 @@ object Pipeline {
             try {
                 // 1. CONVERT (Fast)
                 // We create the UiNode wrapper immediately.
-                Log.d(TAG, "Processing Accessibility Event: ${event.eventType}")
+                Timber.d("Processing Accessibility Event: ${event.eventType}")
                 val uiNode = UiNode.from(rootNode) ?: return@launch
 
                 // 2. DIFF (Optimization)
                 // We check the hash of the UiNode BEFORE we do any heavy recognition logic.
                 val isClick = event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
-                Log.d(TAG, "Is Click: $isClick")
+                Timber.d("Is Click: $isClick")
 
-                if (!isClick && !differ.hasChanged(uiNode)) {
+                if (!isClick && !screenDiffer.hasChanged(uiNode)) {
                     // Screen is identical to the last one processed.
                     // Stop here to save CPU and Battery.
-                    Log.d(TAG, "Screen is identical to the last one processed. Skipping...")
+                    Timber.d("Screen is identical to the last one processed. Skipping...")
                     return@launch
                 }
 
                 // 3. PROCESS (Heavy)
                 // Now that we know it's new, we ask the Factory to analyze it.
-                val updateEvent = StateContextFactory.createFromAccessibility(uiNode)
+                val updateEvent = stateContextFactory.createFromAccessibility(uiNode)
 
-                Log.i(TAG, "Sending event to StateManager: ${updateEvent.screenInfo?.screen}")
+                Timber.i("Sending event to StateManager: ${updateEvent.screenInfo?.screen}")
 
                 // 4. DISPATCH
-                StateManagerV2.dispatch(updateEvent)
+                stateManagerV2.dispatch(updateEvent)
 
             } catch (e: Exception) {
-                Log.e(TAG, "Accessibility Pipeline Error", e)
+                Timber.e(e, "Accessibility Pipeline Error")
             }
         }
     }

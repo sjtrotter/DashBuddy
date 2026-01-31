@@ -1,11 +1,12 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import javax.inject.Inject
 
-class SetDashEndTimeMatcher : ScreenMatcher {
+class SetDashEndTimeMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.SET_DASH_END_TIME
 

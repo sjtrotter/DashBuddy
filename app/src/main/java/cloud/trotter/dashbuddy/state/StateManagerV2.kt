@@ -1,6 +1,10 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.DashBuddyApplication
+import android.os.Build
+import androidx.annotation.RequiresApi
+import cloud.trotter.dashbuddy.data.state.StateRecoveryRepository
+import cloud.trotter.dashbuddy.state.effects.EffectHandler
+import cloud.trotter.dashbuddy.state.event.StateEvent
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,23 +13,18 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import cloud.trotter.dashbuddy.log.Logger as Log
-import android.os.Build
-import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.state.effects.DefaultEffectHandler
-import cloud.trotter.dashbuddy.state.effects.EffectHandler
-import cloud.trotter.dashbuddy.state.event.StateEvent
-import kotlinx.coroutines.delay
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object StateManagerV2 {
+@Singleton
+class StateManagerV2 @Inject constructor(
+    private val effectHandler: EffectHandler,
+    private val stateRecoveryRepository: StateRecoveryRepository,
+    private val reducer: Reducer,
+) {
 
-    private const val TAG = "StateManagerV2"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-
-    // --- DEPENDENCY INJECTION POINT ---
-    // By default, use the real handler. Tests can overwrite this with a Mock.
-    var effectHandler: EffectHandler = DefaultEffectHandler()
-
     private val gson = Gson().newBuilder()
         .registerTypeAdapterFactory(
             cloud.trotter.dashbuddy.util.RuntimeTypeAdapterFactory.of(
@@ -52,29 +51,9 @@ object StateManagerV2 {
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun initialize() {
-        Log.i(TAG, "Initializing V2 State Machine...")
+        Timber.i("Initializing V2 State Machine...")
         restoreState()
         startProcessor()
-        startHeartbeat()
-    }
-
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
-    private fun startHeartbeat() {
-        scope.launch {
-            while (true) {
-                if (isActiveDash(_state.value)) {
-                    // We delegate this to the handler now
-                    effectHandler.handle(AppEffect.SendKeepAlive, scope)
-                }
-                delay(5 * 60 * 1000L)
-            }
-        }
-    }
-
-    private fun isActiveDash(state: AppStateV2): Boolean {
-        return state !is AppStateV2.IdleOffline &&
-                state !is AppStateV2.Initializing &&
-                state !is AppStateV2.PostDash
     }
 
     fun dispatch(stateEvent: StateEvent) {
@@ -88,7 +67,7 @@ object StateManagerV2 {
                 val currentState = _state.value
 
                 // 1. Reduce
-                val transition = Reducer.reduce(currentState, stateEvent)
+                val transition = reducer.reduce(currentState, stateEvent)
 
                 // 2. Update State
                 if (transition.newState != currentState) {
@@ -96,9 +75,9 @@ object StateManagerV2 {
                     val newClass = transition.newState::class.simpleName
 
                     if (oldClass != newClass) {
-                        Log.i(TAG, ">>> TRANSITION: $oldClass -> $newClass")
+                        Timber.i(">>> TRANSITION: $oldClass -> $newClass")
                     } else {
-                        Log.v(TAG, "    Update within $newClass: ${transition.newState}")
+                        Timber.v("    Update within $newClass: ${transition.newState}")
                     }
 
                     _state.value = transition.newState
@@ -116,26 +95,36 @@ object StateManagerV2 {
     // --- Persistence (Crash Recovery) ---
 
     private fun saveState(state: AppStateV2) {
-        try {
-            val json = gson.toJson(state)
-            DashBuddyApplication.saveCrashRecoveryState(json)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save state", e)
+        // Run IO on background thread
+        scope.launch(Dispatchers.IO) {
+            try {
+                val json = gson.toJson(state)
+                // Use the Repo, not the Application class
+                stateRecoveryRepository.saveState(json)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to save state")
+            }
         }
     }
 
     private fun restoreState() {
-        val json = DashBuddyApplication.getCrashRecoveryState()
-        if (json != null) {
-            try {
-                Log.i(TAG, "Restoring state from storage...")
-                _state.value = gson.fromJson(json, AppStateV2::class.java)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to restore state. Starting fresh.", e)
+        scope.launch(Dispatchers.IO) {
+            // Get fresh state (checks 30 min timeout internally)
+            val json = stateRecoveryRepository.getFreshState()
+
+            if (json != null) {
+                try {
+                    Timber.i("Restoring state from storage...")
+                    val restored = gson.fromJson(json, AppStateV2::class.java)
+                    _state.value = restored
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to restore state. Starting fresh.")
+                    _state.value = AppStateV2.Initializing
+                }
+            } else {
+                Timber.i("No valid previous state found. Starting fresh.")
                 _state.value = AppStateV2.Initializing
             }
-        } else {
-            _state.value = AppStateV2.Initializing
         }
     }
 }

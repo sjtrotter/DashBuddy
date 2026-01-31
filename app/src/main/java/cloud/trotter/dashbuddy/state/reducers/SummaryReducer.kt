@@ -6,8 +6,13 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object SummaryReducer {
+@Singleton
+class SummaryReducer @Inject constructor(
+    private val idleReducer: IdleReducer,
+) {
 
     // --- FACTORY ---
     fun transitionTo(
@@ -51,7 +56,7 @@ object SummaryReducer {
         return when (input) {
             is ScreenInfo.IdleMap -> {
                 // User closed the summary -> Fully Offline
-                IdleReducer.transitionTo(state, input, isRecovery = false)
+                idleReducer.transitionTo(state, input, isRecovery = false)
             }
 
             is ScreenInfo.DashSummary -> {

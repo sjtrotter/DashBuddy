@@ -6,8 +6,16 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
 import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
 
-object DeliveryReducer {
+@Singleton
+class DeliveryReducer @Inject constructor(
+    private val awaitingReducerProvider: Provider<AwaitingReducer>,
+    private val dashPausedReducer: DashPausedReducer,
+    private val postDeliveryReducerProvider: Provider<PostDeliveryReducer>,
+) {
 
     // --- FACTORY (Entry Point) ---
     fun transitionTo(
@@ -64,21 +72,21 @@ object DeliveryReducer {
             // it looks like in practice sometimes the app goes to the awaiting offer state
             // before it makes it to post delivery.
             is ScreenInfo.WaitingForOffer -> {
-                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+                awaitingReducerProvider.get().transitionTo(state, input, isRecovery = false)
             }
 
             is ScreenInfo.DeliverySummaryCollapsed -> {
-                PostDeliveryReducer.transitionTo(state, input, isRecovery = false)
+                postDeliveryReducerProvider.get().transitionTo(state, input, isRecovery = false)
             }
 
             is ScreenInfo.DeliveryCompleted -> {
                 // ARRIVED -> COMPLETED
-                PostDeliveryReducer.transitionTo(state, input, isRecovery = false)
+                postDeliveryReducerProvider.get().transitionTo(state, input, isRecovery = false)
             }
             // Note: If user cancels, we might see IdleMap or WaitingForOffer.
             // The Main Reducer's Anchor logic will catch that.
 
-            is ScreenInfo.DashPaused -> DashPausedReducer.transitionTo(
+            is ScreenInfo.DashPaused -> dashPausedReducer.transitionTo(
                 state,
                 input,
                 isRecovery = false

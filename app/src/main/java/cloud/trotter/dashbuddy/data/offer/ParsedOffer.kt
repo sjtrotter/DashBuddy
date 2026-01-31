@@ -50,37 +50,4 @@ data class ParsedOffer(
 
     /** Store the full extracted text array (joined or as JSON) for this offer screen for later review or parsing. */
     val rawExtractedTexts: String? = null,
-) {
-    fun toOfferEntity(
-        dashId: Long,
-        zoneId: Long,
-        timestamp: Long,
-        calculatedScore: Double?,
-        scoreText: String?,
-        status: OfferStatus,
-        dollarsPerMile: Double?,
-        dollarsPerHour: Double,
-    ): OfferEntity {
-        return OfferEntity(
-            dashId = dashId,
-            zoneId = zoneId,
-            offerHash = offerHash,
-            timestamp = timestamp,
-            itemCount = itemCount,
-            payAmount = payAmount,
-            payTextRaw = payTextRaw,
-            distanceMiles = distanceMiles,
-            distanceTextRaw = distanceTextRaw,
-            dueByTimeText = dueByTimeText,
-            dueByTimeMillis = dueByTimeMillis,
-            badges = badges,
-            initialCountdownSeconds = initialCountdownSeconds,
-            calculatedScore = calculatedScore,
-            scoreText = scoreText,
-            status = status,
-            dollarsPerMile = dollarsPerMile,
-            dollarsPerHour = dollarsPerHour,
-            rawExtractedTexts = rawExtractedTexts
-        )
-    }
-}
+)

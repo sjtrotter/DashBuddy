@@ -8,8 +8,17 @@ import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
 import cloud.trotter.dashbuddy.state.model.TimeoutType
 import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
 
-object DashPausedReducer {
+@Singleton
+class DashPausedReducer @Inject constructor(
+    private val idleReducer: IdleReducer,
+    private val awaitingReducerProvider: Provider<AwaitingReducer>,
+    private val summaryReducer: SummaryReducer,
+    private val postDeliveryReducerProvider: Provider<PostDeliveryReducer>,
+) {
 
     fun onTimeout(
         state: AppStateV2,
@@ -18,7 +27,7 @@ object DashPausedReducer {
         return when (type) {
             TimeoutType.DASH_PAUSED_SAFETY ->
                 // Force transition to Idle (Dash Ended)
-                IdleReducer.transitionTo(
+                idleReducer.transitionTo(
                     oldState = state,
                     // Create dummy info since we aren't looking at a screen
                     input = ScreenInfo.IdleMap(
@@ -90,23 +99,23 @@ object DashPausedReducer {
 
             is ScreenInfo.WaitingForOffer -> {
                 // Resumed -> Cancel Timer -> Go to Awaiting
-                val t = AwaitingReducer.transitionTo(state, input, isRecovery = false)
+                val t = awaitingReducerProvider.get().transitionTo(state, input, isRecovery = false)
                 t.copy(effects = t.effects + AppEffect.CancelTimeout(TimeoutType.DASH_PAUSED_SAFETY))
             }
 
             is ScreenInfo.DashSummary -> {
                 // Ended Manually -> Cancel Timer -> Go to Summary
-                val t = SummaryReducer.transitionTo(state, input, isRecovery = false)
+                val t = summaryReducer.transitionTo(state, input, isRecovery = false)
                 t.copy(effects = t.effects + AppEffect.CancelTimeout(TimeoutType.DASH_PAUSED_SAFETY))
             }
 
             is ScreenInfo.IdleMap -> {
                 // Ended Manually -> Cancel Timer -> Go to Idle
-                val t = IdleReducer.transitionTo(state, input, isRecovery = false)
+                val t = idleReducer.transitionTo(state, input, isRecovery = false)
                 t.copy(effects = t.effects + AppEffect.CancelTimeout(TimeoutType.DASH_PAUSED_SAFETY))
             }
 
-            is ScreenInfo.DeliveryCompleted -> PostDeliveryReducer.transitionTo(
+            is ScreenInfo.DeliveryCompleted -> postDeliveryReducerProvider.get().transitionTo(
                 state,
                 input,
                 isRecovery = false

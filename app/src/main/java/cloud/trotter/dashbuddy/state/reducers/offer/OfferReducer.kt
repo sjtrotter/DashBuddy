@@ -9,9 +9,16 @@ import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
 import cloud.trotter.dashbuddy.state.reducers.DashPausedReducer
 import cloud.trotter.dashbuddy.state.reducers.PickupReducer
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
-import kotlin.collections.plus
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
 
-object OfferReducer {
+@Singleton
+class OfferReducer @Inject constructor(
+    private val awaitingReducerProvider: Provider<AwaitingReducer>,
+    private val pickupReducerProvider: Provider<PickupReducer>,
+    private val dashPausedReducerProvider: Provider<DashPausedReducer>,
+) {
 
     fun transitionTo(
         oldState: AppStateV2,
@@ -67,14 +74,15 @@ object OfferReducer {
                 }
             }
 
-            is ScreenInfo.PickupDetails -> PickupReducer.transitionTo(
+            is ScreenInfo.PickupDetails -> pickupReducerProvider.get().transitionTo(
                 state,
                 input,
                 isRecovery = false
             )
 
             is ScreenInfo.WaitingForOffer -> {
-                val transition = AwaitingReducer.transitionTo(state, input, isRecovery = false)
+                val transition =
+                    awaitingReducerProvider.get().transitionTo(state, input, isRecovery = false)
                 val declineEvent = ReducerUtils.createEvent(
                     state.dashId,
                     AppEventType.OFFER_DECLINED,
@@ -84,7 +92,7 @@ object OfferReducer {
             }
 
             is ScreenInfo.DashPaused -> {
-                DashPausedReducer.transitionTo(state, input, isRecovery = false)
+                dashPausedReducerProvider.get().transitionTo(state, input, isRecovery = false)
             }
 
             else -> null

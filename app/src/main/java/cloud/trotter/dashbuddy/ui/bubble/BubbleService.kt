@@ -21,10 +21,19 @@ import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.data.log.dash.DashLogRepo
-import cloud.trotter.dashbuddy.log.Logger as Log
+import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class BubbleService : Service() {
-    private lateinit var notificationManager: NotificationManager
+
+    @Inject
+    lateinit var dashLogRepo: DashLogRepo
+
+    @Inject
+    lateinit var notificationManager: NotificationManager
+
     private lateinit var dashBuddyPerson: Person
     private lateinit var bubbleShortcut: ShortcutInfoCompat
     private lateinit var dashBuddyNotificationIcon: IconCompat
@@ -41,7 +50,6 @@ class BubbleService : Service() {
         const val BUBBLE_NOTIFICATION_ID = 1
         const val SERVICE_NOTIFICATION_ID = 2
         private const val SHORTCUT_ID = "DashBuddy_Bubble_Shortcut"
-        private const val TAG = "BubbleService"
         const val EXTRA_MESSAGE = "extra_message_to_show" // Key for intent extra
         private const val DASHBUDDY_PERSON_KEY = "dashbuddy_user_key" // Stable key for the Person
 
@@ -54,8 +62,7 @@ class BubbleService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "onCreate: BubbleService creating...")
-        notificationManager = DashBuddyApplication.notificationManager
+        Timber.d("onCreate: BubbleService creating...")
 
         // 1. Create Notification Channel (essential)
         createNotificationChannel(
@@ -84,7 +91,7 @@ class BubbleService : Service() {
 
         // Initialize LocusId here
         dashBuddyLocusId = LocusIdCompat("${SHORTCUT_ID}_Locus")
-        Log.d(TAG, "Initialized LocusId: $dashBuddyLocusId")
+        Timber.d("Initialized LocusId: $dashBuddyLocusId")
 
         // 3. Create and push the dynamic shortcut for the bubble
         val shortcutIntent =
@@ -107,14 +114,14 @@ class BubbleService : Service() {
 
         // Make service instance accessible (if your design relies on this)
         // Be cautious with static references to services.
-        DashBuddyApplication.bubbleService = this
-        Log.d(TAG, "onCreate: BubbleService created successfully.")
+//        DashBuddyApplication.bubbleService = this
+        Timber.d("onCreate: BubbleService created successfully.")
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         isServiceRunningIntentional = true // Mark that the service is now intentionally running
-        Log.d(TAG, "onStartCommand: BubbleService started.")
+        Timber.d("onStartCommand: BubbleService started.")
 
         // Use message from intent if provided (e.g., from showMessageInBubble starting the service)
         // Otherwise, use a default initial message.
@@ -141,10 +148,10 @@ class BubbleService : Service() {
             val serviceType =
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             // If serviceType is 0 for API < 34, just call startForeground(id, notification)
-            startForeground(SERVICE_NOTIFICATION_ID, notification, serviceType)
-            Log.d(TAG, "Service started in foreground with message: '$messageToShow'")
+//            startForeground(SERVICE_NOTIFICATION_ID, notification, serviceType)
+            Timber.d("Service started in foreground with message: '$messageToShow'")
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting foreground service", e)
+            Timber.e(e, "Error starting foreground service")
             isServiceRunningIntentional = false // Reset flag on error
             stopSelf() // Stop the service if it can't start in foreground
         }
@@ -156,12 +163,12 @@ class BubbleService : Service() {
         super.onDestroy()
 
         areComponentsInitialized = false
-        if (DashBuddyApplication.bubbleService == this) {
-            DashBuddyApplication.bubbleService = null // Clear static reference
-            isServiceRunningIntentional =
-                false // Mark that the service is no longer intentionally running
-        }
-        Log.d(TAG, "onDestroy: BubbleService destroyed.")
+//        if (DashBuddyApplication.bubbleService == this) {
+//            DashBuddyApplication.bubbleService = null // Clear static reference
+//            isServiceRunningIntentional =
+//                false // Mark that the service is no longer intentionally running
+//        }
+        Timber.d("onDestroy: BubbleService destroyed.")
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -189,7 +196,7 @@ class BubbleService : Service() {
         if (allowBubbles) {
             channel.setConversationId(channelId, "dashbuddy")
         }
-        Log.d(TAG, "Notification channel $name created/updated.")
+        Timber.d("Notification channel $name created/updated.")
     }
 
     /**
@@ -198,15 +205,13 @@ class BubbleService : Service() {
      */
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun showMessageInBubble(message: CharSequence, expand: Boolean = false) {
-        Log.d(TAG, "showMessageInBubble called with message: '$message'")
+        Timber.d("showMessageInBubble called with message: '$message'")
 
-        Log.d(
-            TAG,
+        Timber.d(
             "Service Running: $isServiceRunningIntentional, Components Initialized: $areComponentsInitialized"
         )
         if (!isServiceRunningIntentional || !areComponentsInitialized) {
-            Log.w(
-                TAG,
+            Timber.w(
                 "Service not running or not initialized. Attempting to start service with this message."
             )
             val startIntent = Intent(
@@ -221,12 +226,12 @@ class BubbleService : Service() {
         }
 
         // If service is running and initialized, proceed to update the notification
-        Log.d(TAG, "Service is running. Updating bubble notification with message: '$message'")
+        Timber.d("Service is running. Updating bubble notification with message: '$message'")
 
         postNotification(message, expand)
         // --- Communicate this message to the UI/ViewModel via the Repository ---
-        DashLogRepo.addLogMessage(message) // Timestamp will be default (System.currentTimeMillis())
-        Log.d(TAG, "Added message to DashLogRepository.")
+        dashLogRepo.addLogMessage(message) // Timestamp will be default (System.currentTimeMillis())
+        Timber.d("Added message to DashLogRepository.")
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -261,6 +266,6 @@ class BubbleService : Service() {
 
         notificationManager.notify(BUBBLE_NOTIFICATION_ID, newNotification)
 
-        Log.d(TAG, "Updated bubble notification posted.")
+        Timber.d("Updated bubble notification posted.")
     }
 }

@@ -1,12 +1,21 @@
 package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
+import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
 
-object IdleReducer {
+@Singleton
+class IdleReducer @Inject constructor(
+    private val bubbleManager: BubbleManager,
+    private val awaitingReducerProvider: Provider<AwaitingReducer>
+) {
 
     // --- FACTORY (Entry Point) ---
     fun transitionTo(
@@ -28,9 +37,10 @@ object IdleReducer {
                 type = AppEventType.DASH_STOP,
                 payload = "Return to Map"
             )
+            bubbleManager.endDash()
             effects.add(AppEffect.LogEvent(stopEvent))
             effects.add(AppEffect.StopOdometer)
-            effects.add(AppEffect.UpdateBubble("Dash Ended"))
+            effects.add(AppEffect.UpdateBubble("Dash Ended", ChatPersona.Dispatcher))
         }
 
         return Reducer.Transition(newState, effects)
@@ -58,7 +68,7 @@ object IdleReducer {
 
             is ScreenInfo.WaitingForOffer -> {
                 // START DASH
-                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+                awaitingReducerProvider.get().transitionTo(state, input, isRecovery = false)
             }
 
             else -> null

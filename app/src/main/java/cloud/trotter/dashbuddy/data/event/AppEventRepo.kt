@@ -1,27 +1,31 @@
 package cloud.trotter.dashbuddy.data.event
 
 import kotlinx.coroutines.flow.Flow
+import javax.inject.Inject
+import javax.inject.Singleton
 
-// No @Singleton annotation needed yet
-class AppEventRepo(private val appEventDao: AppEventDao) { // No @Inject constructor
+@Singleton
+class AppEventRepo @Inject constructor(
+    private val dao: AppEventDao
+) {
 
     suspend fun insert(event: AppEventEntity): Long {
-        return appEventDao.insert(event)
+        return dao.insert(event)
     }
 
     fun getAllEvents(): Flow<List<AppEventEntity>> {
-        return appEventDao.getAllEvents()
+        return dao.getAllEvents()
     }
 
     fun getEventsForDash(dashId: String): Flow<List<AppEventEntity>> {
-        return appEventDao.getEventsForDash(dashId)
+        return dao.getEventsForDash(dashId)
     }
 
     fun getEventsByType(type: AppEventType): Flow<List<AppEventEntity>> {
-        return appEventDao.getEventsByType(type)
+        return dao.getEventsByType(type)
     }
 
     fun getEventsInTimeRange(startTime: Long, endTime: Long): Flow<List<AppEventEntity>> {
-        return appEventDao.getEventsInTimeRange(startTime, endTime)
+        return dao.getEventsInTimeRange(startTime, endTime)
     }
 }

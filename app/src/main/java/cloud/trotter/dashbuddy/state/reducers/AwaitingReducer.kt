@@ -1,15 +1,30 @@
 package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.Reducer
 import cloud.trotter.dashbuddy.state.reducers.offer.OfferReducer
 import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
+import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
 
-object AwaitingReducer {
+@Singleton
+class AwaitingReducer @Inject constructor(
+    private val idleReducerProvider: Provider<IdleReducer>,
+    private val bubbleManager: BubbleManager,
+    private val deliveryReducerProvider: Provider<DeliveryReducer>,
+    private val pickupReducerProvider: Provider<PickupReducer>,
+    private val summaryReducer: SummaryReducer,
+    private val dashPausedReducerProvider: Provider<DashPausedReducer>,
+    private val postDeliveryReducerProvider: Provider<PostDeliveryReducer>,
+    private val offerReducerProvider: Provider<OfferReducer>,
+) {
 
     fun transitionTo(
         oldState: AppStateV2,
@@ -35,10 +50,11 @@ object AwaitingReducer {
                 "start_screen" to "WaitingForOffer"
             )
 
+            bubbleManager.startDash(dashId)
             val event = ReducerUtils.createEvent(dashId, AppEventType.DASH_START, payload)
             effects.add(AppEffect.LogEvent(event))
             effects.add(AppEffect.StartOdometer)
-            effects.add(AppEffect.UpdateBubble("Dash Started!"))
+            effects.add(AppEffect.UpdateBubble("Dash Started!", ChatPersona.Dispatcher))
         }
 
         return Reducer.Transition(newState, effects)
@@ -60,39 +76,44 @@ object AwaitingReducer {
                 } else Reducer.Transition(state)
             }
 
-            is ScreenInfo.Offer -> OfferReducer.transitionTo(state, input, isRecovery = false)
-            is ScreenInfo.IdleMap -> IdleReducer.transitionTo(state, input, isRecovery = false)
-            is ScreenInfo.DashPaused -> DashPausedReducer.transitionTo(
+            is ScreenInfo.Offer -> offerReducerProvider.get()
+                .transitionTo(state, input, isRecovery = false)
+
+            is ScreenInfo.IdleMap -> idleReducerProvider.get()
+                .transitionTo(state, input, isRecovery = false)
+
+            is ScreenInfo.DashPaused -> dashPausedReducerProvider.get().transitionTo(
                 state,
                 input,
                 isRecovery = false
             )
 
-            is ScreenInfo.DeliverySummaryCollapsed -> PostDeliveryReducer.transitionTo(
+            is ScreenInfo.DeliverySummaryCollapsed -> postDeliveryReducerProvider.get()
+                .transitionTo(
+                    state,
+                    input,
+                    isRecovery = false
+                )
+
+            is ScreenInfo.DeliveryCompleted -> postDeliveryReducerProvider.get().transitionTo(
                 state,
                 input,
                 isRecovery = false
             )
 
-            is ScreenInfo.DeliveryCompleted -> PostDeliveryReducer.transitionTo(
+            is ScreenInfo.PickupDetails -> pickupReducerProvider.get().transitionTo(
                 state,
                 input,
                 isRecovery = false
             )
 
-            is ScreenInfo.PickupDetails -> PickupReducer.transitionTo(
+            is ScreenInfo.DropoffDetails -> deliveryReducerProvider.get().transitionTo(
                 state,
                 input,
                 isRecovery = false
             )
 
-            is ScreenInfo.DropoffDetails -> DeliveryReducer.transitionTo(
-                state,
-                input,
-                isRecovery = false
-            )
-
-            is ScreenInfo.DashSummary -> SummaryReducer.transitionTo(
+            is ScreenInfo.DashSummary -> summaryReducer.transitionTo(
                 state,
                 input,
                 isRecovery = false

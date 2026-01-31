@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.util
 
-import cloud.trotter.dashbuddy.log.Logger as Log
+//import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
 import java.security.MessageDigest
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -18,13 +19,12 @@ object UtilityFunctions {
                 LocalTime.parse(timeText, formatter12Hour)
             } catch (e: Exception) {
                 try {
-                    Log.d("UtilityFunctions.parseTimeTextToMillis", "Trying 24-hour format.", e)
+                    Timber.d(e, "Trying 24-hour format.")
                     LocalTime.parse(timeText, formatter24Hour)
                 } catch (e2: Exception) {
-                    Log.w(
-                        "UtilityFunctions.parseTimeTextToMillis",
-                        "Could not parse time text '$timeText' with either 12-hour or 24-hour formats.",
-                        e2
+                    Timber.w(
+                        e2,
+                        "Could not parse time text '$timeText' with either 12-hour or 24-hour formats."
                     )
                     return null // Could not parse with known formats
                 }
@@ -87,8 +87,7 @@ object UtilityFunctions {
         return if (targetIndex >= 0 && targetIndex < texts.size) {
             texts[targetIndex]
         } else {
-            Log.w(
-                "UtilityFunctions.getRelativeText",
+            Timber.w(
                 "Relative text lookup failed: offset $offset from anchor '$anchor' (index $anchorIndex) is out of bounds."
             )
             null
@@ -105,8 +104,7 @@ object UtilityFunctions {
         endAnchor: String
     ): String? {
         if (startAnchor == null) {
-            Log.w(
-                "UtilityFunctions.parseBetweenAnchors",
+            Timber.w(
                 "Cannot parse address without a start anchor."
             )
             return null
@@ -115,8 +113,7 @@ object UtilityFunctions {
         val endIndex = texts.indexOf(endAnchor)
 
         if (startIndex == -1 || endIndex == -1 || startIndex >= endIndex) {
-            Log.w(
-                "UtilityFunctions.parseBetweenAnchors",
+            Timber.w(
                 "Address parsing failed: could not find anchors '$startAnchor' and '$endAnchor' in order."
             )
             return null
@@ -129,8 +126,7 @@ object UtilityFunctions {
         val addressStartInSlice = contentSlice.indexOfFirst { it.matches(Regex("^\\d+.*")) }
 
         if (addressStartInSlice == -1) {
-            Log.w(
-                "UtilityFunctions.parseBetweenAnchors",
+            Timber.w(
                 "Could not find a numeric start to the address within the slice."
             )
             return null

@@ -8,9 +8,19 @@ import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
 import cloud.trotter.dashbuddy.state.reducers.DeliveryReducer
 import cloud.trotter.dashbuddy.state.reducers.PickupReducer
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
 
-object PostDeliveryReducer {
+//import cloud.trotter.dashbuddy.log.Logger as Log
+
+@Singleton
+class PostDeliveryReducer @Inject constructor(
+    private val awaitingReducerProvider: Provider<AwaitingReducer>,
+    private val deliveryReducerProvider: Provider<DeliveryReducer>,
+    private val pickupReducer: PickupReducer,
+) {
 
     // --- FACTORY (Unified Entry) ---
 
@@ -36,7 +46,7 @@ object PostDeliveryReducer {
             }
 
             else -> {
-                Log.e("PostDelivery", "Invalid entry: ${input::class.simpleName}")
+                Timber.e("Invalid entry: ${input::class.simpleName}")
                 Reducer.Transition(oldState)
             }
         }
@@ -48,13 +58,13 @@ object PostDeliveryReducer {
 
         val screenCheck = when (input) {
             is ScreenInfo.WaitingForOffer ->
-                AwaitingReducer.transitionTo(state, input, isRecovery = false)
+                awaitingReducerProvider.get().transitionTo(state, input, isRecovery = false)
 
             is ScreenInfo.DropoffDetails ->
-                DeliveryReducer.transitionTo(state, input, isRecovery = false)
+                deliveryReducerProvider.get().transitionTo(state, input, isRecovery = false)
 
             is ScreenInfo.PickupDetails ->
-                PickupReducer.transitionTo(state, input, isRecovery = false)
+                pickupReducer.transitionTo(state, input, isRecovery = false)
 
             else -> null
         }

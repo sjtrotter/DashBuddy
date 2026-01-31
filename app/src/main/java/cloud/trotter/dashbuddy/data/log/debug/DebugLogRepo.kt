@@ -4,14 +4,16 @@ import android.text.SpannableString
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object DebugLogRepo {
-
-    private const val MAX_LOG_LINES = 1000
+@Singleton // <--- Scoped to App Lifecycle
+class DebugLogRepo @Inject constructor() { // <--- Injected Constructor
+    private val maxLogLines = 1000
 
     // 1. Use an ArrayDeque as the internal, mutable source of truth.
     //    It is highly efficient at adding to the end and removing from the front.
-    private val logMessagesDeque = ArrayDeque<DebugLogItem>(MAX_LOG_LINES)
+    private val logMessagesDeque = ArrayDeque<DebugLogItem>(maxLogLines)
 
     // 2. Add a lock for thread safety. StateFlow's 'update' was handling this
     //    for you, but since we are managing the list manually, we must add one.
@@ -27,17 +29,14 @@ object DebugLogRepo {
      * @param message The CharSequence (SpannableString, String, etc.) of the log message.
      */
     fun addLogMessage(message: CharSequence) {
-        val spannableMessage = if (message is SpannableString) {
-            message
-        } else {
-            SpannableString(message) // Ensure it's a SpannableString
-        }
+        val spannableMessage =
+            message as? SpannableString ?: SpannableString(message) // Ensure it's a SpannableString
         val newItem = DebugLogItem(spannableMessage)
 
         // 4. Update the internal deque inside the lock
         synchronized(lock) {
             // If the deque is full, remove the oldest item first
-            if (logMessagesDeque.size >= MAX_LOG_LINES) {
+            if (logMessagesDeque.size >= maxLogLines) {
                 logMessagesDeque.removeFirst()
             }
             // Add the new item to the end

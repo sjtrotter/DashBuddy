@@ -1,53 +1,47 @@
 package cloud.trotter.dashbuddy.state.effects
 
-import android.os.Build
-import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.DashBuddyApplication
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.state.AppEffect
+import cloud.trotter.dashbuddy.ui.bubble.BubbleManager // <--- Import
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
 import java.util.regex.Pattern
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object TipEffectHandler {
-    private const val TAG = "TipEffectHandler"
+@Singleton // <--- Now an injectable class
+class TipEffectHandler @Inject constructor(
+    private val bubbleManager: BubbleManager
+) {
 
-    // Regex for: "A customer added $5.00 tip on a past McDonald's order delivered at 12/15, 1:30 PM"
-    // Groups: 1=Amount, 2=Store, 3=Date, 4=Time, 5=AM/PM
-    private val TIP_PATTERN = Pattern.compile(
+    private val tipPattern = Pattern.compile(
         "added \\$(\\d+\\.\\d{2}) tip on a past (.+) order delivered at (\\d{1,2}/\\d{1,2}), (\\d{1,2}:\\d{2}) ([AP]M)",
         Pattern.CASE_INSENSITIVE
     )
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun process(scope: CoroutineScope, effect: AppEffect.ProcessTipNotification) {
         scope.launch(Dispatchers.IO) {
             try {
-                val matcher = TIP_PATTERN.matcher(effect.rawText)
+                val matcher = tipPattern.matcher(effect.rawText)
                 if (matcher.find()) {
-                    val amountStr = matcher.group(1) // "5.00"
-                    val storeName = matcher.group(2) // "McDonald's"
-                    val dateStr = matcher.group(3)   // "12/15"
-                    val timeStr = matcher.group(4)   // "1:30"
-                    val amPm = matcher.group(5)      // "PM"
+                    val amountStr = matcher.group(1)
+                    val storeName = matcher.group(2)
 
-                    Log.i(TAG, "Parsed Tip: $$amountStr from $storeName at $dateStr $timeStr $amPm")
+                    Timber.i("Parsed Tip: $$amountStr from $storeName")
 
-                    // TODO: Database Correlation Logic
-                    // 1. Calculate approximate timestamp from dateStr/timeStr (assume current year, handle Year rollover)
-                    // 2. Query OrderRepo for orders from 'storeName' within +/- 1 hour of timestamp
-                    // 3. If found, update order with new tip amount
-                    // 4. DashBuddyApplication.orderRepo.updateTip(orderId, amount.toDouble())
-
-                    // For now, just show a bubble confirming we parsed it
-                    DashBuddyApplication.sendBubbleMessage("Nice! $$amountStr tip from $storeName")
+                    // Clean Modern Call: No static application reference
+                    bubbleManager.postMessage(
+                        text = "Nice! $$amountStr tip from $storeName",
+                        persona = ChatPersona.Dispatcher
+                    )
 
                 } else {
-                    Log.w(TAG, "Failed to parse tip notification: ${effect.rawText}")
+                    Timber.w("Failed to parse tip notification: ${effect.rawText}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing tip notification", e)
+                Timber.e(e, "Error processing tip notification")
             }
         }
     }

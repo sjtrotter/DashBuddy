@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.dash.DashType
+import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
 
 sealed class AppStateV2 {
@@ -108,4 +108,9 @@ sealed class AppStateV2 {
         val pausedAt: Long = System.currentTimeMillis(),
         val durationMs: Long
     ) : AppStateV2()
+
+    val AppStateV2.isActive: Boolean
+        get() = this !is IdleOffline &&
+                this !is Initializing &&
+                this !is PostDash
 }

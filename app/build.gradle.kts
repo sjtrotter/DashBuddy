@@ -16,10 +16,9 @@ android {
         applicationId = "cloud.trotter.dashbuddy"
         minSdk = 30
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "1.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -43,6 +42,7 @@ android {
 //        dataBinding = true // testing to see if databindings need to be enabled
         viewBinding = true
         compose = true
+        buildConfig = true
     }
 }
 
@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.hilt.navigation.compose)
@@ -77,8 +78,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.material)
     implementation(libs.play.services.location)
-    implementation(platform(libs.androidx.compose.bom))
     implementation(libs.reorderable)
+    implementation(libs.timber)
+    implementation(platform(libs.androidx.compose.bom))
 
     ksp(libs.androidx.room.compiler)
     ksp(libs.hilt.compiler)
@@ -91,4 +93,8 @@ kotlin {
     compilerOptions {
         jvmTarget.assign(JvmTarget.JVM_11)
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

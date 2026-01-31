@@ -5,14 +5,18 @@ import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import timber.log.Timber
+import javax.inject.Inject
 import kotlin.math.abs
-import cloud.trotter.dashbuddy.log.Logger as Log
 
-class DeliverySummaryMatcher : ScreenMatcher {
+//import cloud.trotter.dashbuddy.log.Logger as Log
+
+class DeliverySummaryMatcher @Inject constructor(
+    private val payParser: PayParser // <--- Injected Dependency
+) : ScreenMatcher {
+
     override val targetScreen: Screen = Screen.DELIVERY_SUMMARY_EXPANDED
     override val priority: Int = 20
-
-    private val tag = "DeliverySummaryMatcher"
 
     override fun matches(node: UiNode): ScreenInfo? {
 
@@ -43,14 +47,13 @@ class DeliverySummaryMatcher : ScreenMatcher {
             searchScope.hasNode { it.text?.contains("Customer tips", ignoreCase = true) == true }
 
         if (!hasDoorDashPay || !hasTips) {
-            Log.d(
-                tag,
+            Timber.d(
                 "Missing expanded anchors (DD Pay: $hasDoorDashPay, Tips: $hasTips). Checking for Collapsed state."
             )
             return attemptFallbackToCollapsed(node, earningsContainer)
         }
 
-        Log.d(tag, "Anchors found. Proceeding to Parse.")
+        Timber.d("Anchors found. Proceeding to Parse.")
 
         // 4. Extract Headline Total (Validation)
         val finalValueNode = earningsContainer?.findDescendantById("final_value")
@@ -59,32 +62,30 @@ class DeliverySummaryMatcher : ScreenMatcher {
         val headlineTotal = finalValueNode?.text?.replace("$", "")?.toDoubleOrNull()
 
         // 5. Parse Breakdown
-        val parsedPay = PayParser.parsePayFromTree(searchScope)
+        val parsedPay = payParser.parsePayFromTree(searchScope)
         val breakdownTotal = parsedPay.total
 
-        // 6. Validation Logic
+        // 6. Validation Timber.c
         val isValid = if (headlineTotal != null) {
             val diff = abs(breakdownTotal - headlineTotal)
             val isCloseEnough = diff <= 0.02
 
             if (!isCloseEnough) {
-                Log.w(
-                    tag,
+                Timber.w(
                     "Validation FAILED: Mismatch! Breakdown ($breakdownTotal) vs Headline ($headlineTotal). Diff: $diff"
                 )
             }
             isCloseEnough
         } else {
             val hasData = parsedPay.appPayComponents.isNotEmpty()
-            if (!hasData) Log.w(
-                tag,
+            if (!hasData) Timber.w(
                 "Validation FAILED: No headline and no parsed app pay components."
             )
             hasData
         }
 
         if (isValid) {
-            Log.i(tag, "Match Success: DELIVERY_SUMMARY_EXPANDED")
+            Timber.i("Match Success: DELIVERY_SUMMARY_EXPANDED")
             return ScreenInfo.DeliveryCompleted(
                 screen = Screen.DELIVERY_SUMMARY_EXPANDED,
                 parsedPay = parsedPay
@@ -92,7 +93,7 @@ class DeliverySummaryMatcher : ScreenMatcher {
         } else {
             // If validation failed (e.g. mismatch), we can still try to fall back
             // just in case it was a bad read of a collapsed screen.
-            Log.w(tag, "Data invalid despite anchors. Attempting fallback.")
+            Timber.w("Data invalid despite anchors. Attempting fallback.")
             return attemptFallbackToCollapsed(node, earningsContainer)
         }
     }
@@ -104,14 +105,14 @@ class DeliverySummaryMatcher : ScreenMatcher {
         val expandButton = findExpandButton(root, container)
 
         if (expandButton != null) {
-            Log.i(tag, "Match Success: DELIVERY_SUMMARY_COLLAPSED (Found expand button)")
+            Timber.i("Match Success: DELIVERY_SUMMARY_COLLAPSED (Found expand button)")
             return ScreenInfo.DeliverySummaryCollapsed(
                 screen = Screen.DELIVERY_SUMMARY_COLLAPSED,
                 expandButton = expandButton
             )
         }
 
-        Log.w(tag, "Fallback Failed: Could not find expand button.")
+        Timber.w("Fallback Failed: Could not find expand button.")
         return null
     }
 

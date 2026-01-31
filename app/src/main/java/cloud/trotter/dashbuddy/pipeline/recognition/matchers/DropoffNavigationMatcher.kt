@@ -1,17 +1,19 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
-import cloud.trotter.dashbuddy.log.Logger as Log
+import timber.log.Timber
+import javax.inject.Inject
 
-class DropoffNavigationMatcher : ScreenMatcher {
+//import cloud.trotter.dashbuddy.log.Logger as Log
+
+class DropoffNavigationMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.NAVIGATION_VIEW_TO_DROP_OFF
-    private val tag = "DropoffNavMatcher"
 
     // High priority to catch this before generic maps
     override val priority = 10
@@ -54,7 +56,7 @@ class DropoffNavigationMatcher : ScreenMatcher {
             .joinToString(", ")
 
         // --- DEBUG LOGGING (Raw Values) ---
-        Log.d(tag, "Matched Dropoff Nav. Raw Customer: '$rawName', Raw Address: '$rawAddress'")
+        Timber.d("Matched Dropoff Nav. Raw Customer: '$rawName', Raw Address: '$rawAddress'")
 
         // --- HASHING (Privacy Compliance) ---
         val nameHash = if (rawName.isNotBlank()) UtilityFunctions.generateSha256(rawName) else null

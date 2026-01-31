@@ -1,11 +1,12 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import javax.inject.Inject
 
-class AppStartupMatcher : ScreenMatcher {
+class AppStartupMatcher @Inject constructor() : ScreenMatcher {
 
     override val targetScreen = Screen.APP_STARTING_OR_LOADING
 
