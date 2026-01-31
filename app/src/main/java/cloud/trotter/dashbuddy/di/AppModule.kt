@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.di
 
 import android.app.NotificationManager
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
@@ -31,5 +32,11 @@ object AppModule {
         return PreferenceDataStoreFactory.create(
             produceFile = { context.preferencesDataStoreFile(USER_PREFERENCES_NAME) }
         )
+    }
+
+    @Provides
+    @Singleton
+    fun provideSharedPreferences(@ApplicationContext context: Context): SharedPreferences {
+        return context.getSharedPreferences("dashbuddyPrefs", Context.MODE_PRIVATE)
     }
 }

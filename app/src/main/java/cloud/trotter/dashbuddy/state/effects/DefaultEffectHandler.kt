@@ -32,6 +32,7 @@ class DefaultEffectHandler @Inject constructor(
     private val timeoutHandler: TimeoutHandler,
     private val tipEffectHandler: TipEffectHandler,
     private val bubbleManager: BubbleManager,
+    private val offerEvaluator: OfferEvaluator
 ) : EffectHandler {
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -85,7 +86,7 @@ class DefaultEffectHandler @Inject constructor(
             }
 
             is AppEffect.EvaluateOffer -> {
-                val result = OfferEvaluator.evaluateOffer(effect.parsedOffer)
+                val result = offerEvaluator.evaluateOffer(effect.parsedOffer)
                 stateManagerV2.get().dispatch(OfferEvaluationEvent(result.action))
                 val persona = when (result.action) {
                     OfferAction.ACCEPT -> ChatPersona.GoodOffer

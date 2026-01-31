@@ -1,8 +1,12 @@
 package cloud.trotter.dashbuddy.pipeline.filters
 
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class ScreenDiffer {
+@Singleton
+class ScreenDiffer @Inject constructor() {
+
     private var lastStructure: Int? = null
     private var lastContent: Int? = null
 

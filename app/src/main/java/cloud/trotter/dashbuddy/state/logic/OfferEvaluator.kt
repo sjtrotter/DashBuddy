@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state.logic
 
 //import cloud.trotter.dashbuddy.log.Logger
-import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.Typeface
 import android.text.SpannableString
@@ -9,7 +9,6 @@ import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
-import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.order.OrderType
 import cloud.trotter.dashbuddy.state.model.OfferAction
@@ -17,28 +16,28 @@ import cloud.trotter.dashbuddy.state.model.OfferEvaluation
 import cloud.trotter.dashbuddy.util.ScoringUtils
 import timber.log.Timber
 import java.util.Locale
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object OfferEvaluator {
+@Singleton
+class OfferEvaluator @Inject constructor(
+    private val sharedPreferences: SharedPreferences,
+
+    ) {
 
     // --- Normalization Parameters (Constants) ---
-    private const val MIN_PAYOUT_FOR_SCORING = 2.0
-    private const val MAX_PAYOUT_FOR_SCORING = 15.875
-    private const val MIN_DISTANCE_FOR_SCORING = 0.5
-    private const val MAX_DISTANCE_FOR_SCORING = 15.2125
-    private const val MIN_DELIVERY_TIME_FOR_SCORING = 10.0
-    private const val MAX_DELIVERY_TIME_FOR_SCORING = 47.809
-    private const val MIN_DOLLAR_PER_MILE_FOR_SCORING = 0.67
-    private const val MAX_DOLLAR_PER_MILE_FOR_SCORING = 3.864063
-    private const val MIN_DOLLAR_PER_HOUR_FOR_SCORING = 10.00
-    private const val MAX_DOLLAR_PER_HOUR_FOR_SCORING = 32.02188
-    private const val MIN_ITEMS_FOR_SCORING = 1.0
-    private const val MAX_ITEMS_FOR_SCORING = 9.5
-
-    private val sharedPreferences by lazy {
-        DashBuddyApplication.instance.getSharedPreferences(
-            "dashbuddyPrefs", Context.MODE_PRIVATE
-        )
-    }
+    private val MIN_PAYOUT_FOR_SCORING = 2.0
+    private val MAX_PAYOUT_FOR_SCORING = 15.875
+    private val MIN_DISTANCE_FOR_SCORING = 0.5
+    private val MAX_DISTANCE_FOR_SCORING = 15.2125
+    private val MIN_DELIVERY_TIME_FOR_SCORING = 10.0
+    private val MAX_DELIVERY_TIME_FOR_SCORING = 47.809
+    private val MIN_DOLLAR_PER_MILE_FOR_SCORING = 0.67
+    private val MAX_DOLLAR_PER_MILE_FOR_SCORING = 3.864063
+    private val MIN_DOLLAR_PER_HOUR_FOR_SCORING = 10.00
+    private val MAX_DOLLAR_PER_HOUR_FOR_SCORING = 32.02188
+    private val MIN_ITEMS_FOR_SCORING = 1.0
+    private val MAX_ITEMS_FOR_SCORING = 9.5
 
     fun evaluateOffer(
         parsedOffer: ParsedOffer,

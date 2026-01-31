@@ -19,17 +19,14 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-//import cloud.trotter.dashbuddy.log.Logger as Log
-
 @Singleton
 class Pipeline @Inject constructor(
     private val stateManagerV2: StateManagerV2,
     private val stateContextFactory: StateContextFactory,
+    private val screenDiffer: ScreenDiffer,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-
-    private val differ = ScreenDiffer()
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private val debouncer = EventDebouncer(delayMs = 50L) { event, rootNode ->
@@ -82,7 +79,7 @@ class Pipeline @Inject constructor(
                 val isClick = event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
                 Timber.d("Is Click: $isClick")
 
-                if (!isClick && !differ.hasChanged(uiNode)) {
+                if (!isClick && !screenDiffer.hasChanged(uiNode)) {
                     // Screen is identical to the last one processed.
                     // Stop here to save CPU and Battery.
                     Timber.d("Screen is identical to the last one processed. Skipping...")
