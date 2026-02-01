@@ -1,0 +1,208 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,278]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[0,136][1080,278]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Navigate up",
+                                  "class": "ImageButton",
+                                  "bounds": "[0,144][125,269]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[973,144][1080,269]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Help",
+                                      "id": "more_info",
+                                      "class": "Button",
+                                      "bounds": "[973,153][1080,260]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "dxdr_nav_host_fragment",
+                          "class": "FrameLayout",
+                          "bounds": "[0,278][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "dxdr_nav_host_fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,278][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ComposeView",
+                                  "bounds": "[0,278][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "View",
+                                      "bounds": "[0,278][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,278][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "Linked accounts",
+                                              "class": "TextView",
+                                              "bounds": "[36,314][463,380]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,414][1080,518]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "SOME BANK",
+                                                  "class": "View",
+                                                  "bounds": "[36,441][89,494]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[125,443][955,491]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "SOME BANK",
+                                                      "class": "HorizontalScrollView",
+                                                      "bounds": "[125,443][792,491]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "••••0123",
+                                                      "class": "TextView",
+                                                      "bounds": "[792,443][955,491]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[125,466][1080,518]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,518][1080,624]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "Some Credit Card",
+                                                  "class": "View",
+                                                  "bounds": "[36,545][89,598]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[125,547][955,595]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Some Credit Card",
+                                                      "class": "HorizontalScrollView",
+                                                      "bounds": "[125,547][203,595]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "••••0123",
+                                                      "class": "TextView",
+                                                      "bounds": "[203,547][365,595]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "snackbar_anchor",
+                          "class": "ViewGroup",
+                          "bounds": "[0,2347][1080,2347]",
+                          "enabled": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

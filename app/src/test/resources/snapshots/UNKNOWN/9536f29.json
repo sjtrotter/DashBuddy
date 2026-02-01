@@ -1,0 +1,98 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,0][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,0][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,0][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ScrollView",
+                      "bounds": "[0,0][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,136]",
+                          "enabled": true
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[0,136][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,136][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "WebView",
+                                  "bounds": "[0,136][1080,2347]",
+                                  "enabled": true
+                                }
+                              ]
+                            },
+                            {
+                              "id": "progress_container",
+                              "class": "RelativeLayout",
+                              "bounds": "[0,136][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "progress_bar",
+                                  "class": "ProgressBar",
+                                  "bounds": "[486,1188][593,1295]",
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Loading…",
+                                  "id": "progress_message",
+                                  "class": "TextView",
+                                  "bounds": "[451,1366][628,1414]",
+                                  "enabled": true
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

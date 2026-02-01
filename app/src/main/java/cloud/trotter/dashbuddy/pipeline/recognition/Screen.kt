@@ -26,6 +26,9 @@ enum class Screen(
     /** Default screen, matches nothing specifically or used as a fallback. */
     UNKNOWN,
 
+    // Sensitive Screen.
+    SENSITIVE,
+
     // --- Startup / Login / Offline States ---
     APP_STARTING_OR_LOADING,
     MAIN_MAP_IDLE,

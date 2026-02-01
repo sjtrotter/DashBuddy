@@ -1,0 +1,397 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,278]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[0,136][1080,278]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Current dash",
+                                  "class": "ImageButton",
+                                  "bounds": "[0,144][125,269]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Looking for offers",
+                                  "class": "TextView",
+                                  "bounds": "[133,182][463,232]",
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[866,144][1080,269]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Safety",
+                                      "id": "action_dasher_safety",
+                                      "class": "Button",
+                                      "bounds": "[866,153][973,260]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "desc": "Help",
+                                      "id": "action_self_help",
+                                      "class": "Button",
+                                      "bounds": "[973,153][1080,260]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[0,278][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,278][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "fragment_container",
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,278][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "map_container",
+                                      "class": "FrameLayout",
+                                      "bounds": "[0,278][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "FrameLayout",
+                                          "bounds": "[0,278][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "TextureView",
+                                              "bounds": "[0,278][1080,2347]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "FrameLayout",
+                                              "bounds": "[0,278][1080,2347]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "ImageView",
+                                              "bounds": "[5,1796][194,1843]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "ImageView",
+                                              "bounds": "[200,1796][247,1843]",
+                                              "clickable": true,
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "class": "LinearLayout",
+                                      "bounds": "[0,278][1080,444]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "horizontal_progressbar_red_container",
+                                          "class": "FrameLayout",
+                                          "bounds": "[0,278][1080,287]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "looking_for_order_progress_bar",
+                                              "class": "ProgressBar",
+                                              "bounds": "[0,278][1080,287]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,287][1080,444]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "dash_total_pay_widget_layout",
+                                              "class": "LinearLayout",
+                                              "bounds": "[845,305][1062,444]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "$0.00",
+                                                  "id": "running_total_pay",
+                                                  "class": "TextView",
+                                                  "bounds": "[881,323][1026,378]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "this dash",
+                                                  "id": "text_pay",
+                                                  "class": "TextView",
+                                                  "bounds": "[881,382][1026,426]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "hotspot_list_container",
+                                      "class": "ViewGroup",
+                                      "bounds": "[0,1714][1080,2329]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "hotspot_recycler_group",
+                                          "class": "View",
+                                          "bounds": "[0,1714][0,1714]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "show_all_hotspot_button",
+                                          "class": "Button",
+                                          "bounds": "[937,1714][1044,1821]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "imageView_prism_button_icon",
+                                              "class": "ImageView",
+                                              "bounds": "[964,1741][1017,1794]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "wait_time_button",
+                                          "class": "Button",
+                                          "bounds": "[36,1857][414,1964]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "imageView_prism_button_start_icon",
+                                              "class": "ImageView",
+                                              "bounds": "[72,1888][135,1933]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "est. 2-6 min",
+                                              "id": "textView_prism_button_title",
+                                              "class": "TextView",
+                                              "bounds": "[135,1883][378,1938]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "my_location_button",
+                                          "class": "Button",
+                                          "bounds": "[937,1857][1044,1964]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "imageView_prism_button_icon",
+                                              "class": "ImageView",
+                                              "bounds": "[968,1888][1013,1933]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "hotspot_recycler_view",
+                                          "class": "RecyclerView",
+                                          "bounds": "[0,2057][1080,2329]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "hotspot_details_container",
+                                              "class": "FrameLayout",
+                                              "bounds": "[36,2057][1044,2329]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[45,2071][1035,2315]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Near Pizza Hut (AYVAZ Pizza LLC Drive) -DT",
+                                                      "id": "title",
+                                                      "class": "TextView",
+                                                      "bounds": "[81,2107][856,2151]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "2.9 miles",
+                                                      "id": "distance",
+                                                      "class": "TextView",
+                                                      "bounds": "[81,2169][892,2217]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "navigation_button",
+                                                      "class": "Button",
+                                                      "bounds": "[892,2107][999,2214]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[919,2134][972,2187]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "text": "Busy hotspot zone",
+                                                      "id": "description",
+                                                      "class": "TextView",
+                                                      "bounds": "[81,2235][892,2279]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "hotspot_details_container",
+                                              "class": "FrameLayout",
+                                              "bounds": "[1044,2057][1080,2329]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[1053,2071][1080,2315]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Near Wendy's",
+                                                      "id": "title",
+                                                      "class": "TextView",
+                                                      "bounds": "[1089,2107][1080,2151]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "3.1 miles",
+                                                      "id": "distance",
+                                                      "class": "TextView",
+                                                      "bounds": "[1089,2169][1080,2217]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "navigation_button",
+                                                      "class": "Button",
+                                                      "bounds": "[1900,2107][1080,2214]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[1927,2134][1080,2187]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "text": "Busy hotspot zone",
+                                                      "id": "description",
+                                                      "class": "TextView",
+                                                      "bounds": "[1089,2235][1080,2279]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "text": "Hotspots will refresh in 9 mins",
+                                          "id": "refresh_time_info",
+                                          "class": "TextView",
+                                          "bounds": "[45,2000][1035,2089]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

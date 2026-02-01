@@ -1,0 +1,259 @@
+{
+  "id": "legacy_window_root",
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "id": "scrim_behind",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "scrim_notifications",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "light_reveal_scrim",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "scrim_in_front",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "auth_ripple",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "shared_notification_container",
+      "class": "ViewGroup",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true,
+      "children": [
+        {
+          "id": "notification_stack_scroller",
+          "class": "ScrollView",
+          "bounds": "[0,17][1080,2346]",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "keyguard_root_view",
+      "class": "ViewGroup",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true,
+      "children": [
+        {
+          "desc": "Lock screen",
+          "id": "accessibility_actions_view",
+          "class": "View",
+          "bounds": "[0,136][1080,2400]",
+          "enabled": true
+        },
+        {
+          "desc": "03:53",
+          "class": "FrameLayout",
+          "bounds": "[62,193][628,447]",
+          "enabled": true,
+          "children": [
+            {
+              "text": "0",
+              "class": "TextView",
+              "bounds": "[62,193][208,353]",
+              "enabled": true
+            },
+            {
+              "text": "3",
+              "class": "TextView",
+              "bounds": "[62,193][208,353]",
+              "enabled": true
+            },
+            {
+              "text": "5",
+              "class": "TextView",
+              "bounds": "[62,193][208,353]",
+              "enabled": true
+            },
+            {
+              "text": "3",
+              "class": "TextView",
+              "bounds": "[62,193][208,353]",
+              "enabled": true
+            },
+            {
+              "text": ":",
+              "class": "TextView",
+              "bounds": "[62,193][131,315]",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "id": "date_smartspace_view",
+          "class": "LinearLayout",
+          "bounds": "[664,242][874,398]",
+          "enabled": true,
+          "children": [
+            {
+              "text": "Sun, Feb 1",
+              "desc": "Sun, Feb 1",
+              "id": "date",
+              "class": "TextView",
+              "bounds": "[664,242][856,292]",
+              "clickable": true,
+              "enabled": true
+            },
+            {
+              "id": "weather_smartspace_view",
+              "class": "LinearLayout",
+              "bounds": "[664,292][826,345]",
+              "enabled": true,
+              "children": [
+                {
+                  "text": "26°F",
+                  "desc": "Clear, 26°F",
+                  "id": "weather_text_view",
+                  "class": "TextView",
+                  "bounds": "[664,292][808,345]",
+                  "clickable": true,
+                  "enabled": true
+                }
+              ]
+            },
+            {
+              "class": "LinearLayout",
+              "bounds": "[664,345][859,398]",
+              "enabled": true,
+              "children": [
+                {
+                  "text": "08:00",
+                  "desc": "Next alarm at 08:00",
+                  "id": "alarm_text_view",
+                  "class": "TextView",
+                  "bounds": "[664,345][841,398]",
+                  "clickable": true,
+                  "enabled": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nssl_placeholder",
+          "class": "View",
+          "bounds": "[0,475][1080,1613]",
+          "enabled": true
+        },
+        {
+          "id": "device_entry_icon_view",
+          "class": "FrameLayout",
+          "bounds": "[440,1619][640,1819]",
+          "clickable": true,
+          "enabled": true,
+          "children": [
+            {
+              "id": "device_entry_icon_bg",
+              "class": "ImageView",
+              "bounds": "[440,1619][640,1819]",
+              "enabled": true
+            },
+            {
+              "desc": "Device locked",
+              "id": "device_entry_icon_fg",
+              "class": "ImageView",
+              "bounds": "[440,1619][640,1819]",
+              "enabled": true
+            },
+            {
+              "class": "View",
+              "bounds": "[440,1619][640,1819]",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "id": "ambient_indication_container",
+          "class": "FrameLayout",
+          "bounds": "[1,1822][1080,2231]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "ambient_indication",
+              "class": "ViewGroup",
+              "bounds": "[1,1822][1080,2231]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "ambient_indication_info_container",
+                  "class": "LinearLayout",
+                  "bounds": "[1,1867][1080,1867]",
+                  "enabled": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "keyguard_indication_area",
+          "class": "LinearLayout",
+          "bounds": "[1,2231][1080,2338]",
+          "enabled": true,
+          "children": [
+            {
+              "text": "Charged",
+              "id": "keyguard_indication_text_bottom",
+              "class": "TextView",
+              "bounds": "[183,2280][899,2338]",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "desc": "Home",
+          "id": "start_button",
+          "class": "ImageView",
+          "bounds": "[36,2222][143,2329]",
+          "clickable": true,
+          "enabled": true
+        },
+        {
+          "desc": "Wallet",
+          "id": "end_button",
+          "class": "ImageView",
+          "bounds": "[937,2222][1044,2329]",
+          "clickable": true,
+          "enabled": true
+        },
+        {
+          "id": "burn_in_layer_empty_view",
+          "class": "View",
+          "bounds": "[0,2416][1080,2400]",
+          "enabled": true
+        },
+        {
+          "id": "burn_in_layer",
+          "class": "View",
+          "bounds": "[0,2399][1080,2400]",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "keyguard_message_area_container",
+      "class": "LinearLayout",
+      "bounds": "[0,136][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

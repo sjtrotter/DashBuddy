@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.pipeline.recognition.matchers.PickupNavigationMat
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.PickupPreArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.PickupShoppingMatcher
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.ScheduleMatcher
+import cloud.trotter.dashbuddy.pipeline.recognition.matchers.SensitiveScreenMatcher
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.SetDashEndTimeMatcher
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.WaitingForOfferMatcher
 import dagger.Binds
@@ -109,4 +110,9 @@ abstract class PipelineModule {
     @IntoSet
     @Singleton
     abstract fun bindDashAlongTheWayMatcher(impl: DashAlongTheWayMatcher): ScreenMatcher
+
+    @Binds
+    @IntoSet
+    @Singleton
+    abstract fun bindSensitiveScreenMatcher(impl: SensitiveScreenMatcher): ScreenMatcher
 }

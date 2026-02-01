@@ -1,0 +1,325 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,0][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,0][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,0][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ScrollView",
+                      "bounds": "[0,0][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,136]",
+                          "enabled": true
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[0,136][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,136][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "WebView",
+                                  "bounds": "[0,136][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Drive and Deliver with DoorDash | Make Money on Your Own Schedule",
+                                      "class": "WebView",
+                                      "bounds": "[0,136][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "text": "",
+                                          "id": "root",
+                                          "class": "View",
+                                          "bounds": "[0,136][1080,2116]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "",
+                                              "class": "View",
+                                              "bounds": "[0,136][1080,2116]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "",
+                                                  "class": "View",
+                                                  "bounds": "[0,136][1080,2116]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "",
+                                                      "class": "View",
+                                                      "bounds": "[0,136][1080,300]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "text": "",
+                                                          "class": "NavigationView",
+                                                          "bounds": "[0,136][1080,300]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "",
+                                                              "class": "View",
+                                                              "bounds": "[15,169][109,262]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "",
+                                                                  "desc": "Back",
+                                                                  "class": "Button",
+                                                                  "bounds": "[15,169][109,262]",
+                                                                  "clickable": true,
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "text": "",
+                                                              "class": "View",
+                                                              "bounds": "[140,189][493,242]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "",
+                                                                  "class": "View",
+                                                                  "bounds": "[140,184][493,242]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "text": "",
+                                                                      "class": "Image",
+                                                                      "bounds": "[140,198][215,240]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "text": "",
+                                                                      "class": "View",
+                                                                      "bounds": "[240,204][493,236]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "text": "",
+                                                                          "class": "Image",
+                                                                          "bounds": "[240,204][493,236]",
+                                                                          "enabled": true
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "text": "",
+                                                              "class": "View",
+                                                              "bounds": "[972,169][1063,262]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "",
+                                                                  "desc": "help",
+                                                                  "class": "Button",
+                                                                  "bounds": "[972,169][1063,262]",
+                                                                  "clickable": true,
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "text": "Manage Account",
+                                                      "class": "TextView",
+                                                      "bounds": "[175,476][812,576]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Marketing Choices",
+                                                      "class": "TextView",
+                                                      "bounds": "[175,649][585,705]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Learn about and control personalized ads.",
+                                                      "class": "TextView",
+                                                      "bounds": "[175,725][867,834]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Learn more",
+                                                      "class": "Button",
+                                                      "bounds": "[175,852][465,928]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Request account data",
+                                                      "class": "TextView",
+                                                      "bounds": "[175,994][649,1052]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "We’ll prepare an archive of your personal information we have on file and notify you when it’s ready to download.",
+                                                      "class": "TextView",
+                                                      "bounds": "[175,1072][843,1293]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Request Data",
+                                                      "class": "Button",
+                                                      "bounds": "[175,1310][460,1386]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Delete your account",
+                                                      "class": "TextView",
+                                                      "bounds": "[175,1491][611,1548]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Your account will be instantly deleted and all personal information will also removed within 30 days, except for some information that may be saved in accordance with applicable law.",
+                                                      "class": "TextView",
+                                                      "bounds": "[175,1568][890,1844]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Delete Account",
+                                                      "class": "Button",
+                                                      "bounds": "[175,1864][493,1938]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "text": "",
+                                                  "class": "TextView",
+                                                  "bounds": "[0,136][1080,2347]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "",
+                                                  "class": "TextView",
+                                                  "bounds": "[0,136][1080,2347]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "",
+                                                  "class": "TextView",
+                                                  "bounds": "[0,136][1080,2347]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "",
+                                                  "class": "TextView",
+                                                  "bounds": "[0,136][1080,2347]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "",
+                                                  "class": "TextView",
+                                                  "bounds": "[0,136][1080,2347]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "",
+                                              "class": "TextView",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "",
+                                              "class": "TextView",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "",
+                                              "class": "TextView",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "",
+                                              "class": "TextView",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "",
+                                              "class": "TextView",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "text": "rs?id=redactedId&t=completed_view",
+                                          "class": "Image",
+                                          "bounds": "[0,2147][4,2154]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

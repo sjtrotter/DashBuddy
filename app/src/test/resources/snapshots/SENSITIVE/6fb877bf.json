@@ -1,0 +1,314 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,278]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[0,136][1080,278]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Navigate up",
+                                  "class": "ImageButton",
+                                  "bounds": "[0,144][125,269]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[1080,144][1080,269]",
+                                  "enabled": true
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "dxdr_nav_host_fragment",
+                          "class": "FrameLayout",
+                          "bounds": "[0,278][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "dxdr_nav_host_fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,278][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "fragment_container",
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,278][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Enter the code we sent you",
+                                      "id": "otp_title_textview",
+                                      "class": "TextView",
+                                      "bounds": "[36,314][1044,382]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "text": "Please enter the code we sent to the phone number ending in 1234. This code expires in 10 minutes.",
+                                      "id": "otp_subtitle_textview",
+                                      "class": "TextView",
+                                      "bounds": "[36,427][1062,528]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "otp_1_input_field_click_view",
+                                      "class": "View",
+                                      "bounds": "[36,564][143,674]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "otp_1_input_field",
+                                      "class": "ViewGroup",
+                                      "bounds": "[36,564][143,674]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "background_view",
+                                          "class": "View",
+                                          "bounds": "[36,564][143,674]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "edit_text",
+                                          "class": "AutoCompleteTextView",
+                                          "bounds": "[36,564][116,674]",
+                                          "clickable": true,
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "otp_2_input_field_click_view",
+                                      "class": "View",
+                                      "bounds": "[179,564][286,674]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "otp_2_input_field",
+                                      "class": "ViewGroup",
+                                      "bounds": "[179,564][286,674]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "background_view",
+                                          "class": "View",
+                                          "bounds": "[179,564][286,674]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "edit_text",
+                                          "class": "AutoCompleteTextView",
+                                          "bounds": "[179,564][259,674]",
+                                          "clickable": true,
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "otp_3_input_field_click_view",
+                                      "class": "View",
+                                      "bounds": "[322,564][429,674]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "otp_3_input_field",
+                                      "class": "ViewGroup",
+                                      "bounds": "[322,564][429,674]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "background_view",
+                                          "class": "View",
+                                          "bounds": "[322,564][429,674]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "edit_text",
+                                          "class": "AutoCompleteTextView",
+                                          "bounds": "[322,564][402,674]",
+                                          "clickable": true,
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "otp_4_input_field_click_view",
+                                      "class": "View",
+                                      "bounds": "[465,564][572,674]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "otp_4_input_field",
+                                      "class": "ViewGroup",
+                                      "bounds": "[465,564][572,674]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "background_view",
+                                          "class": "View",
+                                          "bounds": "[465,564][572,674]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "edit_text",
+                                          "class": "AutoCompleteTextView",
+                                          "bounds": "[465,564][545,674]",
+                                          "clickable": true,
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "otp_5_input_field_click_view",
+                                      "class": "View",
+                                      "bounds": "[608,564][715,674]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "otp_5_input_field",
+                                      "class": "ViewGroup",
+                                      "bounds": "[608,564][715,674]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "background_view",
+                                          "class": "View",
+                                          "bounds": "[608,564][715,674]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "edit_text",
+                                          "class": "AutoCompleteTextView",
+                                          "bounds": "[608,564][688,674]",
+                                          "clickable": true,
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "otp_6_input_field_click_view",
+                                      "class": "View",
+                                      "bounds": "[751,564][858,674]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "otp_6_input_field",
+                                      "class": "ViewGroup",
+                                      "bounds": "[751,564][858,674]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "background_view",
+                                          "class": "View",
+                                          "bounds": "[751,564][858,674]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "edit_text",
+                                          "class": "AutoCompleteTextView",
+                                          "bounds": "[751,564][831,674]",
+                                          "clickable": true,
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "Resend code available in 54",
+                                      "id": "resend_code_button",
+                                      "class": "TextView",
+                                      "bounds": "[36,719][499,764]",
+                                      "clickable": true
+                                    },
+                                    {
+                                      "desc": "Continue",
+                                      "id": "next_button",
+                                      "class": "Button",
+                                      "bounds": "[45,2195][1035,2302]",
+                                      "clickable": true,
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "text": "Continue",
+                                          "id": "textView_prism_button_title",
+                                          "class": "TextView",
+                                          "bounds": "[444,2221][636,2276]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "snackbar_anchor",
+                          "class": "ViewGroup",
+                          "bounds": "[0,2347][1080,2347]",
+                          "enabled": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

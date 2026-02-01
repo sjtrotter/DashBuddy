@@ -88,4 +88,6 @@ sealed class ScreenInfo {
         val remainingMillis: Long,
         val rawTimeText: String
     ) : ScreenInfo()
+
+    data class Sensitive(override val screen: Screen) : ScreenInfo()
 }

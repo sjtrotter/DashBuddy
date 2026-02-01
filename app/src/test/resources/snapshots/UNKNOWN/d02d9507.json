@@ -1,0 +1,430 @@
+{
+  "id": "legacy_window_root",
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "id": "scrim_behind",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "scrim_notifications",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "light_reveal_scrim",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "scrim_in_front",
+      "class": "View",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "shared_notification_container",
+      "class": "ViewGroup",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true
+    },
+    {
+      "id": "notification_panel",
+      "class": "FrameLayout",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true,
+      "children": [
+        {
+          "id": "keyguard_long_press",
+          "class": "View",
+          "bounds": "[0,0][1080,2400]",
+          "enabled": true
+        },
+        {
+          "id": "notification_container_parent",
+          "class": "ViewGroup",
+          "bounds": "[0,0][1080,2400]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "qs_frame",
+              "class": "FrameLayout",
+              "bounds": "[0,0][1080,2400]",
+              "enabled": true,
+              "children": [
+                {
+                  "class": "FrameLayout",
+                  "bounds": "[0,0][1080,2400]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "quick_settings_container",
+                      "class": "ComposeView",
+                      "bounds": "[0,0][1080,2400]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "class": "View",
+                          "bounds": "[0,0][1080,2400]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "class": "View",
+                              "bounds": "[0,0][1080,2400]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "quick_qs_panel",
+                                  "class": "View",
+                                  "bounds": "[0,0][1080,2400]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "View",
+                                      "bounds": "[0,136][1080,186]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "qqs_tile_layout",
+                                          "class": "View",
+                                          "bounds": "[36,136][1044,186]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[36,170][532,186]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,117][532,239]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "qs_tile_large",
+                                                      "class": "View",
+                                                      "bounds": "[36,117][532,239]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "desc": "Modes. ",
+                                                          "id": "qs_tile_toggle_target",
+                                                          "class": "View",
+                                                          "bounds": "[54,119][179,238]",
+                                                          "clickable": true,
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[192,117][514,239]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "Modes",
+                                                              "class": "TextView",
+                                                              "bounds": "[192,170][514,186]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "class": "Button",
+                                                          "bounds": "[36,170][532,186]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[550,170][1044,186]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[550,117][1044,239]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "qs_tile_large",
+                                                      "class": "View",
+                                                      "bounds": "[550,117][1044,239]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[706,117][933,239]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "Wallet",
+                                                              "class": "TextView",
+                                                              "bounds": "[706,170][933,181]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "View",
+                                                              "bounds": "[706,181][933,186]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[928,125][1035,232]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "Button",
+                                                          "bounds": "[550,170][1044,186]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "class": "FrameLayout",
+              "bounds": "[0,0][1080,2400]",
+              "enabled": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keyguard_root_view",
+      "class": "ViewGroup",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true,
+      "children": [
+        {
+          "desc": "Lock screen",
+          "id": "accessibility_actions_view",
+          "class": "View",
+          "bounds": "[0,136][1080,2400]",
+          "enabled": true
+        },
+        {
+          "desc": "03:53",
+          "class": "FrameLayout",
+          "bounds": "[64,227][630,481]",
+          "enabled": true,
+          "children": [
+            {
+              "text": "0",
+              "class": "TextView",
+              "bounds": "[64,227][210,387]",
+              "enabled": true
+            },
+            {
+              "text": "3",
+              "class": "TextView",
+              "bounds": "[64,227][210,387]",
+              "enabled": true
+            },
+            {
+              "text": "5",
+              "class": "TextView",
+              "bounds": "[64,227][210,387]",
+              "enabled": true
+            },
+            {
+              "text": "3",
+              "class": "TextView",
+              "bounds": "[64,227][210,387]",
+              "enabled": true
+            },
+            {
+              "text": ":",
+              "class": "TextView",
+              "bounds": "[64,227][133,349]",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "id": "date_smartspace_view",
+          "class": "LinearLayout",
+          "bounds": "[666,276][876,432]",
+          "enabled": true,
+          "children": [
+            {
+              "text": "Sun, Feb 1",
+              "desc": "Sun, Feb 1",
+              "id": "date",
+              "class": "TextView",
+              "bounds": "[666,276][858,326]",
+              "clickable": true,
+              "enabled": true
+            },
+            {
+              "id": "weather_smartspace_view",
+              "class": "LinearLayout",
+              "bounds": "[666,326][828,379]",
+              "enabled": true,
+              "children": [
+                {
+                  "text": "26°F",
+                  "desc": "Clear, 26°F",
+                  "id": "weather_text_view",
+                  "class": "TextView",
+                  "bounds": "[666,326][810,379]",
+                  "clickable": true,
+                  "enabled": true
+                }
+              ]
+            },
+            {
+              "class": "LinearLayout",
+              "bounds": "[666,379][861,432]",
+              "enabled": true,
+              "children": [
+                {
+                  "text": "08:00",
+                  "desc": "Next alarm at 08:00",
+                  "id": "alarm_text_view",
+                  "class": "TextView",
+                  "bounds": "[666,379][843,432]",
+                  "clickable": true,
+                  "enabled": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nssl_placeholder",
+          "class": "View",
+          "bounds": "[0,475][1080,1613]",
+          "enabled": true
+        },
+        {
+          "id": "aod_notification_icon_container",
+          "class": "ViewGroup",
+          "bounds": "[2,526][1080,633]",
+          "enabled": true,
+          "children": [
+            {
+              "desc": "Android System notification: ",
+              "class": "ImageView",
+              "bounds": "[64,526][116,633]",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "id": "device_entry_icon_view",
+          "class": "FrameLayout",
+          "bounds": "[440,1624][640,1824]",
+          "clickable": true,
+          "enabled": true,
+          "children": [
+            {
+              "id": "device_entry_icon_bg",
+              "class": "ImageView",
+              "bounds": "[440,1624][640,1824]",
+              "enabled": true
+            },
+            {
+              "desc": "Fingerprint sensor",
+              "id": "device_entry_icon_fg",
+              "class": "ImageView",
+              "bounds": "[440,1624][640,1824]",
+              "enabled": true
+            },
+            {
+              "class": "View",
+              "bounds": "[440,1624][640,1824]",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "id": "ambient_indication_container",
+          "class": "FrameLayout",
+          "bounds": "[2,1828][1080,2296]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "ambient_indication",
+              "class": "ViewGroup",
+              "bounds": "[2,1828][1080,2296]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "ambient_indication_info_container",
+                  "class": "LinearLayout",
+                  "bounds": "[2,1873][1080,1873]",
+                  "enabled": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "keyguard_indication_area",
+          "class": "LinearLayout",
+          "bounds": "[4,2296][1080,2344]",
+          "enabled": true,
+          "children": [
+            {
+              "text": "Charged",
+              "id": "keyguard_indication_text",
+              "class": "TextView",
+              "bounds": "[4,2296][1080,2344]",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "id": "burn_in_layer_empty_view",
+          "class": "View",
+          "bounds": "[2,2450][1080,2400]",
+          "enabled": true
+        },
+        {
+          "id": "burn_in_layer",
+          "class": "View",
+          "bounds": "[0,2399][1080,2400]",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "keyguard_message_area_container",
+      "class": "LinearLayout",
+      "bounds": "[0,136][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

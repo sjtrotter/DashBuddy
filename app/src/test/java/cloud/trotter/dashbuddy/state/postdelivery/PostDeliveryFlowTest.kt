@@ -7,19 +7,33 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.model.TimeoutType
+import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
+import cloud.trotter.dashbuddy.state.reducers.DeliveryReducer
+import cloud.trotter.dashbuddy.state.reducers.PickupReducer
 import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.Mockito.mock
 
 class PostDeliveryFlowTest {
 
     private val payParser: PayParser = PayParser()
     private val matcher = DeliverySummaryMatcher(payParser)
+// --- FIX START: MOCKING DEPENDENCIES ---
 
-    // --- REUSING YOUR LOGS ---
-    // (I'm pasting the relevant ones here for the test context)
+    private val mockAwaitingReducer = mock(AwaitingReducer::class.java)
+    private val mockDeliveryReducer = mock(DeliveryReducer::class.java)
+    private val mockPickupReducer = mock(PickupReducer::class.java)
+
+    private val postDeliveryReducer = PostDeliveryReducer(
+        awaitingReducerProvider = { mockAwaitingReducer },
+        deliveryReducerProvider = { mockDeliveryReducer },
+        pickupReducer = mockPickupReducer
+    )
+
+    // --- FIX END ---
 
     private val collapsedLog = """
 UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
@@ -212,7 +226,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         // In the real app, we are already in STABILIZING, so reduce() returns null until timeout
         // But let's verify that inputs don't break it.
         var transition =
-            PostDeliveryReducer.reduce(currentState as AppStateV2.PostDelivery, collapsedInput)
+            postDeliveryReducer.reduce(currentState as AppStateV2.PostDelivery, collapsedInput)
 
         // Assert: It should basically ignore input here while waiting
         assertTrue(transition == null)
@@ -221,7 +235,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         // STEP 2: Timeout Fires (Move to Clicking)
         // ---------------------------------------------------
         println("\nStep 2: Timeout (EXPAND_STABILITY)")
-        transition = PostDeliveryReducer.onTimeout(
+        transition = postDeliveryReducer.onTimeout(
             currentState,
             TimeoutEvent(type = TimeoutType.EXPAND_STABILITY)
         )
@@ -238,7 +252,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         // ---------------------------------------------------
         println("\nStep 3: Processing Collapsed Screen (Hunting for button)")
         transition =
-            PostDeliveryReducer.reduce(currentState, collapsedInput)!!
+            postDeliveryReducer.reduce(currentState, collapsedInput)!!
 
         // Update State
         currentState = transition.newState
@@ -259,7 +273,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         println("\nStep 4: Processing Expanded Screen (Data Arrived)")
         // Now we feed it the EXPANDED log
         transition =
-            PostDeliveryReducer.reduce(currentState, expandedInput)!!
+            postDeliveryReducer.reduce(currentState, expandedInput)!!
 
         currentState = transition.newState
         val parsedPay = (currentState as AppStateV2.PostDelivery).parsedPay
@@ -273,7 +287,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         // STEP 5: Final Timeout (Recording)
         // ---------------------------------------------------
         println("\nStep 5: Timeout (VERIFY_PAY)")
-        transition = PostDeliveryReducer.onTimeout(
+        transition = postDeliveryReducer.onTimeout(
             currentState,
             TimeoutEvent(type = TimeoutType.VERIFY_PAY)
         )

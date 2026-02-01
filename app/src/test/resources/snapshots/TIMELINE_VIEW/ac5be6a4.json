@@ -1,0 +1,408 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "ComposeView",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "class": "View",
+                          "bounds": "[0,136][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "class": "View",
+                              "bounds": "[0,136][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "View",
+                                  "bounds": "[0,136][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "View",
+                                      "bounds": "[0,136][1080,1560]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,341][1080,447]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[27,403][1053,512]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "Artwork Image",
+                                              "class": "View",
+                                              "bounds": "[27,430][80,483]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "Pause orders",
+                                              "class": "TextView",
+                                              "bounds": "[116,433][348,481]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[27,458][1053,564]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,468][1080,574]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "text": "Earnings",
+                                          "class": "TextView",
+                                          "bounds": "[27,557][207,609]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[27,609][1053,713]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "This dash",
+                                              "class": "TextView",
+                                              "bounds": "[27,636][196,684]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "$0.00",
+                                              "class": "TextView",
+                                              "bounds": "[945,636][1053,679]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[27,659][1053,765]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,669][1080,775]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "text": "Dash ends at 00:00",
+                                          "class": "TextView",
+                                          "bounds": "[27,758][433,810]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[27,837][522,944]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[130,838][237,945]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "Add time",
+                                              "class": "TextView",
+                                              "bounds": "[215,867][388,915]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "Button",
+                                              "bounds": "[27,846][522,935]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[558,837][1053,944]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[666,838][773,945]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "End now",
+                                              "class": "TextView",
+                                              "bounds": "[751,867][915,915]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "Button",
+                                              "bounds": "[558,846][1053,935]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[27,919][1053,1025]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,929][1080,1035]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "text": "Other",
+                                          "class": "TextView",
+                                          "bounds": "[27,1018][151,1070]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[27,1070][1053,1179]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "Go to home screen",
+                                              "class": "TextView",
+                                              "bounds": "[27,1100][366,1148]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[27,1125][1053,1179]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[27,1179][1053,1288]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "Dash Preferences",
+                                              "class": "TextView",
+                                              "bounds": "[27,1209][346,1257]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[27,1234][1053,1288]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[27,1288][1053,1433]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "Read instructions on arrival",
+                                              "class": "TextView",
+                                              "bounds": "[27,1336][514,1384]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[901,1288][1053,1431]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[919,1306][1035,1413]",
+                                                  "clickable": true,
+                                                  "enabled": true,
+                                                  "checked": 1,
+                                                  "children": [
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[945,1306][1052,1413]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[919,1324][1035,1395]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[901,1288][1053,1431]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[27,1379][1053,1433]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[27,1433][1053,1542]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "Safe driving features",
+                                              "class": "TextView",
+                                              "bounds": "[27,1463][397,1511]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[27,1488][1053,1594]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,1498][1080,1604]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "class": "View",
+                                      "bounds": "[0,136][1080,385]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,136][1080,278]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[9,153][116,260]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "Close",
+                                                  "class": "View",
+                                                  "bounds": "[36,180][89,233]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "Button",
+                                                  "bounds": "[18,162][107,251]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[125,174][955,240]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[964,153][1071,260]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "Chat",
+                                                  "class": "View",
+                                                  "bounds": "[982,171][1053,242]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "Button",
+                                                  "bounds": "[973,162][1062,251]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,278][1080,385]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[36,258][1080,364]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Current dash",
+                                                  "class": "TextView",
+                                                  "bounds": "[36,278][1080,344]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

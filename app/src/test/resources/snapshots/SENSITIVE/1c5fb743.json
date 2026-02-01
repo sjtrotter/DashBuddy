@@ -1,0 +1,204 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "loading_layout",
+                          "class": "ViewGroup",
+                          "bounds": "[0,136][1080,2347]",
+                          "clickable": true,
+                          "enabled": true,
+                          "children": [
+                            {
+                              "desc": "Loading",
+                              "id": "loading_indicator",
+                              "class": "ImageView",
+                              "bounds": "[505,1206][576,1277]",
+                              "enabled": true
+                            }
+                          ]
+                        },
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,278]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[0,136][1080,278]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Navigate up",
+                                  "class": "ImageButton",
+                                  "bounds": "[0,144][125,269]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[1080,144][1080,269]",
+                                  "enabled": true
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "dxdr_nav_host_fragment",
+                          "class": "FrameLayout",
+                          "bounds": "[0,278][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "dxdr_nav_host_fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,278][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ComposeView",
+                                  "bounds": "[0,278][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "View",
+                                      "bounds": "[0,278][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,278][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,278][1080,2347]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,278][903,831]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,288][874,802]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[27,288][845,802]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "text": "•••• •••• •••• 0123",
+                                                      "class": "TextView",
+                                                      "bounds": "[84,458][506,572]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[506,305][678,610]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Expiry",
+                                                      "class": "TextView",
+                                                      "bounds": "[74,613][188,727]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "••\/••",
+                                                      "class": "TextView",
+                                                      "bounds": "[69,655][183,770]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "CVV",
+                                                      "class": "TextView",
+                                                      "bounds": "[234,613][349,655]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "•••",
+                                                      "class": "TextView",
+                                                      "bounds": "[234,655][349,770]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "snackbar_anchor",
+                          "class": "ViewGroup",
+                          "bounds": "[0,2347][1080,2347]",
+                          "enabled": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,45][1080,2445]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,45][1080,2392]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,181][1080,2392]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,181][1080,2392]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,181][1080,2392]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "ViewGroup",
+                      "bounds": "[0,181][1080,2392]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "image_logo",
+                          "class": "ImageView",
+                          "bounds": "[459,323][621,416]",
+                          "enabled": true
+                        },
+                        {
+                          "id": "user_interface",
+                          "class": "ViewGroup",
+                          "bounds": "[0,505][1080,2392]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "scroll_view",
+                              "class": "ScrollView",
+                              "bounds": "[0,505][1080,2392]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,1422][1080,1475]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Starting…",
+                                      "id": "progress_message",
+                                      "class": "TextView",
+                                      "bounds": "[372,1422][708,1475]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Cancel",
+                              "id": "cancel_button",
+                              "class": "Button",
+                              "bounds": "[437,2257][644,2392]",
+                              "clickable": true,
+                              "enabled": true
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2392][1080,2445]",
+      "enabled": true
+    }
+  ]
+}

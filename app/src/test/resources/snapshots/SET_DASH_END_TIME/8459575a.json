@@ -1,0 +1,234 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[156,0][1236,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[156,0][1236,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[156,0][1236,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[156,0][1236,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[156,0][1236,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ScrollView",
+                      "bounds": "[156,0][1236,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[156,136][1236,278]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[156,136][1236,278]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Navigate up",
+                                  "class": "ImageButton",
+                                  "bounds": "[156,144][281,269]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Dash Now",
+                                  "class": "TextView",
+                                  "bounds": "[289,175][536,238]",
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[1022,144][1236,269]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Safety",
+                                      "id": "action_dasher_safety",
+                                      "class": "Button",
+                                      "bounds": "[1022,153][1129,260]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "desc": "Help",
+                                      "id": "action_self_help",
+                                      "class": "Button",
+                                      "bounds": "[1129,153][1236,260]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[156,278][1236,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[156,278][1236,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ViewGroup",
+                                  "bounds": "[156,278][1236,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "old_views_group",
+                                      "class": "View",
+                                      "bounds": "[156,278][156,278]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "text": "TX: Leon Valley",
+                                      "id": "starting_point_name",
+                                      "class": "TextView",
+                                      "bounds": "[156,278][625,418]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "dash_now_recycler_view",
+                                      "class": "RecyclerView",
+                                      "bounds": "[156,418][1236,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "LinearLayout",
+                                          "bounds": "[156,418][1236,570]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "Select end time",
+                                              "class": "TextView",
+                                              "bounds": "[196,458][1196,506]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "Dashers needed until 00:00",
+                                              "id": "end_time_description",
+                                              "class": "TextView",
+                                              "bounds": "[196,506][1196,550]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[196,568][1196,570]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "end_time_container",
+                                          "class": "LinearLayout",
+                                          "bounds": "[156,570][1236,700]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "00:00",
+                                              "id": "end_time_text",
+                                              "class": "TextView",
+                                              "bounds": "[196,570][317,698]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[196,698][1196,700]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "end_time_container",
+                                          "class": "LinearLayout",
+                                          "bounds": "[156,700][1236,830]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "00:30",
+                                              "id": "end_time_text",
+                                              "class": "TextView",
+                                              "bounds": "[196,700][312,828]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[196,828][1196,830]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "end_time_container",
+                                          "class": "LinearLayout",
+                                          "bounds": "[156,830][1236,960]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "01:00",
+                                              "id": "end_time_text",
+                                              "class": "TextView",
+                                              "bounds": "[196,830][304,958]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[196,958][1196,960]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[156,2347][1236,2400]",
+      "enabled": true
+    }
+  ]
+}
