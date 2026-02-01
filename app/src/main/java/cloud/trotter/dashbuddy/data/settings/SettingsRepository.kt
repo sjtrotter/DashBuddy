@@ -19,7 +19,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
@@ -70,6 +73,20 @@ class SettingsRepository @Inject constructor(
         ScoringRule.MetricRule("hr", true, MetricType.ACTIVE_HOURLY, 22.0f),
         ScoringRule.MetricRule("items", false, MetricType.ITEM_COUNT, 50.0f)
     )
+
+    // --- DEVELOPER SETTINGS ---
+
+    // TODO: SECURITY: Set this to FALSE (or BuildConfig.DEBUG) before releasing to Play Store!
+    // We default to TRUE right now so we can gather data during development.
+    private val _devSnapshotsEnabled = MutableStateFlow(true)
+    val devSnapshotsEnabled: StateFlow<Boolean> = _devSnapshotsEnabled.asStateFlow()
+
+    /** * Temporary helper to toggle it at runtime if needed (e.g. via a hidden debug menu)
+     */
+    fun setDevSnapshotsEnabled(enabled: Boolean) {
+        _devSnapshotsEnabled.value = enabled
+    }
+
 
     // ============================================================================================
     // HOT STREAMS
