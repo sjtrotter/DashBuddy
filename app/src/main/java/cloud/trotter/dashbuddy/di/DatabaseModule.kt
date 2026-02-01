@@ -5,6 +5,7 @@ import androidx.room.Room
 import cloud.trotter.dashbuddy.data.base.DashBuddyDatabase
 import cloud.trotter.dashbuddy.data.chat.ChatDao
 import cloud.trotter.dashbuddy.data.event.AppEventDao
+import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -36,5 +37,10 @@ object DatabaseModule {
     @Provides
     fun provideChatDao(db: DashBuddyDatabase): ChatDao {
         return db.chatDao()
+    }
+
+    @Provides
+    fun provideSnapshotDao(db: DashBuddyDatabase): SnapshotDao {
+        return db.snapshotDao()
     }
 }

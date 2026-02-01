@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.processing
 
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.data.log.LogRepository
+import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenRecognizer
@@ -15,8 +15,8 @@ import javax.inject.Singleton
 class StateContextFactory @Inject constructor(
     private val odometerRepository: OdometerRepository,
     private val screenRecognizer: ScreenRecognizer,
-    private val logRepository: LogRepository,
-    private val settingsRepository: SettingsRepository // <--- Injected
+    private val settingsRepository: SettingsRepository,
+    private val snapshotRepository: SnapshotRepository,
 ) {
 
     fun createFromNotification(info: NotificationInfo): NotificationEvent {
@@ -35,12 +35,12 @@ class StateContextFactory @Inject constructor(
 
         // 2. Evidence Locker (Debug State)
         // Access the cached value directly. No blocking, no statics.
-        val evidenceConfig = settingsRepository.evidenceConfig.value
+        val devConfig = settingsRepository.devSnapshotsEnabled.value
 
-        if (evidenceConfig.masterEnabled) {
+        if (devConfig) {
             // Optional: finer grain control based on screen type
             // e.g. only save if (evidenceConfig.saveOffers && screenInfo.screen == Screen.OFFER)
-            logRepository.saveSnapshot(uiNode, screenInfo.screen.name)
+            snapshotRepository.saveSnapshot(uiNode, screenInfo.screen.name)
         }
 
         // 3. Build Event
