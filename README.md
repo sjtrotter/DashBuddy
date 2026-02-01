@@ -12,3 +12,9 @@ Most boilerplate code is written by Gemini, with logical edits made by me.
     - earnings tracking (still broke)
 
 Note: The Notification Service is not yet functional and you don't need it at this time.
+
+## 🧪 Testing
+
+DashBuddy uses a Snapshot-based regression system for its Screen Recognition Pipeline.
+For instructions on how to import new screen captures, use the **Inbox Workflow**, or handle
+sensitive data, please read the [Test Infrastructure Documentation](app/src/test/README.md).
