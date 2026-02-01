@@ -1,0 +1,362 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,278]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[0,136][1080,278]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Navigate up",
+                                  "class": "ImageButton",
+                                  "bounds": "[0,144][125,269]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Statements & documents",
+                                  "class": "TextView",
+                                  "bounds": "[133,175][744,238]",
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[1080,144][1080,269]",
+                                  "enabled": true
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "dxdr_nav_host_fragment",
+                          "class": "FrameLayout",
+                          "bounds": "[0,278][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "dxdr_nav_host_fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,278][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ComposeView",
+                                  "bounds": "[0,278][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "View",
+                                      "bounds": "[0,278][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,278][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,278][1080,403]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Monthly statements",
+                                                  "class": "TextView",
+                                                  "bounds": "[45,317][406,365]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "ViewFactoryHolder",
+                                                  "bounds": "[965,305][1036,376]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "Button",
+                                                      "bounds": "[965,305][1036,376]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[983,323][1019,359]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[36,351][1080,405]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,405][1080,530]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Electronic Communications Agreement",
+                                                  "class": "TextView",
+                                                  "bounds": "[45,444][758,492]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "ViewFactoryHolder",
+                                                  "bounds": "[965,432][1036,503]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "Button",
+                                                      "bounds": "[965,432][1036,503]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[983,450][1019,486]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[36,478][1080,532]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,532][1080,657]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Deposit Account Agreement",
+                                                  "class": "TextView",
+                                                  "bounds": "[45,571][562,619]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "ViewFactoryHolder",
+                                                  "bounds": "[965,559][1036,630]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "Button",
+                                                      "bounds": "[965,559][1036,630]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[983,577][1019,613]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[36,605][1080,659]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,659][1080,784]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Fee Schedule",
+                                                  "class": "TextView",
+                                                  "bounds": "[45,698][291,746]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "ViewFactoryHolder",
+                                                  "bounds": "[965,686][1036,757]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "Button",
+                                                      "bounds": "[965,686][1036,757]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[983,704][1019,740]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[36,732][1080,786]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,786][1080,911]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Privacy Policy",
+                                                  "class": "TextView",
+                                                  "bounds": "[45,825][297,873]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "ViewFactoryHolder",
+                                                  "bounds": "[965,813][1036,884]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "Button",
+                                                      "bounds": "[965,813][1036,884]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[983,831][1019,867]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[36,859][1080,913]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,913][1080,1038]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Rewards Program T&Cs",
+                                                  "class": "TextView",
+                                                  "bounds": "[45,952][470,1000]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "ViewFactoryHolder",
+                                                  "bounds": "[965,940][1036,1011]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "Button",
+                                                      "bounds": "[965,940][1036,1011]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[983,958][1019,994]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "snackbar_anchor",
+                          "class": "ViewGroup",
+                          "bounds": "[0,2347][1080,2347]",
+                          "enabled": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

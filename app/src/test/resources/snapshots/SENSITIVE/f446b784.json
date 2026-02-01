@@ -1,0 +1,100 @@
+{
+  "class": "LinearLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "id": "biometric_prompt_constraint_layout",
+      "class": "ViewGroup",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true,
+      "children": [
+        {
+          "id": "auth_screen",
+          "class": "View",
+          "bounds": "[0,0][0,0]",
+          "enabled": true
+        },
+        {
+          "desc": "Cancel",
+          "id": "background",
+          "class": "ImageView",
+          "bounds": "[0,0][1080,2400]",
+          "clickable": true,
+          "enabled": true
+        },
+        {
+          "id": "panel",
+          "class": "View",
+          "bounds": "[0,1030][1080,2400]",
+          "clickable": true,
+          "enabled": true
+        },
+        {
+          "id": "scrollView",
+          "class": "ScrollView",
+          "bounds": "[0,1030][1080,1613]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "innerConstraint",
+              "class": "ViewGroup",
+              "bounds": "[53,1083][1027,1560]",
+              "enabled": true,
+              "children": [
+                {
+                  "desc": "App logo",
+                  "id": "logo",
+                  "class": "ImageView",
+                  "bounds": "[505,1083][576,1154]",
+                  "enabled": true
+                },
+                {
+                  "text": "Dasher",
+                  "id": "logo_description",
+                  "class": "TextView",
+                  "bounds": "[53,1154][1027,1225]",
+                  "enabled": true
+                },
+                {
+                  "text": "Start using Biometric to secure your account.",
+                  "id": "title",
+                  "class": "TextView",
+                  "bounds": "[53,1225][1027,1418]",
+                  "enabled": true
+                },
+                {
+                  "text": "Start using Biometric to secure your account.",
+                  "id": "subtitle",
+                  "class": "TextView",
+                  "bounds": "[158,1418][923,1507]",
+                  "enabled": true
+                },
+                {
+                  "id": "customized_view_container",
+                  "class": "LinearLayout",
+                  "bounds": "[53,1507][1027,1560]",
+                  "enabled": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "desc": "Fingerprint sensor",
+          "id": "biometric_icon",
+          "class": "ImageView",
+          "bounds": "[440,1613][640,1813]",
+          "clickable": true,
+          "enabled": true
+        },
+        {
+          "id": "button_bar",
+          "class": "ViewGroup",
+          "bounds": "[0,2347][1080,2347]",
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}

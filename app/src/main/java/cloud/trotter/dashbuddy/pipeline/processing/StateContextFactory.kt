@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenRecognizer
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
@@ -40,7 +41,9 @@ class StateContextFactory @Inject constructor(
         if (devConfig) {
             // Optional: finer grain control based on screen type
             // e.g. only save if (evidenceConfig.saveOffers && screenInfo.screen == Screen.OFFER)
-            snapshotRepository.saveSnapshot(uiNode, screenInfo.screen.name)
+            if (screenInfo is ScreenInfo.Sensitive) {
+                snapshotRepository.saveSnapshot(uiNode, screenInfo.screen.name)
+            }
         }
 
         // 3. Build Event

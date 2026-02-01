@@ -9,9 +9,13 @@ import cloud.trotter.dashbuddy.pipeline.recognition.matchers.IdleMapMatcher
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.OfferMatcher
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.model.TimeoutType
+import cloud.trotter.dashbuddy.state.reducers.AwaitingReducer
+import cloud.trotter.dashbuddy.state.reducers.DeliveryReducer
+import cloud.trotter.dashbuddy.state.reducers.PickupReducer
 import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
 import cloud.trotter.dashbuddy.test.LogPreProcessor
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
+import org.mockito.Mockito.mock
 
 class StateFlowSimulator {
 
@@ -21,6 +25,26 @@ class StateFlowSimulator {
         DeliverySummaryMatcher(payParser),
         IdleMapMatcher(),
     )
+
+    // --- FIX START: MOCKING DEPENDENCIES ---
+
+    // 1. Create fake objects using Mockito
+    // We use mocks because the simulator only cares about PostDeliveryReducer logic,
+    // not the other reducers.
+    private val mockAwaitingReducer = mock(AwaitingReducer::class.java)
+    private val mockDeliveryReducer = mock(DeliveryReducer::class.java)
+    private val mockPickupReducer = mock(PickupReducer::class.java)
+
+    // 2. Instantiate Reducer with the mocks
+    // Note: Provider { ... } is a lambda that satisfies the javax.inject.Provider interface
+    private val postDeliveryReducer = PostDeliveryReducer(
+        awaitingReducerProvider = { mockAwaitingReducer },
+        deliveryReducerProvider = { mockDeliveryReducer },
+        pickupReducer = mockPickupReducer
+    )
+
+    // --- FIX END ---
+
 
     // Start generically
     private var currentState: AppStateV2 = AppStateV2.PostDelivery(
@@ -75,17 +99,17 @@ class StateFlowSimulator {
 
             // A. If we are already in the flow, let the reducer handle it
             is AppStateV2.PostDelivery -> {
-                PostDeliveryReducer.reduce(state, screenInput)
+                postDeliveryReducer.reduce(state, screenInput)
             }
 
             // B. If we are Idle/Other, check if we should ENTER the flow
             else -> {
                 if (screenInput is ScreenInfo.DeliverySummaryCollapsed) {
                     // Simulate the App triggering the start of the flow
-                    PostDeliveryReducer.transitionTo(state, screenInput, isRecovery = false)
+                    postDeliveryReducer.transitionTo(state, screenInput, isRecovery = false)
                 } else if (screenInput is ScreenInfo.DeliveryCompleted) {
                     // Simulate manual recovery entry
-                    PostDeliveryReducer.transitionTo(state, screenInput, isRecovery = true)
+                    postDeliveryReducer.transitionTo(state, screenInput, isRecovery = true)
                 } else {
                     // Otherwise, stay in current state (do nothing)
                     null
@@ -142,7 +166,7 @@ class StateFlowSimulator {
                 // (Prevents crashing if a timer fires after we've exited the flow)
                 val state = currentState
                 if (state is AppStateV2.PostDelivery) {
-                    val transition = PostDeliveryReducer.onTimeout(state, TimeoutEvent(type = type))
+                    val transition = postDeliveryReducer.onTimeout(state, TimeoutEvent(type = type))
 
                     val oldState = currentState
                     currentState = transition.newState

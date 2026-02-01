@@ -1,0 +1,270 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[156,0][1236,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[156,0][1236,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[156,0][1236,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[156,0][1236,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ScrollView",
+                      "bounds": "[156,0][1236,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[156,136][1236,278]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[156,136][1236,278]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Navigate up",
+                                  "class": "ImageButton",
+                                  "bounds": "[156,144][281,269]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Payout details",
+                                  "class": "TextView",
+                                  "bounds": "[289,175][635,238]",
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[1129,144][1236,269]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Help",
+                                      "id": "action_self_help",
+                                      "class": "Button",
+                                      "bounds": "[1129,153][1236,260]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[156,278][1236,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[156,278][1236,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ComposeView",
+                                  "bounds": "[156,278][1236,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "View",
+                                      "bounds": "[156,278][1236,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[156,278][1236,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[156,278][1236,398]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Change payout method",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,314][620,362]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[1129,285][1235,391]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[192,346][1236,400]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[156,400][1236,563]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Recent payout history",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,436][588,484]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Last 90 days of transfers",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,484][591,527]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[1129,429][1235,535]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[192,511][1236,565]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[156,565][1236,728]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "DoorDash Crimson",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,601][534,649]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "View account details",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,649][532,692]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[1129,594][1235,700]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[192,676][1236,730]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[156,730][1236,893]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Earnings statements",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,766][558,814]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Summary of your earnings",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,814][614,857]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[1129,759][1235,865]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[192,841][1236,895]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[156,895][1236,1058]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Tax documents",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,931][465,979]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "View and download your annual tax summary",
+                                                  "class": "TextView",
+                                                  "bounds": "[192,979][923,1022]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[1129,924][1235,1030]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[156,2347][1236,2400]",
+      "enabled": true
+    }
+  ]
+}

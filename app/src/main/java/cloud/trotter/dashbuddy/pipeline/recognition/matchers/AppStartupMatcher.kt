@@ -16,7 +16,7 @@ class AppStartupMatcher @Inject constructor() : ScreenMatcher {
 
         // 1. Check for "Starting..." text
         val hasStartingText = node.findNode {
-            it.text == "Starting…" && it.className == "android.widget.TextView"
+            it.text == "Starting…" && it.className?.endsWith("TextView") == true
         } != null
 
         // Optimization: Fail fast if the main text isn't there
@@ -24,7 +24,7 @@ class AppStartupMatcher @Inject constructor() : ScreenMatcher {
 
         // 2. Check for "Cancel" button
         val hasCancelButton = node.findNode {
-            it.text == "Cancel" && it.className == "android.widget.Button"
+            it.text == "Cancel" && it.className?.endsWith("Button") == true
         } != null
 
         // 3. Return Result

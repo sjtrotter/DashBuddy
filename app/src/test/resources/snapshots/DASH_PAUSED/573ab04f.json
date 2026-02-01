@@ -1,0 +1,201 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[3,4][1083,2404]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[3,4][1083,2351]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[3,140][1083,2351]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[3,140][1083,2351]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ViewGroup",
+                      "bounds": "[3,140][1083,2351]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[3,140][1083,282]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[3,140][1083,282]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Current dash",
+                                  "class": "ImageButton",
+                                  "bounds": "[3,148][128,273]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Dash Paused",
+                                  "class": "TextView",
+                                  "bounds": "[136,186][375,236]",
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[869,148][1083,273]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Safety",
+                                      "id": "action_dasher_safety",
+                                      "class": "Button",
+                                      "bounds": "[869,157][976,264]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "desc": "Help",
+                                      "id": "action_self_help",
+                                      "class": "Button",
+                                      "bounds": "[976,157][1083,264]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[3,282][1083,2351]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[3,282][1083,2351]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ViewGroup",
+                                  "bounds": "[3,282][1083,2351]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "limitPauseCountdown",
+                                      "class": "RelativeLayout",
+                                      "bounds": "[273,353][813,893]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "RelativeLayout",
+                                          "bounds": "[270,349][810,889]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "progress_bar",
+                                              "class": "ProgressBar",
+                                              "bounds": "[270,349][810,889]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "34:28",
+                                              "id": "progress_number",
+                                              "class": "TextView",
+                                              "bounds": "[449,575][631,662]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "You won't get offers while you're paused",
+                                      "id": "primaryText",
+                                      "class": "TextView",
+                                      "bounds": "[0,960][1080,1008]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "text": "If you pause for more than 35 minutes, your dash will end.",
+                                      "id": "secondaryText",
+                                      "class": "TextView",
+                                      "bounds": "[0,1044][1080,1153]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "desc": "Resume dash",
+                                      "id": "resumeButton",
+                                      "class": "Button",
+                                      "bounds": "[36,2061][1044,2168]",
+                                      "clickable": true,
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "text": "Resume dash",
+                                          "id": "textView_prism_button_title",
+                                          "class": "TextView",
+                                          "bounds": "[404,2087][676,2142]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "desc": "End dash",
+                                      "id": "endDashButton",
+                                      "class": "Button",
+                                      "bounds": "[36,2204][1044,2311]",
+                                      "clickable": true,
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "text": "End dash",
+                                          "id": "textView_prism_button_title",
+                                          "class": "TextView",
+                                          "bounds": "[446,2230][634,2285]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,719 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,278]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[0,136][1080,278]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Navigate up",
+                                  "class": "ImageButton",
+                                  "bounds": "[0,144][125,269]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[1080,144][1080,269]",
+                                  "enabled": true
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "dxdr_nav_host_fragment",
+                          "class": "FrameLayout",
+                          "bounds": "[0,278][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "dxdr_nav_host_fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,278][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ComposeView",
+                                  "bounds": "[0,278][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "View",
+                                      "bounds": "[0,278][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,278][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,278][1080,2086]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,278][1080,2086]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,278][1080,701]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,278][1080,701]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "View",
+                                                              "bounds": "[0,278][1080,701]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,278][1080,701]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "View",
+                                                              "bounds": "[0,278][1080,701]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "Available Balance",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[348,305][652,353]",
+                                                                  "enabled": true
+                                                                },
+                                                                {
+                                                                  "class": "View",
+                                                                  "bounds": "[652,278][758,382]",
+                                                                  "clickable": true,
+                                                                  "enabled": true
+                                                                },
+                                                                {
+                                                                  "text": "$0.00",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[432,362][648,436]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[189,395][891,737]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[151,278][497,314]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "ViewFactoryHolder",
+                                                              "bounds": "[302,454][648,525]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "Button",
+                                                                  "bounds": "[302,454][648,525]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "text": "View card details ",
+                                                                      "id": "textView_prism_button_title",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[329,467][621,512]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,701][1080,934]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,737][1080,934]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "View",
+                                                              "bounds": "[74,755][230,916]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "View",
+                                                                  "bounds": "[99,755][206,862]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "class": "ViewFactoryHolder",
+                                                                      "bounds": "[99,755][206,862]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "class": "Button",
+                                                                          "bounds": "[99,755][206,862]",
+                                                                          "clickable": true,
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "id": "imageView_prism_button_icon",
+                                                                              "class": "ImageView",
+                                                                              "bounds": "[126,782][179,835]",
+                                                                              "enabled": true
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "text": "Withdraw",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[83,871][221,907]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "View",
+                                                              "bounds": "[305,755][495,916]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "View",
+                                                                  "bounds": "[347,755][454,862]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "class": "ViewFactoryHolder",
+                                                                      "bounds": "[347,755][454,862]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "class": "Button",
+                                                                          "bounds": "[347,755][454,862]",
+                                                                          "clickable": true,
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "id": "imageView_prism_button_icon",
+                                                                              "class": "ImageView",
+                                                                              "bounds": "[374,782][427,835]",
+                                                                              "enabled": true
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "text": "Transactions",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[314,871][486,907]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "View",
+                                                              "bounds": "[569,755][734,916]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "View",
+                                                                  "bounds": "[598,755][705,862]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "class": "ViewFactoryHolder",
+                                                                      "bounds": "[598,755][705,862]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "class": "Button",
+                                                                          "bounds": "[598,755][705,862]",
+                                                                          "clickable": true,
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "id": "imageView_prism_button_icon",
+                                                                              "class": "ImageView",
+                                                                              "bounds": "[625,782][678,835]",
+                                                                              "enabled": true
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "text": "Find ATMs",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[578,871][725,907]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "View",
+                                                              "bounds": "[809,755][1006,916]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "View",
+                                                                  "bounds": "[854,755][961,862]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "class": "ViewFactoryHolder",
+                                                                      "bounds": "[854,755][961,862]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "class": "Button",
+                                                                          "bounds": "[854,755][961,862]",
+                                                                          "clickable": true,
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "id": "imageView_prism_button_icon",
+                                                                              "class": "ImageView",
+                                                                              "bounds": "[881,782][934,835]",
+                                                                              "enabled": true
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "text": "Manage card",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[818,871][997,907]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,882][1080,988]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,882][1080,988]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,936][1080,1208]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "text": "Cash back rewards",
+                                                          "class": "TextView",
+                                                          "bounds": "[45,966][357,1014]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[357,937][463,1043]",
+                                                          "clickable": true,
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "text": "$0.00",
+                                                          "class": "TextView",
+                                                          "bounds": "[45,1017][214,1083]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "ViewFactoryHolder",
+                                                          "bounds": "[45,1110][307,1181]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "Button",
+                                                              "bounds": "[45,1110][307,1181]",
+                                                              "clickable": true,
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "View history",
+                                                                  "id": "textView_prism_button_title",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[72,1123][280,1168]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,1156][1080,1210]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,1156][1080,1210]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,1210][1080,1377]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,1210][1080,1377]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "Direct deposit",
+                                                              "class": "TextView",
+                                                              "bounds": "[45,1246][301,1294]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Get all your paychecks deposited in one place",
+                                                              "class": "TextView",
+                                                              "bounds": "[45,1298][787,1341]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "ViewFactoryHolder",
+                                                              "bounds": "[965,1258][1036,1329]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "Button",
+                                                                  "bounds": "[965,1258][1036,1329]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "imageView_prism_button_icon",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[983,1276][1019,1312]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,1377][1080,1504]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[36,1325][1080,1379]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,1379][1080,1504]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "Account details",
+                                                              "class": "TextView",
+                                                              "bounds": "[45,1418][328,1466]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "ViewFactoryHolder",
+                                                              "bounds": "[965,1406][1036,1477]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "Button",
+                                                                  "bounds": "[965,1406][1036,1477]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "imageView_prism_button_icon",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[983,1424][1019,1460]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,1504][1080,1631]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[36,1452][1080,1506]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,1506][1080,1631]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "Linked accounts",
+                                                              "class": "TextView",
+                                                              "bounds": "[45,1545][341,1593]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "ViewFactoryHolder",
+                                                              "bounds": "[965,1533][1036,1604]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "Button",
+                                                                  "bounds": "[965,1533][1036,1604]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "imageView_prism_button_icon",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[983,1551][1019,1587]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,1631][1080,1758]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[36,1579][1080,1633]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,1633][1080,1758]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "Statements and documents",
+                                                              "class": "TextView",
+                                                              "bounds": "[45,1672][539,1720]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "ViewFactoryHolder",
+                                                              "bounds": "[965,1660][1036,1731]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "Button",
+                                                                  "bounds": "[965,1660][1036,1731]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "imageView_prism_button_icon",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[983,1678][1019,1714]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,1758][1080,1885]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[36,1706][1080,1760]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[0,1760][1080,1885]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "Help & FAQs",
+                                                              "class": "TextView",
+                                                              "bounds": "[45,1799][277,1847]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "ViewFactoryHolder",
+                                                              "bounds": "[965,1787][1036,1858]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "Button",
+                                                                  "bounds": "[965,1787][1036,1858]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "imageView_prism_button_icon",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[983,1805][1019,1841]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,1885][1080,2086]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "text": "The DoorDash Crimson Deposit Account is established by Starion Bank, Member FDIC. The DoorDash Crimson Visa Debit Card is issued by Starion Bank. View disclosures",
+                                                          "class": "TextView",
+                                                          "bounds": "[36,1894][1044,2024]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "snackbar_anchor",
+                          "class": "ViewGroup",
+                          "bounds": "[0,2347][1080,2347]",
+                          "enabled": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}
