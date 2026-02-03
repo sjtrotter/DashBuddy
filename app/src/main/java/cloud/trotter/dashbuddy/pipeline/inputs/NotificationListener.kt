@@ -4,7 +4,6 @@ import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.annotation.RequiresApi
-//import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.pipeline.Pipeline
 import cloud.trotter.dashbuddy.state.model.NotificationInfo
 import dagger.hilt.android.AndroidEntryPoint
@@ -16,8 +15,6 @@ class NotificationListener : NotificationListenerService() {
 
     @Inject
     lateinit var pipeline: Pipeline
-
-    private val tag = "NotificationWatcher"
 
     override fun onListenerConnected() {
         Timber.i("Notification Listener Connected!")

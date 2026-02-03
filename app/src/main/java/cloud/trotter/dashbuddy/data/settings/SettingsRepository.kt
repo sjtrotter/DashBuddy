@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.data.settings
 
 import android.content.Context
-import android.util.Log // <--- Using Standard Android Log
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -10,10 +10,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import cloud.trotter.dashbuddy.BuildConfig
 import cloud.trotter.dashbuddy.model.config.EvidenceConfig
 import cloud.trotter.dashbuddy.model.config.MetricType
 import cloud.trotter.dashbuddy.model.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.model.config.ScoringRule
+import cloud.trotter.dashbuddy.pipeline.recognition.Screen
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +23,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -76,17 +77,34 @@ class SettingsRepository @Inject constructor(
 
     // --- DEVELOPER SETTINGS ---
 
-    // TODO: SECURITY: Set this to FALSE (or BuildConfig.DEBUG) before releasing to Play Store!
-    // We default to TRUE right now so we can gather data during development.
-    private val _devSnapshotsEnabled = MutableStateFlow(true)
-    val devSnapshotsEnabled: StateFlow<Boolean> = _devSnapshotsEnabled.asStateFlow()
-
-    /** * Temporary helper to toggle it at runtime if needed (e.g. via a hidden debug menu)
-     */
-    fun setDevSnapshotsEnabled(enabled: Boolean) {
-        _devSnapshotsEnabled.value = enabled
+    // 2. Whitelist: Default to "Everything" if Debugging, "Nothing" if Release
+    private val defaultSnapshotWhitelist = if (BuildConfig.DEBUG) {
+        // Debug: Capture everything for analysis (except Sensitive)
+        Screen.entries.toSet()
+    } else {
+        // Release: Default to empty. (Or maybe just UNKNOWN if you want beta-tester snapshots)
+        emptySet()
     }
 
+    // 2. The StateFlow holds the "Allowed" list
+    private val _snapshotWhitelist = MutableStateFlow(defaultSnapshotWhitelist)
+    val snapshotWhitelist = _snapshotWhitelist.asStateFlow()
+
+    // 3. The Master Toggle (Global On/Off)
+    private val _devSnapshotsEnabled = MutableStateFlow(BuildConfig.DEBUG)
+    val devSnapshotsEnabled = _devSnapshotsEnabled.asStateFlow()
+
+    // --- ACTIONS ---
+
+    fun toggleSnapshotScreen(screen: Screen, isEnabled: Boolean) {
+        val current = _snapshotWhitelist.value.toMutableSet()
+        if (isEnabled) current.add(screen) else current.remove(screen)
+        _snapshotWhitelist.value = current
+    }
+
+    fun enableSensitiveSnapshots(enabled: Boolean) {
+        toggleSnapshotScreen(Screen.SENSITIVE, enabled)
+    }
 
     // ============================================================================================
     // HOT STREAMS
@@ -104,9 +122,16 @@ class SettingsRepository @Inject constructor(
     /**
      * Holds the current Log Level Priority (e.g., Log.INFO or Log.DEBUG).
      */
+// Default to DEBUG level for you, but INFO (or WARN) for users.
     val minLogLevel = context.dataStore.data.map { prefs ->
-        prefs[Keys.LOG_LEVEL] ?: Log.INFO // Default to INFO if not set
-    }.stateIn(scope, SharingStarted.Eagerly, Log.INFO)
+        // Logic: "Use the saved setting. If null, use the Build Type default."
+        prefs[Keys.LOG_LEVEL] ?: if (BuildConfig.DEBUG) Log.DEBUG else Log.INFO
+    }.stateIn(
+        scope,
+        SharingStarted.Eagerly,
+        // Initial value while loading from disk
+        if (BuildConfig.DEBUG) Log.DEBUG else Log.INFO
+    )
 
     // ============================================================================================
     // STANDARD STREAMS (Pass-through)

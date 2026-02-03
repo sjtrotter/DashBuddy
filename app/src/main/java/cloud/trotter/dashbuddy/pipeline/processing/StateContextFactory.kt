@@ -4,11 +4,11 @@ import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenRecognizer
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.state.model.NotificationInfo
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,20 +30,18 @@ class StateContextFactory @Inject constructor(
     fun createFromAccessibility(
         uiNode: UiNode
     ): ScreenUpdateEvent {
-
-        // 1. Run Recognition (The heavy part)
+        // 1. Identify
         val screenInfo = screenRecognizer.identify(uiNode)
 
-        // 2. Evidence Locker (Debug State)
-        // Access the cached value directly. No blocking, no statics.
-        val devConfig = settingsRepository.devSnapshotsEnabled.value
+        // 2. Snapshot Logic
+        val masterEnabled = settingsRepository.devSnapshotsEnabled.value
+        val whitelist = settingsRepository.snapshotWhitelist.value
 
-        if (devConfig) {
-            // Optional: finer grain control based on screen type
-            // e.g. only save if (evidenceConfig.saveOffers && screenInfo.screen == Screen.OFFER)
-            if (screenInfo is ScreenInfo.Sensitive) {
-                snapshotRepository.saveSnapshot(uiNode, screenInfo.screen.name)
-            }
+        // Logic: "If the system is ON, and this specific screen type is ALLOWED"
+        if (masterEnabled && screenInfo.screen in whitelist) {
+            snapshotRepository.saveSnapshot(uiNode, screenInfo.screen.name)
+        } else {
+            Timber.d("Skipping snapshot for ${screenInfo.screen.name}")
         }
 
         // 3. Build Event
