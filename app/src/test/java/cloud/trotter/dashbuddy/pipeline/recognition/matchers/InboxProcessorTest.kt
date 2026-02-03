@@ -9,7 +9,7 @@ import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import org.junit.AfterClass
-import org.junit.Assert.fail
+import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
@@ -37,39 +37,51 @@ class InboxProcessorTest(
         @Parameterized.Parameters(name = "{0}")
         fun data(): Collection<Array<Any>> {
             // 1. Load Data
-            // We use a try-catch in case the folder doesn't exist at all
             val data = try {
                 TestResourceLoader.loadForParameterized(INBOX_FOLDER)
             } catch (_: Exception) {
                 emptyList()
             }
 
-            // 2. The "Empty Inbox" Fix
+            // 2. Handle Empty Inbox
             if (data.isEmpty()) {
-                // Return a single DUMMY item so JUnit doesn't crash.
-                // We use a blank UiNode() since we won't actually read it.
+                // If empty, reset stats to 0. We do NOT print the header here.
+                sharedStats.reset(0)
+                // Return dummy so JUnit doesn't crash
                 return listOf(arrayOf("EMPTY_INBOX", UiNode()))
             }
 
+            // 3. Reset stats for the upcoming run
             sharedStats.reset(data.size)
             return data
         }
 
+        /**
+         * 🆕 NEW: Prints the header when the Test Class node starts.
+         * This puts the output inside "InboxProcessorTest" in the UI.
+         */
+        @JvmStatic
+        @BeforeClass
+        fun setUp() {
+            // Only print if there are actual files (optional check)
+            sharedStats.printHeader()
+        }
+
         @JvmStatic
         @AfterClass
-        fun tearDown() = sharedStats.printFooter()
+        fun tearDown() {
+            sharedStats.printFooter()
+        }
     }
 
     @Test
     fun `process inbox file`() {
         // --- 0. CHECK FOR THE DUMMY TOKEN ---
         if (filename == "EMPTY_INBOX") {
-            println("\n🎉 INBOX IS EMPTY! No files to process.")
-            println("   (This is a good thing. It means you are caught up.)")
-            return // Pass the test immediately
+            println("\n   🎉 Inbox is empty!")
+            return
         }
 
-        stats.onTestStart()
         println("\n  📥 Processing: $filename")
 
         // --- STEP 1: TOXICITY CHECK ---
@@ -91,13 +103,13 @@ class InboxProcessorTest(
         }
     }
 
-    // --- HANDLERS (Same as before) ---
+    // --- HANDLERS ---
 
     private fun handleToxicFile() {
         println("     🚨 STATUS: TOXIC (Sensitive Data Detected)")
         println("     🔍 FULL TEXT DUMP:")
         collectAllText(node).forEach { println("       • $it") }
-        fail("Sensitive data detected in $filename. Redact and move manually.")
+        org.junit.Assert.fail("Sensitive data detected in $filename. Redact and move manually.")
     }
 
     private fun handleKnownFile(info: ScreenInfo) {
@@ -108,10 +120,10 @@ class InboxProcessorTest(
         try {
             moveFile(targetFolderName = screenName)
             println("     ✨ SUCCESS: File moved.")
-            stats.recordSuccess()
         } catch (e: Exception) {
             println("     ❌ ERROR: Could not move file: ${e.message}")
-            stats.recordSuccess()
+            // Note: We don't fail() here, so the test "passes" even if move fails,
+            // but the error is logged. Call fail() if you want to stop the build.
         }
     }
 
@@ -123,7 +135,6 @@ class InboxProcessorTest(
             .take(10)
             .forEach { println("       • $it") }
         println("        Action: File remains in INBOX for analysis.")
-        stats.recordSuccess()
     }
 
     // --- UTILITIES ---

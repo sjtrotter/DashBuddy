@@ -1,0 +1,1145 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "FrameLayout",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "assignment_activity_host_fragment",
+                          "class": "FrameLayout",
+                          "bounds": "[0,136][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "assignment_activity_host_fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,136][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,136][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "header",
+                                      "class": "LinearLayout",
+                                      "bounds": "[0,136][1080,261]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,136][1080,261]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "navbar",
+                                              "class": "LinearLayout",
+                                              "bounds": "[0,136][1080,261]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "collapsingToolbar_navBar",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[0,136][1080,261]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "imageview_nav_bar_background",
+                                                      "class": "ImageView",
+                                                      "bounds": "[0,136][1080,136]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "toolbar_navBar",
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[0,136][1080,261]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "ImageButton",
+                                                          "bounds": "[0,136][125,261]",
+                                                          "clickable": true,
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "id": "container_navBar_titles",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[125,171][1080,226]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "Item list",
+                                                              "id": "textView_navBar_title",
+                                                              "class": "TextView",
+                                                              "bounds": "[125,171][1080,226]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "class": "LinearLayoutCompat",
+                                                          "bounds": "[1080,136][1080,261]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[1080,136][1080,261]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "recycler",
+                                      "class": "RecyclerView",
+                                      "bounds": "[0,297][1080,2133]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,297][1080,502]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[36,297][1044,502]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "icon_image_view",
+                                                  "class": "ImageView",
+                                                  "bounds": "[36,315][196,475]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "40 oz. Natural River Rocks By Ashland",
+                                                  "id": "title_text_view",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,315][1044,363]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 x",
+                                                  "id": "quantity",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,381][1044,431]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,502][1080,542]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[0,502][1080,542]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider",
+                                                  "class": "View",
+                                                  "bounds": "[36,520][1044,524]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,542][1080,747]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[36,542][1044,747]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "icon_image_view",
+                                                  "class": "ImageView",
+                                                  "bounds": "[36,560][196,720]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Aleene's Original Tacky Glue",
+                                                  "id": "title_text_view",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,560][1044,608]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 x",
+                                                  "id": "quantity",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,626][1044,676]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,747][1080,787]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[0,747][1080,787]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider",
+                                                  "class": "View",
+                                                  "bounds": "[36,765][1044,769]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,787][1080,992]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[36,787][1044,992]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "icon_image_view",
+                                                  "class": "ImageView",
+                                                  "bounds": "[36,805][196,965]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Brown Kinetic Sand",
+                                                  "id": "title_text_view",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,805][1044,853]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 x",
+                                                  "id": "quantity",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,871][1044,921]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,992][1080,1032]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[0,992][1080,1032]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider",
+                                                  "class": "View",
+                                                  "bounds": "[36,1010][1044,1014]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,1032][1080,1237]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[36,1032][1044,1237]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "icon_image_view",
+                                                  "class": "ImageView",
+                                                  "bounds": "[36,1050][196,1210]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Crayola White Air Dry Clay, 5lb.",
+                                                  "id": "title_text_view",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,1050][1044,1098]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 x",
+                                                  "id": "quantity",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,1116][1044,1166]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,1237][1080,1277]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[0,1237][1080,1277]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider",
+                                                  "class": "View",
+                                                  "bounds": "[36,1255][1044,1259]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,1277][1080,1482]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[36,1277][1044,1482]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "icon_image_view",
+                                                  "class": "ImageView",
+                                                  "bounds": "[36,1295][196,1455]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Mini Flower & Grass Bushes by Make Market",
+                                                  "id": "title_text_view",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,1295][1044,1343]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 x",
+                                                  "id": "quantity",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,1361][1044,1411]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,1482][1080,1522]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[0,1482][1080,1522]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider",
+                                                  "class": "View",
+                                                  "bounds": "[36,1500][1044,1504]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,1522][1080,1727]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[36,1522][1044,1727]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "icon_image_view",
+                                                  "class": "ImageView",
+                                                  "bounds": "[36,1540][196,1700]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Mini Green Shade Trees by Make Market",
+                                                  "id": "title_text_view",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,1540][1044,1588]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "4 x",
+                                                  "id": "quantity",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,1606][1044,1656]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,1727][1080,1767]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[0,1727][1080,1767]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider",
+                                                  "class": "View",
+                                                  "bounds": "[36,1745][1044,1749]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,1767][1080,1972]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[36,1767][1044,1972]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "icon_image_view",
+                                                  "class": "ImageView",
+                                                  "bounds": "[36,1785][196,1945]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Mini Palm Trees by Make Market",
+                                                  "id": "title_text_view",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,1785][1044,1833]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 x",
+                                                  "id": "quantity",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,1851][1044,1901]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,1972][1080,2012]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[0,1972][1080,2012]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider",
+                                                  "class": "View",
+                                                  "bounds": "[36,1990][1044,1994]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,2012][1080,2133]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ViewGroup",
+                                              "bounds": "[36,2012][1044,2133]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "icon_image_view",
+                                                  "class": "ImageView",
+                                                  "bounds": "[36,2030][196,2133]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Mini Waterfall Pool by Make Market",
+                                                  "id": "title_text_view",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,2030][1044,2078]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 x",
+                                                  "id": "quantity",
+                                                  "class": "TextView",
+                                                  "bounds": "[232,2096][1044,2133]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "footer",
+                                      "class": "LinearLayout",
+                                      "bounds": "[36,2169][1044,2294]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "LinearLayout",
+                                          "bounds": "[36,2169][1044,2294]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "button_group_vertical_container",
+                                              "class": "LinearLayout",
+                                              "bounds": "[36,2169][1044,2294]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "Button",
+                                                  "bounds": "[36,2187][1044,2294]",
+                                                  "clickable": true,
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Done",
+                                                      "id": "textView_prism_button_title",
+                                                      "class": "TextView",
+                                                      "bounds": "[485,2213][595,2268]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "accept_decline_fragment_container",
+                          "class": "FrameLayout",
+                          "bounds": "[0,136][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "bottomSheetLayout",
+                              "class": "ViewGroup",
+                              "bounds": "[0,136][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "accept_constraint_layout",
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,136][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "map_container",
+                                      "class": "FrameLayout",
+                                      "bounds": "[0,136][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "FrameLayout",
+                                          "bounds": "[0,136][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "TextureView",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "FrameLayout",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "ImageView",
+                                              "bounds": "[5,1096][194,1143]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "ImageView",
+                                              "bounds": "[200,1096][247,1143]",
+                                              "clickable": true,
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "secondary_action_button_dash_plus",
+                                      "class": "Button",
+                                      "bounds": "[816,172][1044,297]",
+                                      "clickable": true,
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "text": "Decline",
+                                          "id": "textView_prism_button_title",
+                                          "class": "TextView",
+                                          "bounds": "[852,207][1008,262]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "prism_sheet",
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,1143][1080,2347]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "prism_sheet_collar_view",
+                                      "class": "FrameLayout",
+                                      "bounds": "[0,1143][1080,1340]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "collar_background",
+                                          "class": "LinearLayout",
+                                          "bounds": "[0,1143][1080,1340]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "custom_view_container",
+                                              "class": "FrameLayout",
+                                              "bounds": "[0,1143][1080,1322]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "animated_collar_view_container",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[0,1143][1080,1322]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "animated_collar_view_icon",
+                                                      "class": "ImageView",
+                                                      "bounds": "[36,1179][143,1286]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "layout_textContainer",
+                                                      "class": "LinearLayout",
+                                                      "bounds": "[161,1179][1044,1286]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "text": "You're getting paid more as a Pro",
+                                                          "id": "animated_collar_view_title",
+                                                          "class": "TextView",
+                                                          "bounds": "[161,1179][1044,1234]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "text": "High paying offer",
+                                                          "id": "animated_collar_view_body",
+                                                          "class": "TextView",
+                                                          "bounds": "[161,1238][1044,1286]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "handle_overlay",
+                                          "class": "FrameLayout",
+                                          "bounds": "[0,1313][1080,1340]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "extra_space",
+                                      "class": "View",
+                                      "bounds": "[0,1340][0,1376]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "prism_sheet_content_parent_container",
+                                      "class": "ViewGroup",
+                                      "bounds": "[0,1376][1080,2311]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "nested_scroll_view",
+                                          "class": "ScrollView",
+                                          "bounds": "[0,1376][1080,2311]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "prism_content_container",
+                                              "class": "LinearLayout",
+                                              "bounds": "[0,1376][1080,2151]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "bottomsheet_content_container",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[0,1376][1080,2151]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "accept_decline_recycler_view_container",
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[0,1376][1080,2151]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "items_recycler_view",
+                                                          "class": "RecyclerView",
+                                                          "bounds": "[0,1376][1080,2151]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[0,1376][1080,1463]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[0,1376][1080,1463]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "text": "$16.25  Guaranteed (incl. tips)",
+                                                                      "id": "text_field",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[36,1376][1044,1463]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[0,1463][1080,1529]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[0,1463][1080,1529]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "text": "7.5 mi",
+                                                                      "id": "text_field",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[36,1463][1044,1529]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[0,1529][1080,1586]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[0,1529][1080,1586]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "text": "Deliver by 4:21 PM",
+                                                                      "id": "text_field",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[36,1529][1044,1586]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[0,1586][1080,1626]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "View",
+                                                                  "bounds": "[36,1622][1044,1626]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[0,1626][1080,1870]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[0,1626][1080,1870]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "work_unit_icon_container",
+                                                                      "class": "FrameLayout",
+                                                                      "bounds": "[45,1653][99,1707]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "id": "work_unit_image",
+                                                                          "class": "ImageView",
+                                                                          "bounds": "[45,1653][99,1707]",
+                                                                          "enabled": true
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "text": "Shop for items",
+                                                                      "id": "work_unit_type",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[126,1658][1080,1703]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "id": "bottom_vertical_line",
+                                                                      "class": "View",
+                                                                      "bounds": "[71,1707][73,1870]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "id": "display_name_container",
+                                                                      "class": "ViewGroup",
+                                                                      "bounds": "[126,1721][972,1773]",
+                                                                      "clickable": true,
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "text": "Michaels",
+                                                                          "id": "display_name",
+                                                                          "class": "TextView",
+                                                                          "bounds": "[126,1721][318,1773]",
+                                                                          "enabled": true
+                                                                        },
+                                                                        {
+                                                                          "text": "(11 items • 14 units)",
+                                                                          "id": "display_name_secondary",
+                                                                          "class": "TextView",
+                                                                          "bounds": "[318,1721][649,1773]",
+                                                                          "enabled": true
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "id": "chevron",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[1008,1733][1044,1773]",
+                                                                      "clickable": true,
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "id": "requirements_container",
+                                                                      "class": "ViewGroup",
+                                                                      "bounds": "[126,1791][1044,1870]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "class": "ViewGroup",
+                                                                          "bounds": "[126,1791][391,1870]",
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "class": "ViewGroup",
+                                                                              "bounds": "[126,1791][391,1870]",
+                                                                              "enabled": true,
+                                                                              "children": [
+                                                                                {
+                                                                                  "text": "Red Card",
+                                                                                  "id": "tag",
+                                                                                  "class": "TextView",
+                                                                                  "bounds": "[126,1795][373,1866]",
+                                                                                  "enabled": true
+                                                                                }
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[0,1870][1080,1951]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[0,1870][1080,1951]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "top_vertical_line",
+                                                                      "class": "View",
+                                                                      "bounds": "[71,1870][73,1897]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "id": "work_unit_image",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[45,1897][99,1951]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "text": "Customer dropoff",
+                                                                      "id": "display_name",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[126,1902][422,1947]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "id": "display_name_secondary",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[431,1903][1080,1947]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[0,1951][1080,1991]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "View",
+                                                                  "bounds": "[36,1987][1044,1991]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[0,1991][1080,2071]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[0,1991][1080,2071]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "callout_image",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[45,2009][99,2063]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "text": "May need returns",
+                                                                      "id": "callout_text",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[117,2009][1035,2071]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[0,2071][1080,2151]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[0,2071][1080,2151]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "callout_image",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[45,2089][99,2143]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "text": "Items can be added before checkout",
+                                                                      "id": "callout_text",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[117,2089][1035,2151]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "prism_sheet_footer_divider",
+                                  "class": "View",
+                                  "bounds": "[0,2147][1080,2151]",
+                                  "enabled": true
+                                },
+                                {
+                                  "id": "prism_sheet_footer_container",
+                                  "class": "LinearLayout",
+                                  "bounds": "[0,2151][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "accept_decline_footer_container",
+                                      "class": "ViewGroup",
+                                      "bounds": "[0,2151][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "accept_button",
+                                          "class": "Button",
+                                          "bounds": "[36,2187][1044,2311]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "Accept",
+                                              "id": "textView_prism_button_title",
+                                              "class": "TextView",
+                                              "bounds": "[466,2222][614,2277]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "id": "textSwitcher_prism_button_end_text",
+                                              "class": "TextSwitcher",
+                                              "bounds": "[944,2224][1008,2274]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "32",
+                                                  "id": "textView_prism_button_end_text_1",
+                                                  "class": "TextView",
+                                                  "bounds": "[962,2224][1008,2274]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

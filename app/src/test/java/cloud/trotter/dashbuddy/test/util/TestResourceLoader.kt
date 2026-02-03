@@ -22,6 +22,7 @@ object TestResourceLoader {
         }
 
         return resourceDir.listFiles { _, name -> name.endsWith(".json") }
+            ?.sorted()
             ?.map { file ->
                 val jsonString = file.readText()
                 val uiNode = parseJsonToUiNode(jsonString)

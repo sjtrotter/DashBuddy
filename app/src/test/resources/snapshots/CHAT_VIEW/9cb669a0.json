@@ -1,0 +1,135 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "ddchat_holder_base",
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,261]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "desc": "Dasher",
+                              "id": "collapsingToolbar_navBar",
+                              "class": "FrameLayout",
+                              "bounds": "[0,136][1080,261]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "imageview_nav_bar_background",
+                                  "class": "ImageView",
+                                  "bounds": "[0,136][1080,136]",
+                                  "enabled": true
+                                },
+                                {
+                                  "id": "toolbar_navBar",
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,136][1080,261]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Navigate up",
+                                      "class": "ImageButton",
+                                      "bounds": "[0,136][125,261]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "text": "Dasher",
+                                      "class": "TextView",
+                                      "bounds": "[125,163][125,233]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "container_navBar_titles",
+                                      "class": "ViewGroup",
+                                      "bounds": "[125,171][1080,226]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "text": "Messages",
+                                          "id": "textView_navBar_title",
+                                          "class": "TextView",
+                                          "bounds": "[125,171][1080,226]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "class": "LinearLayoutCompat",
+                                      "bounds": "[1080,136][1080,261]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "class": "View",
+                                      "bounds": "[1080,136][1080,261]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "ddchat_holder_fragment",
+                          "class": "FrameLayout",
+                          "bounds": "[0,261][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "class": "ViewGroup",
+                              "bounds": "[0,261][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "inbox_recycler_view",
+                                  "class": "RecyclerView",
+                                  "bounds": "[0,261][1080,2347]",
+                                  "enabled": true
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
