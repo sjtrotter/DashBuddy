@@ -5,12 +5,11 @@ import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.state.AppEffect
-import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
+import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import cloud.trotter.dashbuddy.state.model.OfferAction
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
-import dagger.Lazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -19,8 +18,6 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-//import cloud.trotter.dashbuddy.log.Logger as Log
-
 /**
  * The Real-World implementation that interacts with Android Services, UI, and Hardware.
  */
@@ -28,7 +25,6 @@ import javax.inject.Singleton
 class DefaultEffectHandler @Inject constructor(
     private val appEventRepo: AppEventRepo,
     private val odometerEffectHandler: OdometerEffectHandler,
-    private val stateManagerV2: Lazy<StateManagerV2>,
     private val timeoutHandler: TimeoutHandler,
     private val tipEffectHandler: TipEffectHandler,
     private val bubbleManager: BubbleManager,
@@ -37,11 +33,15 @@ class DefaultEffectHandler @Inject constructor(
 ) : EffectHandler {
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
-    override fun handle(effect: AppEffect, scope: CoroutineScope) {
+    override fun handle(
+        effect: AppEffect,
+        scope: CoroutineScope,
+        dispatch: (StateEvent) -> Unit
+    ) {
         when (effect) {
             is AppEffect.SequentialEffect -> {
                 effect.effects.forEach { childEffect ->
-                    handle(childEffect, scope)
+                    handle(childEffect, scope, dispatch)
                 }
             }
 
@@ -87,7 +87,7 @@ class DefaultEffectHandler @Inject constructor(
 
             is AppEffect.EvaluateOffer -> {
                 val result = offerEvaluator.evaluateOffer(effect.parsedOffer)
-                stateManagerV2.get().dispatch(OfferEvaluationEvent(result.action))
+                dispatch(OfferEvaluationEvent(result.action))
                 val persona = when (result.action) {
                     OfferAction.ACCEPT -> ChatPersona.GoodOffer
                     OfferAction.DECLINE -> ChatPersona.BadOffer
@@ -105,7 +105,7 @@ class DefaultEffectHandler @Inject constructor(
             is AppEffect.Delayed -> {
                 scope.launch {
                     delay(effect.delayMs)
-                    handle(effect.effect, scope) // Recursive call after delay
+                    handle(effect.effect, scope, dispatch) // Recursive call after delay
                 }
             }
         }

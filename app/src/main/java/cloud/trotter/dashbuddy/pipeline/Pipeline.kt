@@ -36,16 +36,17 @@ class Pipeline @Inject constructor(
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun onAccessibilityEvent(event: AccessibilityEvent, service: AccessibilityService) {
         if (event.packageName?.toString() != "com.doordash.driverapp") return
-        val rootNode = service.rootInActiveWindow ?: return
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_CLICKED,
+//            AccessibilityEvent.TYPE_VIEW_CLICKED, // removed. we don't care about receiving clicks.
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 debouncer.cancel()
+                val rootNode = service.rootInActiveWindow ?: return
                 processAccessibility(event, rootNode)
             }
 
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                val rootNode = service.rootInActiveWindow ?: return
                 debouncer.submit(event, rootNode)
             }
 

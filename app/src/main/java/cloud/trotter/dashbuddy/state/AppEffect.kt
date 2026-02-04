@@ -43,6 +43,5 @@ sealed class AppEffect {
     data class Delayed(val delayMs: Long, val effect: AppEffect) : AppEffect()
     data class SequentialEffect(
         val effects: List<AppEffect>
-    ) : AppEffect(
-    )
+    ) : AppEffect()
 }
