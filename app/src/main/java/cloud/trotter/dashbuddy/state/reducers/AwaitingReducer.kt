@@ -1,122 +1,81 @@
 package cloud.trotter.dashbuddy.state.reducers
 
-import cloud.trotter.dashbuddy.data.event.AppEventType
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
-import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
-import cloud.trotter.dashbuddy.state.Reducer
-import cloud.trotter.dashbuddy.state.reducers.offer.OfferReducer
-import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
-import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
-import java.util.UUID
+import cloud.trotter.dashbuddy.state.factories.DashPausedStateFactory
+import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory
+import cloud.trotter.dashbuddy.state.factories.IdleStateFactory
+import cloud.trotter.dashbuddy.state.factories.OfferStateFactory
+import cloud.trotter.dashbuddy.state.factories.PickupStateFactory
+import cloud.trotter.dashbuddy.state.factories.PostDeliveryStateFactory
+import cloud.trotter.dashbuddy.state.factories.SummaryStateFactory
+import cloud.trotter.dashbuddy.state.model.Transition
 import javax.inject.Inject
-import javax.inject.Provider
 import javax.inject.Singleton
 
 @Singleton
 class AwaitingReducer @Inject constructor(
-    private val idleReducerProvider: Provider<IdleReducer>,
-    private val bubbleManager: BubbleManager,
-    private val deliveryReducerProvider: Provider<DeliveryReducer>,
-    private val pickupReducerProvider: Provider<PickupReducer>,
-    private val summaryReducer: SummaryReducer,
-    private val dashPausedReducerProvider: Provider<DashPausedReducer>,
-    private val postDeliveryReducerProvider: Provider<PostDeliveryReducer>,
-    private val offerReducerProvider: Provider<OfferReducer>,
+    private val idleStateFactory: IdleStateFactory,
+    private val offerStateFactory: OfferStateFactory,
+    private val pickupStateFactory: PickupStateFactory,
+    private val deliveryStateFactory: DeliveryStateFactory,
+    private val postDeliveryStateFactory: PostDeliveryStateFactory,
+    private val summaryStateFactory: SummaryStateFactory,
+    private val dashPausedStateFactory: DashPausedStateFactory
 ) {
-
-    fun transitionTo(
-        oldState: AppStateV2,
-        input: ScreenInfo.WaitingForOffer,
-        isRecovery: Boolean
-    ): Reducer.Transition {
-        // Reuse ID if valid, else generate new
-        val dashId = oldState.dashId ?: UUID.randomUUID().toString()
-
-        val newState = AppStateV2.AwaitingOffer(
-            dashId = dashId,
-            currentSessionPay = input.currentDashPay,
-            waitTimeEstimate = input.waitTimeEstimate,
-            isHeadingBackToZone = input.isHeadingBackToZone
-        )
-
-        val effects = mutableListOf<AppEffect>()
-
-        // Log DASH_START only if we are coming from offline or initializing
-        if (oldState is AppStateV2.IdleOffline || oldState is AppStateV2.Initializing || (isRecovery && oldState.dashId == null)) {
-            val payload = mapOf(
-                "source" to if (isRecovery) "recovery" else "interaction",
-                "start_screen" to "WaitingForOffer"
-            )
-
-            bubbleManager.startDash(dashId)
-            val event = ReducerUtils.createEvent(dashId, AppEventType.DASH_START, payload)
-            effects.add(AppEffect.LogEvent(event))
-            effects.add(AppEffect.StartOdometer)
-            effects.add(AppEffect.UpdateBubble("Dash Started!", ChatPersona.Dispatcher))
-        }
-
-        return Reducer.Transition(newState, effects)
-    }
 
     fun reduce(
         state: AppStateV2.AwaitingOffer,
         input: ScreenInfo
-    ): Reducer.Transition? {
+    ): Transition? {
+
+        // Helper: Factories now return Transition directly. We just pass it through.
+        fun request(factoryResult: Transition) = factoryResult
+
         return when (input) {
+            // Internal Update
             is ScreenInfo.WaitingForOffer -> {
                 if (state.currentSessionPay != input.currentDashPay || state.waitTimeEstimate != input.waitTimeEstimate) {
-                    Reducer.Transition(
+                    Transition(
                         state.copy(
                             currentSessionPay = input.currentDashPay,
                             waitTimeEstimate = input.waitTimeEstimate
                         )
                     )
-                } else Reducer.Transition(state)
+                } else Transition(state)
             }
 
-            is ScreenInfo.Offer -> offerReducerProvider.get()
-                .transitionTo(state, input, isRecovery = false)
-
-            is ScreenInfo.IdleMap -> idleReducerProvider.get()
-                .transitionTo(state, input, isRecovery = false)
-
-            is ScreenInfo.DashPaused -> dashPausedReducerProvider.get().transitionTo(
-                state,
-                input,
-                isRecovery = false
+            // Transitions (Just return the factory result!)
+            is ScreenInfo.Offer -> request(
+                offerStateFactory.createEntry(state, input, isRecovery = false)
             )
 
-            is ScreenInfo.DeliverySummaryCollapsed -> postDeliveryReducerProvider.get()
-                .transitionTo(
-                    state,
-                    input,
-                    isRecovery = false
-                )
-
-            is ScreenInfo.DeliveryCompleted -> postDeliveryReducerProvider.get().transitionTo(
-                state,
-                input,
-                isRecovery = false
+            is ScreenInfo.IdleMap -> request(
+                idleStateFactory.createEntry(state, input, isRecovery = false)
             )
 
-            is ScreenInfo.PickupDetails -> pickupReducerProvider.get().transitionTo(
-                state,
-                input,
-                isRecovery = false
+            is ScreenInfo.DashPaused -> request(
+                dashPausedStateFactory.createEntry(state, input, isRecovery = false)
             )
 
-            is ScreenInfo.DropoffDetails -> deliveryReducerProvider.get().transitionTo(
-                state,
-                input,
-                isRecovery = false
+            is ScreenInfo.DeliverySummaryCollapsed -> request(
+                postDeliveryStateFactory.createEntry(state, input, isRecovery = false)
             )
 
-            is ScreenInfo.DashSummary -> summaryReducer.transitionTo(
-                state,
-                input,
-                isRecovery = false
+            is ScreenInfo.DeliveryCompleted -> request(
+                postDeliveryStateFactory.createEntry(state, input, isRecovery = false)
+            )
+
+            is ScreenInfo.PickupDetails -> request(
+                pickupStateFactory.createEntry(state, input, isRecovery = false)
+            )
+
+            is ScreenInfo.DropoffDetails -> request(
+                deliveryStateFactory.createEntry(state, input, isRecovery = false)
+            )
+
+            is ScreenInfo.DashSummary -> request(
+                summaryStateFactory.createEntry(state, input, isRecovery = false)
             )
 
             else -> null

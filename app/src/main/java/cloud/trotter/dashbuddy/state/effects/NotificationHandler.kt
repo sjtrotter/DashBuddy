@@ -3,8 +3,8 @@ package cloud.trotter.dashbuddy.state.effects
 import cloud.trotter.dashbuddy.data.event.AppEventType
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
-import cloud.trotter.dashbuddy.state.Reducer
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
+import cloud.trotter.dashbuddy.state.model.Transition // <--- New Import
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,7 +18,7 @@ class NotificationHandler @Inject constructor() {
     fun handle(
         currentState: AppStateV2,
         stateEvent: NotificationEvent,
-    ): Reducer.Transition {
+    ): Transition { // <--- Return type updated
         val notif = stateEvent.notification
         val fullText = notif.toFullString()
 
@@ -39,6 +39,7 @@ class NotificationHandler @Inject constructor() {
             effects.add(AppEffect.ProcessTipNotification(fullText))
         }
 
-        return Reducer.Transition(currentState, effects)
+        // Return new Transition object directly
+        return Transition(currentState, effects)
     }
 }
