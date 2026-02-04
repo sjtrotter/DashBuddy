@@ -4,21 +4,34 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import cloud.trotter.dashbuddy.ui.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.navigation.Screen
+import cloud.trotter.dashbuddy.ui.settings.EvidenceSettingsScreen
+import cloud.trotter.dashbuddy.ui.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.ui.settings.StrategySettingsScreen
 import cloud.trotter.dashbuddy.ui.setup.SetupScreen
 import cloud.trotter.dashbuddy.ui.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
 
-@AndroidEntryPoint // <--- 1. Hilt Entry Point
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,29 +42,27 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    // 2. Use NavHost inside Scaffold to handle system bars correctly
                     NavHost(
                         navController = navController,
-                        startDestination = Screen.Dashboard.route, // <--- Use Sealed Class
+                        startDestination = Screen.Dashboard.route,
                         modifier = Modifier.padding(innerPadding)
                     ) {
 
-                        // Screen 1: Dashboard
+                        // --- MAIN DASHBOARD ---
                         composable(Screen.Dashboard.route) {
                             DashboardScreen(
                                 onNavigateToSettings = {
-                                    // Navigate to the new Visualizer
-                                    navController.navigate(Screen.StrategySettings.route)
+                                    // Navigate to the new Settings Home Menu
+                                    navController.navigate(Screen.SettingsHome.route)
                                 },
                                 onNavigateToSetup = {
-                                    // Make sure you added 'data object Setup : Screen("setup")' to your Routes file!
-                                    navController.navigate("setup")
+                                    navController.navigate(Screen.Setup.route)
                                 }
                             )
                         }
 
-                        // Screen 2: Setup
-                        composable("setup") { // Use Screen.Setup.route if you added it
+                        // --- SETUP FLOW ---
+                        composable(Screen.Setup.route) {
                             SetupScreen(
                                 onSetupComplete = {
                                     navController.popBackStack()
@@ -59,13 +70,83 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Screen 3: Settings Strategy (The Visualizer)
+                        // ========================================================
+                        // SETTINGS HIERARCHY
+                        // ========================================================
+
+                        // 1. Settings Home (The Menu)
+                        composable(Screen.SettingsHome.route) {
+                            SettingsHomeScreen(
+                                onNavigate = { route -> navController.navigate(route) },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 2. Strategy (The Visualizer)
                         composable(Screen.StrategySettings.route) {
+                            // This is your existing complex screen with the sliders
                             StrategySettingsScreen()
+                        }
+
+                        // 3. Evidence Locker
+                        composable(Screen.EvidenceSettings.route) {
+                            EvidenceSettingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 4. General Settings (Placeholder)
+                        composable(Screen.GeneralSettings.route) {
+                            PlaceholderScreen(
+                                title = "General Settings",
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 5. Developer Options (Placeholder)
+                        composable(Screen.DeveloperSettings.route) {
+                            PlaceholderScreen(
+                                title = "Developer Options",
+                                onBack = { navController.popBackStack() }
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * A temporary placeholder to prevent compile errors for screens
+ * you haven't built yet (General & Developer).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlaceholderScreen(title: String, onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Construction Area 🚧\nComing Soon",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
         }
     }
 }
