@@ -25,6 +25,8 @@ class StateManagerV2 @Inject constructor(
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    // GSON configuration setup
     private val gson = Gson().newBuilder()
         .registerTypeAdapterFactory(
             cloud.trotter.dashbuddy.util.RuntimeTypeAdapterFactory.of(
@@ -56,6 +58,10 @@ class StateManagerV2 @Inject constructor(
         startProcessor()
     }
 
+    /**
+     * Entry point for all events in the system.
+     * This function is passed to the EffectHandler to allow feedback loops.
+     */
     fun dispatch(stateEvent: StateEvent) {
         inputChannel.trySend(stateEvent)
     }
@@ -84,9 +90,10 @@ class StateManagerV2 @Inject constructor(
                     saveState(transition.newState)
                 }
 
-                // 3. Execute Effects (DELEGATED)
+                // 3. Execute Effects
+                // We pass `::dispatch` so the handler can feed events (like Offer Evaluated) back to us
                 transition.effects.forEach { effect ->
-                    effectHandler.handle(effect, scope)
+                    effectHandler.handle(effect, scope, ::dispatch)
                 }
             }
         }
@@ -99,7 +106,6 @@ class StateManagerV2 @Inject constructor(
         scope.launch(Dispatchers.IO) {
             try {
                 val json = gson.toJson(state)
-                // Use the Repo, not the Application class
                 stateRecoveryRepository.saveState(json)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to save state")
@@ -109,7 +115,6 @@ class StateManagerV2 @Inject constructor(
 
     private fun restoreState() {
         scope.launch(Dispatchers.IO) {
-            // Get fresh state (checks 30 min timeout internally)
             val json = stateRecoveryRepository.getFreshState()
 
             if (json != null) {
