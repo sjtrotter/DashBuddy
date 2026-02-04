@@ -9,7 +9,7 @@ class SnapshotTestStats(private val folderName: String) {
     private val headerPrinted = AtomicBoolean(false)
 
     // Just a long line, no calculation needed
-    private val BAR = "═".repeat(60)
+    private val bar = "═".repeat(79)
 
     fun reset(total: Int) {
         totalCount.set(total)
@@ -30,10 +30,10 @@ class SnapshotTestStats(private val folderName: String) {
     fun printHeader() {
         if (!headerPrinted.getAndSet(true)) {
             println()
-            println("╔$BAR")
+            println("╔$bar")
             println("║ 📂 FOLDER: $folderName")
             println("║ 🔢 FILES:  ${totalCount.get()} snapshots found")
-            println("╚$BAR")
+            println("╚$bar")
         }
     }
 
@@ -52,10 +52,10 @@ class SnapshotTestStats(private val folderName: String) {
 
         // 3. Print (Single block, no branching)
         println()
-        println("╔$BAR") // Note: Use "╠$BAR" if you want it to visually connect to the tests above
+        println("╔$bar") // Note: Use "╠$BAR" if you want it to visually connect to the tests above
         println("║ $emoji SUMMARY: $folderName")
         println("║ $status $details")
-        println("╚$BAR")
+        println("╚$bar")
         println()
     }
 }

@@ -4,49 +4,83 @@ import android.graphics.Rect
 import android.os.Build
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
+import kotlinx.serialization.json.Json
 
 /**
  * A data class to hold structured information about a single UI element (node).
- * Used to transcribe [android.view.accessibility.AccessibilityNodeInfo] objects into a useful data structure
- * for use within the DashBuddy app.
  */
+@Serializable
 data class UiNode(
-    val text: String? = null,
-    val contentDescription: String? = null,
-    val stateDescription: String? = null,
-    val viewIdResourceName: String? = null, // e.g., "com.doordash.driverapp:id/accept_button"
-    val className: String? = null,           // e.g., "android.widget.Button"
+    // 1. Use @SerialName to keep the JSON keys short (matches your old output)
+    @SerialName("text") val text: String? = null,
+    @SerialName("desc") val contentDescription: String? = null,
+    @SerialName("state") val stateDescription: String? = null,
+
+    // Note: This will save the FULL ID ("com.app:id/foo"), not just "foo".
+    // This is better for data integrity.
+    @SerialName("id") val viewIdResourceName: String? = null,
+    @SerialName("class") val className: String? = null,
+
+    // Flags
     val isClickable: Boolean = false,
     val isEnabled: Boolean = false,
     val isChecked: Int = 0,
+
+    // 2. Use the Custom Serializer for Android Rect
+    @Serializable(with = RectSerializer::class)
+    @SerialName("bounds")
     val boundsInScreen: Rect = Rect(),
-    val parent: UiNode? = null, // Can be useful for hierarchy
+
+    // 3. Transient + VAR: Not saved to JSON, but we can re-link it later.
+    @Transient
+    var parent: UiNode? = null,
+
+    @SerialName("children")
     val children: MutableList<UiNode> = mutableListOf(),
+
+    // 4. System object: Never save this.
+    @Transient
     val originalNode: AccessibilityNodeInfo? = null,
 ) {
+
     /**
-     * Checks if this node's ID ends with the given snippet.
-     * Use this to ignore the app package prefix (e.g. "com.doordash.driverapp:id/").
+     * Call this immediately after deserializing from JSON to re-populate
+     * the 'parent' fields for the entire tree.
      */
+    fun restoreParents() {
+        for (child in children) {
+            child.parent = this
+            child.restoreParents() // Recurse down
+        }
+    }
+
+    /**
+     * Serializes to JSON using kotlinx.serialization.
+     */
+    fun toJson(): String {
+        val json = Json {
+            prettyPrint = true
+            ignoreUnknownKeys = true
+            explicitNulls = false
+        }
+        return json.encodeToString(this)
+    }
+
+    // --- YOUR EXISTING LOGIC (Preserved) ---
+
     fun hasId(idSnippet: String): Boolean {
         return viewIdResourceName?.endsWith(idSnippet) == true
     }
 
-    /**
-     * Finds the first DIRECT child that matches the given ID snippet.
-     * Does not search deeper than level 1.
-     */
     fun findChildById(idSnippet: String): UiNode? {
         return children.find { it.hasId(idSnippet) }
     }
 
-    /**
-     * Finds the first DESCENDANT (child, grandchild, etc.) that matches the given ID snippet.
-     * Uses depth-first search.
-     */
     fun findDescendantById(idSnippet: String): UiNode? {
         if (hasId(idSnippet)) return this
-
         for (child in children) {
             val found = child.findDescendantById(idSnippet)
             if (found != null) return found
@@ -54,21 +88,12 @@ data class UiNode(
         return null
     }
 
-    /**
-     * This method is for debugging. It gets called automatically by Log.d()
-     * to convert the whole tree into a nicely indented, readable string.
-     * It is NOT part of the tree creation logic.
-     */
     override fun toString(): String {
         val builder = StringBuilder()
         appendNode(builder, this, 0)
         return builder.toString()
     }
 
-    /**
-     * A private helper used by toString() to handle the recursion and indentation
-     * for pretty-printing the tree structure.
-     */
     private fun appendNode(builder: StringBuilder, node: UiNode, indent: Int) {
         val indentation = "  ".repeat(indent)
         val id = node.viewIdResourceName?.substringAfter("id/") ?: "no_id"
@@ -85,53 +110,28 @@ data class UiNode(
         }
     }
 
-    /**
-     * Traverses the entire UiNode tree and returns the first node that matches the predicate.
-     * @param predicate A function that returns true if the node is a match.
-     * @return The first matching UiNode, or null if no match is found.
-     */
     fun findNode(predicate: (UiNode) -> Boolean): UiNode? {
-        if (predicate(this)) {
-            return this
-        }
+        if (predicate(this)) return this
         for (child in children) {
             val found = child.findNode(predicate)
-            if (found != null) {
-                return found
-            }
+            if (found != null) return found
         }
         return null
     }
 
-    /**
-     * Traverses the entire UiNode tree and returns a list of all nodes that match the predicate.
-     * @param predicate A function that returns true if the node is a match.
-     * @return A List of matching UiNodes.
-     */
     fun findNodes(predicate: (UiNode) -> Boolean): List<UiNode> {
         val matches = mutableListOf<UiNode>()
-        if (predicate(this)) {
-            matches.add(this)
-        }
+        if (predicate(this)) matches.add(this)
         for (child in children) {
             matches.addAll(child.findNodes(predicate))
         }
         return matches
     }
 
-    /**
-     * A convenience function to quickly check if at least one node in the tree matches the predicate.
-     * @return True if a matching node is found, false otherwise.
-     */
     fun hasNode(predicate: (UiNode) -> Boolean): Boolean {
         return this.findNode(predicate) != null
     }
 
-    /**
-     * Generates a hash code based ONLY on the structural identity of the node and its children.
-     * It ignores mutable text/descriptions but respects ClassName, ID, and Hierarchy.
-     * Use this to detect if the "Layout" has changed.
-     */
     val structuralHash: Int by lazy {
         var result = className?.hashCode() ?: 0
         result = 31 * result + (viewIdResourceName?.hashCode() ?: 0)
@@ -141,9 +141,6 @@ data class UiNode(
         result
     }
 
-    /** * Generates a hash code based on Content (Text).
-     * Use this to detect if the "Data" on the screen has changed.
-     */
     val contentHash: Int by lazy {
         var result = text?.hashCode() ?: 0
         result = 31 * result + (contentDescription?.hashCode() ?: 0)
@@ -160,74 +157,12 @@ data class UiNode(
     }
 
     private fun collectText(node: UiNode, list: MutableList<String>) {
-        // Add current node's text
         if (!node.text.isNullOrBlank()) list.add(node.text)
         if (!node.contentDescription.isNullOrBlank()) list.add(node.contentDescription)
-
-        // Recursively add children's text
         node.children.forEach { collectText(it, list) }
     }
 
-    /**
-     * Serializes this node and its children to a formatted JSON string.
-     * SAFELY handles circular references by ignoring 'parent' and 'originalNode'.
-     */
-    fun toJson(): String {
-        return try {
-            toJsonObject().toString(2) // Indent with 2 spaces for readability
-        } catch (e: Exception) {
-            "{\"error\": \"Serialization failed: ${e.message}\"}"
-        }
-    }
-
-    /**
-     * Internal helper to recursive build the JSON tree.
-     * Uses org.json.JSONObject (Standard Android Library).
-     */
-    private fun toJsonObject(): org.json.JSONObject {
-        val json = org.json.JSONObject()
-        // Core Attributes
-        json.putOpt("text", text)
-        json.putOpt("desc", contentDescription)
-        json.putOpt("id", viewIdResourceName?.substringAfter("id/")) // Simplify ID
-        json.put("class", className?.substringAfterLast(".")) // Simplify ClassName
-
-        // Bounds (Custom format for readability)
-        json.put(
-            "bounds",
-            "[${boundsInScreen.left},${boundsInScreen.top}][${boundsInScreen.right},${boundsInScreen.bottom}]"
-        )
-
-        // Flags (Only include if true/relevant to reduce noise)
-        if (isClickable) json.put("clickable", true)
-        if (isEnabled) json.put("enabled", true)
-        if (isChecked != 0) json.put("checked", isChecked)
-
-        // Recursion: Children
-        if (children.isNotEmpty()) {
-            val childrenArray = org.json.JSONArray()
-            children.forEach { child ->
-                childrenArray.put(child.toJsonObject())
-            }
-            json.put("children", childrenArray)
-        }
-
-        return json
-    }
-
-    // Helper extension to handle nullable puts cleanly
-    private fun org.json.JSONObject.putOpt(key: String, value: Any?) {
-        if (value != null && (value !is String || value.isNotEmpty())) {
-            put(key, value)
-        }
-    }
-
     companion object {
-        /**
-         * This is the factory method that:
-         * 1. Creates a UiNode for the given AccessibilityNodeInfo.
-         * 2. Recursively calls itself to process all children.
-         */
         @RequiresApi(Build.VERSION_CODES.BAKLAVA)
         fun from(accNode: AccessibilityNodeInfo?, parentUiNode: UiNode? = null): UiNode? {
             if (accNode == null) return null
@@ -235,7 +170,9 @@ data class UiNode(
             val bounds = Rect()
             accNode.getBoundsInScreen(bounds)
 
-            // Step 1: Get the info for this node and create the UiNode object.
+            // Convert boolean checked to Int if that is your preference
+            val checkedInt = accNode.checked
+
             val currentUiNode = UiNode(
                 text = accNode.text?.toString(),
                 contentDescription = accNode.contentDescription?.toString(),
@@ -244,13 +181,12 @@ data class UiNode(
                 className = accNode.className?.toString(),
                 isClickable = accNode.isClickable,
                 isEnabled = accNode.isEnabled,
-                isChecked = accNode.checked,
+                isChecked = checkedInt,
                 boundsInScreen = bounds,
                 parent = parentUiNode,
                 originalNode = accNode
             )
 
-            // Step 2: Get the children and do this recursively.
             for (i in 0 until accNode.childCount) {
                 val childAccNode = accNode.getChild(i)
                 from(childAccNode, currentUiNode)?.let { childUiNode ->
