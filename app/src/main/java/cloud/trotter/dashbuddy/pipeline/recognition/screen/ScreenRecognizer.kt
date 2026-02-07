@@ -1,7 +1,7 @@
-package cloud.trotter.dashbuddy.pipeline.recognition
+package cloud.trotter.dashbuddy.pipeline.recognition.screen
 
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.matchers.LegacyEnumMatcher
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.matchers.LegacyEnumMatcher
 import javax.inject.Inject
 import javax.inject.Singleton
 

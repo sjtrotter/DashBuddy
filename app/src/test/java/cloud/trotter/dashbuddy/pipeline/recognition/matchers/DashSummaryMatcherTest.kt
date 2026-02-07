@@ -1,8 +1,11 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.matchers.DashSummaryMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DashSummaryMatcherTest {

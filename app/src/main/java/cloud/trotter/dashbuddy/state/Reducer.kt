@@ -1,8 +1,9 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.pipeline.recognition.Screen
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.effects.NotificationHandler
+import cloud.trotter.dashbuddy.state.event.ClickEvent
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
@@ -65,6 +66,13 @@ class Reducer @Inject constructor(
 
     private fun delegateReduce(currentState: AppStateV2, stateEvent: StateEvent): Transition {
         return when (stateEvent) {
+            is ClickEvent -> {
+                return when (currentState) {
+                    is AppStateV2.OfferPresented -> offerReducer.onClick(currentState, stateEvent)
+                    else -> Transition(currentState)
+                }
+            }
+
             is OfferEvaluationEvent -> Transition(currentState)
 
             is NotificationEvent -> notificationHandler.handle(currentState, stateEvent)

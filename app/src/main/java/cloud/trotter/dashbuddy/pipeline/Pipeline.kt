@@ -38,7 +38,15 @@ class Pipeline @Inject constructor(
         if (event.packageName?.toString() != "com.doordash.driverapp") return
 
         when (event.eventType) {
-//            AccessibilityEvent.TYPE_VIEW_CLICKED, // removed. we don't care about receiving clicks.
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                val sourceNode = event.source
+                if (sourceNode == null) {
+                    Timber.w("👻 Ghost Click detected (Source was null)")
+                    return
+                }
+                processAccessibility(event, sourceNode)
+            }
+
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 debouncer.cancel()
                 val rootNode = service.rootInActiveWindow ?: return
@@ -78,12 +86,18 @@ class Pipeline @Inject constructor(
                 // 2. DIFF (Optimization)
                 // We check the hash of the UiNode BEFORE we do any heavy recognition logic.
                 val isClick = event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
-                Timber.d("Is Click: $isClick")
 
-                if (!isClick && !screenDiffer.hasChanged(uiNode)) {
-                    // Screen is identical to the last one processed.
-                    // Stop here to save CPU and Battery.
-                    Timber.d("Screen is identical to the last one processed. Skipping...")
+                if (!isClick) {
+                    if (!screenDiffer.hasChanged(uiNode)) {
+                        // Screen is identical to the last one processed.
+                        // Stop here to save CPU and Battery.
+                        Timber.d("Screen is identical to the last one processed. Skipping...")
+                        return@launch
+                    }
+                } else {
+                    Timber.d("Clicked sourceNode: $uiNode")
+                    val clickEvent = stateContextFactory.createFromClick(uiNode)
+//                    stateManagerV2.dispatch(clickEvent)
                     return@launch
                 }
 

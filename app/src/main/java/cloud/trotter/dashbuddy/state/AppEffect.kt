@@ -44,4 +44,7 @@ sealed class AppEffect {
     data class SequentialEffect(
         val effects: List<AppEffect>
     ) : AppEffect()
+
+    data class StartDash(val dashId: String) : AppEffect()
+    data object EndDash : AppEffect()
 }

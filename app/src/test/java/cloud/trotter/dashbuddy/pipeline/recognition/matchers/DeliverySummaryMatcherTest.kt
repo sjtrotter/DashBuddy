@@ -1,8 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.pay.PayParser
-import cloud.trotter.dashbuddy.pipeline.recognition.Screen
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.matchers.DeliverySummaryMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

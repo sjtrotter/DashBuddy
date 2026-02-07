@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.pipeline.recognition
+package cloud.trotter.dashbuddy.pipeline.recognition.screen
 
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import java.util.Locale

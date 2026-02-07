@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.state
 import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
+import cloud.trotter.dashbuddy.pipeline.recognition.click.ClickAction
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
 
 sealed class AppStateV2 {
     abstract val timestamp: Long
@@ -51,7 +53,9 @@ sealed class AppStateV2 {
         val rawOfferText: String?,
         val merchantName: String?,
         val amount: Double?,
-        val currentOfferHash: String
+        val currentOfferHash: String,
+        val currentScreen: Screen,
+        val clickInfo: Pair<Screen, ClickAction>? = null
     ) : AppStateV2()
 
     data class OnPickup(

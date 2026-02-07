@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state.factories
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.TimeoutType

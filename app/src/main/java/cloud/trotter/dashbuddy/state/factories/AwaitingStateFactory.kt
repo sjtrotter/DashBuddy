@@ -1,8 +1,7 @@
 package cloud.trotter.dashbuddy.state.factories
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
@@ -42,9 +41,6 @@ class AwaitingStateFactory @Inject constructor() {
                 "start_screen" to "WaitingForOffer"
             )
 
-            // Note: We need a new Effect for "BubbleManager.startDash(id)" if strictly pure,
-            // or we assume LogEvent(DASH_START) covers it in the handler.
-            // For now, sticking to standard effects:
             effects.add(
                 AppEffect.LogEvent(
                     ReducerUtils.createEvent(
@@ -55,7 +51,7 @@ class AwaitingStateFactory @Inject constructor() {
                 )
             )
             effects.add(AppEffect.StartOdometer)
-            effects.add(AppEffect.UpdateBubble("Dash Started!", ChatPersona.Dispatcher))
+            effects.add(AppEffect.StartDash(dashId))
         }
 
         return Transition(newState, effects)

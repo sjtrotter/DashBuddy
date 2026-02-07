@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.test.base
 
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenMatcher
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenMatcher
 import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.rules.TestWatcher

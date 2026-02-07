@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.Screen
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenRecognizer
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenRecognizer
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.SnapshotLibrarian

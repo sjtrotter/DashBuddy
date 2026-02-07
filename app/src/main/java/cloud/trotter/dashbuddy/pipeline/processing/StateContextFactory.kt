@@ -2,10 +2,13 @@ package cloud.trotter.dashbuddy.pipeline.processing
 
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.data.log.Breadcrumbs
+import cloud.trotter.dashbuddy.data.log.clicks.ClickLogRepository
 import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenRecognizer
+import cloud.trotter.dashbuddy.pipeline.recognition.click.ClickRecognizer
+import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenRecognizer
+import cloud.trotter.dashbuddy.state.event.ClickEvent
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.state.model.NotificationInfo
@@ -20,6 +23,8 @@ class StateContextFactory @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val snapshotRepository: SnapshotRepository,
     private val breadcrumbs: Breadcrumbs,
+    private val clickRecognizer: ClickRecognizer,
+    private val clickLogRepository: ClickLogRepository
 ) {
 
     fun createFromNotification(info: NotificationInfo): NotificationEvent {
@@ -27,6 +32,18 @@ class StateContextFactory @Inject constructor(
             timestamp = info.timestamp,
             notification = info
         )
+    }
+
+    fun createFromClick(uiNode: UiNode): ClickEvent {
+        val clickInfo = clickRecognizer.recognize(uiNode)
+        val clickEvent = ClickEvent(
+            System.currentTimeMillis(),
+            clickInfo,
+            uiNode
+        )
+
+        clickLogRepository.log(clickEvent)
+        return clickEvent
     }
 
     fun createFromAccessibility(

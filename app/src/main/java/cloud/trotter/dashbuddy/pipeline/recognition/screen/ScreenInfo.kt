@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.pipeline.recognition
+package cloud.trotter.dashbuddy.pipeline.recognition.screen
 
 import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
