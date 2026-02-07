@@ -42,12 +42,18 @@ class OfferReducer @Inject constructor(
             )
 
             //TODO: remove this after testing.
-            val bubbleMessage = if (outcome == AppEventType.OFFER_ACCEPTED) {
-                "Offer Accepted"
-            } else if (outcome == AppEventType.OFFER_DECLINED) {
-                "Offer Declined"
-            } else {
-                "Offer Timed Out!"
+            val bubbleMessage = when (outcome) {
+                AppEventType.OFFER_ACCEPTED -> {
+                    "Offer Accepted"
+                }
+
+                AppEventType.OFFER_DECLINED -> {
+                    "Offer Declined"
+                }
+
+                else -> {
+                    "Offer Timed Out!"
+                }
             }
 
             return factoryResult.copy(

@@ -7,10 +7,10 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.filters.EventDebouncer
 import cloud.trotter.dashbuddy.pipeline.filters.ScreenDiffer
+import cloud.trotter.dashbuddy.pipeline.model.NotificationInfo
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.processing.StateContextFactory
 import cloud.trotter.dashbuddy.state.StateManagerV2
-import cloud.trotter.dashbuddy.state.model.NotificationInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -97,7 +97,7 @@ class Pipeline @Inject constructor(
                 } else {
                     Timber.d("Clicked sourceNode: $uiNode")
                     val clickEvent = stateContextFactory.createFromClick(uiNode)
-//                    stateManagerV2.dispatch(clickEvent)
+                    stateManagerV2.dispatch(clickEvent)
                     return@launch
                 }
 

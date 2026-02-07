@@ -5,13 +5,13 @@ import cloud.trotter.dashbuddy.data.log.Breadcrumbs
 import cloud.trotter.dashbuddy.data.log.clicks.ClickLogRepository
 import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.pipeline.model.NotificationInfo
 import cloud.trotter.dashbuddy.pipeline.model.UiNode
 import cloud.trotter.dashbuddy.pipeline.recognition.click.ClickRecognizer
 import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenRecognizer
 import cloud.trotter.dashbuddy.state.event.ClickEvent
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
-import cloud.trotter.dashbuddy.state.model.NotificationInfo
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -36,12 +36,14 @@ class StateContextFactory @Inject constructor(
 
     fun createFromClick(uiNode: UiNode): ClickEvent {
         val clickInfo = clickRecognizer.recognize(uiNode)
+
         val clickEvent = ClickEvent(
             System.currentTimeMillis(),
             clickInfo,
             uiNode
         )
 
+        Timber.d("Click Event: $clickEvent is ${clickEvent.action}")
         clickLogRepository.log(clickEvent)
         return clickEvent
     }

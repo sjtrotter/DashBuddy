@@ -5,7 +5,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.Pipeline
-import cloud.trotter.dashbuddy.state.model.NotificationInfo
+import cloud.trotter.dashbuddy.pipeline.model.NotificationInfo
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject

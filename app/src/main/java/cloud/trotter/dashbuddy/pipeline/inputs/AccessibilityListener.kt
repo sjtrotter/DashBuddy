@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
-//import cloud.trotter.dashbuddy.log.Logger
 import cloud.trotter.dashbuddy.pipeline.Pipeline
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
@@ -24,7 +23,7 @@ class AccessibilityListener : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-
+        // set here for expandability later. i.e. if we decide to do Uber or Grubhub, etc.
         val validPackages = setOf("com.doordash.driverapp")
         if (event.packageName?.toString() !in validPackages) {
             Timber.d("Ignoring event from ${event.packageName}")
