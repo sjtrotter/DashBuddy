@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.state
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.data.state.StateRecoveryRepository
+import cloud.trotter.dashbuddy.pipeline.PipelineV2
 import cloud.trotter.dashbuddy.state.effects.EffectHandler
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import com.google.gson.Gson
@@ -12,6 +13,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -19,6 +22,7 @@ import javax.inject.Singleton
 
 @Singleton
 class StateManagerV2 @Inject constructor(
+    private val pipeline: PipelineV2,
     private val effectHandler: EffectHandler,
     private val stateRecoveryRepository: StateRecoveryRepository,
     private val reducer: Reducer,
@@ -47,6 +51,7 @@ class StateManagerV2 @Inject constructor(
         .create()
 
     private val inputChannel = Channel<StateEvent>(Channel.UNLIMITED)
+    private val loopbackChannel = Channel<StateEvent>(Channel.UNLIMITED)
 
     private val _state = MutableStateFlow<AppStateV2>(AppStateV2.Initializing)
     val state = _state.asStateFlow()
@@ -69,6 +74,18 @@ class StateManagerV2 @Inject constructor(
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun startProcessor() {
         scope.launch {
+            // testing new pipeline.
+            merge(
+                pipeline.events,
+                loopbackChannel.receiveAsFlow()
+            )
+                .collect { stateEvent ->
+                    // --- THE GOLDEN LOG ---
+                    // This is the single most important log in your entire app.
+                    // It proves that an event (ANY event) has reached the brain.
+                    Timber.i("📥 PROCESSING: ${stateEvent::class.simpleName}")
+                }
+
             for (stateEvent in inputChannel) {
                 val currentState = _state.value
 

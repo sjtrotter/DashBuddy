@@ -16,6 +16,9 @@ class NotificationListener : NotificationListenerService() {
     @Inject
     lateinit var pipeline: Pipeline
 
+    @Inject
+    lateinit var notificationSource: NotificationSource
+
     override fun onListenerConnected() {
         Timber.i("Notification Listener Connected!")
     }
@@ -23,6 +26,9 @@ class NotificationListener : NotificationListenerService() {
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
+
+        // new event pipeline! (under construction)
+        notificationSource.emit(sbn)
 
         // 1. Filter: Only care about specific apps?
         val packageName = sbn.packageName
