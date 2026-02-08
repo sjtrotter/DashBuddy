@@ -35,34 +35,31 @@ class OfferReducer @Inject constructor(
             outcome: AppEventType,
             description: String
         ): Transition {
-            // Create the definitive log entry for how this offer ended
+            // 1. Log the event (Database) - Always happens on transition
             val logEvent = ReducerUtils.createEvent(
                 state.dashId,
                 outcome,
                 description
-                // Optional: metadata = Gson().toJson(state.clickInfo)
             )
 
-            //TODO: remove this after testing.
-            val bubbleMessage = when (outcome) {
-                AppEventType.OFFER_ACCEPTED -> {
-                    "Offer Accepted"
-                }
+            // 2. Handle Feedback
+            val effects = factoryResult.effects.toMutableList()
+            effects.add(AppEffect.LogEvent(logEvent))
 
-                AppEventType.OFFER_DECLINED -> {
-                    "Offer Declined"
-                }
-
-                else -> {
-                    "Offer Timed Out!"
-                }
+            // 3. Timeout Bubble Logic
+            // If the outcome is TIMEOUT, the user never clicked anything,
+            // so we haven't shown a bubble yet. We must show it now.
+            // (If it was ACCEPT/DECLINE, we already showed it in onClick, so we skip it here)
+            if (outcome == AppEventType.OFFER_TIMEOUT) {
+                effects.add(
+                    AppEffect.UpdateBubble(
+                        "Offer Timed Out!",
+                        persona = ChatPersona.Dispatcher
+                    )
+                )
             }
 
-            return factoryResult.copy(
-                effects = factoryResult.effects + AppEffect.LogEvent(logEvent)
-                        // TODO: Remove this after testing.
-                        + AppEffect.UpdateBubble(bubbleMessage, persona = ChatPersona.Dispatcher)
-            )
+            return factoryResult.copy(effects = effects)
         }
 
         return when (input) {
@@ -125,6 +122,7 @@ class OfferReducer @Inject constructor(
                 )
             }
 
+            // EXIT PATH 5: Return to Post-Delivery (e.g. Add-on Offer ignored)
             is ScreenInfo.DeliveryCompleted -> {
                 val outcome = resolveOutcome(state)
                 request(
@@ -138,12 +136,6 @@ class OfferReducer @Inject constructor(
         }
     }
 
-    /**
-     * Determines how the current offer ended based strictly on user intent (Clicks).
-     * If the user clicked nothing, we default to TIMEOUT.
-     * * Note: This handles "Add-on Timeout" correctly. If you are OnPickup, ignore an add-on,
-     * and stay OnPickup, this returns TIMEOUT because you didn't click ACCEPT.
-     */
     private fun resolveOutcome(state: AppStateV2.OfferPresented): AppEventType {
         val action = state.clickInfo?.second
 
@@ -155,13 +147,31 @@ class OfferReducer @Inject constructor(
     }
 
     /**
-     * Captures the user's intent. We don't change the screen here;
-     * we just record "The user clicked Accept/Decline while on Screen X".
+     * Captures the user's intent AND provides immediate feedback (Optimistic UI).
      */
     fun onClick(state: AppStateV2.OfferPresented, event: ClickEvent): Transition {
+        // 1. Update State (So resolveOutcome works later when the screen changes)
         val newClickInfo = state.currentScreen to event.action
+
+        // 2. Immediate Feedback
+        // We fire the bubble NOW. We don't wait for the app to navigate.
+        val bubbleEffect = when (event.action) {
+            ClickAction.ACCEPT_OFFER -> AppEffect.UpdateBubble(
+                "Offer Accepted",
+                persona = ChatPersona.Dispatcher
+            )
+
+            ClickAction.DECLINE_OFFER -> AppEffect.UpdateBubble(
+                "Offer Declined",
+                persona = ChatPersona.Dispatcher
+            )
+
+            else -> null
+        }
+
         return Transition(
-            newState = state.copy(clickInfo = newClickInfo)
+            newState = state.copy(clickInfo = newClickInfo),
+            effects = listOfNotNull(bubbleEffect) // Fire immediately!
         )
     }
 }
