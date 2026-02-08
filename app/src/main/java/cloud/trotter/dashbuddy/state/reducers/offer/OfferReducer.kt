@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DashPausedStateFactory
 import cloud.trotter.dashbuddy.state.factories.OfferStateFactory
 import cloud.trotter.dashbuddy.state.factories.PickupStateFactory
+import cloud.trotter.dashbuddy.state.factories.PostDeliveryStateFactory
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
 import javax.inject.Inject
@@ -23,6 +24,7 @@ class OfferReducer @Inject constructor(
     private val awaitingStateFactory: AwaitingStateFactory,
     private val pickupStateFactory: PickupStateFactory,
     private val dashPausedStateFactory: DashPausedStateFactory,
+    private val postDeliveryStateFactory: PostDeliveryStateFactory,
 ) {
 
     fun reduce(state: AppStateV2.OfferPresented, input: ScreenInfo): Transition? {
@@ -120,6 +122,15 @@ class OfferReducer @Inject constructor(
                     dashPausedStateFactory.createEntry(state, input, isRecovery = false),
                     outcome,
                     "Dash Paused during offer"
+                )
+            }
+
+            is ScreenInfo.DeliveryCompleted -> {
+                val outcome = resolveOutcome(state)
+                request(
+                    postDeliveryStateFactory.createEntry(state, input, isRecovery = false),
+                    outcome,
+                    "return to DeliveryCompleted after offer"
                 )
             }
 
