@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state.reducers
 
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.factories.DashPausedStateFactory
 import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory

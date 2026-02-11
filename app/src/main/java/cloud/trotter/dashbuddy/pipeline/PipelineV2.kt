@@ -2,9 +2,9 @@ package cloud.trotter.dashbuddy.pipeline
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.pipeline.features.click.ClickPipeline
-import cloud.trotter.dashbuddy.pipeline.features.notification.NotificationPipeline
-import cloud.trotter.dashbuddy.pipeline.features.screen.ScreenPipeline
+import cloud.trotter.dashbuddy.pipeline.accessibility.click.ClickPipeline
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenPipeline
+import cloud.trotter.dashbuddy.pipeline.notification.NotificationPipeline
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow

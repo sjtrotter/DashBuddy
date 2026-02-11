@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.matchers.SensitiveScreenMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.matchers.SensitiveScreenMatcher
 
 object SnapshotSecurityScanner {
     // Single source of truth for keywords

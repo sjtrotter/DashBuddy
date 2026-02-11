@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state.reducers.postdelivery
 
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent

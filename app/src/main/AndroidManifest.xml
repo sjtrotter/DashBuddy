@@ -41,7 +41,7 @@
         </activity>
 
         <service
-            android:name=".pipeline.inputs.AccessibilityListener"
+            android:name=".pipeline.accessibility.input.AccessibilityListener"
             android:exported="true"
             android:label="DashBuddy"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
@@ -58,7 +58,7 @@
         <!--            android:foregroundServiceType="location" />-->
 
         <service
-            android:name=".pipeline.inputs.NotificationListener"
+            android:name=".pipeline.notification.input.NotificationListener"
             android:label="DashBuddy Notification Watcher"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">

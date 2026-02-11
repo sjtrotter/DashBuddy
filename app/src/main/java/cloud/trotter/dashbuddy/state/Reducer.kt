@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.effects.NotificationHandler
 import cloud.trotter.dashbuddy.state.event.ClickEvent
 import cloud.trotter.dashbuddy.state.event.NotificationEvent

@@ -4,7 +4,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.data.state.StateRecoveryRepository
 import cloud.trotter.dashbuddy.pipeline.PipelineV2
-import cloud.trotter.dashbuddy.state.effects.EffectHandler
+import cloud.trotter.dashbuddy.state.effects.SideEffectEngine
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
@@ -23,14 +23,14 @@ import javax.inject.Singleton
 @Singleton
 class StateManagerV2 @Inject constructor(
     private val pipeline: PipelineV2,
-    private val effectHandler: EffectHandler,
+    private val engine: SideEffectEngine, // <--- Renamed & Updated
     private val stateRecoveryRepository: StateRecoveryRepository,
     private val reducer: Reducer,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    // GSON configuration setup
+    // GSON setup...
     private val gson = Gson().newBuilder()
         .registerTypeAdapterFactory(
             cloud.trotter.dashbuddy.util.RuntimeTypeAdapterFactory.of(
@@ -50,8 +50,8 @@ class StateManagerV2 @Inject constructor(
         )
         .create()
 
-    private val inputChannel = Channel<StateEvent>(Channel.UNLIMITED)
-    private val loopbackChannel = Channel<StateEvent>(Channel.UNLIMITED)
+    // 3. UI INPUT STREAM (Clicks, Debug Buttons)
+    private val uiInputChannel = Channel<StateEvent>(Channel.UNLIMITED)
 
     private val _state = MutableStateFlow<AppStateV2>(AppStateV2.Initializing)
     val state = _state.asStateFlow()
@@ -63,67 +63,62 @@ class StateManagerV2 @Inject constructor(
         startProcessor()
     }
 
-    /**
-     * Entry point for all events in the system.
-     * This function is passed to the EffectHandler to allow feedback loops.
-     */
     fun dispatch(stateEvent: StateEvent) {
-        inputChannel.trySend(stateEvent)
+        uiInputChannel.trySend(stateEvent)
     }
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun startProcessor() {
         scope.launch {
-            // testing new pipeline.
+            Timber.d("🔌 Connecting All Event Streams...")
+
+            // --- THE TRIFECTA MERGE ---
+            // 1. Pipeline (System Events: Screen, Notifications)
+            // 2. Engine (Logic Events: Timeouts, Calculations)
+            // 3. UI (User Events: Manual Clicks)
             merge(
                 pipeline.events,
-                loopbackChannel.receiveAsFlow()
+                engine.events,
+                uiInputChannel.receiveAsFlow()
             )
                 .collect { stateEvent ->
-                    // --- THE GOLDEN LOG ---
-                    // This is the single most important log in your entire app.
-                    // It proves that an event (ANY event) has reached the brain.
+                    // The Single Source of Truth
                     Timber.i("📥 PROCESSING: ${stateEvent::class.simpleName}")
+                    processEvent(stateEvent)
                 }
-
-            for (stateEvent in inputChannel) {
-                val currentState = _state.value
-
-                // 1. Reduce
-                val transition = reducer.reduce(currentState, stateEvent)
-
-                // 2. Update State
-                if (transition.newState != currentState) {
-                    val oldClass = currentState::class.simpleName
-                    val newClass = transition.newState::class.simpleName
-
-                    if (oldClass != newClass) {
-                        Timber.i(">>> TRANSITION: $oldClass -> $newClass")
-                    } else {
-                        Timber.v("    Update within $newClass: ${transition.newState}")
-                    }
-
-                    _state.value = transition.newState
-                    saveState(transition.newState)
-                }
-
-                // 3. Execute Effects
-                // We pass `::dispatch` so the handler can feed events (like Offer Evaluated) back to us
-                transition.effects.forEach { effect ->
-                    effectHandler.handle(effect, scope, ::dispatch)
-                }
-            }
         }
     }
 
-    // --- Persistence (Crash Recovery) ---
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    private fun processEvent(stateEvent: StateEvent) {
+        val currentState = _state.value
 
+        // 1. REDUCE
+        val transition = reducer.reduce(currentState, stateEvent)
+
+        // 2. UPDATE STATE
+        if (transition.newState != currentState) {
+            val oldClass = currentState::class.simpleName
+            val newClass = transition.newState::class.simpleName
+            if (oldClass != newClass) {
+                Timber.i(">>> TRANSITION: $oldClass -> $newClass")
+            }
+            _state.value = transition.newState
+            saveState(transition.newState)
+        }
+
+        // 3. EMIT EFFECTS
+        // We push effects into the Engine. It decides if/when to loop back.
+        transition.effects.forEach { effect ->
+            engine.process(effect, scope)
+        }
+    }
+
+    // --- Persistence code (Same as before) ---
     private fun saveState(state: AppStateV2) {
-        // Run IO on background thread
         scope.launch(Dispatchers.IO) {
             try {
-                val json = gson.toJson(state)
-                stateRecoveryRepository.saveState(json)
+                stateRecoveryRepository.saveState(gson.toJson(state))
             } catch (e: Exception) {
                 Timber.e(e, "Failed to save state")
             }
@@ -133,19 +128,12 @@ class StateManagerV2 @Inject constructor(
     private fun restoreState() {
         scope.launch(Dispatchers.IO) {
             val json = stateRecoveryRepository.getFreshState()
-
             if (json != null) {
                 try {
-                    Timber.i("Restoring state from storage...")
-                    val restored = gson.fromJson(json, AppStateV2::class.java)
-                    _state.value = restored
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to restore state. Starting fresh.")
+                    _state.value = gson.fromJson(json, AppStateV2::class.java)
+                } catch (_: Exception) {
                     _state.value = AppStateV2.Initializing
                 }
-            } else {
-                Timber.i("No valid previous state found. Starting fresh.")
-                _state.value = AppStateV2.Initializing
             }
         }
     }

@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenRecognizer
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenClassifier
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import org.junit.Assert.fail
@@ -22,8 +22,8 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
 
         // 1. REPLICATE THE DAGGER GRAPH
         // We manually instantiate the recognizer exactly how Hilt would do it.
-        private val recognizer: ScreenRecognizer by lazy {
-            ScreenRecognizer(
+        private val recognizer: ScreenClassifier by lazy {
+            ScreenClassifier(
                 injectedMatchers = TestMatcherFactory.createAllMatchers()
             )
         }

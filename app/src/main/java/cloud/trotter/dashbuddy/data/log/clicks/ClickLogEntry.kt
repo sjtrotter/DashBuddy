@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.data.log.clicks
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.click.ClickAction
+import cloud.trotter.dashbuddy.pipeline.accessibility.click.ClickAction
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import kotlinx.serialization.Serializable
 
 @Serializable

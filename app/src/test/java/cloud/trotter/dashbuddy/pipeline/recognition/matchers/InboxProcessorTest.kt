@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenRecognizer
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenClassifier
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.SnapshotLibrarian
@@ -32,8 +32,8 @@ class InboxProcessorTest(
         private const val INBOX = "INBOX"
         val sharedStats = SnapshotTestStats(INBOX)
 
-        private val recognizer: ScreenRecognizer by lazy {
-            ScreenRecognizer(TestMatcherFactory.createAllMatchers())
+        private val recognizer: ScreenClassifier by lazy {
+            ScreenClassifier(TestMatcherFactory.createAllMatchers())
         }
 
         @JvmStatic

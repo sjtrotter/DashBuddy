@@ -15,7 +15,7 @@ import cloud.trotter.dashbuddy.model.config.EvidenceConfig
 import cloud.trotter.dashbuddy.model.config.MetricType
 import cloud.trotter.dashbuddy.model.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.model.config.ScoringRule
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

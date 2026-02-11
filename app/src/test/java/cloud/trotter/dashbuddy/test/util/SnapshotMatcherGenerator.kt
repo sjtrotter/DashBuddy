@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 
 /**
  * Automagically generates a ScreenMatcher class skeleton based on a UiNode snapshot.

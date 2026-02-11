@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state.event
 
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
 
 data class ScreenUpdateEvent(
     override val timestamp: Long,

@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.data.pay
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton

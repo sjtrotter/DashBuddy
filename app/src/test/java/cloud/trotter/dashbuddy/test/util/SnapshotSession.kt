@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 
 /**
  * Stores context across multiple test executions.

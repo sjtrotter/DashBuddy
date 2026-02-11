@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.dash.DashType
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.ScreenInfo
-import cloud.trotter.dashbuddy.pipeline.recognition.screen.matchers.IdleMapMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.screen.matchers.IdleMapMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
