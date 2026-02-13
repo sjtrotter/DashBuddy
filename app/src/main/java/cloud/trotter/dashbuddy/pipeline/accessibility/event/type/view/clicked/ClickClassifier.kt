@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.pipeline.accessibility.click
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import javax.inject.Inject

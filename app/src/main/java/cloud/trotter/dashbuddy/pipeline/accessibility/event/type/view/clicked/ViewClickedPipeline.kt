@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.pipeline.accessibility.click
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import javax.inject.Inject
 
-class ClickPipeline @Inject constructor(
+class ViewClickedPipeline @Inject constructor(
     private val source: AccessibilitySource,
     private val classifier: ClickClassifier,
     private val factory: ClickFactory

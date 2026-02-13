@@ -2,8 +2,7 @@ package cloud.trotter.dashbuddy.pipeline
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.pipeline.accessibility.click.ClickPipeline
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenPipeline
+import cloud.trotter.dashbuddy.pipeline.accessibility.AccessibilityPipeline
 import cloud.trotter.dashbuddy.pipeline.notification.NotificationPipeline
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import kotlinx.coroutines.Dispatchers
@@ -15,15 +14,12 @@ import javax.inject.Singleton
 
 @Singleton
 class PipelineV2 @Inject constructor(
-    clickPipeline: ClickPipeline,
-    screenPipeline: ScreenPipeline,
+    accessibilityPipeline: AccessibilityPipeline,
     notificationPipeline: NotificationPipeline
 ) {
-    // The Master Stream
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     val events: Flow<StateEvent> = merge(
-        clickPipeline.output(),
-        screenPipeline.output(),
+        accessibilityPipeline.output(),
         notificationPipeline.output()
     )
         .flowOn(Dispatchers.Default)

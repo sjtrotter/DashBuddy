@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.state.reducers.offer
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
-import cloud.trotter.dashbuddy.pipeline.accessibility.click.ClickAction
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked.ClickAction
 import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
 import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect

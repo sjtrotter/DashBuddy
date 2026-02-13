@@ -28,7 +28,7 @@ class DeliverySummaryMatcher @Inject constructor(
         if (!hasContext) return null
 
         // 2. Find the Correct Container
-        val earningsContainer = node.findNodes { it.hasId("earnings_container") }
+        val earningsContainer = node.findNodes { it.matchesId("earnings_container") }
             .find { container ->
                 container.hasNode { it.text?.contains("This offer", ignoreCase = true) == true }
             }
@@ -120,6 +120,6 @@ class DeliverySummaryMatcher @Inject constructor(
     private fun findExpandButton(root: UiNode, container: UiNode?): UiNode? {
         return container?.findDescendantById("expandable_view")
             ?: container?.findDescendantById("expandable_layout")
-            ?: root.findNodes { it.hasId("expandable_view") }.lastOrNull()
+            ?: root.findNodes { it.matchesId("expandable_view") }.lastOrNull()
     }
 }

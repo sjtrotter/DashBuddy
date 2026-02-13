@@ -3,7 +3,7 @@ package cloud.trotter.dashbuddy.state
 import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
-import cloud.trotter.dashbuddy.pipeline.accessibility.click.ClickAction
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked.ClickAction
 import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
 
 sealed class AppStateV2 {
