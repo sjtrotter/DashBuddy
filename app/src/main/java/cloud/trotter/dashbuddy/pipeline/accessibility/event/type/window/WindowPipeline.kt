@@ -3,10 +3,9 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window
 //import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.logic.ScreenRepository
 import android.os.Build
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed.WindowContentChangedPipeline
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.state_changed.WindowStateChangedPipeline
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
 import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenFactory
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.filters.ScreenDiffer
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -14,9 +13,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import javax.inject.Inject
 
-class TypeWindowPipeline @Inject constructor(
-    private val contentChangedPipeline: WindowContentChangedPipeline,
-    private val stateChangedPipeline: WindowStateChangedPipeline,
+class WindowPipeline @Inject constructor(
+    private val contentChangedPipeline: ContentChangedPipeline,
+    private val stateChangedPipeline: StateChangedPipeline,
     private val factory: ScreenFactory,
     private val differ: ScreenDiffer,
 //    private val repository: ScreenRepository // Centralized Sticky Cache!

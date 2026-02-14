@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.pipeline.accessibility.screen.filters
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window
 
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import javax.inject.Inject

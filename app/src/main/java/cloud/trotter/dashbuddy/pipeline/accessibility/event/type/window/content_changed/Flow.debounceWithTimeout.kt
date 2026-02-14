@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.util
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow

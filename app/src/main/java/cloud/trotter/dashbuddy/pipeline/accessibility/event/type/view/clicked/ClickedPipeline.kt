@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import javax.inject.Inject
 
-class ViewClickedPipeline @Inject constructor(
+class ClickedPipeline @Inject constructor(
     private val source: AccessibilitySource,
     private val classifier: ClickClassifier,
     private val factory: ClickFactory

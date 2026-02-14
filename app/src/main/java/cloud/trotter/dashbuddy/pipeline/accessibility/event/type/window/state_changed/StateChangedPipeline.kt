@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import javax.inject.Inject
 
-class WindowStateChangedPipeline @Inject constructor(
+class StateChangedPipeline @Inject constructor(
     private val source: AccessibilitySource
 ) {
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)

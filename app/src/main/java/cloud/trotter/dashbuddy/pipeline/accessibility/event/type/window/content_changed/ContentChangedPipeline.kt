@@ -5,7 +5,6 @@ import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
-import cloud.trotter.dashbuddy.util.debounceWithTimeout
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -15,7 +14,7 @@ import timber.log.Timber
 import javax.inject.Inject
 
 @OptIn(FlowPreview::class)
-class WindowContentChangedPipeline @Inject constructor(
+class ContentChangedPipeline @Inject constructor(
     private val source: AccessibilitySource
 ) {
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
