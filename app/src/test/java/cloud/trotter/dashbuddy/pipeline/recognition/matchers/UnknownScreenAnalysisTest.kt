@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenClassifier
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
 import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import org.junit.Assert.fail

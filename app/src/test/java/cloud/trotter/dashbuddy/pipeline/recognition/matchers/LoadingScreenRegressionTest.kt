@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.LegacyEnumMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.matchers.LegacyEnumMatcher
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader

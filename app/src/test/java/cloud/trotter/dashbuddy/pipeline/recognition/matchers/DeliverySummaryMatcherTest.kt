@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.data.pay.PayParser
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.matchers.DeliverySummaryMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DeliverySummaryMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import cloud.trotter.dashbuddy.test.util.ConsoleTree
 import org.junit.Assert.assertEquals

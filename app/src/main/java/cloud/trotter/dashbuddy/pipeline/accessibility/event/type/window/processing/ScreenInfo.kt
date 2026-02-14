@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.pipeline.accessibility.screen
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing
 
 import cloud.trotter.dashbuddy.data.dash.DashType
 import cloud.trotter.dashbuddy.data.event.status.DropoffStatus

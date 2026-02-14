@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state.reducers.postdelivery
 
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.AppStateV2.PostDelivery.Phase
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent

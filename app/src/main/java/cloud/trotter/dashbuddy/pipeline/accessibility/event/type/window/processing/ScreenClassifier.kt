@@ -1,7 +1,7 @@
-package cloud.trotter.dashbuddy.pipeline.accessibility.screen
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing
 
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.LegacyEnumMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.matchers.LegacyEnumMatcher
 import javax.inject.Inject
 import javax.inject.Singleton
 

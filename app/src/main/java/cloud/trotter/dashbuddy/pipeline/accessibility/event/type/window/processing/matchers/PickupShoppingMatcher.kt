@@ -1,10 +1,10 @@
-package cloud.trotter.dashbuddy.pipeline.accessibility.screen.matchers
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers
 
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenMatcher
 import javax.inject.Inject
 
 class PickupShoppingMatcher @Inject constructor() : ScreenMatcher {

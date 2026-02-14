@@ -4,8 +4,8 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenFactory
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenFactory
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter

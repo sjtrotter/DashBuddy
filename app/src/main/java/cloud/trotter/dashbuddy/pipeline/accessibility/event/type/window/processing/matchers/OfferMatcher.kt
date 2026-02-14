@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.pipeline.accessibility.screen.matchers
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -7,10 +7,10 @@ import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.order.OrderBadge
 import cloud.trotter.dashbuddy.data.order.OrderType
 import cloud.trotter.dashbuddy.data.order.ParsedOrder
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenInfo
-import cloud.trotter.dashbuddy.pipeline.accessibility.screen.ScreenMatcher
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
 import javax.inject.Inject
