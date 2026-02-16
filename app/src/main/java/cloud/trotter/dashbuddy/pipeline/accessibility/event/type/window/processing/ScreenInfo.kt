@@ -66,6 +66,24 @@ sealed class ScreenInfo {
         val parsedPay: ParsedPay,
     ) : ScreenInfo()
 
+    data class DeliverySummary(
+        override val screen: Screen,
+
+        // State Flags
+        val isExpanded: Boolean,
+
+        // The Critical Data (Best effort extraction)
+        val totalPay: Double, // Extracted from header (Collapsed) or Breakdown (Expanded)
+        val parsedPay: ParsedPay? = null, // Only available if Expanded
+
+        // Interactive Elements
+        val expandButton: UiNode? = null, // Only needed if !isExpanded
+
+        // "Data Left on the Table" - Now captured!
+        val sessionEarnings: Double? = null, // The running total for the dash
+        val offersAccepted: String? = null // e.g., "4 out of 18"
+    ) : ScreenInfo()
+
     /** Contains the extracted zone and earning type from the Idle Map screen. */
     data class IdleMap(
         override val screen: Screen,

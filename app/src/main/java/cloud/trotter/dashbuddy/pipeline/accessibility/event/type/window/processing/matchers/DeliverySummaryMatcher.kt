@@ -10,113 +10,78 @@ import javax.inject.Inject
 import kotlin.math.abs
 
 class DeliverySummaryMatcher @Inject constructor(
-    private val payParser: PayParser // <--- Injected Dependency
+    private val payParser: PayParser
 ) : ScreenMatcher {
 
+    // We default to identifying as EXPANDED if we find data, but the object itself carries the truth.
     override val targetScreen: Screen = Screen.DELIVERY_SUMMARY_EXPANDED
     override val priority: Int = 20
 
     override fun matches(node: UiNode): ScreenInfo? {
-
         // 1. Context Check
         val hasContext = node.hasNode {
             val text = it.text ?: ""
             text.contains("This offer", ignoreCase = true) ||
                     text.contains("Delivery Complete", ignoreCase = true)
         }
-
         if (!hasContext) return null
 
-        // 2. Find the Correct Container
+        // 2. Locate Containers
         val earningsContainer = node.findNodes { it.matchesId("earnings_container") }
             .find { container ->
                 container.hasNode { it.text?.contains("This offer", ignoreCase = true) == true }
             }
-
-        // Define the scope for searching (prefer container, fallback to root)
         val searchScope = earningsContainer ?: node
 
-        // 3. Fast Fail: Check for "Anchor" Nodes
-        // If these text nodes are missing, the screen is definitely NOT expanded (or not loaded).
-        // We skip parsing entirely and check for the button immediately.
-        val hasDoorDashPay =
-            searchScope.hasNode { it.text?.contains("DoorDash pay", ignoreCase = true) == true }
-        val hasTips =
-            searchScope.hasNode { it.text?.contains("Customer tips", ignoreCase = true) == true }
-
-        if (!hasDoorDashPay || !hasTips) {
-            Timber.d(
-                "Missing expanded anchors (DD Pay: $hasDoorDashPay, Tips: $hasTips). Checking for Collapsed state."
-            )
-            return attemptFallbackToCollapsed(node, earningsContainer)
-        }
-
-        Timber.d("Anchors found. Proceeding to Parse.")
-
-        // 4. Extract Headline Total (Validation)
+        // 3. Extract Common Data (Available in both states)
         val finalValueNode = earningsContainer?.findDescendantById("final_value")
             ?: node.findDescendantById("final_value")
+        val headlineTotal = finalValueNode?.text?.replace("$", "")?.toDoubleOrNull() ?: 0.0
 
-        val headlineTotal = finalValueNode?.text?.replace("$", "")?.toDoubleOrNull()
+        // Extract "Data on the table" (Session Earnings)
+        val sessionEarningsNode = node.findDescendantById("earnings_ticker")
+        val sessionEarnings = parseTickerText(sessionEarningsNode)
 
-        // 5. Parse Breakdown
-        val parsedPay = payParser.parsePayFromTree(searchScope)
-        val breakdownTotal = parsedPay.total
+        // 4. Check State (Expanded vs Collapsed)
+        val hasDoorDashPay = searchScope.hasNode { it.matchesText("DoorDash pay") }
+        val hasTips = searchScope.hasNode { it.matchesText("Customer tips") }
+        val isVisuallyExpanded = hasDoorDashPay && hasTips
 
-        // 6. Validation Timber.c
-        val isValid = if (headlineTotal != null) {
-            val diff = abs(breakdownTotal - headlineTotal)
-            val isCloseEnough = diff <= 0.02
+        // 5. Parse Breakdown (if expanded)
+        var parsedPay = if (isVisuallyExpanded) payParser.parsePayFromTree(searchScope) else null
 
-            if (!isCloseEnough) {
-                Timber.w(
-                    "Validation FAILED: Mismatch! Breakdown ($breakdownTotal) vs Headline ($headlineTotal). Diff: $diff"
-                )
+        // 6. Validation / Glitch Detection
+        // If we think it's expanded, but the math doesn't check out, treat it as Collapsed (Glitch).
+        if (parsedPay != null && headlineTotal > 0) {
+            val diff = abs(parsedPay.total - headlineTotal)
+            if (diff > 0.02) {
+                Timber.w("Validation Failed: Breakdown ${parsedPay.total} != Header $headlineTotal. Treating as Glitch.")
+                parsedPay = null // Force fallback to button logic
             }
-            isCloseEnough
-        } else {
-            val hasData = parsedPay.appPayComponents.isNotEmpty()
-            if (!hasData) Timber.w(
-                "Validation FAILED: No headline and no parsed app pay components."
-            )
-            hasData
         }
 
-        if (isValid) {
-            Timber.i("Match Success: DELIVERY_SUMMARY_EXPANDED")
-            return ScreenInfo.DeliveryCompleted(
-                screen = Screen.DELIVERY_SUMMARY_EXPANDED,
-                parsedPay = parsedPay
-            )
-        } else {
-            // If validation failed (e.g. mismatch), we can still try to fall back
-            // just in case it was a bad read of a collapsed screen.
-            Timber.w("Data invalid despite anchors. Attempting fallback.")
-            return attemptFallbackToCollapsed(node, earningsContainer)
-        }
+        // 7. Find Button (Only strictly needed if we don't have the parsed pay)
+        val expandButton =
+            if (parsedPay == null) findExpandButton(node, earningsContainer) else null
+
+        // 8. Return Unified Object
+        return ScreenInfo.DeliverySummary(
+            // Use the enum to indicate "Logical State" for the rest of the app
+            screen = if (parsedPay != null) Screen.DELIVERY_SUMMARY_EXPANDED else Screen.DELIVERY_SUMMARY_COLLAPSED,
+            isExpanded = parsedPay != null,
+            totalPay = headlineTotal,
+            parsedPay = parsedPay,
+            expandButton = expandButton,
+            sessionEarnings = sessionEarnings
+        )
     }
 
-    /**
-     * Helper to check if we are in the Collapsed state by locating the expand button.
-     */
-    private fun attemptFallbackToCollapsed(root: UiNode, container: UiNode?): ScreenInfo? {
-        val expandButton = findExpandButton(root, container)
-
-        if (expandButton != null) {
-            Timber.i("Match Success: DELIVERY_SUMMARY_COLLAPSED (Found expand button)")
-            return ScreenInfo.DeliverySummaryCollapsed(
-                screen = Screen.DELIVERY_SUMMARY_COLLAPSED,
-                expandButton = expandButton
-            )
-        }
-
-        Timber.w("Fallback Failed: Could not find expand button.")
-        return null
+    private fun parseTickerText(tickerNode: UiNode?): Double? {
+        // Tickers usually have separate TextViews for digits: "3" "4" "." "5" "0"
+        // We collect all text from children and join them.
+        return tickerNode?.allText?.joinToString("")?.replace("$", "")?.toDoubleOrNull()
     }
 
-    /**
-     * Encapsulated logic for finding the expand/collapse button
-     */
     private fun findExpandButton(root: UiNode, container: UiNode?): UiNode? {
         return container?.findDescendantById("expandable_view")
             ?: container?.findDescendantById("expandable_layout")

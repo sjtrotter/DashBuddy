@@ -23,10 +23,10 @@ import cloud.trotter.dashbuddy.state.reducers.DashPausedReducer
 import cloud.trotter.dashbuddy.state.reducers.DeliveryReducer
 import cloud.trotter.dashbuddy.state.reducers.IdleReducer
 import cloud.trotter.dashbuddy.state.reducers.InitializingReducer
+import cloud.trotter.dashbuddy.state.reducers.OfferReducer
 import cloud.trotter.dashbuddy.state.reducers.PickupReducer
+import cloud.trotter.dashbuddy.state.reducers.PostDeliveryReducer
 import cloud.trotter.dashbuddy.state.reducers.SummaryReducer
-import cloud.trotter.dashbuddy.state.reducers.offer.OfferReducer
-import cloud.trotter.dashbuddy.state.reducers.postdelivery.PostDeliveryReducer
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton

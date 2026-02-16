@@ -79,25 +79,16 @@ sealed class AppStateV2 {
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
 
-        // --- NEW FIELDS ---
+        // Data Accumulators
         val parsedPay: ParsedPay? = null,
-        val merchantNames: String = "Delivery", // Cached for filename/display
+        val totalPay: Double = 0.0,
+        val merchantNames: String = "Delivery",
         val summaryText: String = "Processing...",
 
-        val phase: Phase = Phase.STABILIZING,
-    ) : AppStateV2() {
-
-        // Helper accessors for clean UI usage
-        val totalPay: Double
-            get() = parsedPay?.total ?: 0.0
-
-        enum class Phase {
-            STABILIZING,
-            CLICKING,
-            VERIFYING,
-            RECORDED,
-        }
-    }
+        // Automation State (Closed Loop)
+        val clickSent: Boolean = false,
+        val clickAttempts: Int = 0
+    ) : AppStateV2()
 
     // --- 3. TRANSIENT ---
     data class PausedOrInterrupted(
