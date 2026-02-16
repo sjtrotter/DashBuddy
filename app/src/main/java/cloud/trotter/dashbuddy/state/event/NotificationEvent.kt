@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state.event
 
-import cloud.trotter.dashbuddy.state.model.NotificationInfo
+import cloud.trotter.dashbuddy.pipeline.notification.NotificationInfo
 
 data class NotificationEvent(
     override val timestamp: Long,

@@ -3,7 +3,7 @@ package cloud.trotter.dashbuddy.state.reducers
 import cloud.trotter.dashbuddy.data.event.AppEventType
 import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory

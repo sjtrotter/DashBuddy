@@ -77,6 +77,14 @@ class DefaultEffectHandler @Inject constructor(
                 timeoutHandler.cancel(effect.type)
             }
 
+            is AppEffect.StartDash -> {
+                bubbleManager.startDash(effect.dashId)
+            }
+
+            is AppEffect.EndDash -> {
+                if (bubbleManager.activeDashId.value != null) bubbleManager.endDash()
+            }
+
             is AppEffect.StartOdometer -> {
                 odometerEffectHandler.startUp()
             }

@@ -7,7 +7,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.view.Display
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.pipeline.inputs.AccessibilityListener
+import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilityListener
 //import cloud.trotter.dashbuddy.log.Logger as Log
 import cloud.trotter.dashbuddy.state.AppEffect
 import kotlinx.coroutines.CoroutineScope

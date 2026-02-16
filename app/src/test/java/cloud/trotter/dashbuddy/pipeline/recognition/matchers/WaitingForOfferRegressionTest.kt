@@ -1,7 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.WaitingForOfferMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader

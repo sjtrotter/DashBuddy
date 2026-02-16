@@ -14,7 +14,7 @@ enum class AppEventType {
     OFFER_RECEIVED,
     OFFER_ACCEPTED,
     OFFER_DECLINED,
-    OFFER_MISSED, // Timeout
+    OFFER_TIMEOUT, // Timeout
 
     // --- Pickup Phase ---
     PICKUP_NAV_STARTED,

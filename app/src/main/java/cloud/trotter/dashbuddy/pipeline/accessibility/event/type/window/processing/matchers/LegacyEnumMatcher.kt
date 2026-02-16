@@ -1,0 +1,20 @@
+package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers
+
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+
+/**
+ * A wrapper that lets us use the old Screen Enum logic inside the new system.
+ */
+class LegacyEnumMatcher(
+    override val targetScreen: Screen,
+    override val priority: Int = 0
+) : ScreenMatcher {
+
+    override fun matches(node: UiNode): ScreenInfo? {
+        if (!targetScreen.matches(node)) return null
+        return ScreenInfo.Simple(targetScreen)
+    }
+}

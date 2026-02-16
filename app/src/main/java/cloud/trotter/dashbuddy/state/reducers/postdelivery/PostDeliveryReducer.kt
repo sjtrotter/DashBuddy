@@ -1,11 +1,12 @@
 package cloud.trotter.dashbuddy.state.reducers.postdelivery
 
-import cloud.trotter.dashbuddy.pipeline.recognition.ScreenInfo
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.AppStateV2.PostDelivery.Phase
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory
+import cloud.trotter.dashbuddy.state.factories.OfferStateFactory
 import cloud.trotter.dashbuddy.state.factories.PickupStateFactory
 import cloud.trotter.dashbuddy.state.model.Transition
 import javax.inject.Inject
@@ -16,6 +17,7 @@ class PostDeliveryReducer @Inject constructor(
     private val awaitingStateFactory: AwaitingStateFactory,
     private val deliveryStateFactory: DeliveryStateFactory,
     private val pickupStateFactory: PickupStateFactory,
+    private val offerStateFactory: OfferStateFactory,
 ) {
 
     fun reduce(state: AppStateV2.PostDelivery, input: ScreenInfo): Transition? {
@@ -31,6 +33,9 @@ class PostDeliveryReducer @Inject constructor(
 
             is ScreenInfo.PickupDetails ->
                 pickupStateFactory.createEntry(state, input, isRecovery = false)
+
+            is ScreenInfo.Offer ->
+                offerStateFactory.createEntry(state, input, isRecovery = false)
 
             else -> null
         }

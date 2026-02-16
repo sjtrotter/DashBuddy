@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.data.pay
 
-import cloud.trotter.dashbuddy.pipeline.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,8 +43,8 @@ class PayParser @Inject constructor() {
             }
 
             // 2. Detect Rows (Container logic)
-            val titleNode = node.children.find { child -> titleIds.any { child.hasId(it) } }
-            val valueNode = node.children.find { child -> valueIds.any { child.hasId(it) } }
+            val titleNode = node.children.find { child -> titleIds.any { child.matchesId(it) } }
+            val valueNode = node.children.find { child -> valueIds.any { child.matchesId(it) } }
 
             // Debug: Check if we found anything resembling a row
             if (titleNode != null || valueNode != null) {
@@ -70,7 +70,7 @@ class PayParser @Inject constructor() {
                     // Partial Match Check
                     // Filter out known ignored nodes like the headline total itself
                     val isIgnored =
-                        node.children.any { child -> ignoredIds.any { child.hasId(it) } }
+                        node.children.any { child -> ignoredIds.any { child.matchesId(it) } }
 
                     if (!isIgnored) {
                         Timber.w(
