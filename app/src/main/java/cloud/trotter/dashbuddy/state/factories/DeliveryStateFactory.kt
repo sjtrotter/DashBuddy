@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.state.factories
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
+import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
@@ -41,7 +42,9 @@ class DeliveryStateFactory @Inject constructor() {
                     )
                 )
             )
-            effects.add(AppEffect.UpdateBubble("Heading to Customer"))
+            val customer = input.customerNameHash?.take(6) ?: "Customer"
+            val persona = ChatPersona.Customer(customer)
+            effects.add(AppEffect.UpdateBubble("Heading to $customer", persona))
         }
 
         return Transition(newState, effects)
