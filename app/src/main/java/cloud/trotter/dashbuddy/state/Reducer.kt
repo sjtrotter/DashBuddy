@@ -166,15 +166,15 @@ class Reducer @Inject constructor(
                 AppStateV2.OnDelivery::class.java
             )
 
-            is ScreenInfo.DeliveryCompleted -> pack(
+            is ScreenInfo.DeliverySummary -> pack(
                 postDeliveryStateFactory.createEntry(state, input, isRecovery = true),
                 AppStateV2.PostDelivery::class.java
             )
-
-            is ScreenInfo.DeliverySummaryCollapsed -> pack(
-                postDeliveryStateFactory.createEntry(state, input, isRecovery = true),
-                AppStateV2.PostDelivery::class.java
-            )
+//
+//            is ScreenInfo.DeliverySummaryCollapsed -> pack(
+//                postDeliveryStateFactory.createEntry(state, input, isRecovery = true),
+//                AppStateV2.PostDelivery::class.java
+//            )
 
             is ScreenInfo.DashSummary -> pack(
                 summaryStateFactory.createEntry(state, input, isRecovery = true),
