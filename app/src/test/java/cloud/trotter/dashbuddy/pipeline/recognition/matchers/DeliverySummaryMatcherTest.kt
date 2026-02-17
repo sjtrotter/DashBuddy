@@ -496,15 +496,19 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val result = matcher.matches(root!!)
 
         assertNotNull("Should match the screen", result)
-        assertTrue("Should be Collapsed state", result is ScreenInfo.DeliverySummaryCollapsed)
+        assertTrue("Should be DeliverySummary", result is ScreenInfo.DeliverySummary)
+        assertTrue(
+            "Screen should be COLLAPSED",
+            result?.screen == Screen.DELIVERY_SUMMARY_COLLAPSED
+        )
 
-        val info = result as ScreenInfo.DeliverySummaryCollapsed
+        val info = result as ScreenInfo.DeliverySummary
         val clickedButton = info.expandButton
         assertNotNull("Must return a click target", clickedButton)
 
         // --- THE CRITICAL ASSERTION ---
         // Verify the clicked button is the sibling of "This offer", NOT "This dash so far"
-        val parent = clickedButton.parent
+        val parent = clickedButton?.parent
         assertNotNull(parent)
 
         // Check the parent's other children for the text "This offer" (via the title container)
@@ -530,10 +534,11 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 
         val result = matcher.matches(root!!)
 
-        assertNotNull("Should match EXPANDED screen", result)
-        assertTrue("Result should be DeliveryCompleted", result is ScreenInfo.DeliveryCompleted)
+        assertNotNull("Should match, not be null", result)
+        assertTrue("Result should be DeliverySummary", result is ScreenInfo.DeliverySummary)
+        assertTrue("Screen should be EXPANDED", result?.screen == Screen.DELIVERY_SUMMARY_EXPANDED)
 
-        val info = result as ScreenInfo.DeliveryCompleted
+        val info = result as ScreenInfo.DeliverySummary
         assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
 
         val pay = info.parsedPay
@@ -543,7 +548,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         // Tip (Walgreens): $5.00
         // Total: $8.00
 
-        assertEquals("Total Base Pay", 3.00, pay.totalBasePay, 0.01)
+        assertEquals("Total Base Pay", 3.00, pay?.totalBasePay!!, 0.01)
         assertEquals("Total Tip", 5.00, pay.totalTip, 0.01)
         assertEquals("Total Pay", 8.00, pay.total, 0.01)
     }
@@ -555,10 +560,11 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 
         val result = matcher.matches(root!!)
 
-        assertNotNull("Should match EXPANDED screen", result)
-        assertTrue("Result should be DeliveryCompleted", result is ScreenInfo.DeliveryCompleted)
+        assertNotNull("Should match, not be null", result)
+        assertTrue("Result should be DeliverySummary", result is ScreenInfo.DeliverySummary)
+        assertTrue("Screen should be EXPANDED", result?.screen == Screen.DELIVERY_SUMMARY_EXPANDED)
 
-        val info = result as ScreenInfo.DeliveryCompleted
+        val info = result as ScreenInfo.DeliverySummary
         assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
 
         val pay = info.parsedPay
@@ -568,7 +574,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         // Tip (Walgreens): $5.00
         // Total: $8.00
 
-        assertEquals("Total Base Pay", 6.00, pay.totalBasePay, 0.01)
+        assertEquals("Total Base Pay", 6.00, pay?.totalBasePay!!, 0.01)
         assertEquals("Total Tip", 5.00, pay.totalTip, 0.01)
         assertEquals("Total Pay", 11.00, pay.total, 0.01)
     }
@@ -580,10 +586,11 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 
         val result = matcher.matches(root!!)
 
-        assertNotNull("Should match EXPANDED screen", result)
-        assertTrue("Result should be DeliveryCompleted", result is ScreenInfo.DeliveryCompleted)
+        assertNotNull("Should match, not be null", result)
+        assertTrue("Result should be DeliverySummary", result is ScreenInfo.DeliverySummary)
+        assertTrue("Screen should be EXPANDED", result?.screen == Screen.DELIVERY_SUMMARY_EXPANDED)
 
-        val info = result as ScreenInfo.DeliveryCompleted
+        val info = result as ScreenInfo.DeliverySummary
         assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
 
         val pay = info.parsedPay
@@ -593,7 +600,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         // Tip (Walgreens): $5.00
         // Total: $8.00
 
-        assertEquals("Total Base Pay", 6.75, pay.totalBasePay, 0.01)
+        assertEquals("Total Base Pay", 6.75, pay?.totalBasePay!!, 0.01)
         assertEquals("Total Tip", 4.0, pay.totalTip, 0.01)
         assertEquals("Total Pay", 10.75, pay.total, 0.01)
     }
@@ -605,15 +612,16 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 
         val result = matcher.matches(root!!)
 
-        assertNotNull("Should match EXPANDED screen", result)
-        assertTrue("Result should be DeliveryCompleted", result is ScreenInfo.DeliveryCompleted)
+        assertNotNull("Should match, not be null", result)
+        assertTrue("Result should be DeliverySummary", result is ScreenInfo.DeliverySummary)
+        assertTrue("Screen should be EXPANDED", result?.screen == Screen.DELIVERY_SUMMARY_EXPANDED)
 
-        val info = result as ScreenInfo.DeliveryCompleted
+        val info = result as ScreenInfo.DeliverySummary
         assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
 
         val pay = info.parsedPay
 
-        assertEquals("Total Base Pay", 17.25, pay.totalBasePay, 0.01)
+        assertEquals("Total Base Pay", 17.25, pay?.totalBasePay!!, 0.01)
         assertEquals("Total Tip", 5.50, pay.totalTip, 0.01)
         assertEquals("Total Pay", 22.75, pay.total, 0.01)
     }
@@ -623,14 +631,14 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(rightButtonLog)
 
         assertNotNull(root)
-        val result = matcher.matches(root!!) as ScreenInfo.DeliverySummaryCollapsed
+        val result = matcher.matches(root!!) as ScreenInfo.DeliverySummary
 
         // 3. The "Smoking Gun" Assertion
         // If this passes, it is mathematically impossible that we clicked the wrong list.
         assertEquals(
             "Matcher picked the wrong expand button!",
             "RIGHT_BUTTON",
-            result.expandButton.text
+            result.expandButton?.text
         )
     }
 }

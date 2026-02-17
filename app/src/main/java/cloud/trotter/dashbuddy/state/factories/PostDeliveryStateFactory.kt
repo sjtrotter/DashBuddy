@@ -2,12 +2,9 @@ package cloud.trotter.dashbuddy.state.factories
 
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
-import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
-import cloud.trotter.dashbuddy.state.model.TimeoutType
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.util.UtilityFunctions
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,54 +16,43 @@ class PostDeliveryStateFactory @Inject constructor() {
         input: ScreenInfo,
         isRecovery: Boolean
     ): Transition {
+        // Initialize clean state
+        val baseState = AppStateV2.PostDelivery(
+            dashId = oldState.dashId
+        )
+
+        // Pre-populate if we have data immediately
         return when (input) {
-            is ScreenInfo.DeliverySummaryCollapsed -> createStabilizingEntry(oldState)
-            is ScreenInfo.DeliveryCompleted -> createVerifyingEntry(
-                oldState,
-                input,
-                clickSent = false
-            )
-
-            else -> {
-                Timber.e("Invalid entry to PostDelivery: ${input::class.simpleName}")
-                Transition(oldState)
+            is ScreenInfo.DeliverySummary -> {
+                val pay = input.parsedPay
+                if (pay != null) {
+                    val merchants = extractMerchants(pay)
+                    Transition(
+                        baseState.copy(
+                            parsedPay = pay,
+                            totalPay = pay.total,
+                            merchantNames = merchants,
+                            summaryText = "Paid: ${UtilityFunctions.formatCurrency(pay.total)}"
+                        )
+                    )
+                } else {
+                    // We only have the header total
+                    val total = input.totalPay
+                    Transition(
+                        baseState.copy(
+                            totalPay = total,
+                            summaryText = if (total > 0) "Paid: ${
+                                UtilityFunctions.formatCurrency(
+                                    total
+                                )
+                            }" else "Processing..."
+                        )
+                    )
+                }
             }
+
+            else -> Transition(baseState)
         }
-    }
-
-    // Extracted from StabilizingPhase.transitionTo
-    private fun createStabilizingEntry(oldState: AppStateV2): Transition {
-        val newState = AppStateV2.PostDelivery(
-            dashId = oldState.dashId,
-            phase = AppStateV2.PostDelivery.Phase.STABILIZING
-        )
-        return Transition(
-            newState,
-            listOf(AppEffect.ScheduleTimeout(500, TimeoutType.EXPAND_STABILITY))
-        )
-    }
-
-    // Extracted from VerifyingPhase.transitionTo
-    private fun createVerifyingEntry(
-        oldState: AppStateV2,
-        input: ScreenInfo.DeliveryCompleted,
-        clickSent: Boolean
-    ): Transition {
-        val merchants = extractMerchants(input.parsedPay)
-
-        val newState = AppStateV2.PostDelivery(
-            dashId = oldState.dashId,
-            phase = AppStateV2.PostDelivery.Phase.VERIFYING,
-            parsedPay = input.parsedPay,
-            merchantNames = merchants,
-            summaryText = "Paid: ${UtilityFunctions.formatCurrency(input.parsedPay.total)}"
-        )
-
-        val waitTime = if (clickSent) 2000L else 1000L
-        return Transition(
-            newState,
-            listOf(AppEffect.ScheduleTimeout(waitTime, TimeoutType.VERIFY_PAY))
-        )
     }
 
     private fun extractMerchants(parsedPay: ParsedPay): String {

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state.reducers.offer
+package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.data.event.AppEventType
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
@@ -14,7 +14,6 @@ import cloud.trotter.dashbuddy.state.factories.OfferStateFactory
 import cloud.trotter.dashbuddy.state.factories.PickupStateFactory
 import cloud.trotter.dashbuddy.state.factories.PostDeliveryStateFactory
 import cloud.trotter.dashbuddy.state.model.Transition
-import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
 import javax.inject.Inject
 import javax.inject.Singleton
 
