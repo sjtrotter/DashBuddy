@@ -6,6 +6,8 @@ import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
+import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
+import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory
@@ -31,8 +33,20 @@ class PostDeliveryReducer @Inject constructor(
         private const val GLITCH_RETRY_DELAY = 1500L
     }
 
-    fun reduce(state: AppStateV2.PostDelivery, input: ScreenInfo): Transition? {
+    // --- NEW CONTRACT: Handle ANY StateEvent ---
+    fun reduce(state: AppStateV2.PostDelivery, event: StateEvent): Transition? {
+        return when (event) {
+            is ScreenUpdateEvent -> {
+                val input = event.screenInfo ?: return null
+                handleScreenUpdate(state, input)
+            }
 
+            is TimeoutEvent -> handleTimeout(state, event)
+            else -> null
+        }
+    }
+
+    private fun handleScreenUpdate(state: AppStateV2.PostDelivery, input: ScreenInfo): Transition? {
         // 1. EXIT LOGIC: User has left the screen.
         val exitTransition = checkForExit(state, input)
         if (exitTransition != null) {
@@ -44,6 +58,26 @@ class PostDeliveryReducer @Inject constructor(
             is ScreenInfo.DeliverySummary -> handleDeliverySummary(state, input)
             else -> null
         }
+    }
+
+    private fun handleTimeout(state: AppStateV2.PostDelivery, event: TimeoutEvent): Transition? {
+        if (event.type == TimeoutType.VERIFY_PAY) {
+            // The timer expired. This means 1.5s passed since we clicked.
+
+            // If we have data now, great! Do nothing.
+            if (state.parsedPay != null) {
+                return Transition(state)
+            }
+
+            // If we are still here and data is missing, the click failed (glitch).
+            // Reset 'clickSent' to false. This allows the reducer (in the next frame)
+            // to enter the "canRetry" block again.
+            Timber.w("Expansion verification failed. Resetting click flag to retry.")
+            return Transition(
+                state.copy(clickSent = false)
+            )
+        }
+        return null
     }
 
     private fun handleDeliverySummary(
@@ -112,26 +146,6 @@ class PostDeliveryReducer @Inject constructor(
         }
 
         return if (newState != state) Transition(newState) else null
-    }
-
-    fun onTimeout(state: AppStateV2.PostDelivery, event: TimeoutEvent): Transition {
-        if (event.type == TimeoutType.VERIFY_PAY) {
-            // The timer expired. This means 1.5s passed since we clicked.
-
-            // If we have data now, great! Do nothing.
-            if (state.parsedPay != null) {
-                return Transition(state)
-            }
-
-            // If we are still here and data is missing, the click failed (glitch).
-            // Reset 'clickSent' to false. This allows the reducer (in the next frame)
-            // to enter the "canRetry" block again.
-            Timber.w("Expansion verification failed. Resetting click flag to retry.")
-            return Transition(
-                state.copy(clickSent = false)
-            )
-        }
-        return Transition(state)
     }
 
     // --- Helpers ---

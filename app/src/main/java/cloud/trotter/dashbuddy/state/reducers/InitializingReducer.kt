@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppStateV2
+import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
+import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.IdleStateFactory
 import cloud.trotter.dashbuddy.state.model.Transition
@@ -13,7 +15,23 @@ class InitializingReducer @Inject constructor(
     private val idleStateFactory: IdleStateFactory,
     private val awaitingStateFactory: AwaitingStateFactory,
 ) {
-    fun reduce(state: AppStateV2.Initializing, input: ScreenInfo): Transition? {
+
+    // --- NEW CONTRACT: Handle ANY StateEvent ---
+    fun reduce(state: AppStateV2.Initializing, event: StateEvent): Transition? {
+        return when (event) {
+            is ScreenUpdateEvent -> {
+                val input = event.screenInfo ?: return null
+                handleScreenUpdate(state, input)
+            }
+            // Initializing doesn't usually handle clicks/timeouts
+            else -> null
+        }
+    }
+
+    private fun handleScreenUpdate(
+        state: AppStateV2.Initializing,
+        input: ScreenInfo
+    ): Transition? {
         fun request(result: Transition) = result
 
         return when (input) {

@@ -8,6 +8,9 @@ import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processi
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.event.ClickEvent
+import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
+import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
+import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DashPausedStateFactory
 import cloud.trotter.dashbuddy.state.factories.OfferStateFactory
@@ -26,15 +29,65 @@ class OfferReducer @Inject constructor(
     private val postDeliveryStateFactory: PostDeliveryStateFactory,
 ) {
 
-    fun reduce(state: AppStateV2.OfferPresented, input: ScreenInfo): Transition? {
+    // --- NEW CONTRACT: Handle ANY StateEvent ---
+    fun reduce(state: AppStateV2.OfferPresented, event: StateEvent): Transition? {
+        return when (event) {
+            is ScreenUpdateEvent -> {
+                val input = event.screenInfo ?: return null
+                handleScreenUpdate(state, input)
+            }
 
+            is ClickEvent -> handleClick(state, event)
+            is OfferEvaluationEvent -> handleEvaluation(state, event)
+            else -> null
+        }
+    }
+
+    private fun handleEvaluation(
+        state: AppStateV2.OfferPresented,
+        event: OfferEvaluationEvent
+    ): Transition {
+        // Placeholder for future logic (e.g. updating bubble with score)
+        // For now, we just acknowledge it to prevent fall-through.
+        return Transition(state)
+    }
+
+    private fun handleClick(state: AppStateV2.OfferPresented, event: ClickEvent): Transition {
+        // 1. Update State (So resolveOutcome works later when the screen changes)
+        val newClickInfo = state.currentScreen to event.action
+
+        // 2. Immediate Feedback (Optimistic UI)
+        val bubbleEffect = when (event.action) {
+            ClickAction.ACCEPT_OFFER -> AppEffect.UpdateBubble(
+                "Offer Accepted",
+                persona = ChatPersona.Dispatcher
+            )
+
+            ClickAction.DECLINE_OFFER -> AppEffect.UpdateBubble(
+                "Offer Declined",
+                persona = ChatPersona.Dispatcher
+            )
+
+            else -> null
+        }
+
+        return Transition(
+            newState = state.copy(clickInfo = newClickInfo),
+            effects = listOfNotNull(bubbleEffect)
+        )
+    }
+
+    private fun handleScreenUpdate(
+        state: AppStateV2.OfferPresented,
+        input: ScreenInfo
+    ): Transition? {
         // Helper to simplify logging + transitioning
         fun request(
             factoryResult: Transition,
             outcome: AppEventType,
             description: String
         ): Transition {
-            // 1. Log the event (Database) - Always happens on transition
+            // 1. Log the event (Database)
             val logEvent = ReducerUtils.createEvent(
                 state.dashId,
                 outcome,
@@ -46,9 +99,6 @@ class OfferReducer @Inject constructor(
             effects.add(AppEffect.LogEvent(logEvent))
 
             // 3. Timeout Bubble Logic
-            // If the outcome is TIMEOUT, the user never clicked anything,
-            // so we haven't shown a bubble yet. We must show it now.
-            // (If it was ACCEPT/DECLINE, we already showed it in onClick, so we skip it here)
             if (outcome == AppEventType.OFFER_TIMEOUT) {
                 effects.add(
                     AppEffect.UpdateBubble(
@@ -122,7 +172,8 @@ class OfferReducer @Inject constructor(
             }
 
             // EXIT PATH 5: Return to Post-Delivery (e.g. Add-on Offer ignored)
-            is ScreenInfo.DeliveryCompleted -> {
+            // UPDATED: Use Unified DeliverySummary
+            is ScreenInfo.DeliverySummary -> {
                 val outcome = resolveOutcome(state)
                 request(
                     postDeliveryStateFactory.createEntry(state, input, isRecovery = false),
@@ -143,34 +194,5 @@ class OfferReducer @Inject constructor(
             ClickAction.DECLINE_OFFER -> AppEventType.OFFER_DECLINED
             else -> AppEventType.OFFER_TIMEOUT
         }
-    }
-
-    /**
-     * Captures the user's intent AND provides immediate feedback (Optimistic UI).
-     */
-    fun onClick(state: AppStateV2.OfferPresented, event: ClickEvent): Transition {
-        // 1. Update State (So resolveOutcome works later when the screen changes)
-        val newClickInfo = state.currentScreen to event.action
-
-        // 2. Immediate Feedback
-        // We fire the bubble NOW. We don't wait for the app to navigate.
-        val bubbleEffect = when (event.action) {
-            ClickAction.ACCEPT_OFFER -> AppEffect.UpdateBubble(
-                "Offer Accepted",
-                persona = ChatPersona.Dispatcher
-            )
-
-            ClickAction.DECLINE_OFFER -> AppEffect.UpdateBubble(
-                "Offer Declined",
-                persona = ChatPersona.Dispatcher
-            )
-
-            else -> null
-        }
-
-        return Transition(
-            newState = state.copy(clickInfo = newClickInfo),
-            effects = listOfNotNull(bubbleEffect) // Fire immediately!
-        )
     }
 }

@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppStateV2
+import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
+import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.factories.DashPausedStateFactory
 import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory
 import cloud.trotter.dashbuddy.state.factories.IdleStateFactory
@@ -24,7 +26,23 @@ class AwaitingReducer @Inject constructor(
     private val dashPausedStateFactory: DashPausedStateFactory
 ) {
 
+    // --- NEW CONTRACT: Handle ANY StateEvent ---
     fun reduce(
+        state: AppStateV2.AwaitingOffer,
+        event: StateEvent
+    ): Transition? {
+        return when (event) {
+            is ScreenUpdateEvent -> {
+                val input = event.screenInfo ?: return null
+                handleScreenUpdate(state, input)
+            }
+            // Awaiting state generally doesn't handle Clicks/Timeouts directly,
+            // but the structure is here if you need it later.
+            else -> null
+        }
+    }
+
+    private fun handleScreenUpdate(
         state: AppStateV2.AwaitingOffer,
         input: ScreenInfo
     ): Transition? {
@@ -58,11 +76,8 @@ class AwaitingReducer @Inject constructor(
                 dashPausedStateFactory.createEntry(state, input, isRecovery = false)
             )
 
-            is ScreenInfo.DeliverySummaryCollapsed -> request(
-                postDeliveryStateFactory.createEntry(state, input, isRecovery = false)
-            )
-
-            is ScreenInfo.DeliveryCompleted -> request(
+            // UPDATED: Use Unified DeliverySummary
+            is ScreenInfo.DeliverySummary -> request(
                 postDeliveryStateFactory.createEntry(state, input, isRecovery = false)
             )
 
