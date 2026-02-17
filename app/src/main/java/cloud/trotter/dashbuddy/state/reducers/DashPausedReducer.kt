@@ -4,6 +4,9 @@ import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processi
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
+import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
+import cloud.trotter.dashbuddy.state.event.StateEvent
+import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.IdleStateFactory
 import cloud.trotter.dashbuddy.state.factories.PostDeliveryStateFactory
@@ -21,10 +24,24 @@ class DashPausedReducer @Inject constructor(
     private val postDeliveryStateFactory: PostDeliveryStateFactory,
 ) {
 
-    fun onTimeout(state: AppStateV2, type: TimeoutType): Transition {
+    // --- NEW CONTRACT: Handle ANY StateEvent ---
+    fun reduce(state: AppStateV2.DashPaused, event: StateEvent): Transition? {
+        return when (event) {
+            is ScreenUpdateEvent -> {
+                val input = event.screenInfo ?: return null
+                handleScreenUpdate(state, input)
+            }
+
+            is TimeoutEvent -> handleTimeout(state, event.type)
+            else -> null
+        }
+    }
+
+    private fun handleTimeout(state: AppStateV2.DashPaused, type: TimeoutType): Transition? {
         return when (type) {
             TimeoutType.DASH_PAUSED_SAFETY -> {
                 // Force transition to Idle (Dash Ended by Timeout)
+                // We construct a synthetic input to satisfy the factory
                 val dummyInput = ScreenInfo.IdleMap(Screen.MAIN_MAP_IDLE, "Unknown", null)
                 val result = idleStateFactory.createEntry(state, dummyInput, isRecovery = false)
 
@@ -34,11 +51,11 @@ class DashPausedReducer @Inject constructor(
                 )
             }
 
-            else -> Transition(state)
+            else -> null // Let other timeouts fall through or return null if unhandled
         }
     }
 
-    fun reduce(state: AppStateV2.DashPaused, input: ScreenInfo): Transition? {
+    private fun handleScreenUpdate(state: AppStateV2.DashPaused, input: ScreenInfo): Transition? {
 
         // Helper: Must cancel the timer on exit
         fun request(factoryResult: Transition): Transition {
@@ -48,11 +65,13 @@ class DashPausedReducer @Inject constructor(
         }
 
         return when (input) {
+            // Internal Update
             is ScreenInfo.DashPaused -> {
                 val newEnd = System.currentTimeMillis() + input.remainingMillis
                 Transition(state.copy(durationMs = newEnd))
             }
 
+            // Exits
             is ScreenInfo.WaitingForOffer -> request(
                 awaitingStateFactory.createEntry(state, input, isRecovery = false)
             )
@@ -65,7 +84,8 @@ class DashPausedReducer @Inject constructor(
                 idleStateFactory.createEntry(state, input, isRecovery = false)
             )
 
-            is ScreenInfo.DeliveryCompleted -> request(
+            // UPDATED: Use Unified DeliverySummary
+            is ScreenInfo.DeliverySummary -> request(
                 postDeliveryStateFactory.createEntry(state, input, isRecovery = false)
             )
 

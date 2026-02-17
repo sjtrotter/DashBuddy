@@ -1,14 +1,10 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.state.effects.NotificationHandler
-import cloud.trotter.dashbuddy.state.event.ClickEvent
 import cloud.trotter.dashbuddy.state.event.NotificationEvent
-import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.state.event.StateEvent
-import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DashPausedStateFactory
 import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory
@@ -27,7 +23,6 @@ import cloud.trotter.dashbuddy.state.reducers.OfferReducer
 import cloud.trotter.dashbuddy.state.reducers.PickupReducer
 import cloud.trotter.dashbuddy.state.reducers.PostDeliveryReducer
 import cloud.trotter.dashbuddy.state.reducers.SummaryReducer
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,67 +49,44 @@ class Reducer @Inject constructor(
     private val summaryStateFactory: SummaryStateFactory,
     private val dashPausedStateFactory: DashPausedStateFactory,
 
+    // Global Interceptors
     private val notificationHandler: NotificationHandler,
 ) {
 
-    // Main entry point - acts as the Orchestrator
+    // Main entry point - acts as the Dumb Router
     fun reduce(currentState: AppStateV2, stateEvent: StateEvent): Transition {
-        // Since we removed TransitionTo effect, we simply delegate logic.
-        // The Child Reducers and Factories now return the 'newState' directly in the Transition object.
-        return delegateReduce(currentState, stateEvent)
-    }
 
-    private fun delegateReduce(currentState: AppStateV2, stateEvent: StateEvent): Transition {
-        return when (stateEvent) {
-            is ClickEvent -> {
-                return when (currentState) {
-                    is AppStateV2.OfferPresented -> offerReducer.onClick(currentState, stateEvent)
-                    else -> Transition(currentState)
-                }
-            }
-
-            is OfferEvaluationEvent -> Transition(currentState)
-
-            is NotificationEvent -> notificationHandler.handle(currentState, stateEvent)
-
-            is TimeoutEvent -> {
-                Timber.i("Handling Timeout: ${stateEvent.type}")
-                when (currentState) {
-                    is AppStateV2.DashPaused ->
-                        dashPausedReducer.onTimeout(currentState, stateEvent.type)
-
-                    is AppStateV2.PostDelivery ->
-                        postDeliveryReducer.onTimeout(currentState, stateEvent)
-
-                    else -> Transition(currentState)
-                }
-            }
-
-            is ScreenUpdateEvent -> {
-                val input = stateEvent.screenInfo ?: return Transition(currentState)
-                if (input.screen == Screen.UNKNOWN) return Transition(currentState)
-
-                // A. Sequential Logic (Child Reducers)
-                val sequential = when (currentState) {
-                    is AppStateV2.Initializing -> initializingReducer.reduce(currentState, input)
-                    is AppStateV2.IdleOffline -> idleReducer.reduce(currentState, input)
-                    is AppStateV2.AwaitingOffer -> awaitingReducer.reduce(currentState, input)
-                    is AppStateV2.OfferPresented -> offerReducer.reduce(currentState, input)
-                    is AppStateV2.OnPickup -> pickupReducer.reduce(currentState, input)
-                    is AppStateV2.OnDelivery -> deliveryReducer.reduce(currentState, input)
-                    is AppStateV2.PostDelivery -> postDeliveryReducer.reduce(currentState, input)
-                    is AppStateV2.PostDash -> summaryReducer.reduce(currentState, input)
-                    is AppStateV2.DashPaused -> dashPausedReducer.reduce(currentState, input)
-                    is AppStateV2.PausedOrInterrupted -> null
-                }
-
-                if (sequential != null) return sequential
-
-                // B. Anchor Logic (Global Recovery)
-                // If specific reducer didn't handle it, check if we drifted to a known anchor state
-                checkAnchors(currentState, input) ?: Transition(currentState)
-            }
+        // 1. GLOBAL INTERCEPTORS
+        // Handle events that apply to ANY state (e.g. Tips)
+        if (stateEvent is NotificationEvent) {
+            return notificationHandler.handle(currentState, stateEvent)
         }
+
+        // 2. DELEGATION (Pass generic event to specific child)
+        val transition = when (currentState) {
+            is AppStateV2.Initializing -> initializingReducer.reduce(currentState, stateEvent)
+            is AppStateV2.IdleOffline -> idleReducer.reduce(currentState, stateEvent)
+            is AppStateV2.AwaitingOffer -> awaitingReducer.reduce(currentState, stateEvent)
+            is AppStateV2.OfferPresented -> offerReducer.reduce(currentState, stateEvent)
+            is AppStateV2.OnPickup -> pickupReducer.reduce(currentState, stateEvent)
+            is AppStateV2.OnDelivery -> deliveryReducer.reduce(currentState, stateEvent)
+            is AppStateV2.PostDelivery -> postDeliveryReducer.reduce(currentState, stateEvent)
+            is AppStateV2.PostDash -> summaryReducer.reduce(currentState, stateEvent)
+            is AppStateV2.DashPaused -> dashPausedReducer.reduce(currentState, stateEvent)
+            is AppStateV2.PausedOrInterrupted -> null
+        }
+
+        // If child handled it, return immediately
+        if (transition != null) return transition
+
+        // 3. ANCHOR RECOVERY (Global Safety Net)
+        // If the child didn't handle it, check if we drifted to a known anchor screen.
+        // This only applies if the event provided new ScreenInfo.
+        if (stateEvent is ScreenUpdateEvent && stateEvent.screenInfo != null) {
+            return checkAnchors(currentState, stateEvent.screenInfo) ?: Transition(currentState)
+        }
+
+        return Transition(currentState)
     }
 
     private fun checkAnchors(state: AppStateV2, input: ScreenInfo): Transition? {
@@ -170,11 +142,6 @@ class Reducer @Inject constructor(
                 postDeliveryStateFactory.createEntry(state, input, isRecovery = true),
                 AppStateV2.PostDelivery::class.java
             )
-//
-//            is ScreenInfo.DeliverySummaryCollapsed -> pack(
-//                postDeliveryStateFactory.createEntry(state, input, isRecovery = true),
-//                AppStateV2.PostDelivery::class.java
-//            )
 
             is ScreenInfo.DashSummary -> pack(
                 summaryStateFactory.createEntry(state, input, isRecovery = true),
