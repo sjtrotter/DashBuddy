@@ -41,6 +41,7 @@ class PostDeliveryStateFactory @Inject constructor() {
                     Transition(
                         baseState.copy(
                             totalPay = total,
+                            latestExpandButton = input.expandButton,
                             summaryText = if (total > 0) "Paid: ${
                                 UtilityFunctions.formatCurrency(
                                     total

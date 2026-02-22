@@ -17,7 +17,7 @@ object SnapshotMatcherGenerator {
             .distinct()
             .take(3) // Pick top 3 IDs
 
-        val texts = candidates.filter { !it.text.isNullOrBlank() && it.text!!.length > 5 }
+        val texts = candidates.filter { !it.text.isNullOrBlank() && it.text.length > 5 }
             .mapNotNull { it.text }
             .distinct()
             .take(2) // Pick top 2 Texts

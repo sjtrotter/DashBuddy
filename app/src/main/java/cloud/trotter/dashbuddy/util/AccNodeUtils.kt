@@ -3,8 +3,6 @@ package cloud.trotter.dashbuddy.util
 import android.view.accessibility.AccessibilityNodeInfo
 import timber.log.Timber
 
-//import cloud.trotter.dashbuddy.log.Logger as Log
-
 /**
  * A utility object for performing actions on AccessibilityNodeInfo objects.
  */

@@ -30,6 +30,7 @@ class DefaultEffectHandler @Inject constructor(
     private val bubbleManager: BubbleManager,
     private val offerEvaluator: OfferEvaluator,
     private val screenShotHandler: ScreenShotHandler,
+    private val uiInteractionHandler: UiInteractionHandler,
 ) : EffectHandler {
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -106,8 +107,7 @@ class DefaultEffectHandler @Inject constructor(
 
             is AppEffect.ClickNode -> {
                 Timber.i("Executing Effect: Clicking Node (${effect.description})")
-                // Robust utility call
-                cloud.trotter.dashbuddy.util.AccNodeUtils.clickNode(effect.node.originalNode)
+                uiInteractionHandler.performClick(effect.node, effect.description)
             }
 
             is AppEffect.Delayed -> {

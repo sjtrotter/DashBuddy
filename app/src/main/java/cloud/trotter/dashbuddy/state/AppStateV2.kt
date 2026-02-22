@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.data.event.status.PickupStatus
 import cloud.trotter.dashbuddy.data.pay.ParsedPay
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked.ClickAction
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
+import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 
 sealed class AppStateV2 {
     abstract val timestamp: Long
@@ -84,7 +85,9 @@ sealed class AppStateV2 {
         val totalPay: Double = 0.0,
         val merchantNames: String = "Delivery",
         val summaryText: String = "Processing...",
-
+        @Transient
+        val latestExpandButton: UiNode? = null,
+        val settleTimerStarted: Boolean = false,
         // Automation State (Closed Loop)
         val clickSent: Boolean = false,
         val clickAttempts: Int = 0
