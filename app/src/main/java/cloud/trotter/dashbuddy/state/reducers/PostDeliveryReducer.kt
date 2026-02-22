@@ -31,9 +31,9 @@ class PostDeliveryReducer @Inject constructor(
     companion object {
         private const val MAX_CLICK_ATTEMPTS = 3
         private const val GLITCH_RETRY_DELAY = 1500L
+        private const val UI_SETTLE_DELAY = 500L // New: Let the slide-in finish
     }
 
-    // --- NEW CONTRACT: Handle ANY StateEvent ---
     fun reduce(state: AppStateV2.PostDelivery, event: StateEvent): Transition? {
         return when (event) {
             is ScreenUpdateEvent -> {
@@ -61,23 +61,49 @@ class PostDeliveryReducer @Inject constructor(
     }
 
     private fun handleTimeout(state: AppStateV2.PostDelivery, event: TimeoutEvent): Transition? {
-        if (event.type == TimeoutType.VERIFY_PAY) {
-            // The timer expired. This means 1.5s passed since we clicked.
+        // If we already succeeded, ignore any lingering timeouts
+        if (state.parsedPay != null) return null
 
-            // If we have data now, great! Do nothing.
-            if (state.parsedPay != null) {
-                return Transition(state)
+        return when (event.type) {
+            TimeoutType.SETTLE_UI -> {
+                // Timer finished! Fire the click using the freshest node we saved.
+                if (state.latestExpandButton != null && state.clickAttempts < MAX_CLICK_ATTEMPTS) {
+                    val nextAttempt = state.clickAttempts + 1
+                    Timber.d("Settle Timer Expired. Clicking Expand. Attempt $nextAttempt / $MAX_CLICK_ATTEMPTS")
+
+                    Transition(
+                        newState = state.copy(
+                            clickSent = true,
+                            clickAttempts = nextAttempt
+                        ),
+                        effects = listOf(
+                            AppEffect.ClickNode(state.latestExpandButton, "Expand Details"),
+                            AppEffect.ScheduleTimeout(
+                                GLITCH_RETRY_DELAY,
+                                TimeoutType.RETRY_CLICK_TIMEOUT
+                            )
+                        )
+                    )
+                } else {
+                    null
+                }
             }
 
-            // If we are still here and data is missing, the click failed (glitch).
-            // Reset 'clickSent' to false. This allows the reducer (in the next frame)
-            // to enter the "canRetry" block again.
-            Timber.w("Expansion verification failed. Resetting click flag to retry.")
-            return Transition(
-                state.copy(clickSent = false)
-            )
+            TimeoutType.RETRY_CLICK_TIMEOUT -> {
+                Timber.w("Expansion verification failed. Resetting loop to retry.")
+                // The click failed or the app lagged.
+                // Resetting these flags allows the next ScreenUpdateEvent to start the 500ms timer again.
+                Transition(
+                    state.copy(
+                        settleTimerStarted = false,
+                        clickSent = false,
+                        latestExpandButton = null // Clear stale reference
+                    )
+                )
+            }
+
+            else -> null
         }
-        return null
     }
 
     private fun handleDeliverySummary(
@@ -85,30 +111,35 @@ class PostDeliveryReducer @Inject constructor(
         input: ScreenInfo.DeliverySummary
     ): Transition? {
         var newState = state
+        val effects = mutableListOf<AppEffect>()
 
-        // --- PHASE 1: Data Accumulation ---
-        // If we found a full breakdown, capture it immediately.
+        // Always keep the absolute freshest reference to the button
+        if (newState.parsedPay == null && input.expandButton != null) {
+            newState = newState.copy(latestExpandButton = input.expandButton)
+        }
+
+        // --- PHASE 1: Data Accumulation (The Ground Truth) ---
         if (input.parsedPay != null && input.parsedPay != state.parsedPay) {
             newState = newState.copy(
                 parsedPay = input.parsedPay,
                 totalPay = input.parsedPay.total,
                 summaryText = "Saved: ${UtilityFunctions.formatCurrency(input.parsedPay.total)}"
             )
-            // Optional: Show bubble immediately
-            return Transition(
-                newState,
-                listOf(
-                    AppEffect.UpdateBubble(
-                        generateReceiptText(
-                            input.parsedPay,
-                            input.parsedPay.total
-                        ), ChatPersona.Earnings
-                    )
+
+            // We got the data! Kill the polling loop.
+            effects.add(AppEffect.CancelTimeout(TimeoutType.SETTLE_UI))
+            effects.add(AppEffect.CancelTimeout(TimeoutType.RETRY_CLICK_TIMEOUT))
+
+            effects.add(
+                AppEffect.UpdateBubble(
+                    generateReceiptText(input.parsedPay, input.parsedPay.total),
+                    ChatPersona.Earnings
                 )
             )
+            return Transition(newState, effects)
         }
 
-        // If we haven't found a breakdown, at least grab the header total.
+        // Fallback for header total
         if (state.parsedPay == null && input.totalPay > 0 && state.totalPay == 0.0) {
             newState = newState.copy(
                 totalPay = input.totalPay,
@@ -116,36 +147,22 @@ class PostDeliveryReducer @Inject constructor(
             )
         }
 
-        // --- PHASE 2: Automation (Closed Loop) ---
-        // Goal: Get the breakdown (parsedPay).
-        if (newState.parsedPay == null) {
+        // --- PHASE 2: Automation (Start the Settle Timer) ---
+        if (newState.parsedPay == null && input.expandButton != null) {
+            val canRetry = state.clickAttempts < MAX_CLICK_ATTEMPTS
 
-            // We see a button...
-            if (input.expandButton != null) {
-                val canRetry = state.clickAttempts < MAX_CLICK_ATTEMPTS
-
-                // Logic: If we haven't clicked recently (clickSent == false), AND we have retries left.
-                if (!state.clickSent && canRetry) {
-                    val nextAttempt = state.clickAttempts + 1
-                    Timber.d("Clicking Expand. Attempt $nextAttempt / $MAX_CLICK_ATTEMPTS")
-
-                    return Transition(
-                        newState.copy(
-                            clickSent = true,
-                            clickAttempts = nextAttempt
-                        ),
-                        listOf(
-                            // Action
-                            AppEffect.ClickNode(input.expandButton, "Expand Details"),
-                            // Observation: Check back in 1.5s
-                            AppEffect.ScheduleTimeout(GLITCH_RETRY_DELAY, TimeoutType.VERIFY_PAY)
-                        )
-                    )
-                }
+            // If we haven't started waiting yet, start the 500ms clock.
+            if (!newState.settleTimerStarted && !newState.clickSent && canRetry) {
+                Timber.d("UI detected. Starting UI Settle Timer ($UI_SETTLE_DELAY ms)")
+                newState = newState.copy(settleTimerStarted = true)
+                effects.add(AppEffect.ScheduleTimeout(UI_SETTLE_DELAY, TimeoutType.SETTLE_UI))
             }
         }
 
-        return if (newState != state) Transition(newState) else null
+        return if (newState != state || effects.isNotEmpty()) Transition(
+            newState,
+            effects
+        ) else null
     }
 
     // --- Helpers ---
@@ -178,8 +195,13 @@ class PostDeliveryReducer @Inject constructor(
             )
         )
 
+        // Safety: Clean up any running timers when leaving the state
         return exitTransition.copy(
-            effects = listOf(logEffect) + exitTransition.effects
+            effects = listOf(
+                logEffect,
+                AppEffect.CancelTimeout(TimeoutType.SETTLE_UI),
+                AppEffect.CancelTimeout(TimeoutType.RETRY_CLICK_TIMEOUT)
+            ) + exitTransition.effects
         )
     }
 

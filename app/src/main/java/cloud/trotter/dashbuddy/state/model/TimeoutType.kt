@@ -4,12 +4,9 @@ enum class TimeoutType {
     // Global Safety
     DASH_PAUSED_SAFETY,
 
-    // Expanding Reducer
-    EXPAND_STABILITY,
-    EXPAND_CLICK_FAIL,
-
     // Post Delivery Reducer
-    VERIFY_PAY,
+    RETRY_CLICK_TIMEOUT,
+    SETTLE_UI,
 
     // Offer Reducer (Decline Flow)
     DECLINE_POPUP_WAIT,

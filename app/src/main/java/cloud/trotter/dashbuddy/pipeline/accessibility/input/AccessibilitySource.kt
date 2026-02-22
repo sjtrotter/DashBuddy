@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.input
 import android.accessibilityservice.AccessibilityService
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import kotlinx.coroutines.channels.BufferOverflow
@@ -26,6 +27,15 @@ class AccessibilitySource @Inject constructor() {
         _events.tryEmit(event)
     }
 
+    /**
+     * Exposes the raw, live native root for surgical strikes (clicks).
+     * The caller is responsible for calling recycle() on the returned node!
+     */
+    fun getLiveNativeRoot(): AccessibilityNodeInfo? {
+        val service = serviceRef?.get() ?: return null
+        return service.rootInActiveWindow
+    }
+
     // --- 2. The Service Connection (Pull) ---
     // We use a WeakReference so we don't leak the Service if it restarts
     private var serviceRef: WeakReference<AccessibilityService>? = null
@@ -40,10 +50,7 @@ class AccessibilitySource @Inject constructor() {
      */
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun getCurrentRootNode(): UiNode? {
-        val service = serviceRef?.get() ?: return null
-
-        // This is the heavy system call. We only make it when the Pipeline asks.
-        val root = service.rootInActiveWindow ?: return null
+        val root = getLiveNativeRoot() ?: return null
 
         return try {
             UiNode.from(root)

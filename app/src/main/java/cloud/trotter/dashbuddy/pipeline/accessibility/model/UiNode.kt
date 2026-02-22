@@ -69,6 +69,48 @@ data class UiNode(
         return json.encodeToString(this)
     }
 
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as UiNode
+
+        // Compare unique identifiers instead of the recursive tree.
+        // Text comparisons: text, contentDescription, stateDescription
+        if (text != other.text) return false
+        if (contentDescription != other.contentDescription) return false
+        if (stateDescription != other.stateDescription) return false
+        // ID and className
+        if (viewIdResourceName != other.viewIdResourceName) return false
+        if (className != other.className) return false
+        // Flags
+        if (isClickable != other.isClickable) return false
+        if (isEnabled != other.isEnabled) return false
+        if (isChecked != other.isChecked) return false
+        // Bounds
+        if (boundsInScreen != other.boundsInScreen) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        // Hash based on unique identifiers
+        // Texts: text, contentDescription, stateDescription
+        var result = text?.hashCode() ?: 0
+        result = 31 * result + (contentDescription?.hashCode() ?: 0)
+        result = 31 * result + (stateDescription?.hashCode() ?: 0)
+        // ID and className
+        result = 31 * result + (viewIdResourceName?.hashCode() ?: 0)
+        result = 31 * result + (className?.hashCode() ?: 0)
+        // Flags
+        result = 31 * result + isClickable.hashCode()
+        result = 31 * result + isEnabled.hashCode()
+        result = 31 * result + isChecked.hashCode()
+        // Bounds
+        result = 31 * result + boundsInScreen.hashCode()
+        return result
+    }
+
     // ========================================================================
     //  STRICT MATCHERS (Check ONLY this node)
     //  Use these for specific logic or inside the recursive functions.
