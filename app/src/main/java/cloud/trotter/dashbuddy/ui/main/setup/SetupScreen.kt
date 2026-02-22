@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.setup
+package cloud.trotter.dashbuddy.ui.main.setup
 
 import android.Manifest
 import android.content.Intent
@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import cloud.trotter.dashbuddy.ui.dashboard.DashboardViewModel
+import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardViewModel
 import cloud.trotter.dashbuddy.util.PermissionUtils
 
 @Composable

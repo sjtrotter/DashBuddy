@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.navigation
+package cloud.trotter.dashbuddy.ui.main.navigation
 
 sealed class Screen(val route: String) {
     // Top Level

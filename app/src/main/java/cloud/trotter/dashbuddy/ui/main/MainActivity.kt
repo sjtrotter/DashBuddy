@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.activities
+package cloud.trotter.dashbuddy.ui.main
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -22,12 +22,12 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import cloud.trotter.dashbuddy.ui.dashboard.DashboardScreen
-import cloud.trotter.dashbuddy.ui.navigation.Screen
-import cloud.trotter.dashbuddy.ui.settings.EvidenceSettingsScreen
-import cloud.trotter.dashbuddy.ui.settings.SettingsHomeScreen
-import cloud.trotter.dashbuddy.ui.settings.StrategySettingsScreen
-import cloud.trotter.dashbuddy.ui.setup.SetupScreen
+import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
+import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
+import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
+import cloud.trotter.dashbuddy.ui.main.settings.StrategySettingsScreen
+import cloud.trotter.dashbuddy.ui.main.setup.SetupScreen
 import cloud.trotter.dashbuddy.ui.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
 

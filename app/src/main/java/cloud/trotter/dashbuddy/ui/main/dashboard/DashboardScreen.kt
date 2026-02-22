@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.dashboard
+package cloud.trotter.dashbuddy.ui.main.dashboard
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer

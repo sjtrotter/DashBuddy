@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.settings.components
+package cloud.trotter.dashbuddy.ui.main.settings.components
 
 import android.annotation.SuppressLint
 import android.graphics.Canvas
@@ -6,6 +6,7 @@ import android.graphics.Rect
 import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.view.children
+import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceGroupAdapter
 import androidx.recyclerview.widget.RecyclerView
 import cloud.trotter.dashbuddy.R
@@ -61,6 +62,6 @@ class GroupedRectDecoration(private val pixelPadding: Int) : RecyclerView.ItemDe
     private fun isCategory(adapter: PreferenceGroupAdapter, position: Int): Boolean {
         if (position < 0 || position >= adapter.itemCount) return true // Boundary counts as break
         val item = adapter.getItem(position)
-        return item is androidx.preference.PreferenceCategory
+        return item is PreferenceCategory
     }
 }

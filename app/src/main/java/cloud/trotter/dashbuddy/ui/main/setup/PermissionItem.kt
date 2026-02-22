@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.setup
+package cloud.trotter.dashbuddy.ui.main.setup
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row

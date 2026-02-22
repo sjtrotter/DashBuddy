@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.settings
+package cloud.trotter.dashbuddy.ui.main.settings
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -39,7 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.BuildConfig
-import cloud.trotter.dashbuddy.ui.navigation.Screen // <--- IMPORT THIS
+import cloud.trotter.dashbuddy.ui.main.navigation.Screen // <--- IMPORT THIS
 
 @Composable
 fun SettingsHomeScreen(

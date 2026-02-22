@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.ui.dashboard
+package cloud.trotter.dashbuddy.ui.main.dashboard
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
