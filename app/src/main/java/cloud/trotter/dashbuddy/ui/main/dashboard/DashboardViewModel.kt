@@ -63,7 +63,7 @@ class DashboardViewModel @Inject constructor(
         // We start a "Test Session" for them to play with
         bubbleManager.startDash("manual_test_${System.currentTimeMillis()}")
         bubbleManager.postMessage(
-            "Welcome to DashBuddy! The HUD is active.",
+            text = "Welcome to DashBuddy! Click the bubble icon ( ↘️ ) in the corner of this notification to keep me on screen.",
             ChatPersona.Dispatcher,
             expand = true
         )

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -17,6 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -31,27 +31,46 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.dashbuddy.util.PermissionUtils
 
 @Composable
 fun DashboardScreen(
-    // 1. Inject the ViewModel via Hilt
     viewModel: DashboardViewModel = hiltViewModel(),
     onNavigateToSettings: () -> Unit,
-    onNavigateToSetup: () -> Unit
+    onNavigateToWizard: () -> Unit
 ) {
     val context = LocalContext.current
     val isFirstRun by viewModel.isFirstRun.collectAsState()
 
-    // Permissions State
-    // (We keep this local because it depends on the Activity Context re-checking)
+    // Data State
     var hasPermissions by remember { mutableStateOf<Boolean?>(null) }
+
+    // UI State for the Bottom Sheet
+    var showPermissionSheet by remember { mutableStateOf(false) }
 
     // Check permissions every time the screen resumes
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        hasPermissions = PermissionUtils.hasAllEssentialPermissions(context)
-        // Note: We don't need to check isFirstRun here anymore,
-        // the ViewModel stream handles that automatically!
+        val granted = PermissionUtils.hasAllEssentialPermissions(context)
+        hasPermissions = granted
+
+        // Only trigger the sheet to open.
+        // We let the sheet itself tell us when it's done closing!
+        if (!granted) {
+            showPermissionSheet = true
+        }
+    }
+
+    // ========================================================================
+    // THE GATE: If permissions are missing, force the Bottom Sheet to appear
+    // ========================================================================
+    if (showPermissionSheet) {
+        PermissionsBottomSheet(
+            onAllGranted = {
+                // This callback is fired AFTER the sheet finishes its slide-down animation
+                showPermissionSheet = false
+            }
+        )
     }
 
     Scaffold(
@@ -70,12 +89,45 @@ fun DashboardScreen(
             when {
                 // CASE 0: Loading (New) - Prevents the flicker
                 hasPermissions == null -> {
-                    // Render nothing, or a simple Box with a CircularProgressIndicator if you want
-                    // For now, an empty state is smoother than a wrong state.
+                    // Empty state while calculating
                 }
 
-                // CASE 1: Everything is Perfect
-                hasPermissions == true -> {
+                // CASE 1: Permissions Missing (The Gate)
+                // Even though the bottom sheet is showing over this, we render a scary card
+                // in the background so the app state makes sense.
+                hasPermissions == false -> {
+                    StatusCard(
+                        title = "Permissions Required",
+                        subtitle = "DashBuddy needs your attention. Please complete the popup.",
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        textColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+
+                // CASE 2: Permissions Granted, BUT it's the First Run (The Guide)
+                hasPermissions == true && isFirstRun -> {
+                    StatusCard(
+                        title = "You have the Keys!",
+                        subtitle = "Permissions granted. Let's personalize your strategy so DashBuddy knows what offers you like.",
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onNavigateToWizard
+                    ) { Text("Personalize Strategy") }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { viewModel.completeSetup() } // Skips wizard entirely
+                    ) { Text("Skip for now") }
+                }
+
+                // CASE 3: Everything is Perfect (Permissions + Not First Run)
+                hasPermissions == true && !isFirstRun -> {
                     StatusCard(
                         title = "Ready to Dash",
                         subtitle = "All systems go.",
@@ -88,36 +140,6 @@ fun DashboardScreen(
                             viewModel.showWelcomeBubble()
                         }
                     ) { Text("Show Bubble") }
-                }
-
-                // CASE 2: First Run (Friendly Welcome)
-                isFirstRun -> {
-                    StatusCard(
-                        title = "Welcome to DashBuddy!",
-                        subtitle = "Let's get you set up with the permissions needed to automate your dash.",
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onNavigateToSetup
-                    ) { Text("Start Setup") }
-                }
-
-                // CASE 3: Permissions Broken (Error State)
-                else -> {
-                    StatusCard(
-                        title = "Permissions Missing",
-                        subtitle = "Something essential was disabled. Please fix it to continue.",
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        textColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        onClick = onNavigateToSetup
-                    ) { Text("Fix Permissions") }
                 }
             }
         }

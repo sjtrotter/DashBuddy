@@ -27,7 +27,7 @@ import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.ui.main.settings.StrategySettingsScreen
-import cloud.trotter.dashbuddy.ui.main.setup.SetupScreen
+import cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardScreen
 import cloud.trotter.dashbuddy.ui.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -52,19 +52,19 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Dashboard.route) {
                             DashboardScreen(
                                 onNavigateToSettings = {
-                                    // Navigate to the new Settings Home Menu
                                     navController.navigate(Screen.SettingsHome.route)
                                 },
-                                onNavigateToSetup = {
-                                    navController.navigate(Screen.Setup.route)
+                                onNavigateToWizard = { // <-- UPDATED CALLBACK
+                                    navController.navigate(Screen.Wizard.route)
                                 }
                             )
                         }
 
-                        // --- SETUP FLOW ---
-                        composable(Screen.Setup.route) {
-                            SetupScreen(
-                                onSetupComplete = {
+                        // --- INTERACTIVE WIZARD FLOW ---
+                        composable(Screen.Wizard.route) {
+                            WizardScreen(
+                                onComplete = {
+                                    // Pops the wizard off the stack, returning to the Dashboard
                                     navController.popBackStack()
                                 }
                             )
@@ -84,7 +84,6 @@ class MainActivity : ComponentActivity() {
 
                         // 2. Strategy (The Visualizer)
                         composable(Screen.StrategySettings.route) {
-                            // This is your existing complex screen with the sliders
                             StrategySettingsScreen()
                         }
 
@@ -95,7 +94,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // 4. General Settings (Placeholder)
+                        // 4. General Settings
                         composable(Screen.GeneralSettings.route) {
                             PlaceholderScreen(
                                 title = "General Settings",
@@ -103,7 +102,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // 5. Developer Options (Placeholder)
+                        // 5. Developer Options
                         composable(Screen.DeveloperSettings.route) {
                             PlaceholderScreen(
                                 title = "Developer Options",

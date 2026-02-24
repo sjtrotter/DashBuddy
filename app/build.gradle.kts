@@ -1,4 +1,11 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -14,11 +21,16 @@ android {
 
     defaultConfig {
         applicationId = "cloud.trotter.dashbuddy"
-        minSdk = 30
+        minSdk = 36
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.230.0"
+        buildConfigField(
+            "String",
+            "EIA_API_KEY",
+            localProperties.getProperty("EIA_API_KEY") ?: "\"\""
+        )
     }
 
     buildTypes {
@@ -75,10 +87,15 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.google.code.gson)
     implementation(libs.hilt.android)
+    implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.material)
     implementation(libs.play.services.location)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
     implementation(libs.reorderable)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.robolectric)
     implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))

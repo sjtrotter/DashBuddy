@@ -5,7 +5,7 @@
     <string name="save_log">Save Log</string>
     <string name="share_log">Share Log</string>
     <string name="accessibility_service_description">"     DashBuddy reads information from the Dasher app screen to automatically track your miles, log offer details, and record your earnings.      This service never collects passwords or personal information. This permission is required to enable automatic tracking features. "</string>
-    <!-- Strings for the Permissions Screen -->
+
     <string name="welcome">Welcome to DashBuddy!</string>
     <string name="dashbuddy_explainer">We make tracking your dashes easier!         Interactions in this app happen within its Bubble.  In addition to notifications, we also need to ask for some other permissions.         Please enable the following services:</string>
 
@@ -45,6 +45,64 @@
     <string name="all_systems_go">All systems go.</string>
     <string name="settings">Settings</string>
     <string name="edit">Edit</string>
-    <string name="description_goes_here">Description goes here...</string>
+    <string name="description_goes_here">Description goes here…</string>
     <string name="settings_content_frame">settings content frame</string>
+
+    <string name="perm_privacy_guarantee">Your data stays on your device. We never sell your data.</string>
+    <string name="perm_under_the_hood_title">How does this work?</string>
+
+    <string name="perm_title_accessibility">Screen Automation (Accessibility)</string>
+    <string name="perm_pitch_accessibility">To act as your co-pilot, DashBuddy needs to read Dasher offers as they pop up and tap the screen to accept or decline them based on your rules.</string>
+    <string name="perm_hood_accessibility">We use Android\'s AccessibilityService. Our engine only looks at the screen when the Dasher app is open. Strict \'Sensitive Screen\' blockers completely shut down our \'eyes\' if you open your bank app or personal texts.</string>
+    <string name="perm_action_accessibility">Enable Automation</string>
+
+    <string name="perm_title_listener">Tip Radar (Notifications)</string>
+    <string name="perm_pitch_listener">To catch tip updates and other notifications, DashBuddy needs to read your Dasher notifications.</string>
+    <string name="perm_hood_listener">We use the NotificationListenerService to listen *only* for Dasher notifications. We instantly ignore notifications from messages, emails, or other personal apps.</string>
+    <string name="perm_action_listener">Enable Radar</string>
+
+    <string name="perm_title_location">Background Location</string>
+    <string name="perm_pitch_location">DashBuddy tracks your miles while you are dashing so you can calculate your actual profit after gas and wear-and-tear.</string>
+    <string name="perm_hood_location">We only ping your GPS while an active Dash is running. Once you hit \'End Dash\', our Odometer shuts down completely to save your battery and protect your privacy.</string>
+    <string name="perm_action_location">Grant Location</string>
+
+    <string name="perm_title_post_notif">Bubble Alerts</string>
+    <string name="perm_pitch_post_notif">DashBuddy uses notifications to keep the floating Bubble alive and to alert you of high-paying offers.</string>
+    <string name="perm_hood_post_notif">This is a standard Android permission to ensure the OS doesn\'t kill the app in the background while you are working. For full functionality, enabling the bubble is recommended!</string>
+    <string name="perm_action_post_notif">Enable Alerts</string>
+
+    <string name="perm_title_bubbles">Floating HUD</string>
+    <string name="perm_pitch_bubbles">To show you the math over the DoorDash app, DashBuddy needs permission to pop out into a floating window.</string>
+    <string name="perm_action_bubbles">Enable Bubbles</string>
+    <string name="perm_hood_bubbles">Android heavily restricts floating windows. Please ensure you select "All conversations can bubble" on the next screen so the HUD works automatically!</string>
+
+    <string name="perm_toast_bubbles_hint">Select \"All conversations can bubble\"</string>
+    <string name="perm_toast_accessibility_hint">Look for \'DashBuddy\' and turn it on.</string>
+
+    <string name="wizard_phase_economy">Part 1: The Economy</string>
+    <string name="wizard_phase_strategy">Part 2: The Strategy</string>
+
+    <string name="wizard_title_mpg">Vehicle Efficiency</string>
+    <string name="wizard_desc_mpg">What is your car\'s average MPG? We use this to calculate your actual profit after gas expenses.</string>
+
+    <string name="wizard_title_vehicle">Your Vehicle</string>
+    <string name="wizard_desc_vehicle">What car are you driving? We will automatically look up its fuel efficiency to calculate your true profit.</string>
+
+    <string name="wizard_title_gas">Gas Price</string>
+    <string name="wizard_desc_gas">What are you currently paying per gallon?</string>
+
+    <string name="wizard_title_goal">Primary Goal</string>
+    <string name="wizard_desc_goal">Are you cherry-picking for maximum profit, or trying to protect your Platinum/Top Dasher status?</string>
+
+    <string name="wizard_title_shopping">Shop &amp; Deliver</string>
+    <string name="wizard_desc_shopping">Do you currently accept Red Card shopping orders?</string>
+
+    <string name="wizard_title_min_payout">Minimum Payout</string>
+    <string name="wizard_desc_min_payout">What is the absolute lowest payout you will even look at before declining?</string>
+
+    <string name="wizard_title_hourly">Target Hourly</string>
+    <string name="wizard_desc_hourly">What is your target active hourly wage?</string>
+
+    <string name="wizard_title_distance">Max Distance</string>
+    <string name="wizard_desc_distance">How many miles are you willing to drive for a single order?</string>
 </resources>

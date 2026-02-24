@@ -3,7 +3,7 @@ package cloud.trotter.dashbuddy.ui.main.navigation
 sealed class Screen(val route: String) {
     // Top Level
     data object Dashboard : Screen("dashboard")
-    data object Setup : Screen("setup")
+    data object Wizard : Screen("wizard")
 
     // Settings Hierarchy
     // Note: We use "settings/home" as the landing page for settings

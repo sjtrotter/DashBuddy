@@ -1,25 +1,104 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">DashBuddy</string>
-    <string name="share_log">Compartir registro</string>
-    <string name="accessibility_service_description">DashBuddy lee la información de la pantalla de la app Dasher para rastrear automáticamente tus millas, registrar los detalles de las ofertas y tus ganancias. Este servicio nunca recopila contraseñas ni información personal. Se requiere este permiso para habilitar las funciones de rastreo automático.</string>
     <string name="this_is_the_bubble">¡Esta es la burbuja!</string>
     <string name="log_level">Nivel de registro</string>
     <string name="save_log">Guardar registro</string>
+    <string name="share_log">Compartir registro</string>
+    <string name="accessibility_service_description">DashBuddy lee la información de la pantalla de la app Dasher para rastrear automáticamente tus millas, registrar los detalles de las ofertas y tus ganancias. Este servicio nunca recopila contraseñas ni información personal. Se requiere este permiso para habilitar las funciones de rastreo automático.</string>
+
     <string name="welcome">¡Bienvenido a DashBuddy!</string>
     <string name="dashbuddy_explainer">¡Te facilitamos el seguimiento de tus carreras! Las interacciones en esta app ocurren dentro de su burbuja. Además de las notificaciones, también necesitamos solicitar otros permisos. Por favor, activa los siguientes servicios:</string>
+
     <string name="post_notifications">Notificaciones de publicaciones</string>
     <string name="post_notifications_explainer">Permite que DashBuddy muestre alertas importantes y el botón de burbuja flotante. Tras habilitarlo, toque el botón de burbuja en la notificación para iniciar el servicio.</string>
+
     <string name="accessibility_service">Servicio de Accesibilidad</string>
     <string name="accessibility_service_explainer">Este es el permiso principal. Permite que la aplicación lea el texto de la pantalla de Dasher para registrar automáticamente los detalles de las ofertas, seguir el progreso del dash y proporcionar superposiciones.</string>
+
     <string name="location_access">Acceso a la ubicación</string>
     <string name="location_access_explainer">Necesario para el seguimiento del kilometraje a efectos fiscales y para proporcionar estimaciones precisas del tiempo de entrega. Su ubicación solo se registra durante una carrera activa.</string>
+
     <string name="notification_access">Acceso a notificaciones</string>
     <string name="notification_access_explainer">Se requiere para ver las notificaciones de nuevos pedidos y las alertas de propinas cuando la aplicación Dasher está en segundo plano. Esto ayuda a garantizar que no se pierdan oportunidades.</string>
-    <string name="enable">permitir</string>
+
+    <string name="enable">Permitir</string>
     <string name="enabled">Activada</string>
-    <string name="total">Total</string>
+    <string name="start_time_stop_time" translatable="false">%1$s - %2$s</string>
     <string name="orders_miles">%1$d Pedidos • %2$s Millas</string>
+    <string name="offer_summary_status" translatable="false">%1$s: %2$s</string>
+    <string name="total">Total</string>
     <string name="order_at_store_and_status">Ordene en %1$s: %2$s</string>
     <string name="show_bubble">Mostrar burbuja</string>
+
+    <string name="total_miles_format" translatable="false">Total: %1$s</string>
+    <string name="actual_stats_time" translatable="false">Time: %1$s</string>
+    <string name="actual_stats_distance" translatable="false">Distance: %1$s</string>
+    <string name="actual_stats_per_mile" translatable="false">$/mi: %1$s</string>
+    <string name="actual_stats_per_hour" translatable="false">$/hr: %1$s</string>
+    <string name="doordash_pays" translatable="false">Doordash Pay(s)</string>
+    <string name="no_pay_data">Sin datos de pago</string>
+    <string name="previous">Anterior</string>
+    <string name="next">Siguiente</string>
+    <string name="export">Exportar</string>
+    <string name="go_to_current">Ir al actual</string>
+    <string name="active_total">Activo/Total</string>
+    <string name="ready_to_dash">Listo para trabajar</string>
+    <string name="all_systems_go">Todos los sistemas listos.</string>
+    <string name="settings">Ajustes</string>
+    <string name="edit">Editar</string>
+    <string name="description_goes_here">La descripción va aquí…</string>
+    <string name="settings_content_frame" translatable="false">settings content frame</string>
+
+    <string name="perm_privacy_guarantee">Tu información se queda en tu dispositivo. Nunca vendemos tus datos.</string>
+    <string name="perm_under_the_hood_title">¿Cómo funciona esto?</string>
+
+    <string name="perm_title_accessibility">Automatización de Pantalla (Accesibilidad)</string>
+    <string name="perm_pitch_accessibility">Para actuar como tu copiloto, DashBuddy necesita leer las ofertas de Dasher a medida que aparecen y tocar la pantalla para aceptarlas o rechazarlas según tus reglas.</string>
+    <string name="perm_hood_accessibility">Usamos el Servicio de Accesibilidad de Android. Nuestro motor solo observa la pantalla cuando la aplicación Dasher está abierta. Nuestros bloqueadores de \'Pantalla Sensible\' apagan nuestros \'ojos\' inmediatamente si abres tu aplicación bancaria o mensajes personales.</string>
+    <string name="perm_action_accessibility">Habilitar Automatización</string>
+
+    <string name="perm_title_listener">Radar de Propinas (Notificaciones)</string>
+    <string name="perm_pitch_listener">Para capturar actualizaciones de propinas y otras notificaciones, DashBuddy necesita leer tus notificaciones de Dasher.</string>
+    <string name="perm_hood_listener">Usamos el servicio de notificaciones para escuchar *solo* alertas de Dasher. Ignoramos al instante mensajes personales o correos electrónicos.</string>
+    <string name="perm_action_listener">Habilitar Radar</string>
+
+    <string name="perm_title_location">Ubicación en Segundo Plano</string>
+    <string name="perm_pitch_location">DashBuddy rastrea tus millas mientras trabajas para que puedas calcular tu ganancia real después de la gasolina y el desgaste.</string>
+    <string name="perm_hood_location">Solo usamos tu GPS durante una carrera activa. Al finalizar el dash, nuestro odómetro se apaga completamente para ahorrar batería y proteger tu privacidad.</string>
+    <string name="perm_action_location">Permitir Ubicación</string>
+
+    <string name="perm_title_post_notif">Alertas de Burbuja</string>
+    <string name="perm_pitch_post_notif">DashBuddy usa notificaciones para mantener activa la burbuja flotante y avisarte de ofertas bien pagadas.</string>
+    <string name="perm_hood_post_notif">Este es un permiso estándar de Android para asegurar que el sistema no cierre la aplicación en segundo plano mientras trabajas. ¡Para obtener la funcionalidad completa, se recomienda habilitar la burbuja!</string>
+    <string name="perm_action_post_notif">Habilitar Alertas</string>
+
+    <string name="perm_toast_accessibility_hint">Busca \'DashBuddy\' y actívalo.</string>
+
+    <string name="wizard_phase_economy">Parte 1: La Economía</string>
+    <string name="wizard_phase_strategy">Parte 2: La Estrategia</string>
+
+    <string name="wizard_title_mpg">Eficiencia del Vehículo</string>
+    <string name="wizard_desc_mpg">¿Cuál es el MPG (millas por galón) promedio de tu auto? Usamos esto para calcular tu ganancia real después de los gastos de gasolina.</string>
+
+    <string name="wizard_title_vehicle">Tu Vehículo</string>
+    <string name="wizard_desc_vehicle">¿Qué auto conduces? Buscaremos automáticamente su eficiencia de combustible para calcular tu ganancia real.</string>
+
+    <string name="wizard_title_gas">Precio de Gasolina</string>
+    <string name="wizard_desc_gas">¿Cuánto pagas actualmente por galón?</string>
+
+    <string name="wizard_title_goal">Objetivo Principal</string>
+    <string name="wizard_desc_goal">¿Estás seleccionando ofertas detalladamente para obtener la máxima ganancia, o intentas proteger tu estado de Platinum/Top Dasher?</string>
+
+    <string name="wizard_title_shopping">Comprar y Entregar</string>
+    <string name="wizard_desc_shopping">¿Actualmente aceptas pedidos de compras con la Tarjeta Roja (Red Card)?</string>
+
+    <string name="wizard_title_min_payout">Pago Mínimo</string>
+    <string name="wizard_desc_min_payout">¿Cuál es el pago mínimo absoluto que estás dispuesto a considerar antes de rechazarlo?</string>
+
+    <string name="wizard_title_hourly">Meta por Hora</string>
+    <string name="wizard_desc_hourly">¿Cuál es tu meta de ganancia activa por hora?</string>
+
+    <string name="wizard_title_distance">Distancia Máxima</string>
+    <string name="wizard_desc_distance">¿Cuántas millas estás dispuesto a conducir por un solo pedido?</string>
 </resources>

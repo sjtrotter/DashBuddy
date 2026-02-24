@@ -65,10 +65,6 @@ class BubbleManager @Inject constructor(
         showNotification(text, persona, expand)
     }
 
-    // ... (createChannel, pushDynamicShortcut, showNotification methods are same as previous response) ...
-    // Note: Copy them from the previous complete BubbleManager example to complete this file.
-    // I can reprint them if you need, but they are standard Android boilerplate.
-
     private fun createChannel() {
         val channel = NotificationChannel(
             channelId, "DashBuddy Stream", NotificationManager.IMPORTANCE_HIGH
@@ -101,15 +97,18 @@ class BubbleManager @Inject constructor(
     }
 
     private fun showNotification(text: CharSequence, persona: ChatPersona, expand: Boolean) {
-        val androidPerson = Person.Builder()
+        val senderPerson = Person.Builder()
             .setName(persona.name)
             .setKey(persona.id)
             .setIcon(IconCompat.createWithResource(context, persona.iconResId))
-            .setBot(persona is ChatPersona.Dispatcher)
+//            .setBot(persona is ChatPersona.Dispatcher)
             .build()
 
+        val intentWithAction = Intent(context, BubbleActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+        }
         val bubbleIntent = PendingIntent.getActivity(
-            context, 0, Intent(context, BubbleActivity::class.java),
+            context, 0, intentWithAction,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE, null
         )
 
@@ -122,17 +121,28 @@ class BubbleManager @Inject constructor(
             .setSuppressNotification(expand)
             .build()
 
-        val style = NotificationCompat.MessagingStyle(androidPerson)
+        val mainAppIntent =
+            context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
+        val contentIntent = PendingIntent.getActivity(
+            context, 1, mainAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val style = NotificationCompat.MessagingStyle(senderPerson)
             .setConversationTitle("Current Dash")
             .setGroupConversation(true)
-            .addMessage(text, System.currentTimeMillis(), androidPerson)
+            .addMessage(text, System.currentTimeMillis(), senderPerson)
 
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.bag_red_idle)
             .setStyle(style)
             .setBubbleMetadata(bubbleMetadata)
+            .setContentIntent(contentIntent)
             .setShortcutId(shortcutId)
+            .setLocusId(LocusIdCompat(shortcutId))
+            .addPerson(senderPerson)
             .setCategory(Notification.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .build()
 
         notificationManager.notify(1, notification)

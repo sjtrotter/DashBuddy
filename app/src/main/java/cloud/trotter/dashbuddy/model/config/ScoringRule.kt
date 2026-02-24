@@ -10,13 +10,13 @@ sealed class ScoringRule {
     abstract val id: String
     abstract val isEnabled: Boolean
 
-    // 1. The Standard Metric Rule (Pay, Distance, etc.)
     @Serializable
     data class MetricRule(
-        override val id: String, // e.g., "rule_pay_target"
-        override val isEnabled: Boolean = true,
-        val metricType: MetricType,    // Enum: PAYOUT, DOLLAR_PER_MILE, ACTIVE_HOURLY
-        val targetValue: Float   // The Slider Value (e.g., 15.0)
+        override val id: String,
+        override val isEnabled: Boolean = true, // TRUE = Show math on HUD
+        val metricType: MetricType,
+        val targetValue: Float,
+        val autoDeclineOnFail: Boolean = false // NEW: TRUE = Click the decline button for me
     ) : ScoringRule()
 
     // 2. The Store Rule (Future Proofing!)
