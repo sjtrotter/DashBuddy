@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.util
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
@@ -21,7 +22,8 @@ object PermissionUtils {
         return hasPostNotificationsPermission(context) &&
                 hasLocationPermission(context) &&
                 isAccessibilityServiceEnabled(context) &&
-                isNotificationListenerEnabled(context)
+                isNotificationListenerEnabled(context) &&
+                hasFullBubblePreference(context)
     }
 
     // Standard Runtime Permission
@@ -38,7 +40,7 @@ object PermissionUtils {
         return fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
     }
 
-    // THE IDIOMATIC WAY: Use AccessibilityManager
+    // Accessibility Permission
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
         val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
 
@@ -54,7 +56,7 @@ object PermissionUtils {
         }
     }
 
-    // Notification Listener Check (Still requires Secure Settings check, no Manager API for this yet)
+    // Notification Listener Check
     fun isNotificationListenerEnabled(context: Context): Boolean {
         val componentName = ComponentName(context, NotificationListener::class.java)
         val flat = android.provider.Settings.Secure.getString(
@@ -62,5 +64,13 @@ object PermissionUtils {
             "enabled_notification_listeners"
         )
         return flat?.contains(componentName.flattenToString()) == true
+    }
+
+    // Bubble Permissions
+    fun hasFullBubblePreference(context: Context): Boolean {
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        return notificationManager.bubblePreference == NotificationManager.BUBBLE_PREFERENCE_ALL
     }
 }

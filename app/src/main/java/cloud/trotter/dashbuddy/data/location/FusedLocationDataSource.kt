@@ -13,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -57,6 +58,17 @@ class FusedLocationDataSource @Inject constructor(
         awaitClose {
             Timber.i("🛑 Stopping GPS updates (Hardware Off)")
             fusedClient.removeLocationUpdates(callback)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    override suspend fun getLastKnownLocation(): Location? {
+        return try {
+            // This grabs the last cached location instantly without firing up the GPS chip
+            fusedClient.lastLocation.await()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get last known location")
+            null
         }
     }
 }

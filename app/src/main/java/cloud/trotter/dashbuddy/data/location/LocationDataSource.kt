@@ -13,4 +13,5 @@ interface LocationDataSource {
      * The GPS hardware is only active while this Flow is being collected.
      */
     val locationUpdates: Flow<Location>
+    suspend fun getLastKnownLocation(): Location?
 }
