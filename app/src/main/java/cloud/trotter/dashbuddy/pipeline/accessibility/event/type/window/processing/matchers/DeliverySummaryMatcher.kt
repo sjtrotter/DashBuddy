@@ -21,7 +21,7 @@ class DeliverySummaryMatcher @Inject constructor(
         // 1. Context Check
         val hasContext = node.hasNode {
             val text = it.text ?: ""
-            text.contains("This offer", ignoreCase = true) ||
+            text.contains("This offer", ignoreCase = false) ||
                     text.contains("Delivery Complete", ignoreCase = true)
         }
         if (!hasContext) return null

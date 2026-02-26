@@ -53,7 +53,7 @@ class DeliverySummaryCollapsedRegressionTest(
         val matcher = DeliverySummaryMatcher(parser)
 
         runTest(matcher) { result ->
-            val info = result as ScreenInfo.DeliverySummaryCollapsed
+            val info = result as ScreenInfo.DeliverySummary
 
             // If you have specific properties to check (like map location text),
             // you can log or assert them here.
