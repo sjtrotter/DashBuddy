@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.data.vehicle
 
 import cloud.trotter.dashbuddy.data.vehicle.api.FuelEconomyApi
 import cloud.trotter.dashbuddy.data.vehicle.api.dto.MenuItem
+import cloud.trotter.dashbuddy.data.vehicle.api.dto.VehicleDetailsResponse
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -60,6 +61,19 @@ class VehicleRepository @Inject constructor(
             details.combinedMpg
         } catch (e: Exception) {
             Timber.e(e, "Failed to fetch MPG for ID $vehicleId")
+            null
+        }
+    }
+
+    // Inside VehicleRepository.kt
+    // Rename and change the return type to the raw DTO (Assuming your DTO is named VehicleDetailsDto)
+    suspend fun getVehicleDetails(vehicleId: String): VehicleDetailsResponse? {
+        return try {
+            val details = api.getVehicleDetails(vehicleId = vehicleId)
+            Timber.d("Fetched Details for ID $vehicleId: MPG=${details.combinedMpg}, Fuel=${details.fuelType1}")
+            details
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to fetch Details for ID $vehicleId")
             null
         }
     }

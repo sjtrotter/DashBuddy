@@ -19,6 +19,7 @@ data class WizardState(
     val isGasPriceAuto: Boolean = true,
     val gasPrice: Float = 3.50f,
     val isFetchingGasPrice: Boolean = false,
+    val fetchedGasPrices: Map<FuelType, Float> = emptyMap(),
 
     // Strategy Variables
     val strategy: DashStrategy = DashStrategy.MANUAL,

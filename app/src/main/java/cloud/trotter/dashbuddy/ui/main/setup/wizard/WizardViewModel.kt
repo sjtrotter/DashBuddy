@@ -14,12 +14,16 @@ import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.VehicleType
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -60,6 +64,7 @@ class WizardViewModel @Inject constructor(
             val currentModel = settingsRepository.vehicleModel.first()
             val currentTrim = settingsRepository.vehicleTrim.first()
             val currentMpg = settingsRepository.estimatedMpg.first()
+            val currentFuelType = settingsRepository.fuelType.first()
             val currentGasAuto = settingsRepository.isGasPriceAuto.first()
             val currentGasPrice = settingsRepository.gasPrice.first()
             val currentProtectMode = settingsRepository.protectStatsMode.first()
@@ -86,6 +91,7 @@ class WizardViewModel @Inject constructor(
                     vehicleModel = currentModel,
                     vehicleTrim = currentTrim,
                     estimatedMpg = currentMpg,
+                    fuelType = currentFuelType,
                     isGasPriceAuto = currentGasAuto,
                     gasPrice = currentGasPrice,
                     strategy = currentStrategy,
@@ -154,13 +160,51 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch {
             val vehicleId =
                 _availableTrims.value.find { it.text == trimName }?.value ?: return@launch
-            val mpg = vehicleRepository.getCombinedMpg(vehicleId)
-            if (mpg != null) _state.update { it.copy(estimatedMpg = mpg) }
+
+            // Get both MPG and the raw Fuel String from the EPA
+            val details = vehicleRepository.getVehicleDetails(vehicleId)
+
+            if (details != null) {
+                // Map the EPA's string to our enum
+                val mappedFuelType = mapEpaFuelType(details.fuelType1)
+
+                _state.update { currentState ->
+                    val cachedPrice = currentState.fetchedGasPrices[mappedFuelType]
+                    val newPrice =
+                        if (currentState.isGasPriceAuto && cachedPrice != null) cachedPrice else currentState.gasPrice
+
+                    currentState.copy(
+                        estimatedMpg = details.combinedMpg ?: currentState.estimatedMpg,
+                        fuelType = mappedFuelType,
+                        gasPrice = newPrice
+                    )
+                }
+            }
+        }
+    }
+
+    private fun mapEpaFuelType(epaString: String?): FuelType {
+        if (epaString == null) return FuelType.REGULAR
+        val lower = epaString.lowercase(Locale.getDefault())
+        return when {
+            lower.contains("premium") -> FuelType.PREMIUM
+            lower.contains("midgrade") -> FuelType.MIDGRADE
+            lower.contains("diesel") -> FuelType.DIESEL
+            else -> FuelType.REGULAR
         }
     }
 
     fun updateFuelType(type: FuelType) {
-        _state.update { it.copy(fuelType = type) }
+        _state.update { currentState ->
+            val cachedPrice = currentState.fetchedGasPrices[type]
+            val newPrice =
+                if (currentState.isGasPriceAuto && cachedPrice != null) cachedPrice else currentState.gasPrice
+
+            currentState.copy(
+                fuelType = type,
+                gasPrice = newPrice
+            )
+        }
     }
 
     fun toggleAutoGasPrice(isAuto: Boolean) {
@@ -177,11 +221,28 @@ class WizardViewModel @Inject constructor(
 
         viewModelScope.launch {
             _state.update { it.copy(isFetchingGasPrice = true) }
-            val result = gasPriceRepository.fetchAndSaveCurrentGasPrice(_state.value.fuelType)
-            if (result.isSuccess) {
-                _state.update { it.copy(gasPrice = result.getOrNull() ?: 3.50f) }
+
+            val pricesMap = mutableMapOf<FuelType, Float>()
+
+            // Fire off all 4 network requests in parallel
+            coroutineScope {
+                FuelType.entries.map { fuel ->
+                    async {
+                        val result = gasPriceRepository.fetchGasPriceOnly(fuel)
+                        if (result.isSuccess) {
+                            pricesMap[fuel] = result.getOrNull()!!
+                        }
+                    }
+                }.awaitAll()
             }
-            _state.update { it.copy(isFetchingGasPrice = false) }
+
+            _state.update { currentState ->
+                currentState.copy(
+                    fetchedGasPrices = pricesMap,
+                    gasPrice = pricesMap[currentState.fuelType] ?: currentState.gasPrice,
+                    isFetchingGasPrice = false
+                )
+            }
         }
     }
 
@@ -220,27 +281,17 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch {
             val finalState = _state.value
 
-            settingsRepository.updateFuelType(finalState.fuelType) // <-- ADD THIS
+            settingsRepository.updateFuelType(finalState.fuelType)
 
             if (finalState.vehicleType == VehicleType.E_BIKE) {
                 settingsRepository.updateEconomySettings(
-                    "E-Bike",
-                    "E-Bike",
-                    "E-Bike",
-                    "",
-                    999f,
-                    false,
-                    0.0f
+                    "E-Bike", "E-Bike", "E-Bike", "", 999f, false, 0.0f
                 )
             } else {
                 settingsRepository.updateEconomySettings(
-                    finalState.vehicleYear,
-                    finalState.vehicleMake,
-                    finalState.vehicleModel,
-                    finalState.vehicleTrim,
-                    finalState.estimatedMpg,
-                    finalState.isGasPriceAuto,
-                    finalState.gasPrice
+                    finalState.vehicleYear, finalState.vehicleMake,
+                    finalState.vehicleModel, finalState.vehicleTrim,
+                    finalState.estimatedMpg, finalState.isGasPriceAuto, finalState.gasPrice
                 )
             }
 
@@ -248,7 +299,6 @@ class WizardViewModel @Inject constructor(
             val isPlatinum = finalState.strategy == DashStrategy.PROTECT_PLATINUM
 
             settingsRepository.setProtectStatsMode(isPlatinum)
-            // Master logic follows the strategy
             settingsRepository.setMasterAutomation(isCherryPicker)
             settingsRepository.updateAutomation(
                 autoAccept = false,
@@ -257,7 +307,6 @@ class WizardViewModel @Inject constructor(
             )
             settingsRepository.setAllowShopping(true)
 
-            // Individual rules follow the specific enforcement toggles
             val currentRules = settingsRepository.scoringRules.first().toMutableList()
             val updatedRules = currentRules.map { rule ->
                 if (rule is ScoringRule.MetricRule) {

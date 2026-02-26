@@ -2,19 +2,27 @@ package cloud.trotter.dashbuddy
 
 import android.app.Application
 import android.content.Context
-import android.os.Build
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.data.log.LogRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
 import cloud.trotter.dashbuddy.log.StateAwareTree
 import cloud.trotter.dashbuddy.state.StateManagerV2
+import cloud.trotter.dashbuddy.worker.DailyGasPriceWorker
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Provider
 
 @HiltAndroidApp
-class DashBuddyApplication : Application() {
+class DashBuddyApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var stateManagerV2: StateManagerV2
@@ -28,6 +36,9 @@ class DashBuddyApplication : Application() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    // Needed for Hilt to inject repositories into WorkManager classes
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
 
     // Global Context Accessor (Still useful for Utils, but avoid if possible)
     companion object {
@@ -74,11 +85,36 @@ class DashBuddyApplication : Application() {
         Timber.plant(StateAwareTree(logRepository, settingsRepository, stateProvider))
 
         // 2. Initialize State
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            stateManagerV2.initialize()
-            Timber.i("StateManagerV2 initialized.")
-        }
+        stateManagerV2.initialize()
+        Timber.i("StateManagerV2 initialized.")
+
+        // 3. Schedule Background Tasks
+        scheduleBackgroundWorkers()
 
         Timber.i("DashBuddyApplication initialized.")
     }
+
+    private fun scheduleBackgroundWorkers() {
+        // Require internet connection to run the gas fetcher
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val dailyWorkRequest = PeriodicWorkRequestBuilder<DailyGasPriceWorker>(24, TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .build()
+
+        // KEEP policy ensures we don't accidentally restart the 24-hour clock every time they open the app
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily_gas_price_sync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            dailyWorkRequest
+        )
+        Timber.i("Background workers verified and scheduled.")
+    }
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
 }

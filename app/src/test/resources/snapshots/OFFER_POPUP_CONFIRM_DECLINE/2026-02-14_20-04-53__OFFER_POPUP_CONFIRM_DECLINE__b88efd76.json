@@ -1,0 +1,98 @@
+{
+  "timestamp": 1771121093320,
+  "breadcrumbs": [
+    "DELIVERY_SUMMARY_COLLAPSED",
+    "DELIVERY_SUMMARY_EXPANDED",
+    "UNKNOWN",
+    "ON_DASH_MAP_WAITING_FOR_OFFER",
+    "UNKNOWN",
+    "OFFER_POPUP",
+    "UNKNOWN",
+    "OFFER_POPUP_CONFIRM_DECLINE",
+    "UNKNOWN",
+    "OFFER_POPUP_CONFIRM_DECLINE"
+  ],
+  "root": {
+    "class": "android.view.View",
+    "isEnabled": true,
+    "bounds": "[0,1440][1080,2311]",
+    "children": [
+      {
+        "text": "Are you sure you want to decline this offer?",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": "[36,1493][1044,1625]"
+      },
+      {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[36,1652][1044,2007]",
+        "children": [
+          {
+            "class": "android.view.View",
+            "isEnabled": true,
+            "bounds": "[36,1688][1044,1989]",
+            "children": [
+              {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[72,1724][1008,1953]",
+                "children": [
+                  {
+                    "text": "Lowers acceptance rate",
+                    "class": "android.widget.TextView",
+                    "isEnabled": true,
+                    "bounds": "[72,1724][1008,1772]"
+                  },
+                  {
+                    "class": "android.view.View",
+                    "isEnabled": true,
+                    "bounds": "[358,1788][722,1894]",
+                    "children": [
+                      {
+                        "text": "49%",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[358,1799][504,1883]"
+                      },
+                      {
+                        "desc": "",
+                        "class": "android.widget.ImageView",
+                        "isEnabled": true,
+                        "bounds": "[513,1815][566,1868]"
+                      },
+                      {
+                        "text": "48%",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[575,1799][722,1883]"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Get above 50% to unlock Silver status",
+                    "class": "android.widget.TextView",
+                    "isEnabled": true,
+                    "bounds": "[72,1910][1008,1953]"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[0,2043][1080,2150]",
+        "children": [
+          {
+            "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+            "isEnabled": true,
+            "bounds": "[36,2043][1044,2150]"
+          }
+        ]
+      }
+    ]
+  }
+}
