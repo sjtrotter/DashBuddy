@@ -1,16 +1,16 @@
 package cloud.trotter.dashbuddy.ui.main.setup.wizard.cards
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -19,6 +19,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +30,7 @@ import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GasPriceCard(
     step: WizardStep,
@@ -40,6 +42,14 @@ fun GasPriceCard(
     onAutoToggle: (Boolean) -> Unit,
     onPriceChange: (Float) -> Unit
 ) {
+    // Edge case: If they switch to Electricity and the price is still at "Gas" levels,
+    // snap it down to a sensible $0.30 default for a better user experience.
+    LaunchedEffect(fuelType) {
+        if (fuelType == FuelType.ELECTRICITY && price > 1.0f) {
+            onPriceChange(0.30f)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -56,11 +66,11 @@ fun GasPriceCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FuelType.entries.forEach { type ->
                 FilterChip(
@@ -73,28 +83,41 @@ fun GasPriceCard(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Auto-Update Gas Prices", style = MaterialTheme.typography.titleMedium)
+        if (fuelType == FuelType.ELECTRICITY) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Manual EV Charging Costs", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "We'll fetch the regional average for your fuel type daily.",
+                    text = "Because public Superchargers and home charging rates vary wildly, please set your average equivalent 'per-gallon' cost manually.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(
-                checked = isAuto,
-                onCheckedChange = onAutoToggle
-            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Auto-Update Gas Prices", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "We'll fetch the regional average for your fuel type daily.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = isAuto,
+                    onCheckedChange = onAutoToggle
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        if (isAuto) {
+        val displayAuto = isAuto && fuelType != FuelType.ELECTRICITY
+
+        if (displayAuto) {
             if (isFetching) {
                 CircularProgressIndicator(modifier = Modifier.size(48.dp))
             } else {
@@ -128,7 +151,8 @@ fun GasPriceCard(
                 Slider(
                     value = price,
                     onValueChange = onPriceChange,
-                    valueRange = 1.0f..8.0f,
+                    // UPDATED: Start at 10 cents for EVs, otherwise keep $1 minimum for gas.
+                    valueRange = if (fuelType == FuelType.ELECTRICITY) 0.10f..8.0f else 1.0f..8.0f,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

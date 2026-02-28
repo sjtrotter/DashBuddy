@@ -28,6 +28,9 @@ class EiaGasPriceDataSource @Inject constructor(
         fuelType: FuelType
     ): Result<Float> {
         return try {
+            if (fuelType == FuelType.ELECTRICITY) {
+                return Result.failure(IllegalStateException("Electricity prices are handled manually."))
+            }
             val regionCode = getRegionCode(lat, lon)
             Timber.i("Fetching Gas Price for ${fuelType.name} in region: $regionCode")
 
@@ -57,6 +60,8 @@ class EiaGasPriceDataSource @Inject constructor(
             FuelType.MIDGRADE -> "EMM_EPMMU_PTE"
             FuelType.PREMIUM -> "EMM_EPMPU_PTE"
             FuelType.DIESEL -> "EMD_EPD2D_PTE"
+            FuelType.ELECTRICITY ->
+                throw IllegalArgumentException("Cannot build EIA petroleum series ID for Electricity")
         }
         return "${productCode}_${regionCode}_DPG"
     }

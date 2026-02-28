@@ -55,6 +55,7 @@ class WizardViewModel @Inject constructor(
         Timber.v("Initializing WizardViewModel")
         loadExistingSettings()
         fetchVehicleYears()
+        attemptAutoGasPriceFetch()
     }
 
     private fun loadExistingSettings() {
@@ -137,37 +138,45 @@ class WizardViewModel @Inject constructor(
         _state.update { it.copy(vehicleMake = make, vehicleModel = "", vehicleTrim = "") }
         _availableModels.value = emptyList(); _availableTrims.value =
             emptyList(); availableTrimNames.value = emptyList()
-        viewModelScope.launch {
-            _availableModels.value = vehicleRepository.getModels(_state.value.vehicleYear, make)
+
+        // Skip API call if Not Listed
+        if (make != "Not Listed") {
+            viewModelScope.launch {
+                _availableModels.value = vehicleRepository.getModels(_state.value.vehicleYear, make)
+            }
         }
     }
 
     fun onModelSelected(model: String) {
         _state.update { it.copy(vehicleModel = model, vehicleTrim = "") }
         _availableTrims.value = emptyList(); availableTrimNames.value = emptyList()
-        viewModelScope.launch {
-            val trims = vehicleRepository.getVehicleOptions(
-                _state.value.vehicleYear,
-                _state.value.vehicleMake,
-                model
-            )
-            _availableTrims.value = trims; availableTrimNames.value = trims.map { it.text }
+
+        // Skip API call if Not Listed
+        if (model != "Not Listed") {
+            viewModelScope.launch {
+                val trims = vehicleRepository.getVehicleOptions(
+                    _state.value.vehicleYear,
+                    _state.value.vehicleMake,
+                    model
+                )
+                _availableTrims.value = trims; availableTrimNames.value = trims.map { it.text }
+            }
         }
     }
 
     fun onTrimSelected(trimName: String) {
         _state.update { it.copy(vehicleTrim = trimName) }
+
+        // Escape hatch! Don't look up MPG if Not Listed.
+        if (trimName == "Not Listed") return
+
         viewModelScope.launch {
             val vehicleId =
                 _availableTrims.value.find { it.text == trimName }?.value ?: return@launch
-
-            // Get both MPG and the raw Fuel String from the EPA
             val details = vehicleRepository.getVehicleDetails(vehicleId)
 
             if (details != null) {
-                // Map the EPA's string to our enum
                 val mappedFuelType = mapEpaFuelType(details.fuelType1)
-
                 _state.update { currentState ->
                     val cachedPrice = currentState.fetchedGasPrices[mappedFuelType]
                     val newPrice =
@@ -183,10 +192,16 @@ class WizardViewModel @Inject constructor(
         }
     }
 
+    // --- NEW: Manual MPG Slider update ---
+    fun updateEstimatedMpg(mpg: Float) {
+        _state.update { it.copy(estimatedMpg = mpg) }
+    }
+
     private fun mapEpaFuelType(epaString: String?): FuelType {
         if (epaString == null) return FuelType.REGULAR
         val lower = epaString.lowercase(Locale.getDefault())
         return when {
+            lower.contains("electricity") -> FuelType.ELECTRICITY // <-- NEW
             lower.contains("premium") -> FuelType.PREMIUM
             lower.contains("midgrade") -> FuelType.MIDGRADE
             lower.contains("diesel") -> FuelType.DIESEL
@@ -197,13 +212,39 @@ class WizardViewModel @Inject constructor(
     fun updateFuelType(type: FuelType) {
         _state.update { currentState ->
             val cachedPrice = currentState.fetchedGasPrices[type]
-            val newPrice =
-                if (currentState.isGasPriceAuto && cachedPrice != null) cachedPrice else currentState.gasPrice
 
-            currentState.copy(
-                fuelType = type,
-                gasPrice = newPrice
-            )
+            // If we have the price, swap instantly!
+            if (currentState.isGasPriceAuto && cachedPrice != null) {
+                currentState.copy(fuelType = type, gasPrice = cachedPrice)
+            } else {
+                // If we DON'T have the price, just update the fuel type for now.
+                currentState.copy(fuelType = type)
+            }
+        }
+
+        // If auto is ON, but we didn't have the price cached, fetch it right now!
+        if (_state.value.isGasPriceAuto && _state.value.fetchedGasPrices[type] == null) {
+            viewModelScope.launch {
+                _state.update { it.copy(isFetchingGasPrice = true) }
+                val result = gasPriceRepository.fetchGasPriceOnly(type)
+
+                if (result.isSuccess) {
+                    val newPrice = result.getOrNull()!!
+                    _state.update { currentState ->
+                        // Update the map AND the current price
+                        val newMap = currentState.fetchedGasPrices.toMutableMap()
+                        newMap[type] = newPrice
+
+                        currentState.copy(
+                            fetchedGasPrices = newMap,
+                            gasPrice = newPrice,
+                            isFetchingGasPrice = false
+                        )
+                    }
+                } else {
+                    _state.update { it.copy(isFetchingGasPrice = false) }
+                }
+            }
         }
     }
 
@@ -221,10 +262,8 @@ class WizardViewModel @Inject constructor(
 
         viewModelScope.launch {
             _state.update { it.copy(isFetchingGasPrice = true) }
-
             val pricesMap = mutableMapOf<FuelType, Float>()
 
-            // Fire off all 4 network requests in parallel
             coroutineScope {
                 FuelType.entries.map { fuel ->
                     async {
@@ -234,6 +273,7 @@ class WizardViewModel @Inject constructor(
                         }
                     }
                 }.awaitAll()
+                Timber.i("Fetched gas prices: $pricesMap")
             }
 
             _state.update { currentState ->
@@ -285,7 +325,13 @@ class WizardViewModel @Inject constructor(
 
             if (finalState.vehicleType == VehicleType.E_BIKE) {
                 settingsRepository.updateEconomySettings(
-                    "E-Bike", "E-Bike", "E-Bike", "", 999f, false, 0.0f
+                    "E-Bike",
+                    "E-Bike",
+                    "E-Bike",
+                    "",
+                    999f,
+                    false,
+                    0.0f
                 )
             } else {
                 settingsRepository.updateEconomySettings(

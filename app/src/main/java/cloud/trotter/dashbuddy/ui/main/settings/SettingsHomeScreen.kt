@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.main.settings
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -19,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
@@ -27,19 +28,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import cloud.trotter.dashbuddy.BuildConfig
-import cloud.trotter.dashbuddy.ui.main.navigation.Screen // <--- IMPORT THIS
+import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 
 @Composable
 fun SettingsHomeScreen(
@@ -47,21 +44,8 @@ fun SettingsHomeScreen(
     onBack: () -> Unit,
     viewModel: SettingsMenuViewModel = hiltViewModel()
 ) {
-    val devModeEnabled by viewModel.devModeEnabled.collectAsState()
-    val clicks by viewModel.versionClickCount.collectAsState()
-    val context = LocalContext.current
-
-    LaunchedEffect(clicks) {
-        if (clicks in 3..<7) {
-            Toast.makeText(
-                context,
-                "You are ${7 - clicks} steps away from being a developer.",
-                Toast.LENGTH_SHORT
-            ).show()
-        } else if (clicks == 7) {
-            Toast.makeText(context, "Developer Mode Enabled!", Toast.LENGTH_LONG).show()
-        }
-    }
+    // Relying strictly on the persisted DataStore state now
+    val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsState(initial = false)
 
     Scaffold(
         topBar = {
@@ -95,7 +79,6 @@ fun SettingsHomeScreen(
                     icon = Icons.Default.Tune,
                     title = "Strategy Config",
                     subtitle = "Rules, Pricing, and Simulation",
-                    // FIX: Use Screen.StrategySettings.route
                     onClick = { onNavigate(Screen.StrategySettings.route) }
                 )
             }
@@ -108,7 +91,6 @@ fun SettingsHomeScreen(
                     icon = Icons.Default.Folder,
                     title = "Evidence Locker",
                     subtitle = "Manage screenshots and logs",
-                    // FIX: Use Screen.EvidenceSettings.route
                     onClick = { onNavigate(Screen.EvidenceSettings.route) }
                 )
             }
@@ -121,14 +103,27 @@ fun SettingsHomeScreen(
                     icon = Icons.Default.Settings,
                     title = "General",
                     subtitle = "Theme, Pro Mode, and Defaults",
-                    // FIX: Use Screen.GeneralSettings.route
                     onClick = { onNavigate(Screen.GeneralSettings.route) }
+                )
+
+                SettingsNavItem(
+                    icon = Icons.Default.RocketLaunch,
+                    title = "Re-run Setup Wizard",
+                    subtitle = "Adjust vehicle and base targets",
+                    onClick = { onNavigate(Screen.Wizard.route) }
+                )
+
+                SettingsNavItem(
+                    icon = Icons.Default.Info,
+                    title = "About",
+                    subtitle = "Version, Support, and Developer info",
+                    onClick = { onNavigate(Screen.AboutSettings.route) }
                 )
             }
 
             // Section 4: Developer (Conditional)
             AnimatedVisibility(
-                visible = devModeEnabled || clicks >= 7,
+                visible = isDevUnlocked,
                 enter = expandVertically() + fadeIn()
             ) {
                 Column {
@@ -138,39 +133,17 @@ fun SettingsHomeScreen(
                             icon = Icons.Default.BugReport,
                             title = "Debug Menu",
                             subtitle = "Log levels & Snapshot whitelist",
-                            // FIX: Use Screen.DeveloperSettings.route
                             onClick = { onNavigate(Screen.DeveloperSettings.route) }
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Footer
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp)
-                    .clickable { viewModel.onVersionClicked() },
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "DashBuddy v${BuildConfig.VERSION_NAME}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.Gray
-                )
-                Text(
-                    text = "Build ${BuildConfig.VERSION_CODE}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray.copy(alpha = 0.5f)
-                )
-            }
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
 
-// ... Keep SettingsGroup and SettingsNavItem as they were ...
 @Composable
 fun SettingsGroup(
     title: String,

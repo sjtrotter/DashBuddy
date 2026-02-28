@@ -66,7 +66,6 @@ fun WizardScreen(
 
     val isCherryPicker = state.strategy == DashStrategy.CHERRY_PICKER
 
-    // --- NEW: State for the Completion Sheet ---
     var showCompletionSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -75,7 +74,6 @@ fun WizardScreen(
             WizardTopBar(
                 currentStep = pagerState.currentPage,
                 totalSteps = steps.size,
-                // INTERCEPT SKIP
                 onSkip = { showCompletionSheet = true }
             )
         },
@@ -90,7 +88,6 @@ fun WizardScreen(
                     if (pagerState.currentPage < steps.size - 1) {
                         coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
                     } else {
-                        // INTERCEPT FINISH
                         showCompletionSheet = true
                     }
                 }
@@ -116,6 +113,7 @@ fun WizardScreen(
                             make = state.vehicleMake,
                             model = state.vehicleModel,
                             trim = state.vehicleTrim,
+                            mpg = state.estimatedMpg,
                             availableYears = availableYears,
                             availableMakes = availableMakes,
                             availableModels = availableModels,
@@ -124,7 +122,8 @@ fun WizardScreen(
                             onYearSelected = viewModel::onYearSelected,
                             onMakeSelected = viewModel::onMakeSelected,
                             onModelSelected = viewModel::onModelSelected,
-                            onTrimSelected = viewModel::onTrimSelected
+                            onTrimSelected = viewModel::onTrimSelected,
+                            onMpgChanged = viewModel::updateEstimatedMpg
                         )
                     }
 
@@ -217,7 +216,6 @@ fun WizardScreen(
         }
     }
 
-    // --- NEW: The Completion Bottom Sheet ---
     if (showCompletionSheet) {
         ModalBottomSheet(
             onDismissRequest = { showCompletionSheet = false },
@@ -237,36 +235,29 @@ fun WizardScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        Icons.Default.Check,
                         contentDescription = "Success",
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
-
                 Spacer(modifier = Modifier.height(24.dp))
-
                 Text(
-                    text = "You're all set!",
+                    "You're all set!",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-
                 Spacer(modifier = Modifier.height(16.dp))
-
                 Text(
-                    text = "Your setup is complete. Remember, you can always tweak these targets, change your vehicle, or adjust your automation strategy later in the Settings menu.",
+                    "Your setup is complete. Remember, you can always tweak these targets, change your vehicle, or adjust your automation strategy later in the Settings menu.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
-
                 Spacer(modifier = Modifier.height(32.dp))
-
                 Button(
                     onClick = {
-                        // Dismiss the sheet visually, THEN save and route to the Dashboard
                         coroutineScope.launch {
                             sheetState.hide()
                             showCompletionSheet = false
@@ -279,8 +270,7 @@ fun WizardScreen(
                 ) {
                     Text("Let's Go Dash", style = MaterialTheme.typography.titleMedium)
                 }
-
-                Spacer(modifier = Modifier.height(16.dp)) // Padding for bottom edge
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

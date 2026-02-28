@@ -8,5 +8,6 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class MenuItemsResponse(
+    @Serializable(with = MenuItemListSerializer::class)
     val menuItem: List<MenuItem> = emptyList()
 )

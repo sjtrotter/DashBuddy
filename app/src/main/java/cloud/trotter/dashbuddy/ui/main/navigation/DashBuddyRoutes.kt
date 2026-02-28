@@ -10,6 +10,7 @@ sealed class Screen(val route: String) {
     data object SettingsHome : Screen("settings/home")
 
     // Sub-menus
+    data object AboutSettings : Screen("settings/about")
     data object StrategySettings : Screen("settings/strategy")
     data object EvidenceSettings : Screen("settings/evidence")
     data object GeneralSettings : Screen("settings/general")
