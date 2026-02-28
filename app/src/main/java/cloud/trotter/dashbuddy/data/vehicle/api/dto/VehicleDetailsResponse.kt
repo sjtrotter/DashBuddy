@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class VehicleDetailsResponse(
-    val comb08: String // They return numbers as strings, e.g., "25"
+    val comb08: String,
+    val fuelType1: String
 ) {
     val combinedMpg: Float?
         get() = comb08.toFloatOrNull()

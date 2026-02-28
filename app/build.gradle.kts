@@ -71,6 +71,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.work)
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.material.icons.extended)
@@ -85,6 +86,7 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.google.code.gson)
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.coroutines.play.services)
@@ -101,6 +103,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
 
     ksp(libs.androidx.room.compiler)
+    ksp(libs.androidx.hilt.compiler)
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)

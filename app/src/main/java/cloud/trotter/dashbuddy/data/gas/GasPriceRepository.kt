@@ -33,4 +33,17 @@ class GasPriceRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun fetchGasPriceOnly(fuelType: FuelType): Result<Float> {
+        return try {
+            val location = locationDataSource.getLastKnownLocation()
+            val lat = location?.latitude
+            val lon = location?.longitude
+
+            gasDataSource.getGasPrice(lat, lon, fuelType)
+        } catch (e: Exception) {
+            Timber.e(e, "GasPriceRepository failed to fetch price only")
+            Result.failure(e)
+        }
+    }
 }

@@ -82,6 +82,9 @@ class SettingsRepository @Inject constructor(
         // Sim
         val SIM_PAY = doublePreferencesKey("sim_test_pay")
         val SIM_DIST = doublePreferencesKey("sim_test_dist")
+
+        // Dev Mode
+        val IS_DEV_MODE_UNLOCKED = booleanPreferencesKey("is_dev_mode_unlocked")
     }
 
     private val defaultRules = listOf(
@@ -140,6 +143,11 @@ class SettingsRepository @Inject constructor(
     // STANDARD STREAMS (Pass-through)
     // ============================================================================================
 
+    // Dev Mode
+    val isDevModeUnlocked: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.IS_DEV_MODE_UNLOCKED] ?: BuildConfig.DEBUG
+    }
+
     // Economy Streams
     val vehicleYear: Flow<String> = context.dataStore.data.map { it[Keys.VEHICLE_YEAR] ?: "" }
     val vehicleMake: Flow<String> = context.dataStore.data.map { it[Keys.VEHICLE_MAKE] ?: "" }
@@ -155,7 +163,7 @@ class SettingsRepository @Inject constructor(
         val savedType = prefs[Keys.FUEL_TYPE] ?: FuelType.REGULAR.name
         try {
             FuelType.valueOf(savedType)
-        } catch (e: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
             FuelType.REGULAR
         }
     }
@@ -193,6 +201,12 @@ class SettingsRepository @Inject constructor(
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
+
+    // Dev Mode
+    suspend fun setDevModeUnlocked(unlocked: Boolean) {
+        Timber.w("Developer Mode Unlocked: %b", unlocked)
+        context.dataStore.edit { it[Keys.IS_DEV_MODE_UNLOCKED] = unlocked }
+    }
 
     suspend fun updateEconomySettings(
         year: String, make: String, model: String, trim: String,

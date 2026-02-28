@@ -1,0 +1,141 @@
+{
+  "timestamp": 1771101002771,
+  "breadcrumbs": [
+    "OFFER_POPUP",
+    "UNKNOWN",
+    "OFFER_POPUP_CONFIRM_DECLINE",
+    "UNKNOWN",
+    "OFFER_POPUP_CONFIRM_DECLINE",
+    "ON_DASH_MAP_WAITING_FOR_OFFER",
+    "UNKNOWN",
+    "OFFER_POPUP",
+    "UNKNOWN",
+    "OFFER_POPUP_CONFIRM_DECLINE"
+  ],
+  "root": {
+    "class": "androidx.compose.ui.platform.ComposeView",
+    "isEnabled": true,
+    "bounds": "[0,2222][1080,2311]",
+    "children": [
+      {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[0,1440][1080,2311]",
+        "children": [
+          {
+            "text": "Are you sure you want to decline this offer?",
+            "class": "android.widget.TextView",
+            "isEnabled": true,
+            "bounds": "[36,1493][1044,1625]"
+          },
+          {
+            "class": "android.view.View",
+            "isEnabled": true,
+            "bounds": "[36,1652][1044,2007]",
+            "children": [
+              {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[36,1688][1044,1989]",
+                "children": [
+                  {
+                    "class": "android.view.View",
+                    "isEnabled": true,
+                    "bounds": "[72,1724][1008,1953]",
+                    "children": [
+                      {
+                        "text": "Does not lower acceptance rate",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[72,1724][1008,1772]"
+                      },
+                      {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[468,1788][612,1894]",
+                        "children": [
+                          {
+                            "text": "53%",
+                            "class": "android.widget.TextView",
+                            "isEnabled": true,
+                            "bounds": "[468,1799][612,1883]"
+                          }
+                        ]
+                      },
+                      {
+                        "text": "Accepting this offer will raise acceptance rate",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[72,1910][1008,1953]"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "class": "android.view.View",
+            "isEnabled": true,
+            "bounds": "[0,2043][1080,2150]",
+            "children": [
+              {
+                "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                "isEnabled": true,
+                "bounds": "[36,4443][1044,4550]",
+                "children": [
+                  {
+                    "class": "android.widget.Button",
+                    "isClickable": true,
+                    "isEnabled": true,
+                    "bounds": "[36,4408][1044,4515]",
+                    "children": [
+                      {
+                        "text": "Decline offer",
+                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[409,4434][671,4489]"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "state": "100 percent.",
+                "class": "android.widget.ProgressBar",
+                "isEnabled": true,
+                "bounds": "[946,4422][1026,4502]"
+              },
+              {
+                "text": "33",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[969,4444][1004,4480]"
+              }
+            ]
+          },
+          {
+            "class": "android.view.View",
+            "isClickable": true,
+            "isEnabled": true,
+            "bounds": "[36,4533][1044,4640]",
+            "children": [
+              {
+                "text": "View offer details",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[361,2196][718,2248]"
+              },
+              {
+                "class": "android.widget.Button",
+                "isEnabled": true,
+                "bounds": "[36,4533][1044,4640]"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

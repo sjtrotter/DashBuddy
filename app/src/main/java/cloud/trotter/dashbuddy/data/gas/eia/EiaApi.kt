@@ -21,7 +21,7 @@ data class EiaPriceRecord(
 )
 
 interface EiaApi {
-    @GET("petroleum/pri/gnd/data/")
+    @GET("v2/petroleum/pri/gnd/data/")
     suspend fun getNationalAverage(
         @Query("api_key") apiKey: String,
         @Query("frequency") frequency: String = "weekly",

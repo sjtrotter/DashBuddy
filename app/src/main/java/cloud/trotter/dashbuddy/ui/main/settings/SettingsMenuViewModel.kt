@@ -20,9 +20,8 @@ class SettingsMenuViewModel @Inject constructor(
     val isProMode = repository.isProMode
 
     // Re-using the debug flag from repo as the "Unlock" state
-    val devModeEnabled = repository.devSnapshotsEnabled
+    val isDevModeUnlocked = repository.isDevModeUnlocked
 
-    // Internal click counter for the "Secret" unlock
     private val _versionClickCount = MutableStateFlow(0)
     val versionClickCount = _versionClickCount.asStateFlow()
 
@@ -31,19 +30,10 @@ class SettingsMenuViewModel @Inject constructor(
         if (current < 7) {
             _versionClickCount.value = current + 1
         }
+    }
 
-        // Unlock at 7 clicks
-        if (_versionClickCount.value == 7 && !devModeEnabled.value) {
-            viewModelScope.launch {
-                // We toggle the repo's master dev switch to "True" to persist the unlock
-                // (Assuming your toggleSnapshotScreen logic handles the boolean flip,
-                // or we add a specific method to repo for 'setDevMode(true)')
-                // For now, let's assume we just treat the 'devSnapshotsEnabled' as the gate
-                // If you don't have a specific setter for the boolean flow, you might need to add one to Repo.
-                // For this example, I'll assume we simply track it locally or add a Repo method:
-                // repository.setDevModeEnabled(true) -> You might need to add this to Repo
-            }
-        }
+    fun unlockDeveloperMode() = viewModelScope.launch {
+        repository.setDevModeUnlocked(true)
     }
 
     // --- Actions ---

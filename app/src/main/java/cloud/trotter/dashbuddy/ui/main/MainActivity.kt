@@ -24,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.ui.main.settings.StrategySettingsScreen
@@ -78,6 +79,12 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.SettingsHome.route) {
                             SettingsHomeScreen(
                                 onNavigate = { route -> navController.navigate(route) },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        // 1.1. About screen
+                        composable(Screen.AboutSettings.route) {
+                            AboutScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }
