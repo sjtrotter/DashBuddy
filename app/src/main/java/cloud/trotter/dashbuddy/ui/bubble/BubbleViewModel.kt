@@ -3,19 +3,22 @@ package cloud.trotter.dashbuddy.ui.bubble
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class BubbleViewModel @Inject constructor(
     private val bubbleManager: BubbleManager,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    odometerRepository: OdometerRepository
 ) : ViewModel() {
 
     // Automatically switches the chat stream when the activeDashId changes
@@ -27,6 +30,11 @@ class BubbleViewModel @Inject constructor(
             flowOf(emptyList()) // Or show system messages if offline
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Expose real-time session miles
+    val sessionMiles = odometerRepository.sessionMeters
+        .map { meters -> meters * 0.000621371 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
     // Debug helper to test the system
     fun sendTestMessage() {
