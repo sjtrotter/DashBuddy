@@ -92,33 +92,49 @@ fun BubbleScreen(
             if (showFullChat) {
                 FullChatView(messages)
             } else {
-                DashboardView(messages) { showFullChat = true }
+                DashboardView(messages, viewModel) { showFullChat = true }
             }
         }
     }
 }
 
 @Composable
-fun DashboardView(messages: List<ChatMessageEntity>, onOpenChat: () -> Unit) {
+fun DashboardView(
+    messages: List<ChatMessageEntity>,
+    viewModel: BubbleViewModel,
+    onOpenChat: () -> Unit
+) {
+    val miles by viewModel.sessionMiles.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
 
-        Text("Current Status", style = MaterialTheme.typography.titleMedium)
+        Text("Current Trip", style = MaterialTheme.typography.titleMedium)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
-                .height(80.dp),
+                .height(100.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
         ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    "Waiting for Offer...",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = "%.2f".format(miles),
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Text(
+                    text = "SESSION MILES",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                 )
             }
         }
