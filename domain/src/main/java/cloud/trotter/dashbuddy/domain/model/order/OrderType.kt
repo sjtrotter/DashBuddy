@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.order
+package cloud.trotter.dashbuddy.domain.model.order
 
 /**
  * Represents the various types of orders that can be offered by DoorDash.

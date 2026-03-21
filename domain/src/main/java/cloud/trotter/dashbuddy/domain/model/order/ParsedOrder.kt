@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.order
+package cloud.trotter.dashbuddy.domain.model.order
 
 data class ParsedOrder(
     /** The index of this order in the offer. */

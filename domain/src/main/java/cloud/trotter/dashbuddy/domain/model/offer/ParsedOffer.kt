@@ -1,6 +1,6 @@
-package cloud.trotter.dashbuddy.data.offer
+package cloud.trotter.dashbuddy.domain.model.offer
 
-import cloud.trotter.dashbuddy.data.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 
 data class ParsedOffer(
     /** A hash generated from core offer details

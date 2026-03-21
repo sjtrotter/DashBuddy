@@ -10,7 +10,7 @@ import cloud.trotter.dashbuddy.data.order.OrderBadge
 /** Class used by the Room database to convert Kotlin data types to and from SQL types. */
 class DataTypeConverters {
 
-    /** Converts a set of [OfferBadge]s to a bar-separated string for storage in the database.
+    /** Converts a set of [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge]s to a bar-separated string for storage in the database.
      * @return A bar-separated string representation of the set,
      * or an empty string if the set is null or empty.
      */
@@ -19,8 +19,8 @@ class DataTypeConverters {
         return badges?.takeIf { it.isNotEmpty() }?.joinToString("|") { it.name } ?: ""
     }
 
-    /** Converts a bar-separated string of offer badges back to a set of [OfferBadge]s.
-     * @return A set of [OfferBadge]s, or an empty set if the string is blank or null.
+    /** Converts a bar-separated string of offer badges back to a set of [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge]s.
+     * @return A set of [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge]s, or an empty set if the string is blank or null.
      */
     @TypeConverter
     fun toOfferBadgeSet(badgeString: String?): Set<OfferBadge> {
@@ -36,7 +36,7 @@ class DataTypeConverters {
             ?.toSet() ?: emptySet()
     }
 
-    /** Converts a set of [OrderBadge]s to a bar-separated string for storage in the database.
+    /** Converts a set of [cloud.trotter.dashbuddy.domain.model.order.OrderBadge]s to a bar-separated string for storage in the database.
      * @return A bar-separated string representation of the set,
      * or an empty string if the set is null or empty.
      */
@@ -45,8 +45,8 @@ class DataTypeConverters {
         return badges?.takeIf { it.isNotEmpty() }?.joinToString("|") { it.name } ?: ""
     }
 
-    /** Converts a bar-separated string of offer badges back to a set of [OfferBadge]s.
-     * @return A set of [OrderBadge]s, or an empty set if the string is blank or null.
+    /** Converts a bar-separated string of offer badges back to a set of [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge]s.
+     * @return A set of [cloud.trotter.dashbuddy.domain.model.order.OrderBadge]s, or an empty set if the string is blank or null.
      */
     @TypeConverter
     fun toOrderBadgeSet(badgeString: String?): Set<OrderBadge> {

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.util
+package cloud.trotter.dashbuddy.domain.evaluation
 
 object ScoringUtils {
 

@@ -44,8 +44,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_25
+        targetCompatibility = JavaVersion.VERSION_25
     }
 
     viewBinding.enable = true
@@ -113,7 +113,7 @@ dependencies {
 
 kotlin {
     compilerOptions {
-        jvmTarget.assign(JvmTarget.JVM_11)
+        jvmTarget.assign(JvmTarget.JVM_25)
     }
 }
 

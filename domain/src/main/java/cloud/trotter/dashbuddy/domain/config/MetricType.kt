@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.model.config
+package cloud.trotter.dashbuddy.domain.config
 
 enum class MetricType(val label: String, val unit: String, val isHigherBetter: Boolean) {
     // "Higher is Better" metrics

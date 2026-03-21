@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state.model
+package cloud.trotter.dashbuddy.domain.evaluation
 
 enum class OfferAction {
     ACCEPT,
