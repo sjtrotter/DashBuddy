@@ -1,15 +1,14 @@
 package cloud.trotter.dashbuddy.state.effects
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
-import cloud.trotter.dashbuddy.state.model.OfferAction
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
+import cloud.trotter.dashbuddy.ui.formatters.toSpannableString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -33,7 +32,6 @@ class DefaultEffectHandler @Inject constructor(
     private val uiInteractionHandler: UiInteractionHandler,
 ) : EffectHandler {
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun handle(
         effect: AppEffect,
         scope: CoroutineScope,
@@ -102,7 +100,7 @@ class DefaultEffectHandler @Inject constructor(
                     OfferAction.DECLINE -> ChatPersona.BadOffer
                     OfferAction.NOTHING -> ChatPersona.Inspector
                 }
-                bubbleManager.postMessage(result.message, persona)
+                bubbleManager.postMessage(result.toSpannableString(), persona)
             }
 
             is AppEffect.ClickNode -> {

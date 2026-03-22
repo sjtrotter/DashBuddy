@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "DashBuddy"
 include(":app")
- 
+include(":domain")

@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.data.chat
 
 import android.text.Html
 import android.text.Spanned
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +31,7 @@ class ChatRepository @Inject constructor(
                 senderId = persona.id,
                 senderName = persona.name,
                 messageText = safeText, // Storing "<b>Hello</b>"
-                iconResId = persona.iconResId
+                iconResId = R.drawable.ic_launcher_foreground, // Placeholder
             )
             chatDao.insertMessage(entity)
         }

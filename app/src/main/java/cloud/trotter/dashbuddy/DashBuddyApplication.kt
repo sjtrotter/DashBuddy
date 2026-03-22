@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.data.log.LogRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.log.StateAwareTree
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.worker.DailyGasPriceWorker
@@ -56,7 +57,7 @@ class DashBuddyApplication : Application(), Configuration.Provider {
                 .getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
             val ver = instance.packageManager.getPackageInfo(instance.packageName, 0).versionName
 
-            val metadata = cloud.trotter.dashbuddy.data.event.EventMetadata(
+            val metadata = EventMetadata(
                 odometer = odometer,
                 batteryLevel = battery,
                 appVersion = ver,

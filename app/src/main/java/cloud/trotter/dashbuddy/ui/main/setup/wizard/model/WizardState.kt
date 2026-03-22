@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.ui.main.setup.wizard.model
 
-import cloud.trotter.dashbuddy.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.config.DashStrategy
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
 
 /**
  * Represents the volatile UI state of the Setup Wizard before it is committed to DataStore.

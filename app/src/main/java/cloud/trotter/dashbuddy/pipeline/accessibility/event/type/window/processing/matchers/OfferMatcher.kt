@@ -2,11 +2,11 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.data.offer.OfferBadge
-import cloud.trotter.dashbuddy.data.offer.ParsedOffer
-import cloud.trotter.dashbuddy.data.order.OrderBadge
-import cloud.trotter.dashbuddy.data.order.OrderType
-import cloud.trotter.dashbuddy.data.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher

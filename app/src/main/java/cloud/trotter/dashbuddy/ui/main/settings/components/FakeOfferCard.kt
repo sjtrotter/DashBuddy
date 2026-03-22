@@ -28,8 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.state.model.OfferAction
-import cloud.trotter.dashbuddy.state.model.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.ui.formatters.toAnnotatedString
 
 @Composable
 fun FakeOfferCard(
@@ -86,7 +87,7 @@ fun FakeOfferCard(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = evaluation.message.toString(),
+                text = evaluation.toAnnotatedString(),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )

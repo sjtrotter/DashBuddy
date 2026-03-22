@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import kotlinx.coroutines.flow.Flow
 
 @Dao

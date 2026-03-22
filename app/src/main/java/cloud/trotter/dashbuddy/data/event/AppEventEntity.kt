@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.data.event
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 @Entity(
     tableName = "app_events",

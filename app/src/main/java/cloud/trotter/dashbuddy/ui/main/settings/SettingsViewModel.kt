@@ -2,12 +2,12 @@ package cloud.trotter.dashbuddy.ui.main.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cloud.trotter.dashbuddy.data.offer.ParsedOffer
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
-import cloud.trotter.dashbuddy.model.config.EvaluationConfig
-import cloud.trotter.dashbuddy.model.config.ScoringRule
-import cloud.trotter.dashbuddy.state.logic.OfferEvaluatorV2
-import cloud.trotter.dashbuddy.state.model.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.config.EvaluationConfig
+import cloud.trotter.dashbuddy.domain.config.ScoringRule
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -77,7 +77,7 @@ class SettingsViewModel @Inject constructor(
         )
 
         val currentConfig = evaluationConfig.value
-        val evaluator = OfferEvaluatorV2(currentConfig)
+        val evaluator = OfferEvaluator(currentConfig)
         return evaluator.evaluate(fakeOffer)
     }
 }

@@ -6,11 +6,11 @@ import cloud.trotter.dashbuddy.data.gas.GasPriceRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
 import cloud.trotter.dashbuddy.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.data.vehicle.api.dto.MenuItem
-import cloud.trotter.dashbuddy.model.config.MetricType
-import cloud.trotter.dashbuddy.model.config.ScoringRule
-import cloud.trotter.dashbuddy.model.vehicle.FuelType
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.DashStrategy
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.VehicleType
+import cloud.trotter.dashbuddy.domain.config.DashStrategy
+import cloud.trotter.dashbuddy.domain.config.MetricType
+import cloud.trotter.dashbuddy.domain.config.ScoringRule
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import dagger.hilt.android.lifecycle.HiltViewModel

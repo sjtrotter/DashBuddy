@@ -36,13 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.domain.config.DashStrategy
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.GasPriceCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.MetricSliderCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.SelectionCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.VehicleCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardBottomBar
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardTopBar
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.DashStrategy
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import kotlinx.coroutines.launch
 import java.util.Locale

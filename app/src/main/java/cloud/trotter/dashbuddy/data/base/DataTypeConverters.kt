@@ -1,16 +1,17 @@
 package cloud.trotter.dashbuddy.data.base
 
 import androidx.room.TypeConverter
-import cloud.trotter.dashbuddy.data.dash.DashType
-import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
-import cloud.trotter.dashbuddy.data.event.status.PickupStatus
-import cloud.trotter.dashbuddy.data.offer.OfferBadge
-import cloud.trotter.dashbuddy.data.order.OrderBadge
+import cloud.trotter.dashbuddy.domain.model.dash.DashType
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
+import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
+import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
+import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 
 /** Class used by the Room database to convert Kotlin data types to and from SQL types. */
 class DataTypeConverters {
 
-    /** Converts a set of [OfferBadge]s to a bar-separated string for storage in the database.
+    /** Converts a set of [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge]s to a bar-separated string for storage in the database.
      * @return A bar-separated string representation of the set,
      * or an empty string if the set is null or empty.
      */
@@ -19,8 +20,8 @@ class DataTypeConverters {
         return badges?.takeIf { it.isNotEmpty() }?.joinToString("|") { it.name } ?: ""
     }
 
-    /** Converts a bar-separated string of offer badges back to a set of [OfferBadge]s.
-     * @return A set of [OfferBadge]s, or an empty set if the string is blank or null.
+    /** Converts a bar-separated string of offer badges back to a set of [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge]s.
+     * @return A set of [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge]s, or an empty set if the string is blank or null.
      */
     @TypeConverter
     fun toOfferBadgeSet(badgeString: String?): Set<OfferBadge> {
@@ -36,7 +37,7 @@ class DataTypeConverters {
             ?.toSet() ?: emptySet()
     }
 
-    /** Converts a set of [OrderBadge]s to a bar-separated string for storage in the database.
+    /** Converts a set of [cloud.trotter.dashbuddy.domain.model.order.OrderBadge]s to a bar-separated string for storage in the database.
      * @return A bar-separated string representation of the set,
      * or an empty string if the set is null or empty.
      */
@@ -45,8 +46,8 @@ class DataTypeConverters {
         return badges?.takeIf { it.isNotEmpty() }?.joinToString("|") { it.name } ?: ""
     }
 
-    /** Converts a bar-separated string of offer badges back to a set of [OfferBadge]s.
-     * @return A set of [OrderBadge]s, or an empty set if the string is blank or null.
+    /** Converts a bar-separated string of offer badges back to a set of [cloud.trotter.dashbuddy.domain.model.offer.OfferBadge]s.
+     * @return A set of [cloud.trotter.dashbuddy.domain.model.order.OrderBadge]s, or an empty set if the string is blank or null.
      */
     @TypeConverter
     fun toOrderBadgeSet(badgeString: String?): Set<OrderBadge> {
@@ -117,18 +118,18 @@ class DataTypeConverters {
     }
 
     @TypeConverter
-    fun fromAppEventType(type: cloud.trotter.dashbuddy.data.event.AppEventType): String {
+    fun fromAppEventType(type: AppEventType): String {
         return type.name
     }
 
     @TypeConverter
-    fun toAppEventType(value: String): cloud.trotter.dashbuddy.data.event.AppEventType {
+    fun toAppEventType(value: String): AppEventType {
         return try {
-            enumValueOf<cloud.trotter.dashbuddy.data.event.AppEventType>(value)
+            enumValueOf<AppEventType>(value)
         } catch (_: Exception) {
             // Fallback for version safety: If we remove an enum later,
             // old logs default to ERROR or a specific UNKNOWN type.
-            cloud.trotter.dashbuddy.data.event.AppEventType.ERROR_OCCURRED
+            AppEventType.ERROR_OCCURRED
         }
     }
 }

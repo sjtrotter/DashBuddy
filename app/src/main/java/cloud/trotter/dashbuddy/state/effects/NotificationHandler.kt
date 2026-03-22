@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
-import cloud.trotter.dashbuddy.data.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.event.NotificationEvent

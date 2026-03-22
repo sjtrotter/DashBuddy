@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers
 
-import cloud.trotter.dashbuddy.data.event.status.PickupStatus
+import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher

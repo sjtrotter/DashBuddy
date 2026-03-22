@@ -25,7 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import java.util.Locale

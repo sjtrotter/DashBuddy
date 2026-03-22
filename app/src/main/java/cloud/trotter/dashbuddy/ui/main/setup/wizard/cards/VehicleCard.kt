@@ -30,9 +30,9 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.VehicleDropdown
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
-import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.VehicleType
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import java.util.Locale
 

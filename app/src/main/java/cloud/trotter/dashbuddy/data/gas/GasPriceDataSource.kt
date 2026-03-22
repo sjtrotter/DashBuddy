@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.data.gas
 
-import cloud.trotter.dashbuddy.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 
 /**
  * The standard contract for fetching gas prices.

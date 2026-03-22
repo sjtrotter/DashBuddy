@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.data.pay
 
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import timber.log.Timber
 import javax.inject.Inject

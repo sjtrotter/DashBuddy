@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.data.dash.DashType
-import cloud.trotter.dashbuddy.data.event.status.PickupStatus
-import cloud.trotter.dashbuddy.data.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.dash.DashType
+import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked.ClickAction
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
