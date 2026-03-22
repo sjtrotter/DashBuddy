@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.data.order // Assuming it belongs in this package
 
+import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton

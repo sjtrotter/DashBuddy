@@ -1,10 +1,10 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing
 
-import cloud.trotter.dashbuddy.data.dash.DashType
-import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
-import cloud.trotter.dashbuddy.data.event.status.PickupStatus
-import cloud.trotter.dashbuddy.data.offer.ParsedOffer
-import cloud.trotter.dashbuddy.data.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.dash.DashType
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
+import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 
 /**

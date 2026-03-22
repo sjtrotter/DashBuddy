@@ -5,7 +5,7 @@ import android.location.Address
 import android.location.Geocoder
 import cloud.trotter.dashbuddy.BuildConfig
 import cloud.trotter.dashbuddy.data.gas.GasPriceDataSource
-import cloud.trotter.dashbuddy.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import timber.log.Timber

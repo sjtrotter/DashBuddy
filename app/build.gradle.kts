@@ -44,8 +44,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     viewBinding.enable = true
@@ -102,6 +102,8 @@ dependencies {
     implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))
 
+    implementation(project(":domain"))
+
     ksp(libs.androidx.room.compiler)
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.hilt.compiler)
@@ -113,7 +115,7 @@ dependencies {
 
 kotlin {
     compilerOptions {
-        jvmTarget.assign(JvmTarget.JVM_25)
+        jvmTarget.assign(JvmTarget.JVM_17)
     }
 }
 

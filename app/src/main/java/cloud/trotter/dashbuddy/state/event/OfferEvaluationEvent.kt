@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state.event
 
-import cloud.trotter.dashbuddy.state.model.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 
 data class OfferEvaluationEvent(
     val action: OfferAction,

@@ -1,19 +1,17 @@
 package cloud.trotter.dashbuddy.state.logic
 
-//import cloud.trotter.dashbuddy.log.Logger
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.Typeface
-import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
-import cloud.trotter.dashbuddy.data.offer.ParsedOffer
-import cloud.trotter.dashbuddy.data.order.OrderType
-import cloud.trotter.dashbuddy.state.model.OfferAction
-import cloud.trotter.dashbuddy.state.model.OfferEvaluation
-import cloud.trotter.dashbuddy.util.ScoringUtils
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.evaluation.ScoringUtils
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import timber.log.Timber
 import java.util.Locale
 import javax.inject.Inject
@@ -58,8 +56,8 @@ class OfferEvaluator @Inject constructor(
 
         var timeToCompleteMinutes: Long? = null
         if (parsedOffer.dueByTimeMillis != null) {
-            if (parsedOffer.dueByTimeMillis >= eventTimestamp) {
-                val differenceInMillis = parsedOffer.dueByTimeMillis - eventTimestamp
+            if (parsedOffer.dueByTimeMillis!! >= eventTimestamp) {
+                val differenceInMillis = parsedOffer.dueByTimeMillis!! - eventTimestamp
                 timeToCompleteMinutes = differenceInMillis / (1000 * 60)
             } else {
                 timeToCompleteMinutes = 0
@@ -181,7 +179,15 @@ class OfferEvaluator @Inject constructor(
         Timber.i("Evaluated: $merchantName ($totalScore) -> $offerQuality")
         return OfferEvaluation(
             OfferAction.NOTHING,
-            SpannableString(builder)
+            totalScore,
+            offerQuality,
+            offerQuality,
+            currentPayout,
+            currentDistance,
+            dollarsPerMile,
+            dollarsPerHour,
+            currentItemCount,
+            merchantName,
         )
     }
 }

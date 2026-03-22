@@ -81,7 +81,12 @@ class BubbleManager @Inject constructor(
         }
         val person = Person.Builder()
             .setName(ChatPersona.Dispatcher.name)
-            .setIcon(IconCompat.createWithResource(context, ChatPersona.Dispatcher.iconResId))
+            .setIcon(
+                IconCompat.createWithResource(
+                    context,
+                    R.drawable.bag_red_idle
+                )
+            ) // TODO: replace with mapped persona icon
             .setKey(ChatPersona.Dispatcher.id)
             .build()
         val shortcut = ShortcutInfoCompat.Builder(context, shortcutId)
@@ -100,7 +105,12 @@ class BubbleManager @Inject constructor(
         val senderPerson = Person.Builder()
             .setName(persona.name)
             .setKey(persona.id)
-            .setIcon(IconCompat.createWithResource(context, persona.iconResId))
+            .setIcon(
+                IconCompat.createWithResource(
+                    context,
+                    R.drawable.bag_red_idle
+                )
+            ) // TODO: replace with mapped persona icon
 //            .setBot(persona is ChatPersona.Dispatcher)
             .build()
 
@@ -114,7 +124,10 @@ class BubbleManager @Inject constructor(
 
         val bubbleMetadata = NotificationCompat.BubbleMetadata.Builder(
             bubbleIntent,
-            IconCompat.createWithResource(context, persona.iconResId)
+            IconCompat.createWithResource(
+                context,
+                R.drawable.bag_red_idle
+            ) // TODO: replace with mapped persona icon
         )
             .setDesiredHeight(600)
             .setAutoExpandBubble(expand)

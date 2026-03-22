@@ -1,11 +1,12 @@
 package cloud.trotter.dashbuddy.data.base
 
 import androidx.room.TypeConverter
-import cloud.trotter.dashbuddy.data.dash.DashType
-import cloud.trotter.dashbuddy.data.event.status.DropoffStatus
-import cloud.trotter.dashbuddy.data.event.status.PickupStatus
-import cloud.trotter.dashbuddy.data.offer.OfferBadge
-import cloud.trotter.dashbuddy.data.order.OrderBadge
+import cloud.trotter.dashbuddy.domain.model.dash.DashType
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
+import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
+import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
+import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 
 /** Class used by the Room database to convert Kotlin data types to and from SQL types. */
 class DataTypeConverters {
@@ -117,18 +118,18 @@ class DataTypeConverters {
     }
 
     @TypeConverter
-    fun fromAppEventType(type: cloud.trotter.dashbuddy.data.event.AppEventType): String {
+    fun fromAppEventType(type: AppEventType): String {
         return type.name
     }
 
     @TypeConverter
-    fun toAppEventType(value: String): cloud.trotter.dashbuddy.data.event.AppEventType {
+    fun toAppEventType(value: String): AppEventType {
         return try {
-            enumValueOf<cloud.trotter.dashbuddy.data.event.AppEventType>(value)
+            enumValueOf<AppEventType>(value)
         } catch (_: Exception) {
             // Fallback for version safety: If we remove an enum later,
             // old logs default to ERROR or a specific UNKNOWN type.
-            cloud.trotter.dashbuddy.data.event.AppEventType.ERROR_OCCURRED
+            AppEventType.ERROR_OCCURRED
         }
     }
 }

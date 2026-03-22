@@ -4,13 +4,14 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
-import cloud.trotter.dashbuddy.state.model.OfferAction
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
+import cloud.trotter.dashbuddy.ui.formatters.toSpannableString
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,7 +104,7 @@ class SideEffectEngine @Inject constructor(
                     OfferAction.DECLINE -> ChatPersona.BadOffer
                     OfferAction.NOTHING -> ChatPersona.Inspector
                 }
-                bubbleManager.postMessage(result.message, persona)
+                bubbleManager.postMessage(result.toSpannableString(), persona)
             }
 
             // --- TIMING LOGIC (Pure Coroutines) ---

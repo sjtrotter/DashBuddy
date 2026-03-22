@@ -12,11 +12,11 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import cloud.trotter.dashbuddy.BuildConfig
-import cloud.trotter.dashbuddy.model.config.EvidenceConfig
-import cloud.trotter.dashbuddy.model.config.MetricType
-import cloud.trotter.dashbuddy.model.config.OfferAutomationConfig
-import cloud.trotter.dashbuddy.model.config.ScoringRule
-import cloud.trotter.dashbuddy.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
+import cloud.trotter.dashbuddy.domain.config.MetricType
+import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
+import cloud.trotter.dashbuddy.domain.config.ScoringRule
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope

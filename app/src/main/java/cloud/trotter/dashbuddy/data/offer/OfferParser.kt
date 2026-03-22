@@ -1,9 +1,10 @@
 package cloud.trotter.dashbuddy.data.offer
 
 import cloud.trotter.dashbuddy.data.order.OrderParser
-import cloud.trotter.dashbuddy.data.order.OrderType
-import cloud.trotter.dashbuddy.data.order.ParsedOrder
-//import cloud.trotter.dashbuddy.log.Logger as Log
+import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.util.UtilityFunctions.generateSha256
 import cloud.trotter.dashbuddy.util.UtilityFunctions.parseTimeTextToMillis
 import timber.log.Timber
@@ -13,7 +14,7 @@ import kotlin.math.max
 
 @Singleton
 class OfferParser @Inject constructor(
-    private val orderParser: OrderParser // <--- Dependency Injection!
+    private val orderParser: OrderParser
 ) {
     // regexes.
     private val countdownTimerRegex = Regex("^\\d{1,2}$")
