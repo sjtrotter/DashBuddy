@@ -22,3 +22,7 @@ dependencyResolutionManagement {
 rootProject.name = "DashBuddy"
 include(":app")
 include(":domain")
+include(":core:database")
+include(":core:database")
+include(":core:network")
+include(":core:location")

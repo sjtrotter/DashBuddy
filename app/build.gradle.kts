@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "cloud.trotter.dashbuddy"
-        minSdk = 36
+        minSdk = 35
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
