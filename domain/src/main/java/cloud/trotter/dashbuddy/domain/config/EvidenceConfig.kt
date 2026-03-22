@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.model.config
+package cloud.trotter.dashbuddy.domain.config
 
 data class EvidenceConfig(
     val masterEnabled: Boolean = false,

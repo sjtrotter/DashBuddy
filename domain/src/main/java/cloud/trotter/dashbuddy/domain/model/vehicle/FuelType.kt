@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.model.vehicle
+package cloud.trotter.dashbuddy.domain.model.vehicle
 
 enum class FuelType(val displayName: String) {
     REGULAR("Regular (87)"),

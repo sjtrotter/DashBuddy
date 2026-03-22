@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.dash
+package cloud.trotter.dashbuddy.domain.model.dash
 
 /**
  * Represents the earning modes available for a dash session.

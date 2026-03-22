@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.pay
+package cloud.trotter.dashbuddy.domain.model.pay
 
 /**
  * A data class to hold a single component of pay parsed from the screen.

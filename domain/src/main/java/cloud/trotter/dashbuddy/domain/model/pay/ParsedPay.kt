@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.pay
+package cloud.trotter.dashbuddy.domain.model.pay
 
 /**
  * A container for the entire parsed pay breakdown from a delivery completion screen.

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state.model.config
+package cloud.trotter.dashbuddy.domain.config
 
 /**
  * Rules for the "Post-Dash Robot". -- DELETE after transition to Compose
