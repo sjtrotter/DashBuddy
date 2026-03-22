@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.event
+package cloud.trotter.dashbuddy.domain.model.event
 
 data class EventMetadata(
     /** The odometer reading in miles at the time of the event. */

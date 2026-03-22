@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.event
+package cloud.trotter.dashbuddy.domain.model.event
 
 enum class AppEventType {
     // --- Session Lifecycle ---

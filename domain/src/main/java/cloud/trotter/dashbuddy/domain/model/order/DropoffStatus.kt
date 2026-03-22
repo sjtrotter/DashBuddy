@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.event.status
+package cloud.trotter.dashbuddy.domain.model.order
 
 /**
  * Represents the specific phase of a drop-off task.
