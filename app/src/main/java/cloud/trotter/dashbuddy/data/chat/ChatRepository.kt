@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.data.chat
 import android.text.Html
 import android.text.Spanned
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.core.database.chat.ChatDao
+import cloud.trotter.dashbuddy.core.database.chat.ChatMessageEntity
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

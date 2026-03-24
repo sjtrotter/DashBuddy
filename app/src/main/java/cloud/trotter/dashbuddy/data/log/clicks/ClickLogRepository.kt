@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.data.log.clicks
 
 import android.content.Context
+import cloud.trotter.dashbuddy.domain.model.log.clicks.ClickLogEntry
 import cloud.trotter.dashbuddy.state.event.ClickEvent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope

@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.ClickAction
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import javax.inject.Inject
 
 class ClickClassifier @Inject constructor() {

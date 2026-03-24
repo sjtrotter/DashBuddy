@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import cloud.trotter.dashbuddy.data.chat.ChatMessageEntity
+import cloud.trotter.dashbuddy.core.database.chat.ChatMessageEntity
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)

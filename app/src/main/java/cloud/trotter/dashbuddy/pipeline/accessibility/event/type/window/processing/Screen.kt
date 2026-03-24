@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing
 
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import java.util.Locale
 
 //import cloud.trotter.dashbuddy.log.Logger as Log

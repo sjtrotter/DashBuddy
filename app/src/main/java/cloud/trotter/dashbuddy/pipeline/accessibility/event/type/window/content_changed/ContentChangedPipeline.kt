@@ -3,8 +3,9 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toUiNode
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -24,6 +25,6 @@ class ContentChangedPipeline @Inject constructor(
         .debounceWithTimeout(150L, 300L)
         .onEach { Timber.d("💧 DRIP: Survivor! ${it.className}") }
         .mapNotNull { event ->
-            UiNode.from(event.source)
+            event.source.toUiNode()
         }
 }

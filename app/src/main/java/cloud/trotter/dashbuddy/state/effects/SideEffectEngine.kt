@@ -12,7 +12,6 @@ import cloud.trotter.dashbuddy.state.event.TimeoutEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toSpannableString
-import cloud.trotter.dashbuddy.util.AccNodeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,6 +34,7 @@ class SideEffectEngine @Inject constructor(
     private val bubbleManager: BubbleManager,
     private val offerEvaluator: OfferEvaluator,
     private val screenShotHandler: ScreenShotHandler,
+    private val uiInteractionHandler: UiInteractionHandler,
 ) {
 
     // 1. OUTPUT STREAM: Events going BACK to the StateMachine (The Loopback)
@@ -77,7 +77,8 @@ class SideEffectEngine @Inject constructor(
             }
 
             is AppEffect.ClickNode -> {
-                AccNodeUtils.clickNode(effect.node.originalNode)
+                Timber.i("Executing Effect: Clicking Node (${effect.description})")
+                uiInteractionHandler.performClick(effect.node, effect.description)
             }
 
             is AppEffect.PlayNotificationSound -> { /* Implementation */

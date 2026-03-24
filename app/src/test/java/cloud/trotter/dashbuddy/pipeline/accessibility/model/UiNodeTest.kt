@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.model
 
 import android.graphics.Rect
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue

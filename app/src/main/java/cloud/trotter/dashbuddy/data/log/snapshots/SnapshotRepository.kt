@@ -1,7 +1,10 @@
 package cloud.trotter.dashbuddy.data.log.snapshots
 
 import android.content.Context
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotDao
+import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotRecord
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.log.snapshots.SnapshotWrapper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

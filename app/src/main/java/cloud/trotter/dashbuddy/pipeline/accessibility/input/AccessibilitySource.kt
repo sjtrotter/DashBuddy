@@ -5,7 +5,8 @@ import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toUiNode
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -53,7 +54,7 @@ class AccessibilitySource @Inject constructor() {
         val root = getLiveNativeRoot() ?: return null
 
         return try {
-            UiNode.from(root)
+            root.toUiNode()
         } catch (_: Exception) {
             null
         } finally {

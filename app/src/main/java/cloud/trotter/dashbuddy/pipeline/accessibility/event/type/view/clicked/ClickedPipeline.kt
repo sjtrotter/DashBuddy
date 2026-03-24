@@ -4,7 +4,7 @@ import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toUiNode
 import cloud.trotter.dashbuddy.state.event.StateEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -21,7 +21,7 @@ class ClickedPipeline @Inject constructor(
         .filter { it.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED }
         .mapNotNull { event ->
             val sourceNode = event.source ?: return@mapNotNull null
-            val node = UiNode.from(sourceNode) ?: return@mapNotNull null
+            val node = sourceNode.toUiNode() ?: return@mapNotNull null
 
             // Enrich
             val action = classifier.classify(node)

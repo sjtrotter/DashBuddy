@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.data.event.AppEventEntity
+import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import com.google.gson.Gson
 

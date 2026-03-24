@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotWrapper
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.log.snapshots.SnapshotWrapper
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import java.io.File

@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.data.log
 
 import android.content.Context
-import cloud.trotter.dashbuddy.data.log.debug.DebugLogRepo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +16,6 @@ import javax.inject.Singleton
 @Singleton
 class LogRepository @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val debugLogRepo: DebugLogRepo // For the Bubble UI
 ) {
     // Run file operations on IO thread to never block the main thread
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -48,9 +46,6 @@ class LogRepository @Inject constructor(
                 }
 
                 appLogFile.appendText(line)
-
-                // Optional: Push to Debug Bubble
-                debugLogRepo.addLogMessage(line.trim())
 
             } catch (_: Exception) {
                 // Fail silently to avoid crash loops

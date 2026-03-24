@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.data.event
 
+import cloud.trotter.dashbuddy.core.database.event.AppEventDao
+import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject

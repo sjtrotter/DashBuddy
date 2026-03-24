@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.test
 
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import java.lang.reflect.Field
 
 object LogToUiNodeParser {

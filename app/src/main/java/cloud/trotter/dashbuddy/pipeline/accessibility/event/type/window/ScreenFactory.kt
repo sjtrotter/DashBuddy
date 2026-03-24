@@ -4,8 +4,8 @@ import cloud.trotter.dashbuddy.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.data.log.Breadcrumbs
 import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotRepository
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
 import javax.inject.Inject
 

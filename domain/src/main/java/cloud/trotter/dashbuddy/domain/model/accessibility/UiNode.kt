@@ -1,0 +1,248 @@
+package cloud.trotter.dashbuddy.domain.model.accessibility
+
+/**
+ * A data class to hold structured information about a single UI element (node).
+ * Optimized for both efficient recursive searching (Clicks) and full-text collection (Screen Analysis).
+ * Essentially a pared-down serialization for AccessibilityNode in Android.
+ *
+ * If properties are edited, ensure you update the following to match:
+ *  In this file
+ *    - the equals function
+ *    - the hashcode function
+ *  In :core:database
+ *  - UiNodeDto
+ *  - UiNode.toDto
+ *  - UiNode.toDomain
+ */
+
+data class UiNode(
+
+    val text: String? = null,
+    val contentDescription: String? = null,
+    val stateDescription: String? = null,
+
+    val viewIdResourceName: String? = null,
+    val className: String? = null,
+
+    // Flags
+    val isClickable: Boolean = false,
+    val isEnabled: Boolean = false,
+    val isChecked: Int = 0,
+
+    val boundsInScreen: BoundingBox = BoundingBox(0, 0, 0, 0),
+
+    var parent: UiNode? = null,
+
+    val children: MutableList<UiNode> = mutableListOf(),
+) {
+
+    /**
+     * Call this immediately after deserializing from JSON to re-populate
+     * the 'parent' fields for the entire tree.
+     */
+    fun restoreParents() {
+        for (child in children) {
+            child.parent = this
+            child.restoreParents() // Recurse down
+        }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as UiNode
+
+        // Compare unique identifiers instead of the recursive tree.
+        // Text comparisons: text, contentDescription, stateDescription
+        if (text != other.text) return false
+        if (contentDescription != other.contentDescription) return false
+        if (stateDescription != other.stateDescription) return false
+        // ID and className
+        if (viewIdResourceName != other.viewIdResourceName) return false
+        if (className != other.className) return false
+        // Flags
+        if (isClickable != other.isClickable) return false
+        if (isEnabled != other.isEnabled) return false
+        if (isChecked != other.isChecked) return false
+        // Bounds
+        if (boundsInScreen != other.boundsInScreen) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        // Hash based on unique identifiers
+        // Texts: text, contentDescription, stateDescription
+        var result = text?.hashCode() ?: 0
+        result = 31 * result + (contentDescription?.hashCode() ?: 0)
+        result = 31 * result + (stateDescription?.hashCode() ?: 0)
+        // ID and className
+        result = 31 * result + (viewIdResourceName?.hashCode() ?: 0)
+        result = 31 * result + (className?.hashCode() ?: 0)
+        // Flags
+        result = 31 * result + isClickable.hashCode()
+        result = 31 * result + isEnabled.hashCode()
+        result = 31 * result + isChecked.hashCode()
+        // Bounds
+        result = 31 * result + boundsInScreen.hashCode()
+        return result
+    }
+
+    // ========================================================================
+    //  STRICT MATCHERS (Check ONLY this node)
+    //  Use these for specific logic or inside the recursive functions.
+    // ========================================================================
+
+    fun matchesId(idSnippet: String): Boolean {
+        return viewIdResourceName?.endsWith(idSnippet, ignoreCase = true) == true
+    }
+
+    fun matchesText(substring: String): Boolean {
+        return text?.contains(substring, ignoreCase = true) == true
+    }
+
+    fun matchesDesc(substring: String): Boolean {
+        return contentDescription?.contains(substring, ignoreCase = true) == true
+    }
+
+    // ========================================================================
+    //  RECURSIVE SEARCHERS (Check this node AND children)
+    //  Optimized to stop searching as soon as a match is found.
+    // ========================================================================
+
+    /** Does this node OR any descendant have this ID suffix? */
+    fun hasId(idSnippet: String): Boolean {
+        return findNode { it.matchesId(idSnippet) } != null
+    }
+
+    /** Does this node OR any descendant contain this visible text? */
+    fun hasText(substring: String): Boolean {
+        return findNode { it.matchesText(substring) } != null
+    }
+
+    /** Does this node OR any descendant contain this content description? */
+    fun hasContentDescription(desc: String): Boolean {
+        return findNode { it.matchesDesc(desc) } != null
+    }
+
+    // ========================================================================
+    //  TREE TRAVERSAL & SEARCH
+    // ========================================================================
+
+    /**
+     * Finds the specific node (self or descendant) that has the matching ID.
+     */
+    fun findDescendantById(idSnippet: String): UiNode? {
+        // STRICT check on self first (Fixes infinite recursion bug)
+        if (matchesId(idSnippet)) return this
+
+        for (child in children) {
+            val found = child.findDescendantById(idSnippet)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    /**
+     * Finds the first node matching the predicate.
+     */
+    fun findNode(predicate: (UiNode) -> Boolean): UiNode? {
+        if (predicate(this)) return this
+        for (child in children) {
+            val found = child.findNode(predicate)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    /**
+     * Finds ALL nodes matching the predicate.
+     */
+    fun findNodes(predicate: (UiNode) -> Boolean): List<UiNode> {
+        val matches = mutableListOf<UiNode>()
+        if (predicate(this)) matches.add(this)
+        for (child in children) {
+            matches.addAll(child.findNodes(predicate))
+        }
+        return matches
+    }
+
+    /**
+     * Returns true if any node in the tree matches the predicate.
+     */
+    fun hasNode(predicate: (UiNode) -> Boolean): Boolean {
+        return this.findNode(predicate) != null
+    }
+
+    /**
+     * Finds a child (direct descendant) with the matching ID.
+     */
+    fun findChildById(idSnippet: String): UiNode? {
+        return children.find { it.matchesId(idSnippet) }
+    }
+
+    // ========================================================================
+    //  DATA COLLECTION (Lazy)
+    // ========================================================================
+
+    /**
+     * Collects all text and content descriptions from the entire tree.
+     * Used primarily by Screen Recognizers.
+     */
+    val allText: List<String> by lazy {
+        val results = mutableListOf<String>()
+        collectText(this, results)
+        results
+    }
+
+    private fun collectText(node: UiNode, list: MutableList<String>) {
+        if (!node.text.isNullOrBlank()) list.add(node.text)
+        if (!node.contentDescription.isNullOrBlank()) list.add(node.contentDescription)
+        node.children.forEach { collectText(it, list) }
+    }
+
+    val structuralHash: Int by lazy {
+        var result = className?.hashCode() ?: 0
+        result = 31 * result + (viewIdResourceName?.hashCode() ?: 0)
+        for (child in children) {
+            result = 31 * result + child.structuralHash
+        }
+        result
+    }
+
+    val contentHash: Int by lazy {
+        var result = text?.hashCode() ?: 0
+        result = 31 * result + (contentDescription?.hashCode() ?: 0)
+        for (child in children) {
+            result = 31 * result + child.contentHash
+        }
+        result
+    }
+
+    // ========================================================================
+    //  DEBUGGING & LOGGING
+    // ========================================================================
+
+    override fun toString(): String {
+        val builder = StringBuilder()
+        appendNode(builder, this, 0)
+        return builder.toString()
+    }
+
+    private fun appendNode(builder: StringBuilder, node: UiNode, indent: Int) {
+        val indentation = "  ".repeat(indent)
+        val id = node.viewIdResourceName?.substringAfter("id/") ?: "no_id"
+        val desc = node.contentDescription?.let { "desc='$it'" } ?: ""
+        val txt = node.text?.let { "text='$it'" } ?: ""
+        val state = node.stateDescription?.let { "state='$it'" }
+        val identifier = listOf(txt, desc).filter { it.isNotEmpty() }.joinToString(", ")
+
+        builder.append(indentation)
+            .append("UiNode($identifier, id=$id, state=${state}, class=${node.className})\n")
+
+        for (child in node.children) {
+            appendNode(builder, child, indent + 1)
+        }
+    }
+}

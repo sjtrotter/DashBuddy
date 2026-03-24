@@ -1,7 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
 import cloud.trotter.dashbuddy.data.log.clicks.ClickLogRepository
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.ClickAction
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.state.event.ClickEvent
 import timber.log.Timber
 import javax.inject.Inject

@@ -80,9 +80,6 @@ dependencies {
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.androidx.preference.ktx)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    implementation(libs.androidx.room.paging)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
@@ -102,9 +99,9 @@ dependencies {
     implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))
 
+    implementation(project(":core:database"))
     implementation(project(":domain"))
 
-    ksp(libs.androidx.room.compiler)
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.hilt.compiler)
 
