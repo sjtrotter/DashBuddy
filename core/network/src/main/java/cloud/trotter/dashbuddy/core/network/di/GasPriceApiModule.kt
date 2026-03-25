@@ -1,6 +1,6 @@
-package cloud.trotter.dashbuddy.di
+package cloud.trotter.dashbuddy.core.network.di
 
-import cloud.trotter.dashbuddy.data.gas.eia.EiaApi
+import cloud.trotter.dashbuddy.core.network.fuel.price.eia.EiaApi
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides

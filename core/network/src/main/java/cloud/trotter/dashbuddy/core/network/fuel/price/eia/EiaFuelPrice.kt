@@ -1,37 +1,31 @@
-package cloud.trotter.dashbuddy.data.gas.eia
+package cloud.trotter.dashbuddy.core.network.fuel.price.eia
 
-import android.content.Context
-import android.location.Address
-import android.location.Geocoder
-import cloud.trotter.dashbuddy.BuildConfig
-import cloud.trotter.dashbuddy.data.gas.GasPriceDataSource
+import cloud.trotter.dashbuddy.core.network.BuildConfig
+import cloud.trotter.dashbuddy.domain.model.location.UserLocation
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.suspendCancellableCoroutine
+import cloud.trotter.dashbuddy.domain.provider.FuelPriceDataSource
 import timber.log.Timber
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.resume
 
 @Singleton
-class EiaGasPriceDataSource @Inject constructor(
-    @param:ApplicationContext private val context: Context,
+class EiaFuelPrice @Inject constructor(
     private val api: EiaApi
-) : GasPriceDataSource {
+) : FuelPriceDataSource {
 
     private val apiKey = BuildConfig.EIA_API_KEY
 
-    override suspend fun getGasPrice(
-        lat: Double?,
-        lon: Double?,
+    override suspend fun getFuelPrice(
+        userLocation: UserLocation?,
         fuelType: FuelType
     ): Result<Float> {
         return try {
             if (fuelType == FuelType.ELECTRICITY) {
                 return Result.failure(IllegalStateException("Electricity prices are handled manually."))
             }
-            val regionCode = getRegionCode(lat, lon)
+            val regionCode = getRegionCode(userLocation)
+
             Timber.i("Fetching Gas Price for ${fuelType.name} in region: $regionCode")
 
             val seriesId = buildSeriesId(fuelType, regionCode)
@@ -67,37 +61,16 @@ class EiaGasPriceDataSource @Inject constructor(
     }
 
     /**
-     * Reverse-geocodes coordinates to a US State, then maps it to an EIA PADD Region.
-     * Falls back to "NUS" (National US) if anything fails.
+     * Extracts the US State from the UserLocation and maps it to an EIA PADD Region.
+     * Falls back to "NUS" (National US) if the state is missing or unrecognized.
      */
-    private suspend fun getRegionCode(lat: Double?, lon: Double?): String {
-        if (lat == null || lon == null) return "NUS" // Fallback to National
+    private fun getRegionCode(userLocation: UserLocation?): String {
+        val stateName = userLocation?.stateName
 
-        return try {
-            val geocoder = Geocoder(context, Locale.getDefault())
-
-            // Handle API 33+ vs Older APIs
-            val stateName =
-                suspendCancellableCoroutine { continuation ->
-                    geocoder.getFromLocation(lat, lon, 1, object : Geocoder.GeocodeListener {
-                        override fun onGeocode(addresses: MutableList<Address>) {
-                            continuation.resume(addresses.firstOrNull()?.adminArea ?: "")
-                        }
-
-                        override fun onError(errorMessage: String?) {
-                            Timber.w("Geocoder listener error: $errorMessage")
-                            continuation.resume("") // Resume with empty string on error
-                        }
-                    })
-                }
-
-            if (stateName.isNotEmpty()) {
-                mapStateToPaddRegion(stateName)
-            } else {
-                "NUS"
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Geocoder failed to identify state, falling back to National Average.")
+        return if (!stateName.isNullOrEmpty()) {
+            mapStateToPaddRegion(stateName)
+        } else {
+            Timber.w("State not specified in UserLocation, falling back to National Average.")
             "NUS"
         }
     }

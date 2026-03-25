@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.vehicle.api.dto
+package cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto
 
 import kotlinx.serialization.Serializable
 

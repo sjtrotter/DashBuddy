@@ -1,13 +1,13 @@
-package cloud.trotter.dashbuddy.data.vehicle.api
+package cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa
 
-import cloud.trotter.dashbuddy.data.vehicle.api.dto.MenuItemsResponse
-import cloud.trotter.dashbuddy.data.vehicle.api.dto.VehicleDetailsResponse
+import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.MenuItemsResponse
+import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.VehicleDetailsResponse
 import retrofit2.http.GET
 import retrofit2.http.Headers
 import retrofit2.http.Path
 import retrofit2.http.Query
 
-interface FuelEconomyApi {
+interface EpaApi {
 
     @Headers("Accept: application/json")
     @GET("menu/year")

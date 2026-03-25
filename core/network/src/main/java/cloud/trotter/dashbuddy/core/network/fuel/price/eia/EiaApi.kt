@@ -1,24 +1,8 @@
-package cloud.trotter.dashbuddy.data.gas.eia
+package cloud.trotter.dashbuddy.core.network.fuel.price.eia
 
-import kotlinx.serialization.Serializable
+import cloud.trotter.dashbuddy.core.network.fuel.price.eia.dto.EiaResponseWrapper
 import retrofit2.http.GET
 import retrofit2.http.Query
-
-@Serializable
-data class EiaResponseWrapper(
-    val response: EiaDataNode
-)
-
-@Serializable
-data class EiaDataNode(
-    val data: List<EiaPriceRecord>
-)
-
-@Serializable
-data class EiaPriceRecord(
-    val period: String,
-    val value: Float
-)
 
 interface EiaApi {
     @GET("v2/petroleum/pri/gnd/data/")

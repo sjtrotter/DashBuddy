@@ -1,17 +1,17 @@
-package cloud.trotter.dashbuddy.data.gas
+package cloud.trotter.dashbuddy.domain.provider
 
+import cloud.trotter.dashbuddy.domain.model.location.UserLocation
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 
 /**
  * The standard contract for fetching gas prices.
  * Any future API (GasBuddy, AAA, CollectAPI) must implement this interface.
  */
-interface GasPriceDataSource {
+interface FuelPriceDataSource {
     /**
-     * @param lat The user's latitude (used by hyper-local APIs in the future)
-     * @param lon The user's longitude (used by hyper-local APIs in the future)
+     * @param userLocation The current [UserLocation] - latitude, longitude, city, state, zip
      * @param fuelType The type of gas their vehicle takes
      * @return The price of a gallon of gas, or an exception.
      */
-    suspend fun getGasPrice(lat: Double?, lon: Double?, fuelType: FuelType): Result<Float>
+    suspend fun getFuelPrice(userLocation: UserLocation?, fuelType: FuelType): Result<Float>
 }

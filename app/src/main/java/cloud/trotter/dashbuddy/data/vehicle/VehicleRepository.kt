@@ -1,15 +1,15 @@
 package cloud.trotter.dashbuddy.data.vehicle
 
-import cloud.trotter.dashbuddy.data.vehicle.api.FuelEconomyApi
-import cloud.trotter.dashbuddy.data.vehicle.api.dto.MenuItem
-import cloud.trotter.dashbuddy.data.vehicle.api.dto.VehicleDetailsResponse
+import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.EpaApi
+import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.MenuItem
+import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.VehicleDetailsResponse
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class VehicleRepository @Inject constructor(
-    private val api: FuelEconomyApi
+    private val api: EpaApi
 ) {
 
     suspend fun getYears(): List<String> {

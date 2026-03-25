@@ -26,11 +26,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "0.230.0"
-        buildConfigField(
-            "String",
-            "EIA_API_KEY",
-            localProperties.getProperty("EIA_API_KEY") ?: "\"\""
-        )
     }
 
     buildTypes {
@@ -51,7 +46,6 @@ android {
     viewBinding.enable = true
 
     buildFeatures {
-//        dataBinding = true // testing to see if databindings need to be enabled
         viewBinding = true
         compose = true
         buildConfig = true
@@ -90,16 +84,13 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.material)
     implementation(libs.play.services.location)
-    implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
     implementation(libs.reorderable)
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.robolectric)
     implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))
 
     implementation(project(":core:database"))
+    implementation(project(":core:network"))
     implementation(project(":domain"))
 
     ksp(libs.androidx.hilt.compiler)

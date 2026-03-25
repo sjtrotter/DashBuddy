@@ -1,6 +1,6 @@
-package cloud.trotter.dashbuddy.di
+package cloud.trotter.dashbuddy.core.network.di
 
-import cloud.trotter.dashbuddy.data.vehicle.api.FuelEconomyApi
+import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.EpaApi
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -26,7 +26,7 @@ object VehicleNetworkModule {
 
     @Provides
     @Singleton
-    fun provideFuelEconomyApi(): FuelEconomyApi {
+    fun provideFuelEconomyApi(): EpaApi {
         // Custom OkHttp logger that pipes directly into Timber at the VERBOSE level.
         // This prevents OkHttp from cluttering the standard INFO logcat.
         val customTimberLogger = HttpLoggingInterceptor.Logger { message ->
@@ -56,6 +56,6 @@ object VehicleNetworkModule {
             .client(client)
             .addConverterFactory(networkJson.asConverterFactory(contentType))
             .build()
-            .create(FuelEconomyApi::class.java)
+            .create(EpaApi::class.java)
     }
 }

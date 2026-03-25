@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.data.location
 
 import android.location.Location
+import cloud.trotter.dashbuddy.domain.model.location.Coordinates
+import cloud.trotter.dashbuddy.domain.model.location.UserLocation
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -13,5 +15,6 @@ interface LocationDataSource {
      * The GPS hardware is only active while this Flow is being collected.
      */
     val locationUpdates: Flow<Location>
-    suspend fun getLastKnownLocation(): Location?
+    suspend fun getLastKnownLocation(): Coordinates?
+    suspend fun getUserLocation(): UserLocation?
 }

@@ -2,8 +2,12 @@ package cloud.trotter.dashbuddy.data.location
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.location.Address
+import android.location.Geocoder
 import android.location.Location
 import android.os.Looper
+import cloud.trotter.dashbuddy.domain.model.location.Coordinates
+import cloud.trotter.dashbuddy.domain.model.location.UserLocation
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -13,12 +17,13 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
-
-//import cloud.trotter.dashbuddy.log.Logger as Log
+import kotlin.coroutines.resume
 
 /**
  * The specific implementation that talks to Google's FusedLocationProviderClient.
@@ -62,13 +67,53 @@ class FusedLocationDataSource @Inject constructor(
     }
 
     @SuppressLint("MissingPermission")
-    override suspend fun getLastKnownLocation(): Location? {
+    override suspend fun getLastKnownLocation(): Coordinates? {
         return try {
-            // This grabs the last cached location instantly without firing up the GPS chip
-            fusedClient.lastLocation.await()
+            val loc = fusedClient.lastLocation.await() ?: return null
+            Coordinates(
+                loc.latitude,
+                loc.longitude,
+            )
         } catch (e: Exception) {
             Timber.e(e, "Failed to get last known location")
             null
+        }
+    }
+
+    override suspend fun getUserLocation(): UserLocation? {
+        val coords = getLastKnownLocation() ?: return null
+        val userLocation = UserLocation(coordinates = coords)
+
+        return try {
+            val geocoder = Geocoder(context, Locale.getDefault())
+
+            // Modern API 33+ async geocoder lookup
+            val address = suspendCancellableCoroutine { continuation ->
+                geocoder.getFromLocation(
+                    coords.latitude,
+                    coords.longitude,
+                    1,
+                    object : Geocoder.GeocodeListener {
+                        override fun onGeocode(addresses: MutableList<Address>) {
+                            continuation.resume(addresses.firstOrNull())
+                        }
+
+                        override fun onError(errorMessage: String?) {
+                            Timber.w("Geocoder listener error: $errorMessage")
+                            continuation.resume(null)
+                        }
+                    })
+            }
+
+            userLocation.copy(
+                city = address?.locality,
+                stateName = address?.adminArea,
+                zipCode = address?.postalCode
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Geocoder enrichment failed. Returning raw coordinates.")
+            // Still returns the userLocation containing latitude/longitude!
+            userLocation
         }
     }
 }
