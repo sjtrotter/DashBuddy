@@ -1,10 +1,9 @@
-package cloud.trotter.dashbuddy.data.location
+package cloud.trotter.dashbuddy.core.location
 
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Address
 import android.location.Geocoder
-import android.location.Location
 import android.os.Looper
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import cloud.trotter.dashbuddy.domain.model.location.UserLocation
@@ -37,10 +36,10 @@ class FusedLocationDataSource @Inject constructor(
     private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
 
     @SuppressLint("MissingPermission") // Permission is checked by the UI/Service before starting
-    override val locationUpdates: Flow<Location> = callbackFlow {
+    override val locationUpdates: Flow<Coordinates> = callbackFlow {
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                result.locations.forEach { trySend(it) }
+                result.locations.forEach { trySend(Coordinates(it.latitude, it.longitude)) }
             }
         }
 

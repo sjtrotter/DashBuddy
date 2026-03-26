@@ -1,7 +1,7 @@
-package cloud.trotter.dashbuddy.di
+package cloud.trotter.dashbuddy.core.location.di
 
-import cloud.trotter.dashbuddy.data.location.FusedLocationDataSource
-import cloud.trotter.dashbuddy.data.location.LocationDataSource
+import cloud.trotter.dashbuddy.core.location.FusedLocationDataSource
+import cloud.trotter.dashbuddy.core.location.LocationDataSource
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

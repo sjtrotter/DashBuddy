@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.data.gas
 
-import cloud.trotter.dashbuddy.data.location.LocationDataSource
+import cloud.trotter.dashbuddy.core.location.LocationDataSource
 import cloud.trotter.dashbuddy.data.settings.SettingsRepository
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.provider.FuelPriceDataSource

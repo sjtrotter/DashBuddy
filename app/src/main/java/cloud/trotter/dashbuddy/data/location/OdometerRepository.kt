@@ -1,11 +1,12 @@
 package cloud.trotter.dashbuddy.data.location
 
-import android.location.Location
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import cloud.trotter.dashbuddy.core.location.LocationDataSource
+import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -18,8 +19,6 @@ import timber.log.Timber
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
-
-//import cloud.trotter.dashbuddy.log.Logger as Log
 
 @Singleton
 class OdometerRepository @Inject constructor(
@@ -42,7 +41,7 @@ class OdometerRepository @Inject constructor(
         (current - anchor).coerceAtLeast(0.0)
     }
 
-    private var lastLocation: Location? = null
+    private var lastCoords: Coordinates? = null
     private val metersToMiles = 0.000621371
 
     init {
@@ -86,20 +85,18 @@ class OdometerRepository @Inject constructor(
             Timber.i("Stopping GPS Tracking.")
             trackingJob?.cancel()
             trackingJob = null
-            lastLocation = null
+            lastCoords = null
         }
     }
 
-    private fun processLocation(location: Location) {
-        if (location.accuracy > 25f) return
-
-        if (lastLocation != null) {
-            val distanceMeters = location.distanceTo(lastLocation!!).toDouble()
+    private fun processLocation(coords: Coordinates) {
+        if (lastCoords != null) {
+            val distanceMeters = coords.distanceTo(lastCoords!!)
             if (distanceMeters > 5) {
                 addMeters(distanceMeters)
             }
         }
-        lastLocation = location
+        lastCoords = coords
     }
 
     private fun addMeters(delta: Double) {
