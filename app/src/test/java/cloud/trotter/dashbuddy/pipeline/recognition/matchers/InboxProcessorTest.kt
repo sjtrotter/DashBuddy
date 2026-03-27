@@ -40,7 +40,7 @@ class InboxProcessorTest(
         @Parameterized.Parameters(name = "{0}")
         fun data(): Collection<Array<Any>> {
             val data = try {
-                TestResourceLoader.loadForParameterized(INBOX)
+                TestResourceLoader.loadForParameterizedWithBreadcrumbs(INBOX)
             } catch (_: Exception) {
                 emptyList()
             }

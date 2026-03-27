@@ -10,7 +10,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -32,8 +31,7 @@ class BubbleViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Expose real-time session miles
-    val sessionMiles = odometerRepository.sessionMeters
-        .map { meters -> meters * 0.000621371 }
+    val sessionMiles = odometerRepository.sessionMilesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
     // Debug helper to test the system

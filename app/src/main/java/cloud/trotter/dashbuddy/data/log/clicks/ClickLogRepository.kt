@@ -1,7 +1,8 @@
 package cloud.trotter.dashbuddy.data.log.clicks
 
 import android.content.Context
-import cloud.trotter.dashbuddy.domain.model.log.clicks.ClickLogEntry
+import cloud.trotter.dashbuddy.core.database.log.dto.ClickLogEntryDto
+import cloud.trotter.dashbuddy.core.database.log.mapper.toDto
 import cloud.trotter.dashbuddy.state.event.ClickEvent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -65,18 +66,18 @@ class ClickLogRepository @Inject constructor(
         val filename = "${filenameFormat.format(now)}_clicks.jsonl"
         val file = File(logDir, filename)
 
-        // Wrapper
-        val entry = ClickLogEntry(
+        // Wrapper mapped to the DTO
+        val entryDto = ClickLogEntryDto(
             timestamp = event.timestamp,
             dateReadable = prettyTimeFormat.format(now),
-            action = event.action,
+            action = event.action.name, // Convert Enum to String
             targetId = event.sourceNode.viewIdResourceName,
             targetText = event.sourceNode.text,
-            sourceNode = event.sourceNode
+            sourceNode = event.sourceNode.toDto() // Map the domain node to UiNodeDto
         )
 
         // Serialize to single line
-        val jsonLine = json.encodeToString(entry)
+        val jsonLine = json.encodeToString(entryDto)
 
         // Append with newline
         file.appendText("$jsonLine\n")

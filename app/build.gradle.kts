@@ -90,6 +90,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
 
     implementation(project(":core:database"))
+    implementation(project(":core:datastore"))
     implementation(project(":core:location"))
     implementation(project(":core:network"))
     implementation(project(":domain"))

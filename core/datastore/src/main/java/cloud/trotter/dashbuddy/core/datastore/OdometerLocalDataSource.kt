@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.location
+package cloud.trotter.dashbuddy.core.datastore
 
 import android.content.Context
 import androidx.datastore.preferences.core.doublePreferencesKey

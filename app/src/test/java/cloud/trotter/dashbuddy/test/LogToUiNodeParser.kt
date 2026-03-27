@@ -88,7 +88,6 @@ object LogToUiNodeParser {
             contentDescription = desc,
             viewIdResourceName = resourceId,
             className = className,
-            originalNode = null,
             // parent = null // Parent is set later via reflection
         )
     }

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "cloud.trotter.dashbuddy.core.database"
+    namespace = "cloud.trotter.dashbuddy.core.datastore"
     compileSdk {
         version = release(36)
     }
@@ -28,31 +28,22 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 }
 
 dependencies {
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    implementation(libs.androidx.room.paging)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.timber)
 
     implementation(project(":domain"))
 
-    ksp(libs.androidx.room.compiler)
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)
-    testImplementation(libs.kotlin.reflect)
-
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-}
-
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
 }

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.data.state
 
+import cloud.trotter.dashbuddy.core.datastore.StateRecoveryDataSource
 import javax.inject.Inject
 import javax.inject.Singleton
 

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.data.settings
 
+import cloud.trotter.dashbuddy.core.datastore.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map

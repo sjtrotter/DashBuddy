@@ -1,13 +1,16 @@
 package cloud.trotter.dashbuddy.data.location
 
+import cloud.trotter.dashbuddy.core.datastore.OdometerLocalDataSource
 import cloud.trotter.dashbuddy.core.location.LocationDataSource
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -27,6 +30,11 @@ class OdometerRepository @Inject constructor(
 
     val sessionMeters = combine(_meters, _anchor) { current, anchor ->
         (current - anchor).coerceAtLeast(0.0)
+    }
+
+    // Public Output: Reactive Session Miles
+    val sessionMilesFlow: Flow<Double> = sessionMeters.map { meters ->
+        meters * metersToMiles
     }
 
     private var lastCoords: Coordinates? = null

@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.data.settings
 
+import cloud.trotter.dashbuddy.core.datastore.StrategyDataSource
+import cloud.trotter.dashbuddy.core.datastore.dto.ScoringRuleDto
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
+import cloud.trotter.dashbuddy.domain.config.MerchantAction
 import cloud.trotter.dashbuddy.domain.config.MetricType
 import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.domain.config.ScoringRule
@@ -12,7 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.InternalSerializationApi
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,8 +44,6 @@ class StrategyRepository @Inject constructor(
         EvidenceConfig(master, offers, delivery, dash)
     }.stateIn(scope, SharingStarted.Eagerly, EvidenceConfig())
 
-    // Using the List<> combine overload to support more than 5 parameters!
-// 1. Explicitly type the list as <Flow<Any>>
     val automationConfig: Flow<OfferAutomationConfig> = combine(
         listOf<Flow<Any>>(
             dataSource.autoMaster,
@@ -53,7 +54,7 @@ class StrategyRepository @Inject constructor(
             dataSource.autoDeclineMaxPay,
             dataSource.autoDeclineMinRatio
         )
-    ) { values -> // 'values' is now safely inferred as Array<Any>
+    ) { values ->
         OfferAutomationConfig(
             masterAutoPilotEnabled = values[0] as Boolean,
             autoAcceptEnabled = values[1] as Boolean,
@@ -65,12 +66,27 @@ class StrategyRepository @Inject constructor(
         )
     }
 
-    val scoringRules: Flow<List<ScoringRule>> = dataSource.ruleListJson.map { json ->
-        if (json.isNullOrBlank()) defaultRules else {
-            try {
-                Json.decodeFromString(json)
-            } catch (e: Exception) {
-                defaultRules
+    // Maps the incoming DTOs to pure Domain Models
+    @OptIn(InternalSerializationApi::class)
+    val scoringRules: Flow<List<ScoringRule>> = dataSource.scoringRules.map { dtoList ->
+        if (dtoList.isEmpty()) return@map defaultRules
+
+        dtoList.map { dto ->
+            when (dto) {
+                is ScoringRuleDto.MetricRuleDto -> ScoringRule.MetricRule(
+                    id = dto.id,
+                    isEnabled = dto.isEnabled,
+                    metricType = MetricType.valueOf(dto.metricType),
+                    targetValue = dto.targetValue,
+                    autoDeclineOnFail = dto.autoDeclineOnFail
+                )
+
+                is ScoringRuleDto.MerchantRuleDto -> ScoringRule.MerchantRule(
+                    id = dto.id,
+                    isEnabled = dto.isEnabled,
+                    storeName = dto.storeName,
+                    action = MerchantAction.valueOf(dto.action)
+                )
             }
         }
     }
@@ -81,62 +97,52 @@ class StrategyRepository @Inject constructor(
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
-    suspend fun setEvidenceMaster(enabled: Boolean) {
-        dataSource.update { prefs ->
-            prefs[StrategyDataSource.Keys.EVIDENCE_MASTER] = enabled
-            if (enabled) {
-                if (prefs[StrategyDataSource.Keys.EVIDENCE_OFFERS] == null) prefs[StrategyDataSource.Keys.EVIDENCE_OFFERS] =
-                    true
-                if (prefs[StrategyDataSource.Keys.EVIDENCE_DELIVERY] == null) prefs[StrategyDataSource.Keys.EVIDENCE_DELIVERY] =
-                    true
+    suspend fun setEvidenceMaster(enabled: Boolean) = dataSource.setEvidenceMaster(enabled)
+    suspend fun updateEvidenceConfig(offers: Boolean, delivery: Boolean, dash: Boolean) =
+        dataSource.updateEvidenceConfig(offers, delivery, dash)
+
+    suspend fun setProtectStatsMode(enabled: Boolean) = dataSource.setProtectStatsMode(enabled)
+    suspend fun setAllowShopping(allowed: Boolean) = dataSource.setAllowShopping(allowed)
+    suspend fun setMasterAutomation(enabled: Boolean) = dataSource.setMasterAutomation(enabled)
+
+    // Maps Domain Models to DTOs before saving
+    @OptIn(InternalSerializationApi::class)
+    suspend fun updateRules(newRules: List<ScoringRule>) {
+        val dtos = newRules.map { rule ->
+            when (rule) {
+                is ScoringRule.MetricRule -> ScoringRuleDto.MetricRuleDto(
+                    id = rule.id,
+                    isEnabled = rule.isEnabled,
+                    metricType = rule.metricType.name,
+                    targetValue = rule.targetValue,
+                    autoDeclineOnFail = rule.autoDeclineOnFail
+                )
+
+                is ScoringRule.MerchantRule -> ScoringRuleDto.MerchantRuleDto(
+                    id = rule.id,
+                    isEnabled = rule.isEnabled,
+                    storeName = rule.storeName,
+                    action = rule.action.name
+                )
             }
         }
+        dataSource.updateRules(dtos)
     }
-
-    suspend fun updateEvidenceConfig(offers: Boolean, delivery: Boolean, dash: Boolean) {
-        dataSource.update { prefs ->
-            prefs[StrategyDataSource.Keys.EVIDENCE_OFFERS] = offers
-            prefs[StrategyDataSource.Keys.EVIDENCE_DELIVERY] = delivery
-            prefs[StrategyDataSource.Keys.EVIDENCE_DASH] = dash
-        }
-    }
-
-    suspend fun updateRules(newRules: List<ScoringRule>) {
-        dataSource.update {
-            it[StrategyDataSource.Keys.RULE_LIST_JSON] = Json.encodeToString(newRules)
-        }
-    }
-
-    suspend fun setProtectStatsMode(enabled: Boolean) =
-        dataSource.update { it[StrategyDataSource.Keys.PROTECT_STATS_MODE] = enabled }
-
-    suspend fun setAllowShopping(allowed: Boolean) =
-        dataSource.update { it[StrategyDataSource.Keys.ALLOW_SHOPPING] = allowed }
-
-    suspend fun setMasterAutomation(enabled: Boolean) =
-        dataSource.update { it[StrategyDataSource.Keys.AUTO_MASTER] = enabled }
 
     suspend fun updateAutomation(
-        autoAccept: Boolean,
-        acceptMinPay: Double,
-        acceptMinRatio: Double,
-        autoDecline: Boolean,
-        declineMaxPay: Double,
-        declineMinRatio: Double
-    ) {
-        dataSource.update { prefs ->
-            prefs[StrategyDataSource.Keys.AUTO_ACCEPT] = autoAccept
-            prefs[StrategyDataSource.Keys.AUTO_ACCEPT_MIN_PAY] = acceptMinPay
-            prefs[StrategyDataSource.Keys.AUTO_ACCEPT_MIN_RATIO] = acceptMinRatio
-
-            prefs[StrategyDataSource.Keys.AUTO_DECLINE] = autoDecline
-            prefs[StrategyDataSource.Keys.AUTO_DECLINE_MAX_PAY] = declineMaxPay
-            prefs[StrategyDataSource.Keys.AUTO_DECLINE_MIN_RATIO] = declineMinRatio
-        }
-    }
+        autoAccept: Boolean, acceptMinPay: Double, acceptMinRatio: Double,
+        autoDecline: Boolean, declineMaxPay: Double, declineMinRatio: Double
+    ) = dataSource.updateAutomation(
+        autoAccept,
+        acceptMinPay,
+        acceptMinRatio,
+        autoDecline,
+        declineMaxPay,
+        declineMinRatio
+    )
 
     suspend fun clearPreferences() {
         Timber.w("Clearing Strategy Preferences")
-        dataSource.update { it.clear() }
+        dataSource.clear()
     }
 }

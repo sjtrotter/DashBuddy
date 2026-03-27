@@ -1,10 +1,11 @@
 package cloud.trotter.dashbuddy.data.log.snapshots
 
 import android.content.Context
+import cloud.trotter.dashbuddy.core.database.log.dto.SnapshotWrapperDto
+import cloud.trotter.dashbuddy.core.database.log.mapper.toDto
 import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotDao
 import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotRecord
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.log.snapshots.SnapshotWrapper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -102,15 +103,15 @@ class SnapshotRepository @Inject constructor(
         val file = File(typeDir, filename)
 
         // Create Wrapper
-        val wrapper = SnapshotWrapper(
+        val wrapperDto = SnapshotWrapperDto(
             timestamp = now,
             breadcrumbs = breadcrumbs,
             isGolden = false, // Default is false for live captures
-            root = node
+            root = node.toDto()
         )
 
         // Write
-        file.writeText(json.encodeToString(wrapper))
+        file.writeText(json.encodeToString(wrapperDto))
 
         // Save Record
         val record = SnapshotRecord(

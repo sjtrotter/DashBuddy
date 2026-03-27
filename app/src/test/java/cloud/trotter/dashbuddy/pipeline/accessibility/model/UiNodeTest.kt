@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.model
 
 import android.graphics.Rect
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toBoundingBox
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -23,7 +24,7 @@ class UiNodeTest {
             isClickable = true,
             isEnabled = true,
             isChecked = 0,
-            boundsInScreen = Rect(10, 10, 100, 100)
+            boundsInScreen = Rect(10, 10, 100, 100).toBoundingBox()
         )
     }
 
@@ -98,7 +99,7 @@ class UiNodeTest {
     @Test
     fun `equals returns false when bounds differ`() {
         val base = createBaseNode()
-        val differentBounds = base.copy(boundsInScreen = Rect(0, 0, 0, 0))
+        val differentBounds = base.copy(boundsInScreen = Rect(0, 0, 0, 0).toBoundingBox())
 
         assertNotEquals("Should fail on bounds mismatch", base, differentBounds)
     }
