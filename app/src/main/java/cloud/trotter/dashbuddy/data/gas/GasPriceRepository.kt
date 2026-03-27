@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.data.gas
 
 import cloud.trotter.dashbuddy.core.location.LocationDataSource
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.provider.FuelPriceDataSource
 import timber.log.Timber
@@ -12,7 +12,7 @@ import javax.inject.Singleton
 class GasPriceRepository @Inject constructor(
     private val gasDataSource: FuelPriceDataSource,
     private val locationDataSource: LocationDataSource,
-    private val settingsRepository: SettingsRepository
+    private val appPreferencesRepository: AppPreferencesRepository
 ) {
     suspend fun fetchAndSaveCurrentGasPrice(fuelType: FuelType): Result<Float> {
         return try {
@@ -24,7 +24,7 @@ class GasPriceRepository @Inject constructor(
 
             if (priceResult.isSuccess) {
                 val newPrice = priceResult.getOrThrow()
-                settingsRepository.updateGasPrice(newPrice)
+                appPreferencesRepository.updateGasPrice(newPrice)
             }
 
             priceResult

@@ -1,10 +1,5 @@
 package cloud.trotter.dashbuddy.data.location
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.doublePreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import cloud.trotter.dashbuddy.core.location.LocationDataSource
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import kotlinx.coroutines.CoroutineScope
@@ -12,31 +7,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class OdometerRepository @Inject constructor(
-    private val dataStore: DataStore<Preferences>,
+    private val localDataSource: OdometerLocalDataSource,
     private val locationDataSource: LocationDataSource
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var trackingJob: Job? = null
 
-    // Keys
-    private val keyMeters = doublePreferencesKey("odometer_accumulated_meters")
-    private val keySessionAnchor = doublePreferencesKey("odometer_session_anchor") // <--- NEW
-
     // State
-    private val _meters = MutableStateFlow(0.0) // Total Lifetime Meters
-    private val _anchor = MutableStateFlow(0.0) // The reading when Dash started
+    private val _meters = MutableStateFlow(0.0)
+    private val _anchor = MutableStateFlow(0.0)
 
-    // Public Output: Session Miles (Reactive)
     val sessionMeters = combine(_meters, _anchor) { current, anchor ->
         (current - anchor).coerceAtLeast(0.0)
     }
@@ -45,31 +33,23 @@ class OdometerRepository @Inject constructor(
     private val metersToMiles = 0.000621371
 
     init {
-        // Load BOTH values from disk on startup
         scope.launch {
-            dataStore.data
-                .catch { exception ->
-                    if (exception is IOException) emit(emptyPreferences()) else throw exception
-                }
-                .collect { prefs ->
-                    val savedMeters = prefs[keyMeters] ?: 0.0
-                    val savedAnchor = prefs[keySessionAnchor] ?: 0.0
-
-                    if (_meters.value != savedMeters) _meters.value = savedMeters
-                    if (_anchor.value != savedAnchor) _anchor.value = savedAnchor
-                }
+            localDataSource.totalMetersFlow.collect { savedMeters ->
+                if (_meters.value != savedMeters) _meters.value = savedMeters
+            }
+        }
+        scope.launch {
+            localDataSource.sessionAnchorFlow.collect { savedAnchor ->
+                if (_anchor.value != savedAnchor) _anchor.value = savedAnchor
+            }
         }
     }
 
-    /**
-     * Call this ONLY when a NEW dash starts (Transition from Idle -> Active).
-     * It sets the "Trip A" counter to 0 by moving the anchor to the current total.
-     */
     fun resetSession() {
         Timber.i("Resetting Session Odometer")
         val currentTotal = _meters.value
         _anchor.value = currentTotal
-        saveAnchor(currentTotal)
+        scope.launch { localDataSource.saveSessionAnchor(currentTotal) }
     }
 
     fun startTracking() {
@@ -102,32 +82,9 @@ class OdometerRepository @Inject constructor(
     private fun addMeters(delta: Double) {
         val newTotal = _meters.value + delta
         _meters.value = newTotal
-        saveMeters(newTotal)
+        scope.launch { localDataSource.saveTotalMeters(newTotal) }
     }
 
-    // --- Persistence ---
-
-    private fun saveMeters(newTotal: Double) {
-        scope.launch {
-            try {
-                dataStore.edit { it[keyMeters] = newTotal }
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to save meters")
-            }
-        }
-    }
-
-    private fun saveAnchor(newAnchor: Double) {
-        scope.launch {
-            try {
-                dataStore.edit { it[keySessionAnchor] = newAnchor }
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to save anchor")
-            }
-        }
-    }
-
-    // --- Helpers ---
     fun getCurrentSessionMiles(): Double =
         (_meters.value - _anchor.value).coerceAtLeast(0.0) * metersToMiles
 

@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.data.settings.AppStateRepository
 import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.AppStateV2.Initializing.isActive
@@ -21,7 +21,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     application: Application,
-    private val settingsRepository: SettingsRepository,
+    private val appStateRepository: AppStateRepository,
     odometerRepository: OdometerRepository,
     stateManager: StateManagerV2,
     private val bubbleManager: BubbleManager,
@@ -50,13 +50,13 @@ class DashboardViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 mi")
 
     // 4. First Run Check
-    val isFirstRun: StateFlow<Boolean> = settingsRepository.isFirstRun
+    val isFirstRun: StateFlow<Boolean> = appStateRepository.isFirstRun
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // --- ACTIONS ---
 
     fun completeSetup() = viewModelScope.launch {
-        settingsRepository.setFirstRunComplete()
+        appStateRepository.setFirstRunComplete()
     }
 
     fun showWelcomeBubble() {

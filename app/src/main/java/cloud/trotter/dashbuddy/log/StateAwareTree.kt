@@ -2,7 +2,8 @@ package cloud.trotter.dashbuddy.log
 
 import android.util.Log
 import cloud.trotter.dashbuddy.data.log.LogRepository
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.data.settings.DevSettingsRepository
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -19,7 +20,8 @@ import javax.inject.Provider
  */
 class StateAwareTree(
     private val logRepository: LogRepository,
-    private val settingsRepository: SettingsRepository,
+    private val appPreferencesRepository: AppPreferencesRepository,
+    private val devSettingsRepository: DevSettingsRepository,
     private val stateProvider: Provider<String> // Lazy access to state to avoid circular dependencies
 ) : Timber.Tree() {
 
@@ -28,7 +30,7 @@ class StateAwareTree(
 
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         // 1. Check Log Level Gate
-        if (priority < settingsRepository.minLogLevel.value) return
+        if (priority < devSettingsRepository.minLogLevel.value) return
 
         // 2. Auto-Generate Tag if missing
         val finalTag = tag ?: createStackElementTag()

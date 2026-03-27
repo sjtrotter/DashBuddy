@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.MenuItem
 import cloud.trotter.dashbuddy.data.gas.GasPriceRepository
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.data.settings.AppStateRepository
+import cloud.trotter.dashbuddy.data.settings.StrategyRepository
 import cloud.trotter.dashbuddy.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.domain.config.DashStrategy
 import cloud.trotter.dashbuddy.domain.config.MetricType
@@ -28,7 +30,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class WizardViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository,
+    private val strategyRepository: StrategyRepository,
+    private val appPreferencesRepository: AppPreferencesRepository,
+    private val appStateRepository: AppStateRepository,
     private val vehicleRepository: VehicleRepository,
     private val gasPriceRepository: GasPriceRepository
 ) : ViewModel() {
@@ -60,19 +64,19 @@ class WizardViewModel @Inject constructor(
 
     private fun loadExistingSettings() {
         viewModelScope.launch {
-            val currentYear = settingsRepository.vehicleYear.first()
-            val currentMake = settingsRepository.vehicleMake.first()
-            val currentModel = settingsRepository.vehicleModel.first()
-            val currentTrim = settingsRepository.vehicleTrim.first()
-            val currentMpg = settingsRepository.estimatedMpg.first()
-            val currentFuelType = settingsRepository.fuelType.first()
-            val currentGasAuto = settingsRepository.isGasPriceAuto.first()
-            val currentGasPrice = settingsRepository.gasPrice.first()
-            val currentProtectMode = settingsRepository.protectStatsMode.first()
+            val currentYear = appPreferencesRepository.vehicleYear.first()
+            val currentMake = appPreferencesRepository.vehicleMake.first()
+            val currentModel = appPreferencesRepository.vehicleModel.first()
+            val currentTrim = appPreferencesRepository.vehicleTrim.first()
+            val currentMpg = appPreferencesRepository.estimatedMpg.first()
+            val currentFuelType = appPreferencesRepository.fuelType.first()
+            val currentGasAuto = appPreferencesRepository.isGasPriceAuto.first()
+            val currentGasPrice = appPreferencesRepository.gasPrice.first()
+            val currentProtectMode = strategyRepository.protectStatsMode.first()
             val currentStrategy =
                 if (currentProtectMode) DashStrategy.PROTECT_PLATINUM else DashStrategy.MANUAL
 
-            val rules = settingsRepository.scoringRules.first()
+            val rules = strategyRepository.scoringRules.first()
             val minPayoutRule = rules.filterIsInstance<ScoringRule.MetricRule>()
                 .find { it.metricType == MetricType.PAYOUT }
             val targetHourlyRule = rules.filterIsInstance<ScoringRule.MetricRule>()
@@ -321,10 +325,10 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch {
             val finalState = _state.value
 
-            settingsRepository.updateFuelType(finalState.fuelType)
+            appPreferencesRepository.updateFuelType(finalState.fuelType)
 
             if (finalState.vehicleType == VehicleType.E_BIKE) {
-                settingsRepository.updateEconomySettings(
+                appPreferencesRepository.updateEconomySettings(
                     "E-Bike",
                     "E-Bike",
                     "E-Bike",
@@ -334,7 +338,7 @@ class WizardViewModel @Inject constructor(
                     0.0f
                 )
             } else {
-                settingsRepository.updateEconomySettings(
+                appPreferencesRepository.updateEconomySettings(
                     finalState.vehicleYear, finalState.vehicleMake,
                     finalState.vehicleModel, finalState.vehicleTrim,
                     finalState.estimatedMpg, finalState.isGasPriceAuto, finalState.gasPrice
@@ -344,16 +348,19 @@ class WizardViewModel @Inject constructor(
             val isCherryPicker = finalState.strategy == DashStrategy.CHERRY_PICKER
             val isPlatinum = finalState.strategy == DashStrategy.PROTECT_PLATINUM
 
-            settingsRepository.setProtectStatsMode(isPlatinum)
-            settingsRepository.setMasterAutomation(isCherryPicker)
-            settingsRepository.updateAutomation(
+            strategyRepository.setProtectStatsMode(isPlatinum)
+            strategyRepository.setMasterAutomation(isCherryPicker)
+            strategyRepository.updateAutomation(
                 autoAccept = false,
-                minPay = 0.0,
-                autoDecline = isCherryPicker
-            )
-            settingsRepository.setAllowShopping(true)
+                acceptMinPay = 0.0,
+                acceptMinRatio = 2.0, // Default $2.00/mi
+                autoDecline = isCherryPicker,
+                declineMaxPay = 3.50, // Default auto-decline anything under $3.50
+                declineMinRatio = 0.50 // Default auto-decline anything under $0.50/mi
+            ) // TODO: Update UI to collect all fields?
+            strategyRepository.setAllowShopping(true)
 
-            val currentRules = settingsRepository.scoringRules.first().toMutableList()
+            val currentRules = strategyRepository.scoringRules.first().toMutableList()
             val updatedRules = currentRules.map { rule ->
                 if (rule is ScoringRule.MetricRule) {
                     when (rule.metricType) {
@@ -386,8 +393,8 @@ class WizardViewModel @Inject constructor(
                 } else rule
             }
 
-            settingsRepository.updateRules(updatedRules)
-            settingsRepository.setFirstRunComplete()
+            strategyRepository.updateRules(updatedRules)
+            appStateRepository.setFirstRunComplete()
             onComplete()
         }
     }
