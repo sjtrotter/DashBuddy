@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.data.location
 
-import cloud.trotter.dashbuddy.core.datastore.OdometerLocalDataSource
+import cloud.trotter.dashbuddy.core.datastore.odometer.OdometerLocalDataSource
 import cloud.trotter.dashbuddy.core.location.LocationDataSource
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import kotlinx.coroutines.CoroutineScope

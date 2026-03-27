@@ -1,13 +1,13 @@
-package cloud.trotter.dashbuddy.core.datastore
+package cloud.trotter.dashbuddy.core.datastore.strategy
 
-import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import cloud.trotter.dashbuddy.core.datastore.dto.ScoringRuleDto
-import dagger.hilt.android.qualifiers.ApplicationContext
+import cloud.trotter.dashbuddy.core.datastore.di.StrategyPreferences
+import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.InternalSerializationApi
@@ -15,14 +15,10 @@ import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.strategyDataStore by preferencesDataStore(name = "strategy_prefs")
-
 @Singleton
 class StrategyDataSource @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:StrategyPreferences private val ds: DataStore<Preferences>
 ) {
-    private val ds = context.strategyDataStore
-
     private object Keys {
         val EVIDENCE_MASTER = booleanPreferencesKey("evidence_master_enabled")
         val EVIDENCE_OFFERS = booleanPreferencesKey("evidence_save_offers")
@@ -31,12 +27,10 @@ class StrategyDataSource @Inject constructor(
 
         val AUTO_MASTER = booleanPreferencesKey("auto_master_enabled")
 
-        // Auto-Accept
         val AUTO_ACCEPT = booleanPreferencesKey("auto_accept_enabled")
         val AUTO_ACCEPT_MIN_PAY = doublePreferencesKey("auto_accept_min_pay")
         val AUTO_ACCEPT_MIN_RATIO = doublePreferencesKey("auto_accept_min_ratio")
 
-        // Auto-Decline
         val AUTO_DECLINE = booleanPreferencesKey("auto_decline_enabled")
         val AUTO_DECLINE_MAX_PAY = doublePreferencesKey("auto_decline_max_pay")
         val AUTO_DECLINE_MIN_RATIO = doublePreferencesKey("auto_decline_min_ratio")
@@ -46,9 +40,6 @@ class StrategyDataSource @Inject constructor(
         val ALLOW_SHOPPING = booleanPreferencesKey("allow_shopping")
     }
 
-    // ============================================================================================
-    // STREAMS
-    // ============================================================================================
     val evidenceMaster: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_MASTER] ?: false }
     val evidenceOffers: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_OFFERS] ?: true }
     val evidenceDelivery: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DELIVERY] ?: true }
@@ -81,9 +72,6 @@ class StrategyDataSource @Inject constructor(
     val protectStatsMode: Flow<Boolean> = ds.data.map { it[Keys.PROTECT_STATS_MODE] ?: false }
     val allowShopping: Flow<Boolean> = ds.data.map { it[Keys.ALLOW_SHOPPING] ?: true }
 
-    // ============================================================================================
-    // ENCAPSULATED WRITE ACTIONS
-    // ============================================================================================
     suspend fun setEvidenceMaster(enabled: Boolean) {
         ds.edit { prefs ->
             prefs[Keys.EVIDENCE_MASTER] = enabled

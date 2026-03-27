@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.data.settings
 
-import cloud.trotter.dashbuddy.core.datastore.AppStateDataSource
+import cloud.trotter.dashbuddy.core.datastore.appstate.AppStateDataSource
 import kotlinx.coroutines.flow.Flow
 import timber.log.Timber
 import javax.inject.Inject
@@ -13,7 +13,7 @@ class AppStateRepository @Inject constructor(
     val isFirstRun: Flow<Boolean> = dataSource.isFirstRun
 
     suspend fun setFirstRunComplete() {
-        dataSource.update { it[AppStateDataSource.Keys.IS_FIRST_RUN] = false }
+        dataSource.setFirstRunComplete()
     }
 
     suspend fun clearPreferences() {

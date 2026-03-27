@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.data.settings
 
-import cloud.trotter.dashbuddy.core.datastore.AppPreferencesDataSource
+import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -25,6 +25,7 @@ class AppPreferencesRepository @Inject constructor(
     val isProMode = dataSource.isProMode
     val appTheme = dataSource.appTheme
 
+    // Maps the String from the Datastore into your pure Domain Enum
     val fuelType: Flow<FuelType> = dataSource.fuelType.map { savedType ->
         try {
             FuelType.valueOf(savedType ?: FuelType.REGULAR.name)
@@ -36,17 +37,14 @@ class AppPreferencesRepository @Inject constructor(
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
-    suspend fun updateGasPrice(price: Float) =
-        dataSource.update { it[AppPreferencesDataSource.Keys.GAS_PRICE] = price }
+    suspend fun updateGasPrice(price: Float) = dataSource.updateGasPrice(price)
 
-    suspend fun updateFuelType(type: FuelType) =
-        dataSource.update { it[AppPreferencesDataSource.Keys.FUEL_TYPE] = type.name }
+    // Passes the Enum as a String to keep the DataSource clean
+    suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
 
-    suspend fun setProMode(enabled: Boolean) =
-        dataSource.update { it[AppPreferencesDataSource.Keys.IS_PRO_MODE] = enabled }
+    suspend fun setProMode(enabled: Boolean) = dataSource.setProMode(enabled)
 
-    suspend fun setTheme(theme: String) =
-        dataSource.update { it[AppPreferencesDataSource.Keys.APP_THEME] = theme }
+    suspend fun setTheme(theme: String) = dataSource.setTheme(theme)
 
     suspend fun updateEconomySettings(
         year: String,
@@ -56,27 +54,13 @@ class AppPreferencesRepository @Inject constructor(
         mpg: Float,
         isGasAuto: Boolean,
         price: Float
-    ) {
-        dataSource.update { prefs ->
-            prefs[AppPreferencesDataSource.Keys.VEHICLE_YEAR] = year
-            prefs[AppPreferencesDataSource.Keys.VEHICLE_MAKE] = make
-            prefs[AppPreferencesDataSource.Keys.VEHICLE_MODEL] = model
-            prefs[AppPreferencesDataSource.Keys.VEHICLE_TRIM] = trim
-            prefs[AppPreferencesDataSource.Keys.ESTIMATED_MPG] = mpg
-            prefs[AppPreferencesDataSource.Keys.IS_GAS_PRICE_AUTO] = isGasAuto
-            prefs[AppPreferencesDataSource.Keys.GAS_PRICE] = price
-        }
-    }
+    ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
 
-    suspend fun saveSimulationState(pay: Double, dist: Double) {
-        dataSource.update {
-            it[AppPreferencesDataSource.Keys.SIM_PAY] =
-                pay; it[AppPreferencesDataSource.Keys.SIM_DIST] = dist
-        }
-    }
+    suspend fun saveSimulationState(pay: Double, dist: Double) =
+        dataSource.saveSimulationState(pay, dist)
 
     suspend fun clearPreferences() {
         Timber.w("Clearing App Preferences")
-        dataSource.update { it.clear() }
+        dataSource.clear()
     }
 }

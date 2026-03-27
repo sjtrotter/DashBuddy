@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.data.state
 
-import cloud.trotter.dashbuddy.core.datastore.StateRecoveryDataSource
+import cloud.trotter.dashbuddy.core.datastore.appstate.StateRecoveryDataSource
+import kotlinx.coroutines.flow.firstOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,8 +16,9 @@ class StateRecoveryRepository @Inject constructor(
     }
 
     suspend fun getFreshState(): String? {
-        val json = dataSource.getJson() ?: return null
-        val timestamp = dataSource.getTimestamp()
+        // DataStore uses Flows, so we use firstOrNull() for a one-shot read!
+        val json = dataSource.lastKnownState.firstOrNull() ?: return null
+        val timestamp = dataSource.stateTimestamp.firstOrNull() ?: 0L
 
         if (System.currentTimeMillis() - timestamp > expiryMs) {
             clearState() // Cleanup old data
@@ -26,6 +28,7 @@ class StateRecoveryRepository @Inject constructor(
     }
 
     suspend fun clearState() {
-        dataSource.clearState()
+        // Using the clear() method we generated in the DataSource
+        dataSource.clear()
     }
 }

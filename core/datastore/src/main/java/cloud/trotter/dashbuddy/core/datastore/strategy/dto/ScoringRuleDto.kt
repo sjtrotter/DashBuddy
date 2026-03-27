@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.core.datastore.dto
+package cloud.trotter.dashbuddy.core.datastore.strategy.dto
 
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.SerialName

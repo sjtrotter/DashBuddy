@@ -64,14 +64,17 @@ class WizardViewModel @Inject constructor(
 
     private fun loadExistingSettings() {
         viewModelScope.launch {
-            val currentYear = appPreferencesRepository.vehicleYear.first()
-            val currentMake = appPreferencesRepository.vehicleMake.first()
-            val currentModel = appPreferencesRepository.vehicleModel.first()
-            val currentTrim = appPreferencesRepository.vehicleTrim.first()
-            val currentMpg = appPreferencesRepository.estimatedMpg.first()
-            val currentFuelType = appPreferencesRepository.fuelType.first()
+            // Provide safe defaults for the nullable DataStore flows!
+            val currentYear = appPreferencesRepository.vehicleYear.first() ?: ""
+            val currentMake = appPreferencesRepository.vehicleMake.first() ?: ""
+            val currentModel = appPreferencesRepository.vehicleModel.first() ?: ""
+            val currentTrim = appPreferencesRepository.vehicleTrim.first() ?: ""
+            val currentMpg = appPreferencesRepository.estimatedMpg.first() ?: 0.0f
+            val currentFuelType =
+                appPreferencesRepository.fuelType.first() // Already non-null in Repo
             val currentGasAuto = appPreferencesRepository.isGasPriceAuto.first()
-            val currentGasPrice = appPreferencesRepository.gasPrice.first()
+            val currentGasPrice = appPreferencesRepository.gasPrice.first() ?: 0.0f
+
             val currentProtectMode = strategyRepository.protectStatsMode.first()
             val currentStrategy =
                 if (currentProtectMode) DashStrategy.PROTECT_PLATINUM else DashStrategy.MANUAL

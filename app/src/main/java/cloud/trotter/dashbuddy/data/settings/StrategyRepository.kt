@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.data.settings
 
-import cloud.trotter.dashbuddy.core.datastore.StrategyDataSource
-import cloud.trotter.dashbuddy.core.datastore.dto.ScoringRuleDto
+import cloud.trotter.dashbuddy.core.datastore.strategy.StrategyDataSource
+import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
 import cloud.trotter.dashbuddy.domain.config.MerchantAction
 import cloud.trotter.dashbuddy.domain.config.MetricType

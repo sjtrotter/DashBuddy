@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.data.settings
 
 import android.util.Log
 import cloud.trotter.dashbuddy.BuildConfig
-import cloud.trotter.dashbuddy.core.datastore.DevSettingsDataSource
+import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,14 +55,12 @@ class DevSettingsRepository @Inject constructor(
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
-    suspend fun setDevModeUnlocked(unlocked: Boolean) =
-        dataSource.update { it[DevSettingsDataSource.Keys.IS_DEV_MODE_UNLOCKED] = unlocked }
+    suspend fun setDevModeUnlocked(unlocked: Boolean) = dataSource.setDevModeUnlocked(unlocked)
 
-    suspend fun setLogLevel(priority: Int) =
-        dataSource.update { it[DevSettingsDataSource.Keys.LOG_LEVEL] = priority }
+    suspend fun setLogLevel(priority: Int) = dataSource.setLogLevel(priority)
 
     suspend fun clearPreferences() {
         Timber.w("Clearing Developer Preferences")
-        dataSource.update { it.clear() }
+        dataSource.clear()
     }
 }
