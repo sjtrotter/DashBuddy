@@ -2,10 +2,10 @@ package cloud.trotter.dashbuddy.state
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.data.state.StateRecoveryRepository
+import cloud.trotter.dashbuddy.core.data.state.StateRecoveryRepository
 import cloud.trotter.dashbuddy.pipeline.PipelineV2
 import cloud.trotter.dashbuddy.state.effects.SideEffectEngine
-import cloud.trotter.dashbuddy.state.event.StateEvent
+import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

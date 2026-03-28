@@ -1,10 +1,10 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.state.effects.NotificationHandler
-import cloud.trotter.dashbuddy.state.event.NotificationEvent
-import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
-import cloud.trotter.dashbuddy.state.event.StateEvent
+import cloud.trotter.dashbuddy.domain.model.state.NotificationEvent
+import cloud.trotter.dashbuddy.domain.model.state.ScreenUpdateEvent
+import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DashPausedStateFactory
 import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory

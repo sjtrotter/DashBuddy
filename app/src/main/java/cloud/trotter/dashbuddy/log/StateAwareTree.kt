@@ -2,8 +2,8 @@ package cloud.trotter.dashbuddy.log
 
 import android.util.Log
 import cloud.trotter.dashbuddy.data.log.LogRepository
-import cloud.trotter.dashbuddy.data.settings.AppPreferencesRepository
-import cloud.trotter.dashbuddy.data.settings.DevSettingsRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -16,7 +16,7 @@ import javax.inject.Provider
  * 1. Intercepts logs from Timber.
  * 2. Injects the current App State (e.g., OFFER_EVAL).
  * 3. Formats them with a timestamp.
- * 4. Sends them to the [cloud.trotter.dashbuddy.data.log.LogRepository] for file storage.
+ * 4. Sends them to the [cloud.trotter.dashbuddy.core.data.log.LogRepository] for file storage.
  */
 class StateAwareTree(
     private val logRepository: LogRepository,

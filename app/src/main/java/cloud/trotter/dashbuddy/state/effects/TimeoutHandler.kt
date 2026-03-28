@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.state.StateManagerV2
-import cloud.trotter.dashbuddy.state.event.TimeoutEvent
-import cloud.trotter.dashbuddy.state.model.TimeoutType
+import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
+import cloud.trotter.dashbuddy.domain.model.state.TimeoutType
 import dagger.Lazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

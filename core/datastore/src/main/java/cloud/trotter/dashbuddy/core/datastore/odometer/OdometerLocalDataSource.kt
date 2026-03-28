@@ -22,7 +22,15 @@ class OdometerLocalDataSource @Inject constructor(
     val totalMetersFlow: Flow<Double> = ds.data.map { it[Keys.TOTAL_METERS] ?: 0.0 }
     val sessionAnchorFlow: Flow<Double> = ds.data.map { it[Keys.SESSION_ANCHOR] ?: 0.0 }
 
-    suspend fun saveTotalMeters(meters: Double) = ds.edit { it[Keys.TOTAL_METERS] = meters }
-    suspend fun saveSessionAnchor(anchor: Double) = ds.edit { it[Keys.SESSION_ANCHOR] = anchor }
-    suspend fun clear() = ds.edit { it.clear() }
+    suspend fun saveTotalMeters(meters: Double) {
+        ds.edit { it[Keys.TOTAL_METERS] = meters }
+    }
+
+    suspend fun saveSessionAnchor(anchor: Double) {
+        ds.edit { it[Keys.SESSION_ANCHOR] = anchor }
+    }
+
+    suspend fun clear() {
+        ds.edit { it.clear() }
+    }
 }

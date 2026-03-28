@@ -1,10 +1,10 @@
 package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.state.NotificationEvent
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
-import cloud.trotter.dashbuddy.state.event.NotificationEvent
-import cloud.trotter.dashbuddy.state.model.Transition // <--- New Import
+import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
 import javax.inject.Inject
 import javax.inject.Singleton

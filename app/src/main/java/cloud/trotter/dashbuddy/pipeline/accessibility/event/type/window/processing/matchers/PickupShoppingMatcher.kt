@@ -2,8 +2,8 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
+import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
 import javax.inject.Inject
 

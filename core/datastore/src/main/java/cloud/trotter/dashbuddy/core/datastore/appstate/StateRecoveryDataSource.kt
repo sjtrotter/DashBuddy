@@ -48,5 +48,7 @@ class StateRecoveryDataSource @Inject constructor(
         }
     }
 
-    suspend fun clear() = ds.edit { it.clear() }
+    suspend fun clear() {
+        ds.edit { it.clear() }
+    }
 }

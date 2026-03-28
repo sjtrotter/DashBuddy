@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import cloud.trotter.dashbuddy.data.gas.GasPriceRepository
-import cloud.trotter.dashbuddy.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.data.gas.FuelPriceRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -19,7 +19,7 @@ import timber.log.Timber
 class DailyGasPriceWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
-    private val gasPriceRepository: GasPriceRepository,
+    private val gasPriceRepository: FuelPriceRepository,
     private val appPreferencesRepository: AppPreferencesRepository
 ) : CoroutineWorker(appContext, workerParams) {
 

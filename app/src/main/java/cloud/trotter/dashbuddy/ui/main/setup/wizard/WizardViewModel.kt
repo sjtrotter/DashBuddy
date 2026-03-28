@@ -3,10 +3,10 @@ package cloud.trotter.dashbuddy.ui.main.setup.wizard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.MenuItem
-import cloud.trotter.dashbuddy.data.gas.GasPriceRepository
-import cloud.trotter.dashbuddy.data.settings.AppPreferencesRepository
-import cloud.trotter.dashbuddy.data.settings.AppStateRepository
-import cloud.trotter.dashbuddy.data.settings.StrategyRepository
+import cloud.trotter.dashbuddy.data.gas.FuelPriceRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.domain.config.DashStrategy
 import cloud.trotter.dashbuddy.domain.config.MetricType
@@ -34,7 +34,7 @@ class WizardViewModel @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val appStateRepository: AppStateRepository,
     private val vehicleRepository: VehicleRepository,
-    private val gasPriceRepository: GasPriceRepository
+    private val gasPriceRepository: FuelPriceRepository
 ) : ViewModel() {
 
     private val _steps = MutableStateFlow(WizardStep.entries)

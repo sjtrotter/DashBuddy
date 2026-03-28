@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
+import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber

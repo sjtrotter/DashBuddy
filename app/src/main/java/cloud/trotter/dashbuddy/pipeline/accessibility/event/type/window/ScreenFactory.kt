@@ -1,12 +1,12 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window
 
-import cloud.trotter.dashbuddy.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.data.log.Breadcrumbs
-import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotRepository
-import cloud.trotter.dashbuddy.data.settings.DevSettingsRepository
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.core.data.log.Breadcrumbs
+import cloud.trotter.dashbuddy.core.data.log.SnapshotRepository
+import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
-import cloud.trotter.dashbuddy.state.event.ScreenUpdateEvent
+import cloud.trotter.dashbuddy.domain.model.state.ScreenUpdateEvent
 import javax.inject.Inject
 
 class ScreenFactory @Inject constructor(

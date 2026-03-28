@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.state.AppEffect
-import cloud.trotter.dashbuddy.state.event.StateEvent
 import kotlinx.coroutines.CoroutineScope
 
 interface EffectHandler {

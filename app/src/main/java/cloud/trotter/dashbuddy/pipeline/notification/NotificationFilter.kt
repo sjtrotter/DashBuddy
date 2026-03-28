@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
+import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import javax.inject.Inject
 
 class NotificationFilter @Inject constructor() {

@@ -49,13 +49,21 @@ class AppPreferencesDataSource @Inject constructor(
     // ============================================================================================
     // ENCAPSULATED WRITE ACTIONS
     // ============================================================================================
-    suspend fun updateGasPrice(price: Float) = ds.edit { it[Keys.GAS_PRICE] = price }
+    suspend fun updateGasPrice(price: Float) {
+        ds.edit { it[Keys.GAS_PRICE] = price }
+    }
 
-    suspend fun updateFuelType(type: String) = ds.edit { it[Keys.FUEL_TYPE] = type }
+    suspend fun updateFuelType(type: String) {
+        ds.edit { it[Keys.FUEL_TYPE] = type }
+    }
 
-    suspend fun setProMode(enabled: Boolean) = ds.edit { it[Keys.IS_PRO_MODE] = enabled }
+    suspend fun setProMode(enabled: Boolean) {
+        ds.edit { it[Keys.IS_PRO_MODE] = enabled }
+    }
 
-    suspend fun setTheme(theme: String) = ds.edit { it[Keys.APP_THEME] = theme }
+    suspend fun setTheme(theme: String) {
+        ds.edit { it[Keys.APP_THEME] = theme }
+    }
 
     suspend fun updateEconomySettings(
         year: String, make: String, model: String, trim: String,
@@ -79,5 +87,7 @@ class AppPreferencesDataSource @Inject constructor(
         }
     }
 
-    suspend fun clear() = ds.edit { it.clear() }
+    suspend fun clear() {
+        ds.edit { it.clear() }
+    }
 }

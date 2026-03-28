@@ -23,9 +23,15 @@ class DevSettingsDataSource @Inject constructor(
     val isDevModeUnlocked: Flow<Boolean?> = ds.data.map { it[Keys.IS_DEV_MODE_UNLOCKED] }
     val logLevel: Flow<Int?> = ds.data.map { it[Keys.LOG_LEVEL] }
 
-    suspend fun setDevModeUnlocked(unlocked: Boolean) =
+    suspend fun setDevModeUnlocked(unlocked: Boolean) {
         ds.edit { it[Keys.IS_DEV_MODE_UNLOCKED] = unlocked }
+    }
 
-    suspend fun setLogLevel(priority: Int) = ds.edit { it[Keys.LOG_LEVEL] = priority }
-    suspend fun clear() = ds.edit { it.clear() }
+    suspend fun setLogLevel(priority: Int) {
+        ds.edit { it[Keys.LOG_LEVEL] = priority }
+    }
+
+    suspend fun clear() {
+        ds.edit { it.clear() }
+    }
 }

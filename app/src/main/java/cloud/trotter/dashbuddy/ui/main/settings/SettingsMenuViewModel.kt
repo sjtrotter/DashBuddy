@@ -2,9 +2,9 @@ package cloud.trotter.dashbuddy.ui.main.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cloud.trotter.dashbuddy.data.settings.AppPreferencesRepository
-import cloud.trotter.dashbuddy.data.settings.DevSettingsRepository
-import cloud.trotter.dashbuddy.data.settings.StrategyRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow

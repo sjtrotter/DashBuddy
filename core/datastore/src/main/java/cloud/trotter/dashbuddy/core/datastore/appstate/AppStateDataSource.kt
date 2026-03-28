@@ -27,5 +27,7 @@ class AppStateDataSource @Inject constructor(
         ds.edit { it[Keys.IS_FIRST_RUN] = false }
     }
 
-    suspend fun clear() = ds.edit { it.clear() }
+    suspend fun clear() {
+        ds.edit { it.clear() }
+    }
 }

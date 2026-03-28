@@ -95,11 +95,17 @@ class StrategyDataSource @Inject constructor(
         ds.edit { it[Keys.RULE_LIST_JSON] = Json.encodeToString(rules) }
     }
 
-    suspend fun setProtectStatsMode(enabled: Boolean) =
+    suspend fun setProtectStatsMode(enabled: Boolean) {
         ds.edit { it[Keys.PROTECT_STATS_MODE] = enabled }
+    }
 
-    suspend fun setAllowShopping(allowed: Boolean) = ds.edit { it[Keys.ALLOW_SHOPPING] = allowed }
-    suspend fun setMasterAutomation(enabled: Boolean) = ds.edit { it[Keys.AUTO_MASTER] = enabled }
+    suspend fun setAllowShopping(allowed: Boolean) {
+        ds.edit { it[Keys.ALLOW_SHOPPING] = allowed }
+    }
+
+    suspend fun setMasterAutomation(enabled: Boolean) {
+        ds.edit { it[Keys.AUTO_MASTER] = enabled }
+    }
 
     suspend fun updateAutomation(
         autoAccept: Boolean, acceptMinPay: Double, acceptMinRatio: Double,
@@ -115,5 +121,7 @@ class StrategyDataSource @Inject constructor(
         }
     }
 
-    suspend fun clear() = ds.edit { it.clear() }
+    suspend fun clear() {
+        ds.edit { it.clear() }
+    }
 }

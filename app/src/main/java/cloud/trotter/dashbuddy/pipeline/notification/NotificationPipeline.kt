@@ -1,7 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
+import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
+import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.pipeline.notification.input.NotificationSource
-import cloud.trotter.dashbuddy.state.event.StateEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
