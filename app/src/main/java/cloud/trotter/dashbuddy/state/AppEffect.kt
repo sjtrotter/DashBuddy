@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.state
 
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutType
 

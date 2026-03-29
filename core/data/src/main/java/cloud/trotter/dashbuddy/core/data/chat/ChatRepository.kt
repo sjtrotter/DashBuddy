@@ -1,14 +1,13 @@
 package cloud.trotter.dashbuddy.core.data.chat
 
-import android.text.Html
-import android.text.Spanned
 import cloud.trotter.dashbuddy.core.database.chat.ChatDao
-import cloud.trotter.dashbuddy.core.database.chat.ChatMessageEntity
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import cloud.trotter.dashbuddy.core.database.chat.mappers.toDomain
+import cloud.trotter.dashbuddy.core.database.chat.mappers.toEntity
+import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,27 +15,26 @@ import javax.inject.Singleton
 class ChatRepository @Inject constructor(
     private val chatDao: ChatDao
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-    fun saveMessage(dashId: String?, persona: ChatPersona, text: CharSequence) {
-        scope.launch {
-            // 1. FREEZE: Convert Spannable to HTML String
-            val safeText = if (text is Spanned) {
-                Html.toHtml(text, Html.TO_HTML_PARAGRAPH_LINES_INDIVIDUAL)
-            } else {
-                text.toString()
-            }
-
-            val entity = ChatMessageEntity(
-                dashId = dashId,
-                senderId = persona.id,
-                senderName = persona.name,
-                messageText = safeText, // Storing "<b>Hello</b>"
-                iconResId = R.drawable.ic_launcher_foreground, // Placeholder
-            )
-            chatDao.insertMessage(entity)
+    // Queries specific dash messages and maps them to pure Domain models
+    fun getMessages(dashId: String): Flow<List<ChatMessage>> {
+        return chatDao.getMessagesForDash(dashId).map { entities ->
+            entities.map { it.toDomain() }
         }
     }
 
-    fun getMessages(dashId: String) = chatDao.getMessagesForDash(dashId)
+    suspend fun saveMessage(dashId: String?, text: String, persona: ChatPersona) {
+        val domainMessage = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            dashId = dashId, // Saved!
+            text = text,
+            timestamp = System.currentTimeMillis(),
+            persona = persona
+        )
+
+        chatDao.insertMessage(domainMessage.toEntity())
+    }
+
+    fun getAllDashIds(): Flow<List<String>> {
+        return chatDao.getAllDashIds()
+    }
 }

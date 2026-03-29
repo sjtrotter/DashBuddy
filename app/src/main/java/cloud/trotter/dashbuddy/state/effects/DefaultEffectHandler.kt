@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.state.effects
 
-import cloud.trotter.dashbuddy.data.event.AppEventRepo
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.state.AppEffect

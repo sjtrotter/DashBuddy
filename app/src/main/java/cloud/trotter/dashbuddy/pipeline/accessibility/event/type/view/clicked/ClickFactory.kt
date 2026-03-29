@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
-import cloud.trotter.dashbuddy.data.log.clicks.ClickLogRepository
+import cloud.trotter.dashbuddy.core.data.log.ClickLogRepository
 import cloud.trotter.dashbuddy.domain.model.accessibility.ClickAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.state.ClickEvent

@@ -2,9 +2,9 @@ package cloud.trotter.dashbuddy.ui.bubble
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cloud.trotter.dashbuddy.data.chat.ChatRepository
-import cloud.trotter.dashbuddy.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted

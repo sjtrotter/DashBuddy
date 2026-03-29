@@ -1,8 +1,7 @@
 package cloud.trotter.dashbuddy.log
 
 import android.util.Log
-import cloud.trotter.dashbuddy.data.log.LogRepository
-import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.log.LogRepository
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import timber.log.Timber
 import java.text.SimpleDateFormat
@@ -20,7 +19,6 @@ import javax.inject.Provider
  */
 class StateAwareTree(
     private val logRepository: LogRepository,
-    private val appPreferencesRepository: AppPreferencesRepository,
     private val devSettingsRepository: DevSettingsRepository,
     private val stateProvider: Provider<String> // Lazy access to state to avoid circular dependencies
 ) : Timber.Tree() {

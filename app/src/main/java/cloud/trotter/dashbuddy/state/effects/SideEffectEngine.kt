@@ -2,13 +2,13 @@ package cloud.trotter.dashbuddy.state.effects
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import cloud.trotter.dashbuddy.data.event.AppEventRepo
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
-import cloud.trotter.dashbuddy.state.AppEffect
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
+import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toSpannableString

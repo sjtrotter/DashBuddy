@@ -16,7 +16,7 @@ import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotRecord
         ChatMessageEntity::class,
         SnapshotRecord::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(DataTypeConverters::class)

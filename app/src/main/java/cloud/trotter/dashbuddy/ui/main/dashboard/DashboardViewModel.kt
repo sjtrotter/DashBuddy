@@ -3,9 +3,9 @@ package cloud.trotter.dashbuddy.ui.main.dashboard
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
-import cloud.trotter.dashbuddy.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.AppStateV2.Initializing.isActive
 import cloud.trotter.dashbuddy.state.StateManagerV2

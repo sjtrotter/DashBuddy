@@ -6,7 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject

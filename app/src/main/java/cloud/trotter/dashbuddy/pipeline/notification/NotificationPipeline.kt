@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.pipeline.notification.input.NotificationSource
+import cloud.trotter.dashbuddy.pipeline.notification.mapper.toDomain
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -15,7 +15,7 @@ class NotificationPipeline @Inject constructor(
     private val factory: NotificationFactory
 ) {
     fun output(): Flow<StateEvent> = source.events
-        .mapNotNull { sbn -> NotificationInfo.from(sbn) } // Parse
+        .mapNotNull { sbn -> sbn.toDomain() } // Parse
         .filter { info -> filter.isRelevant(info) }       // Filter Spam
         .map { info -> factory.create(info) }             // Produce Event
 }

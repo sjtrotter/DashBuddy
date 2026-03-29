@@ -1,19 +1,19 @@
 package cloud.trotter.dashbuddy.state.reducers
 
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.state.AppEffect
-import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.domain.model.state.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
+import cloud.trotter.dashbuddy.domain.model.state.TimeoutType
+import cloud.trotter.dashbuddy.state.AppEffect
+import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory
 import cloud.trotter.dashbuddy.state.factories.OfferStateFactory
 import cloud.trotter.dashbuddy.state.factories.PickupStateFactory
-import cloud.trotter.dashbuddy.domain.model.state.TimeoutType
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
@@ -122,8 +122,8 @@ class PostDeliveryReducer @Inject constructor(
         if (input.parsedPay != null && input.parsedPay != state.parsedPay) {
             newState = newState.copy(
                 parsedPay = input.parsedPay,
-                totalPay = input.parsedPay.total,
-                summaryText = "Saved: ${UtilityFunctions.formatCurrency(input.parsedPay.total)}"
+                totalPay = input.parsedPay!!.total,
+                summaryText = "Saved: ${UtilityFunctions.formatCurrency(input.parsedPay!!.total)}"
             )
 
             // We got the data! Kill the polling loop.
@@ -132,7 +132,7 @@ class PostDeliveryReducer @Inject constructor(
 
             effects.add(
                 AppEffect.UpdateBubble(
-                    generateReceiptText(input.parsedPay, input.parsedPay.total),
+                    generateReceiptText(input.parsedPay!!, input.parsedPay!!.total),
                     ChatPersona.Earnings
                 )
             )

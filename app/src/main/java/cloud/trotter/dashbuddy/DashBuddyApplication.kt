@@ -11,10 +11,10 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.core.data.log.LogRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
-import cloud.trotter.dashbuddy.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.data.log.LogRepository
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.log.StateAwareTree
 import cloud.trotter.dashbuddy.state.StateManagerV2
@@ -93,7 +93,6 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         Timber.plant(
             StateAwareTree(
                 logRepository,
-                appPreferencesRepository,
                 devSettingsRepository,
                 stateProvider
             )

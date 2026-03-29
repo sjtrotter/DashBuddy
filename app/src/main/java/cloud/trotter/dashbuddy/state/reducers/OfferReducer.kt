@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.state.reducers
 
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.accessibility.ClickAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.state.ClickEvent
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "bdf1ea90e53d6b66701fe5f4124852f2",
+    "identityHash": "1aba758f6f4a53a2f8e2db85e6aeb11b",
     "entities": [
       {
         "tableName": "app_events",
@@ -81,12 +81,12 @@
       },
       {
         "tableName": "chat_messages",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `dashId` TEXT, `timestamp` INTEGER NOT NULL, `senderId` TEXT NOT NULL, `senderName` TEXT NOT NULL, `messageText` TEXT NOT NULL, `iconResId` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `dashId` TEXT, `text` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `personaType` TEXT NOT NULL, `personaName` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -95,38 +95,32 @@
             "affinity": "TEXT"
           },
           {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
             "fieldPath": "timestamp",
             "columnName": "timestamp",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "senderId",
-            "columnName": "senderId",
+            "fieldPath": "personaType",
+            "columnName": "personaType",
             "affinity": "TEXT",
             "notNull": true
           },
           {
-            "fieldPath": "senderName",
-            "columnName": "senderName",
+            "fieldPath": "personaName",
+            "columnName": "personaName",
             "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "messageText",
-            "columnName": "messageText",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "iconResId",
-            "columnName": "iconResId",
-            "affinity": "INTEGER",
             "notNull": true
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
@@ -205,7 +199,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bdf1ea90e53d6b66701fe5f4124852f2')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1aba758f6f4a53a2f8e2db85e6aeb11b')"
     ]
   }
 }
