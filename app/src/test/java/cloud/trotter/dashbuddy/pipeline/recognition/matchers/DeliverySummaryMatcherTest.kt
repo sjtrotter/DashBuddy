@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.data.pay.PayParser
+import cloud.trotter.dashbuddy.core.data.pay.PayParser
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DeliverySummaryMatcher

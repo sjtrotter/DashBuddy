@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.pay
+package cloud.trotter.dashbuddy.core.data.pay
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
@@ -6,8 +6,6 @@ import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-
-//import cloud.trotter.dashbuddy.log.Logger as Log
 
 @Singleton
 class PayParser @Inject constructor() {

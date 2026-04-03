@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.data.vehicle
+package cloud.trotter.dashbuddy.core.data.vehicle
 
 import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.EpaApi
 import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.MenuItem
