@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.data.strategy
 
 import cloud.trotter.dashbuddy.core.datastore.strategy.StrategyDataSource
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
+import cloud.trotter.dashbuddy.domain.config.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
 import cloud.trotter.dashbuddy.domain.config.MerchantAction
 import cloud.trotter.dashbuddy.domain.config.MetricType
@@ -13,6 +14,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.InternalSerializationApi
@@ -140,6 +142,23 @@ class StrategyRepository @Inject constructor(
         declineMaxPay,
         declineMinRatio
     )
+
+    val evaluationConfigFlow: Flow<EvaluationConfig> = combine(
+        scoringRules,
+        protectStatsMode,
+        allowShopping
+    ) { rules, protect, shop ->
+        EvaluationConfig(
+            protectStatsMode = protect,
+            rules = rules,
+            allowShopping = shop
+        )
+    }
+
+    suspend fun getEvaluationConfig(): EvaluationConfig {
+        // .first() suspends until it reads the most recent emitted value from the flows
+        return evaluationConfigFlow.first()
+    }
 
     suspend fun clearPreferences() {
         Timber.w("Clearing Strategy Preferences")

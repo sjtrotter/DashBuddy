@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.state.effects
 import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
@@ -11,7 +12,7 @@ import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
-import cloud.trotter.dashbuddy.ui.formatters.toSpannableString
+import cloud.trotter.dashbuddy.ui.formatters.toAnnotatedString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,6 +21,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
@@ -33,6 +35,8 @@ class SideEffectEngine @Inject constructor(
     private val tipEffectHandler: TipEffectHandler,
     private val bubbleManager: BubbleManager,
     private val offerEvaluator: OfferEvaluator,
+    private val offerEvaluatorV2: cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator,
+    private val strategyRepository: StrategyRepository,
     private val screenShotHandler: ScreenShotHandler,
     private val uiInteractionHandler: UiInteractionHandler,
 ) {
@@ -94,7 +98,9 @@ class SideEffectEngine @Inject constructor(
             // --- LOOPBACKS (Produces Events) ---
 
             is AppEffect.EvaluateOffer -> {
-                val result = offerEvaluator.evaluateOffer(effect.parsedOffer)
+                val config = strategyRepository.evaluationConfigFlow.first()
+
+                val result = offerEvaluatorV2.evaluate(effect.parsedOffer, config)
 
                 // 1. Emit the Decision back to State Machine
                 _events.emit(OfferEvaluationEvent(result.action))
@@ -105,7 +111,7 @@ class SideEffectEngine @Inject constructor(
                     OfferAction.DECLINE -> ChatPersona.BadOffer
                     OfferAction.NOTHING -> ChatPersona.Inspector
                 }
-                bubbleManager.postMessage(result.toSpannableString(), persona)
+                bubbleManager.postMessage(result.toAnnotatedString(), persona)
             }
 
             // --- TIMING LOGIC (Pure Coroutines) ---

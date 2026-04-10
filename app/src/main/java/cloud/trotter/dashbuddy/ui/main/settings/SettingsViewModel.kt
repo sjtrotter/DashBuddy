@@ -11,7 +11,6 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,17 +22,8 @@ class SettingsViewModel @Inject constructor(
 
     // --- STATE ---
     // Combine multiple data sources into one Config object for the UI
-    val evaluationConfig: StateFlow<EvaluationConfig> = combine(
-        strategyRepository.scoringRules,
-        strategyRepository.protectStatsMode,
-        strategyRepository.allowShopping
-    ) { rules, protect, shop ->
-        EvaluationConfig(
-            protectStatsMode = protect,
-            rules = rules,
-            allowShopping = shop
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EvaluationConfig())
+    val evaluationConfig: StateFlow<EvaluationConfig> = strategyRepository.evaluationConfigFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EvaluationConfig())
 
     // --- ACTIONS ---
 
@@ -77,7 +67,7 @@ class SettingsViewModel @Inject constructor(
         )
 
         val currentConfig = evaluationConfig.value
-        val evaluator = OfferEvaluator(currentConfig)
-        return evaluator.evaluate(fakeOffer)
+        val evaluator = OfferEvaluator()
+        return evaluator.evaluate(fakeOffer, currentConfig)
     }
 }
