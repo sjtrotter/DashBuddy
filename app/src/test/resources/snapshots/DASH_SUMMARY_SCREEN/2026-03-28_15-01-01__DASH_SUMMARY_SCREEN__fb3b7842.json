@@ -1,0 +1,648 @@
+{
+  "timestamp": 1774728061020,
+  "breadcrumbs": [
+    "UNKNOWN",
+    "ON_DASH_MAP_WAITING_FOR_OFFER",
+    "UNKNOWN",
+    "TIMELINE_VIEW",
+    "UNKNOWN",
+    "TIMELINE_VIEW",
+    "UNKNOWN",
+    "TIMELINE_VIEW",
+    "UNKNOWN",
+    "DASH_SUMMARY_SCREEN"
+  ],
+  "root": {
+    "id": "com.doordash.driverapp:id/layout_bottom_sheet",
+    "class": "android.view.ViewGroup",
+    "isEnabled": true,
+    "bounds": {
+      "left": 0,
+      "top": 2536,
+      "right": 1080,
+      "bottom": 4747
+    },
+    "children": [
+      {
+        "id": "com.doordash.driverapp:id/overlay_view",
+        "class": "android.view.View",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+          "left": 0,
+          "top": 2536,
+          "right": 1080,
+          "bottom": 4747
+        }
+      },
+      {
+        "id": "com.doordash.driverapp:id/prism_sheet",
+        "class": "android.view.ViewGroup",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+          "left": 0,
+          "top": 3736,
+          "right": 1080,
+          "bottom": 4747
+        },
+        "children": [
+          {
+            "id": "com.doordash.driverapp:id/prism_sheet_collar_view",
+            "class": "android.widget.FrameLayout",
+            "isEnabled": true,
+            "bounds": {
+              "left": 0,
+              "top": 3736,
+              "right": 1080,
+              "bottom": 3772
+            },
+            "children": [
+              {
+                "id": "com.doordash.driverapp:id/handle_overlay",
+                "class": "android.widget.FrameLayout",
+                "isEnabled": true,
+                "bounds": {
+                  "left": 0,
+                  "top": 3736,
+                  "right": 1080,
+                  "bottom": 3772
+                },
+                "children": [
+                  {
+                    "id": "com.doordash.driverapp:id/handle_overlay_image",
+                    "class": "android.widget.ImageView",
+                    "isEnabled": true,
+                    "bounds": {
+                      "left": 0,
+                      "top": 3754,
+                      "right": 1080,
+                      "bottom": 3763
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "com.doordash.driverapp:id/prism_sheet_content_parent_container",
+            "class": "android.view.ViewGroup",
+            "isEnabled": true,
+            "bounds": {
+              "left": 0,
+              "top": 3772,
+              "right": 1080,
+              "bottom": 4711
+            },
+            "children": [
+              {
+                "id": "com.doordash.driverapp:id/nested_scroll_view",
+                "class": "android.widget.ScrollView",
+                "isEnabled": true,
+                "bounds": {
+                  "left": 0,
+                  "top": 3772,
+                  "right": 1080,
+                  "bottom": 4711
+                },
+                "children": [
+                  {
+                    "id": "com.doordash.driverapp:id/prism_content_container",
+                    "class": "android.widget.LinearLayout",
+                    "isEnabled": true,
+                    "bounds": {
+                      "left": 0,
+                      "top": 3772,
+                      "right": 1080,
+                      "bottom": 4568
+                    },
+                    "children": [
+                      {
+                        "id": "com.doordash.driverapp:id/bottomsheet_content_container",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                          "left": 0,
+                          "top": 3772,
+                          "right": 1080,
+                          "bottom": 4568
+                        },
+                        "children": [
+                          {
+                            "id": "com.doordash.driverapp:id/recycler",
+                            "class": "androidx.recyclerview.widget.RecyclerView",
+                            "isEnabled": true,
+                            "bounds": {
+                              "left": 0,
+                              "top": 3772,
+                              "right": 1080,
+                              "bottom": 4568
+                            },
+                            "children": [
+                              {
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                  "left": 0,
+                                  "top": 3772,
+                                  "right": 1080,
+                                  "bottom": 3887
+                                },
+                                "children": [
+                                  {
+                                    "text": "Dash summary",
+                                    "class": "android.widget.TextView",
+                                    "isEnabled": true,
+                                    "bounds": {
+                                      "left": 0,
+                                      "top": 3825,
+                                      "right": 1080,
+                                      "bottom": 3883
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                  "left": 0,
+                                  "top": 3887,
+                                  "right": 1080,
+                                  "bottom": 4021
+                                },
+                                "children": [
+                                  {
+                                    "text": "$77.48",
+                                    "class": "android.widget.TextView",
+                                    "isEnabled": true,
+                                    "bounds": {
+                                      "left": 0,
+                                      "top": 3887,
+                                      "right": 1080,
+                                      "bottom": 3994
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                  "left": 0,
+                                  "top": 4021,
+                                  "right": 1080,
+                                  "bottom": 4251
+                                },
+                                "children": [
+                                  {
+                                    "class": "android.widget.LinearLayout",
+                                    "isEnabled": true,
+                                    "bounds": {
+                                      "left": 36,
+                                      "top": 4057,
+                                      "right": 1044,
+                                      "bottom": 4251
+                                    },
+                                    "children": [
+                                      {
+                                        "class": "android.widget.LinearLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                          "left": 40,
+                                          "top": 4061,
+                                          "right": 1040,
+                                          "bottom": 4157
+                                        },
+                                        "children": [
+                                          {
+                                            "class": "android.widget.FrameLayout",
+                                            "isEnabled": true,
+                                            "bounds": {
+                                              "left": 76,
+                                              "top": 4097,
+                                              "right": 1004,
+                                              "bottom": 4157
+                                            },
+                                            "children": [
+                                              {
+                                                "class": "android.widget.LinearLayout",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                  "left": 76,
+                                                  "top": 4097,
+                                                  "right": 1004,
+                                                  "bottom": 4157
+                                                },
+                                                "children": [
+                                                  {
+                                                    "class": "android.widget.LinearLayout",
+                                                    "isEnabled": true,
+                                                    "bounds": {
+                                                      "left": 76,
+                                                      "top": 4098,
+                                                      "right": 370,
+                                                      "bottom": 4156
+                                                    },
+                                                    "children": [
+                                                      {
+                                                        "class": "android.widget.ImageView",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                          "left": 76,
+                                                          "top": 4109,
+                                                          "right": 112,
+                                                          "bottom": 4145
+                                                        }
+                                                      },
+                                                      {
+                                                        "text": "Weekly goal",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                          "left": 148,
+                                                          "top": 4098,
+                                                          "right": 370,
+                                                          "bottom": 4156
+                                                        }
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "text": "$298.67",
+                                                    "class": "android.widget.TextView",
+                                                    "isEnabled": true,
+                                                    "bounds": {
+                                                      "left": 370,
+                                                      "top": 4097,
+                                                      "right": 890,
+                                                      "bottom": 4157
+                                                    }
+                                                  },
+                                                  {
+                                                    "text": "/$380",
+                                                    "class": "android.widget.TextView",
+                                                    "isEnabled": true,
+                                                    "bounds": {
+                                                      "left": 890,
+                                                      "top": 4098,
+                                                      "right": 1004,
+                                                      "bottom": 4156
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "class": "android.widget.LinearLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                          "left": 40,
+                                          "top": 4184,
+                                          "right": 1040,
+                                          "bottom": 4247
+                                        },
+                                        "children": [
+                                          {
+                                            "class": "android.view.ViewGroup",
+                                            "isEnabled": true,
+                                            "bounds": {
+                                              "left": 76,
+                                              "top": 4184,
+                                              "right": 1004,
+                                              "bottom": 4211
+                                            },
+                                            "children": [
+                                              {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                  "left": 76,
+                                                  "top": 4184,
+                                                  "right": 1004,
+                                                  "bottom": 4211
+                                                },
+                                                "children": [
+                                                  {
+                                                    "class": "android.view.View",
+                                                    "isEnabled": true,
+                                                    "bounds": {
+                                                      "left": 76,
+                                                      "top": 4184,
+                                                      "right": 1004,
+                                                      "bottom": 4211
+                                                    },
+                                                    "children": [
+                                                      {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                          "left": 76,
+                                                          "top": 4184,
+                                                          "right": 1004,
+                                                          "bottom": 4211
+                                                        }
+                                                      },
+                                                      {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                          "left": 76,
+                                                          "top": 4184,
+                                                          "right": 294,
+                                                          "bottom": 4211
+                                                        }
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                  "left": 0,
+                                  "top": 4251,
+                                  "right": 1080,
+                                  "bottom": 4479
+                                },
+                                "children": [
+                                  {
+                                    "class": "android.widget.LinearLayout",
+                                    "isEnabled": true,
+                                    "bounds": {
+                                      "left": 36,
+                                      "top": 4287,
+                                      "right": 1044,
+                                      "bottom": 4479
+                                    },
+                                    "children": [
+                                      {
+                                        "class": "android.widget.LinearLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                          "left": 40,
+                                          "top": 4291,
+                                          "right": 1040,
+                                          "bottom": 4365
+                                        },
+                                        "children": [
+                                          {
+                                            "class": "android.view.ViewGroup",
+                                            "isEnabled": true,
+                                            "bounds": {
+                                              "left": 40,
+                                              "top": 4318,
+                                              "right": 1040,
+                                              "bottom": 4365
+                                            },
+                                            "children": [
+                                              {
+                                                "id": "com.doordash.driverapp:id/leading_icon",
+                                                "class": "android.widget.ImageView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                  "left": 76,
+                                                  "top": 4324,
+                                                  "right": 112,
+                                                  "bottom": 4360
+                                                }
+                                              },
+                                              {
+                                                "text": "Total online time",
+                                                "id": "com.doordash.driverapp:id/name",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                  "left": 148,
+                                                  "top": 4318,
+                                                  "right": 448,
+                                                  "bottom": 4365
+                                                }
+                                              },
+                                              {
+                                                "text": "3 hr 50 min",
+                                                "id": "com.doordash.driverapp:id/value",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                  "left": 793,
+                                                  "top": 4318,
+                                                  "right": 1004,
+                                                  "bottom": 4365
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "class": "android.widget.LinearLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                          "left": 40,
+                                          "top": 4374,
+                                          "right": 1040,
+                                          "bottom": 4475
+                                        },
+                                        "children": [
+                                          {
+                                            "class": "android.view.ViewGroup",
+                                            "isEnabled": true,
+                                            "bounds": {
+                                              "left": 40,
+                                              "top": 4401,
+                                              "right": 1040,
+                                              "bottom": 4448
+                                            },
+                                            "children": [
+                                              {
+                                                "id": "com.doordash.driverapp:id/leading_icon",
+                                                "class": "android.widget.ImageView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                  "left": 76,
+                                                  "top": 4407,
+                                                  "right": 112,
+                                                  "bottom": 4443
+                                                }
+                                              },
+                                              {
+                                                "text": "Offers accepted",
+                                                "id": "com.doordash.driverapp:id/name",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                  "left": 148,
+                                                  "top": 4401,
+                                                  "right": 440,
+                                                  "bottom": 4448
+                                                }
+                                              },
+                                              {
+                                                "text": "3 out of 11",
+                                                "id": "com.doordash.driverapp:id/value",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                  "left": 819,
+                                                  "top": 4401,
+                                                  "right": 1004,
+                                                  "bottom": 4448
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                  "left": 0,
+                                  "top": 4479,
+                                  "right": 1080,
+                                  "bottom": 4568
+                                },
+                                "children": [
+                                  {
+                                    "text": "Weekly payout scheduled for Mon, Mar 30",
+                                    "class": "android.widget.TextView",
+                                    "isEnabled": true,
+                                    "bounds": {
+                                      "left": 36,
+                                      "top": 4515,
+                                      "right": 1044,
+                                      "bottom": 4568
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "com.doordash.driverapp:id/prism_sheet_footer_divider",
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+          "left": 0,
+          "top": 4564,
+          "right": 1080,
+          "bottom": 4568
+        }
+      },
+      {
+        "id": "com.doordash.driverapp:id/prism_sheet_footer_container",
+        "class": "android.widget.LinearLayout",
+        "isEnabled": true,
+        "bounds": {
+          "left": 0,
+          "top": 4568,
+          "right": 1080,
+          "bottom": 4747
+        },
+        "children": [
+          {
+            "id": "com.doordash.driverapp:id/content",
+            "class": "android.widget.LinearLayout",
+            "isEnabled": true,
+            "bounds": {
+              "left": 0,
+              "top": 4568,
+              "right": 1080,
+              "bottom": 4747
+            },
+            "children": [
+              {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                  "left": 0,
+                  "top": 4568,
+                  "right": 1080,
+                  "bottom": 4747
+                },
+                "children": [
+                  {
+                    "class": "android.widget.LinearLayout",
+                    "isEnabled": true,
+                    "bounds": {
+                      "left": 36,
+                      "top": 4604,
+                      "right": 1044,
+                      "bottom": 4711
+                    },
+                    "children": [
+                      {
+                        "class": "android.widget.LinearLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                          "left": 36,
+                          "top": 4604,
+                          "right": 1044,
+                          "bottom": 4711
+                        },
+                        "children": [
+                          {
+                            "class": "android.widget.Button",
+                            "isClickable": true,
+                            "isEnabled": true,
+                            "bounds": {
+                              "left": 36,
+                              "top": 4604,
+                              "right": 1044,
+                              "bottom": 4711
+                            },
+                            "children": [
+                              {
+                                "text": "Done",
+                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                  "left": 485,
+                                  "top": 4625,
+                                  "right": 595,
+                                  "bottom": 4691
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

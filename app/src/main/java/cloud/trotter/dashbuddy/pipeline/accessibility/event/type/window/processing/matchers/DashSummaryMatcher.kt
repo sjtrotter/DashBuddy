@@ -18,8 +18,6 @@ class DashSummaryMatcher @Inject constructor() : ScreenMatcher {
     private val offersPattern =
         Pattern.compile("(\\d+)\\s*out of\\s*(\\d+)", Pattern.CASE_INSENSITIVE)
 
-    private val tag = "DashSummaryMatcher"
-
     override fun matches(node: UiNode): ScreenInfo? {
 
         // 1. Identification
