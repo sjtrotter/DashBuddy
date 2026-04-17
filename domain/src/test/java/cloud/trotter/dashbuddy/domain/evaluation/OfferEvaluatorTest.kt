@@ -58,6 +58,15 @@ class OfferEvaluatorTest {
     private fun metricRule(metric: MetricType, target: Float, enabled: Boolean = true) =
         ScoringRule.MetricRule(id = metric.name, metricType = metric, targetValue = target, isEnabled = enabled)
 
+    private fun blockRule(storeName: String) =
+        ScoringRule.MerchantRule(id = "block_$storeName", storeName = storeName, action = MerchantAction.BLOCK)
+
+    private fun reviewRule(storeName: String) =
+        ScoringRule.MerchantRule(id = "review_$storeName", storeName = storeName, action = MerchantAction.MANUAL_REVIEW)
+
+    private fun modifierRule(storeName: String, modifier: Float) =
+        ScoringRule.MerchantRule(id = "mod_$storeName", storeName = storeName, action = MerchantAction.SCORE_MODIFIER, scoreModifier = modifier)
+
     // -------------------------------------------------------------------------
     // Protect Stats Mode
     // -------------------------------------------------------------------------
@@ -375,5 +384,185 @@ class OfferEvaluatorTest {
         val result = evaluator.evaluate(offer(pay = 2.0, dist = null), config)
         // dist defaults to 1.0 → dpm = 2.0/1.0 = 2.0 → score 100
         assertEquals(100.0, result.score, 0.0001)
+    }
+
+    // -------------------------------------------------------------------------
+    // MerchantRule - BLOCK
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `BLOCK rule - matching store short-circuits to DECLINE with score 0`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 7.0f),
+                blockRule("Taco Bell"),
+            )
+        )
+        val result = evaluator.evaluate(offer(pay = 20.0, storeName = "Taco Bell"), config)
+        assertEquals(OfferAction.DECLINE, result.action)
+        assertEquals(0.0, result.score, 0.0001)
+        assertEquals("Blocked", result.qualityLevel)
+    }
+
+    @Test
+    fun `BLOCK rule - matching is case-insensitive`() {
+        val config = EvaluationConfig(rules = listOf(blockRule("taco bell")))
+        val result = evaluator.evaluate(offer(storeName = "Taco Bell"), config)
+        assertEquals(OfferAction.DECLINE, result.action)
+    }
+
+    @Test
+    fun `BLOCK rule - non-matching store passes through to metric scoring`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 7.0f),
+                blockRule("Taco Bell"),
+            )
+        )
+        val result = evaluator.evaluate(offer(pay = 10.0, storeName = "Pizza Hut"), config)
+        assertEquals(OfferAction.ACCEPT, result.action)
+    }
+
+    @Test
+    fun `BLOCK rule - overrides protectStatsMode is not applicable (protectStats checked first)`() {
+        // protectStatsMode returns ACCEPT before merchant rules are evaluated
+        val config = EvaluationConfig(protectStatsMode = true, rules = listOf(blockRule("Taco Bell")))
+        val result = evaluator.evaluate(offer(storeName = "Taco Bell"), config)
+        assertEquals(OfferAction.ACCEPT, result.action)
+    }
+
+    // -------------------------------------------------------------------------
+    // MerchantRule - MANUAL_REVIEW
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `MANUAL_REVIEW rule - matching store overrides action regardless of score`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 7.0f),
+                reviewRule("Chipotle"),
+            )
+        )
+        // pay=10 → score=100, but MANUAL_REVIEW overrides to MANUAL_REVIEW action
+        val result = evaluator.evaluate(offer(pay = 10.0, storeName = "Chipotle"), config)
+        assertEquals(OfferAction.MANUAL_REVIEW, result.action)
+        assertEquals("Recommended: REVIEW", result.recommendationText)
+    }
+
+    @Test
+    fun `MANUAL_REVIEW rule - non-matching store does not override action`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 7.0f),
+                reviewRule("Chipotle"),
+            )
+        )
+        val result = evaluator.evaluate(offer(pay = 10.0, storeName = "Pizza Hut"), config)
+        assertEquals(OfferAction.ACCEPT, result.action)
+    }
+
+    @Test
+    fun `MANUAL_REVIEW rule - score is still computed normally`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 10.0f),
+                reviewRule("Chipotle"),
+            )
+        )
+        // pay=5, target=10 → score=50
+        val result = evaluator.evaluate(offer(pay = 5.0, storeName = "Chipotle"), config)
+        assertEquals(OfferAction.MANUAL_REVIEW, result.action)
+        assertEquals(50.0, result.score, 0.0001)
+    }
+
+    // -------------------------------------------------------------------------
+    // MerchantRule - SCORE_MODIFIER
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `SCORE_MODIFIER - positive boost raises score`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 10.0f),
+                modifierRule("Chipotle", 1.5f), // +50%
+            )
+        )
+        // pay=5, target=10 → raw score=50, * 1.5 = 75 → ACCEPT
+        val result = evaluator.evaluate(offer(pay = 5.0, storeName = "Chipotle"), config)
+        assertEquals(75.0, result.score, 0.0001)
+        assertEquals(OfferAction.ACCEPT, result.action)
+    }
+
+    @Test
+    fun `SCORE_MODIFIER - penalty reduces score`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 7.0f),
+                modifierRule("Chipotle", 0.5f), // -50%
+            )
+        )
+        // pay=7, target=7 → raw score=100, * 0.5 = 50 → NOTHING
+        val result = evaluator.evaluate(offer(pay = 7.0, storeName = "Chipotle"), config)
+        assertEquals(50.0, result.score, 0.0001)
+        assertEquals(OfferAction.NOTHING, result.action)
+    }
+
+    @Test
+    fun `SCORE_MODIFIER - score clamped to 100 on extreme boost`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 7.0f),
+                modifierRule("Chipotle", 10.0f),
+            )
+        )
+        val result = evaluator.evaluate(offer(pay = 7.0, storeName = "Chipotle"), config)
+        assertEquals(100.0, result.score, 0.0001)
+    }
+
+    @Test
+    fun `SCORE_MODIFIER - non-matching store modifier is not applied`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 10.0f),
+                modifierRule("Chipotle", 0.1f), // extreme penalty
+            )
+        )
+        // pay=7, target=10 → raw score=70; modifier does NOT apply (wrong store)
+        val result = evaluator.evaluate(offer(pay = 7.0, storeName = "Pizza Hut"), config)
+        assertEquals(70.0, result.score, 0.0001)
+        assertEquals(OfferAction.ACCEPT, result.action)
+    }
+
+    @Test
+    fun `SCORE_MODIFIER - multiple matching modifiers are multiplied together`() {
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 10.0f),
+                modifierRule("Chipotle", 2.0f),
+                modifierRule("Chipotle", 0.5f), // 2.0 * 0.5 = 1.0 → no net change
+            )
+        )
+        val result = evaluator.evaluate(offer(pay = 5.0, storeName = "Chipotle"), config)
+        assertEquals(50.0, result.score, 0.0001)
+    }
+
+    // -------------------------------------------------------------------------
+    // MerchantRule - Merchant rules do not contribute to rank-based weights
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `merchant rules do not skew rank-based metric weights`() {
+        // With 1 metric rule (PAYOUT, target=$10) and 1 BLOCK rule for a different store,
+        // the metric weight should still be 1.0 (sole metric rule gets full weight).
+        val config = EvaluationConfig(
+            rules = listOf(
+                metricRule(MetricType.PAYOUT, 10.0f),
+                blockRule("Taco Bell"),
+            )
+        )
+        // Pizza Hut offer: not blocked, pay=7 → score = (7/10)*100 = 70 → ACCEPT
+        val result = evaluator.evaluate(offer(pay = 7.0, storeName = "Pizza Hut"), config)
+        assertEquals(70.0, result.score, 0.0001)
+        assertEquals(OfferAction.ACCEPT, result.action)
     }
 }

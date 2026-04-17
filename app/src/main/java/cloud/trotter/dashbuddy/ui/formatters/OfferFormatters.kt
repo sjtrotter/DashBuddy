@@ -21,6 +21,7 @@ fun OfferEvaluation.toSpannableString(): SpannableString {
     val color = when (this.action) {
         OfferAction.ACCEPT -> Color.GREEN
         OfferAction.DECLINE -> Color.RED
+        OfferAction.MANUAL_REVIEW -> Color.YELLOW
         else -> Color.YELLOW
     }
 
@@ -48,6 +49,7 @@ fun OfferEvaluation.toAnnotatedString(): AnnotatedString {
         val composeColor = when (this@toAnnotatedString.action) {
             OfferAction.ACCEPT -> androidx.compose.ui.graphics.Color.Green
             OfferAction.DECLINE -> androidx.compose.ui.graphics.Color.Red
+            OfferAction.MANUAL_REVIEW -> androidx.compose.ui.graphics.Color.Yellow
             else -> androidx.compose.ui.graphics.Color.Yellow
         }
 

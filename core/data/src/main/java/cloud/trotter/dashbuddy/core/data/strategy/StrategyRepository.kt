@@ -87,7 +87,14 @@ class StrategyRepository @Inject constructor(
                     id = dto.id,
                     isEnabled = dto.isEnabled,
                     storeName = dto.storeName,
-                    action = MerchantAction.valueOf(dto.action)
+                    action = runCatching { MerchantAction.valueOf(dto.action) }.getOrElse {
+                        // Migrate legacy enum names (BAN→BLOCK, BOOST/PENALIZE→SCORE_MODIFIER)
+                        when (dto.action) {
+                            "BAN" -> MerchantAction.BLOCK
+                            "BOOST", "PENALIZE" -> MerchantAction.SCORE_MODIFIER
+                            else -> MerchantAction.MANUAL_REVIEW
+                        }
+                    }
                 )
             }
         }

@@ -19,6 +19,8 @@ sealed class ScoringRule {
         override val id: String,
         override val isEnabled: Boolean = true,
         val storeName: String,
-        val action: MerchantAction
+        val action: MerchantAction,
+        /** Only used when action == [MerchantAction.SCORE_MODIFIER]. Multiplied against the final score (e.g. 1.2 = +20%, 0.5 = -50%). */
+        val scoreModifier: Float? = null,
     ) : ScoringRule()
 }

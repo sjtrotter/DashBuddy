@@ -38,7 +38,6 @@ class OfferEvaluator() {
             )
         }
 
-
         // --- 3. Filter Active Rules ---
         val activeRules = config.rules.filter { it.isEnabled }
         if (activeRules.isEmpty()) {
@@ -56,47 +55,66 @@ class OfferEvaluator() {
             )
         }
 
-        // --- 4. Calculate Dynamic Weights (Rank Based) ---
-        // Formula: Sum of integers 1..N.
-        // Example: 3 Rules. Sum = 1+2+3 = 6.
-        // Rank 1 gets 3/6 (50%), Rank 2 gets 2/6 (33%), Rank 3 gets 1/6 (16%).
-        val n = activeRules.size
-        val denominator = (n * (n + 1)) / 2.0
+        // --- 3a. Process Merchant Rules ---
+        val offerStoreNames = offer.orders.map { it.storeName.lowercase().trim() }.toSet()
+        val activeMerchantRules = activeRules.filterIsInstance<ScoringRule.MerchantRule>()
 
-        var totalWeightedScore = 0.0
-//        var hardReject = false
-
-        // --- 5. Iterate Rules ---
-        activeRules.forEachIndexed { index, rule ->
-            // Higher rank (lower index) = Higher weight
-            val rankWeight = (n - index) / denominator
-
-            if (rule is ScoringRule.MetricRule) {
-                val score = calculateMetricScore(rule, pay, dpm, activeHourly, dist, items)
-
-                // HARD LIMIT CHECK
-                // If a "Limit" rule (Max Dist/Items) is violated (Score 0), and it's in the top 50% of priorities, kill the offer.
-//                if (score == 0.0 && !rule.metricType.isHigherBetter && index < (n / 2)) {
-//                    hardReject = true
-//                }
-
-                totalWeightedScore += (score * rankWeight)
-            }
+        // BLOCK: hard decline before any scoring
+        val isBlocked = activeMerchantRules.any { rule ->
+            rule.action == MerchantAction.BLOCK &&
+                    rule.storeName.lowercase().trim() in offerStoreNames
+        }
+        if (isBlocked) {
+            return OfferEvaluation(
+                action = OfferAction.DECLINE,
+                score = 0.0,
+                qualityLevel = "Blocked",
+                recommendationText = "Recommended: DECLINE",
+                payAmount = pay,
+                distanceMiles = dist,
+                dollarsPerMile = dpm,
+                dollarsPerHour = activeHourly,
+                itemCount = items,
+                merchantName = merchants
+            )
         }
 
-        // --- 6. Penalties ---
-//        val isShop =
-//            offer.orders.any { order: ParsedOrder -> order.orderType == OrderType.SHOP_FOR_ITEMS }
+        // MANUAL_REVIEW: flag for later action override
+        val requiresManualReview = activeMerchantRules.any { rule ->
+            rule.action == MerchantAction.MANUAL_REVIEW &&
+                    rule.storeName.lowercase().trim() in offerStoreNames
+        }
 
-//        if (isShop && !config.allowShopping) {
-//            hardReject = true
-//        }
+        // SCORE_MODIFIER: collect all matching multipliers, fold into one
+        val scoreModifier = activeMerchantRules
+            .filter { rule ->
+                rule.action == MerchantAction.SCORE_MODIFIER &&
+                        rule.storeName.lowercase().trim() in offerStoreNames
+            }
+            .mapNotNull { it.scoreModifier }
+            .fold(1.0f) { acc, mod -> acc * mod }
 
-        val finalScore = (totalWeightedScore * 100).coerceIn(0.0, 100.0)
-//        = if (hardReject) 0.0 else (totalWeightedScore * 100).coerceIn(0.0, 100.0)
+        // --- 4. Calculate Dynamic Weights (Rank Based, MetricRules only) ---
+        val activeMetricRules = activeRules.filterIsInstance<ScoringRule.MetricRule>()
+        val n = activeMetricRules.size
+        val denominator = if (n > 0) (n * (n + 1)) / 2.0 else 1.0
+
+        var totalWeightedScore = 0.0
+
+        // --- 5. Iterate MetricRules ---
+        activeMetricRules.forEachIndexed { index, rule ->
+            val rankWeight = (n - index) / denominator
+            val score = calculateMetricScore(rule, pay, dpm, activeHourly, dist, items)
+            totalWeightedScore += (score * rankWeight)
+        }
+
+        // --- 6. Apply Score Modifier ---
+        val rawScore = (totalWeightedScore * 100).coerceIn(0.0, 100.0)
+        val finalScore = (rawScore * scoreModifier).coerceIn(0.0, 100.0)
 
         // --- 7. Decision ---
         val action = when {
+            requiresManualReview -> OfferAction.MANUAL_REVIEW
             finalScore >= 70 -> OfferAction.ACCEPT
             finalScore <= 30 -> OfferAction.DECLINE
             else -> OfferAction.NOTHING
@@ -105,6 +123,7 @@ class OfferEvaluator() {
         val recText = when (action) {
             OfferAction.ACCEPT -> "Recommended: ACCEPT"
             OfferAction.DECLINE -> "Recommended: DECLINE"
+            OfferAction.MANUAL_REVIEW -> "Recommended: REVIEW"
             else -> "Recommended: DECIDE"
         }
 
