@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
-import cloud.trotter.dashbuddy.domain.config.EvaluationConfig
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent

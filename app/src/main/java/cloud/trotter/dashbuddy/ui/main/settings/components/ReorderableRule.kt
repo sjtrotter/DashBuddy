@@ -24,8 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.domain.config.MetricType
-import cloud.trotter.dashbuddy.domain.config.ScoringRule
+import cloud.trotter.dashbuddy.domain.evaluation.MetricType
+import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import java.util.Locale
 
 @Composable

@@ -1,8 +1,5 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
-import cloud.trotter.dashbuddy.domain.config.EvaluationConfig
-import cloud.trotter.dashbuddy.domain.config.MetricType
-import cloud.trotter.dashbuddy.domain.config.ScoringRule
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 
