@@ -80,9 +80,11 @@ This automation bot performs three actions:
 If you create a new `ScreenMatcher`:
 
 1. **Define:** Create the matcher class in `src/main/java/.../matchers/`.
-2. **Register:** Add the new matcher to **`TestMatcherFactory.kt`**.
+2. **Register (tests):** Add the new matcher to **`TestMatcherFactory.kt`**.
     * *Note: This mimics the Dagger/Hilt injection graph for local tests.*
-3. **Test:** Run `InboxProcessorTest` to verify it now picks up previously "Unknown" files.
+3. **Register (live):** Add the matcher to the Hilt module that provides the matcher set to the
+   live accessibility pipeline.
+4. **Test:** Run `InboxProcessorTest` to verify it now picks up previously "Unknown" files.
 
 ---
 
