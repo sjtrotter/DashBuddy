@@ -1,8 +1,11 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import javax.inject.Inject
@@ -34,6 +37,27 @@ class AppPreferencesRepository @Inject constructor(
         }
     }
 
+    val vehicleType: Flow<VehicleType> = dataSource.vehicleType.map { saved ->
+        try {
+            VehicleType.valueOf(saved ?: VehicleType.CAR.name)
+        } catch (_: Exception) {
+            VehicleType.CAR
+        }
+    }
+
+    /** Combines stored prefs into a [UserEconomy] ready for [EvaluationConfig]. */
+    val userEconomy: Flow<UserEconomy> = combine(
+        vehicleType,
+        dataSource.estimatedMpg,
+        dataSource.gasPrice,
+    ) { vType, mpg, price ->
+        UserEconomy(
+            vehicleType = vType,
+            vehicleMpg = mpg?.toDouble() ?: 30.0,
+            gasPricePerGallon = price?.toDouble() ?: 3.50,
+        )
+    }
+
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
@@ -41,6 +65,8 @@ class AppPreferencesRepository @Inject constructor(
 
     // Passes the Enum as a String to keep the DataSource clean
     suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
+
+    suspend fun updateVehicleType(type: VehicleType) = dataSource.updateVehicleType(type.name)
 
     suspend fun setProMode(enabled: Boolean) = dataSource.setProMode(enabled)
 

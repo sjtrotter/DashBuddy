@@ -28,6 +28,7 @@ class AppPreferencesDataSource @Inject constructor(
         val IS_PRO_MODE = booleanPreferencesKey("is_pro_mode")
         val APP_THEME = stringPreferencesKey("app_theme")
         val FUEL_TYPE = stringPreferencesKey("fuel_type")
+        val VEHICLE_TYPE = stringPreferencesKey("vehicle_type")
         val SIM_PAY = doublePreferencesKey("sim_pay")
         val SIM_DIST = doublePreferencesKey("sim_dist")
     }
@@ -45,6 +46,7 @@ class AppPreferencesDataSource @Inject constructor(
     val isProMode: Flow<Boolean> = ds.data.map { it[Keys.IS_PRO_MODE] ?: false }
     val appTheme: Flow<String?> = ds.data.map { it[Keys.APP_THEME] }
     val fuelType: Flow<String?> = ds.data.map { it[Keys.FUEL_TYPE] }
+    val vehicleType: Flow<String?> = ds.data.map { it[Keys.VEHICLE_TYPE] }
 
     // ============================================================================================
     // ENCAPSULATED WRITE ACTIONS
@@ -55,6 +57,10 @@ class AppPreferencesDataSource @Inject constructor(
 
     suspend fun updateFuelType(type: String) {
         ds.edit { it[Keys.FUEL_TYPE] = type }
+    }
+
+    suspend fun updateVehicleType(type: String) {
+        ds.edit { it[Keys.VEHICLE_TYPE] = type }
     }
 
     suspend fun setProMode(enabled: Boolean) {

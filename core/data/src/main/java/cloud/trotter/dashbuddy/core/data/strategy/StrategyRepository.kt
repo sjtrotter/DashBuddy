@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.strategy
 
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.datastore.strategy.StrategyDataSource
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
@@ -24,7 +25,8 @@ import javax.inject.Singleton
 
 @Singleton
 class StrategyRepository @Inject constructor(
-    private val dataSource: StrategyDataSource
+    private val dataSource: StrategyDataSource,
+    private val appPreferencesRepository: AppPreferencesRepository,
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -153,12 +155,14 @@ class StrategyRepository @Inject constructor(
     val evaluationConfigFlow: Flow<EvaluationConfig> = combine(
         scoringRules,
         protectStatsMode,
-        allowShopping
-    ) { rules, protect, shop ->
+        allowShopping,
+        appPreferencesRepository.userEconomy,
+    ) { rules, protect, shop, economy ->
         EvaluationConfig(
             protectStatsMode = protect,
             rules = rules,
-            allowShopping = shop
+            allowShopping = shop,
+            userEconomy = economy,
         )
     }
 
