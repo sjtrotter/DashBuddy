@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.domain.config
+package cloud.trotter.dashbuddy.domain.evaluation
 
 /**
  * The Snapshot of all rules needed to score an offer.

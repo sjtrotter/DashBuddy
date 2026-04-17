@@ -8,8 +8,8 @@ import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.domain.config.DashStrategy
-import cloud.trotter.dashbuddy.domain.config.MetricType
-import cloud.trotter.dashbuddy.domain.config.ScoringRule
+import cloud.trotter.dashbuddy.domain.evaluation.MetricType
+import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType

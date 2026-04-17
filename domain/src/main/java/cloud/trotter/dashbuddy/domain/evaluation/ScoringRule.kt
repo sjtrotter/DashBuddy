@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.domain.config
+package cloud.trotter.dashbuddy.domain.evaluation
 
 /**
  * The Base Rule. All rules (Money, Distance, Store-Specific) inherit from this.

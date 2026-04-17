@@ -2,12 +2,12 @@ package cloud.trotter.dashbuddy.core.data.strategy
 
 import cloud.trotter.dashbuddy.core.datastore.strategy.StrategyDataSource
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
-import cloud.trotter.dashbuddy.domain.config.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
-import cloud.trotter.dashbuddy.domain.config.MerchantAction
-import cloud.trotter.dashbuddy.domain.config.MetricType
 import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
-import cloud.trotter.dashbuddy.domain.config.ScoringRule
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
+import cloud.trotter.dashbuddy.domain.evaluation.MerchantAction
+import cloud.trotter.dashbuddy.domain.evaluation.MetricType
+import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
