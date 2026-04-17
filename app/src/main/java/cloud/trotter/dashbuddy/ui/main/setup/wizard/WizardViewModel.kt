@@ -7,11 +7,11 @@ import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
-import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.MenuItem
 import cloud.trotter.dashbuddy.domain.config.DashStrategy
 import cloud.trotter.dashbuddy.domain.config.MetricType
 import cloud.trotter.dashbuddy.domain.config.ScoringRule
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
@@ -25,7 +25,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -52,7 +51,7 @@ class WizardViewModel @Inject constructor(
     private val _availableModels = MutableStateFlow<List<String>>(emptyList())
     val availableModels = _availableModels.asStateFlow()
 
-    private val _availableTrims = MutableStateFlow<List<MenuItem>>(emptyList())
+    private val _availableTrims = MutableStateFlow<List<VehicleOption>>(emptyList())
     val availableTrimNames = MutableStateFlow<List<String>>(emptyList())
 
     init {
@@ -166,7 +165,8 @@ class WizardViewModel @Inject constructor(
                     _state.value.vehicleMake,
                     model
                 )
-                _availableTrims.value = trims; availableTrimNames.value = trims.map { it.text }
+                _availableTrims.value = trims; availableTrimNames.value =
+                trims.map { it.displayName }
             }
         }
     }
@@ -179,19 +179,18 @@ class WizardViewModel @Inject constructor(
 
         viewModelScope.launch {
             val vehicleId =
-                _availableTrims.value.find { it.text == trimName }?.value ?: return@launch
+                _availableTrims.value.find { it.displayName == trimName }?.id ?: return@launch
             val details = vehicleRepository.getVehicleDetails(vehicleId)
 
             if (details != null) {
-                val mappedFuelType = mapEpaFuelType(details.fuelType1)
                 _state.update { currentState ->
-                    val cachedPrice = currentState.fetchedGasPrices[mappedFuelType]
+                    val cachedPrice = currentState.fetchedGasPrices[details.fuelType]
                     val newPrice =
                         if (currentState.isGasPriceAuto && cachedPrice != null) cachedPrice else currentState.gasPrice
 
                     currentState.copy(
                         estimatedMpg = details.combinedMpg ?: currentState.estimatedMpg,
-                        fuelType = mappedFuelType,
+                        fuelType = details.fuelType,
                         gasPrice = newPrice
                     )
                 }
@@ -202,18 +201,6 @@ class WizardViewModel @Inject constructor(
     // --- NEW: Manual MPG Slider update ---
     fun updateEstimatedMpg(mpg: Float) {
         _state.update { it.copy(estimatedMpg = mpg) }
-    }
-
-    private fun mapEpaFuelType(epaString: String?): FuelType {
-        if (epaString == null) return FuelType.REGULAR
-        val lower = epaString.lowercase(Locale.getDefault())
-        return when {
-            lower.contains("electricity") -> FuelType.ELECTRICITY // <-- NEW
-            lower.contains("premium") -> FuelType.PREMIUM
-            lower.contains("midgrade") -> FuelType.MIDGRADE
-            lower.contains("diesel") -> FuelType.DIESEL
-            else -> FuelType.REGULAR
-        }
     }
 
     fun updateFuelType(type: FuelType) {

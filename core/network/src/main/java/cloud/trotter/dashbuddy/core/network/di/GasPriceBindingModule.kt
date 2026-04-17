@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.di
+package cloud.trotter.dashbuddy.core.network.di
 
 import cloud.trotter.dashbuddy.core.network.fuel.price.eia.EiaFuelPrice
 import cloud.trotter.dashbuddy.domain.provider.FuelPriceDataSource

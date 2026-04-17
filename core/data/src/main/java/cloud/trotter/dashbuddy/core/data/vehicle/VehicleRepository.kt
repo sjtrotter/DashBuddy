@@ -1,85 +1,38 @@
 package cloud.trotter.dashbuddy.core.data.vehicle
 
-import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.EpaApi
-import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.MenuItem
-import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.dto.VehicleDetailsResponse
-import timber.log.Timber
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleDetails
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
+import cloud.trotter.dashbuddy.domain.provider.VehicleEfficiencyDataSource
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class VehicleRepository @Inject constructor(
-    private val api: EpaApi
+    private val dataSource: VehicleEfficiencyDataSource
 ) {
-
-    suspend fun getYears(): List<String> {
-        return try {
-            val response = api.getYears()
-            response.menuItem.map { it.text }.sortedDescending()
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to fetch vehicle years")
-            emptyList()
-        }
-    }
+    suspend fun getYears(): List<String> = dataSource.getYears()
 
     suspend fun getMakes(year: String): List<String> {
-        return try {
-            val response = api.getMakes(year = year)
-            val list = response.menuItem.map { it.text }.sorted().toMutableList()
-            list.add(0, "Not Listed") // <-- Add to top
-            list
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to fetch vehicle makes for year: $year")
-            listOf("Not Listed") // Fallback
-        }
+        val list = dataSource.getMakes(year).toMutableList()
+        list.add(0, "Not Listed")
+        return list
     }
 
     suspend fun getModels(year: String, make: String): List<String> {
-        return try {
-            val response = api.getModels(year = year, make = make)
-            val list = response.menuItem.map { it.text }.sorted().toMutableList()
-            list.add(0, "Not Listed")
-            list
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to fetch vehicle models for $year $make")
-            listOf("Not Listed") // Fallback
-        }
+        val list = dataSource.getModels(year, make).toMutableList()
+        list.add(0, "Not Listed")
+        return list
     }
 
-    // --- Fetch the raw MenuItems (so we keep the text AND the hidden ID) ---
-    suspend fun getVehicleOptions(year: String, make: String, model: String): List<MenuItem> {
-        return try {
-            val response = api.getVehicleOptions(year = year, make = make, model = model)
-            val list = response.menuItem.toMutableList()
-            list.add(0, MenuItem("Not Listed", "NOT_LISTED")) // <-- Add dummy DTO to top
-            list
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to fetch vehicle options for $year $make $model")
-            listOf(MenuItem("Not Listed", "NOT_LISTED")) // Fallback
-        }
+    suspend fun getVehicleOptions(year: String, make: String, model: String): List<VehicleOption> {
+        val list = dataSource.getVehicleOptions(year, make, model).toMutableList()
+        list.add(0, VehicleOption(id = "NOT_LISTED", displayName = "Not Listed"))
+        return list
     }
 
-    // --- Fetch exact MPG using the specific Vehicle ID ---
-    suspend fun getCombinedMpg(vehicleId: String): Float? {
-        return try {
-            val details = api.getVehicleDetails(vehicleId = vehicleId)
-            Timber.d("Fetched MPG for ID $vehicleId: ${details.combinedMpg}")
-            details.combinedMpg
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to fetch MPG for ID $vehicleId")
-            null
-        }
-    }
+    suspend fun getVehicleDetails(vehicleId: String): VehicleDetails? =
+        dataSource.getVehicleDetails(vehicleId)
 
-    // --- Fetch full Vehicle Details ---
-    suspend fun getVehicleDetails(vehicleId: String): VehicleDetailsResponse? {
-        return try {
-            val details = api.getVehicleDetails(vehicleId = vehicleId)
-            Timber.d("Fetched Details for ID $vehicleId: MPG=${details.combinedMpg}, Fuel=${details.fuelType1}")
-            details
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to fetch Details for ID $vehicleId")
-            null
-        }
-    }
+    suspend fun getCombinedMpg(vehicleId: String): Float? =
+        dataSource.getVehicleDetails(vehicleId)?.combinedMpg
 }
