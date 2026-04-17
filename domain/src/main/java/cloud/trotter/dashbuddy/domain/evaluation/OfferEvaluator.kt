@@ -6,9 +6,9 @@ import cloud.trotter.dashbuddy.domain.config.ScoringRule
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 
-class OfferEvaluator(private val config: EvaluationConfig) {
+class OfferEvaluator() {
 
-    fun evaluate(offer: ParsedOffer): OfferEvaluation {
+    fun evaluate(offer: ParsedOffer, config: EvaluationConfig): OfferEvaluation {
 
         val pay = offer.payAmount ?: 0.0
         val dist = offer.distanceMiles ?: 1.0

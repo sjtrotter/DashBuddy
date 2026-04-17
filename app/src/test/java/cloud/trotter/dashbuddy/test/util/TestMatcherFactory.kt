@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.data.pay.PayParser
+import cloud.trotter.dashbuddy.core.data.pay.PayParser
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.AppStartupMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashAlongTheWayMatcher

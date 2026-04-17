@@ -1,7 +1,9 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.data.log.snapshots.SnapshotWrapper
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
+import cloud.trotter.dashbuddy.core.database.log.dto.SnapshotWrapperDto
+import cloud.trotter.dashbuddy.core.database.log.dto.UiNodeDto
+import cloud.trotter.dashbuddy.core.database.log.mapper.toDomain
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import java.io.File
@@ -35,8 +37,8 @@ object TestResourceLoader {
         return try {
             val content = file.readText()
             if (content.contains("\"isGolden\": true")) return true
-            val wrapper = jsonParser.decodeFromString<SnapshotWrapper>(content)
-            wrapper.isGolden
+            val wrapperDto = jsonParser.decodeFromString<SnapshotWrapperDto>(content)
+            wrapperDto.isGolden
         } catch (_: Exception) {
             false
         }
@@ -51,11 +53,13 @@ object TestResourceLoader {
             val isWrapper = jsonElement.jsonObject.containsKey("root")
 
             if (isWrapper) {
-                val wrapper = jsonParser.decodeFromString<SnapshotWrapper>(jsonString)
-                wrapper.root to wrapper.breadcrumbs
+                val wrapperDto = jsonParser.decodeFromString<SnapshotWrapperDto>(jsonString)
+                val domainNode = wrapperDto.root.toDomain()
+                domainNode to wrapperDto.breadcrumbs
             } else {
-                val node = jsonParser.decodeFromString<UiNode>(jsonString)
-                node to emptyList()
+                val nodeDto = jsonParser.decodeFromString<UiNodeDto>(jsonString)
+                val domainNode = nodeDto.toDomain()
+                domainNode to emptyList()
             }
         } catch (e: Exception) {
             throw IllegalArgumentException("Failed to parse JSON", e)
@@ -66,9 +70,19 @@ object TestResourceLoader {
     }
 
     /**
-     * UPDATED: Returns [Filename, Node, Breadcrumbs] for the test constructor
+     * LEGACY SUPPORT: Returns [Filename, Node] for older tests (2-argument constructor)
      */
     fun loadForParameterized(folderName: String): Collection<Array<Any>> {
+        val path = "snapshots/$folderName"
+        return loadSnapshots(path).map { (filename, node, _) ->
+            arrayOf(filename, node)
+        }
+    }
+
+    /**
+     * NEW SUPPORT: Returns [Filename, Node, Breadcrumbs] for tests like InboxProcessorTest (3-argument constructor)
+     */
+    fun loadForParameterizedWithBreadcrumbs(folderName: String): Collection<Array<Any>> {
         val path = "snapshots/$folderName"
         return loadSnapshots(path).map { (filename, node, breadcrumbs) ->
             arrayOf(filename, node, breadcrumbs)

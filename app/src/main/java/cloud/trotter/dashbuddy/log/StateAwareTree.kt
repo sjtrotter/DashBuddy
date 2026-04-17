@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.log
 
 import android.util.Log
-import cloud.trotter.dashbuddy.data.log.LogRepository
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.core.data.log.LogRepository
+import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -15,11 +15,11 @@ import javax.inject.Provider
  * 1. Intercepts logs from Timber.
  * 2. Injects the current App State (e.g., OFFER_EVAL).
  * 3. Formats them with a timestamp.
- * 4. Sends them to the [cloud.trotter.dashbuddy.data.log.LogRepository] for file storage.
+ * 4. Sends them to the [cloud.trotter.dashbuddy.core.data.log.LogRepository] for file storage.
  */
 class StateAwareTree(
     private val logRepository: LogRepository,
-    private val settingsRepository: SettingsRepository,
+    private val devSettingsRepository: DevSettingsRepository,
     private val stateProvider: Provider<String> // Lazy access to state to avoid circular dependencies
 ) : Timber.Tree() {
 
@@ -28,7 +28,7 @@ class StateAwareTree(
 
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         // 1. Check Log Level Gate
-        if (priority < settingsRepository.minLogLevel.value) return
+        if (priority < devSettingsRepository.minLogLevel.value) return
 
         // 2. Auto-Generate Tag if missing
         val finalTag = tag ?: createStackElementTag()

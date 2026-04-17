@@ -26,11 +26,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "0.230.0"
-        buildConfigField(
-            "String",
-            "EIA_API_KEY",
-            localProperties.getProperty("EIA_API_KEY") ?: "\"\""
-        )
     }
 
     buildTypes {
@@ -51,7 +46,6 @@ android {
     viewBinding.enable = true
 
     buildFeatures {
-//        dataBinding = true // testing to see if databindings need to be enabled
         viewBinding = true
         compose = true
         buildConfig = true
@@ -80,9 +74,6 @@ dependencies {
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.androidx.preference.ktx)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    implementation(libs.androidx.room.paging)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
@@ -93,18 +84,18 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.material)
     implementation(libs.play.services.location)
-    implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
     implementation(libs.reorderable)
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.robolectric)
     implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))
 
+    implementation(project(":core:data"))
+    implementation(project(":core:database"))
+    implementation(project(":core:datastore"))
+    implementation(project(":core:location"))
+    implementation(project(":core:network"))
     implementation(project(":domain"))
 
-    ksp(libs.androidx.room.compiler)
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.hilt.compiler)
 

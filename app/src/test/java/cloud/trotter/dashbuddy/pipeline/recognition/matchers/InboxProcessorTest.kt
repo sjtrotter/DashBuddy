@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
+import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.SnapshotLibrarian
@@ -40,7 +40,7 @@ class InboxProcessorTest(
         @Parameterized.Parameters(name = "{0}")
         fun data(): Collection<Array<Any>> {
             val data = try {
-                TestResourceLoader.loadForParameterized(INBOX)
+                TestResourceLoader.loadForParameterizedWithBreadcrumbs(INBOX)
             } catch (_: Exception) {
                 emptyList()
             }

@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.ui.main.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.config.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.config.ScoringRule
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -11,45 +11,35 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val repository: SettingsRepository
+    private val strategyRepository: StrategyRepository,
 ) : ViewModel() {
 
     // --- STATE ---
     // Combine multiple data sources into one Config object for the UI
-    val evaluationConfig: StateFlow<EvaluationConfig> = combine(
-        repository.scoringRules,
-        repository.protectStatsMode,
-        repository.allowShopping
-    ) { rules, protect, shop ->
-        EvaluationConfig(
-            protectStatsMode = protect,
-            rules = rules,
-            allowShopping = shop
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EvaluationConfig())
+    val evaluationConfig: StateFlow<EvaluationConfig> = strategyRepository.evaluationConfigFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EvaluationConfig())
 
     // --- ACTIONS ---
 
     fun toggleProtectStats(enabled: Boolean) = viewModelScope.launch {
-        repository.setProtectStatsMode(enabled)
+        strategyRepository.setProtectStatsMode(enabled)
     }
 
     fun toggleAllowShopping(allowed: Boolean) = viewModelScope.launch {
-        repository.setAllowShopping(allowed)
+        strategyRepository.setAllowShopping(allowed)
     }
 
     /**
      * Called when dragging rows to reorder priorities
      */
     fun reorderRules(newList: List<ScoringRule>) = viewModelScope.launch {
-        repository.updateRules(newList)
+        strategyRepository.updateRules(newList)
     }
 
     /**
@@ -61,7 +51,7 @@ class SettingsViewModel @Inject constructor(
 
         if (index != -1) {
             currentList[index] = updatedRule
-            repository.updateRules(currentList)
+            strategyRepository.updateRules(currentList)
         }
     }
 
@@ -77,7 +67,7 @@ class SettingsViewModel @Inject constructor(
         )
 
         val currentConfig = evaluationConfig.value
-        val evaluator = OfferEvaluator(currentConfig)
-        return evaluator.evaluate(fakeOffer)
+        val evaluator = OfferEvaluator()
+        return evaluator.evaluate(fakeOffer, currentConfig)
     }
 }

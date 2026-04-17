@@ -1,10 +1,10 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.data.event.AppEventEntity
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
-import cloud.trotter.dashbuddy.state.model.TimeoutType
+import cloud.trotter.dashbuddy.domain.model.state.TimeoutType
 
 sealed class AppEffect {
     // 1. Log to Database (The Core of Event Sourcing)

@@ -1,5 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -25,16 +28,31 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.paging)
+    implementation(libs.hilt.android)
+    implementation(libs.kotlinx.serialization.json)
+
+    implementation(project(":domain"))
+
+    ksp(libs.androidx.room.compiler)
+    ksp(libs.hilt.compiler)
+
     testImplementation(libs.junit)
+    testImplementation(libs.kotlin.reflect)
+
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashSummaryMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals

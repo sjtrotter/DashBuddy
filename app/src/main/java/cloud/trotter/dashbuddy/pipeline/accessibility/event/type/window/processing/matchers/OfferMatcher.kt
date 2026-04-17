@@ -2,15 +2,15 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
+import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
-import cloud.trotter.dashbuddy.pipeline.accessibility.model.UiNode
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
 import javax.inject.Inject

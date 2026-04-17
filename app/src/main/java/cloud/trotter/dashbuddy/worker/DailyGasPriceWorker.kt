@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import cloud.trotter.dashbuddy.data.gas.GasPriceRepository
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -19,8 +19,8 @@ import timber.log.Timber
 class DailyGasPriceWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
-    private val gasPriceRepository: GasPriceRepository,
-    private val settingsRepository: SettingsRepository
+    private val gasPriceRepository: FuelPriceRepository,
+    private val appPreferencesRepository: AppPreferencesRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -29,14 +29,14 @@ class DailyGasPriceWorker @AssistedInject constructor(
         return try {
             // 1. Check if the user actually wants us to auto-update.
             // Using .first() grabs the current snapshot of the Flow.
-            val isAuto = settingsRepository.isGasPriceAuto.first()
+            val isAuto = appPreferencesRepository.isGasPriceAuto.first()
             if (!isAuto) {
                 Timber.i("Auto gas price is disabled in Settings. Going back to sleep.")
                 return Result.success() // Tell Android the job is "done"
             }
 
             // 2. Figure out what fuel type the user drives right now
-            val fuelType = settingsRepository.fuelType.first()
+            val fuelType = appPreferencesRepository.fuelType.first()
 
             // 3. Hit the EIA API and save it to DataStore
             Timber.i("Fetching latest gas price for ${fuelType.name}...")

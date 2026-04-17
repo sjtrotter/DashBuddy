@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy
 
 import android.app.Application
 import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -9,9 +11,10 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import cloud.trotter.dashbuddy.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.data.log.LogRepository
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.core.data.log.LogRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.log.StateAwareTree
 import cloud.trotter.dashbuddy.state.StateManagerV2
@@ -35,7 +38,10 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     lateinit var logRepository: LogRepository
 
     @Inject
-    lateinit var settingsRepository: SettingsRepository
+    lateinit var appPreferencesRepository: AppPreferencesRepository
+
+    @Inject
+    lateinit var devSettingsRepository: DevSettingsRepository
 
     // Needed for Hilt to inject repositories into WorkManager classes
     @Inject
@@ -67,6 +73,7 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -83,7 +90,13 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
-        Timber.plant(StateAwareTree(logRepository, settingsRepository, stateProvider))
+        Timber.plant(
+            StateAwareTree(
+                logRepository,
+                devSettingsRepository,
+                stateProvider
+            )
+        )
 
         // 2. Initialize State
         stateManagerV2.initialize()

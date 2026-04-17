@@ -2,7 +2,9 @@ package cloud.trotter.dashbuddy.ui.main.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cloud.trotter.dashbuddy.data.settings.SettingsRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,16 +13,18 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsMenuViewModel @Inject constructor(
-    private val repository: SettingsRepository
+    private val appPreferencesRepository: AppPreferencesRepository,
+    private val devSettingsRepository: DevSettingsRepository,
+    private val strategyRepository: StrategyRepository
 ) : ViewModel() {
 
     // Pass-through flows for the UI
-    val evidenceConfig = repository.evidenceConfig
-    val appTheme = repository.appTheme
-    val isProMode = repository.isProMode
+    val evidenceConfig = strategyRepository.evidenceConfig
+    val appTheme = appPreferencesRepository.appTheme
+    val isProMode = appPreferencesRepository.isProMode
 
     // Re-using the debug flag from repo as the "Unlock" state
-    val isDevModeUnlocked = repository.isDevModeUnlocked
+    val isDevModeUnlocked = devSettingsRepository.isDevModeUnlocked
 
     private val _versionClickCount = MutableStateFlow(0)
     val versionClickCount = _versionClickCount.asStateFlow()
@@ -33,25 +37,25 @@ class SettingsMenuViewModel @Inject constructor(
     }
 
     fun unlockDeveloperMode() = viewModelScope.launch {
-        repository.setDevModeUnlocked(true)
+        devSettingsRepository.setDevModeUnlocked(true)
     }
 
     // --- Actions ---
 
     fun setEvidenceMaster(enabled: Boolean) = viewModelScope.launch {
-        repository.setEvidenceMaster(enabled)
+        strategyRepository.setEvidenceMaster(enabled)
     }
 
     fun updateEvidenceConfig(offers: Boolean, delivery: Boolean, dash: Boolean) =
         viewModelScope.launch {
-            repository.updateEvidenceConfig(offers, delivery, dash)
+            strategyRepository.updateEvidenceConfig(offers, delivery, dash)
         }
 
     fun setProMode(enabled: Boolean) = viewModelScope.launch {
-        repository.setProMode(enabled)
+        appPreferencesRepository.setProMode(enabled)
     }
 
     fun setTheme(theme: String) = viewModelScope.launch {
-        repository.setTheme(theme)
+        appPreferencesRepository.setTheme(theme)
     }
 }

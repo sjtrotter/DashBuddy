@@ -4,7 +4,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.accessibility.AccessibilityPipeline
 import cloud.trotter.dashbuddy.pipeline.notification.NotificationPipeline
-import cloud.trotter.dashbuddy.state.event.StateEvent
+import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn

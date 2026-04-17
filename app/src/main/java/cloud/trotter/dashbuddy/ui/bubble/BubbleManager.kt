@@ -14,11 +14,16 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.data.chat.ChatRepository
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import cloud.trotter.dashbuddy.ui.formatters.getIconResId // <-- Your new UI Formatter!
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,10 +34,12 @@ class BubbleManager @Inject constructor(
     private val notificationManager: NotificationManager,
     private val chatRepository: ChatRepository
 ) {
+    // 1. ADDED: CoroutineScope for the suspend database calls
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     private val channelId = "bubble_channel"
     private val shortcutId = "DashBuddy_Bubble_Shortcut"
 
-    // We expose the active ID so the UI knows what to observe
     private val _activeDashId = MutableStateFlow<String?>(null)
     val activeDashId = _activeDashId.asStateFlow()
 
@@ -43,12 +50,13 @@ class BubbleManager @Inject constructor(
 
     fun startDash(dashId: String) {
         _activeDashId.value = dashId
-        postMessage("Dash Started", ChatPersona.System)
+        // Assuming we map System messages to the Dispatcher persona
+        postMessage("Dash Started", ChatPersona.Dispatcher)
     }
 
     fun endDash() {
         _activeDashId.value = null
-        postMessage("Dash Ended", ChatPersona.System)
+        postMessage("Dash Ended", ChatPersona.Dispatcher)
     }
 
     fun postMessage(
@@ -56,12 +64,15 @@ class BubbleManager @Inject constructor(
         persona: ChatPersona = ChatPersona.Dispatcher,
         expand: Boolean = false
     ) {
-        Timber.tag("Chat").i("[${persona.name}]: $text")
+        // Updated to use displayName
+        Timber.tag("Chat").i("[${persona.displayName}]: $text")
 
-        // 1. Save to DB
-        chatRepository.saveMessage(_activeDashId.value, persona, text)
+        // 2. UPDATED: Launched in a coroutine because the Repository is pure suspend now!
+        scope.launch {
+            chatRepository.saveMessage(_activeDashId.value, text.toString(), persona)
+        }
 
-        // 2. Post Notification
+        // Post Notification
         showNotification(text, persona, expand)
     }
 
@@ -79,39 +90,38 @@ class BubbleManager @Inject constructor(
         val activityIntent = Intent(context, BubbleActivity::class.java).apply {
             action = Intent.ACTION_VIEW
         }
+
         val person = Person.Builder()
-            .setName(ChatPersona.Dispatcher.name)
-            .setIcon(
-                IconCompat.createWithResource(
-                    context,
-                    R.drawable.bag_red_idle
-                )
-            ) // TODO: replace with mapped persona icon
+            .setName(ChatPersona.Dispatcher.displayName)
+            .setIcon(IconCompat.createWithResource(context, ChatPersona.Dispatcher.getIconResId()))
             .setKey(ChatPersona.Dispatcher.id)
             .build()
+
         val shortcut = ShortcutInfoCompat.Builder(context, shortcutId)
             .setLongLived(true)
             .setIntent(activityIntent)
             .setShortLabel("DashBuddy")
-            .setIcon(IconCompat.createWithResource(context, R.drawable.bag_red_idle))
-            .setPerson(person)
-            .setCategories(setOf(ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION))
-            .setLocusId(LocusIdCompat(shortcutId))
-            .build()
-        ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
-    }
-
-    private fun showNotification(text: CharSequence, persona: ChatPersona, expand: Boolean) {
-        val senderPerson = Person.Builder()
-            .setName(persona.name)
-            .setKey(persona.id)
             .setIcon(
                 IconCompat.createWithResource(
                     context,
                     R.drawable.bag_red_idle
                 )
-            ) // TODO: replace with mapped persona icon
-//            .setBot(persona is ChatPersona.Dispatcher)
+            ) // Main app icon for the shortcut
+            .setPerson(person)
+            .setCategories(setOf(ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION))
+            .setLocusId(LocusIdCompat(shortcutId))
+            .build()
+
+        ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
+    }
+
+    private fun showNotification(text: CharSequence, persona: ChatPersona, expand: Boolean) {
+
+        val senderPerson = Person.Builder()
+            .setName(persona.displayName)
+            .setKey(persona.id)
+            .setIcon(IconCompat.createWithResource(context, persona.getIconResId()))
+            .setBot(persona is ChatPersona.Dispatcher) // Clean Kotlin type checking!
             .build()
 
         val intentWithAction = Intent(context, BubbleActivity::class.java).apply {
@@ -124,10 +134,7 @@ class BubbleManager @Inject constructor(
 
         val bubbleMetadata = NotificationCompat.BubbleMetadata.Builder(
             bubbleIntent,
-            IconCompat.createWithResource(
-                context,
-                R.drawable.bag_red_idle
-            ) // TODO: replace with mapped persona icon
+            IconCompat.createWithResource(context, persona.getIconResId())
         )
             .setDesiredHeight(600)
             .setAutoExpandBubble(expand)

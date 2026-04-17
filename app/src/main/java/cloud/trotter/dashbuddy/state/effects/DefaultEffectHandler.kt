@@ -1,11 +1,13 @@
 package cloud.trotter.dashbuddy.state.effects
 
-import cloud.trotter.dashbuddy.data.event.AppEventRepo
-import cloud.trotter.dashbuddy.domain.chat.ChatPersona
+import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+import cloud.trotter.dashbuddy.domain.config.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
+import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.state.AppEffect
-import cloud.trotter.dashbuddy.state.event.OfferEvaluationEvent
-import cloud.trotter.dashbuddy.state.event.StateEvent
 import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toSpannableString
@@ -28,6 +30,8 @@ class DefaultEffectHandler @Inject constructor(
     private val tipEffectHandler: TipEffectHandler,
     private val bubbleManager: BubbleManager,
     private val offerEvaluator: OfferEvaluator,
+    private val offerEvaluatorV2: cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator,
+    private val strategyRepository: StrategyRepository,
     private val screenShotHandler: ScreenShotHandler,
     private val uiInteractionHandler: UiInteractionHandler,
 ) : EffectHandler {
@@ -93,14 +97,19 @@ class DefaultEffectHandler @Inject constructor(
             }
 
             is AppEffect.EvaluateOffer -> {
-                val result = offerEvaluator.evaluateOffer(effect.parsedOffer)
-                dispatch(OfferEvaluationEvent(result.action))
-                val persona = when (result.action) {
-                    OfferAction.ACCEPT -> ChatPersona.GoodOffer
-                    OfferAction.DECLINE -> ChatPersona.BadOffer
-                    OfferAction.NOTHING -> ChatPersona.Inspector
+                var config: EvaluationConfig
+                scope.launch(Dispatchers.IO) {
+                    config = strategyRepository.getEvaluationConfig()
+                    val result = offerEvaluatorV2.evaluate(effect.parsedOffer, config)
+
+                    dispatch(OfferEvaluationEvent(result.action))
+                    val persona = when (result.action) {
+                        OfferAction.ACCEPT -> ChatPersona.GoodOffer
+                        OfferAction.DECLINE -> ChatPersona.BadOffer
+                        OfferAction.NOTHING -> ChatPersona.Inspector
+                    }
+                    bubbleManager.postMessage(result.toSpannableString(), persona)
                 }
-                bubbleManager.postMessage(result.toSpannableString(), persona)
             }
 
             is AppEffect.ClickNode -> {
