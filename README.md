@@ -20,8 +20,9 @@ mileage, and providing safety-focused utility overlays.
   duration and earnings.
 * **Mileage Tracking:** Intelligent odometer reading updates based on app state (only tracks while
   active).
-* **Dash Protection:** Auto-resume functionality detects when the delivery app pauses the driver
-  and offers a one-tap fix.
+* **Dash Protection:** Detects when the delivery app pauses a Dash and immediately alerts the
+  driver, preventing unnoticed service interruptions. A safety timer tracks the remaining pause
+  window and transitions the app state automatically when it expires.
 * **Offer Analysis:** (In Progress) Parses incoming delivery offers to calculate price-per-mile
   and hourly rates instantly.
 * **Privacy-First:** All processing happens **on-device**. Sensitive banking and personal
@@ -114,12 +115,22 @@ See **[Test Documentation](app/src/test/README.md)** for details on the testing 
 
 ## Privacy & Safety
 
-This app requires **Accessibility Permissions** to function.
+This app requires **Accessibility Permissions** to function. Privacy protection is enforced in
+multiple layers:
 
-* **Zero Data Exfiltration:** Screen data is processed in ephemeral memory and discarded
-  immediately after identification.
-* **Sensitive Data Blocking:** A high-priority `SensitiveScreenMatcher` runs before any logic to
-  ensure banking/profile screens are never logged or processed.
+* **OS-Level Filtering:** The Accessibility Service is configured with
+  `android:packageNames="com.doordash.driverapp"` — the OS only delivers events from the Dasher
+  app. Events from every other app on the device are never received.
+* **Runtime Guard:** `AccessibilityListener` performs a redundant package name check as a second
+  line of defense before any event enters the processing pipeline.
+* **Sensitive Screen Detection:** Screens within the Dasher app where a driver enters personal or
+  financial information (bank account setup, identity verification, etc.) are classified as
+  `SENSITIVE` by `SensitiveScreenMatcher`, preventing them from being logged, snapshotted, or
+  processed by the state machine. The current implementation uses keyword detection; explicit
+  per-screen matchers are planned as a more robust long-term solution.
+* **Snapshot System is a Dev Tool Only:** The UI snapshot system (used to build the regression
+  test suite) is disabled entirely in release builds. It is only active in debug builds by
+  explicit developer configuration.
 
 ---
 
