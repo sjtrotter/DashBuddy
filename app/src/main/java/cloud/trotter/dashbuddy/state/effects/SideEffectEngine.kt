@@ -10,7 +10,6 @@ import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.state.AppEffect
-import cloud.trotter.dashbuddy.state.logic.OfferEvaluator
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toAnnotatedString
 import kotlinx.coroutines.CoroutineScope
@@ -34,8 +33,7 @@ class SideEffectEngine @Inject constructor(
     private val odometerEffectHandler: OdometerEffectHandler,
     private val tipEffectHandler: TipEffectHandler,
     private val bubbleManager: BubbleManager,
-    private val offerEvaluator: OfferEvaluator,
-    private val offerEvaluatorV2: cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator,
+    private val offerEvaluator: cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator,
     private val strategyRepository: StrategyRepository,
     private val screenShotHandler: ScreenShotHandler,
     private val uiInteractionHandler: UiInteractionHandler,
@@ -100,7 +98,7 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.EvaluateOffer -> {
                 val config = strategyRepository.evaluationConfigFlow.first()
 
-                val result = offerEvaluatorV2.evaluate(effect.parsedOffer, config)
+                val result = offerEvaluator.evaluate(effect.parsedOffer, config)
 
                 // 1. Emit the Decision back to State Machine
                 _events.emit(OfferEvaluationEvent(result.action))
