@@ -14,3 +14,6 @@
 .cxx
 local.properties
 /app/src/test/resources/snapshots/INBOX/
+
+# Claude Code local session state (commit CLAUDE.md, not this)
+.claude/settings.local.json
