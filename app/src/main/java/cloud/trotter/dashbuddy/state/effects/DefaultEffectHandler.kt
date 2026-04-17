@@ -104,6 +104,7 @@ class DefaultEffectHandler @Inject constructor(
                     val persona = when (result.action) {
                         OfferAction.ACCEPT -> ChatPersona.GoodOffer
                         OfferAction.DECLINE -> ChatPersona.BadOffer
+                        OfferAction.MANUAL_REVIEW -> ChatPersona.Inspector
                         OfferAction.NOTHING -> ChatPersona.Inspector
                     }
                     bubbleManager.postMessage(result.toSpannableString(), persona)
