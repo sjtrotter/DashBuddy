@@ -48,7 +48,7 @@ class EiaFuelPrice @Inject constructor(
     /**
      * Constructs the exact EIA Series ID string based on Fuel Type and Geographic Region.
      */
-    private fun buildSeriesId(fuelType: FuelType, regionCode: String): String {
+    internal fun buildSeriesId(fuelType: FuelType, regionCode: String): String {
         val productCode = when (fuelType) {
             FuelType.REGULAR -> "EMM_EPMRU_PTE"
             FuelType.MIDGRADE -> "EMM_EPMMU_PTE"
@@ -64,7 +64,7 @@ class EiaFuelPrice @Inject constructor(
      * Extracts the US State from the UserLocation and maps it to an EIA PADD Region.
      * Falls back to "NUS" (National US) if the state is missing or unrecognized.
      */
-    private fun getRegionCode(userLocation: UserLocation?): String {
+    internal fun getRegionCode(userLocation: UserLocation?): String {
         val stateName = userLocation?.stateName
 
         return if (!stateName.isNullOrEmpty()) {
@@ -79,7 +79,7 @@ class EiaFuelPrice @Inject constructor(
      * Maps standard US State names to EIA PADD Codes.
      * R10 = East Coast, R20 = Midwest, R30 = Gulf Coast, R40 = Rocky Mountain, R50 = West Coast
      */
-    private fun mapStateToPaddRegion(stateName: String): String {
+    internal fun mapStateToPaddRegion(stateName: String): String {
         val upperState = stateName.uppercase(Locale.getDefault())
         return when (upperState) {
             // PADD 1: East Coast

@@ -45,4 +45,6 @@ dependencies {
     implementation(project(":domain"))
 
     ksp(libs.hilt.compiler)
+
+    testImplementation(libs.junit)
 }
