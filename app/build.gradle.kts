@@ -28,9 +28,32 @@ android {
         versionName = "0.230.0"
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("KEYSTORE_PATH")
+                ?: localProperties.getProperty("keystore.path")
+            val storePass = System.getenv("STORE_PASSWORD")
+                ?: localProperties.getProperty("keystore.store.password")
+            val keyAliasVal = System.getenv("KEY_ALIAS")
+                ?: localProperties.getProperty("keystore.key.alias")
+            // KEY_PASSWORD is optional — if not set, falls back to store password
+            val keyPass = System.getenv("KEY_PASSWORD")
+                ?: localProperties.getProperty("keystore.key.password")
+
+            if (keystorePath != null) {
+                storeFile = rootProject.file(keystorePath)
+                storePassword = storePass
+                keyAlias = keyAliasVal
+                // Fall back to store password when no separate key password was set
+                keyPassword = keyPass.takeIf { !it.isNullOrBlank() } ?: storePass
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
