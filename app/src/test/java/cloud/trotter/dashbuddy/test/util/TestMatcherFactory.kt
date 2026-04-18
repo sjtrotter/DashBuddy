@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processi
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DropoffPreArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.IdleMapMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.OfferMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.OnDashMapMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupNavigationMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupPreArrivalMatcher
@@ -40,6 +41,7 @@ object TestMatcherFactory {
             DropoffPreArrivalMatcher(),
             IdleMapMatcher(),
             OfferMatcher(),
+            OnDashMapMatcher(),
             PickupArrivalMatcher(),
             PickupNavigationMatcher(),
             PickupPreArrivalMatcher(),

@@ -479,15 +479,9 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 
         val result = matcher.matches(root!!)
 
-        // IdleMapMatcher is a "special" matcher that returns MAIN_MAP_ON_DASH when it detects
-        // the "Return to dash" button, rather than null. This is intentional current behavior.
-        // TODO (#89 pipeline refactor): decide whether guard-triggered cross-screen returns
-        //  should stay here or be delegated to a dedicated OnDashMapMatcher.
-        assertNotNull("Should return a screen result (not null) for return to dash", result)
-        assertTrue(
-            "Should return MAIN_MAP_ON_DASH, not IdleMap",
-            result !is ScreenInfo.IdleMap
-        )
+        // IdleMapMatcher must return null for the on-dash map screen.
+        // OnDashMapMatcher is the dedicated handler for MAIN_MAP_ON_DASH.
+        assertNull("Should return null — MAIN_MAP_ON_DASH belongs to OnDashMapMatcher", result)
     }
 
     @Test
