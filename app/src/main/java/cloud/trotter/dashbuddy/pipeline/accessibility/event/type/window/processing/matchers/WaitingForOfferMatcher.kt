@@ -13,8 +13,23 @@ class WaitingForOfferMatcher @Inject constructor() : ScreenMatcher {
     override val priority = 1
 
     override fun matches(node: UiNode): ScreenInfo? {
-        // --- 1. SAFETY CHECK ---
-        // Ensure we aren't on the "Dash Along The Way" start screen
+        // --- 1. SAFETY CHECKS ---
+
+        // Guard: Earnings Mode Switcher — this screen belongs to IdleMapMatcher.
+        val hasEarningsSwitcher = node.findNode {
+            it.contentDescription == "Earnings Mode Switcher"
+        } != null
+
+        if (hasEarningsSwitcher) return null
+
+        // Guard: "Return to dash" — this screen belongs to OnDashMapMatcher.
+        val hasReturnToDash = node.findNode {
+            it.text.equals("Return to dash", ignoreCase = true)
+        } != null
+
+        if (hasReturnToDash) return null
+
+        // Guard: Ensure we aren't on the "Dash Along The Way" start screen.
         val hasAlongWayText = node.findNode {
             it.text?.contains("look for orders along the way", ignoreCase = true) == true
         } != null

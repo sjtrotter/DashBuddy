@@ -16,16 +16,25 @@ class IdleMapMatcher @Inject constructor() : ScreenMatcher {
     override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. NEGATIVE MATCHING (Safety Guards) ---
 
-        // Safety Guard 1: "Return to dash"
-        // If this button is visible, we are definitely NOT idle, we are in an active dash
-        // (likely navigating menus).
+        // Safety Guard 1: "Return to dash" — this screen belongs to OnDashMapMatcher.
         val isReturnToDash = node.findNode {
             it.text.equals("Return to dash", ignoreCase = true)
         } != null
 
         if (isReturnToDash) {
-            Timber.v("Match failed: 'Return to dash' button detected (Active Dash).")
-            return ScreenInfo.Simple(Screen.MAIN_MAP_ON_DASH)
+            Timber.v("Match failed: 'Return to dash' button detected (MAIN_MAP_ON_DASH).")
+            return null
+        }
+
+        // Safety Guard 2: "Looking for offers" / "Finding offers" — belongs to WaitingForOfferMatcher.
+        val isWaitingForOffer = node.findNode {
+            it.text?.contains("looking for offers", ignoreCase = true) == true ||
+                    it.text?.contains("finding offers", ignoreCase = true) == true
+        } != null
+
+        if (isWaitingForOffer) {
+            Timber.v("Match failed: Waiting-for-offer UI detected (ON_DASH_MAP_WAITING_FOR_OFFER).")
+            return null
         }
 
         // --- 2. POSITIVE MATCHING (Structural Fingerprint) ---
