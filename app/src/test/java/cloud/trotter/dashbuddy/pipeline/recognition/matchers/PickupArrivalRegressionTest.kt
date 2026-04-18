@@ -3,7 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.WaitingForOfferMatcher
+import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupArrivalMatcher
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
@@ -14,13 +15,13 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 
 @RunWith(Parameterized::class)
-class WaitingForOfferRegressionTest(filename: String, node: UiNode) :
+class PickupArrivalRegressionTest(filename: String, node: UiNode) :
     BaseParameterizedTest(filename, node) {
 
     override val stats = sharedStats
 
     companion object {
-        private const val FOLDER = "ON_DASH_MAP_WAITING_FOR_OFFER"
+        private const val FOLDER = "PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE"
         val sharedStats = SnapshotTestStats(FOLDER)
 
         @JvmStatic
@@ -38,11 +39,13 @@ class WaitingForOfferRegressionTest(filename: String, node: UiNode) :
 
     @Test
     fun `validate snapshot`() {
-        val matcher = WaitingForOfferMatcher()
+        val matcher = PickupArrivalMatcher()
 
         runTest(matcher) { result ->
-            val info = result as ScreenInfo.WaitingForOffer
-            assertEquals(Screen.ON_DASH_MAP_WAITING_FOR_OFFER, info.screen)
+            val info = result as ScreenInfo.PickupDetails
+            assertEquals(Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE, info.screen)
+            assertEquals("Status should always be ARRIVED", PickupStatus.ARRIVED, info.status)
+            println("      Store: ${info.storeName}  Customer hash: ${info.customerNameHash?.take(8)}...")
         }
     }
 }

@@ -35,8 +35,7 @@ class DashPausedRegressionTest(filename: String, node: UiNode) :
         @JvmStatic
         @AfterClass
         fun tearDown() {
-            // Print the big footer when all tests in this class are done
-            IdleMapRegressionTest.sharedStats.printFooter()
+            sharedStats.printFooter()
         }
     }
 
