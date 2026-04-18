@@ -1,10 +1,11 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
 /**
- * The Snapshot of all rules needed to score an offer.
+ * The Snapshot of all rules and Dasher economy settings needed to score an offer.
  */
 data class EvaluationConfig(
     val protectStatsMode: Boolean = false,
     val rules: List<ScoringRule> = emptyList(),
-    val allowShopping: Boolean = true
+    val allowShopping: Boolean = true,
+    val userEconomy: UserEconomy = UserEconomy(),
 )
