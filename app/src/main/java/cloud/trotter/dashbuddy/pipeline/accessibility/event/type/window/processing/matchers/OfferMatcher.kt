@@ -1,7 +1,5 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -20,7 +18,6 @@ class OfferMatcher @Inject constructor() : ScreenMatcher {
     override val targetScreen = Screen.OFFER_POPUP
     override val priority = 20
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun matches(node: UiNode): ScreenInfo? {
         // --- 1. FAIL FAST CHECKS ---
         if (node.findNode { it.viewIdResourceName?.endsWith("progress_bar") == true } != null) return null

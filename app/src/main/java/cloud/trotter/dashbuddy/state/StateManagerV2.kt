@@ -1,7 +1,5 @@
 package cloud.trotter.dashbuddy.state
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.core.data.state.StateRecoveryRepository
 import cloud.trotter.dashbuddy.pipeline.PipelineV2
 import cloud.trotter.dashbuddy.state.effects.SideEffectEngine
@@ -56,7 +54,6 @@ class StateManagerV2 @Inject constructor(
     private val _state = MutableStateFlow<AppStateV2>(AppStateV2.Initializing)
     val state = _state.asStateFlow()
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun initialize() {
         Timber.i("Initializing V2 State Machine...")
         restoreState()
@@ -67,7 +64,6 @@ class StateManagerV2 @Inject constructor(
         uiInputChannel.trySend(stateEvent)
     }
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun startProcessor() {
         scope.launch {
             Timber.d("🔌 Connecting All Event Streams...")
@@ -89,7 +85,6 @@ class StateManagerV2 @Inject constructor(
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun processEvent(stateEvent: StateEvent) {
         val currentState = _state.value
 

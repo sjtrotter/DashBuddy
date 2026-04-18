@@ -2,8 +2,6 @@ package cloud.trotter.dashbuddy
 
 import android.app.Application
 import android.content.Context
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -73,7 +71,6 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onCreate() {
         super.onCreate()
         instance = this

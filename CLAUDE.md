@@ -121,6 +121,9 @@ Tests are data-driven using captured UI hierarchy JSON files under
 
 ## Git Workflow
 
+**Before creating a branch**, mark the issue(s) as **In Progress** in the GitHub project board.
+See `CLAUDE.local.md` for the command to update the project Status field.
+
 **Always create a branch** before starting work on any issue or set of issues. Never commit
 feature/fix work directly to `master`.
 
@@ -146,6 +149,18 @@ GH="/c/Program Files/GitHub CLI/gh.exe"
 "$GH" pr merge <NUMBER> --merge
 ```
 
+## Session Orientation
+
+At the start of a session or before picking up new work:
+
+1. **Check open issues and their blocking relationships** — don't just look at what's open, look at
+   what's blocking what.
+2. **Prioritize blockers first** — if issue A is blocking issues B, C, and D, resolve A before
+   starting B, C, or D.
+3. **Determine logical next steps** from the milestone/phase ordering, then check those candidates
+   for unresolved blockers before committing to a direction.
+4. **Update `memory/project_state.md`** if the current state has drifted from what's recorded.
+
 ## GitHub Issues — Labels & Project
 
 **Always** add every new issue to the DashBuddy Roadmap project. See `CLAUDE.local.md` for the
@@ -168,6 +183,14 @@ project number, owner, and `gh` CLI path used to do this.
 
 Apply multiple labels when appropriate (e.g. `refactor` + `architecture`, `testing` +
 `offer-engine`).
+
+## GitHub Issues — Blocking Relationships
+
+When one issue is pre-work for or directly blocks another, **always set the blocking relationship**
+so the dependency is visible in the GitHub UI. Use the `addBlockedBy` GraphQL mutation — see
+`CLAUDE.local.md` for the exact command.
+
+Convention: if you say "pre-work for #X" or "blocked by #Y" in an issue description, make it real.
 
 ## Device Setup Note
 

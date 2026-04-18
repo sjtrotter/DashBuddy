@@ -1,8 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
-import android.os.Build
 import android.view.accessibility.AccessibilityEvent
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toUiNode
@@ -16,7 +14,6 @@ class ClickedPipeline @Inject constructor(
     private val classifier: ClickClassifier,
     private val factory: ClickFactory
 ) {
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun output(): Flow<StateEvent> = source.events
         .filter { it.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED }
         .mapNotNull { event ->

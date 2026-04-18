@@ -3,10 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.mapper
 import android.graphics.Rect
 import android.os.Build
 import android.view.accessibility.AccessibilityNodeInfo
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 
-@RequiresApi(Build.VERSION_CODES.BAKLAVA)
 fun AccessibilityNodeInfo?.toUiNode(parentUiNode: UiNode? = null): UiNode? {
     if (this == null) return null
 
@@ -16,7 +14,9 @@ fun AccessibilityNodeInfo?.toUiNode(parentUiNode: UiNode? = null): UiNode? {
     val currentUiNode = UiNode(
         text = this.text?.toString(),
         contentDescription = this.contentDescription?.toString(),
-        stateDescription = this.stateDescription?.toString(),
+        stateDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            this.stateDescription?.toString()
+        } else null,
         viewIdResourceName = this.viewIdResourceName,
         className = this.className?.toString(),
         isClickable = this.isClickable,
