@@ -37,7 +37,7 @@ jobs:
         run: ./gradlew :app:assembleDebug
 
       - name: Run unit tests
-        run: ./gradlew :app:testDebugUnitTest
+        run: ./gradlew testDebugUnitTest
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
