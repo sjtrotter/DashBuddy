@@ -119,6 +119,29 @@ Tests are data-driven using captured UI hierarchy JSON files under
 - **Testing:** JUnit 4, Mockito-Kotlin 6.3.0, Robolectric 4.16.1
 - **Logging:** Timber 5.0.1
 
+## GitHub Issues — Labels & Project
+
+**Always** add every new issue to the DashBuddy Roadmap project. See `CLAUDE.local.md` for the
+project number, owner, and `gh` CLI path used to do this.
+
+**Always** apply at least one label. Available labels and when to use them:
+
+| Label           | Use for                                                |
+|-----------------|--------------------------------------------------------|
+| `enhancement`   | New user-facing features                               |
+| `refactor`      | Code restructuring with no behavior change             |
+| `bug`           | Something broken                                       |
+| `architecture`  | Design decisions, RFCs, interface definitions          |
+| `offer-engine`  | Offer evaluation, scoring, UserEconomy, OfferEvaluator |
+| `testing`       | Test infrastructure, regression tests, coverage        |
+| `ci/cd`         | GitHub Actions, build pipelines, release automation    |
+| `chore`         | Housekeeping, non-feature maintenance                  |
+| `cleanup`       | Code hygiene, removing dead code, string extraction    |
+| `documentation` | Docs improvements                                      |
+
+Apply multiple labels when appropriate (e.g. `refactor` + `architecture`, `testing` +
+`offer-engine`).
+
 ## Device Setup Note
 
 To run on a physical device, manually enable DashBuddy under **Android Settings → Accessibility →
