@@ -1,7 +1,5 @@
 package cloud.trotter.dashbuddy.state.effects
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
@@ -53,14 +51,12 @@ class SideEffectEngine @Inject constructor(
      * Entry point: The StateManager pushes an effect here.
      * We execute it in the provided scope.
      */
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun process(effect: AppEffect, scope: CoroutineScope) {
         scope.launch(Dispatchers.Default) {
             execute(effect, scope)
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private suspend fun execute(effect: AppEffect, scope: CoroutineScope) {
         when (effect) {
             // --- FIRE & FORGET (UI / IO) ---

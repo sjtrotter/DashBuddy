@@ -1,10 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.input
 
 import android.accessibilityservice.AccessibilityService
-import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toUiNode
 import kotlinx.coroutines.channels.BufferOverflow
@@ -49,7 +47,6 @@ class AccessibilitySource @Inject constructor() {
      * Fetches the current Root Node directly from the system.
      * * SAFE to call from background threads.
      */
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun getCurrentRootNode(): UiNode? {
         val root = getLiveNativeRoot() ?: return null
 

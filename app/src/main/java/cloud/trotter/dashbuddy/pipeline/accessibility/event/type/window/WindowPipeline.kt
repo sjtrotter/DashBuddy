@@ -1,7 +1,5 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
@@ -17,7 +15,6 @@ class WindowPipeline @Inject constructor(
     private val factory: ScreenFactory,
     private val differ: ScreenDiffer,
 ) {
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun output(): Flow<StateEvent> = merge(
         contentChangedPipeline.output(),
         stateChangedPipeline.output()

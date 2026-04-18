@@ -1,8 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed
 
-import android.os.Build
 import android.view.accessibility.AccessibilityEvent
-import androidx.annotation.RequiresApi
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toUiNode
@@ -18,7 +16,6 @@ import javax.inject.Inject
 class ContentChangedPipeline @Inject constructor(
     private val source: AccessibilitySource
 ) {
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     fun output(): Flow<UiNode> = source.events
         .filter { it.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }
         .onEach { Timber.v("🌊 FLOOD: Content Change from ${it.className}") }

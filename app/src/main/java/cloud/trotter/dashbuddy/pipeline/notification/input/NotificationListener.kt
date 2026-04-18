@@ -1,9 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.notification.input
 
-import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import androidx.annotation.RequiresApi
 //import cloud.trotter.dashbuddy.pipeline.Pipeline
 //import cloud.trotter.dashbuddy.pipeline.features.notification.NotificationInfo
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,7 +21,6 @@ class NotificationListener : NotificationListenerService() {
         Timber.i("Notification Listener Connected!")
     }
 
-    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
 
