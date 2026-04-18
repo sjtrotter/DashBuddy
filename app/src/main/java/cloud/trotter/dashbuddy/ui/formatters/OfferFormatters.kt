@@ -58,5 +58,9 @@ fun OfferEvaluation.toAnnotatedString(): AnnotatedString {
         }
 
         append(" | Score: ${this@toAnnotatedString.score.toInt()}")
+
+        if (this@toAnnotatedString.fuelCostEstimate > 0.0) {
+            append(" | Net: $%.2f".format(this@toAnnotatedString.netPayAmount))
+        }
     }
 }

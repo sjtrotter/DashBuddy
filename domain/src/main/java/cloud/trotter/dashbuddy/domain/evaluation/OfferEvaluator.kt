@@ -17,7 +17,8 @@ class OfferEvaluator() {
         val netPay = grossPay - fuelCost
 
         // Time estimate using user-configured constants
-        val estTimeHours = ((dist * economy.avgMinutesPerMile) + economy.basePickupMinutes) / 60.0
+        val estTimeMinutes = (dist * economy.avgMinutesPerMile) + economy.basePickupMinutes
+        val estTimeHours = estTimeMinutes / 60.0
 
         // Metrics operate on net pay
         val dpm = if (dist > 0) netPay / dist else 0.0
@@ -42,6 +43,7 @@ class OfferEvaluator() {
                 distanceMiles = dist,
                 dollarsPerMile = dpm,
                 dollarsPerHour = activeHourly,
+                estimatedTimeMinutes = estTimeMinutes,
                 itemCount = items,
                 merchantName = merchants,
             )
@@ -61,6 +63,7 @@ class OfferEvaluator() {
                 distanceMiles = 0.0,
                 dollarsPerMile = 0.0,
                 dollarsPerHour = 0.0,
+                estimatedTimeMinutes = 0.0,
                 itemCount = 0.0,
                 merchantName = "UNKNOWN"
             )
@@ -87,6 +90,7 @@ class OfferEvaluator() {
                 distanceMiles = dist,
                 dollarsPerMile = dpm,
                 dollarsPerHour = activeHourly,
+                estimatedTimeMinutes = estTimeMinutes,
                 itemCount = items,
                 merchantName = merchants
             )
@@ -156,6 +160,7 @@ class OfferEvaluator() {
             distanceMiles = dist,
             dollarsPerMile = dpm,
             dollarsPerHour = activeHourly,
+            estimatedTimeMinutes = estTimeMinutes,
             itemCount = items,
             merchantName = merchants,
             warnings = warnings,

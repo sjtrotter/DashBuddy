@@ -11,13 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,12 +21,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
-import cloud.trotter.dashbuddy.ui.formatters.toAnnotatedString
+import java.util.Locale
 
 @Composable
 fun FakeOfferCard(
@@ -39,16 +34,13 @@ fun FakeOfferCard(
 ) {
     val isDark = isSystemInDarkTheme()
 
-    // 1. Logic: In Dark Mode, keep background dark (Surface). In Light Mode, use Pastels.
     val targetContainerColor = if (isDark) {
-        // Dark Mode: Stay dark, maybe slightly tinted
         when (evaluation.action) {
-            OfferAction.ACCEPT -> Color(0xFF1B5E20).copy(alpha = 0.3f) // Very dark green tint
-            OfferAction.DECLINE -> Color(0xFFB71C1C).copy(alpha = 0.3f) // Very dark red tint
+            OfferAction.ACCEPT -> Color(0xFF1B5E20).copy(alpha = 0.3f)
+            OfferAction.DECLINE -> Color(0xFFB71C1C).copy(alpha = 0.3f)
             else -> MaterialTheme.colorScheme.surfaceVariant
         }
     } else {
-        // Light Mode: Use Pastels
         when (evaluation.action) {
             OfferAction.ACCEPT -> Color(0xFFE8F5E9)
             OfferAction.DECLINE -> Color(0xFFFFEBEE)
@@ -56,14 +48,8 @@ fun FakeOfferCard(
         }
     }
 
-    // 2. Logic: Text colors need to pop against the chosen background
-    val targetContentColor = if (isDark) {
-        Color.White // Always white in dark mode
-    } else {
-        Color.Black // Always black in light mode
-    }
+    val targetContentColor = if (isDark) Color.White else Color.Black
 
-    // 3. Logic: Borders carry the heavy lifting in Dark Mode
     val borderColor = when (evaluation.action) {
         OfferAction.ACCEPT -> if (isDark) Color(0xFF4CAF50) else Color(0xFF2E7D32)
         OfferAction.DECLINE -> if (isDark) Color(0xFFEF5350) else Color(0xFFC62828)
@@ -73,56 +59,131 @@ fun FakeOfferCard(
     val animatedContainerColor by animateColorAsState(targetContainerColor, label = "container")
     val animatedContentColor by animateColorAsState(targetContentColor, label = "content")
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(2.dp, borderColor, RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = animatedContainerColor,
-            contentColor = animatedContentColor
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+    val hasFuelCost = evaluation.fuelCostEstimate > 0.0
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(2.dp, borderColor, RoundedCornerShape(12.dp)),
+            colors = CardDefaults.cardColors(
+                containerColor = animatedContainerColor,
+                contentColor = animatedContentColor
+            )
         ) {
-            Text(
-                text = evaluation.toAnnotatedString(),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                MetricBadge(Icons.Default.AttachMoney, "Pay", animatedContentColor)
-                MetricBadge(Icons.Default.DirectionsCar, "Dist", animatedContentColor)
-                MetricBadge(Icons.Default.Timer, "Time", animatedContentColor)
+                // --- Recommendation + Score ---
+                Text(
+                    text = "${evaluation.recommendationText}  ·  ${evaluation.score.toInt()}pts",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = borderColor
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // --- Pay line ---
+                if (hasFuelCost) {
+                    Text(
+                        text = "$${fmt(evaluation.payAmount)} gross  →  $${fmt(evaluation.netPayAmount)} net",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = animatedContentColor
+                    )
+                    Text(
+                        text = "−$${fmt(evaluation.fuelCostEstimate)} est. fuel",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = animatedContentColor.copy(alpha = 0.65f)
+                    )
+                } else {
+                    Text(
+                        text = "$${fmt(evaluation.payAmount)}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = animatedContentColor
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = animatedContentColor.copy(alpha = 0.15f))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // --- Metric row: $/mi | $/hr | items ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    MetricCell(
+                        label = "\$/mi",
+                        value = "$${fmt(evaluation.dollarsPerMile)}",
+                        color = animatedContentColor
+                    )
+                    MetricCell(
+                        label = "\$/hr",
+                        value = "$${fmt(evaluation.dollarsPerHour)}",
+                        color = animatedContentColor
+                    )
+                    MetricCell(
+                        label = "items",
+                        value = evaluation.itemCount.toInt().toString(),
+                        color = animatedContentColor
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // --- Detail row: distance | time ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    MetricCell(
+                        label = "miles",
+                        value = fmt(evaluation.distanceMiles),
+                        color = animatedContentColor
+                    )
+                    MetricCell(
+                        label = "est. time",
+                        value = "~${evaluation.estimatedTimeMinutes.toInt()} min",
+                        color = animatedContentColor
+                    )
+                }
             }
+        }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = when (evaluation.action) {
-                    OfferAction.ACCEPT -> "AUTO ACCEPT"
-                    OfferAction.DECLINE -> "AUTO DECLINE"
-                    else -> "MANUAL REVIEW"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Black,
-                color = if (isDark) borderColor else Color.Black.copy(alpha = 0.7f)
-            )
+        // --- Warnings (#80) ---
+        if (evaluation.warnings.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            evaluation.warnings.forEach { warning ->
+                Text(
+                    text = "\u26a0\ufe0f $warning",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-fun MetricBadge(icon: ImageVector, label: String, tint: Color) {
+private fun MetricCell(label: String, value: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, contentDescription = null, tint = tint)
-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = tint)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = color.copy(alpha = 0.65f)
+        )
     }
 }
+
+private fun fmt(value: Double): String = String.format(Locale.getDefault(), "%.2f", value)

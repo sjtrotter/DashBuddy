@@ -119,6 +119,33 @@ Tests are data-driven using captured UI hierarchy JSON files under
 - **Testing:** JUnit 4, Mockito-Kotlin 6.3.0, Robolectric 4.16.1
 - **Logging:** Timber 5.0.1
 
+## Git Workflow
+
+**Always create a branch** before starting work on any issue or set of issues. Never commit
+feature/fix work directly to `master`.
+
+Branch naming: `<type>/<issue-number(s)>-<short-description>`, e.g. `feature/110-bubble-offer-mode` or `fix/42-crash-on-startup`. Common types:
+
+| Type | Use for |
+|---|---|
+| `feature/` | New functionality |
+| `fix/` | Bug fixes |
+| `refactor/` | Code restructuring, no behavior change |
+| `chore/` | Housekeeping, dependency bumps, config |
+| `test/` | Adding or fixing tests |
+| `ci/` | CI/CD pipeline changes |
+| `docs/` | Documentation only |
+
+Include all relevant issue numbers when a branch covers multiple issues, e.g. `feature/79-80-offer-bubble-net-pay`.
+
+**Always merge PRs with `--merge`** (a true merge commit), never `--squash`. Squash loses
+per-commit history and makes it harder to bisect or attribute changes.
+
+```bash
+GH="/c/Program Files/GitHub CLI/gh.exe"
+"$GH" pr merge <NUMBER> --merge
+```
+
 ## GitHub Issues — Labels & Project
 
 **Always** add every new issue to the DashBuddy Roadmap project. See `CLAUDE.local.md` for the

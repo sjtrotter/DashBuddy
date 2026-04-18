@@ -18,6 +18,8 @@ data class OfferEvaluation(
     val dollarsPerMile: Double,
     /** Net implied hourly rate. */
     val dollarsPerHour: Double,
+    /** Estimated time for this offer in minutes, based on [UserEconomy] constants. */
+    val estimatedTimeMinutes: Double,
     val itemCount: Double,
     val merchantName: String,
     /**
