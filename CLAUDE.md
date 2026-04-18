@@ -9,14 +9,14 @@ repository.
 # Build the app
 ./gradlew :app:build
 
-# Run all unit tests
-./gradlew :app:testDebugUnitTest
+# Run all unit tests (across all modules)
+./gradlew testDebugUnitTest
 
 # Run the full regression suite (before any PR)
-./gradlew :app:testDebugUnitTest --tests "*AllMatchersSuite*"
+./gradlew testDebugUnitTest --tests "*AllMatchersSuite*"
 
 # Run a specific regression test
-./gradlew :app:testDebugUnitTest --tests "*DashPausedRegressionTest*"
+./gradlew testDebugUnitTest --tests "*DashPausedRegressionTest*"
 
 # Run instrumented tests (requires connected device/emulator)
 ./gradlew :app:connectedAndroidTest
