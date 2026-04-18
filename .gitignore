@@ -21,6 +21,9 @@ local.properties
 *.jks
 *.keystore
 
+# Kotlin compiler cache and build error logs
+.kotlin/
+
 # Claude Code local session state (commit CLAUDE.md, not this)
 .claude/settings.local.json
 CLAUDE.local.md
