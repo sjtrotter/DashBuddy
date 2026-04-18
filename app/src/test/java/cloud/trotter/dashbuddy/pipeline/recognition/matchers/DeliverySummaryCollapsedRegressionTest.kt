@@ -37,7 +37,7 @@ class DeliverySummaryCollapsedRegressionTest(
         @JvmStatic
         @Parameterized.Parameters(name = "{0}")
         fun data(): Collection<Array<Any>> {
-            val data = TestResourceLoader.loadForParameterized(FOLDER)
+            val data = TestResourceLoader.loadForParameterizedWithBreadcrumbs(FOLDER)
             sharedStats.reset(data.size)
             return data
         }
