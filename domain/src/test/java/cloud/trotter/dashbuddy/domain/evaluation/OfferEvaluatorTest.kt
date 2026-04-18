@@ -301,6 +301,17 @@ class OfferEvaluatorTest {
         assertEquals(3.0, result.distanceMiles, 0.0001)
         assertEquals(7.0 / 3.0, result.dollarsPerMile, 0.01)
         assertEquals("Taco Bell", result.merchantName)
+        // 3 miles * 2.5 min/mi + 7 base = 14.5 min
+        assertEquals(14.5, result.estimatedTimeMinutes, 0.0001)
+    }
+
+    @Test
+    fun `evaluation output - estimatedTimeMinutes uses UserEconomy constants`() {
+        val economy = UserEconomy(vehicleType = VehicleType.E_BIKE, avgMinutesPerMile = 4.0, basePickupMinutes = 10.0)
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 7.0f)), userEconomy = economy)
+        // 5 miles * 4 min/mi + 10 = 30 min
+        val result = evaluator.evaluate(offer(pay = 7.0, dist = 5.0), cfg)
+        assertEquals(30.0, result.estimatedTimeMinutes, 0.0001)
     }
 
     @Test
