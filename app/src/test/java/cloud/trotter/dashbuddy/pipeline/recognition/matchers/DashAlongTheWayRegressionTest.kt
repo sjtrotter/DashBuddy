@@ -3,7 +3,7 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.WaitingForOfferMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashAlongTheWayMatcher
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
@@ -14,13 +14,13 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 
 @RunWith(Parameterized::class)
-class WaitingForOfferRegressionTest(filename: String, node: UiNode) :
+class DashAlongTheWayRegressionTest(filename: String, node: UiNode) :
     BaseParameterizedTest(filename, node) {
 
     override val stats = sharedStats
 
     companion object {
-        private const val FOLDER = "ON_DASH_MAP_WAITING_FOR_OFFER"
+        private const val FOLDER = "ON_DASH_ALONG_THE_WAY"
         val sharedStats = SnapshotTestStats(FOLDER)
 
         @JvmStatic
@@ -38,11 +38,11 @@ class WaitingForOfferRegressionTest(filename: String, node: UiNode) :
 
     @Test
     fun `validate snapshot`() {
-        val matcher = WaitingForOfferMatcher()
+        val matcher = DashAlongTheWayMatcher()
 
         runTest(matcher) { result ->
             val info = result as ScreenInfo.WaitingForOffer
-            assertEquals(Screen.ON_DASH_MAP_WAITING_FOR_OFFER, info.screen)
+            assertEquals(Screen.ON_DASH_ALONG_THE_WAY, info.screen)
         }
     }
 }
