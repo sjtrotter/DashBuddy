@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SensitiveScreenMatcher
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
@@ -58,7 +58,7 @@ class SensitiveDataScanTest(
         val matcher = SensitiveScreenMatcher()
         val result = matcher.matches(node)
 
-        if (result is ScreenInfo.Sensitive) {
+        if (result == Screen.SENSITIVE) {
             println("     🚨 STATUS: TOXIC (Sensitive Data Detected)")
 
             // --- REPORTING LOGIC ---

@@ -467,7 +467,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 
         assertEquals(Screen.MAIN_MAP_IDLE, matcher.matches(root!!))
 
-        val info = parser.parse(root!!) as ScreenInfo.IdleMap
+        val info = parser.parse(root) as ScreenInfo.IdleMap
         assertEquals(Screen.MAIN_MAP_IDLE, info.screen)
         assertEquals(DashType.BY_TIME, info.dashType)
     }

@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.test.util
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SensitiveScreenMatcher
 
 object SnapshotSecurityScanner {
@@ -24,7 +24,7 @@ object SnapshotSecurityScanner {
         walkAndFind(node, triggers)
 
         // It is toxic if the Matcher says so OR if we found keywords manually
-        val isToxic = (match is ScreenInfo.Sensitive) || triggers.isNotEmpty()
+        val isToxic = (match == Screen.SENSITIVE) || triggers.isNotEmpty()
 
         return ScanResult(isToxic = isToxic, triggers = triggers)
     }
