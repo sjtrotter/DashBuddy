@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
+import cloud.trotter.dashbuddy.test.util.TestParserFactory
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import org.junit.Assert.fail
 import org.junit.Test
@@ -24,7 +25,8 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
         // We manually instantiate the recognizer exactly how Hilt would do it.
         private val recognizer: ScreenClassifier by lazy {
             ScreenClassifier(
-                injectedMatchers = TestMatcherFactory.createAllMatchers()
+                injectedMatchers = TestMatcherFactory.createAllMatchers(),
+                injectedParsers = TestParserFactory.createAllParsers()
             )
         }
 

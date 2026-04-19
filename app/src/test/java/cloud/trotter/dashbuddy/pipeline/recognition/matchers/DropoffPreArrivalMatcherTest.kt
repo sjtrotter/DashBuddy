@@ -4,16 +4,17 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DropoffPreArrivalMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DropoffPreArrivalParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DropoffPreArrivalMatcherTest {
 
     private val matcher = DropoffPreArrivalMatcher()
+    private val parser = DropoffPreArrivalParser()
 
     // --- TEST DATA ---
 
@@ -69,45 +70,28 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches DROPOFF_DETAILS_PRE_ARRIVAL with Deliver to header and Directions button`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match dropoff pre-arrival screen", result)
-        assertTrue(result is ScreenInfo.DropoffDetails)
-        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, result!!.screen)
+        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, matcher.matches(root!!))
     }
 
     @Test
     fun `matches DROPOFF_DETAILS_PRE_ARRIVAL with Continue button`() {
         val root = LogToUiNodeParser.parseLog(arrivedContinueLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match with Continue button", result)
-        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, result!!.screen)
+        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, matcher.matches(root!!))
     }
 
     @Test
     fun `matches DROPOFF_DETAILS_PRE_ARRIVAL with Complete Delivery button`() {
         val root = LogToUiNodeParser.parseLog(completeDeliveryLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match with Complete Delivery button", result)
-        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, result!!.screen)
+        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, matcher.matches(root!!))
     }
 
     @Test
     fun `matches when only contact buttons present (Call or Message)`() {
         val root = LogToUiNodeParser.parseLog(contactOnlyLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Contact buttons alone should be enough to match", result)
-        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, result!!.screen)
+        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, matcher.matches(root!!))
     }
 
     @Test
@@ -131,7 +115,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is NAVIGATING when Directions button is present`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertEquals(DropoffStatus.NAVIGATING, result.status)
     }
@@ -139,7 +123,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is ARRIVED when Continue button is present`() {
         val root = LogToUiNodeParser.parseLog(arrivedContinueLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertEquals(DropoffStatus.ARRIVED, result.status)
     }
@@ -147,7 +131,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is ARRIVED when Complete Delivery button is present`() {
         val root = LogToUiNodeParser.parseLog(completeDeliveryLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertEquals(DropoffStatus.ARRIVED, result.status)
     }
@@ -155,7 +139,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is UNKNOWN when only contact buttons present`() {
         val root = LogToUiNodeParser.parseLog(contactOnlyLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertEquals(DropoffStatus.UNKNOWN, result.status)
     }
@@ -163,7 +147,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `hashes customer name extracted from Deliver to header`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         // "Sam H" extracted from "Deliver to Sam H" — verified as SHA-256
         assertNotNull("Customer name hash should not be null", result.customerNameHash)
@@ -173,7 +157,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `address hash is always null (unstable IDs, not extracted)`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertNull("Address hash is explicitly null (unstable IDs)", result.addressHash)
     }

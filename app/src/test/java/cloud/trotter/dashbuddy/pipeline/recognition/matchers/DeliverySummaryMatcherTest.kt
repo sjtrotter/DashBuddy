@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.core.data.pay.PayParser
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DeliverySummaryMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DeliverySummaryParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import cloud.trotter.dashbuddy.test.util.ConsoleTree
 import org.junit.Assert.assertEquals
@@ -16,7 +17,8 @@ import timber.log.Timber
 class DeliverySummaryMatcherTest {
 
     private val payParser = PayParser()
-    private val matcher = DeliverySummaryMatcher(payParser)
+    private val matcher = DeliverySummaryMatcher()
+    private val parser = DeliverySummaryParser(payParser)
 
     // --- LOG SNAPSHOTS ---
 
@@ -166,7 +168,6 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 """.trimIndent()
 
     // Snapshot 3: Expanded, additional Dasher pay
-    // Contains "DoorDash pay" and "Customer tips" headers
     private val dashPayLog = """
 UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(, id=no_id, state=null, class=android.widget.LinearLayout)
@@ -242,7 +243,6 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 """.trimIndent()
 
     // Snapshot 4: Expanded, stacked order
-    // Contains "DoorDash pay" and "Customer tips" headers
     private val stackedOrder = """
 UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(, id=no_id, state=null, class=android.widget.LinearLayout)
@@ -483,26 +483,29 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches returns null when anchors are missing`() {
         val root = LogToUiNodeParser.parseLog("UiNode(text='Random Screen', class=View)")!!
 
-        val result = matcher.matches(root)
-
-        assertNull("Should return null if 'This offer' is missing", result)
+        assertNull("Should return null if 'This offer' is missing", matcher.matches(root))
     }
 
     @Test
-    fun `matches returns COLLAPSED and finds CORRECT button when both dash and offer summaries exist`() {
+    fun `matches returns DELIVERY_SUMMARY_EXPANDED when collapsed (lookup key)`() {
         val root = LogToUiNodeParser.parseLog(collapsedLog)
         assertNotNull("Failed to parse log string", root)
 
-        val result = matcher.matches(root!!)
+        // Matcher always returns DELIVERY_SUMMARY_EXPANDED as the lookup key;
+        // the parser sets the authoritative screen (COLLAPSED or EXPANDED).
+        assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, matcher.matches(root!!))
+    }
 
-        assertNotNull("Should match the screen", result)
-        assertTrue("Should be DeliverySummary", result is ScreenInfo.DeliverySummary)
+    @Test
+    fun `parser returns COLLAPSED and finds CORRECT button when both dash and offer summaries exist`() {
+        val root = LogToUiNodeParser.parseLog(collapsedLog)!!
+        val info = parser.parse(root) as ScreenInfo.DeliverySummary
+
         assertTrue(
             "Screen should be COLLAPSED",
-            result?.screen == Screen.DELIVERY_SUMMARY_COLLAPSED
+            info.screen == Screen.DELIVERY_SUMMARY_COLLAPSED
         )
 
-        val info = result as ScreenInfo.DeliverySummary
         val clickedButton = info.expandButton
         assertNotNull("Must return a click target", clickedButton)
 
@@ -511,9 +514,6 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val parent = clickedButton?.parent
         assertNotNull(parent)
 
-        // Check the parent's other children for the text "This offer" (via the title container)
-        // Based on the log structure: Button -> Parent -> TitleContainer -> Title("This offer")
-        // We iterate the parent's children to verify we are in the correct container.
         val titleContainer = parent?.children?.find {
             it.viewIdResourceName?.endsWith("section_title_container") == true
         }
@@ -528,117 +528,66 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `matches returns EXPANDED and parses pay correctly`() {
-        val root = LogToUiNodeParser.parseLog(expandedLog)
-        assertNotNull(root)
+    fun `parser returns EXPANDED and parses pay correctly`() {
+        val root = LogToUiNodeParser.parseLog(expandedLog)!!
+        val info = parser.parse(root) as ScreenInfo.DeliverySummary
 
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match, not be null", result)
-        assertTrue("Result should be DeliverySummary", result is ScreenInfo.DeliverySummary)
-        assertTrue("Screen should be EXPANDED", result?.screen == Screen.DELIVERY_SUMMARY_EXPANDED)
-
-        val info = result as ScreenInfo.DeliverySummary
         assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
 
         val pay = info.parsedPay
-
-        // Assertions based on the new log values:
-        // Base pay: $3.00
-        // Tip (Walgreens): $5.00
-        // Total: $8.00
-
         assertEquals("Total Base Pay", 3.00, pay?.totalBasePay!!, 0.01)
         assertEquals("Total Tip", 5.00, pay.totalTip, 0.01)
         assertEquals("Total Pay", 8.00, pay.total, 0.01)
     }
 
     @Test
-    fun `matches returns EXPANDED and parses additional arbitrary doordash pay`() {
-        val root = LogToUiNodeParser.parseLog(dashPayLog)
-        assertNotNull(root)
+    fun `parser returns EXPANDED and parses additional arbitrary doordash pay`() {
+        val root = LogToUiNodeParser.parseLog(dashPayLog)!!
+        val info = parser.parse(root) as ScreenInfo.DeliverySummary
 
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match, not be null", result)
-        assertTrue("Result should be DeliverySummary", result is ScreenInfo.DeliverySummary)
-        assertTrue("Screen should be EXPANDED", result?.screen == Screen.DELIVERY_SUMMARY_EXPANDED)
-
-        val info = result as ScreenInfo.DeliverySummary
         assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
 
         val pay = info.parsedPay
-
-        // Assertions based on the new log values:
-        // Base pay: $3.00
-        // Tip (Walgreens): $5.00
-        // Total: $8.00
-
         assertEquals("Total Base Pay", 6.00, pay?.totalBasePay!!, 0.01)
         assertEquals("Total Tip", 5.00, pay.totalTip, 0.01)
         assertEquals("Total Pay", 11.00, pay.total, 0.01)
     }
 
     @Test
-    fun `matches returns EXPANDED and parses stacked orders`() {
-        val root = LogToUiNodeParser.parseLog(stackedOrder)
-        assertNotNull(root)
+    fun `parser returns EXPANDED and parses stacked orders`() {
+        val root = LogToUiNodeParser.parseLog(stackedOrder)!!
+        val info = parser.parse(root) as ScreenInfo.DeliverySummary
 
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match, not be null", result)
-        assertTrue("Result should be DeliverySummary", result is ScreenInfo.DeliverySummary)
-        assertTrue("Screen should be EXPANDED", result?.screen == Screen.DELIVERY_SUMMARY_EXPANDED)
-
-        val info = result as ScreenInfo.DeliverySummary
         assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
 
         val pay = info.parsedPay
-
-        // Assertions based on the new log values:
-        // Base pay: $3.00
-        // Tip (Walgreens): $5.00
-        // Total: $8.00
-
         assertEquals("Total Base Pay", 6.75, pay?.totalBasePay!!, 0.01)
         assertEquals("Total Tip", 4.0, pay.totalTip, 0.01)
         assertEquals("Total Pay", 10.75, pay.total, 0.01)
     }
 
     @Test
-    fun `matches returns correct for pro shopper status and additional tip`() {
-        val root = LogToUiNodeParser.parseLog(proShopper)
-        assertNotNull(root)
+    fun `parser returns correct for pro shopper status and additional tip`() {
+        val root = LogToUiNodeParser.parseLog(proShopper)!!
+        val info = parser.parse(root) as ScreenInfo.DeliverySummary
 
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match, not be null", result)
-        assertTrue("Result should be DeliverySummary", result is ScreenInfo.DeliverySummary)
-        assertTrue("Screen should be EXPANDED", result?.screen == Screen.DELIVERY_SUMMARY_EXPANDED)
-
-        val info = result as ScreenInfo.DeliverySummary
         assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
 
         val pay = info.parsedPay
-
         assertEquals("Total Base Pay", 17.25, pay?.totalBasePay!!, 0.01)
         assertEquals("Total Tip", 5.50, pay.totalTip, 0.01)
         assertEquals("Total Pay", 22.75, pay.total, 0.01)
     }
 
     @Test
-    fun `matches returns the EXACT button instance associated with This Offer`() {
-        val root = LogToUiNodeParser.parseLog(rightButtonLog)
+    fun `parser returns the EXACT button instance associated with This Offer`() {
+        val root = LogToUiNodeParser.parseLog(rightButtonLog)!!
+        val info = parser.parse(root) as ScreenInfo.DeliverySummary
 
-        assertNotNull(root)
-        val result = matcher.matches(root!!) as ScreenInfo.DeliverySummary
-
-        // 3. The "Smoking Gun" Assertion
-        // If this passes, it is mathematically impossible that we clicked the wrong list.
         assertEquals(
-            "Matcher picked the wrong expand button!",
+            "Parser picked the wrong expand button!",
             "RIGHT_BUTTON",
-            result.expandButton?.text
+            info.expandButton?.text
         )
     }
 }

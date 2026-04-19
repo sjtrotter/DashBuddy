@@ -3,16 +3,17 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.WaitingForOfferMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.WaitingForOfferParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WaitingForOfferMatcherTest {
 
     private val matcher = WaitingForOfferMatcher()
+    private val parser = WaitingForOfferParser()
 
     // --- TEST DATA ---
 
@@ -74,23 +75,14 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches ON_DASH_MAP_WAITING_FOR_OFFER with legacy layout`() {
         val root = LogToUiNodeParser.parseLog(legacyWaitingLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match waiting for offer screen", result)
-        assertTrue(result is ScreenInfo.WaitingForOffer)
-        assertEquals(Screen.ON_DASH_MAP_WAITING_FOR_OFFER, result!!.screen)
+        assertEquals(Screen.ON_DASH_MAP_WAITING_FOR_OFFER, matcher.matches(root!!))
     }
 
     @Test
     fun `matches ON_DASH_MAP_WAITING_FOR_OFFER with new layout`() {
         val root = LogToUiNodeParser.parseLog(newLayoutWaitingLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match new layout", result)
-        assertEquals(Screen.ON_DASH_MAP_WAITING_FOR_OFFER, result!!.screen)
+        assertEquals(Screen.ON_DASH_MAP_WAITING_FOR_OFFER, matcher.matches(root!!))
     }
 
     @Test
@@ -122,7 +114,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses wait time and current pay from legacy layout`() {
         val root = LogToUiNodeParser.parseLog(legacyWaitingLog)!!
-        val result = matcher.matches(root) as ScreenInfo.WaitingForOffer
+        val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
         assertEquals("Should parse wait time", "2-4 min", result.waitTimeEstimate)
         assertEquals("Should parse running pay", 12.50, result.currentDashPay!!, 0.01)
@@ -131,16 +123,16 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses heading back to zone flag`() {
         val root = LogToUiNodeParser.parseLog(headingBackLog)!!
-        val result = matcher.matches(root) as ScreenInfo.WaitingForOffer
+        val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
-        assertTrue("Should detect heading back state", result.isHeadingBackToZone)
+        assertEquals("Should detect heading back state", true, result.isHeadingBackToZone)
         assertEquals("Should parse running pay", 7.25, result.currentDashPay!!, 0.01)
     }
 
     @Test
     fun `new layout returns null for volatile fields`() {
         val root = LogToUiNodeParser.parseLog(newLayoutWaitingLog)!!
-        val result = matcher.matches(root) as ScreenInfo.WaitingForOffer
+        val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
         assertNull("Pay volatile in new layout", result.currentDashPay)
         assertNull("Wait time not extracted in new layout", result.waitTimeEstimate)

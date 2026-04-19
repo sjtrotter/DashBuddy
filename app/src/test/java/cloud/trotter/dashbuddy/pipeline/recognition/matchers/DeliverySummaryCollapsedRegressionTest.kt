@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.core.data.pay.PayParser
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DeliverySummaryMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DeliverySummaryParser
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.ConsoleTree
@@ -49,15 +50,12 @@ class DeliverySummaryCollapsedRegressionTest(
 
     @Test
     fun `validate snapshot`() {
-        val parser = PayParser()
-        val matcher = DeliverySummaryMatcher(parser)
+        val matcher = DeliverySummaryMatcher()
+        val parser = DeliverySummaryParser(PayParser())
 
-        runTest(matcher) { result ->
+        runTest(matcher, parser) { result ->
             val info = result as ScreenInfo.DeliverySummary
-
-            // If you have specific properties to check (like map location text),
-            // you can log or assert them here.
-            assertNotNull("Result should be WaitingForOffer", info)
+            assertNotNull("Result should be DeliverySummary", info)
         }
     }
 }

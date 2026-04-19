@@ -1,12 +1,14 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.LegacyEnumMatcher
+import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.TimelineViewMatcher
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import org.junit.AfterClass
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
@@ -36,8 +38,11 @@ class TimelineRegressionTest(filename: String, node: UiNode) :
 
     @Test
     fun `validate snapshot`() {
-        val matcher = LegacyEnumMatcher(Screen.TIMELINE_VIEW)
+        val matcher = TimelineViewMatcher()
 
-        runTest(matcher)
+        runTest(matcher) { result ->
+            val info = result as ScreenInfo.Simple
+            assertEquals(Screen.TIMELINE_VIEW, info.screen)
+        }
     }
 }

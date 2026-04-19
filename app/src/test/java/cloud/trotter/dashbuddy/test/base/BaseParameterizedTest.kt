@@ -3,7 +3,9 @@ package cloud.trotter.dashbuddy.test.base
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
@@ -15,12 +17,6 @@ abstract class BaseParameterizedTest(
     // Child classes must provide this
     abstract val stats: SnapshotTestStats
 
-    // This runs automatically before every test method
-    init {
-        // We defer this call until the test actually starts so `stats` is initialized
-        // Use a lazy hook or call it inside runTest if init causes issues with property access order
-    }
-
     @get:Rule
     val watchman = object : TestWatcher() {
         override fun succeeded(description: Description?) {
@@ -28,31 +24,36 @@ abstract class BaseParameterizedTest(
         }
     }
 
+    /**
+     * Runs a two-phase recognition + parsing test.
+     *
+     * 1. Calls [matcher].matches([node]) — expects a non-null Screen.
+     * 2. If [parser] is provided, calls [parser].parse([node]) to get a [ScreenInfo] for
+     *    [customChecks]. Otherwise wraps the matched Screen in [ScreenInfo.Simple].
+     */
     protected fun runTest(
         matcher: ScreenMatcher,
+        parser: ScreenParser? = null,
         customChecks: (ScreenInfo) -> Unit = {}
     ) {
-        // Trigger Header (will only print once per class)
         stats.onTestStart()
-
         println("\n  📸 Checking: $filename")
-        // println("     Matcher: ${matcher::class.simpleName}")
 
-        val result = matcher.matches(node)
-        val resultName = result?.javaClass?.simpleName ?: "NULL"
-
-        if (result == null) {
+        val screen = matcher.matches(node)
+        if (screen == null) {
             println("     ❌ RESULT: NULL (Expected Match)")
-        } else {
-            println("     ✅ RESULT: $resultName")
+            fail("Matcher returned NULL for $filename")
+            return
         }
+        println("     ✅ MATCHED: $screen")
 
-        assertNotNull("Matcher returned NULL for $filename", result)
+        val result: ScreenInfo = parser?.parse(node) ?: ScreenInfo.Simple(screen)
+        println("     ℹ️  PARSED: ${result::class.simpleName}")
+
+        assertNotNull("Parser returned NULL for $filename", result)
 
         try {
-            if (result != null) {
-                customChecks(result)
-            }
+            customChecks(result)
         } catch (e: AssertionError) {
             println("     ❌ CUSTOM CHECK FAILED: ${e.message}")
             throw e

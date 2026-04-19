@@ -1,13 +1,11 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SensitiveScreenMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SensitiveScreenMatcherTest {
@@ -30,8 +28,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(buildLog("Bank Account"))!!
         val result = matcher.matches(root)
         assertNotNull(result)
-        assertTrue(result is ScreenInfo.Sensitive)
-        assertEquals(Screen.SENSITIVE, result!!.screen)
+        assertEquals(Screen.SENSITIVE, result)
     }
 
     @Test

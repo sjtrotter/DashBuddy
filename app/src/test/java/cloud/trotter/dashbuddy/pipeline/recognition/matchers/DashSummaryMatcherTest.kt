@@ -1,16 +1,18 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashSummaryMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashSummaryParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DashSummaryMatcherTest {
 
     private val matcher = DashSummaryMatcher()
+    private val parser = DashSummaryParser()
 
     // Log 1: Standard Dash Summary ($60.41)
     private val log1 = """
@@ -127,22 +129,13 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `matches log1 correctly`() {
         val root = LogToUiNodeParser.parseLog(log1)!!
-        val result = matcher.matches(root)
+        assertEquals(Screen.DASH_SUMMARY_SCREEN, matcher.matches(root))
 
-        assertNotNull("Should match Dash Summary", result)
-        assertTrue(result is ScreenInfo.DashSummary)
-
-        val info = result as ScreenInfo.DashSummary
-
-        // Assert Pay
+        val info = parser.parse(root) as ScreenInfo.DashSummary
         assertEquals("Total Pay", 60.41, info.totalEarnings!!, 0.01)
         assertEquals("Weekly Pay", 151.93, info.weeklyEarnings!!, 0.01)
-
-        // Assert Stats
         assertEquals("Accepted", 6, info.offersAccepted)
         assertEquals("Total Offers", 15, info.offersTotal)
-
-        // Assert Duration (3hr 14min = 194 min = 11,640,000 ms)
         val expectedMillis = (3 * 3600 * 1000L) + (14 * 60 * 1000L)
         assertEquals("Duration", expectedMillis, info.onlineDurationMillis)
     }
@@ -150,21 +143,12 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `matches log2 correctly`() {
         val root = LogToUiNodeParser.parseLog(log2)!!
-        val result = matcher.matches(root)
+        assertEquals(Screen.DASH_SUMMARY_SCREEN, matcher.matches(root))
 
-        assertNotNull("Should match Dash Summary", result)
-        assertTrue(result is ScreenInfo.DashSummary)
-
-        val info = result as ScreenInfo.DashSummary
-
-        // Assert Pay
+        val info = parser.parse(root) as ScreenInfo.DashSummary
         assertEquals("Total Pay", 42.20, info.totalEarnings!!, 0.01)
-
-        // Assert Stats
         assertEquals("Accepted", 4, info.offersAccepted)
         assertEquals("Total Offers", 21, info.offersTotal)
-
-        // Assert Duration (2hr 27min = 147 min = 8,820,000 ms)
         val expectedMillis = (2 * 3600 * 1000L) + (27 * 60 * 1000L)
         assertEquals("Duration", expectedMillis, info.onlineDurationMillis)
     }

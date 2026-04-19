@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupArrivalMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupArrivalParser
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
@@ -40,8 +41,9 @@ class PickupArrivalRegressionTest(filename: String, node: UiNode) :
     @Test
     fun `validate snapshot`() {
         val matcher = PickupArrivalMatcher()
+        val parser = PickupArrivalParser()
 
-        runTest(matcher) { result ->
+        runTest(matcher, parser) { result ->
             val info = result as ScreenInfo.PickupDetails
             assertEquals(Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE, info.screen)
             assertEquals("Status should always be ARRIVED", PickupStatus.ARRIVED, info.status)

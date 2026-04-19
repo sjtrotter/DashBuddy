@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
 import javax.inject.Inject
 
@@ -21,11 +20,11 @@ class SensitiveScreenMatcher @Inject constructor() : ScreenMatcher {
         )
     }
 
-    override fun matches(node: UiNode): ScreenInfo? {
+    override fun matches(node: UiNode): Screen? {
         val hasSensitiveText = node.findNode {
             SENSITIVE_KEYWORDS.any { keyword -> it.text?.contains(keyword, true) == true }
         } != null
 
-        return if (hasSensitiveText) ScreenInfo.Sensitive(targetScreen) else null
+        return if (hasSensitiveText) targetScreen else null
     }
 }

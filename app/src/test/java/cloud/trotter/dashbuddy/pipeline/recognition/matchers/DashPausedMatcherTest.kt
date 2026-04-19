@@ -3,17 +3,18 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashPausedMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashPausedParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class DashPausedMatcherTest {
 
     private val matcher = DashPausedMatcher()
+    private val parser = DashPausedParser()
 
     // --- TEST DATA ---
 
@@ -65,12 +66,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches DASH_PAUSED when all anchors present`() {
         val root = LogToUiNodeParser.parseLog(dashPausedLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match dash paused screen", result)
-        assertTrue(result is ScreenInfo.DashPaused)
-        assertEquals(Screen.DASH_PAUSED, result!!.screen)
+        assertEquals(Screen.DASH_PAUSED, matcher.matches(root!!))
     }
 
     @Test
@@ -102,7 +98,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses remaining time correctly for 34m 15s`() {
         val root = LogToUiNodeParser.parseLog(dashPausedLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DashPaused
+        val result = parser.parse(root) as ScreenInfo.DashPaused
 
         val expectedMillis = TimeUnit.MINUTES.toMillis(34) + TimeUnit.SECONDS.toMillis(15)
         assertEquals("Should parse 34:15 as milliseconds", expectedMillis, result.remainingMillis)
@@ -112,7 +108,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses remaining time correctly for 01m 00s`() {
         val root = LogToUiNodeParser.parseLog(dashPausedNearEndLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DashPaused
+        val result = parser.parse(root) as ScreenInfo.DashPaused
 
         val expectedMillis = TimeUnit.MINUTES.toMillis(1)
         assertEquals("Should parse 01:00 as 60000ms", expectedMillis, result.remainingMillis)
@@ -128,7 +124,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(desc='Resume dash', id=resumeButton, state=null, class=android.widget.Button)
 """.trimIndent()
         val root = LogToUiNodeParser.parseLog(log)!!
-        val result = matcher.matches(root) as ScreenInfo.DashPaused
+        val result = parser.parse(root) as ScreenInfo.DashPaused
 
         assertEquals("00:00 should parse to 0ms", 0L, result.remainingMillis)
     }

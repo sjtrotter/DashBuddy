@@ -3,16 +3,17 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SetDashEndTimeMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.SetDashEndTimeParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SetDashEndTimeMatcherTest {
 
     private val matcher = SetDashEndTimeMatcher()
+    private val parser = SetDashEndTimeParser()
 
     // --- TEST DATA ---
 
@@ -53,23 +54,14 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches SET_DASH_END_TIME with zone name and select time text`() {
         val root = LogToUiNodeParser.parseLog(setEndTimeLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match set dash end time screen", result)
-        assertTrue(result is ScreenInfo.IdleMap)
-        assertEquals(Screen.SET_DASH_END_TIME, result!!.screen)
+        assertEquals(Screen.SET_DASH_END_TIME, matcher.matches(root!!))
     }
 
     @Test
     fun `matches SET_DASH_END_TIME with zone name and description only`() {
         val root = LogToUiNodeParser.parseLog(setEndTimeDescOnlyLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match with description fallback", result)
-        assertEquals(Screen.SET_DASH_END_TIME, result!!.screen)
+        assertEquals(Screen.SET_DASH_END_TIME, matcher.matches(root!!))
     }
 
     @Test
@@ -93,7 +85,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses zone name from starting_point_name node`() {
         val root = LogToUiNodeParser.parseLog(setEndTimeLog)!!
-        val result = matcher.matches(root) as ScreenInfo.IdleMap
+        val result = parser.parse(root) as ScreenInfo.IdleMap
 
         assertEquals("TX: Leon Valley", result.zoneName)
     }
@@ -101,7 +93,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `dash type is always null on this screen`() {
         val root = LogToUiNodeParser.parseLog(setEndTimeLog)!!
-        val result = matcher.matches(root) as ScreenInfo.IdleMap
+        val result = parser.parse(root) as ScreenInfo.IdleMap
 
         assertNull("DashType toggle not visible on this screen", result.dashType)
     }

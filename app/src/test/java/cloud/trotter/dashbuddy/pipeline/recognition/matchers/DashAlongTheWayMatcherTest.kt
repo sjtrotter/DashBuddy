@@ -3,17 +3,18 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashAlongTheWayMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashAlongTheWayParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DashAlongTheWayMatcherTest {
 
     private val matcher = DashAlongTheWayMatcher()
+    private val parser = DashAlongTheWayParser()
 
     // --- TEST DATA ---
 
@@ -56,22 +57,14 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches ON_DASH_ALONG_THE_WAY with standard layout`() {
         val root = LogToUiNodeParser.parseLog(alongTheWayLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match along the way screen", result)
-        assertEquals(Screen.ON_DASH_ALONG_THE_WAY, result!!.screen)
+        assertEquals(Screen.ON_DASH_ALONG_THE_WAY, matcher.matches(root!!))
     }
 
     @Test
     fun `matches ON_DASH_ALONG_THE_WAY with fallback spot saved layout`() {
         val root = LogToUiNodeParser.parseLog(alongTheWayFallbackLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match fallback layout", result)
-        assertEquals(Screen.ON_DASH_ALONG_THE_WAY, result!!.screen)
+        assertEquals(Screen.ON_DASH_ALONG_THE_WAY, matcher.matches(root!!))
     }
 
     @Test
@@ -95,11 +88,10 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parsed result is WaitingForOffer with isHeadingBackToZone false`() {
         val root = LogToUiNodeParser.parseLog(alongTheWayLog)!!
-
-        val result = matcher.matches(root) as ScreenInfo.WaitingForOffer
+        val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
         assertFalse("Along the way is forward navigation, not heading back", result.isHeadingBackToZone)
-        assertTrue("Pay not available on this screen", result.currentDashPay == null)
-        assertTrue("Wait time not available on this screen", result.waitTimeEstimate == null)
+        assertNull("Pay not available on this screen", result.currentDashPay)
+        assertNull("Wait time not available on this screen", result.waitTimeEstimate)
     }
 }

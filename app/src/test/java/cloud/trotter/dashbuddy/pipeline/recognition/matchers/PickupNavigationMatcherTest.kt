@@ -4,16 +4,17 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupNavigationMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupNavigationParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PickupNavigationMatcherTest {
 
     private val matcher = PickupNavigationMatcher()
+    private val parser = PickupNavigationParser()
 
     // --- TEST DATA ---
 
@@ -57,12 +58,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches NAVIGATION_VIEW_TO_PICK_UP for pickup navigation`() {
         val root = LogToUiNodeParser.parseLog(pickupNavLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match pickup navigation", result)
-        assertTrue(result is ScreenInfo.PickupDetails)
-        assertEquals(Screen.NAVIGATION_VIEW_TO_PICK_UP, result!!.screen)
+        assertEquals(Screen.NAVIGATION_VIEW_TO_PICK_UP, matcher.matches(root!!))
     }
 
     @Test
@@ -94,7 +90,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses store name from Heading to prefix`() {
         val root = LogToUiNodeParser.parseLog(pickupNavLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         assertEquals("Chipotle", result.storeName)
     }
@@ -102,7 +98,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses full address from address lines`() {
         val root = LogToUiNodeParser.parseLog(pickupNavLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         assertEquals("123 Main St, Austin, TX 78701", result.storeAddress)
     }
@@ -110,7 +106,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is NAVIGATING`() {
         val root = LogToUiNodeParser.parseLog(pickupNavLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         assertEquals(PickupStatus.NAVIGATING, result.status)
     }
@@ -122,7 +118,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='Heading to Subway', id=bottom_sheet_task_title, state=null, class=android.widget.TextView)
 """.trimIndent()
         val root = LogToUiNodeParser.parseLog(log)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         assertNull("Address should be null if no address nodes", result.storeAddress)
     }

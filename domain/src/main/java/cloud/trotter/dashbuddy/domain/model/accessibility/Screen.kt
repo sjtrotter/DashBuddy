@@ -31,41 +31,13 @@ enum class Screen(
     MAIN_MAP_IDLE,
     MAIN_MAP_ON_DASH,
     SCHEDULE_VIEW,
-    EARNINGS_VIEW(
-        requiredTexts = listOf("earnings", "this week"),
-        someOfTheseTexts = listOf("past weeks", "balance", "crimson"),
-    ),
-    RATINGS_VIEW(
-        requiredTexts = listOf("ratings", "acceptance rate", "completion rate", "overall"),
-    ),
-    SAFETY_VIEW(
-        requiredTexts = listOf(
-            "safedash",
-            "safety tools",
-            "report safety issue",
-            "share your location"
-        ),
-    ),
-    CHAT_VIEW(
-        requiredTexts = listOf("dasher", "messages"),
-        forbiddenTexts = listOf("folder"),
-    ),
-    NOTIFICATIONS_VIEW(
-        requiredTexts = listOf("notifications"),
-        forbiddenTexts = listOf("battery"),
-    ),
-    PROMOS_VIEW(
-        requiredTexts = listOf("navigate up", "promotions"),
-    ),
-    HELP_VIEW(
-        requiredTexts = listOf(
-            "doordash dasher",
-            "close webview",
-            "safety resources",
-            "additional resources",
-            "chat with support"
-        ),
-    ),
+    EARNINGS_VIEW,
+    RATINGS_VIEW,
+    SAFETY_VIEW,
+    CHAT_VIEW,
+    NOTIFICATIONS_VIEW,
+    PROMOS_VIEW,
+    HELP_VIEW,
     // --- Starting or Ending a Dash Workflow ---
     /** This screen after Dash is clicked, when Dash Anytime is enabled. */
     SET_DASH_END_TIME,
@@ -75,33 +47,14 @@ enum class Screen(
 
     // --- Actively Dashing States ---
     ON_DASH_MAP_WAITING_FOR_OFFER,
-    ON_DASH_ALONG_THE_WAY(
-        requiredTexts = listOf(
-            "we'll look for orders along the way",
-            "navigate",
-            "to zone",
-            "spot saved until"
-        ),
-    ),
-    TIMELINE_VIEW(
-        requiredTexts = listOf(
-            "current dash",
-            "pause orders",
-            "end now",
-            "dash ends at",
-            "add time"
-        ),
-    ),
+    ON_DASH_ALONG_THE_WAY,
+    TIMELINE_VIEW,
 
     /** The paused dash screen. */
     DASH_PAUSED,
 
     // --- Navigation Views ---
-    NAVIGATION_VIEW(
-        requiredTexts = listOf("min", "exit"),
-        someOfTheseTexts = listOf("mi", "ft"),
-        forbiddenTexts = listOf("accept", "decline"),
-    ),
+    NAVIGATION_VIEW,
 
     /** Navigating, but to a pickup location. */
     NAVIGATION_VIEW_TO_PICK_UP,
@@ -112,49 +65,25 @@ enum class Screen(
     // --- Offer Handling ---
     OFFER_POPUP,
 
-    OFFER_POPUP_CONFIRM_DECLINE(
-        requiredTexts = listOf("Are you sure you want to decline", "acceptance rate"),
-    ),
+    OFFER_POPUP_CONFIRM_DECLINE,
 
     // --- Active Delivery - Pickup Phase ---
 
     /** Prior to arrival at pickup location. */
     PICKUP_DETAILS_PRE_ARRIVAL,
 
-    PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI(
-        requiredTexts = listOf(
-            "confirm at store",
-            "orders",
-            "you have",
-            "orders to pick up at",
-            "pick up each one to continue"
-        ),
-    ),
+    PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI,
 
     /** After arrival at pickup location. */
     PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE,
 
-    PICKUP_DETAILS_VERIFY_PICKUP(
-        requiredTexts = listOf("verify order", "order for", "confirm pickup", "can’t verify order"),
-        forbiddenTexts = listOf("pick up by"),
-    ),
-    PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI(
-        requiredTexts = listOf(
-            "pick up",
-            "orders",
-            "you have",
-            "orders to pick up at",
-            "pick up each one to continue"
-        ),
-        forbiddenTexts = listOf("confirm at store", "customer"),
-    ),
+    PICKUP_DETAILS_VERIFY_PICKUP,
+    PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI,
 
     /** Arrival at store for shopping order. */
     PICKUP_DETAILS_POST_ARRIVAL_SHOP,
 
-    PICKUP_DETAILS_PICKED_UP(
-        requiredTexts = listOf("Confirm pickup", "Loading…"),
-    ),
+    PICKUP_DETAILS_PICKED_UP,
 
     // --- Active Delivery - Dropoff Phase ---
 
@@ -215,8 +144,8 @@ enum class Screen(
 
     /**
      * Returns true if this screen has specific matching criteria defined in the Enum.
-     * If false, this screen is likely refactored to a standalone matcher or is UNKNOWN,
-     * so the LegacyEnumMatcher should ignore it.
+     * All screens have been migrated to standalone [cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher]
+     * implementations, so this always returns false. Kept for reference during future enum cleanup.
      */
     val hasMatchingCriteria: Boolean
         get() = requiredTexts.isNotEmpty() ||

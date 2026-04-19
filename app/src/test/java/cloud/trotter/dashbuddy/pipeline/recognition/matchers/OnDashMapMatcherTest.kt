@@ -1,13 +1,11 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.OnDashMapMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OnDashMapMatcherTest {
@@ -122,12 +120,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches MAIN_MAP_ON_DASH when Return to dash button is present`() {
         val root = LogToUiNodeParser.parseLog(returnToDashLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match MAIN_MAP_ON_DASH", result)
-        assertTrue(result is ScreenInfo.Simple)
-        assertEquals(Screen.MAIN_MAP_ON_DASH, result!!.screen)
+        assertEquals(Screen.MAIN_MAP_ON_DASH, matcher.matches(root!!))
     }
 
     @Test

@@ -4,16 +4,17 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.dash.DashType
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.IdleMapMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.IdleMapParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class IdleMapMatcherTest {
 
     private val matcher = IdleMapMatcher()
+    private val parser = IdleMapParser()
 
     // Log from 2026-01-07 21:31:13.566
     // Scenario 1: User is idle, but zone is gray/busy.
@@ -434,67 +435,39 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches Idle Map even when action button text is different (Zone Busy)`() {
         val root = LogToUiNodeParser.parseLog(zoneBusyLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match Idle Map based on Structural Elements", result)
-        assertTrue(result is ScreenInfo.IdleMap)
-
-        val info = result as ScreenInfo.IdleMap
-        assertEquals(Screen.MAIN_MAP_IDLE, info.screen)
+        assertEquals(Screen.MAIN_MAP_IDLE, matcher.matches(root!!))
     }
 
     @Test
     fun `matches Idle Map for scheduled dash`() {
         val root = LogToUiNodeParser.parseLog(startDashLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match Idle Map based on Structural Elements", result)
-        assertTrue(result is ScreenInfo.IdleMap)
-
-        val info = result as ScreenInfo.IdleMap
-        assertEquals(Screen.MAIN_MAP_IDLE, info.screen)
+        assertEquals(Screen.MAIN_MAP_IDLE, matcher.matches(root!!))
     }
 
     @Test
     fun `matches Idle Map for busy or platinum pre-dashing`() {
         val root = LogToUiNodeParser.parseLog(busyDashLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match Idle Map based on Structural Elements", result)
-        assertTrue(result is ScreenInfo.IdleMap)
-
-        val info = result as ScreenInfo.IdleMap
-        assertEquals(Screen.MAIN_MAP_IDLE, info.screen)
+        assertEquals(Screen.MAIN_MAP_IDLE, matcher.matches(root!!))
     }
 
     @Test
     fun `does not match Idle Map for return to dash`() {
         val root = LogToUiNodeParser.parseLog(returnToDash)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
         // IdleMapMatcher must return null for the on-dash map screen.
-        // OnDashMapMatcher is the dedicated handler for MAIN_MAP_ON_DASH.
-        assertNull("Should return null — MAIN_MAP_ON_DASH belongs to OnDashMapMatcher", result)
+        assertNull("Should return null — MAIN_MAP_ON_DASH belongs to OnDashMapMatcher", matcher.matches(root!!))
     }
 
     @Test
-    fun `matches Idle Map for earn by time dash`() {
+    fun `matches Idle Map for earn by time dash and parser extracts DashType`() {
         val root = LogToUiNodeParser.parseLog(earnByTime)
         assertNotNull("Failed to parse log", root)
 
-        val result = matcher.matches(root!!)
+        assertEquals(Screen.MAIN_MAP_IDLE, matcher.matches(root!!))
 
-        assertNotNull("Should match Idle Map based on Structural Elements", result)
-        assertTrue(result is ScreenInfo.IdleMap)
-
-        val info = result as ScreenInfo.IdleMap
+        val info = parser.parse(root!!) as ScreenInfo.IdleMap
         assertEquals(Screen.MAIN_MAP_IDLE, info.screen)
         assertEquals(DashType.BY_TIME, info.dashType)
     }
