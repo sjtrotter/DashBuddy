@@ -72,6 +72,55 @@ itself. This keeps history decoupled from state model evolution.
 
 ---
 
+---
+
+## Planned: Full Operating Cost in Offer Evaluation
+
+### Problem
+
+`OfferEvaluator` currently only deducts **fuel cost** from gross pay to compute net pay:
+
+```
+fuelCostPerMile = gasPricePerGallon / vehicleMpg   // UserEconomy.kt
+netPay = grossPay - (distanceMiles * fuelCostPerMile)
+```
+
+This means $/mi and $/hr are both overstated — they don't account for maintenance, depreciation,
+or insurance (the other ~60% of true per-mile cost for a car).
+
+### Fix
+
+Rename `fuelCostPerMile` → `operatingCostPerMile` in `UserEconomy` and feed it a full per-mile
+figure. Because all downstream math in `OfferEvaluator` already flows through that one field, no
+scoring logic needs to change.
+
+**Default / input options (pick one or let user choose mode):**
+- **IRS standard rate** — $0.70/mile (2025), covers gas + depreciation + maintenance + insurance.
+  Good zero-config default.
+- **Auto-computed** — itemize gas (from existing MPG + gas price) + a user-entered maintenance
+  estimate (e.g., $0.10/mile) + optional insurance premium spread over annual miles.
+- **Manual override** — Dasher enters their own $/mile figure directly.
+
+### Files to Touch
+
+| File | Change |
+|---|---|
+| `domain/.../evaluation/UserEconomy.kt` | Rename `fuelCostPerMile` → `operatingCostPerMile`; update compute logic |
+| `domain/.../evaluation/OfferEvaluation.kt` | Rename `fuelCostEstimate` → `operatingCostEstimate` for clarity |
+| `core/datastore/.../AppPreferencesDataSource.kt` | Add DataStore key for maintenance cost or cost-mode selection |
+| `core/data/.../settings/AppPreferencesRepository.kt` | Build `operatingCostPerMile` flow from component inputs |
+| Settings UI (wizard/prefs screens) | Surface the new input field(s) |
+| `domain/.../OfferEvaluatorTest.kt` | Update field names + add test cases for full cost mode |
+
+### Key Decision to Make
+
+Does the Dasher see one combined "cost per mile" field, or do we keep gas separate (it's live from
+EIA) and let them add a separate fixed maintenance/depreciation figure on top? Leaning toward
+**two-field**: live gas cost (auto-fetched) + user-entered wear cost (default $0.12/mile or similar),
+combined transparently at evaluation time. Keeps the live gas price feature useful.
+
+---
+
 ## Key Files Quick Reference (Bubble UI)
 
 | File | Role |
