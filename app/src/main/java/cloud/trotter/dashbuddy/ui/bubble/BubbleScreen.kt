@@ -23,14 +23,17 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -56,16 +59,21 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId
 import java.util.Date
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BubbleScreen(
     viewModel: BubbleViewModel = hiltViewModel()
 ) {
-    // 1. Swap Entity for Pure Domain Model!
     val messages by viewModel.messages.collectAsState()
+    val appState by viewModel.appState.collectAsState()
+    val sessionMiles by viewModel.sessionMiles.collectAsState()
+    val sessionEarnings by viewModel.sessionEarnings.collectAsState()
     var showFullChat by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -82,7 +90,8 @@ fun BubbleScreen(
                     }
                     IconButton(onClick = { showFullChat = !showFullChat }) {
                         Icon(
-                            imageVector = if (showFullChat) Icons.Default.Close else Icons.AutoMirrored.Filled.Chat,
+                            imageVector = if (showFullChat) Icons.Default.Close
+                            else Icons.AutoMirrored.Filled.Chat,
                             contentDescription = "Toggle Chat",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
@@ -95,106 +104,348 @@ fun BubbleScreen(
             if (showFullChat) {
                 FullChatView(messages)
             } else {
-                DashboardView(messages, viewModel) { showFullChat = true }
+                DashboardView(
+                    appState = appState,
+                    sessionEarnings = sessionEarnings,
+                    sessionMiles = sessionMiles,
+                    messages = messages,
+                    onOpenChat = { showFullChat = true }
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard layout
+// ---------------------------------------------------------------------------
+
+@Composable
+fun DashboardView(
+    appState: AppStateV2,
+    sessionEarnings: Double,
+    sessionMiles: Double,
+    messages: List<ChatMessage>,
+    onOpenChat: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        MetricsStrip(appState = appState, earnings = sessionEarnings, miles = sessionMiles)
+        ModeCard(appState = appState, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.weight(1f))
+        LatestMessageTicker(messages = messages, onClick = onOpenChat)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Always-visible earnings + miles strip
+// ---------------------------------------------------------------------------
+
+@Composable
+fun MetricsStrip(appState: AppStateV2, earnings: Double, miles: Double) {
+    val isActive = appState !is AppStateV2.IdleOffline &&
+            appState !is AppStateV2.Initializing &&
+            appState !is AppStateV2.PostDash
+
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Status badge
+            val (badgeText, badgeColor) = statusBadge(appState)
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = badgeColor.copy(alpha = 0.2f)
+            ) {
+                Text(
+                    text = badgeText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = badgeColor,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            if (isActive) {
+                Text(
+                    text = "$${String.format("%.2f", earnings)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Text(
+                    text = "  ·  ",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = "${"%.1f".format(miles)} mi",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            } else {
+                Text(
+                    text = "Not dashing",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                )
             }
         }
     }
 }
 
 @Composable
-fun DashboardView(
-    messages: List<ChatMessage>, // 2. Pure Domain Model
-    viewModel: BubbleViewModel,
-    onOpenChat: () -> Unit
-) {
-    val miles by viewModel.sessionMiles.collectAsState()
+private fun statusBadge(appState: AppStateV2): Pair<String, Color> {
+    val green = Color(0xFF4CAF50)
+    val amber = Color(0xFFFFC107)
+    val blue = Color(0xFF2196F3)
+    val grey = MaterialTheme.colorScheme.outline
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+    return when (appState) {
+        is AppStateV2.Initializing -> "STARTING" to grey
+        is AppStateV2.IdleOffline -> "OFFLINE" to grey
+        is AppStateV2.AwaitingOffer -> "WAITING" to green
+        is AppStateV2.OfferPresented -> "OFFER" to blue
+        is AppStateV2.OnPickup -> "PICKUP" to green
+        is AppStateV2.OnDelivery -> "DELIVERING" to green
+        is AppStateV2.PostDelivery -> "DELIVERED" to green
+        is AppStateV2.DashPaused -> "PAUSED" to amber
+        is AppStateV2.PausedOrInterrupted -> "PAUSED" to amber
+        is AppStateV2.PostDash -> "DONE" to grey
+    }
+}
+
+// ---------------------------------------------------------------------------
+// State-aware mode card
+// ---------------------------------------------------------------------------
+
+@Composable
+fun ModeCard(appState: AppStateV2, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-
-        Text("Current Trip", style = MaterialTheme.typography.titleMedium)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .height(100.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "%.2f".format(miles),
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-                Text(
-                    text = "SESSION MILES",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                )
-            }
-        }
-
-        Text(
-            "Recent Messages",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 16.dp)
-        )
-
-        val recentMessages = messages.takeLast(3)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .clickable { onOpenChat() },
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                if (recentMessages.isEmpty()) {
-                    Text(
-                        "No messages yet.",
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                    )
-                } else {
-                    recentMessages.forEach { msg ->
-                        val preview = getPreviewText(msg.text)
-
-                        Row(modifier = Modifier.padding(vertical = 4.dp)) {
-                            Text(
-                                // 3. Use displayName from the persona!
-                                text = "${msg.persona.displayName}: ",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = preview,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-                Text(
-                    text = "Tap to view all...",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(top = 8.dp)
-                )
+        Box(modifier = Modifier.padding(16.dp)) {
+            when (appState) {
+                is AppStateV2.Initializing -> ModeInitializing()
+                is AppStateV2.IdleOffline -> ModeIdle()
+                is AppStateV2.AwaitingOffer -> ModeAwaiting(appState)
+                is AppStateV2.OfferPresented -> ModeOffer(appState)
+                is AppStateV2.OnPickup -> ModePickup(appState)
+                is AppStateV2.OnDelivery -> ModeDelivery()
+                is AppStateV2.PostDelivery -> ModePostDelivery(appState)
+                is AppStateV2.DashPaused -> ModePaused(appState)
+                is AppStateV2.PausedOrInterrupted -> ModePausedOrInterrupted(appState)
+                is AppStateV2.PostDash -> ModePostDash(appState)
             }
         }
     }
 }
+
+@Composable
+private fun ModeInitializing() {
+    ModeRow(label = "Status", value = "Starting up…")
+}
+
+@Composable
+private fun ModeIdle() {
+    ModeRow(label = "Status", value = "Offline — not dashing")
+}
+
+@Composable
+private fun ModeAwaiting(state: AppStateV2.AwaitingOffer) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModePrimaryText("Waiting for orders")
+        if (state.isHeadingBackToZone) {
+            ModeRow(label = "Heads up", value = "Heading back to zone")
+        }
+        state.waitTimeEstimate?.let {
+            ModeRow(label = "Est. wait", value = it)
+        }
+    }
+}
+
+@Composable
+private fun ModeOffer(state: AppStateV2.OfferPresented) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        state.merchantName?.let { ModePrimaryText(it) }
+        state.amount?.let { amount ->
+            Text(
+                text = "$${String.format("%.2f", amount)}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        if (state.merchantName == null && state.amount == null) {
+            ModePrimaryText("Offer incoming…")
+        }
+    }
+}
+
+@Composable
+private fun ModePickup(state: AppStateV2.OnPickup) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModePrimaryText(state.storeName)
+        ModeRow(
+            label = "Status",
+            value = when (state.status) {
+                PickupStatus.NAVIGATING -> "Heading to store"
+                PickupStatus.ARRIVED -> "Arrived — waiting for order"
+                PickupStatus.SHOPPING -> "Shopping for items"
+                PickupStatus.CONFIRMED -> "Order confirmed"
+                PickupStatus.UNKNOWN -> "At pickup"
+            }
+        )
+        if (state.orders.isNotEmpty()) {
+            ModeRow(label = "Items", value = state.orders.size.toString())
+        }
+        if (state.arrivalConfirmed) {
+            ModeRow(label = "Arrival", value = "Confirmed")
+        }
+    }
+}
+
+@Composable
+private fun ModeDelivery() {
+    ModePrimaryText("Delivering…")
+}
+
+@Composable
+private fun ModePostDelivery(state: AppStateV2.PostDelivery) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        state.parsedPay?.let { pay ->
+            if (pay.total > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "+$${String.format("%.2f", pay.total)}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+            }
+        }
+        if (state.merchantNames.isNotBlank() && state.merchantNames != "Delivery") {
+            ModeRow(label = "From", value = state.merchantNames)
+        }
+        if (state.summaryText.isNotBlank() && state.summaryText != "Processing…") {
+            Text(
+                text = state.summaryText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModePaused(state: AppStateV2.DashPaused) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModePrimaryText("Dash paused")
+        ModeRow(label = "Paused for", value = formatDuration(state.durationMs))
+    }
+}
+
+@Composable
+private fun ModePausedOrInterrupted(state: AppStateV2.PausedOrInterrupted) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModePrimaryText("Interrupted")
+        ModeRow(
+            label = "Was",
+            value = state.previousState::class.simpleName?.replace(
+                Regex("([A-Z])"), " $1"
+            )?.trim() ?: "Unknown"
+        )
+    }
+}
+
+@Composable
+private fun ModePostDash(state: AppStateV2.PostDash) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "$${String.format("%.2f", state.totalEarnings)}",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        ModeRow(label = "Duration", value = formatDuration(state.durationMillis))
+        ModeRow(label = "Acceptance", value = state.acceptanceRateForSession)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Latest message ticker — replaces the old Recent Messages card
+// ---------------------------------------------------------------------------
+
+@Composable
+fun LatestMessageTicker(messages: List<ChatMessage>, onClick: () -> Unit) {
+    val latest = messages.lastOrNull()
+
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (latest != null) {
+            Icon(
+                painter = painterResource(id = latest.persona.getIconResId()),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = Color.Unspecified
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "${latest.persona.displayName}: ",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = getPreviewText(latest.text),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            Text(
+                text = "No messages yet",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.weight(1f),
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+            )
+        }
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = "Open chat",
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Full chat view (unchanged)
+// ---------------------------------------------------------------------------
 
 @Composable
 fun FullChatView(messages: List<ChatMessage>) {
@@ -225,10 +476,8 @@ fun FullChatView(messages: List<ChatMessage>) {
 fun ChatBubble(message: ChatMessage) {
     val context = LocalContext.current
 
-    // 4. Clean Kotlin type-checking! No messy string ID checks.
     val isSystem =
         message.persona is ChatPersona.Dispatcher || message.persona is ChatPersona.System
-
 
     val nameColor = if (isSystem) {
         MaterialTheme.colorScheme.secondary
@@ -256,7 +505,6 @@ fun ChatBubble(message: ChatMessage) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    // 5. Use displayName from the sealed class
                     text = message.persona.displayName,
                     style = MaterialTheme.typography.labelMedium,
                     color = nameColor,
@@ -266,7 +514,6 @@ fun ChatBubble(message: ChatMessage) {
                 Spacer(modifier = Modifier.width(6.dp))
 
                 Icon(
-                    // 6. SOLVED: Dynamically grab the correct icon!
                     painter = painterResource(id = message.persona.getIconResId()),
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
@@ -312,11 +559,51 @@ fun HtmlText(
         },
         update = { textView ->
             textView.setTextColor(androidTextColor)
-            val spanned =
-                Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT)
-            textView.text = spanned
+            textView.text = Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT)
         }
     )
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ModePrimaryText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+}
+
+@Composable
+private fun ModeRow(label: String, value: String) {
+    Row {
+        Text(
+            text = "$label: ",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun formatDuration(ms: Long): String {
+    if (ms <= 0) return "0s"
+    val hours = TimeUnit.MILLISECONDS.toHours(ms)
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(ms) % 60
+    val seconds = TimeUnit.MILLISECONDS.toSeconds(ms) % 60
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m ${seconds}s"
+        else -> "${seconds}s"
+    }
 }
 
 fun getPreviewText(html: String): String {
@@ -328,8 +615,6 @@ fun getPreviewText(html: String): String {
         .replace("</p>", " // ")
         .replace("</div>", " // ")
 
-    val spanned =
-        Html.fromHtml(spacedHtml, Html.FROM_HTML_MODE_COMPACT)
-
+    val spanned = Html.fromHtml(spacedHtml, Html.FROM_HTML_MODE_COMPACT)
     return spanned.toString().trim()
 }
