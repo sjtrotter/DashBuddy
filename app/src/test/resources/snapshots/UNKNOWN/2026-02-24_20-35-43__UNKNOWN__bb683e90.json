@@ -1,0 +1,110 @@
+{
+    "timestamp": 1771986943466,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/drop_off_tasks_recycler_view",
+        "class": "androidx.recyclerview.widget.RecyclerView",
+        "isEnabled": true,
+        "bounds": "[0,429][1080,2168]",
+        "children": [
+            {
+                "id": "com.doordash.driverapp:id/time_slot_container",
+                "class": "android.view.ViewGroup",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,429][1080,658]",
+                "children": [
+                    {
+                        "text": "1",
+                        "id": "com.doordash.driverapp:id/step_number",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[36,482][94,540]"
+                    },
+                    {
+                        "id": "com.doordash.driverapp:id/next_step_timeline",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[62,535][64,658]"
+                    },
+                    {
+                        "text": "Do NOT hand over items until ID has been verified",
+                        "id": "com.doordash.driverapp:id/step_title",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[130,482][1044,596]"
+                    },
+                    {
+                        "id": "com.doordash.driverapp:id/step_description",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[130,614][1044,658]"
+                    }
+                ]
+            },
+            {
+                "id": "com.doordash.driverapp:id/time_slot_container",
+                "class": "android.view.ViewGroup",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,658][1080,987]",
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/prev_step_timeline",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[62,658][64,711]"
+                    },
+                    {
+                        "text": "2",
+                        "id": "com.doordash.driverapp:id/step_number",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[36,711][94,769]"
+                    },
+                    {
+                        "text": "Verify recipient's identity",
+                        "id": "com.doordash.driverapp:id/step_title",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[130,711][1044,766]"
+                    },
+                    {
+                        "text": "Scan their ID and verify their identity. \nMake sure they are not intoxicated",
+                        "id": "com.doordash.driverapp:id/step_description",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[130,784][1044,880]"
+                    },
+                    {
+                        "id": "com.doordash.driverapp:id/step_action_red",
+                        "class": "android.widget.Button",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": "[130,916][443,987]",
+                        "children": [
+                            {
+                                "text": "Verify recipient",
+                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": "[157,929][416,974]"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

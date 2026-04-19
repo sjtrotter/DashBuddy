@@ -1,0 +1,611 @@
+{
+    "timestamp": 1772244218842,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "HELP_VIEW",
+        "UNKNOWN",
+        "HELP_VIEW",
+        "UNKNOWN",
+        "HELP_VIEW",
+        "UNKNOWN",
+        "HELP_VIEW",
+        "UNKNOWN",
+        "HELP_VIEW"
+    ],
+    "root": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": "[0,0][1080,2400]",
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": "[0,0][1080,2347]",
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": "[0,136][1080,2347]",
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/action_bar_root",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": "[0,136][1080,2347]",
+                                "children": [
+                                    {
+                                        "id": "android:id/content",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": "[0,136][1080,2347]",
+                                        "children": [
+                                            {
+                                                "id": "com.doordash.driverapp:id/container",
+                                                "class": "android.view.ViewGroup",
+                                                "isEnabled": true,
+                                                "bounds": "[0,136][1080,2347]",
+                                                "children": [
+                                                    {
+                                                        "id": "com.doordash.driverapp:id/fragment",
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isEnabled": true,
+                                                        "bounds": "[0,136][1080,2311]",
+                                                        "children": [
+                                                            {
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": "[0,136][1080,2311]",
+                                                                "children": [
+                                                                    {
+                                                                        "class": "android.webkit.WebView",
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[0,136][1080,2311]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "DoorDash Dasher",
+                                                                                "class": "android.webkit.WebView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[0,136][1080,2311]",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "text": "",
+                                                                                        "id": "root",
+                                                                                        "class": "android.view.View",
+                                                                                        "isClickable": true,
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[0,136][1080,1484]",
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "text": "",
+                                                                                                "class": "android.view.View",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[0,136][1080,1484]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "text": "",
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,136][1080,262]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[15,136][109,227]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "",
+                                                                                                                        "desc": "Close Webview",
+                                                                                                                        "class": "android.widget.Button",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[15,136][109,227]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[15,147][1080,213]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "Help",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[15,147][1063,213]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[972,136][1063,227]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "",
+                                                                                                                        "class": "android.view.View",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[972,136][1063,227]",
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "text": "",
+                                                                                                                                "desc": "Safety Resources",
+                                                                                                                                "class": "android.widget.Button",
+                                                                                                                                "isClickable": true,
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": "[972,136][1063,227]"
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Hi Stephen,",
+                                                                                                        "class": "android.widget.TextView",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[33,136][253,136]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "How can we help?",
+                                                                                                        "class": "android.widget.TextView",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[33,136][869,136]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "",
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[33,136][1045,136]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "id": "FieldWrapper-0",
+                                                                                                                "class": "android.widget.EditText",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[122,136][1014,136]"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "",
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,136][1080,136]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[0,136][11,136]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "getting_started",
+                                                                                                                        "desc": "Getting Started",
+                                                                                                                        "class": "android.widget.Image",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[0,136][11,136]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Getting Started",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[0,136][0,136]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[8,136][171,136]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "dashing_selected",
+                                                                                                                        "desc": "Dashing",
+                                                                                                                        "class": "android.widget.Image",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[8,136][171,136]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Dashing",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[20,136][157,136]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[166,136][331,136]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "schedule",
+                                                                                                                        "desc": "Schedule",
+                                                                                                                        "class": "android.widget.Image",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[166,136][331,136]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Schedule",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[171,136][327,136]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[327,136][491,136]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "account",
+                                                                                                                        "desc": "Account",
+                                                                                                                        "class": "android.widget.Image",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[327,136][491,136]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Account",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[338,136][480,136]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[487,136][651,136]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "ratings",
+                                                                                                                        "desc": "Ratings",
+                                                                                                                        "class": "android.widget.Image",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[487,136][651,136]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Ratings",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[505,136][634,136]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[647,136][812,136]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "earnings",
+                                                                                                                        "desc": "Earnings",
+                                                                                                                        "class": "android.widget.Image",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[647,136][812,136]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Earnings",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[658,136][801,136]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[809,136][972,136]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "non_traditional_orders",
+                                                                                                                        "desc": "Non-Traditional Orders",
+                                                                                                                        "class": "android.widget.Image",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[809,136][972,136]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "New Verticals",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[818,136][961,136]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[967,136][1080,136]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "safety_resources",
+                                                                                                                        "desc": "Safety Resources",
+                                                                                                                        "class": "android.widget.Image",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[967,136][1080,136]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Safety",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[996,136][1080,136]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Dashing related issues",
+                                                                                                        "class": "android.widget.TextView",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[68,136][513,180]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "General issues while Dashing",
+                                                                                                        "class": "android.widget.Button",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,187][1080,316]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Issues at the store",
+                                                                                                        "class": "android.widget.Button",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,314][1080,445]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Issues with delivering to the customer",
+                                                                                                        "class": "android.widget.Button",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,440][1080,572]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Cannot continue with the order",
+                                                                                                        "class": "android.widget.Button",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,567][1080,698]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Red Card usage",
+                                                                                                        "class": "android.widget.Button",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,696][1080,825]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Notice of Rights for NYC Delivery Workers",
+                                                                                                        "class": "android.widget.Button",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,823][1080,954]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Related snippets (5)",
+                                                                                                        "class": "android.widget.TextView",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[33,1021][469,1081]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "",
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,1115][1080,1442]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "Delays at the store When experiencing a long wait at the store, customer ratings below 5 stars will not impact your ratings.",
+                                                                                                                "class": "android.widget.Button",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[24,1115][491,1442]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "When to Dash There are more delivery opportunities during lunch and dinner times.",
+                                                                                                                "class": "android.widget.Button",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[487,1115][954,1442]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "Issues at the store If the store is unaware of the order, please contact support to either get the order fulfilled or cancelled.",
+                                                                                                                "class": "android.widget.Button",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[950,1115][1080,1442]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "Disappearing orders If an order disappears from your app mid-dash, it was likely cancelled by the customer or the store.",
+                                                                                                                "class": "android.widget.Button",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[1080,1115][1080,1442]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "Unassigning order If you are unable to complete an order, you can unassign yourself in-app. This will affect your ratings.",
+                                                                                                                "class": "android.widget.Button",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[1080,1115][1080,1442]"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Still need help?",
+                                                                                                        "class": "android.widget.TextView",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[33,1484][369,1542]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "Additional resources",
+                                                                                                        "class": "android.widget.Button",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,1557][1080,1689]"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "text": "",
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[0,1684][1080,2225]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "Chat with support Need more help? Chat with us.",
+                                                                                                                "class": "android.widget.Button",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[0,1684][1080,1867]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "Call support Prefer to talk? Call us.",
+                                                                                                                "class": "android.widget.Button",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[0,1862][1080,2045]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "Help center Explore all of our resources",
+                                                                                                                "class": "android.widget.Button",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[0,2042][1080,2225]"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "text": "",
+                                                                                                "class": "android.view.View",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[0,136][1080,2311]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "text": "",
+                                                                                                        "class": "android.view.View",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[427,240][1045,342]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.widget.TextView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[427,240][1045,342]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "Feeling unsafe? Get help here. Close Tooltip",
+                                                                                                                "id": "Tooltip-0",
+                                                                                                                "class": "android.view.View",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[427,240][1045,342]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[1001,227][1030,245]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Feeling unsafe? Get help here.",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[445,258][941,318]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "",
+                                                                                                                        "desc": "Close Tooltip",
+                                                                                                                        "class": "android.widget.Button",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[956,256][1030,329]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "text": "",
+                                                                                                                "class": "android.widget.TextView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[427,338][1045,338]"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "text": "",
+                                                                                                "class": "android.widget.TextView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[0,136][1080,2311]"
+                                                                                            },
+                                                                                            {
+                                                                                                "text": "",
+                                                                                                "class": "android.widget.TextView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[0,136][1080,2311]"
+                                                                                            },
+                                                                                            {
+                                                                                                "text": "",
+                                                                                                "class": "android.widget.TextView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[0,136][1080,2311]"
+                                                                                            },
+                                                                                            {
+                                                                                                "text": "",
+                                                                                                "class": "android.widget.TextView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[0,136][1080,2311]"
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "android:id/navigationBarBackground",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,2347][1080,2400]"
+            }
+        ]
+    }
+}

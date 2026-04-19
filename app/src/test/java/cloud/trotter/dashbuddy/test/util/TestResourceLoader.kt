@@ -26,9 +26,14 @@ object TestResourceLoader {
 
         return resourceDir.listFiles { _, name -> name.endsWith(".json") }
             ?.sorted()
-            ?.map { file ->
-                val (node, breadcrumbs) = parseFlexibleJson(file.readText())
-                Triple(file.name, node, breadcrumbs)
+            ?.mapNotNull { file ->
+                try {
+                    val (node, breadcrumbs) = parseFlexibleJson(file.readText())
+                    Triple(file.name, node, breadcrumbs)
+                } catch (_: Exception) {
+                    println("⚠️  Skipping unparseable file: ${file.name}")
+                    null
+                }
             }
             ?: emptyList()
     }

@@ -1,0 +1,239 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[10,7][1090,2407]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[10,7][1090,2354]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[10,143][1090,2354]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[10,143][1090,2354]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[10,143][1090,2354]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ViewGroup",
+                      "bounds": "[10,143][1090,2354]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[10,143][1090,285]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[10,143][1090,285]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Current dash",
+                                  "class": "ImageButton",
+                                  "bounds": "[10,151][135,276]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Looking for offers",
+                                  "class": "TextView",
+                                  "bounds": "[143,189][473,239]",
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[876,151][1090,276]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Safety",
+                                      "id": "action_dasher_safety",
+                                      "class": "Button",
+                                      "bounds": "[876,160][983,267]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "desc": "Help",
+                                      "id": "action_self_help",
+                                      "class": "Button",
+                                      "bounds": "[983,160][1090,267]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[10,285][1090,2354]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[10,285][1090,2354]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "fragment_container",
+                                  "class": "ViewGroup",
+                                  "bounds": "[10,285][1090,2354]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "map_container",
+                                      "class": "FrameLayout",
+                                      "bounds": "[10,285][1090,1959]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "FrameLayout",
+                                          "bounds": "[10,285][1090,1959]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "TextureView",
+                                              "bounds": "[10,285][1090,1959]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "FrameLayout",
+                                              "bounds": "[10,285][1090,1959]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "ImageView",
+                                              "bounds": "[15,1859][204,1906]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "ImageView",
+                                              "bounds": "[210,1859][257,1906]",
+                                              "clickable": true,
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "loading_indicator",
+                                      "class": "ProgressBar",
+                                      "bounds": "[497,1266][604,1373]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "my_location_button",
+                                      "class": "Button",
+                                      "bounds": "[965,1789][1054,1878]",
+                                      "clickable": true,
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "imageView_prism_button_icon",
+                                          "class": "ImageView",
+                                          "bounds": "[987,1811][1032,1856]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "bottom_spot_info_and_navigate_layout",
+                                      "class": "LinearLayout",
+                                      "bounds": "[10,1914][1090,2354]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "text": "We'll look for orders along the way",
+                                          "id": "bottom_view_info_ctd_v2_title",
+                                          "class": "TextView",
+                                          "bounds": "[10,1950][1090,1994]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "ctd_v2_title_divider",
+                                          "class": "View",
+                                          "bounds": "[10,2012][1090,2014]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "bottom_view_info_title",
+                                          "class": "TextView",
+                                          "bounds": "[10,2050][82,2105]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "bottom_view_info_subtitle",
+                                          "class": "TextView",
+                                          "bounds": "[10,2114][82,2158]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "desc": "Navigate",
+                                          "id": "navigate_button",
+                                          "class": "Button",
+                                          "bounds": "[46,2211][1054,2318]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "imageView_prism_button_start_icon",
+                                              "class": "ImageView",
+                                              "bounds": "[82,2238][153,2291]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "text": "Navigate",
+                                              "id": "textView_prism_button_title",
+                                              "class": "TextView",
+                                              "bounds": "[457,2237][643,2292]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[10,2354][1090,2407]",
+      "enabled": true
+    }
+  ]
+}

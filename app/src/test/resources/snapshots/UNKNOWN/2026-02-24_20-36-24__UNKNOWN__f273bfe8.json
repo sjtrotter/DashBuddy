@@ -1,0 +1,80 @@
+{
+    "timestamp": 1771986984030,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/prism_sheet",
+        "class": "android.view.ViewGroup",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": "[0,2047][1080,2347]",
+        "children": [
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet_collar_view",
+                "class": "android.widget.FrameLayout",
+                "isEnabled": true,
+                "bounds": "[0,2123][1080,2123]"
+            },
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet_header_image",
+                "class": "android.widget.ImageView",
+                "isEnabled": true,
+                "bounds": "[0,2186][1080,2284]"
+            },
+            {
+                "text": "Scan Successful",
+                "id": "com.doordash.driverapp:id/prism_sheet_title",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[36,2386][1044,2347]"
+            },
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet_content_parent_container",
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": "[0,2490][1080,2347]",
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/nested_scroll_view",
+                        "class": "android.widget.ScrollView",
+                        "isEnabled": true,
+                        "bounds": "[0,2490][1080,2347]",
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/prism_content_container",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": "[0,2490][1080,2347]",
+                                "children": [
+                                    {
+                                        "text": "Now you're ready to start verification.",
+                                        "id": "com.doordash.driverapp:id/prism_sheet_message",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": "[36,2490][1044,2347]"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet_header_divider",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,2524][1080,2347]"
+            }
+        ]
+    }
+}

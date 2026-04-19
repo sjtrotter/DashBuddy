@@ -1,0 +1,813 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[147,267][933,2016]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[147,267][933,1977]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[147,366][933,1977]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[147,366][933,1977]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[147,366][933,1977]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ViewGroup",
+                      "bounds": "[147,366][933,1977]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[147,366][933,469]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[147,366][933,469]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Current dash",
+                                  "class": "ImageButton",
+                                  "bounds": "[147,372][238,463]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Pick up by 19:12",
+                                  "class": "TextView",
+                                  "bounds": "[243,399][455,436]",
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[778,372][933,463]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Safety",
+                                      "id": "action_dasher_safety",
+                                      "class": "Button",
+                                      "bounds": "[778,378][855,456]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "desc": "Help",
+                                      "id": "action_self_help",
+                                      "class": "Button",
+                                      "bounds": "[855,378][933,456]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[147,469][933,1977]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[147,469][933,1977]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "container",
+                                  "class": "ViewGroup",
+                                  "bounds": "[147,469][933,1977]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "main_view_container",
+                                      "class": "ScrollView",
+                                      "bounds": "[147,469][933,1834]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "bottom_sheet_container",
+                                          "class": "ViewGroup",
+                                          "bounds": "[147,469][933,1834]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "at_store_contact_view",
+                                              "class": "ViewGroup",
+                                              "bounds": "[147,469][933,703]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Order for",
+                                                  "id": "customer_name_label",
+                                                  "class": "TextView",
+                                                  "bounds": "[173,496][340,531]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Graham B",
+                                                  "id": "customer_name",
+                                                  "class": "TextView",
+                                                  "bounds": "[173,544][705,593]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "call_button",
+                                                  "class": "ImageButton",
+                                                  "bounds": "[732,512][796,577]",
+                                                  "clickable": true,
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "text_button",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[823,502][907,587]",
+                                                  "clickable": true,
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "chat_button_internal",
+                                                      "class": "ImageButton",
+                                                      "bounds": "[834,513][897,577]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "id": "mni_header_view",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[147,606][933,703]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Order includes",
+                                                      "id": "lblOrderIncludes",
+                                                      "class": "TextView",
+                                                      "bounds": "[173,606][907,638]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Drink",
+                                                      "id": "drinkTag",
+                                                      "class": "TextView",
+                                                      "bounds": "[173,652][305,703]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "conditional_pay_offer_banner_view",
+                                              "class": "ViewGroup",
+                                              "bounds": "[147,716][933,915]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "Make this delivery count: This customer tends to leave higher tips and ratings for great service. Take a moment to check the order.",
+                                                  "id": "conditional_pay_offer_banner",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[147,716][933,915]",
+                                                  "clickable": true,
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "actions_group",
+                                                      "class": "View",
+                                                      "bounds": "[147,716][147,716]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "subdued_decoration_view",
+                                                      "class": "View",
+                                                      "bounds": "[147,718][153,913]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "start_icon_image_view",
+                                                      "class": "ImageView",
+                                                      "bounds": "[166,736][218,788]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Make this delivery count",
+                                                      "id": "label_text_view",
+                                                      "class": "TextView",
+                                                      "bounds": "[231,742][835,778]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "This customer tends to leave higher tips and ratings for great service. Take a moment to check the order.",
+                                                      "id": "body_text_view",
+                                                      "class": "TextView",
+                                                      "bounds": "[231,778][835,889]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "end_icon_button",
+                                                      "class": "Button",
+                                                      "bounds": "[855,736][907,788]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "subdued_border_view",
+                                                      "class": "View",
+                                                      "bounds": "[147,912][933,915]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "payment_component_view",
+                                              "class": "ViewGroup",
+                                              "bounds": "[147,934][933,1148]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "payment_component_banner",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[147,934][933,1148]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "banner_icon",
+                                                      "class": "ImageView",
+                                                      "bounds": "[173,961][206,991]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Place order and pay with Red Card",
+                                                      "id": "banner_title_rest_requirement",
+                                                      "class": "TextView",
+                                                      "bounds": "[232,961][907,993]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "This order must be placed at the store. Wait in line, order at the register then pay with your Red Card",
+                                                      "id": "banner_description",
+                                                      "class": "TextView",
+                                                      "bounds": "[232,1006][894,1076]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Total amount of this order is $23.95",
+                                                      "id": "banner_label",
+                                                      "class": "TextView",
+                                                      "bounds": "[232,1089][894,1122]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "instructions_view",
+                                              "class": "ViewGroup",
+                                              "bounds": "[147,1148][933,1581]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider",
+                                                  "class": "View",
+                                                  "bounds": "[147,1174][933,1175]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "instructions_list",
+                                                  "class": "RecyclerView",
+                                                  "bounds": "[147,1175][933,1581]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[147,1175][933,1318]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "instructions_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[173,1208][195,1241]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "text": "Walk into store",
+                                                          "id": "instructions_title",
+                                                          "class": "TextView",
+                                                          "bounds": "[222,1202][855,1237]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "id": "expand_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[869,1202][907,1240]",
+                                                          "clickable": true,
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "id": "instructions_expandable_view",
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[222,1256][907,1291]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "id": "instructions_expanded_container",
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[222,1256][907,1291]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "Enter the store and pick up the order.",
+                                                                  "id": "instructions_line_2_expanded",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[222,1256][907,1291]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[147,1319][933,1581]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "instructions_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[173,1352][206,1381]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "text": "Additional notes",
+                                                          "id": "instructions_title",
+                                                          "class": "TextView",
+                                                          "bounds": "[232,1345][855,1380]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "id": "expand_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[869,1345][907,1384]",
+                                                          "clickable": true,
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "id": "instructions_expandable_view",
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[232,1400][907,1555]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "id": "instructions_expanded_container",
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[232,1400][907,1555]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "Place order inside and pay with your Red Card. Read order to the cashier - DO NOT hand your phone to them. Fill any drinks yourself at the drink station as necessary.",
+                                                                  "id": "instructions_line_2_expanded",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[232,1400][907,1555]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "order_items_view",
+                                              "class": "ViewGroup",
+                                              "bounds": "[147,1581][933,1834]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "divider_orders",
+                                                  "class": "View",
+                                                  "bounds": "[147,1608][933,1609]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "ic_items_v2",
+                                                  "class": "ImageView",
+                                                  "bounds": "[166,1629][205,1667]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "5 items",
+                                                  "id": "items_title_v2",
+                                                  "class": "TextView",
+                                                  "bounds": "[107,1869][973,1924]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "expand_button_v2",
+                                                  "class": "ImageView",
+                                                  "bounds": "[973,1869][1062,1922]",
+                                                  "clickable": true,
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "items_content_v2",
+                                                  "class": "RecyclerView",
+                                                  "bounds": "[166,1682][920,1834]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[166,1682][920,1834]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "item_list_expanded_view",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[166,1682][920,1834]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "1 ×",
+                                                              "id": "order_item_count",
+                                                              "class": "TextView",
+                                                              "bounds": "[166,1708][205,1747]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "The Caniac Combo",
+                                                              "id": "order_item_name",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1708][842,1744]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Item Choice: No Slaw (100 Cal) - (Extra Fries) (180 Cal)\nDrink Choice: Sweet Tea (Large)",
+                                                              "id": "order_item_instructions",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1744][842,1834]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "open_ioos_menu",
+                                                              "class": "ImageView",
+                                                              "bounds": "[869,1779][907,1818]",
+                                                              "clickable": true,
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "flowTags",
+                                                              "class": "View",
+                                                              "bounds": "[231,1834][894,1862]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Drink",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1834][310,1862]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "divider",
+                                                              "class": "View",
+                                                              "bounds": "[231,1834][920,1914]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[166,1834][920,1915]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "item_list_expanded_view",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[166,1834][920,1915]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "1 ×",
+                                                              "id": "order_item_count",
+                                                              "class": "TextView",
+                                                              "bounds": "[27,2298][80,2151]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Fountain Drink",
+                                                              "id": "order_item_name",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1834][842,1941]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Drink Choice: Coke\nSize Choice: Large 32 oz",
+                                                              "id": "order_item_instructions",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1834][842,1978]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "open_ioos_menu",
+                                                              "class": "ImageView",
+                                                              "bounds": "[869,1834][907,1994]",
+                                                              "clickable": true,
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "flowTags",
+                                                              "class": "View",
+                                                              "bounds": "[231,1834][894,2057]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Drink",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1834][310,2057]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "divider",
+                                                              "class": "View",
+                                                              "bounds": "[231,1834][920,2109]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[166,1834][920,2110]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "item_list_expanded_view",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[166,1834][920,2110]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "2 ×",
+                                                              "id": "order_item_count",
+                                                              "class": "TextView",
+                                                              "bounds": "[166,1834][205,2136]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Chicken Finger",
+                                                              "id": "order_item_name",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1834][842,2136]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "open_ioos_menu",
+                                                              "class": "ImageView",
+                                                              "bounds": "[869,1834][907,2133]",
+                                                              "clickable": true,
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "flowTags",
+                                                              "class": "View",
+                                                              "bounds": "[231,1834][894,2179]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "divider",
+                                                              "class": "View",
+                                                              "bounds": "[231,1834][920,2193]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[166,1834][920,2194]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "item_list_expanded_view",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[166,1834][920,2194]",
+                                                          "clickable": true,
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "1 ×",
+                                                              "id": "order_item_count",
+                                                              "class": "TextView",
+                                                              "bounds": "[166,1834][205,2220]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Cane's Sauce",
+                                                              "id": "order_item_name",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1834][842,2220]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Size Choice: Regular",
+                                                              "id": "order_item_instructions",
+                                                              "class": "TextView",
+                                                              "bounds": "[231,1834][842,2257]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "open_ioos_menu",
+                                                              "class": "ImageView",
+                                                              "bounds": "[869,1834][907,2227]",
+                                                              "clickable": true,
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "flowTags",
+                                                              "class": "View",
+                                                              "bounds": "[231,1834][894,2298]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "mx_contact_view",
+                                              "class": "ViewGroup",
+                                              "bounds": "[147,1834][933,2298]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "contact_view",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[0,2788][1080,2151]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "divider",
+                                                      "class": "View",
+                                                      "bounds": "[147,1834][933,2324]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "instructions_icon",
+                                                      "class": "ImageView",
+                                                      "bounds": "[173,1834][211,2352]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Raising Cane's",
+                                                      "id": "instructions_title",
+                                                      "class": "TextView",
+                                                      "bounds": "[238,1834][842,2352]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "accessory_button",
+                                                      "class": "ImageButton",
+                                                      "bounds": "[973,2859][1044,2151]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "pickup_survey_view",
+                                              "class": "ViewGroup",
+                                              "bounds": "[147,1834][933,2402]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[147,2402][933,2644]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,2930][1080,3020]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Waiting for your order?",
+                                                      "class": "TextView",
+                                                      "bounds": "[238,2456][584,2493]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Your on-time rate includes a buffer for extra time spent waiting at the store.",
+                                                      "class": "TextView",
+                                                      "bounds": "[238,2500][907,2576]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "text": "Tell us what’s causing your wait",
+                                                      "class": "TextView",
+                                                      "bounds": "[238,2568][657,2644]",
+                                                      "clickable": true,
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "pick_up_action_view",
+                                      "class": "ViewGroup",
+                                      "bounds": "[147,1834][933,1977]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "button_bg",
+                                          "class": "View",
+                                          "bounds": "[147,1834][933,1977]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "primary_action_button",
+                                          "class": "Button",
+                                          "bounds": "[173,1873][907,1951]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "text": "Confirm order has been placed",
+                                              "id": "textView_prism_button_title",
+                                              "class": "TextView",
+                                              "bounds": "[313,1892][767,1932]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[147,1977][933,2016]",
+      "enabled": true
+    }
+  ]
+}

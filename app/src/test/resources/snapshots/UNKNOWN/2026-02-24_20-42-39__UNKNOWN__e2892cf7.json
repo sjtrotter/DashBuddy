@@ -1,0 +1,64 @@
+{
+    "timestamp": 1771987359779,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.widget.ScrollView",
+        "isEnabled": true,
+        "bounds": "[0,278][1080,2347]",
+        "children": [
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": "[45,278][1035,2347]",
+                "children": [
+                    {
+                        "text": "A recipient signature is required for this order",
+                        "id": "com.doordash.driverapp:id/signature_instruction_label",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[45,340][1035,473]"
+                    },
+                    {
+                        "id": "com.doordash.driverapp:id/step_flow_progressbar",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": "[45,509][1035,583]",
+                        "children": [
+                            {
+                                "text": "3 of 4",
+                                "id": "com.doordash.driverapp:id/step_title",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": "[45,509][1035,559]"
+                            },
+                            {
+                                "id": "com.doordash.driverapp:id/step_container",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": "[45,567][1035,583]",
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": "[45,575][284,583]"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

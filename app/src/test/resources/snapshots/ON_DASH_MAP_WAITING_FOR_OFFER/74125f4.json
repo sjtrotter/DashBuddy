@@ -1,0 +1,226 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[6,9][1086,2409]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[6,9][1086,2356]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[6,145][1086,2356]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[6,145][1086,2356]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[6,145][1086,2356]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ViewGroup",
+                      "bounds": "[6,145][1086,2356]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[6,145][1086,287]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "toolbar",
+                              "class": "ViewGroup",
+                              "bounds": "[6,145][1086,287]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Current dash",
+                                  "class": "ImageButton",
+                                  "bounds": "[6,153][131,278]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Looking for offers",
+                                  "class": "TextView",
+                                  "bounds": "[139,191][469,241]",
+                                  "enabled": true
+                                },
+                                {
+                                  "class": "LinearLayoutCompat",
+                                  "bounds": "[872,153][1086,278]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "desc": "Safety",
+                                      "id": "action_dasher_safety",
+                                      "class": "Button",
+                                      "bounds": "[872,162][979,269]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    },
+                                    {
+                                      "desc": "Help",
+                                      "id": "action_self_help",
+                                      "class": "Button",
+                                      "bounds": "[979,162][1086,269]",
+                                      "clickable": true,
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[6,287][1086,2356]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[6,287][1086,2356]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "fragment_container",
+                                  "class": "ViewGroup",
+                                  "bounds": "[6,287][1086,2356]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "map_container",
+                                      "class": "FrameLayout",
+                                      "bounds": "[6,287][1086,2356]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "FrameLayout",
+                                          "bounds": "[6,287][1086,2356]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "TextureView",
+                                              "bounds": "[6,287][1086,2356]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "FrameLayout",
+                                              "bounds": "[6,287][1086,2356]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "ImageView",
+                                              "bounds": "[11,2304][200,2351]",
+                                              "enabled": true
+                                            },
+                                            {
+                                              "class": "ImageView",
+                                              "bounds": "[206,2304][253,2351]",
+                                              "clickable": true,
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "class": "LinearLayout",
+                                      "bounds": "[6,287][1086,296]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "horizontal_progressbar_red_container",
+                                          "class": "FrameLayout",
+                                          "bounds": "[6,287][1086,296]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "looking_for_order_progress_bar",
+                                              "class": "ProgressBar",
+                                              "bounds": "[6,287][1086,296]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "ViewGroup",
+                                          "bounds": "[6,296][1086,296]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "hotspot_list_container",
+                                      "class": "ViewGroup",
+                                      "bounds": "[6,1869][1086,2338]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "show_all_hotspot_button",
+                                          "class": "Button",
+                                          "bounds": "[943,1869][1050,1976]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "imageView_prism_button_icon",
+                                              "class": "ImageView",
+                                              "bounds": "[970,1896][1023,1949]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "my_location_button",
+                                          "class": "Button",
+                                          "bounds": "[943,2012][1050,2119]",
+                                          "clickable": true,
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "imageView_prism_button_icon",
+                                              "class": "ImageView",
+                                              "bounds": "[974,2043][1019,2088]",
+                                              "enabled": true
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[6,2356][1086,2409]",
+      "enabled": true
+    }
+  ]
+}

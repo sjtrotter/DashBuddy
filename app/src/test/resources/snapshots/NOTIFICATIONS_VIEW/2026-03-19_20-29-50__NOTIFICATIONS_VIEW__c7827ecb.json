@@ -1,0 +1,416 @@
+{
+    "timestamp": 1773970190054,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "NOTIFICATIONS_VIEW"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[0,0][1080,2400]",
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,0][1080,2400]",
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[0,0][1080,2400]",
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": "[0,385][1080,2347]",
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[0,385][1080,619]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,448][143,555]"
+                                            },
+                                            {
+                                                "desc": "notification icon",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[63,475][116,528]"
+                                            },
+                                            {
+                                                "text": "Get access to cash orders",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,421][682,473]"
+                                            },
+                                            {
+                                                "text": "Put money in your pocket, instantly.",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,477][754,520]"
+                                            },
+                                            {
+                                                "text": "2 hours ago",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,538][360,581]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,565][1080,619]"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[0,619][1080,906]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,708][143,815]"
+                                            },
+                                            {
+                                                "desc": "notification icon",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[63,735][116,788]"
+                                            },
+                                            {
+                                                "text": "Set your weekly earnings goal",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,655][778,707]"
+                                            },
+                                            {
+                                                "text": "Choose a weekly earnings goal that works for you, track your progress in the app",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,711][1044,807]"
+                                            },
+                                            {
+                                                "text": "3 days ago",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,825][344,868]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,852][1080,906]"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[0,906][1080,1193]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,995][143,1102]"
+                                            },
+                                            {
+                                                "desc": "notification icon",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[63,1022][116,1075]"
+                                            },
+                                            {
+                                                "text": "Drop-off photo achievement",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,942][742,994]"
+                                            },
+                                            {
+                                                "text": "You took drop-off photos for 80%+ of contactless deliveries.",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,998][1044,1094]"
+                                            },
+                                            {
+                                                "text": "1 week ago",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1112][348,1155]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,1139][1080,1193]"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[0,1193][1080,1480]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,1282][143,1389]"
+                                            },
+                                            {
+                                                "desc": "notification icon",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[63,1309][116,1362]"
+                                            },
+                                            {
+                                                "text": "Confirm delivery just after dropoff",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1229][849,1281]"
+                                            },
+                                            {
+                                                "text": "Recently, you spent 10+ minutes near a dropoff before completing delivery in the app",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1285][1044,1381]"
+                                            },
+                                            {
+                                                "text": "1 week ago",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1399][348,1442]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,1426][1080,1480]"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[0,1480][1080,1767]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,1569][143,1676]"
+                                            },
+                                            {
+                                                "desc": "notification icon",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[63,1596][116,1649]"
+                                            },
+                                            {
+                                                "text": "Unlock 20 cent savings per gallon",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1516][855,1568]"
+                                            },
+                                            {
+                                                "text": "Fuel up twice per month and unlock 20 cents off per gallon savings at Circle K.",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1572][1044,1668]"
+                                            },
+                                            {
+                                                "text": "2 weeks ago",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1686][370,1729]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,1713][1080,1767]"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[0,1767][1080,2001]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,1830][143,1937]"
+                                            },
+                                            {
+                                                "desc": "notification icon",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[63,1857][116,1910]"
+                                            },
+                                            {
+                                                "text": "On-time delivery streak",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1803][657,1855]"
+                                            },
+                                            {
+                                                "text": "You had 50 straight on-time deliveries.",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1859][802,1902]"
+                                            },
+                                            {
+                                                "text": "2 weeks ago",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,1920][370,1963]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,1947][1080,2001]"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[0,2001][1080,2288]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,2090][143,2197]"
+                                            },
+                                            {
+                                                "desc": "notification icon",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[63,2117][116,2170]"
+                                            },
+                                            {
+                                                "text": "Order accuracy streak",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,2037][611,2089]"
+                                            },
+                                            {
+                                                "text": "You had 10 straight deliveries with 100% order accuracy.",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,2093][1044,2189]"
+                                            },
+                                            {
+                                                "text": "3 weeks ago",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,2207][370,2250]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,2234][1080,2288]"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[0,2288][1080,2400]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,2377][143,2400]"
+                                            },
+                                            {
+                                                "text": "Missing drop-off photos",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[170,2324][653,2347]"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": "[0,0][1080,385]",
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": "[0,136][1080,278]",
+                                        "children": [
+                                            {
+                                                "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                                                "isEnabled": true,
+                                                "bounds": "[9,162][98,251]",
+                                                "children": [
+                                                    {
+                                                        "class": "android.widget.Button",
+                                                        "isClickable": true,
+                                                        "isEnabled": true,
+                                                        "bounds": "[9,162][98,251]",
+                                                        "children": [
+                                                            {
+                                                                "id": "com.doordash.driverapp:id/imageView_prism_button_icon",
+                                                                "class": "android.widget.ImageView",
+                                                                "isEnabled": true,
+                                                                "bounds": "[31,184][76,229]"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[107,180][373,234]"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": "[0,278][1080,385]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,270][469,376]",
+                                                "children": [
+                                                    {
+                                                        "text": "Notifications",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": "[36,278][469,368]"
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

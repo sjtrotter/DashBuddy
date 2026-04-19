@@ -1,0 +1,22 @@
+{
+    "timestamp": 1771987366249,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "state": "in progress",
+        "id": "com.doordash.driverapp:id/dialog_confirm_dropoff_progress_bar",
+        "class": "android.widget.ProgressBar",
+        "isEnabled": true,
+        "bounds": "[487,2150][594,2257]"
+    }
+}

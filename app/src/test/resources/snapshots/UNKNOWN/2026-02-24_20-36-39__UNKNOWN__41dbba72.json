@@ -1,0 +1,23 @@
+{
+    "timestamp": 1771986999494,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "I have received this order",
+        "id": "com.doordash.driverapp:id/received_order_button",
+        "class": "android.widget.Button",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": "[81,2204][999,2311]"
+    }
+}

@@ -1,0 +1,110 @@
+{
+    "timestamp": 1771986992302,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/layout_bottom_sheet",
+        "class": "android.view.ViewGroup",
+        "isEnabled": true,
+        "bounds": "[0,136][1080,2347]",
+        "children": [
+            {
+                "id": "com.doordash.driverapp:id/overlay_view",
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,136][1080,2347]"
+            },
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet_footer_container",
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": "[0,2419][1080,2347]",
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/prism_sheet_actions_container",
+                        "class": "android.widget.LinearLayout",
+                        "isEnabled": true,
+                        "bounds": "[0,2419][1080,2347]",
+                        "children": [
+                            {
+                                "class": "android.widget.Button",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": "[36,2455][1044,2347]",
+                                "children": [
+                                    {
+                                        "text": "Got it",
+                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": "[481,2481][600,2347]"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet_footer_divider",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,2343][1080,2347]"
+            },
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet",
+                "class": "android.view.ViewGroup",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,2347][1080,2347]",
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/prism_sheet_collar_view",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": "[0,2347][1080,2347]"
+                    },
+                    {
+                        "id": "com.doordash.driverapp:id/prism_sheet_content_parent_container",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": "[0,2419][1080,2347]",
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/nested_scroll_view",
+                                "class": "android.widget.ScrollView",
+                                "isEnabled": true,
+                                "bounds": "[0,2419][1080,2347]",
+                                "children": [
+                                    {
+                                        "id": "com.doordash.driverapp:id/prism_content_container",
+                                        "class": "android.widget.LinearLayout",
+                                        "isEnabled": true,
+                                        "bounds": "[0,2419][1080,2347]"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "com.doordash.driverapp:id/prism_sheet_header_divider",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[0,2419][1080,2347]"
+                    }
+                ]
+            }
+        ]
+    }
+}

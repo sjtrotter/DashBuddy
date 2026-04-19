@@ -1,0 +1,459 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,136]",
+                          "enabled": true
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[0,136][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,136][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,136][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "LinearLayout",
+                                      "bounds": "[0,136][1080,136]",
+                                      "enabled": true
+                                    },
+                                    {
+                                      "id": "fragmentContainerView_shopDeliver",
+                                      "class": "FrameLayout",
+                                      "bounds": "[0,136][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "fragmentContainerView_shopDeliver",
+                                          "class": "FrameLayout",
+                                          "bounds": "[0,136][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ScrollView",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "camera_fragment_container_view",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[0,136][1080,2347]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "appBarLayout",
+                                                  "class": "LinearLayout",
+                                                  "bounds": "[0,136][1080,385]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "materialToolbar",
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[0,136][1080,278]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "ImageButton",
+                                                          "bounds": "[0,144][125,269]",
+                                                          "clickable": true,
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "text": "Shop and Deliver",
+                                                          "class": "TextView",
+                                                          "bounds": "[133,179][479,234]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "LinearLayoutCompat",
+                                                          "bounds": "[761,144][1080,269]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "desc": "Timeline",
+                                                              "id": "item_timeline",
+                                                              "class": "Button",
+                                                              "bounds": "[761,153][868,260]",
+                                                              "clickable": true,
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "desc": "Help",
+                                                              "id": "item_self_help",
+                                                              "class": "Button",
+                                                              "bounds": "[868,153][975,260]",
+                                                              "clickable": true,
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "item_in_app_chat",
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[975,154][1080,259]",
+                                                              "clickable": true,
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "id": "chat_button_internal",
+                                                                  "class": "ImageButton",
+                                                                  "bounds": "[984,163][1071,250]",
+                                                                  "clickable": true,
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "id": "tab_layout",
+                                                      "class": "HorizontalScrollView",
+                                                      "bounds": "[0,278][1080,385]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[0,278][1080,385]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "desc": "To shop (1)",
+                                                              "class": "LinearLayout",
+                                                              "bounds": "[0,278][540,385]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "To shop (1)",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[170,306][369,356]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "desc": "Done (8)",
+                                                              "class": "LinearLayout",
+                                                              "bounds": "[540,278][1080,385]",
+                                                              "clickable": true,
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "Done (8)",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[731,307][889,355]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "id": "shopping_tab_container",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[0,385][1080,2347]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "recyclerView_stickyHeaders",
+                                                      "class": "RecyclerView",
+                                                      "bounds": "[0,385][1080,385]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "view_pager",
+                                                      "class": "ViewPager",
+                                                      "bounds": "[0,385][1080,2347]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "RecyclerView",
+                                                          "bounds": "[0,385][1080,2347]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[0,385][1080,2347]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[0,385][1080,2347]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "group_legacy",
+                                                                      "class": "View",
+                                                                      "bounds": "[0,385][0,385]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "id": "recycler_view",
+                                                                      "class": "RecyclerView",
+                                                                      "bounds": "[0,385][1080,2347]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "class": "ViewGroup",
+                                                                          "bounds": "[0,385][1080,515]",
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "class": "View",
+                                                                              "bounds": "[0,385][1080,515]",
+                                                                              "enabled": true,
+                                                                              "children": [
+                                                                                {
+                                                                                  "class": "View",
+                                                                                  "bounds": "[36,397][1044,503]",
+                                                                                  "clickable": true,
+                                                                                  "enabled": true,
+                                                                                  "children": [
+                                                                                    {
+                                                                                      "text": "Near Entrance Door",
+                                                                                      "class": "TextView",
+                                                                                      "bounds": "[36,421][482,479]",
+                                                                                      "enabled": true
+                                                                                    }
+                                                                                  ]
+                                                                                }
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        },
+                                                                        {
+                                                                          "class": "ViewGroup",
+                                                                          "bounds": "[0,515][1080,946]",
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "class": "FrameLayout",
+                                                                              "bounds": "[0,515][1080,946]",
+                                                                              "enabled": true,
+                                                                              "children": [
+                                                                                {
+                                                                                  "id": "container_item_details",
+                                                                                  "class": "ViewGroup",
+                                                                                  "bounds": "[36,515][1044,946]",
+                                                                                  "enabled": true,
+                                                                                  "children": [
+                                                                                    {
+                                                                                      "id": "view_topBorder",
+                                                                                      "class": "View",
+                                                                                      "bounds": "[36,515][1044,533]",
+                                                                                      "enabled": true
+                                                                                    },
+                                                                                    {
+                                                                                      "id": "view_leftBorder",
+                                                                                      "class": "View",
+                                                                                      "bounds": "[36,533][38,928]",
+                                                                                      "enabled": true
+                                                                                    },
+                                                                                    {
+                                                                                      "id": "compose_itemDetails",
+                                                                                      "class": "ComposeView",
+                                                                                      "bounds": "[38,533][1042,928]",
+                                                                                      "enabled": true,
+                                                                                      "children": [
+                                                                                        {
+                                                                                          "class": "View",
+                                                                                          "bounds": "[38,533][1042,928]",
+                                                                                          "enabled": true,
+                                                                                          "children": [
+                                                                                            {
+                                                                                              "class": "View",
+                                                                                              "bounds": "[38,533][1042,928]",
+                                                                                              "clickable": true,
+                                                                                              "enabled": true,
+                                                                                              "children": [
+                                                                                                {
+                                                                                                  "id": "item_image",
+                                                                                                  "class": "View",
+                                                                                                  "bounds": "[74,569][341,836]",
+                                                                                                  "enabled": true,
+                                                                                                  "children": [
+                                                                                                    {
+                                                                                                      "class": "View",
+                                                                                                      "bounds": "[74,569][341,836]",
+                                                                                                      "enabled": true
+                                                                                                    }
+                                                                                                  ]
+                                                                                                },
+                                                                                                {
+                                                                                                  "text": "Reddy Premium Packaged Ice (7 lb)",
+                                                                                                  "id": "item_name",
+                                                                                                  "class": "TextView",
+                                                                                                  "bounds": "[377,569][1015,691]",
+                                                                                                  "enabled": true
+                                                                                                },
+                                                                                                {
+                                                                                                  "text": "$2.50",
+                                                                                                  "class": "TextView",
+                                                                                                  "bounds": "[377,709][476,752]",
+                                                                                                  "enabled": true
+                                                                                                },
+                                                                                                {
+                                                                                                  "class": "View",
+                                                                                                  "bounds": "[373,778][479,884]",
+                                                                                                  "enabled": true,
+                                                                                                  "children": [
+                                                                                                    {
+                                                                                                      "class": "ViewFactoryHolder",
+                                                                                                      "bounds": "[404,806][448,856]",
+                                                                                                      "enabled": true,
+                                                                                                      "children": [
+                                                                                                        {
+                                                                                                          "text": "1 ×",
+                                                                                                          "class": "TextView",
+                                                                                                          "bounds": "[404,806][448,856]",
+                                                                                                          "enabled": true
+                                                                                                        }
+                                                                                                      ]
+                                                                                                    }
+                                                                                                  ]
+                                                                                                }
+                                                                                              ]
+                                                                                            }
+                                                                                          ]
+                                                                                        }
+                                                                                      ]
+                                                                                    },
+                                                                                    {
+                                                                                      "id": "view_rightBorder",
+                                                                                      "class": "View",
+                                                                                      "bounds": "[1042,533][1044,928]",
+                                                                                      "enabled": true
+                                                                                    },
+                                                                                    {
+                                                                                      "id": "view_bottomBorder",
+                                                                                      "class": "View",
+                                                                                      "bounds": "[36,928][1044,946]",
+                                                                                      "enabled": true
+                                                                                    }
+                                                                                  ]
+                                                                                }
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "id": "shopping_tooltip",
+                                                      "class": "View",
+                                                      "bounds": "[540,385][1080,387]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "image_view_divider",
+                                                      "class": "ImageView",
+                                                      "bounds": "[1058,2347][1062,2347]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "id": "layout_loading",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[540,1366][540,1366]",
+                                                  "clickable": true,
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "FrameLayout",
+                                                      "bounds": "[540,1366][540,1366]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "desc": "Loading",
+                                                          "id": "animation_view_loading",
+                                                          "class": "ImageView",
+                                                          "bounds": "[540,1366][540,1366]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

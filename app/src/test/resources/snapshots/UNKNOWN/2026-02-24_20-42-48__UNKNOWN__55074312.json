@@ -1,0 +1,28 @@
+{
+    "timestamp": 1771987368894,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[584,1715][663,1789]",
+        "children": [
+            {
+                "text": "0",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[612,1715][663,1781]"
+            }
+        ]
+    }
+}

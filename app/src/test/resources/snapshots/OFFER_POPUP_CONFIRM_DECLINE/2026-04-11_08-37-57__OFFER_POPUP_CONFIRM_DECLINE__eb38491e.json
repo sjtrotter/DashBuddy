@@ -1,0 +1,141 @@
+{
+    "timestamp": 1775914677508,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1441,
+            "right": 1080,
+            "bottom": 2311
+        },
+        "children": [
+            {
+                "text": "Are you sure you want to decline this offer?",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 1494,
+                    "right": 1044,
+                    "bottom": 1626
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 1653,
+                    "right": 1044,
+                    "bottom": 2007
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1689,
+                            "right": 1044,
+                            "bottom": 1989
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 72,
+                                    "top": 1725,
+                                    "right": 1008,
+                                    "bottom": 1953
+                                },
+                                "children": [
+                                    {
+                                        "text": "Does not lower acceptance rate",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 72,
+                                            "top": 1725,
+                                            "right": 1008,
+                                            "bottom": 1772
+                                        }
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 487,
+                                            "top": 1788,
+                                            "right": 593,
+                                            "bottom": 1894
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "7%",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 491,
+                                                    "top": 1799,
+                                                    "right": 589,
+                                                    "bottom": 1883
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "text": "Accepting this offer will raise acceptance rate",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 72,
+                                            "top": 1910,
+                                            "right": 1008,
+                                            "bottom": 1953
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 2043,
+                    "right": 1080,
+                    "bottom": 2150
+                },
+                "children": [
+                    {
+                        "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2043,
+                            "right": 1044,
+                            "bottom": 2150
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

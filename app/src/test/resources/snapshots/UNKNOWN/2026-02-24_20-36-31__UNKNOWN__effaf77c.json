@@ -1,0 +1,179 @@
+{
+    "timestamp": 1771986991171,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/container",
+        "class": "android.widget.ScrollView",
+        "isEnabled": true,
+        "bounds": "[62,0][1142,2347]",
+        "children": [
+            {
+                "id": "com.doordash.driverapp:id/toolbar_container",
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": "[62,136][1142,278]",
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/toolbar",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": "[62,136][1142,278]",
+                        "children": [
+                            {
+                                "desc": "Navigate up",
+                                "class": "android.widget.ImageButton",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": "[62,144][187,269]"
+                            },
+                            {
+                                "class": "androidx.appcompat.widget.LinearLayoutCompat",
+                                "isEnabled": true,
+                                "bounds": "[1035,144][1142,269]",
+                                "children": [
+                                    {
+                                        "desc": "Help",
+                                        "id": "com.doordash.driverapp:id/action_self_help",
+                                        "class": "android.widget.Button",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": "[1035,153][1142,260]"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.widget.FrameLayout",
+                "isEnabled": true,
+                "bounds": "[62,278][1142,2347]",
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/fragment",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": "[62,278][1142,2347]",
+                        "children": [
+                            {
+                                "class": "android.widget.ScrollView",
+                                "isEnabled": true,
+                                "bounds": "[62,278][1142,2347]",
+                                "children": [
+                                    {
+                                        "class": "android.view.ViewGroup",
+                                        "isEnabled": true,
+                                        "bounds": "[107,278][1097,2347]",
+                                        "children": [
+                                            {
+                                                "text": "A recipient signature is required for this order",
+                                                "id": "com.doordash.driverapp:id/signature_instruction_label",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[107,340][1097,473]"
+                                            },
+                                            {
+                                                "id": "com.doordash.driverapp:id/step_flow_progressbar",
+                                                "class": "android.view.ViewGroup",
+                                                "isEnabled": true,
+                                                "bounds": "[107,509][1097,583]",
+                                                "children": [
+                                                    {
+                                                        "text": "3 of 4",
+                                                        "id": "com.doordash.driverapp:id/step_title",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": "[107,509][1097,559]"
+                                                    },
+                                                    {
+                                                        "id": "com.doordash.driverapp:id/step_container",
+                                                        "class": "android.widget.LinearLayout",
+                                                        "isEnabled": true,
+                                                        "bounds": "[107,567][1097,583]",
+                                                        "children": [
+                                                            {
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": "[107,575][346,583]"
+                                                            },
+                                                            {
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": "[354,575][593,583]"
+                                                            },
+                                                            {
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": "[601,575][840,583]"
+                                                            },
+                                                            {
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": "[848,575][1087,583]"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "com.doordash.driverapp:id/signature_drawing_view",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[107,619][1097,966]"
+                                            },
+                                            {
+                                                "class": "android.widget.ImageView",
+                                                "isEnabled": true,
+                                                "bounds": "[107,908][147,948]"
+                                            },
+                                            {
+                                                "id": "com.doordash.driverapp:id/signature_drawing_line",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[107,962][1097,966]"
+                                            },
+                                            {
+                                                "text": "Clear",
+                                                "id": "com.doordash.driverapp:id/signature_clear_button",
+                                                "class": "android.widget.Button",
+                                                "isClickable": true,
+                                                "isEnabled": true,
+                                                "bounds": "[946,859][1097,966]"
+                                            },
+                                            {
+                                                "text": "This is not a receipt. By submitting, you agree to DoorDash's E-Sign Consent",
+                                                "id": "com.doordash.driverapp:id/signature_disclaimer",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[107,966][1097,1062]"
+                                            },
+                                            {
+                                                "text": "I have received this order",
+                                                "id": "com.doordash.driverapp:id/received_order_button",
+                                                "class": "android.widget.Button",
+                                                "isClickable": true,
+                                                "bounds": "[143,2204][1061,2311]"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

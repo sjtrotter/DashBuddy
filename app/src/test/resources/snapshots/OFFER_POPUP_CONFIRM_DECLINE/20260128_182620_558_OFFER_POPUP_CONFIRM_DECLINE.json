@@ -1,0 +1,242 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "FrameLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "layout_bottom_sheet",
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "overlay_view",
+                          "class": "View",
+                          "bounds": "[0,136][1080,2347]",
+                          "clickable": true,
+                          "enabled": true
+                        },
+                        {
+                          "id": "prism_sheet",
+                          "class": "ViewGroup",
+                          "bounds": "[0,1440][1080,2347]",
+                          "clickable": true,
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "prism_sheet_collar_view",
+                              "class": "FrameLayout",
+                              "bounds": "[0,1440][1080,1440]",
+                              "enabled": true
+                            },
+                            {
+                              "id": "prism_sheet_content_parent_container",
+                              "class": "ViewGroup",
+                              "bounds": "[0,1440][1080,2311]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "nested_scroll_view",
+                                  "class": "ScrollView",
+                                  "bounds": "[0,1440][1080,2311]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "prism_content_container",
+                                      "class": "LinearLayout",
+                                      "bounds": "[0,1440][1080,2311]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "bottomsheet_content_container",
+                                          "class": "FrameLayout",
+                                          "bounds": "[0,1440][1080,2311]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "ComposeView",
+                                              "bounds": "[0,1440][1080,2311]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,1440][1080,2311]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Are you sure you want to decline this offer?",
+                                                      "class": "TextView",
+                                                      "bounds": "[36,1493][1044,1625]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[36,1652][1044,2007]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "View",
+                                                          "bounds": "[36,1688][1044,1989]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "View",
+                                                              "bounds": "[72,1724][1008,1953]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "Does not lower acceptance rate",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[72,1724][1008,1772]",
+                                                                  "enabled": true
+                                                                },
+                                                                {
+                                                                  "class": "View",
+                                                                  "bounds": "[472,1788][609,1894]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "text": "37%",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[472,1799][609,1883]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "text": "Accepting this offer will raise acceptance rate",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[72,1910][1008,1953]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[0,2043][1080,2150]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "ViewFactoryHolder",
+                                                          "bounds": "[36,2043][1044,2150]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "Button",
+                                                              "bounds": "[36,2043][1044,2150]",
+                                                              "clickable": true,
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "Decline offer",
+                                                                  "id": "textView_prism_button_title",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[409,2069][671,2124]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "class": "ProgressBar",
+                                                          "bounds": "[946,2057][1026,2137]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "text": "18",
+                                                          "class": "TextView",
+                                                          "bounds": "[971,2079][1002,2115]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "class": "View",
+                                                      "bounds": "[36,2168][1044,2275]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "text": "View offer details",
+                                                          "class": "TextView",
+                                                          "bounds": "[361,2196][718,2248]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "class": "Button",
+                                                          "bounds": "[36,2168][1044,2275]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "prism_sheet_footer_divider",
+                          "class": "View",
+                          "bounds": "[0,2343][1080,2347]",
+                          "enabled": true
+                        },
+                        {
+                          "id": "prism_sheet_footer_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,2347][1080,2347]",
+                          "enabled": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

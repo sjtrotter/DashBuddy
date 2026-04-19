@@ -1,0 +1,711 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2347]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,136][1080,2347]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,136][1080,2347]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,136][1080,2347]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "container",
+                      "class": "ViewGroup",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "toolbar_container",
+                          "class": "LinearLayout",
+                          "bounds": "[0,136][1080,136]",
+                          "enabled": true
+                        },
+                        {
+                          "class": "FrameLayout",
+                          "bounds": "[0,136][1080,2347]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "id": "fragment",
+                              "class": "FrameLayout",
+                              "bounds": "[0,136][1080,2347]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "fragment_navigation_container",
+                                  "class": "ViewGroup",
+                                  "bounds": "[0,136][1080,2347]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "ComposeView",
+                                      "bounds": "[0,136][0,136]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,136][0,136]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "class": "ComposeView",
+                                      "bounds": "[0,136][0,136]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,136][0,136]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "navigationView",
+                                      "class": "FrameLayout",
+                                      "bounds": "[0,136][1080,2347]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "mapViewLayout",
+                                          "class": "FrameLayout",
+                                          "bounds": "[0,136][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "FrameLayout",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "ImageView",
+                                                  "bounds": "[0,2300][46,2347]",
+                                                  "clickable": true,
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "SurfaceView",
+                                                  "bounds": "[0,136][1080,2347]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "id": "coordinatorLayout",
+                                          "class": "ViewGroup",
+                                          "bounds": "[0,136][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "id": "container",
+                                              "class": "ViewGroup",
+                                              "bounds": "[0,136][1080,2347]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "guidanceLayout",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[0,136][1080,848]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "maneuverView",
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[0,136][1080,848]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[9,145][1071,839]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "id": "maneuver",
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[9,145][1071,839]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[9,145][1071,839]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "mainManeuverLayout",
+                                                                      "class": "ViewGroup",
+                                                                      "bounds": "[9,145][1071,394]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "id": "maneuverIcon",
+                                                                          "class": "ImageView",
+                                                                          "bounds": "[74,181][181,288]",
+                                                                          "enabled": true
+                                                                        },
+                                                                        {
+                                                                          "text": "US 281 North ",
+                                                                          "id": "primaryManeuverText",
+                                                                          "class": "TextView",
+                                                                          "bounds": "[237,182][1062,283]",
+                                                                          "enabled": true
+                                                                        },
+                                                                        {
+                                                                          "text": "350 ft",
+                                                                          "id": "stepDistance",
+                                                                          "class": "TextView",
+                                                                          "bounds": "[18,288][237,376]",
+                                                                          "enabled": true
+                                                                        },
+                                                                        {
+                                                                          "text": "Johnson City ",
+                                                                          "id": "secondaryManeuverText",
+                                                                          "class": "TextView",
+                                                                          "bounds": "[237,283][1062,363]",
+                                                                          "enabled": true
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "id": "upcomingManeuverRecycler",
+                                                                      "class": "RecyclerView",
+                                                                      "bounds": "[9,394][1071,839]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "class": "ViewGroup",
+                                                                          "bounds": "[9,394][1071,617]",
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "text": "2.1 mi",
+                                                                              "id": "stepDistance",
+                                                                              "class": "TextView",
+                                                                              "bounds": "[18,511][237,599]",
+                                                                              "enabled": true
+                                                                            },
+                                                                            {
+                                                                              "id": "maneuverIcon",
+                                                                              "class": "ImageView",
+                                                                              "bounds": "[74,417][181,524]",
+                                                                              "enabled": true
+                                                                            },
+                                                                            {
+                                                                              "text": "US 281 ",
+                                                                              "id": "primaryManeuverText",
+                                                                              "class": "TextView",
+                                                                              "bounds": "[237,455][1062,556]",
+                                                                              "enabled": true
+                                                                            }
+                                                                          ]
+                                                                        },
+                                                                        {
+                                                                          "class": "ViewGroup",
+                                                                          "bounds": "[9,617][1071,839]",
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "text": "0.3 mi",
+                                                                              "id": "stepDistance",
+                                                                              "class": "TextView",
+                                                                              "bounds": "[18,734][237,822]",
+                                                                              "enabled": true
+                                                                            },
+                                                                            {
+                                                                              "id": "maneuverIcon",
+                                                                              "class": "ImageView",
+                                                                              "bounds": "[74,640][181,747]",
+                                                                              "enabled": true
+                                                                            },
+                                                                            {
+                                                                              "text": "Stone Oak Parkway \/ TPC Parkway ",
+                                                                              "id": "primaryManeuverText",
+                                                                              "class": "TextView",
+                                                                              "bounds": "[237,643][1062,815]",
+                                                                              "enabled": true
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "id": "subManeuverLayout",
+                                                                      "class": "ViewGroup",
+                                                                      "bounds": "[9,394][1071,497]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "id": "subManeuverIcon",
+                                                                          "class": "ImageView",
+                                                                          "bounds": "[105,403][172,470]",
+                                                                          "enabled": true
+                                                                        },
+                                                                        {
+                                                                          "id": "subManeuverText",
+                                                                          "class": "TextView",
+                                                                          "bounds": "[258,416][1062,475]",
+                                                                          "enabled": true
+                                                                        },
+                                                                        {
+                                                                          "id": "laneGuidanceRecycler",
+                                                                          "class": "RecyclerView",
+                                                                          "bounds": "[446,403][634,488]",
+                                                                          "enabled": true,
+                                                                          "children": [
+                                                                            {
+                                                                              "class": "LinearLayout",
+                                                                              "bounds": "[464,412][531,479]",
+                                                                              "enabled": true,
+                                                                              "children": [
+                                                                                {
+                                                                                  "id": "itemLaneGuidance",
+                                                                                  "class": "ImageView",
+                                                                                  "bounds": "[464,412][531,479]",
+                                                                                  "enabled": true
+                                                                                }
+                                                                              ]
+                                                                            },
+                                                                            {
+                                                                              "class": "LinearLayout",
+                                                                              "bounds": "[549,412][616,479]",
+                                                                              "enabled": true,
+                                                                              "children": [
+                                                                                {
+                                                                                  "id": "itemLaneGuidance",
+                                                                                  "class": "ImageView",
+                                                                                  "bounds": "[549,412][616,479]",
+                                                                                  "enabled": true
+                                                                                }
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "id": "scalebarLayout",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[0,848][0,848]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "speedLimitLayout",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[18,866][185,1049]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "speedInfoView",
+                                                      "class": "FrameLayout",
+                                                      "bounds": "[18,866][168,1049]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "speedInfoMutcdLayout",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[18,866][168,1049]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "id": "postedSpeedLayoutMutcd",
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[22,870][164,1045]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "text": "70",
+                                                                  "id": "postedSpeedMutcd",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[22,892][164,976]",
+                                                                  "enabled": true
+                                                                },
+                                                                {
+                                                                  "text": "mph",
+                                                                  "id": "postedSpeedUnit",
+                                                                  "class": "TextView",
+                                                                  "bounds": "[22,976][164,1023]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "id": "actionListLayout",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[893,859][1062,1246]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "buttonContainer",
+                                                      "class": "LinearLayout",
+                                                      "bounds": "[947,859][1062,1246]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "buttonsContainerTop",
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[1062,859][1062,859]",
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "id": "buttonsContainerCenter",
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[947,859][1062,1117]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "id": "buttonsContainerCompass",
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[947,859][947,859]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "buttonsContainerCamera",
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[947,859][1062,988]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "FrameLayout",
+                                                                  "bounds": "[947,866][1062,981]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "container",
+                                                                      "class": "ViewGroup",
+                                                                      "bounds": "[947,866][1062,981]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "id": "iconImage",
+                                                                          "class": "ImageView",
+                                                                          "bounds": "[969,888][1040,959]",
+                                                                          "enabled": true
+                                                                        },
+                                                                        {
+                                                                          "id": "buttonText",
+                                                                          "class": "TextView",
+                                                                          "bounds": "[1042,902][1060,946]",
+                                                                          "enabled": true
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "id": "buttonsContainerAudio",
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[947,988][1062,1117]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "class": "FrameLayout",
+                                                                  "bounds": "[947,995][1062,1110]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "container",
+                                                                      "class": "ViewGroup",
+                                                                      "bounds": "[947,995][1062,1110]",
+                                                                      "enabled": true,
+                                                                      "children": [
+                                                                        {
+                                                                          "id": "iconImage",
+                                                                          "class": "ImageView",
+                                                                          "bounds": "[969,1017][1040,1088]",
+                                                                          "enabled": true
+                                                                        },
+                                                                        {
+                                                                          "id": "buttonText",
+                                                                          "class": "TextView",
+                                                                          "bounds": "[1042,1031][1060,1075]",
+                                                                          "enabled": true
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "id": "buttonsContainerRecenter",
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[947,1117][947,1117]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "id": "buttonsContainerBottom",
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[947,1117][1062,1246]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[947,1124][1062,1239]",
+                                                              "clickable": true,
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "id": "container",
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[947,1124][1062,1239]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "id": "iconImage",
+                                                                      "class": "ImageView",
+                                                                      "bounds": "[969,1146][1040,1217]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "id": "buttonText",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[1042,1160][1060,1204]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "id": "emptyLeftContainer",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[18,1575][18,1575]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "emptyRightContainer",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[1062,1665][1062,1665]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "id": "roadNameLayout",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[540,2083][540,2083]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "infoPanelLayout",
+                                              "class": "FrameLayout",
+                                              "bounds": "[0,2116][1080,2347]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "infoPanelContainer",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[0,2116][1080,2347]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "infoPanelHeader",
+                                                      "class": "FrameLayout",
+                                                      "bounds": "[0,2116][1080,2347]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "infoPanelHeaderContent",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[0,2116][1080,2347]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "ViewGroup",
+                                                              "bounds": "[0,2116][1080,2335]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "id": "expand_sheet_button",
+                                                                  "class": "ImageButton",
+                                                                  "bounds": "[36,2181][125,2270]",
+                                                                  "clickable": true,
+                                                                  "enabled": true
+                                                                },
+                                                                {
+                                                                  "id": "header_container",
+                                                                  "class": "ViewGroup",
+                                                                  "bounds": "[437,2116][644,2335]",
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "text": "4 min",
+                                                                      "id": "bottom_sheet_remaining_time_v2",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[454,2134][627,2269]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "text": "3 mi",
+                                                                      "id": "bottom_sheet_remaining_distance_v2",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[437,2287][512,2335]",
+                                                                      "enabled": true
+                                                                    },
+                                                                    {
+                                                                      "text": "• 20:28",
+                                                                      "id": "bottom_sheet_eta_v2",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[512,2287][644,2335]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "desc": "Exit",
+                                                                  "id": "exit_button",
+                                                                  "class": "Button",
+                                                                  "bounds": "[916,2181][1044,2270]",
+                                                                  "clickable": true,
+                                                                  "enabled": true,
+                                                                  "children": [
+                                                                    {
+                                                                      "text": "Exit",
+                                                                      "id": "textView_prism_button_title",
+                                                                      "class": "TextView",
+                                                                      "bounds": "[943,2201][1017,2251]",
+                                                                      "enabled": true
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "id": "handle",
+                                                      "class": "View",
+                                                      "bounds": "[487,2138][594,2149]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "id": "infoPanelContent",
+                                                      "class": "FrameLayout",
+                                                      "bounds": "[0,2347][1080,2347]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "bottom_sheet_in_transit_navigation_container",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[0,2347][1080,2347]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "id": "bottom_sheet_address_line_1",
+                                                              "class": "TextView",
+                                                              "bounds": "[36,2347][1044,2347]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "bottom_sheet_address_line_2",
+                                                              "class": "TextView",
+                                                              "bounds": "[36,2395][1044,2347]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "text": "Avoid tolls",
+                                                              "id": "bottom_sheet_avoid_tolls_toggle_button",
+                                                              "class": "TextView",
+                                                              "bounds": "[0,2443][1080,2347]",
+                                                              "clickable": true,
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "bottom_sheet_bottom_separator_2",
+                                                              "class": "View",
+                                                              "bounds": "[0,2443][1080,2347]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "id": "bottom_sheet_avoid_tolls_toggle_switch",
+                                                              "class": "Switch",
+                                                              "bounds": "[940,2476][1044,2347]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "navigationBarBackground",
+      "class": "View",
+      "bounds": "[0,2347][1080,2400]",
+      "enabled": true
+    }
+  ]
+}

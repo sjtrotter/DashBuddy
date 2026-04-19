@@ -1,0 +1,206 @@
+{
+    "timestamp": 1770651660415,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "SET_DASH_END_TIME",
+        "UNKNOWN",
+        "ON_DASH_ALONG_THE_WAY",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "DASH_PAUSED"
+    ],
+    "root": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": "[156,23][1236,2423]",
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": "[156,23][1236,2370]",
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": "[156,159][1236,2370]",
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/action_bar_root",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": "[156,159][1236,2370]",
+                                "children": [
+                                    {
+                                        "id": "android:id/content",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": "[156,159][1236,2370]",
+                                        "children": [
+                                            {
+                                                "id": "com.doordash.driverapp:id/container",
+                                                "class": "android.view.ViewGroup",
+                                                "isEnabled": true,
+                                                "bounds": "[156,159][1236,2370]",
+                                                "children": [
+                                                    {
+                                                        "id": "com.doordash.driverapp:id/toolbar_container",
+                                                        "class": "android.widget.LinearLayout",
+                                                        "isEnabled": true,
+                                                        "bounds": "[156,159][1236,301]",
+                                                        "children": [
+                                                            {
+                                                                "id": "com.doordash.driverapp:id/toolbar",
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": "[156,159][1236,301]",
+                                                                "children": [
+                                                                    {
+                                                                        "desc": "Current dash",
+                                                                        "class": "android.widget.ImageButton",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[156,167][281,292]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Dash Paused",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[289,205][528,255]"
+                                                                    },
+                                                                    {
+                                                                        "class": "androidx.appcompat.widget.LinearLayoutCompat",
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[1129,167][1236,292]",
+                                                                        "children": [
+                                                                            {
+                                                                                "desc": "Safety",
+                                                                                "id": "com.doordash.driverapp:id/action_dasher_safety",
+                                                                                "class": "android.widget.Button",
+                                                                                "isClickable": true,
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[1129,176][1236,283]"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isEnabled": true,
+                                                        "bounds": "[156,301][1236,2370]",
+                                                        "children": [
+                                                            {
+                                                                "id": "com.doordash.driverapp:id/fragment",
+                                                                "class": "android.widget.FrameLayout",
+                                                                "isEnabled": true,
+                                                                "bounds": "[156,301][1236,2370]",
+                                                                "children": [
+                                                                    {
+                                                                        "class": "android.view.ViewGroup",
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[156,301][1236,2370]",
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/limitPauseCountdown",
+                                                                                "class": "android.widget.RelativeLayout",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[426,372][966,912]",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "class": "android.widget.RelativeLayout",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[426,372][966,912]",
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "state": "0%",
+                                                                                                "id": "com.doordash.driverapp:id/progress_bar",
+                                                                                                "class": "android.widget.ProgressBar",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[426,372][966,912]"
+                                                                                            },
+                                                                                            {
+                                                                                                "id": "com.doordash.driverapp:id/progress_number",
+                                                                                                "class": "android.widget.TextView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[696,618][696,666]"
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "text": "You won't get offers while you're paused",
+                                                                                "id": "com.doordash.driverapp:id/primaryText",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[156,983][1236,1031]"
+                                                                            },
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/secondaryText",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[156,1067][1236,1115]"
+                                                                            },
+                                                                            {
+                                                                                "desc": "Resume dash",
+                                                                                "id": "com.doordash.driverapp:id/resumeButton",
+                                                                                "class": "android.widget.Button",
+                                                                                "isClickable": true,
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[192,2084][1200,2191]",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "text": "Resume dash",
+                                                                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                                                                        "class": "android.widget.TextView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[560,2110][832,2165]"
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "desc": "End dash",
+                                                                                "id": "com.doordash.driverapp:id/endDashButton",
+                                                                                "class": "android.widget.Button",
+                                                                                "isClickable": true,
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[192,2227][1200,2334]",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "text": "End dash",
+                                                                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                                                                        "class": "android.widget.TextView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[602,2253][790,2308]"
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "android:id/navigationBarBackground",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[156,2370][1236,2423]"
+            }
+        ]
+    }
+}

@@ -1,0 +1,1143 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true,
+      "children": [
+        {
+          "id": "content",
+          "class": "FrameLayout",
+          "bounds": "[0,0][1080,2400]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "launcher",
+              "class": "FrameLayout",
+              "bounds": "[0,0][1080,2400]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "drag_layer",
+                  "class": "FrameLayout",
+                  "bounds": "[0,0][1080,2400]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "scrim_view",
+                      "class": "View",
+                      "bounds": "[0,0][1080,2400]",
+                      "enabled": true
+                    },
+                    {
+                      "id": "workspace",
+                      "class": "ScrollView",
+                      "bounds": "[74,165][1006,2235]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "class": "ViewGroup",
+                          "bounds": "[73,288][74,1826]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "class": "ViewGroup",
+                              "bounds": "[52,308][74,1805]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "id": "search_container_workspace",
+                                  "class": "FrameLayout",
+                                  "bounds": "[52,308][74,536]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "bc_smartspace_view",
+                                      "class": "FrameLayout",
+                                      "bounds": "[52,322][74,521]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "desc": "At a glance",
+                                          "id": "smartspace_card_pager",
+                                          "class": "ViewPager",
+                                          "bounds": "[52,322][74,521]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "RecyclerView",
+                                              "bounds": "[52,322][74,521]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "base_template_card_with_date",
+                                                  "class": "ViewGroup",
+                                                  "bounds": "[52,322][74,521]",
+                                                  "clickable": true,
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "id": "text_group",
+                                                      "class": "ViewGroup",
+                                                      "bounds": "[36,363][74,482]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "text": "Wed, Jan 28",
+                                                          "desc": "Wed, Jan 28",
+                                                          "id": "date",
+                                                          "class": "TextView",
+                                                          "bounds": "[0,363][74,411]",
+                                                          "clickable": true,
+                                                          "enabled": true
+                                                        },
+                                                        {
+                                                          "id": "smartspace_subtitle_group",
+                                                          "class": "ViewGroup",
+                                                          "bounds": "[36,420][74,482]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "59°F",
+                                                              "desc": "Partly cloudy, 59°F",
+                                                              "id": "subtitle_text",
+                                                              "class": "TextView",
+                                                              "bounds": "[0,420][74,482]",
+                                                              "clickable": true,
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Analog",
+                                  "class": "LauncherAppWidgetHostView",
+                                  "bounds": "[0,562][74,1043]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "widget_frame",
+                                      "class": "FrameLayout",
+                                      "bounds": "[0,562][74,1043]",
+                                      "clickable": true,
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "desc": "15:26",
+                                          "id": "base_clock",
+                                          "class": "View",
+                                          "bounds": "[0,562][74,1043]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "desc": "15:26",
+                                          "id": "date_clock",
+                                          "class": "View",
+                                          "bounds": "[0,562][74,1043]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "text": "Wednesday, Jan 28, 3:26 PM",
+                                          "desc": "Wednesday, Jan 28, 3:26 PM",
+                                          "id": "a11y_clock",
+                                          "class": "TextView",
+                                          "bounds": "[0,562][74,604]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "background",
+                                          "class": "FrameLayout",
+                                          "bounds": "[0,578][74,1027]",
+                                          "enabled": true
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Weather",
+                                  "class": "LauncherAppWidgetHostView",
+                                  "bounds": "[52,562][74,1043]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "assistant_weather_widget_background",
+                                      "class": "RelativeLayout",
+                                      "bounds": "[52,643][74,961]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "text": "59°",
+                                          "id": "assistant_weather_widget_temperature",
+                                          "class": "TextView",
+                                          "bounds": "[52,677][74,871]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "assistant_weather_icon",
+                                          "class": "ImageView",
+                                          "bounds": "[0,800][74,931]",
+                                          "enabled": true
+                                        },
+                                        {
+                                          "id": "background",
+                                          "class": "FrameLayout",
+                                          "bounds": "[4,690][74,913]",
+                                          "clickable": true,
+                                          "enabled": true
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "text": "Files",
+                                  "desc": "Files",
+                                  "class": "TextView",
+                                  "bounds": "[0,1322][74,1550]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Play Store",
+                                  "desc": "Play Store",
+                                  "class": "TextView",
+                                  "bounds": "[0,1322][74,1550]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Wallet",
+                                  "desc": "Wallet",
+                                  "class": "TextView",
+                                  "bounds": "[0,1322][74,1550]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Gmail",
+                                  "desc": "Gmail",
+                                  "class": "TextView",
+                                  "bounds": "[52,1322][74,1550]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Maps",
+                                  "desc": "Maps",
+                                  "class": "TextView",
+                                  "bounds": "[0,1576][74,1804]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Calendar",
+                                  "desc": "Calendar",
+                                  "class": "TextView",
+                                  "bounds": "[0,1576][74,1804]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Photos",
+                                  "desc": "Photos",
+                                  "class": "TextView",
+                                  "bounds": "[0,1576][74,1804]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "YouTube",
+                                  "desc": "YouTube",
+                                  "class": "TextView",
+                                  "bounds": "[52,1576][74,1804]",
+                                  "clickable": true,
+                                  "enabled": true
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "class": "ViewGroup",
+                          "bounds": "[96,288][984,1826]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "class": "ViewGroup",
+                              "bounds": "[117,308][963,1805]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Calendar schedule",
+                                  "class": "LauncherAppWidgetHostView",
+                                  "bounds": "[117,308][612,1043]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "id": "base_layout",
+                                      "class": "RelativeLayout",
+                                      "bounds": "[107,286][613,1039]",
+                                      "clickable": true,
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "id": "events_list",
+                                          "class": "ListView",
+                                          "bounds": "[107,286][613,1039]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,286][613,286]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[107,286][613,286]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,286][613,397]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "id": "bc25_day_divider_top",
+                                                  "class": "LinearLayout",
+                                                  "bounds": "[107,286][613,397]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "desc": "Wed, Jan 28",
+                                                      "id": "day_divider",
+                                                      "class": "LinearLayout",
+                                                      "bounds": "[147,286][487,397]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "text": "Wed, Jan 28",
+                                                          "id": "widget_bc25_divider_text",
+                                                          "class": "TextView",
+                                                          "bounds": "[147,286][354,397]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "desc": "Create new event",
+                                                      "id": "widget_add_new_event",
+                                                      "class": "FrameLayout",
+                                                      "bounds": "[487,294][589,389]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "bc25_fab",
+                                                          "class": "FrameLayout",
+                                                          "bounds": "[487,310][589,373]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "ImageButton",
+                                                              "bounds": "[492,313][584,370]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,397][613,456]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "1 pending task, All day: , stephen.j.trotter@gmail.com",
+                                                  "id": "widget_row",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[107,397][613,456]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "desc": "Open Event",
+                                                      "id": "agenda_item_color",
+                                                      "class": "ImageView",
+                                                      "bounds": "[131,399][589,454]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "class": "LinearLayout",
+                                                      "bounds": "[131,399][589,454]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "FrameLayout",
+                                                          "bounds": "[147,405][190,448]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "id": "chip_badged_icon_container",
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[147,405][190,448]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "id": "chip_badged_icon_background",
+                                                                  "class": "ImageView",
+                                                                  "bounds": "[147,405][190,448]",
+                                                                  "enabled": true
+                                                                },
+                                                                {
+                                                                  "id": "chip_badged_icon",
+                                                                  "class": "ImageView",
+                                                                  "bounds": "[150,408][186,444]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "text": "‎‪1 pending task‬‎",
+                                                          "id": "title",
+                                                          "class": "TextView",
+                                                          "bounds": "[190,403][574,450]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,456][613,526]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "Fri, Jan 30",
+                                                  "id": "day_divider",
+                                                  "class": "LinearLayout",
+                                                  "bounds": "[107,460][613,522]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Fri, Jan 30",
+                                                      "id": "widget_bc25_divider_text",
+                                                      "class": "TextView",
+                                                      "bounds": "[147,465][328,517]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,526][613,630]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "SrA McLaurin Going Away, Response: Not responded, 11:00 – 12:00, Willie's Icehouse, 8739 TX-151, stephen.j.trotter@gmail.com",
+                                                  "id": "widget_row",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[107,526][613,630]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "desc": "Open Event",
+                                                      "id": "agenda_item_color",
+                                                      "class": "ImageView",
+                                                      "bounds": "[131,528][589,628]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "class": "LinearLayout",
+                                                      "bounds": "[131,528][589,628]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[131,531][589,578]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "‎‪SrA McLaurin Going Away‬‎",
+                                                              "id": "title",
+                                                              "class": "TextView",
+                                                              "bounds": "[147,531][574,578]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[147,554][147,554]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "text": "‎‪11:00 at Willie's Icehouse, 8739 TX-151‬‎",
+                                                          "id": "when",
+                                                          "class": "TextView",
+                                                          "bounds": "[131,578][589,625]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,630][613,630]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[103,625][614,625]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,630][613,700]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "Mon, Feb 9",
+                                                  "id": "day_divider",
+                                                  "class": "LinearLayout",
+                                                  "bounds": "[103,628][614,692]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Mon, Feb 9",
+                                                      "id": "widget_bc25_divider_text",
+                                                      "class": "TextView",
+                                                      "bounds": "[143,634][332,686]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,700][613,804]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "PT follow-up, 11:30 – 12:30, Wilford Hall Ambulatory Surgical Center, 1100 Wilford Hall Loop, Lackland Air Force Base, TX 78236, USA, stephen.j.trotter@gmail.com, Peacock",
+                                                  "id": "widget_row",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[103,695][614,800]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "desc": "Open Event",
+                                                      "id": "agenda_item_color",
+                                                      "class": "ImageView",
+                                                      "bounds": "[127,697][590,799]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "class": "LinearLayout",
+                                                      "bounds": "[127,697][590,799]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[127,700][590,748]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "‎‪PT follow-up‬‎",
+                                                              "id": "title",
+                                                              "class": "TextView",
+                                                              "bounds": "[143,700][574,748]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[143,724][143,724]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "text": "‎‪11:30 at Wilford Hall Ambulatory Surgical Center, 1100 Wilford Hall Loop, Lackland Air Force Base, TX 78236, USA‬‎",
+                                                          "id": "when",
+                                                          "class": "TextView",
+                                                          "bounds": "[127,748][590,795]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,804][613,908]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "PRE-CIMB @ Group Staff Mtg, Response: Not responded, 13:00 – 14:00, 67 Wing Bldg other side downstairs, stephen.j.trotter@gmail.com",
+                                                  "id": "widget_row",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[103,800][614,906]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "desc": "Open Event",
+                                                      "id": "agenda_item_color",
+                                                      "class": "ImageView",
+                                                      "bounds": "[127,802][590,904]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "class": "LinearLayout",
+                                                      "bounds": "[127,802][590,904]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[127,806][590,853]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "text": "‎‪PRE-CIMB @ Group Staff Mtg‬‎",
+                                                              "id": "title",
+                                                              "class": "TextView",
+                                                              "bounds": "[143,806][574,853]",
+                                                              "enabled": true
+                                                            },
+                                                            {
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[143,829][143,829]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "text": "‎‪13:00 at 67 Wing Bldg other side downstairs‬‎",
+                                                          "id": "when",
+                                                          "class": "TextView",
+                                                          "bounds": "[127,853][590,900]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,908][613,978]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "Tue, Feb 10",
+                                                  "id": "day_divider",
+                                                  "class": "LinearLayout",
+                                                  "bounds": "[103,909][614,973]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Tue, Feb 10",
+                                                      "id": "widget_bc25_divider_text",
+                                                      "class": "TextView",
+                                                      "bounds": "[143,915][338,967]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "AppWidgetHostView",
+                                              "bounds": "[107,978][613,1039]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "desc": "Task: Check Bills, 06:00, stephen.j.trotter@gmail.com",
+                                                  "id": "widget_row",
+                                                  "class": "FrameLayout",
+                                                  "bounds": "[103,976][614,1038]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "desc": "Open Event",
+                                                      "id": "agenda_item_color",
+                                                      "class": "ImageView",
+                                                      "bounds": "[127,978][590,1038]",
+                                                      "enabled": true
+                                                    },
+                                                    {
+                                                      "class": "LinearLayout",
+                                                      "bounds": "[127,978][590,1038]",
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "class": "LinearLayout",
+                                                          "bounds": "[127,981][590,1029]",
+                                                          "enabled": true,
+                                                          "children": [
+                                                            {
+                                                              "class": "FrameLayout",
+                                                              "bounds": "[143,983][187,1027]",
+                                                              "enabled": true,
+                                                              "children": [
+                                                                {
+                                                                  "id": "chip_icon",
+                                                                  "class": "ImageView",
+                                                                  "bounds": "[143,983][187,1027]",
+                                                                  "enabled": true
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "text": "‎‪Check Bills‬‎",
+                                                              "id": "title",
+                                                              "class": "TextView",
+                                                              "bounds": "[187,981][574,1029]",
+                                                              "enabled": true
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "text": "‎‪06:00‬‎",
+                                                          "id": "when",
+                                                          "class": "TextView",
+                                                          "bounds": "[127,1029][590,1038]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "text": "Gemini",
+                                  "desc": "Gemini",
+                                  "class": "TextView",
+                                  "bounds": "[645,308][788,536]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Master Lock® Vault",
+                                  "desc": "Master Lock® Vault",
+                                  "class": "TextView",
+                                  "bounds": "[821,308][963,536]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "text": "Gear Defenders",
+                                  "desc": "Gear Defenders",
+                                  "class": "TextView",
+                                  "bounds": "[645,562][788,789]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "desc": "Folder: Auto, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[645,1069][788,1297]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Auto",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[649,1221][796,1300]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Gig Apps, 2 items, has notifications",
+                                  "class": "FrameLayout",
+                                  "bounds": "[821,1069][963,1297]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Gig Apps",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[831,1221][977,1300]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Connect, 4 or more items, has notifications",
+                                  "class": "FrameLayout",
+                                  "bounds": "[117,1322][260,1550]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Connect",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[103,1484][250,1562]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Entertainment, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[285,1327][432,1562]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Entertainment",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[285,1484][432,1562]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Fitness, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[467,1327][614,1562]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Fitness",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[467,1484][614,1562]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Food, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[649,1327][796,1562]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Food",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[649,1484][796,1562]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Games, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[831,1327][977,1562]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Games",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[831,1484][977,1562]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Home, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[103,1589][250,1824]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Home",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[103,1746][250,1824]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Money, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[282,1593][431,1831]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Money",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[282,1751][431,1831]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Office, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[466,1593][615,1831]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Office",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[466,1751][615,1831]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Shopping, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[650,1593][799,1831]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Shopping",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[650,1751][799,1831]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                },
+                                {
+                                  "desc": "Folder: Tools, 4 or more items",
+                                  "class": "FrameLayout",
+                                  "bounds": "[834,1593][981,1831]",
+                                  "clickable": true,
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "text": "Tools",
+                                      "id": "folder_icon_name",
+                                      "class": "TextView",
+                                      "bounds": "[834,1751][981,1831]",
+                                      "enabled": true
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "desc": "Home",
+                      "id": "accessibility_action_view",
+                      "class": "View",
+                      "bounds": "[0,136][1080,2347]",
+                      "enabled": true
+                    },
+                    {
+                      "id": "page_indicator_container",
+                      "class": "LinearLayout",
+                      "bounds": "[0,1893][1080,1946]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "id": "page_indicator",
+                          "class": "View",
+                          "bounds": "[516,1906][564,1932]",
+                          "enabled": true
+                        }
+                      ]
+                    },
+                    {
+                      "id": "overview_actions_view",
+                      "class": "FrameLayout",
+                      "bounds": "[0,1975][1080,2400]"
+                    },
+                    {
+                      "id": "hotseat",
+                      "class": "ViewGroup",
+                      "bounds": "[74,1889][1006,2235]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "class": "ViewGroup",
+                          "bounds": "[116,1920][964,2049]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "text": "Phone",
+                              "desc": "Phone",
+                              "class": "TextView",
+                              "bounds": "[116,1920][230,2049]",
+                              "clickable": true,
+                              "enabled": true
+                            },
+                            {
+                              "text": "Messages",
+                              "desc": "Messages",
+                              "class": "TextView",
+                              "bounds": "[299,1920][414,2049]",
+                              "clickable": true,
+                              "enabled": true
+                            },
+                            {
+                              "text": "Chrome",
+                              "desc": "Chrome",
+                              "class": "TextView",
+                              "bounds": "[483,1920][598,2049]",
+                              "clickable": true,
+                              "enabled": true
+                            },
+                            {
+                              "text": "Camera",
+                              "desc": "Camera",
+                              "class": "TextView",
+                              "bounds": "[667,1920][781,2049]",
+                              "clickable": true,
+                              "enabled": true
+                            },
+                            {
+                              "text": "Dasher",
+                              "desc": "Dasher",
+                              "class": "TextView",
+                              "bounds": "[851,1920][964,2049]",
+                              "clickable": true,
+                              "enabled": true
+                            }
+                          ]
+                        },
+                        {
+                          "desc": "Google search",
+                          "id": "search_container_hotseat",
+                          "class": "FrameLayout",
+                          "bounds": "[119,2070][960,2196]",
+                          "clickable": true,
+                          "enabled": true,
+                          "children": [
+                            {
+                              "desc": "Google app",
+                              "id": "g_icon",
+                              "class": "ImageView",
+                              "bounds": "[135,2085][231,2181]",
+                              "clickable": true,
+                              "enabled": true
+                            },
+                            {
+                              "id": "end_part",
+                              "class": "LinearLayout",
+                              "bounds": "[651,2070][960,2196]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "desc": "Voice search",
+                                  "id": "mic_icon",
+                                  "class": "ImageView",
+                                  "bounds": "[651,2070][747,2196]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "desc": "Google Lens",
+                                  "id": "lens_icon",
+                                  "class": "ImageButton",
+                                  "bounds": "[747,2070][844,2196]",
+                                  "clickable": true,
+                                  "enabled": true
+                                },
+                                {
+                                  "desc": "AI Mode",
+                                  "id": "aim_icon",
+                                  "class": "ImageButton",
+                                  "bounds": "[852,2070][948,2196]",
+                                  "clickable": true,
+                                  "enabled": true
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "class": "FrameLayout",
+                  "bounds": "[389,690][810,1626]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "class": "View",
+                      "bounds": "[698,1496][910,1966]",
+                      "enabled": true
+                    },
+                    {
+                      "class": "ImageView",
+                      "bounds": "[698,1496][910,1708]",
+                      "enabled": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

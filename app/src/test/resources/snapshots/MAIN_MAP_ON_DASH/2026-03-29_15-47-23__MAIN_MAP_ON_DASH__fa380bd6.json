@@ -1,0 +1,642 @@
+{
+    "timestamp": 1774817243931,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW_TO_PICK_UP",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_PICK_UP",
+        "PICKUP_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "MAIN_MAP_ON_DASH"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 0,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 0,
+                            "right": 1080,
+                            "bottom": 2400
+                        },
+                        "children": [
+                            {
+                                "class": "android.widget.FrameLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 0,
+                                    "right": 1080,
+                                    "bottom": 2400
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.TextureView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 0,
+                                            "right": 1080,
+                                            "bottom": 2400
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 0,
+                                            "right": 1080,
+                                            "bottom": 2400
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 53
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 136,
+                    "right": 161,
+                    "bottom": 261
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 136,
+                            "right": 161,
+                            "bottom": 261
+                        },
+                        "children": [
+                            {
+                                "desc": "Side Menu",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 72,
+                                    "top": 172,
+                                    "right": 125,
+                                    "bottom": 225
+                                }
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 136,
+                                    "right": 161,
+                                    "bottom": 261
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 767,
+                    "top": 136,
+                    "right": 892,
+                    "bottom": 261
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 767,
+                            "top": 136,
+                            "right": 892,
+                            "bottom": 261
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 767,
+                                    "top": 136,
+                                    "right": 892,
+                                    "bottom": 261
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 776,
+                                            "top": 145,
+                                            "right": 883,
+                                            "bottom": 252
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.Button",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 767,
+                                            "top": 136,
+                                            "right": 892,
+                                            "bottom": 261
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 794,
+                                    "top": 127,
+                                    "right": 901,
+                                    "bottom": 234
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 919,
+                    "top": 136,
+                    "right": 1044,
+                    "bottom": 261
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 919,
+                            "top": 136,
+                            "right": 1044,
+                            "bottom": 261
+                        },
+                        "children": [
+                            {
+                                "desc": "",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 955,
+                                    "top": 172,
+                                    "right": 1008,
+                                    "bottom": 225
+                                }
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 919,
+                                    "top": 136,
+                                    "right": 1044,
+                                    "bottom": 261
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 390,
+                    "top": 136,
+                    "right": 690,
+                    "bottom": 261
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 417,
+                            "top": 136,
+                            "right": 663,
+                            "bottom": 261
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 417,
+                                    "top": 146,
+                                    "right": 663,
+                                    "bottom": 252
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 438,
+                                            "top": 127,
+                                            "right": 545,
+                                            "bottom": 234
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "$",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 479,
+                                                    "top": 160,
+                                                    "right": 504,
+                                                    "bottom": 196
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 451,
+                                            "top": 127,
+                                            "right": 557,
+                                            "bottom": 234
+                                        }
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 451,
+                                            "top": 127,
+                                            "right": 557,
+                                            "bottom": 234
+                                        }
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 465,
+                                            "top": 127,
+                                            "right": 572,
+                                            "bottom": 234
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "0",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 504,
+                                                    "top": 160,
+                                                    "right": 533,
+                                                    "bottom": 196
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 485,
+                                            "top": 127,
+                                            "right": 592,
+                                            "bottom": 201
+                                        },
+                                        "children": [
+                                            {
+                                                "text": ".",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 533,
+                                                    "top": 160,
+                                                    "right": 544,
+                                                    "bottom": 196
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 505,
+                                            "top": 127,
+                                            "right": 612,
+                                            "bottom": 234
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "0",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 544,
+                                                    "top": 160,
+                                                    "right": 573,
+                                                    "bottom": 196
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 534,
+                                            "top": 127,
+                                            "right": 641,
+                                            "bottom": 234
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "0",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 573,
+                                                    "top": 160,
+                                                    "right": 602,
+                                                    "bottom": 196
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "text": "This week",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 472,
+                                            "top": 201,
+                                            "right": 609,
+                                            "bottom": 238
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 417,
+                                    "top": 136,
+                                    "right": 663,
+                                    "bottom": 261
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 1956,
+                            "right": 1080,
+                            "bottom": 2400
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 1956,
+                                    "right": 1080,
+                                    "bottom": 2400
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 1956,
+                                            "right": 1080,
+                                            "bottom": 2400
+                                        },
+                                        "children": [
+                                            {
+                                                "class": "android.widget.ScrollView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 1956,
+                                                    "right": 1080,
+                                                    "bottom": 2150
+                                                },
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 1956,
+                                                            "right": 1080,
+                                                            "bottom": 2150
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "text": "You're dashing now",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 36,
+                                                                    "top": 2009,
+                                                                    "right": 765,
+                                                                    "bottom": 2114
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 928,
+                    "top": 1661,
+                    "right": 1053,
+                    "bottom": 1804
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 928,
+                            "top": 1661,
+                            "right": 1053,
+                            "bottom": 1786
+                        },
+                        "children": [
+                            {
+                                "desc": "",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 964,
+                                    "top": 1697,
+                                    "right": 1017,
+                                    "bottom": 1750
+                                }
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 928,
+                                    "top": 1661,
+                                    "right": 1053,
+                                    "bottom": 1786
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 928,
+                    "top": 1804,
+                    "right": 1053,
+                    "bottom": 1929
+                },
+                "children": [
+                    {
+                        "desc": "Safety tools",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 964,
+                            "top": 1840,
+                            "right": 1017,
+                            "bottom": 1893
+                        }
+                    },
+                    {
+                        "class": "android.widget.Button",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 928,
+                            "top": 1804,
+                            "right": 1053,
+                            "bottom": 1929
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 2186,
+                    "right": 1044,
+                    "bottom": 2311
+                },
+                "children": [
+                    {
+                        "text": "Return to dash",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 365,
+                            "top": 2218,
+                            "right": 713,
+                            "bottom": 2280
+                        }
+                    },
+                    {
+                        "class": "android.widget.Button",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2186,
+                            "right": 1044,
+                            "bottom": 2311
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,98 @@
+{
+    "timestamp": 1771987364544,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/design_bottom_sheet",
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": "[0,2242][1080,2719]",
+        "children": [
+            {
+                "id": "com.doordash.driverapp:id/container",
+                "class": "android.widget.FrameLayout",
+                "isEnabled": true,
+                "bounds": "[0,2242][1080,2719]",
+                "children": [
+                    {
+                        "class": "android.widget.ScrollView",
+                        "isEnabled": true,
+                        "bounds": "[0,2242][1080,2719]",
+                        "children": [
+                            {
+                                "class": "android.view.ViewGroup",
+                                "isEnabled": true,
+                                "bounds": "[0,2242][1080,2719]",
+                                "children": [
+                                    {
+                                        "text": "Confirm delivery was completed",
+                                        "id": "com.doordash.driverapp:id/confirmation_dialog_title",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": "[36,2295][1044,2363]"
+                                    },
+                                    {
+                                        "id": "com.doordash.driverapp:id/buttonbar_placeholder",
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": "[0,2416][1080,2719]"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "com.doordash.driverapp:id/buttons_container",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": "[0,2397][1080,2683]",
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/confirm_button",
+                                "class": "android.widget.Button",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": "[36,2433][1044,2540]",
+                                "children": [
+                                    {
+                                        "text": "Confirm",
+                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": "[457,2459][624,2514]"
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "com.doordash.driverapp:id/go_back_button",
+                                "class": "android.widget.Button",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": "[36,2576][1044,2683]",
+                                "children": [
+                                    {
+                                        "text": "Go back",
+                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": "[456,2602][625,2657]"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

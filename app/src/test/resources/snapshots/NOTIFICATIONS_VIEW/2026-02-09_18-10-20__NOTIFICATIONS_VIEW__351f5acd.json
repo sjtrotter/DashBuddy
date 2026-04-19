@@ -1,0 +1,1074 @@
+{
+    "timestamp": 1770682220772,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "NOTIFICATIONS_VIEW"
+    ],
+    "root": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": "[0,0][1080,2400]",
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": "[0,0][1080,2400]",
+                "children": [
+                    {
+                        "id": "android:id/content",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": "[0,0][1080,2400]",
+                        "children": [
+                            {
+                                "id": "com.google.android.apps.nexuslauncher:id/launcher",
+                                "class": "android.widget.FrameLayout",
+                                "isEnabled": true,
+                                "bounds": "[0,0][1080,2400]",
+                                "children": [
+                                    {
+                                        "id": "com.google.android.apps.nexuslauncher:id/drag_layer",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": "[0,0][1080,2400]",
+                                        "children": [
+                                            {
+                                                "id": "com.google.android.apps.nexuslauncher:id/scrim_view",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,0][1080,2400]"
+                                            },
+                                            {
+                                                "id": "com.google.android.apps.nexuslauncher:id/workspace",
+                                                "class": "android.widget.ScrollView",
+                                                "isEnabled": true,
+                                                "bounds": "[35,77][1045,2323]",
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.ViewGroup",
+                                                        "isEnabled": true,
+                                                        "bounds": "[34,210][35,1879]",
+                                                        "children": [
+                                                            {
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": "[10,232][35,1857]",
+                                                                "children": [
+                                                                    {
+                                                                        "id": "com.google.android.apps.nexuslauncher:id/search_container_workspace",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[10,232][35,479]",
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/bc_smartspace_view",
+                                                                                "class": "android.widget.FrameLayout",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[10,247][35,463]",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "desc": "At a glance",
+                                                                                        "id": "com.google.android.apps.nexuslauncher:id/smartspace_card_pager",
+                                                                                        "class": "androidx.viewpager.widget.ViewPager",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[10,247][35,463]",
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "class": "androidx.recyclerview.widget.RecyclerView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[10,247][35,463]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "id": "com.google.android.apps.nexuslauncher:id/base_template_card_with_date",
+                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                        "isClickable": true,
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[10,247][35,463]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "id": "com.google.android.apps.nexuslauncher:id/text_group",
+                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[0,291][35,420]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "Mon, Feb 9",
+                                                                                                                        "desc": "Mon, Feb 9",
+                                                                                                                        "id": "com.google.android.apps.nexuslauncher:id/date",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[0,291][35,344]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "id": "com.google.android.apps.nexuslauncher:id/smartspace_subtitle_group",
+                                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[0,354][35,420]",
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "text": "77°F",
+                                                                                                                                "desc": "Sunny, 77°F",
+                                                                                                                                "id": "com.google.android.apps.nexuslauncher:id/subtitle_text",
+                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "isClickable": true,
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": "[0,354][35,420]"
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Analog",
+                                                                        "class": "com.android.launcher3.widget.LauncherAppWidgetHostView",
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[0,507][35,1030]",
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.google.android.deskclock:id/widget_frame",
+                                                                                "class": "android.widget.FrameLayout",
+                                                                                "isClickable": true,
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[0,502][30,1028]",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "desc": "18:10",
+                                                                                        "id": "com.google.android.deskclock:id/base_clock",
+                                                                                        "class": "android.view.View",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[0,502][30,1028]"
+                                                                                    },
+                                                                                    {
+                                                                                        "desc": "18:10",
+                                                                                        "id": "com.google.android.deskclock:id/date_clock",
+                                                                                        "class": "android.view.View",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[0,502][30,1028]"
+                                                                                    },
+                                                                                    {
+                                                                                        "text": "Monday, Feb 9, 6:10 PM",
+                                                                                        "desc": "Monday, Feb 9, 6:10 PM",
+                                                                                        "id": "com.google.android.deskclock:id/a11y_clock",
+                                                                                        "class": "android.widget.TextView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[0,502][30,548]"
+                                                                                    },
+                                                                                    {
+                                                                                        "id": "android:id/background",
+                                                                                        "class": "android.widget.FrameLayout",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[0,520][30,1010]"
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Weather",
+                                                                        "class": "com.android.launcher3.widget.LauncherAppWidgetHostView",
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[6,502][30,1028]",
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.google.android.googlequicksearchbox:id/assistant_weather_widget_background",
+                                                                                "class": "android.widget.RelativeLayout",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[6,590][30,939]",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "text": "79°",
+                                                                                        "id": "com.google.android.googlequicksearchbox:id/assistant_weather_widget_temperature",
+                                                                                        "class": "android.widget.TextView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[6,628][30,840]"
+                                                                                    },
+                                                                                    {
+                                                                                        "id": "com.google.android.googlequicksearchbox:id/assistant_weather_icon",
+                                                                                        "class": "android.widget.ImageView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[0,762][30,906]"
+                                                                                    },
+                                                                                    {
+                                                                                        "id": "android:id/background",
+                                                                                        "class": "android.widget.FrameLayout",
+                                                                                        "isClickable": true,
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[0,642][30,886]"
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "text": "Files",
+                                                                        "desc": "Files",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[0,1334][30,1583]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Play Store",
+                                                                        "desc": "Play Store",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[0,1334][30,1583]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Wallet",
+                                                                        "desc": "Wallet",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[0,1334][30,1583]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Gmail",
+                                                                        "desc": "Gmail",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[6,1334][30,1583]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Maps",
+                                                                        "desc": "Maps",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[0,1611][30,1861]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Calendar",
+                                                                        "desc": "Calendar",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[0,1611][30,1861]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Photos",
+                                                                        "desc": "Photos",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[0,1611][30,1861]"
+                                                                    },
+                                                                    {
+                                                                        "text": "YouTube",
+                                                                        "desc": "YouTube",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[6,1611][30,1861]"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "class": "android.view.ViewGroup",
+                                                        "isEnabled": true,
+                                                        "bounds": "[54,201][1026,1885]",
+                                                        "children": [
+                                                            {
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": "[78,224][1002,1863]",
+                                                                "children": [
+                                                                    {
+                                                                        "desc": "Calendar schedule",
+                                                                        "class": "com.android.launcher3.widget.LauncherAppWidgetHostView",
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[78,224][618,1028]",
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.google.android.calendar:id/base_layout",
+                                                                                "class": "android.widget.RelativeLayout",
+                                                                                "isClickable": true,
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[78,224][618,1028]",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "id": "com.google.android.calendar:id/events_list",
+                                                                                        "class": "android.widget.ListView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": "[78,224][618,1028]",
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,224][618,224]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[78,224][618,224]"
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,224][618,342]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "id": "com.google.android.calendar:id/bc25_day_divider_top",
+                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[78,224][618,342]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "desc": "Mon, Feb 9",
+                                                                                                                "id": "com.google.android.calendar:id/day_divider",
+                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[120,224][483,342]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "Mon, Feb 9",
+                                                                                                                        "id": "com.google.android.calendar:id/widget_bc25_divider_text",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[120,224][320,342]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "desc": "Create new event",
+                                                                                                                "id": "com.google.android.calendar:id/widget_add_new_event",
+                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[483,233][593,334]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "id": "com.google.android.calendar:id/bc25_fab",
+                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[483,250][593,317]",
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.widget.ImageButton",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": "[489,253][587,313]"
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,342][618,405]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "desc": "1 pending task, All day: , stephen.j.trotter@gmail.com",
+                                                                                                        "id": "com.google.android.calendar:id/widget_row",
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[78,342][618,405]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "desc": "Open Event",
+                                                                                                                "id": "com.google.android.calendar:id/agenda_item_color",
+                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[103,344][593,403]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[103,344][593,403]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[120,351][166,397]",
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "id": "com.google.android.calendar:id/chip_badged_icon_container",
+                                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": "[120,351][166,397]",
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "id": "com.google.android.calendar:id/chip_badged_icon_background",
+                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": "[120,351][166,397]"
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "id": "com.google.android.calendar:id/chip_badged_icon",
+                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": "[124,354][162,392]"
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "‎‪1 pending task‬‎",
+                                                                                                                        "id": "com.google.android.calendar:id/title",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[166,349][576,399]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,405][618,480]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "desc": "Tue, Feb 10",
+                                                                                                        "id": "com.google.android.calendar:id/day_divider",
+                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[78,409][618,476]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "Tue, Feb 10",
+                                                                                                                "id": "com.google.android.calendar:id/widget_bc25_divider_text",
+                                                                                                                "class": "android.widget.TextView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[120,415][327,470]"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,480][618,591]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "desc": "Task: Check Bills, 06:00, stephen.j.trotter@gmail.com",
+                                                                                                        "id": "com.google.android.calendar:id/widget_row",
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[74,475][619,587]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "desc": "Open Event",
+                                                                                                                "id": "com.google.android.calendar:id/agenda_item_color",
+                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[100,477][593,585]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[100,477][593,585]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[100,481][593,531]",
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": "[117,482][164,529]",
+                                                                                                                                "children": [
+                                                                                                                                    {
+                                                                                                                                        "id": "com.google.android.calendar:id/chip_icon",
+                                                                                                                                        "class": "android.widget.ImageView",
+                                                                                                                                        "isEnabled": true,
+                                                                                                                                        "bounds": "[117,482][164,529]"
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "text": "‎‪Check Bills‬‎",
+                                                                                                                                "id": "com.google.android.calendar:id/title",
+                                                                                                                                "class": "android.widget.TextView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": "[164,481][576,531]"
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "‎‪06:00‬‎",
+                                                                                                                        "id": "com.google.android.calendar:id/when",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[100,531][593,581]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,591][618,666]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "desc": "Sat, Feb 14",
+                                                                                                        "id": "com.google.android.calendar:id/day_divider",
+                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[74,591][619,658]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "Sat, Feb 14",
+                                                                                                                "id": "com.google.android.calendar:id/widget_bc25_divider_text",
+                                                                                                                "class": "android.widget.TextView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[117,597][318,653]"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,666][618,729]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "desc": "Valentine's Day, All day: , stephen.j.trotter@gmail.com, Holidays in United States",
+                                                                                                        "id": "com.google.android.calendar:id/widget_row",
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[74,662][619,726]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "desc": "Open Event",
+                                                                                                                "id": "com.google.android.calendar:id/agenda_item_color",
+                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[100,664][593,724]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[100,664][593,724]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "‎‪Valentine's Day‬‎",
+                                                                                                                        "id": "com.google.android.calendar:id/title",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[117,669][576,719]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[117,693][117,693]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,729][618,804]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "desc": "Mon, Feb 16",
+                                                                                                        "id": "com.google.android.calendar:id/day_divider",
+                                                                                                        "class": "android.widget.LinearLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[74,730][619,797]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "text": "Mon, Feb 16",
+                                                                                                                "id": "com.google.android.calendar:id/widget_bc25_divider_text",
+                                                                                                                "class": "android.widget.TextView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[117,735][335,791]"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,804][618,867]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "desc": "Presidents' Day, All day: , stephen.j.trotter@gmail.com, Holidays in United States",
+                                                                                                        "id": "com.google.android.calendar:id/widget_row",
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[74,801][619,865]",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "desc": "Open Event",
+                                                                                                                "id": "com.google.android.calendar:id/agenda_item_color",
+                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[100,803][593,863]"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": "[100,803][593,863]",
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "text": "‎‪Presidents' Day‬‎",
+                                                                                                                        "id": "com.google.android.calendar:id/title",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[117,808][576,858]"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": "[117,832][117,832]"
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.appwidget.AppWidgetHostView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": "[78,867][618,875]",
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": "[74,865][619,873]"
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "text": "Gemini",
+                                                                        "desc": "Gemini",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[655,224][811,473]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Master Lock® Vault",
+                                                                        "desc": "Master Lock® Vault",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[850,217][1006,468]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Gear Defenders",
+                                                                        "desc": "Gear Defenders",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[656,497][813,748]"
+                                                                    },
+                                                                    {
+                                                                        "text": "Grindr",
+                                                                        "desc": "Grindr",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[850,497][1006,748]"
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Auto, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[656,1056][813,1306]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Auto",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[656,1223][813,1306]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Gig Apps, 2 items, has notifications",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[850,1056][1006,1306]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Gig Apps",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[850,1223][1006,1306]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Connect, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[74,1335][231,1586]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Connect",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[74,1502][231,1586]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Entertainment, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[267,1336][424,1588]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Entertainment",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[267,1504][424,1588]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Fitness, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[462,1336][619,1588]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Fitness",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[462,1504][619,1588]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Food, 4 or more items, has notifications",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[657,1336][814,1588]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Food",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[657,1504][814,1588]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Games, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[852,1336][1008,1588]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Games",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[852,1504][1008,1588]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Home, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[72,1617][229,1869]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Home",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[72,1785][229,1869]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Money, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[267,1617][424,1869]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Money",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[267,1785][424,1869]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Office, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[462,1617][619,1869]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Office",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[462,1785][619,1869]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Shopping, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[657,1617][814,1869]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Shopping",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[657,1785][814,1869]"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "desc": "Folder: Tools, 4 or more items",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[852,1617][1008,1869]",
+                                                                        "children": [
+                                                                            {
+                                                                                "text": "Tools",
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/folder_icon_name",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": "[852,1785][1008,1869]"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "desc": "Home",
+                                                "state": "Home screen 2 of 2",
+                                                "id": "com.google.android.apps.nexuslauncher:id/accessibility_action_view",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,136][1080,2347]"
+                                            },
+                                            {
+                                                "id": "com.google.android.apps.nexuslauncher:id/page_indicator_container",
+                                                "class": "android.widget.LinearLayout",
+                                                "isEnabled": true,
+                                                "bounds": "[0,1893][1080,1946]",
+                                                "children": [
+                                                    {
+                                                        "id": "com.google.android.apps.nexuslauncher:id/page_indicator",
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": "[516,1906][564,1932]"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "com.google.android.apps.nexuslauncher:id/overview_actions_view",
+                                                "class": "android.widget.FrameLayout",
+                                                "bounds": "[0,1975][1080,2400]"
+                                            },
+                                            {
+                                                "id": "com.google.android.apps.nexuslauncher:id/hotseat",
+                                                "class": "android.view.ViewGroup",
+                                                "isEnabled": true,
+                                                "bounds": "[24,1964][1056,2347]",
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.ViewGroup",
+                                                        "isEnabled": true,
+                                                        "bounds": "[90,1964][990,2100]",
+                                                        "children": [
+                                                            {
+                                                                "text": "Phone",
+                                                                "desc": "Phone",
+                                                                "class": "android.widget.TextView",
+                                                                "isClickable": true,
+                                                                "isEnabled": true,
+                                                                "bounds": "[90,1964][211,2100]"
+                                                            },
+                                                            {
+                                                                "text": "Messages",
+                                                                "desc": "Messages",
+                                                                "class": "android.widget.TextView",
+                                                                "isClickable": true,
+                                                                "isEnabled": true,
+                                                                "bounds": "[285,1964][406,2100]"
+                                                            },
+                                                            {
+                                                                "text": "Chrome",
+                                                                "desc": "Chrome",
+                                                                "class": "android.widget.TextView",
+                                                                "isClickable": true,
+                                                                "isEnabled": true,
+                                                                "bounds": "[480,1964][601,2100]"
+                                                            },
+                                                            {
+                                                                "text": "Camera",
+                                                                "desc": "Camera",
+                                                                "class": "android.widget.TextView",
+                                                                "isClickable": true,
+                                                                "isEnabled": true,
+                                                                "bounds": "[675,1964][796,2100]"
+                                                            },
+                                                            {
+                                                                "text": "Dasher",
+                                                                "desc": "Dasher",
+                                                                "class": "android.widget.TextView",
+                                                                "isClickable": true,
+                                                                "isEnabled": true,
+                                                                "bounds": "[870,1964][990,2100]"
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "desc": "Google search",
+                                                        "id": "com.google.android.apps.nexuslauncher:id/search_container_hotseat",
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isClickable": true,
+                                                        "isEnabled": true,
+                                                        "bounds": "[94,2123][985,2257]",
+                                                        "children": [
+                                                            {
+                                                                "desc": "Google app",
+                                                                "id": "com.google.android.apps.nexuslauncher:id/g_icon",
+                                                                "class": "android.widget.ImageView",
+                                                                "isClickable": true,
+                                                                "isEnabled": true,
+                                                                "bounds": "[110,2138][212,2241]"
+                                                            },
+                                                            {
+                                                                "id": "com.google.android.apps.nexuslauncher:id/end_part",
+                                                                "class": "android.widget.LinearLayout",
+                                                                "isEnabled": true,
+                                                                "bounds": "[658,2123][985,2257]",
+                                                                "children": [
+                                                                    {
+                                                                        "desc": "Voice search",
+                                                                        "id": "com.google.android.apps.nexuslauncher:id/mic_icon",
+                                                                        "class": "android.widget.ImageView",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[658,2123][760,2257]"
+                                                                    },
+                                                                    {
+                                                                        "desc": "Google Lens",
+                                                                        "id": "com.google.android.apps.nexuslauncher:id/lens_icon",
+                                                                        "class": "android.widget.ImageButton",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[760,2123][862,2257]"
+                                                                    },
+                                                                    {
+                                                                        "desc": "AI Mode",
+                                                                        "id": "com.google.android.apps.nexuslauncher:id/aim_icon",
+                                                                        "class": "android.widget.ImageButton",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": "[871,2123][973,2257]"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": "[801,1779][964,2141]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[835,1878][976,2191]"
+                                            },
+                                            {
+                                                "class": "android.widget.ImageView",
+                                                "isEnabled": true,
+                                                "bounds": "[835,1878][976,2019]"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

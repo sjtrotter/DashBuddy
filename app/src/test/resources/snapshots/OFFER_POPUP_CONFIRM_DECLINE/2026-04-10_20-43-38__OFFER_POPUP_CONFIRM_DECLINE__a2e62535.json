@@ -1,0 +1,246 @@
+{
+    "timestamp": 1775871818073,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1441,
+            "right": 1080,
+            "bottom": 2311
+        },
+        "children": [
+            {
+                "text": "Are you sure you want to decline this offer?",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 1494,
+                    "right": 1044,
+                    "bottom": 1626
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 1653,
+                    "right": 1044,
+                    "bottom": 2007
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1689,
+                            "right": 1044,
+                            "bottom": 1989
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 72,
+                                    "top": 1725,
+                                    "right": 1008,
+                                    "bottom": 1953
+                                },
+                                "children": [
+                                    {
+                                        "text": "Lowers acceptance rate",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 72,
+                                            "top": 1725,
+                                            "right": 1008,
+                                            "bottom": 1772
+                                        }
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 401,
+                                            "top": 1788,
+                                            "right": 679,
+                                            "bottom": 1894
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "9%",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 401,
+                                                    "top": 1799,
+                                                    "right": 504,
+                                                    "bottom": 1883
+                                                }
+                                            },
+                                            {
+                                                "desc": "",
+                                                "class": "android.widget.ImageView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 513,
+                                                    "top": 1815,
+                                                    "right": 566,
+                                                    "bottom": 1868
+                                                }
+                                            },
+                                            {
+                                                "text": "8%",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 575,
+                                                    "top": 1799,
+                                                    "right": 679,
+                                                    "bottom": 1883
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "text": "Get above 50% to unlock Silver status",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 72,
+                                            "top": 1910,
+                                            "right": 1008,
+                                            "bottom": 1953
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 2043,
+                    "right": 1080,
+                    "bottom": 2150
+                },
+                "children": [
+                    {
+                        "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2043,
+                            "right": 1044,
+                            "bottom": 2150
+                        },
+                        "children": [
+                            {
+                                "class": "android.widget.Button",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 2043,
+                                    "right": 1044,
+                                    "bottom": 2150
+                                },
+                                "children": [
+                                    {
+                                        "text": "Decline offer",
+                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 408,
+                                            "top": 2064,
+                                            "right": 672,
+                                            "bottom": 2130
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "state": "100 percent.",
+                        "class": "android.widget.ProgressBar",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 946,
+                            "top": 2057,
+                            "right": 1026,
+                            "bottom": 2137
+                        }
+                    },
+                    {
+                        "text": "35",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 968,
+                            "top": 2079,
+                            "right": 1004,
+                            "bottom": 2115
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 2168,
+                    "right": 1044,
+                    "bottom": 2275
+                },
+                "children": [
+                    {
+                        "text": "View offer details",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 361,
+                            "top": 2196,
+                            "right": 718,
+                            "bottom": 2248
+                        }
+                    },
+                    {
+                        "class": "android.widget.Button",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2168,
+                            "right": 1044,
+                            "bottom": 2275
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

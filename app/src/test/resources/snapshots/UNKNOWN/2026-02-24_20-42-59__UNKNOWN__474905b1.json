@@ -1,0 +1,63 @@
+{
+    "timestamp": 1771987379359,
+    "breadcrumbs": [
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_EXPANDED",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[0,0][1080,2400]",
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,0][1080,53]"
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[36,136][161,261]"
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[767,136][892,261]"
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[919,136][1044,261]"
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[487,145][593,251]"
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,0][1080,2400]"
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[928,1539][1053,1664]"
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[36,2186][1044,2311]"
+            }
+        ]
+    }
+}

@@ -1,0 +1,448 @@
+{
+  "class": "FrameLayout",
+  "bounds": "[0,0][1080,2400]",
+  "enabled": true,
+  "children": [
+    {
+      "class": "LinearLayout",
+      "bounds": "[0,0][1080,2400]",
+      "enabled": true,
+      "children": [
+        {
+          "class": "FrameLayout",
+          "bounds": "[0,0][1080,2400]",
+          "enabled": true,
+          "children": [
+            {
+              "id": "action_bar_root",
+              "class": "LinearLayout",
+              "bounds": "[0,0][1080,2400]",
+              "enabled": true,
+              "children": [
+                {
+                  "id": "content",
+                  "class": "FrameLayout",
+                  "bounds": "[0,0][1080,2400]",
+                  "enabled": true,
+                  "children": [
+                    {
+                      "id": "fragment",
+                      "class": "FrameLayout",
+                      "bounds": "[0,0][1080,2400]",
+                      "enabled": true,
+                      "children": [
+                        {
+                          "class": "ComposeView",
+                          "bounds": "[0,0][1080,2400]",
+                          "enabled": true,
+                          "children": [
+                            {
+                              "class": "View",
+                              "bounds": "[0,0][1080,2400]",
+                              "enabled": true,
+                              "children": [
+                                {
+                                  "class": "View",
+                                  "bounds": "[0,0][1080,2400]",
+                                  "enabled": true,
+                                  "children": [
+                                    {
+                                      "class": "View",
+                                      "bounds": "[0,0][1080,2400]",
+                                      "enabled": true,
+                                      "children": [
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,385][1080,2347]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,385][1080,619]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,448][143,555]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "desc": "notification icon",
+                                                  "class": "View",
+                                                  "bounds": "[63,475][116,528]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Get access to cash orders",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,421][677,473]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Put money in your pocket, instantly.",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,477][749,520]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "4 mins ago",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,538][345,581]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,565][1080,619]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,619][1080,853]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,682][143,789]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "desc": "notification icon",
+                                                  "class": "View",
+                                                  "bounds": "[63,709][116,762]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Route your tax refund. Get a $20 bonus.",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,655][970,707]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Plus, a chance to win up to $5,000.",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,711][744,754]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 day ago",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,772][319,815]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,799][1080,853]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,853][1080,1140]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,942][143,1049]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "desc": "notification icon",
+                                                  "class": "View",
+                                                  "bounds": "[63,969][116,1022]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Drop-off photo achievement",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,889][743,941]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "You took drop-off photos for 80%+ of contactless deliveries.",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,945][1044,1041]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "1 week ago",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1059][346,1102]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,1086][1080,1140]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,1140][1080,1427]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,1229][143,1336]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "desc": "notification icon",
+                                                  "class": "View",
+                                                  "bounds": "[63,1256][116,1309]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Order accuracy streak",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1176][609,1228]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "You had 10 straight deliveries with 100% order accuracy.",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1232][1044,1328]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "2 weeks ago",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1346][368,1389]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,1373][1080,1427]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,1427][1080,1714]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,1516][143,1623]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "desc": "notification icon",
+                                                  "class": "View",
+                                                  "bounds": "[63,1543][116,1596]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Missing drop-off photos",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1463][648,1515]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "30%+ of your leave-at-door deliveries lacked drop-off photos.",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1519][1044,1615]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "2 weeks ago",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1633][368,1676]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,1660][1080,1714]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,1714][1080,2001]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,1803][143,1910]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "desc": "notification icon",
+                                                  "class": "View",
+                                                  "bounds": "[63,1830][116,1883]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Missing items reported",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1750][626,1802]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Multiple customers reported drinks or desserts missing from their orders.",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1806][1044,1902]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "2 weeks ago",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,1920][368,1963]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,1947][1080,2001]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,2001][1080,2288]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,2090][143,2197]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "desc": "notification icon",
+                                                  "class": "View",
+                                                  "bounds": "[63,2117][116,2170]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Confirm delivery just after dropoff",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,2037][843,2089]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "Recently, you spent 10+ minutes near a dropoff before completing delivery in the app",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,2093][1044,2189]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "text": "3 weeks ago",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,2207][369,2250]",
+                                                  "enabled": true
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[0,2234][1080,2288]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,2288][1080,2400]",
+                                              "clickable": true,
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "text": "Wrong orders reported",
+                                                  "class": "TextView",
+                                                  "bounds": "[170,2324][631,2347]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "class": "View",
+                                          "bounds": "[0,0][1080,385]",
+                                          "enabled": true,
+                                          "children": [
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,136][1080,278]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "ViewFactoryHolder",
+                                                  "bounds": "[9,162][98,251]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "class": "Button",
+                                                      "bounds": "[9,162][98,251]",
+                                                      "clickable": true,
+                                                      "enabled": true,
+                                                      "children": [
+                                                        {
+                                                          "id": "imageView_prism_button_icon",
+                                                          "class": "ImageView",
+                                                          "bounds": "[31,184][76,229]",
+                                                          "enabled": true
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[107,180][375,234]",
+                                                  "enabled": true
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "class": "View",
+                                              "bounds": "[0,278][1080,385]",
+                                              "enabled": true,
+                                              "children": [
+                                                {
+                                                  "class": "View",
+                                                  "bounds": "[36,270][469,376]",
+                                                  "enabled": true,
+                                                  "children": [
+                                                    {
+                                                      "text": "Notifications",
+                                                      "class": "TextView",
+                                                      "bounds": "[36,278][469,368]",
+                                                      "enabled": true
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
