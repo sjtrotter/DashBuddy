@@ -94,30 +94,75 @@ Rename `fuelCostPerMile` → `operatingCostPerMile` in `UserEconomy` and feed it
 figure. Because all downstream math in `OfferEvaluator` already flows through that one field, no
 scoring logic needs to change.
 
-**Default / input options (pick one or let user choose mode):**
-- **IRS standard rate** — $0.70/mile (2025), covers gas + depreciation + maintenance + insurance.
-  Good zero-config default.
-- **Auto-computed** — itemize gas (from existing MPG + gas price) + a user-entered maintenance
-  estimate (e.g., $0.10/mile) + optional insurance premium spread over annual miles.
-- **Manual override** — Dasher enters their own $/mile figure directly.
+### Design Philosophy: Personalized to the Dasher
+
+Gig driving is classified as **"severe service"** by vehicle manufacturers — lots of short trips,
+frequent cold starts, stop-and-go — so normal consumer assumptions about maintenance intervals and
+costs don't apply. The goal is a model that starts with reasonable gig-work defaults and lets the
+Dasher tune it to their actual situation.
+
+### Cost Model: Two Layers
+
+**Layer 1 — Fuel (live, auto-fetched)**
+- `gasPricePerGallon / combinedMpg` — already working, pulls from EIA + EPA
+- Stays separate so the live gas price feature remains useful
+
+**Layer 2 — Non-fuel operating cost (personalized, per-mile)**
+- Default: **$0.70/mile** (user-confirmed starting point, conservative/protective)
+- This is intentionally on top of gas, not replacing it — gig depreciation + insurance + wear
+  is genuinely higher than typical consumer use
+- User tunes this down over time as they learn their actual costs
+
+**Total: `operatingCostPerMile = fuelCostPerMile + wearCostPerMile`**
+
+### Personalization Inputs (wizard / settings screens)
+
+#### Oil Changes (gig-adjusted interval)
+- Gig driving = severe service = shorter intervals than the sticker in the door jamb
+- Default assumption: **3,500 miles** between changes (vs. 5,000-7,500 for normal driving)
+- Inputs: oil change cost + interval miles (both editable)
+- Computed contribution: `oilChangeCost / intervalMiles` → per-mile cost
+- This figure should start higher and the Dasher can adjust based on their actual mechanic bills
+
+#### Insurance
+- Inputs: monthly (or annual) premium + number of vehicles on the policy
+- Per-vehicle annual cost = `annualPremium / vehicleCount`
+- Per-mile contribution = `perVehicleAnnualCost / dasherAnnualMiles`
+- `dasherAnnualMiles` = estimated or tracked (can default to 20,000 for a full-time dasher)
+- Note: dashers with a rideshare/gig endorsement on their policy pay more — worth a flag
+
+#### Other wear (tires, brakes, misc)
+- Gig driving burns through tires and brakes faster than consumer use (stop-and-go)
+- Could offer a simple "other wear" $/mile field that defaults to something like $0.08/mile
+- Or break out: tire cost / expected tire life miles + brake cost / expected brake life miles
+- Keep this simple for v1 — single editable field with a sensible default
+
+### UI Approach
+
+Show the breakdown transparently in settings so the Dasher understands what they're paying:
+
+```
+Fuel:        $0.14/mi  (live from EIA + your MPG)
+Oil changes: $0.02/mi  (based on your interval + cost)
+Insurance:   $0.07/mi  (your premium ÷ vehicles ÷ annual miles)
+Other wear:  $0.08/mi  (tires, brakes, misc)
+─────────────────────
+Total:       $0.31/mi  ← this is what OfferEvaluator deducts
+```
+
+Default total lands around $0.84/mi ($0.14 fuel + $0.70 wear) until they personalize.
+As they update inputs, the number adjusts live.
 
 ### Files to Touch
 
 | File | Change |
 |---|---|
-| `domain/.../evaluation/UserEconomy.kt` | Rename `fuelCostPerMile` → `operatingCostPerMile`; update compute logic |
-| `domain/.../evaluation/OfferEvaluation.kt` | Rename `fuelCostEstimate` → `operatingCostEstimate` for clarity |
-| `core/datastore/.../AppPreferencesDataSource.kt` | Add DataStore key for maintenance cost or cost-mode selection |
-| `core/data/.../settings/AppPreferencesRepository.kt` | Build `operatingCostPerMile` flow from component inputs |
-| Settings UI (wizard/prefs screens) | Surface the new input field(s) |
-| `domain/.../OfferEvaluatorTest.kt` | Update field names + add test cases for full cost mode |
-
-### Key Decision to Make
-
-Does the Dasher see one combined "cost per mile" field, or do we keep gas separate (it's live from
-EIA) and let them add a separate fixed maintenance/depreciation figure on top? Leaning toward
-**two-field**: live gas cost (auto-fetched) + user-entered wear cost (default $0.12/mile or similar),
-combined transparently at evaluation time. Keeps the live gas price feature useful.
+| `domain/.../evaluation/UserEconomy.kt` | Add `wearCostPerMile` computed from components; `operatingCostPerMile = fuel + wear` |
+| `domain/.../evaluation/OfferEvaluation.kt` | Rename `fuelCostEstimate` → `operatingCostEstimate`; add breakdown fields |
+| `core/datastore/.../AppPreferencesDataSource.kt` | Add keys: oilChangeCost, oilChangeIntervalMiles, insuranceMonthlyPremium, vehicleCount, otherWearPerMile, dasherAnnualMiles |
+| `core/data/.../settings/AppPreferencesRepository.kt` | Build `wearCostPerMile` flow from component inputs |
+| Settings UI (wizard/prefs screens) | New "Operating Costs" section with breakdown + live total |
+| `domain/.../OfferEvaluatorTest.kt` | Update field names + test cases for full cost model |
 
 ---
 
