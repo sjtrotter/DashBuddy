@@ -4,16 +4,17 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DropoffNavigationMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DropoffNavigationParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DropoffNavigationMatcherTest {
 
     private val matcher = DropoffNavigationMatcher()
+    private val parser = DropoffNavigationParser()
 
     // --- TEST DATA ---
 
@@ -63,12 +64,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches NAVIGATION_VIEW_TO_DROP_OFF for dropoff navigation`() {
         val root = LogToUiNodeParser.parseLog(dropoffNavLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match dropoff navigation", result)
-        assertTrue(result is ScreenInfo.DropoffDetails)
-        assertEquals(Screen.NAVIGATION_VIEW_TO_DROP_OFF, result!!.screen)
+        assertEquals(Screen.NAVIGATION_VIEW_TO_DROP_OFF, matcher.matches(root!!))
     }
 
     @Test
@@ -100,7 +96,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is NAVIGATING`() {
         val root = LogToUiNodeParser.parseLog(dropoffNavLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertEquals(DropoffStatus.NAVIGATING, result.status)
     }
@@ -108,7 +104,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `hashes customer name extracted from Deliver to prefix`() {
         val root = LogToUiNodeParser.parseLog(dropoffNavLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         // Name "John D" extracted from "Deliver to John D" — verified as SHA-256
         assertNotNull("Customer name hash should be present", result.customerNameHash)
@@ -118,7 +114,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `hashes address from address lines`() {
         val root = LogToUiNodeParser.parseLog(dropoffNavLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertNotNull("Address hash should be present when address nodes exist", result.addressHash)
         assertEquals("SHA-256 hash is 64 hex chars", 64, result.addressHash!!.length)
@@ -127,7 +123,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `address hash is null when no address nodes present`() {
         val root = LogToUiNodeParser.parseLog(noAddressLog)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertNull("Address hash should be null if no address nodes", result.addressHash)
     }
@@ -139,7 +135,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='Deliver to ', id=bottom_sheet_task_title, state=null, class=android.widget.TextView)
 """.trimIndent()
         val root = LogToUiNodeParser.parseLog(log)!!
-        val result = matcher.matches(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
         assertNull("Blank name after prefix should produce null hash", result.customerNameHash)
     }

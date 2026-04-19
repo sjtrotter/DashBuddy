@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashAlongTheWayMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashAlongTheWayParser
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
@@ -39,8 +40,9 @@ class DashAlongTheWayRegressionTest(filename: String, node: UiNode) :
     @Test
     fun `validate snapshot`() {
         val matcher = DashAlongTheWayMatcher()
+        val parser = DashAlongTheWayParser()
 
-        runTest(matcher) { result ->
+        runTest(matcher, parser) { result ->
             val info = result as ScreenInfo.WaitingForOffer
             assertEquals(Screen.ON_DASH_ALONG_THE_WAY, info.screen)
         }

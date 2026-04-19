@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SensitiveScreenMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.SensitiveScreenParser
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
@@ -46,8 +47,9 @@ class SensitiveScreenRegressionTest(filename: String, node: UiNode) :
     @Test
     fun `validate sensitive match`() {
         val matcher = SensitiveScreenMatcher()
+        val parser = SensitiveScreenParser()
 
-        runTest(matcher) { result ->
+        runTest(matcher, parser) { result ->
             // Verify it specifically returns the Sensitive type
             assertTrue(
                 "❌ Matcher return ${result::class.simpleName}, expected ScreenInfo.Sensitive",

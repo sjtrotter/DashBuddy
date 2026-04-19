@@ -1,13 +1,11 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.AppStartupMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppStartupMatcherTest {
@@ -46,12 +44,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches APP_STARTING_OR_LOADING when Starting text and Cancel button present`() {
         val root = LogToUiNodeParser.parseLog(startingLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match app startup screen", result)
-        assertTrue(result is ScreenInfo.Simple)
-        assertEquals(Screen.APP_STARTING_OR_LOADING, result!!.screen)
+        assertEquals(Screen.APP_STARTING_OR_LOADING, matcher.matches(root!!))
     }
 
     @Test

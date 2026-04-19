@@ -1,13 +1,11 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.ScheduleMatcher
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ScheduleMatcherTest {
@@ -55,23 +53,14 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches SCHEDULE_VIEW with both tabs present`() {
         val root = LogToUiNodeParser.parseLog(scheduleLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match schedule screen", result)
-        assertTrue(result is ScreenInfo.Simple)
-        assertEquals(Screen.SCHEDULE_VIEW, result!!.screen)
+        assertEquals(Screen.SCHEDULE_VIEW, matcher.matches(root!!))
     }
 
     @Test
     fun `matches SCHEDULE_VIEW with only Available tab`() {
         val root = LogToUiNodeParser.parseLog(scheduleAvailableOnlyLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match with just Available tab", result)
-        assertEquals(Screen.SCHEDULE_VIEW, result!!.screen)
+        assertEquals(Screen.SCHEDULE_VIEW, matcher.matches(root!!))
     }
 
     @Test

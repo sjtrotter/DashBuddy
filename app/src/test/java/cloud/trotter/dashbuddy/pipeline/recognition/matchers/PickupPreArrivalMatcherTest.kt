@@ -4,16 +4,17 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupPreArrivalMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupPreArrivalParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PickupPreArrivalMatcherTest {
 
     private val matcher = PickupPreArrivalMatcher()
+    private val parser = PickupPreArrivalParser()
 
     // --- TEST DATA ---
 
@@ -90,23 +91,14 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches PICKUP_DETAILS_PRE_ARRIVAL with Directions button`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match pre-arrival screen", result)
-        assertTrue(result is ScreenInfo.PickupDetails)
-        assertEquals(Screen.PICKUP_DETAILS_PRE_ARRIVAL, result!!.screen)
+        assertEquals(Screen.PICKUP_DETAILS_PRE_ARRIVAL, matcher.matches(root!!))
     }
 
     @Test
     fun `matches PICKUP_DETAILS_PRE_ARRIVAL with Arrived at store button`() {
         val root = LogToUiNodeParser.parseLog(preArrivalArrivedButtonLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("'Arrived at store' button should still match pre-arrival", result)
-        assertEquals(Screen.PICKUP_DETAILS_PRE_ARRIVAL, result!!.screen)
+        assertEquals(Screen.PICKUP_DETAILS_PRE_ARRIVAL, matcher.matches(root!!))
     }
 
     @Test
@@ -126,11 +118,13 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `returns null when store name node is missing`() {
+    fun `still matches when store name node is missing (data completeness is a parser concern)`() {
         val root = LogToUiNodeParser.parseLog(noStoreNameLog)
         assertNotNull("Failed to parse log", root)
 
-        assertNull("Missing store name should not match", matcher.matches(root!!))
+        // The matcher identifies the SCREEN TYPE based on structural cues (label + button).
+        // A missing user_name node does not change what screen this is.
+        assertEquals(Screen.PICKUP_DETAILS_PRE_ARRIVAL, matcher.matches(root!!))
     }
 
     // --- PARSING TESTS ---
@@ -138,7 +132,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses store name from user_name node`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         assertEquals("Chipotle", result.storeName)
     }
@@ -146,7 +140,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses full address from address lines`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         assertEquals("350 Congress Ave, Austin, TX 78701", result.storeAddress)
     }
@@ -154,7 +148,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is always NAVIGATING regardless of button text`() {
         val root = LogToUiNodeParser.parseLog(preArrivalArrivedButtonLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         assertEquals(PickupStatus.NAVIGATING, result.status)
     }
@@ -162,7 +156,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `skips address line 1 when it duplicates the store name`() {
         val root = LogToUiNodeParser.parseLog(duplicateAddressLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         // address_line_1 == storeName ("Wendy's"), so only line_2 should appear
         assertEquals("Austin, TX 78704", result.storeAddress)

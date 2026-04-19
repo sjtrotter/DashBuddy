@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.test.util.SnapshotScreenDiagnostics
 import cloud.trotter.dashbuddy.test.util.SnapshotSecurityScanner
 import cloud.trotter.dashbuddy.test.util.SnapshotSession
 import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
+import cloud.trotter.dashbuddy.test.util.TestParserFactory
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import org.junit.AfterClass
 import org.junit.Assert.fail
@@ -33,7 +34,10 @@ class InboxProcessorTest(
         val sharedStats = SnapshotTestStats(INBOX)
 
         private val recognizer: ScreenClassifier by lazy {
-            ScreenClassifier(TestMatcherFactory.createAllMatchers())
+            ScreenClassifier(
+                injectedMatchers = TestMatcherFactory.createAllMatchers(),
+                injectedParsers = TestParserFactory.createAllParsers()
+            )
         }
 
         @JvmStatic

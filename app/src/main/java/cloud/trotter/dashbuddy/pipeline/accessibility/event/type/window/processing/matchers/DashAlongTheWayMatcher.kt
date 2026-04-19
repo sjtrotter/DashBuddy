@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
 import javax.inject.Inject
@@ -14,10 +13,7 @@ class DashAlongTheWayMatcher @Inject constructor() : ScreenMatcher {
     // Check this BEFORE the generic WaitingForOffer matcher
     override val priority = 2
 
-    override fun matches(node: UiNode): ScreenInfo? {
-        // --- 1. ID-BASED MATCHING ---
-        // Using the "Smoking Gun" IDs from your log
-
+    override fun matches(node: UiNode): Screen? {
         // A. Specific Title: "We'll look for orders along the way"
         val hasAlongWayTitle = node.hasNode {
             it.viewIdResourceName?.endsWith("bottom_view_info_ctd_v2_title") == true
@@ -33,20 +29,7 @@ class DashAlongTheWayMatcher @Inject constructor() : ScreenMatcher {
             it.viewIdResourceName?.endsWith("bottom_view_info_title") == true
         }
 
-        // Logic: Must have Navigate Button AND (Specific Title OR Spot Saved Info)
-        if (!hasNavigateButton || (!hasAlongWayTitle && !hasSpotSavedInfo)) {
-            return null
-        }
-
-        // --- 2. RETURN INFO ---
-        // We map this to WaitingForOffer so the Reducer handles it automatically.
-        // We flag 'isHeadingBackToZone' as false, because this is a forward-navigation state.
-
-        return ScreenInfo.WaitingForOffer(
-            screen = targetScreen,
-            currentDashPay = null, // Pay is usually not shown on this specific overlay
-            waitTimeEstimate = null, // No wait time estimate on this screen
-            isHeadingBackToZone = false
-        )
+        // Must have Navigate Button AND (Specific Title OR Spot Saved Info)
+        return if (hasNavigateButton && (hasAlongWayTitle || hasSpotSavedInfo)) targetScreen else null
     }
 }

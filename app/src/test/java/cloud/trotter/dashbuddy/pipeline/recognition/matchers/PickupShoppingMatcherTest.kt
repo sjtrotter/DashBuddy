@@ -4,16 +4,17 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupShoppingMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupShoppingParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PickupShoppingMatcherTest {
 
     private val matcher = PickupShoppingMatcher()
+    private val parser = PickupShoppingParser()
 
     // --- TEST DATA ---
 
@@ -55,23 +56,14 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches PICKUP_DETAILS_POST_ARRIVAL_SHOP with tab layout`() {
         val root = LogToUiNodeParser.parseLog(shoppingLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match shopping screen", result)
-        assertTrue(result is ScreenInfo.PickupDetails)
-        assertEquals(Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP, result!!.screen)
+        assertEquals(Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP, matcher.matches(root!!))
     }
 
     @Test
     fun `matches PICKUP_DETAILS_POST_ARRIVAL_SHOP with To shop text fallback`() {
         val root = LogToUiNodeParser.parseLog(shoppingFallbackLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match fallback layout", result)
-        assertEquals(Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP, result!!.screen)
+        assertEquals(Screen.PICKUP_DETAILS_POST_ARRIVAL_SHOP, matcher.matches(root!!))
     }
 
     @Test
@@ -95,7 +87,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `store name is null (not available on shopping screen)`() {
         val root = LogToUiNodeParser.parseLog(shoppingLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         // Store name uses "sticky" logic from previous screen — not parsed here
         assertNull("Store name not available on shopping screen", result.storeName)
@@ -104,7 +96,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is SHOPPING`() {
         val root = LogToUiNodeParser.parseLog(shoppingLog)!!
-        val result = matcher.matches(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ScreenInfo.PickupDetails
 
         assertEquals(PickupStatus.SHOPPING, result.status)
     }

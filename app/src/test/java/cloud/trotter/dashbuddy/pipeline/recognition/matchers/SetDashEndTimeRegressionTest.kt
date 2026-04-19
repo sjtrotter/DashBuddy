@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SetDashEndTimeMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.SetDashEndTimeParser
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
@@ -39,8 +40,9 @@ class SetDashEndTimeRegressionTest(filename: String, node: UiNode) :
     @Test
     fun `validate snapshot`() {
         val matcher = SetDashEndTimeMatcher()
+        val parser = SetDashEndTimeParser()
 
-        runTest(matcher) { result ->
+        runTest(matcher, parser) { result ->
             val info = result as ScreenInfo.IdleMap
             assertEquals(Screen.SET_DASH_END_TIME, info.screen)
             println("      Zone: ${info.zoneName}")

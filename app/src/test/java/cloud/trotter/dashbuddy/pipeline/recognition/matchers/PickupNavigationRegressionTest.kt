@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupNavigationMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupNavigationParser
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
@@ -39,8 +40,9 @@ class PickupNavigationRegressionTest(filename: String, node: UiNode) :
     @Test
     fun `validate snapshot`() {
         val matcher = PickupNavigationMatcher()
+        val parser = PickupNavigationParser()
 
-        runTest(matcher) { result ->
+        runTest(matcher, parser) { result ->
             val info = result as ScreenInfo.PickupDetails
             assertEquals(Screen.NAVIGATION_VIEW_TO_PICK_UP, info.screen)
             println("      Store: ${info.storeName}  Address: ${info.storeAddress}")

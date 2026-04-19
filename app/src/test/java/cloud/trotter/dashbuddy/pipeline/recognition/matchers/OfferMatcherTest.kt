@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.OfferMatcher
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.OfferParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -16,6 +17,7 @@ import org.junit.Test
 class OfferMatcherTest {
 
     private val matcher = OfferMatcher()
+    private val parser = OfferParser()
 
     // --- TEST DATA ---
 
@@ -119,7 +121,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='Decline', id=no_id, state=null, class=android.widget.Button)
 """.trimIndent()
 
-    // Pay amount missing — should NOT match
+    // Pay amount missing — matcher matches (Decline+Accept present), parser returns Simple
     private val noPayLog = """
 UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='2.8 mi', id=text_field, state=null, class=android.widget.TextView)
@@ -134,34 +136,21 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `matches OFFER_POPUP for standard single-order offer`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Should match offer popup", result)
-        assertTrue(result is ScreenInfo.Offer)
-        assertEquals(Screen.OFFER_POPUP, result!!.screen)
+        assertEquals(Screen.OFFER_POPUP, matcher.matches(root!!))
     }
 
     @Test
     fun `matches OFFER_POPUP when Add to route replaces Accept`() {
         val root = LogToUiNodeParser.parseLog(addToRouteOfferLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Add to route should count as accept anchor", result)
-        assertEquals(Screen.OFFER_POPUP, result!!.screen)
+        assertEquals(Screen.OFFER_POPUP, matcher.matches(root!!))
     }
 
     @Test
     fun `returns OFFER_POPUP_CONFIRM_DECLINE for decline confirmation dialog`() {
         val root = LogToUiNodeParser.parseLog(declineConfirmLog)
         assertNotNull("Failed to parse log", root)
-
-        val result = matcher.matches(root!!)
-
-        assertNotNull("Decline confirm dialog should produce a result", result)
-        assertEquals(Screen.OFFER_POPUP_CONFIRM_DECLINE, result!!.screen)
+        assertEquals(Screen.OFFER_POPUP_CONFIRM_DECLINE, matcher.matches(root!!))
     }
 
     @Test
@@ -189,11 +178,19 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `returns null when pay amount is missing`() {
+    fun `matches when pay amount missing (matcher only checks Decline and Accept)`() {
         val root = LogToUiNodeParser.parseLog(noPayLog)
         assertNotNull("Failed to parse log", root)
 
-        assertNull("Missing pay amount is a critical failure — should not match", matcher.matches(root!!))
+        // Matcher checks structural signals only — Decline+Accept are present so it matches
+        assertEquals(Screen.OFFER_POPUP, matcher.matches(root!!))
+    }
+
+    @Test
+    fun `parser returns Simple when pay amount is missing`() {
+        val root = LogToUiNodeParser.parseLog(noPayLog)!!
+        // Parser returns Simple (not Offer) when payAmount is null — no parseable offer
+        assertTrue("Missing pay should produce Simple result", parser.parse(root) is ScreenInfo.Simple)
     }
 
     // --- PARSING TESTS ---
@@ -201,7 +198,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses pay amount from text_field node`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertEquals(7.50, result.parsedOffer.payAmount!!, 0.01)
     }
@@ -209,7 +206,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses distance miles from text_field node`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertEquals(2.8, result.parsedOffer.distanceMiles!!, 0.01)
     }
@@ -217,7 +214,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses due-by time text from Deliver by text_field`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertEquals("8:45 PM", result.parsedOffer.dueByTimeText)
     }
@@ -225,7 +222,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses single order with store name`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertEquals(1, result.parsedOffer.orders.size)
         assertEquals("Chipotle", result.parsedOffer.orders[0].storeName)
@@ -234,7 +231,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses order type as PICKUP when work_unit_type says Pickup`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertEquals(OrderType.PICKUP, result.parsedOffer.orders[0].orderType)
     }
@@ -242,7 +239,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses order type as SHOP_FOR_ITEMS when work_unit_type says Shop for items`() {
         val root = LogToUiNodeParser.parseLog(shopOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertEquals(OrderType.SHOP_FOR_ITEMS, result.parsedOffer.orders[0].orderType)
     }
@@ -250,7 +247,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses item count from display_name_secondary for shop order`() {
         val root = LogToUiNodeParser.parseLog(shopOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertEquals(8, result.parsedOffer.orders[0].itemCount)
     }
@@ -258,7 +255,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `expands multi-order into separate ParsedOrders`() {
         val root = LogToUiNodeParser.parseLog(multiOrderOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         // "(2 orders)" -> 2 ParsedOrder entries
         assertEquals(2, result.parsedOffer.orders.size)
@@ -270,7 +267,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `detects Red Card badge on order`() {
         val root = LogToUiNodeParser.parseLog(redCardOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertTrue("Red Card badge should be detected", result.parsedOffer.orders[0].badges.contains(OrderBadge.RED_CARD))
     }
@@ -278,7 +275,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `creates fallback order when no display_name nodes found`() {
         val root = LogToUiNodeParser.parseLog(addToRouteOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         // addToRouteOfferLog has a display_name node, this verifies it parsed correctly
         assertEquals(1, result.parsedOffer.orders.size)
@@ -288,7 +285,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `offer hash is not null or blank`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = matcher.matches(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ScreenInfo.Offer
 
         assertTrue("Offer hash should be set", result.parsedOffer.offerHash.isNotBlank())
     }

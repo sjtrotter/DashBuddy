@@ -3,28 +3,24 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.LegacyEnumMatcher
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ScreenClassifier @Inject constructor(
-    // 1. INJECTED: The new, Hilt-managed matchers (OfferMatcher, etc.)
-    injectedMatchers: Set<@JvmSuppressWildcards ScreenMatcher>
+    injectedMatchers: Set<@JvmSuppressWildcards ScreenMatcher>,
+    injectedParsers: Set<@JvmSuppressWildcards ScreenParser>
 ) {
 
-    // 2. MANUAL: The old enums that still have logic
-    private val legacyMatchers = Screen.entries
-        .filter { it.hasMatchingCriteria }
-        .map { LegacyEnumMatcher(it) }
-
-    // 3. MERGE: Combine both lists, sort by priority
-    private val allMatchers = (injectedMatchers + legacyMatchers)
+    private val allMatchers = injectedMatchers
         .sortedByDescending { it.priority }
 
+    private val parserMap: Map<Screen, ScreenParser> =
+        injectedParsers.associateBy { it.targetScreen }
+
     fun identify(node: UiNode): ScreenInfo {
-        // Iterate through the unified list
-        return allMatchers.firstNotNullOfOrNull { it.matches(node) }
-            ?: ScreenInfo.Simple(Screen.UNKNOWN)
+        val screen = allMatchers.firstNotNullOfOrNull { it.matches(node) }
+            ?: return ScreenInfo.Simple(Screen.UNKNOWN)
+        return parserMap[screen]?.parse(node) ?: ScreenInfo.Simple(screen)
     }
 }

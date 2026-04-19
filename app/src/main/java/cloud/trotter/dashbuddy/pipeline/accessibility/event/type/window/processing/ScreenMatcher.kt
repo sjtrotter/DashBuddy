@@ -8,5 +8,6 @@ interface ScreenMatcher {
     val targetScreen: Screen
     val priority: Int
 
-    fun matches(node: UiNode): ScreenInfo?
+    /** Pure recognition predicate. Returns [targetScreen] on match, null otherwise. No data extraction. */
+    fun matches(node: UiNode): Screen?
 }
