@@ -70,6 +70,11 @@ object TestResourceLoader {
     }
 
     /**
+     * Loads a single file into a UiNode. Used by SnapshotLibrarian for content fingerprinting.
+     */
+    fun loadNode(file: File): UiNode = parseFlexibleJson(file.readText()).first
+
+    /**
      * LEGACY SUPPORT: Returns [Filename, Node] for older tests (2-argument constructor)
      */
     fun loadForParameterized(folderName: String): Collection<Array<Any>> {
