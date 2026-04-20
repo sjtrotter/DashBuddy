@@ -15,11 +15,15 @@ class DashSummaryParser @Inject constructor() : ScreenParser {
 
     private val timePattern = Pattern.compile("(\\d+)\\s*(hr|min)")
     private val offersPattern = Pattern.compile("(\\d+)\\s*out of\\s*(\\d+)", Pattern.CASE_INSENSITIVE)
+    private val currencyPattern = Pattern.compile("^\\$[\\d,]+\\.\\d{2}$")
 
     override fun parse(node: UiNode): ScreenInfo {
         Timber.d("DashSummaryParser: analyzing node tree...")
 
+        // DoorDash removed the header_pay ID in a late-2025 app update; fall back to finding
+        // the first bare currency text node in the tree (the session total is always first).
         val payNode = node.findDescendantById("header_pay")
+            ?: node.findNode { it.text != null && currencyPattern.matcher(it.text!!).matches() }
         val totalEarnings = payNode?.text?.let { UtilityFunctions.parseCurrency(it) }
         Timber.d("Dash Earnings: node='${payNode?.text}' -> parsed=$totalEarnings")
 
