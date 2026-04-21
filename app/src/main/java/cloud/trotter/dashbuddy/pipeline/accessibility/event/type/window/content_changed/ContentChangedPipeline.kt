@@ -19,7 +19,7 @@ class ContentChangedPipeline @Inject constructor(
         .filter { it.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }
         .onEach { Timber.v("🌊 FLOOD: Content Change from ${it.className}") }
         .debounceWithTimeout(150L, 300L)
-        .onEach { Timber.d("💧 DRIP: Survivor! ${it.className}") }
+        .onEach { Timber.d("💧 DRIP: triggered by ${it.className}, capturing root...") }
         .mapNotNull { _ ->
             source.getCurrentRootNode()
         }
