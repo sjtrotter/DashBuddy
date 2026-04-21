@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DeliveryStateFactory
 import cloud.trotter.dashbuddy.state.factories.OfferStateFactory
 import cloud.trotter.dashbuddy.state.model.Transition
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,6 +53,7 @@ class PickupReducer @Inject constructor(
                 if (hasStoreChanged || hasStatusChanged) {
                     val nextStoreName = if (hasStoreChanged) newStoreName else state.storeName
                     val nextState = state.copy(storeName = nextStoreName, status = input.status)
+                    if (hasStatusChanged) Timber.i("🛍️ PICKUP STATUS: ${state.status} → ${input.status} @ $nextStoreName")
                     val effects = mutableListOf<AppEffect>()
 
                     // Persona Selection

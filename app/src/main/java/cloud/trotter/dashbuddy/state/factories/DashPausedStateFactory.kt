@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +26,8 @@ class DashPausedStateFactory @Inject constructor() {
             dashId = oldState.dashId,
             durationMs = durationMs
         )
+
+        Timber.i("⏸️ DASH PAUSED: '${input.rawTimeText}' remaining (safety timer: ${durationMs}ms)")
 
         val effects = mutableListOf<AppEffect>()
 
