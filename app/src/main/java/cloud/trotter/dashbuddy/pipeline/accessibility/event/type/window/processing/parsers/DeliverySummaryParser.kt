@@ -43,6 +43,8 @@ class DeliverySummaryParser @Inject constructor(
             }
         }
 
+        Timber.d("DeliverySummaryParser: expanded=$isVisuallyExpanded, headline=\$$headlineTotal, parsedTotal=${parsedPay?.total}")
+
         val expandButton = if (parsedPay == null) {
             earningsContainer?.findDescendantById("expandable_view")
                 ?: earningsContainer?.findDescendantById("expandable_layout")

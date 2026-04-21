@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +26,10 @@ class SummaryStateFactory @Inject constructor() {
             durationMillis = input.onlineDurationMillis,
             acceptanceRateForSession = "${input.offersAccepted}/${input.offersTotal}"
         )
+
+        val earnings = input.totalEarnings?.let { UtilityFunctions.formatCurrency(it) } ?: "?"
+        val durationMin = input.onlineDurationMillis / 60000
+        Timber.i("🏁 DASH DONE: $earnings | ${input.offersAccepted}/${input.offersTotal} offers | ${durationMin}min online")
 
         val effects = mutableListOf<AppEffect>()
 

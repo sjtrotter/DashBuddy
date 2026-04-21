@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +24,8 @@ class DeliveryStateFactory @Inject constructor() {
             customerNameHash = null,
             customerAddressHash = null
         )
+
+        Timber.i("🚗 DELIVERY: en route to customer [${input.customerNameHash?.take(6) ?: "?"}]")
 
         val effects = mutableListOf<AppEffect>()
 

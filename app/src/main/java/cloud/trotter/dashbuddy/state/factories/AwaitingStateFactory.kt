@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,6 +28,9 @@ class AwaitingStateFactory @Inject constructor() {
             waitTimeEstimate = input.waitTimeEstimate,
             isHeadingBackToZone = input.isHeadingBackToZone
         )
+
+        val isDashStart = oldState is AppStateV2.IdleOffline || oldState is AppStateV2.Initializing
+        Timber.i("🏃 AWAITING OFFER${if (isDashStart) " — DASH STARTED" else ""}: wait=${input.waitTimeEstimate ?: "?"}")
 
         val effects = mutableListOf<AppEffect>()
 

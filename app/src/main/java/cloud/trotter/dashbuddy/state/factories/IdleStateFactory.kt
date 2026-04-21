@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +22,9 @@ class IdleStateFactory @Inject constructor() {
             lastKnownZone = input.zoneName,
             dashType = input.dashType
         )
+
+        val endingDash = oldState.dashId != null
+        Timber.i("🗺️ IDLE: zone='${input.zoneName ?: "Unknown"}', type=${input.dashType}${if (endingDash) " — DASH ENDED" else ""}")
 
         val effects = mutableListOf<AppEffect>()
 

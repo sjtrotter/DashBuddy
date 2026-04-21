@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,7 +21,11 @@ class ScreenClassifier @Inject constructor(
 
     fun identify(node: UiNode): ScreenInfo {
         val screen = allMatchers.firstNotNullOfOrNull { it.matches(node) }
-            ?: return ScreenInfo.Simple(Screen.UNKNOWN)
+            ?: run {
+                Timber.i("🖥️ SCREEN: UNKNOWN")
+                return ScreenInfo.Simple(Screen.UNKNOWN)
+            }
+        Timber.i("🖥️ SCREEN: ${screen.name}")
         return parserMap[screen]?.parse(node) ?: ScreenInfo.Simple(screen)
     }
 }

@@ -19,7 +19,8 @@ class DashPausedMatcher @Inject constructor() : ScreenMatcher {
         } != null
         val hasTimer = node.findNode { it.viewIdResourceName?.endsWith("progress_number") == true } != null
 
-        Timber.v("DashPaused check: title=$hasTitle, btn=$hasResumeButton, timer=$hasTimer")
+        if (hasTitle || hasResumeButton || hasTimer)
+            Timber.v("DashPaused check: title=$hasTitle, btn=$hasResumeButton, timer=$hasTimer")
         return if (hasTitle && hasResumeButton && hasTimer) targetScreen else null
     }
 }

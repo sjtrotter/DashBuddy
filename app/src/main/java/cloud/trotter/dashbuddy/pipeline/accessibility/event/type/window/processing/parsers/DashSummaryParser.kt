@@ -18,7 +18,7 @@ class DashSummaryParser @Inject constructor() : ScreenParser {
     private val currencyPattern = Pattern.compile("^\\$[\\d,]+\\.\\d{2}$")
 
     override fun parse(node: UiNode): ScreenInfo {
-        Timber.d("DashSummaryParser: analyzing node tree...")
+        Timber.v("DashSummaryParser: analyzing node tree...")
 
         // DoorDash removed the header_pay ID in a late-2025 app update; fall back to finding
         // the first bare currency text node in the tree (the session total is always first).
@@ -38,7 +38,7 @@ class DashSummaryParser @Inject constructor() : ScreenParser {
             val parent = labelNode.parent ?: continue
             val valueNode = parent.findChildById("value") ?: continue
             val valueText = valueNode.text ?: ""
-            Timber.d("Found Row: '$label' -> '$valueText'")
+            Timber.v("Found Row: '$label' -> '$valueText'")
 
             when {
                 label.equals("Total online time", ignoreCase = true) ->

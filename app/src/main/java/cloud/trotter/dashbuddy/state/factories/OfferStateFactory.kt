@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,6 +28,11 @@ class OfferStateFactory @Inject constructor() {
             currentOfferHash = input.parsedOffer.offerHash,
             currentScreen = input.screen,
         )
+
+        val pay = input.parsedOffer.payAmount?.let { "$${"%.2f".format(it)}" } ?: "?"
+        val dist = input.parsedOffer.distanceMiles?.let { "${"%.1f".format(it)}mi" } ?: "?"
+        val time = input.parsedOffer.timeToCompleteMinutes?.let { "${it}min" } ?: "?"
+        Timber.i("💰 OFFER: $pay • $dist • $time — $merchantName")
 
         val effects = mutableListOf<AppEffect>()
         if (!isRecovery) {
