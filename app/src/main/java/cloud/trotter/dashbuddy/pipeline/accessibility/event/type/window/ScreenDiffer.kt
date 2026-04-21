@@ -8,27 +8,20 @@ import javax.inject.Singleton
 class ScreenDiffer @Inject constructor() {
 
     private var lastStructure: Int? = null
-    private var lastContent: Int? = null
 
     /**
-     * Returns TRUE if the screen is different from the last check.
+     * Returns TRUE if the screen structure has changed since the last check.
+     * Only compares [UiNode.structuralHash] (className + viewIdResourceName hierarchy) —
+     * text/content changes within a stable layout do not constitute a new screen.
      */
     fun hasChanged(node: UiNode): Boolean {
-        // Accessing the properties triggers the lazy computation automatically
         val newStructure = node.structuralHash
-        val newContent = node.contentHash
-
-        if (newStructure == lastStructure && newContent == lastContent) {
-            return false // Screen is identical
-        }
-
+        if (newStructure == lastStructure) return false
         lastStructure = newStructure
-        lastContent = newContent
         return true
     }
 
     fun reset() {
         lastStructure = null
-        lastContent = null
     }
 }
