@@ -79,7 +79,7 @@ class StateManagerV2 @Inject constructor(
             )
                 .collect { stateEvent ->
                     // The Single Source of Truth
-                    Timber.i("📥 PROCESSING: ${stateEvent::class.simpleName}")
+                    Timber.d("📥 PROCESSING: ${stateEvent::class.simpleName}")
                     processEvent(stateEvent)
                 }
         }

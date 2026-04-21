@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,6 +28,8 @@ class PickupStateFactory @Inject constructor() {
             customerNameHash = input.customerNameHash,
             status = input.status
         )
+
+        Timber.i("🛍️ PICKUP: $safeStoreName [${input.status}]")
 
         val effects = mutableListOf<AppEffect>()
         if (!isRecovery) {

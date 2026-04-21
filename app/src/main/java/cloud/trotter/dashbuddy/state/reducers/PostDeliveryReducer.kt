@@ -120,6 +120,7 @@ class PostDeliveryReducer @Inject constructor(
 
         // --- PHASE 1: Data Accumulation (The Ground Truth) ---
         if (input.parsedPay != null && input.parsedPay != state.parsedPay) {
+            Timber.i("📦 DELIVERY: ${UtilityFunctions.formatCurrency(input.parsedPay!!.total)} total")
             newState = newState.copy(
                 parsedPay = input.parsedPay,
                 totalPay = input.parsedPay!!.total,
