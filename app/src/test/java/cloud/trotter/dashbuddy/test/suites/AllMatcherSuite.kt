@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.pipeline.recognition.matchers.DashSummaryRegressi
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.DeliverySummaryCollapsedRegressionTest
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.DeliverySummaryExpandedRegressionTest
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.DropoffNavigationRegressionTest
+import cloud.trotter.dashbuddy.pipeline.recognition.matchers.NavigationViewRegressionTest
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.DropoffPreArrivalRegressionTest
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.IdleMapRegressionTest
 import cloud.trotter.dashbuddy.pipeline.recognition.matchers.LoadingScreenRegressionTest
@@ -55,6 +56,7 @@ import org.junit.runners.Suite
     DashSummaryRegressionTest::class,
 
     // UI / Navigation screens
+    NavigationViewRegressionTest::class,
     ScheduleRegressionTest::class,
     TimelineRegressionTest::class,
 

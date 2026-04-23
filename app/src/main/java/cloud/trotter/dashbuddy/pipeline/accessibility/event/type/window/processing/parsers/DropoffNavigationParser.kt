@@ -18,8 +18,11 @@ class DropoffNavigationParser @Inject constructor() : ScreenParser {
             it.viewIdResourceName?.endsWith("bottom_sheet_task_title") == true
         }?.text ?: ""
 
-        // "Deliver to John Doe" -> "John Doe"
-        val rawName = titleText.replace("Deliver to ", "", ignoreCase = true).trim()
+        // "Deliver to John Doe" or "Heading to John Doe" -> "John Doe"
+        val rawName = titleText
+            .replace("Deliver to ", "", ignoreCase = true)
+            .replace("Heading to ", "", ignoreCase = true)
+            .trim()
 
         val address1 = node.findNode {
             it.viewIdResourceName?.endsWith("bottom_sheet_address_line_1") == true

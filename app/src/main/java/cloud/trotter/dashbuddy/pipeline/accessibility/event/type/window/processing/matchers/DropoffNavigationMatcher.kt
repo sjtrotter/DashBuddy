@@ -17,10 +17,18 @@ class DropoffNavigationMatcher @Inject constructor() : ScreenMatcher {
 
         val titleText = navTitleNode.text ?: ""
 
-        // Fail fast: "Heading to" means pickup, not dropoff.
-        if (titleText.contains("Heading to", ignoreCase = true)) return null
+        // "Deliver to [name]" — definitively a dropoff.
+        if (titleText.contains("Deliver to", ignoreCase = true)) return targetScreen
 
-        // Must say "Deliver to" to be a dropoff.
-        return if (titleText.contains("Deliver to", ignoreCase = true)) targetScreen else null
+        // "Heading to [name]" is shared with pickup navigation. Confirm dropoff via "Deliver by"
+        // in the arrive-by node — pickup navigation says "Pick up by [time]" instead.
+        if (titleText.contains("Heading to", ignoreCase = true)) {
+            val timeNode = node.findNode {
+                it.viewIdResourceName?.endsWith("bottom_sheet_task_arrive_by") == true
+            }
+            if (timeNode?.text?.contains("Deliver by", ignoreCase = true) == true) return targetScreen
+        }
+
+        return null
     }
 }
