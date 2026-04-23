@@ -1,0 +1,37 @@
+{
+    "timestamp": 1774660434921,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "androidx.compose.ui.platform.ComposeView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 278,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 278,
+                    "right": 1080,
+                    "bottom": 2347
+                }
+            }
+        ]
+    }
+}

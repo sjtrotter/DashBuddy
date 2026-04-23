@@ -1,0 +1,130 @@
+{
+    "timestamp": 1774661445874,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 136,
+            "right": 1080,
+            "bottom": 278
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 136,
+                    "right": 1080,
+                    "bottom": 278
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 9,
+                            "top": 153,
+                            "right": 116,
+                            "bottom": 260
+                        },
+                        "children": [
+                            {
+                                "desc": "Back",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 180,
+                                    "right": 89,
+                                    "bottom": 233
+                                }
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 18,
+                                    "top": 162,
+                                    "right": 107,
+                                    "bottom": 251
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 125,
+                            "top": 154,
+                            "right": 402,
+                            "bottom": 260
+                        },
+                        "children": [
+                            {
+                                "text": "Scan barcode",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 125,
+                                    "top": 181,
+                                    "right": 402,
+                                    "bottom": 233
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 964,
+                            "top": 153,
+                            "right": 1071,
+                            "bottom": 260
+                        },
+                        "children": [
+                            {
+                                "desc": "Help",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 991,
+                                    "top": 180,
+                                    "right": 1044,
+                                    "bottom": 233
+                                }
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 973,
+                                    "top": 162,
+                                    "right": 1062,
+                                    "bottom": 251
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

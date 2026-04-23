@@ -1,0 +1,58 @@
+{
+    "timestamp": 1774616132241,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "SENSITIVE",
+        "APP_STARTING_OR_LOADING",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[549,1678][1008,2079]",
+        "children": [
+            {
+                "text": "10:30",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[727,1678][830,1700]"
+            },
+            {
+                "text": "11:00",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[731,1717][826,1764]"
+            },
+            {
+                "text": "11:30",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[733,1784][824,1831]"
+            },
+            {
+                "text": "12:00",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[728,1847][830,1894]"
+            },
+            {
+                "text": "12:30",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[730,1915][828,1962]"
+            },
+            {
+                "text": "13:00",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[727,1981][830,2028]"
+            }
+        ]
+    }
+}

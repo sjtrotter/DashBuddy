@@ -1,0 +1,53 @@
+{
+    "timestamp": 1774659538836,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/layout_loading",
+        "class": "android.widget.FrameLayout",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 540,
+            "top": 1366,
+            "right": 540,
+            "bottom": 1366
+        },
+        "children": [
+            {
+                "class": "android.widget.FrameLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 540,
+                    "top": 1366,
+                    "right": 540,
+                    "bottom": 1366
+                },
+                "children": [
+                    {
+                        "desc": "Loading",
+                        "id": "com.doordash.driverapp:id/animation_view_loading",
+                        "class": "android.widget.ImageView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 540,
+                            "top": 1366,
+                            "right": 540,
+                            "bottom": 1366
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

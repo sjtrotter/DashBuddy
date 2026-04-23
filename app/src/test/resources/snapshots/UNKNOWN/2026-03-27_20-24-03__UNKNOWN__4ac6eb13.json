@@ -1,0 +1,165 @@
+{
+    "timestamp": 1774661043825,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.widget.HorizontalScrollView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 448,
+            "right": 1080,
+            "bottom": 990
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 448,
+                    "right": 414,
+                    "bottom": 990
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 448,
+                            "right": 414,
+                            "bottom": 893
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 888,
+                            "right": 414,
+                            "bottom": 995
+                        },
+                        "children": [
+                            {
+                                "text": "Even, Bright Yellow",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 81,
+                                    "top": 920,
+                                    "right": 405,
+                                    "bottom": 963
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 432,
+                    "top": 448,
+                    "right": 810,
+                    "bottom": 990
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 432,
+                            "top": 448,
+                            "right": 810,
+                            "bottom": 893
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 432,
+                            "top": 888,
+                            "right": 810,
+                            "bottom": 995
+                        },
+                        "children": [
+                            {
+                                "text": "Soft Spots",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 552,
+                                    "top": 920,
+                                    "right": 727,
+                                    "bottom": 963
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 828,
+                    "top": 448,
+                    "right": 1080,
+                    "bottom": 990
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 828,
+                            "top": 448,
+                            "right": 1080,
+                            "bottom": 893
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 828,
+                            "top": 888,
+                            "right": 1080,
+                            "bottom": 995
+                        },
+                        "children": [
+                            {
+                                "text": "Green Patches",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 913,
+                                    "top": 920,
+                                    "right": 1080,
+                                    "bottom": 963
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

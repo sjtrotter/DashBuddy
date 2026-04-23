@@ -1,0 +1,94 @@
+{
+    "timestamp": 1774661468591,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 36,
+            "top": 448,
+            "right": 1044,
+            "bottom": 1410
+        },
+        "children": [
+            {
+                "desc": "Step 1",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 72,
+                    "top": 484,
+                    "right": 125,
+                    "bottom": 537
+                }
+            },
+            {
+                "text": "Confirm quantity",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 161,
+                    "top": 484,
+                    "right": 919,
+                    "bottom": 536
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 928,
+                    "top": 457,
+                    "right": 1035,
+                    "bottom": 564
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 260,
+                    "top": 609,
+                    "right": 527,
+                    "bottom": 876
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 260,
+                            "top": 609,
+                            "right": 527,
+                            "bottom": 876
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 554,
+                    "top": 609,
+                    "right": 821,
+                    "bottom": 876
+                }
+            }
+        ]
+    }
+}

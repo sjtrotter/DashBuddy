@@ -1,0 +1,226 @@
+{
+    "timestamp": 1774661270958,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 38,
+            "top": 1779,
+            "right": 1042,
+            "bottom": 2426
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 38,
+                    "top": 1779,
+                    "right": 1042,
+                    "bottom": 2426
+                },
+                "children": [
+                    {
+                        "id": "item_image",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 74,
+                            "top": 1815,
+                            "right": 341,
+                            "bottom": 2082
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 74,
+                                    "top": 1815,
+                                    "right": 341,
+                                    "bottom": 2082
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "text": "Fresh Bunch of Bananas, 4-7 Bananas",
+                        "id": "item_name",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 377,
+                            "top": 1815,
+                            "right": 1015,
+                            "bottom": 1936
+                        }
+                    },
+                    {
+                        "text": "$0.53/lb",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 377,
+                            "top": 1954,
+                            "right": 517,
+                            "bottom": 1997
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 377,
+                            "top": 2028,
+                            "right": 610,
+                            "bottom": 2134
+                        },
+                        "children": [
+                            {
+                                "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 404,
+                                    "top": 2051,
+                                    "right": 583,
+                                    "bottom": 2111
+                                },
+                                "children": [
+                                    {
+                                        "text": "1 × Bunch",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 404,
+                                            "top": 2051,
+                                            "right": 583,
+                                            "bottom": 2111
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "text": "Enter item weight",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 422,
+                            "top": 2147,
+                            "right": 716,
+                            "bottom": 2190
+                        }
+                    },
+                    {
+                        "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 74,
+                            "top": 2226,
+                            "right": 1006,
+                            "bottom": 2347
+                        },
+                        "children": [
+                            {
+                                "desc": ": Yellow bunch:  | ",
+                                "class": "android.view.ViewGroup",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 74,
+                                    "top": 2226,
+                                    "right": 1006,
+                                    "bottom": 2347
+                                },
+                                "children": [
+                                    {
+                                        "id": "com.doordash.driverapp:id/actions_group",
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 74,
+                                            "top": 2226,
+                                            "right": 74,
+                                            "bottom": 2226
+                                        }
+                                    },
+                                    {
+                                        "id": "com.doordash.driverapp:id/subdued_decoration_view",
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 74,
+                                            "top": 2228,
+                                            "right": 83,
+                                            "bottom": 2347
+                                        }
+                                    },
+                                    {
+                                        "id": "com.doordash.driverapp:id/start_icon_image_view",
+                                        "class": "android.widget.ImageView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 101,
+                                            "top": 2253,
+                                            "right": 172,
+                                            "bottom": 2324
+                                        }
+                                    },
+                                    {
+                                        "text": "Yellow bunch:  | ",
+                                        "id": "com.doordash.driverapp:id/body_text_view",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 190,
+                                            "top": 2261,
+                                            "right": 871,
+                                            "bottom": 2319
+                                        }
+                                    },
+                                    {
+                                        "id": "com.doordash.driverapp:id/button_container",
+                                        "class": "android.widget.LinearLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 190,
+                                            "top": 2319,
+                                            "right": 871,
+                                            "bottom": 2319
+                                        }
+                                    },
+                                    {
+                                        "id": "com.doordash.driverapp:id/end_icon_button",
+                                        "class": "android.widget.Button",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 898,
+                                            "top": 2253,
+                                            "right": 970,
+                                            "bottom": 2324
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

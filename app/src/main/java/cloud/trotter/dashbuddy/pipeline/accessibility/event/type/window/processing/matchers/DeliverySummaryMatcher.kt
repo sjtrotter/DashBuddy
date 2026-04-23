@@ -12,6 +12,13 @@ class DeliverySummaryMatcher @Inject constructor() : ScreenMatcher {
     override val priority: Int = 20
 
     override fun matches(node: UiNode): Screen? {
+        // The timeline screen also contains "This offer" in its earnings section.
+        // Guard against that false positive — the real delivery summary never has "pause orders".
+        val hasPauseOrders = node.hasNode {
+            (it.text ?: "").contains("pause orders", ignoreCase = true)
+        }
+        if (hasPauseOrders) return null
+
         val hasContext = node.hasNode {
             val text = it.text ?: ""
             text.contains("This offer", ignoreCase = false) ||

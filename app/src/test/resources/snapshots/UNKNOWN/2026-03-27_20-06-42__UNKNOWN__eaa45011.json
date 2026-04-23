@@ -1,0 +1,95 @@
+{
+    "timestamp": 1774660002155,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 2070,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 27,
+                    "top": 2097,
+                    "right": 1053,
+                    "bottom": 2204
+                },
+                "children": [
+                    {
+                        "text": "Scan item barcode",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 349,
+                            "top": 2125,
+                            "right": 729,
+                            "bottom": 2177
+                        }
+                    },
+                    {
+                        "class": "android.widget.Button",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 27,
+                            "top": 2097,
+                            "right": 1053,
+                            "bottom": 2204
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 27,
+                    "top": 2213,
+                    "right": 1053,
+                    "bottom": 2320
+                },
+                "children": [
+                    {
+                        "text": "Item unavailable",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 370,
+                            "top": 2241,
+                            "right": 708,
+                            "bottom": 2293
+                        }
+                    },
+                    {
+                        "class": "android.widget.Button",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 27,
+                            "top": 2213,
+                            "right": 1053,
+                            "bottom": 2320
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,39 @@
+{
+    "timestamp": 1774625930507,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 36,
+            "top": 1834,
+            "right": 1044,
+            "bottom": 1940
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 1792,
+                    "right": 481,
+                    "bottom": 1898
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 1845,
+                    "right": 1044,
+                    "bottom": 1951
+                }
+            }
+        ]
+    }
+}

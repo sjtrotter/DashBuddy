@@ -1,0 +1,47 @@
+{
+    "timestamp": 1774616293302,
+    "breadcrumbs": [
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[72,1124][1008,1213]",
+        "children": [
+            {
+                "text": "Start around 11 AM",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[72,1142][832,1194]"
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[868,1124][1008,1213]",
+                "children": [
+                    {
+                        "text": "Start",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[895,1156][979,1199]"
+                    },
+                    {
+                        "class": "android.widget.Button",
+                        "isEnabled": true,
+                        "bounds": "[868,1142][1008,1213]"
+                    }
+                ]
+            }
+        ]
+    }
+}

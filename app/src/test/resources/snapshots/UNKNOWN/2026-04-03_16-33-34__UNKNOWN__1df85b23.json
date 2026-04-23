@@ -1,0 +1,26 @@
+{
+    "timestamp": 1775252014328,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "0",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 544,
+            "top": 160,
+            "right": 573,
+            "bottom": 196
+        }
+    }
+}

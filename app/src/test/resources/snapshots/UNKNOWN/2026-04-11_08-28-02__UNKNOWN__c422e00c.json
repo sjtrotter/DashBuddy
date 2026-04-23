@@ -1,0 +1,74 @@
+{
+    "timestamp": 1775914082483,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/laneGuidanceRecycler",
+        "class": "androidx.recyclerview.widget.RecyclerView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 446,
+            "top": 403,
+            "right": 634,
+            "bottom": 488
+        },
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 464,
+                    "top": 412,
+                    "right": 531,
+                    "bottom": 479
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/itemLaneGuidance",
+                        "class": "android.widget.ImageView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 464,
+                            "top": 412,
+                            "right": 531,
+                            "bottom": 479
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 549,
+                    "top": 412,
+                    "right": 616,
+                    "bottom": 479
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/itemLaneGuidance",
+                        "class": "android.widget.ImageView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 549,
+                            "top": 412,
+                            "right": 616,
+                            "bottom": 479
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

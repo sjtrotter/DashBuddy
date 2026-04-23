@@ -1,0 +1,50 @@
+{
+    "timestamp": 1775263503411,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 36,
+            "top": 1049,
+            "right": 1044,
+            "bottom": 1174
+        },
+        "children": [
+            {
+                "desc": "Step 1 completed",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 72,
+                    "top": 1085,
+                    "right": 125,
+                    "bottom": 1138
+                }
+            },
+            {
+                "text": "1 × bunch",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 161,
+                    "top": 1085,
+                    "right": 919,
+                    "bottom": 1137
+                }
+            }
+        ]
+    }
+}

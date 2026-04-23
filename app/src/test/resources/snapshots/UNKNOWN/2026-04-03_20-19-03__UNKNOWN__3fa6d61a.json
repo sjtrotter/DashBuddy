@@ -1,0 +1,27 @@
+{
+    "timestamp": 1775265543020,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN"
+    ],
+    "root": {
+        "desc": "Loading",
+        "id": "com.doordash.driverapp:id/loadingView",
+        "class": "android.widget.ImageView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 496,
+            "top": 1042,
+            "right": 585,
+            "bottom": 1131
+        }
+    }
+}

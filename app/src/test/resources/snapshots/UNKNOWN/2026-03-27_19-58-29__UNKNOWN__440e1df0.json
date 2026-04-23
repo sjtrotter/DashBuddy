@@ -1,0 +1,25 @@
+{
+    "timestamp": 1774659509332,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW_TO_PICK_UP",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_PICK_UP",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_PICK_UP",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_PICK_UP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.ViewGroup",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 2186,
+            "right": 1080,
+            "bottom": 2347
+        }
+    }
+}

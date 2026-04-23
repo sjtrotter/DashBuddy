@@ -1,0 +1,27 @@
+{
+    "timestamp": 1775264299505,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "14 min",
+        "id": "com.doordash.driverapp:id/bottom_sheet_remaining_time_v2",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 432,
+            "top": 2134,
+            "right": 648,
+            "bottom": 2267
+        }
+    }
+}

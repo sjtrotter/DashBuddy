@@ -1,0 +1,171 @@
+{
+    "timestamp": 1774661389007,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 278,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "text": "H-E-B Texas Roots Fresh Kale Greens, 1 Bundle",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 318,
+                    "right": 918,
+                    "bottom": 365
+                }
+            },
+            {
+                "text": "1 × Pack",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 369,
+                    "right": 167,
+                    "bottom": 412
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 448,
+                    "right": 1044,
+                    "bottom": 1148
+                },
+                "children": [
+                    {
+                        "desc": "Step 1",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 72,
+                            "top": 484,
+                            "right": 125,
+                            "bottom": 537
+                        }
+                    },
+                    {
+                        "text": "Confirm quantity",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 161,
+                            "top": 484,
+                            "right": 919,
+                            "bottom": 536
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 928,
+                            "top": 457,
+                            "right": 1035,
+                            "bottom": 564
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 407,
+                            "top": 609,
+                            "right": 674,
+                            "bottom": 876
+                        }
+                    },
+                    {
+                        "text": "1 × pack",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 437,
+                            "top": 912,
+                            "right": 644,
+                            "bottom": 978
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 330,
+                            "top": 892,
+                            "right": 437,
+                            "bottom": 998
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 72,
+                            "top": 1005,
+                            "right": 1008,
+                            "bottom": 1112
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 72,
+                                    "top": 1005,
+                                    "right": 1008,
+                                    "bottom": 1112
+                                },
+                                "children": [
+                                    {
+                                        "text": "Confirm",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 455,
+                                            "top": 1033,
+                                            "right": 624,
+                                            "bottom": 1085
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.Button",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 72,
+                                            "top": 1005,
+                                            "right": 1008,
+                                            "bottom": 1112
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

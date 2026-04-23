@@ -1,0 +1,110 @@
+{
+    "timestamp": 1774662918112,
+    "breadcrumbs": [
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 2288,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 2154,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 505,
+                            "top": 2154,
+                            "right": 576,
+                            "bottom": 2261
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 487,
+                                    "top": 2154,
+                                    "right": 594,
+                                    "bottom": 2261
+                                },
+                                "children": [
+                                    {
+                                        "desc": "Drag handle",
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 505,
+                                            "top": 2203,
+                                            "right": 576,
+                                            "bottom": 2212
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "text": "When should it arrive?",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2297,
+                            "right": 1044,
+                            "bottom": 2363
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 2399,
+                            "right": 1080,
+                            "bottom": 2400
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 2399,
+                                    "right": 1080,
+                                    "bottom": 2400
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

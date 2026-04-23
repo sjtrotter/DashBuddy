@@ -1,0 +1,239 @@
+{
+    "timestamp": 1774662547378,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/prism_sheet",
+        "class": "android.view.ViewGroup",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1842,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet_collar_view",
+                "class": "android.widget.FrameLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 4094,
+                    "right": 1080,
+                    "bottom": 4130
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/handle_overlay",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 4094,
+                            "right": 1080,
+                            "bottom": 4130
+                        },
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/handle_overlay_image",
+                                "class": "android.widget.ImageView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 4112,
+                                    "right": 1080,
+                                    "bottom": 4121
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "com.doordash.driverapp:id/prism_sheet_content_parent_container",
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 4130,
+                    "right": 1080,
+                    "bottom": 4563
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/nested_scroll_view",
+                        "class": "android.widget.ScrollView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 4130,
+                            "right": 1080,
+                            "bottom": 4563
+                        },
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/prism_content_container",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 4130,
+                                    "right": 1080,
+                                    "bottom": 4563
+                                },
+                                "children": [
+                                    {
+                                        "id": "com.doordash.driverapp:id/bottomsheet_content_container",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 4130,
+                                            "right": 1080,
+                                            "bottom": 4563
+                                        },
+                                        "children": [
+                                            {
+                                                "class": "androidx.compose.ui.platform.ComposeView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 4130,
+                                                    "right": 1080,
+                                                    "bottom": 4563
+                                                },
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 4130,
+                                                            "right": 1080,
+                                                            "bottom": 4563
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 0,
+                                                                    "top": 4130,
+                                                                    "right": 1080,
+                                                                    "bottom": 4563
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "text": "Confirm order was completed",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 36,
+                                                                            "top": 1914,
+                                                                            "right": 1044,
+                                                                            "bottom": 1980
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 36,
+                                                                            "top": 2034,
+                                                                            "right": 1044,
+                                                                            "bottom": 2141
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "class": "android.widget.Button",
+                                                                                "isClickable": true,
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 36,
+                                                                                    "top": 4286,
+                                                                                    "right": 1044,
+                                                                                    "bottom": 4393
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "text": "Confirm",
+                                                                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                                                                        "class": "android.widget.TextView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 456,
+                                                                                            "top": 4307,
+                                                                                            "right": 624,
+                                                                                            "bottom": 4373
+                                                                                        }
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 36,
+                                                                            "top": 4420,
+                                                                            "right": 1044,
+                                                                            "bottom": 4527
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "class": "android.widget.Button",
+                                                                                "isClickable": true,
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 36,
+                                                                                    "top": 2168,
+                                                                                    "right": 1044,
+                                                                                    "bottom": 2275
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "text": "Back",
+                                                                                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                                                                        "class": "android.widget.TextView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 489,
+                                                                                            "top": 4441,
+                                                                                            "right": 591,
+                                                                                            "bottom": 4507
+                                                                                        }
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

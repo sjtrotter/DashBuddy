@@ -1,0 +1,27 @@
+{
+    "timestamp": 1774662277228,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "Shady Hollow Lane ",
+        "id": "com.doordash.driverapp:id/roadNameView",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 346,
+            "top": 1976,
+            "right": 734,
+            "bottom": 2083
+        }
+    }
+}

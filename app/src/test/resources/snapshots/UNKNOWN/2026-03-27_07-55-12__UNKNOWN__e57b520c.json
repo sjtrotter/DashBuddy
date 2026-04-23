@@ -1,0 +1,81 @@
+{
+    "timestamp": 1774616112311,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "APP_STARTING_OR_LOADING",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[0,1751][1080,2400]",
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,1751][1080,2400]",
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[0,1751][1080,2400]",
+                        "children": [
+                            {
+                                "class": "android.widget.ScrollView",
+                                "isEnabled": true,
+                                "bounds": "[0,1751][1080,2150]",
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": "[0,1751][1080,2203]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,1751][1080,2203]",
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": "[36,2007][1044,2203]"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[0,1751][1080,2109]",
+                                                "children": [
+                                                    {
+                                                        "text": "Schedule your dash for later",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": "[36,1804][1044,2007]"
+                                                    },
+                                                    {
+                                                        "text": "This zone's full right now",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": "[36,2011][591,2073]"
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

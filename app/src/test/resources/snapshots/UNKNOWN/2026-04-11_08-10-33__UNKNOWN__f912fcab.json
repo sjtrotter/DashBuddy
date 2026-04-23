@@ -1,0 +1,119 @@
+{
+    "timestamp": 1775913033980,
+    "breadcrumbs": [
+        "SENSITIVE",
+        "UNKNOWN",
+        "NOTIFICATIONS_VIEW",
+        "UNKNOWN",
+        "NOTIFICATIONS_VIEW",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1541,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 505,
+                    "top": 1458,
+                    "right": 576,
+                    "bottom": 1565
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 487,
+                            "top": 1541,
+                            "right": 594,
+                            "bottom": 1648
+                        },
+                        "children": [
+                            {
+                                "desc": "Drag handle",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 505,
+                                    "top": 1590,
+                                    "right": 576,
+                                    "bottom": 1599
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1648,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "desc": "",
+                        "class": "android.widget.ImageView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 340,
+                            "top": 1648,
+                            "right": 741,
+                            "bottom": 2049
+                        }
+                    },
+                    {
+                        "text": "Drop-off photo achievement",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2049,
+                            "right": 1080,
+                            "bottom": 2115
+                        }
+                    },
+                    {
+                        "text": "Why you’re seeing this",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2151,
+                            "right": 1044,
+                            "bottom": 2198
+                        }
+                    },
+                    {
+                        "text": "You took drop-off photos for 80%+ of contactless deliveries. This helps customers find their orders and provides proof of delivery.",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2229,
+                            "right": 1044,
+                            "bottom": 2388
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

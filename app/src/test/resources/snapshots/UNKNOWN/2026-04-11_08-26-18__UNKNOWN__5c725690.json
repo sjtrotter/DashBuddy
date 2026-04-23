@@ -1,0 +1,27 @@
+{
+    "timestamp": 1775913978432,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "ON_DASH_ALONG_THE_WAY",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "48",
+        "id": "com.doordash.driverapp:id/currentSpeedMutcd",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 22,
+            "top": 703,
+            "right": 164,
+            "bottom": 805
+        }
+    }
+}

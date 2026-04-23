@@ -1,0 +1,171 @@
+{
+    "timestamp": 1775914594148,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/bottomSheetLayout",
+        "class": "android.view.ViewGroup",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 136,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "id": "com.doordash.driverapp:id/accept_constraint_layout",
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 136,
+                    "right": 1080,
+                    "bottom": 2347
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/map_container",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 136,
+                            "right": 1080,
+                            "bottom": 2347
+                        },
+                        "children": [
+                            {
+                                "class": "android.widget.FrameLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 136,
+                                    "right": 1080,
+                                    "bottom": 2347
+                                },
+                                "children": [
+                                    {
+                                        "id": "com.doordash.driverapp:id/google_map_view",
+                                        "class": "android.widget.FrameLayout",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 136,
+                                            "right": 1080,
+                                            "bottom": 2347
+                                        },
+                                        "children": [
+                                            {
+                                                "class": "android.widget.FrameLayout",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 136,
+                                                    "right": 1080,
+                                                    "bottom": 2347
+                                                },
+                                                "children": [
+                                                    {
+                                                        "desc": "Google Map",
+                                                        "class": "android.view.TextureView",
+                                                        "isClickable": true,
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 136,
+                                                            "right": 1080,
+                                                            "bottom": 2347
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "desc": "Map Marker",
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 42,
+                                                                    "top": 1337,
+                                                                    "right": 267,
+                                                                    "bottom": 1426
+                                                                }
+                                                            },
+                                                            {
+                                                                "desc": "Map Marker",
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 34,
+                                                                    "top": 1217,
+                                                                    "right": 274,
+                                                                    "bottom": 1457
+                                                                }
+                                                            },
+                                                            {
+                                                                "desc": "Map Marker",
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 146,
+                                                                    "top": 911,
+                                                                    "right": 386,
+                                                                    "bottom": 1151
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "class": "android.widget.RelativeLayout",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 136,
+                                                            "right": 1080,
+                                                            "bottom": 2347
+                                                        }
+                                                    },
+                                                    {
+                                                        "class": "android.widget.RelativeLayout",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 136,
+                                                            "right": 1080,
+                                                            "bottom": 2347
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "class": "android.widget.ImageView",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 16,
+                                                                    "top": 1585,
+                                                                    "right": 150,
+                                                                    "bottom": 1634
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

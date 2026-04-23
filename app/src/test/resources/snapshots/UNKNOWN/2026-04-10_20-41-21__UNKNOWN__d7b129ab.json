@@ -1,0 +1,26 @@
+{
+    "timestamp": 1775871681273,
+    "breadcrumbs": [
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "desc": "",
+        "class": "android.widget.ImageView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 531,
+            "top": 2085,
+            "right": 584,
+            "bottom": 2138
+        }
+    }
+}

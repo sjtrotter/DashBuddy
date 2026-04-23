@@ -1,0 +1,172 @@
+{
+    "timestamp": 1774662026600,
+    "breadcrumbs": [
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/message_recycler_view",
+        "class": "androidx.recyclerview.widget.RecyclerView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 261,
+            "right": 1080,
+            "bottom": 1442
+        },
+        "children": [
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 261,
+                    "right": 1080,
+                    "bottom": 777
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/image_self_view",
+                        "class": "android.widget.ImageView",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 608,
+                            "top": 261,
+                            "right": 1053,
+                            "bottom": 695
+                        }
+                    },
+                    {
+                        "text": "Sent at 20:14",
+                        "id": "com.doordash.driverapp:id/image_self_seenat_text_view",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 862,
+                            "top": 713,
+                            "right": 1044,
+                            "bottom": 759
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 777,
+                    "right": 1080,
+                    "bottom": 977
+                },
+                "children": [
+                    {
+                        "text": "this alright?",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 793,
+                            "top": 795,
+                            "right": 1049,
+                            "bottom": 895
+                        }
+                    },
+                    {
+                        "text": "Sent at 20:14",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 862,
+                            "top": 913,
+                            "right": 1044,
+                            "bottom": 959
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 977,
+                    "right": 1080,
+                    "bottom": 1186
+                },
+                "children": [
+                    {
+                        "text": "Yes 👍",
+                        "id": "com.doordash.driverapp:id/message_other_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1004,
+                            "right": 205,
+                            "bottom": 1104
+                        }
+                    },
+                    {
+                        "text": "Received at 20:15",
+                        "id": "com.doordash.driverapp:id/message_other_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1122,
+                            "right": 284,
+                            "bottom": 1168
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1186,
+                    "right": 1080,
+                    "bottom": 1442
+                },
+                "children": [
+                    {
+                        "text": "no other issues! omw eta is about 5 minutes",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 515,
+                            "top": 1204,
+                            "right": 1049,
+                            "bottom": 1360
+                        }
+                    },
+                    {
+                        "text": "Pending",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 927,
+                            "top": 1378,
+                            "right": 1044,
+                            "bottom": 1424
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,143 @@
+{
+    "timestamp": 1774616330384,
+    "breadcrumbs": [
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[0,700][1080,2311]",
+        "children": [
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,647][1080,708]",
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[0,650][1080,704]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[51,701][1029,895]",
+                "children": [
+                    {
+                        "text": "Mar 27, 10:00 - Mar 28, 04:00",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[212,770][818,822]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[176,849][904,955]"
+            },
+            {
+                "text": "TX: Downtown / Alamo Heights",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[212,947][780,994]"
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[176,1030][904,1226]",
+                "children": [
+                    {
+                        "text": "08:00 - 09:00",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[212,1101][506,1153]"
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[176,1172][904,1226]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[176,1226][904,1420]",
+                "children": [
+                    {
+                        "text": "Mar 27, 10:00 - Mar 28, 04:00",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[212,1297][818,1349]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[176,1376][904,1482]"
+            },
+            {
+                "text": "Fort Sam Houston - Base Credentials Reqd",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[212,1474][904,1521]"
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[176,1557][904,1751]",
+                "children": [
+                    {
+                        "text": "08:30 - 22:30",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[212,1628][490,1680]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[176,1707][904,1813]"
+            },
+            {
+                "text": "TX: Castroville",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[212,1805][475,1852]"
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[351,1885][729,2079]",
+                "children": [
+                    {
+                        "text": "08:00 - 22:30",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[387,1956][670,2008]"
+                    }
+                ]
+            }
+        ]
+    }
+}

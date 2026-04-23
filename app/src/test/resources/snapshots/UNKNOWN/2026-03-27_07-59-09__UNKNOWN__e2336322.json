@@ -1,0 +1,154 @@
+{
+    "timestamp": 1774616349289,
+    "breadcrumbs": [
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[0,700][1080,2311]",
+        "children": [
+            {
+                "text": "TX: South San Antonio",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[36,735][445,782]"
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,812][1080,1008]",
+                "children": [
+                    {
+                        "text": "08:00 - 08:30",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[36,883][326,935]"
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[0,954][1080,1008]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,1008][1080,1202]",
+                "children": [
+                    {
+                        "text": "Mar 27, 10:00 - Mar 28, 03:30",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[36,1079][635,1131]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,1158][1080,1264]"
+            },
+            {
+                "text": "TX: Northwest San Antonio",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[36,1251][528,1298]"
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,1331][1080,1527]",
+                "children": [
+                    {
+                        "text": "08:00 - 09:30",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[36,1399][325,1451]"
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[0,1468][1080,1522]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,1521][1080,1715]",
+                "children": [
+                    {
+                        "text": "Mar 27, 10:00 - Mar 28, 04:00",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[36,1592][642,1644]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,1671][1080,1777]"
+            },
+            {
+                "text": "TX: Downtown / Alamo Heights",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": "[36,1769][604,1816]"
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,1852][1080,2048]",
+                "children": [
+                    {
+                        "text": "08:00 - 09:00",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[36,1923][330,1975]"
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[0,1994][1080,2048]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": "[0,2048][1080,2242]",
+                "children": [
+                    {
+                        "text": "Mar 27, 10:00 - Mar 28, 04:00",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": "[36,2119][642,2171]"
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,2198][1080,2304]"
+            }
+        ]
+    }
+}

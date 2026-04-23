@@ -1,0 +1,424 @@
+{
+    "timestamp": 1774662563750,
+    "breadcrumbs": [
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_EXPANDED",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": 159,
+            "top": 0,
+            "right": 1239,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 159,
+                    "top": 0,
+                    "right": 1239,
+                    "bottom": 2347
+                },
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 159,
+                            "top": 136,
+                            "right": 1239,
+                            "bottom": 2347
+                        },
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/action_bar_root",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 159,
+                                    "top": 136,
+                                    "right": 1239,
+                                    "bottom": 2347
+                                },
+                                "children": [
+                                    {
+                                        "id": "android:id/content",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 159,
+                                            "top": 136,
+                                            "right": 1239,
+                                            "bottom": 2347
+                                        },
+                                        "children": [
+                                            {
+                                                "class": "android.widget.FrameLayout",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 159,
+                                                    "top": 136,
+                                                    "right": 1239,
+                                                    "bottom": 2347
+                                                },
+                                                "children": [
+                                                    {
+                                                        "id": "com.doordash.driverapp:id/accept_decline_fragment_container",
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 159,
+                                                            "top": 136,
+                                                            "right": 1239,
+                                                            "bottom": 2347
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "id": "com.doordash.driverapp:id/bottomSheetLayout",
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 159,
+                                                                    "top": 136,
+                                                                    "right": 1239,
+                                                                    "bottom": 2347
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "id": "com.doordash.driverapp:id/accept_constraint_layout",
+                                                                        "class": "android.view.ViewGroup",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 159,
+                                                                            "top": 136,
+                                                                            "right": 1239,
+                                                                            "bottom": 2347
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/map_container",
+                                                                                "class": "android.widget.FrameLayout",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 159,
+                                                                                    "top": 136,
+                                                                                    "right": 1239,
+                                                                                    "bottom": 2347
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "class": "android.widget.FrameLayout",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 159,
+                                                                                            "top": 136,
+                                                                                            "right": 1239,
+                                                                                            "bottom": 2347
+                                                                                        },
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "class": "android.view.TextureView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 159,
+                                                                                                    "top": 136,
+                                                                                                    "right": 1239,
+                                                                                                    "bottom": 2347
+                                                                                                }
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.widget.FrameLayout",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 159,
+                                                                                                    "top": 136,
+                                                                                                    "right": 1239,
+                                                                                                    "bottom": 2347
+                                                                                                }
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.widget.ImageView",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 164,
+                                                                                                    "top": 2295,
+                                                                                                    "right": 353,
+                                                                                                    "bottom": 2342
+                                                                                                }
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.widget.ImageView",
+                                                                                                "isClickable": true,
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 359,
+                                                                                                    "top": 2295,
+                                                                                                    "right": 406,
+                                                                                                    "bottom": 2342
+                                                                                                }
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/secondary_action_button",
+                                                                                "class": "android.widget.Button",
+                                                                                "isClickable": true,
+                                                                                "bounds": {
+                                                                                    "left": 1114,
+                                                                                    "top": 172,
+                                                                                    "right": 1203,
+                                                                                    "bottom": 261
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "text": "fe467097-202e-42cb-84d8-8d5a62f61c86",
+                                                                                "id": "com.doordash.driverapp:id/assignment_id_text",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 865,
+                                                                                    "top": 2027,
+                                                                                    "right": 1239,
+                                                                                    "bottom": 2068
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "id": "com.doordash.driverapp:id/load_progress",
+                                                                        "class": "android.widget.RelativeLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 159,
+                                                                            "top": 136,
+                                                                            "right": 1239,
+                                                                            "bottom": 2347
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "state": "in progress",
+                                                                                "id": "com.doordash.driverapp:id/progress_bar",
+                                                                                "class": "android.widget.ProgressBar",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 645,
+                                                                                    "top": 1188,
+                                                                                    "right": 752,
+                                                                                    "bottom": 1295
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/progress_message",
+                                                                                "class": "android.widget.TextView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 699,
+                                                                                    "top": 1295,
+                                                                                    "right": 699,
+                                                                                    "bottom": 1342
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "id": "com.doordash.driverapp:id/prism_sheet",
+                                                                        "class": "android.view.ViewGroup",
+                                                                        "isClickable": true,
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 159,
+                                                                            "top": 2068,
+                                                                            "right": 1239,
+                                                                            "bottom": 2347
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/prism_sheet_collar_view",
+                                                                                "class": "android.widget.FrameLayout",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 159,
+                                                                                    "top": 2068,
+                                                                                    "right": 1239,
+                                                                                    "bottom": 2068
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/extra_space",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 159,
+                                                                                    "top": 2068,
+                                                                                    "right": 159,
+                                                                                    "bottom": 2104
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/prism_sheet_content_parent_container",
+                                                                                "class": "android.view.ViewGroup",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 159,
+                                                                                    "top": 2104,
+                                                                                    "right": 1239,
+                                                                                    "bottom": 2311
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "id": "com.doordash.driverapp:id/nested_scroll_view",
+                                                                                        "class": "android.widget.ScrollView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 159,
+                                                                                            "top": 2104,
+                                                                                            "right": 1239,
+                                                                                            "bottom": 2311
+                                                                                        },
+                                                                                        "children": [
+                                                                                            {
+                                                                                                "id": "com.doordash.driverapp:id/prism_content_container",
+                                                                                                "class": "android.widget.LinearLayout",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 159,
+                                                                                                    "top": 2104,
+                                                                                                    "right": 1239,
+                                                                                                    "bottom": 2104
+                                                                                                },
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "id": "com.doordash.driverapp:id/bottomsheet_content_container",
+                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 159,
+                                                                                                            "top": 2104,
+                                                                                                            "right": 1239,
+                                                                                                            "bottom": 2104
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "id": "com.doordash.driverapp:id/accept_decline_recycler_view_container",
+                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 159,
+                                                                                                                    "top": 2104,
+                                                                                                                    "right": 1239,
+                                                                                                                    "bottom": 2104
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "id": "com.doordash.driverapp:id/items_recycler_view",
+                                                                                                                        "class": "androidx.recyclerview.widget.RecyclerView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 159,
+                                                                                                                            "top": 2104,
+                                                                                                                            "right": 1239,
+                                                                                                                            "bottom": 2104
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "id": "com.doordash.driverapp:id/prism_sheet_footer_divider",
+                                                                        "class": "android.view.View",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 159,
+                                                                            "top": 2100,
+                                                                            "right": 1239,
+                                                                            "bottom": 2104
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "id": "com.doordash.driverapp:id/prism_sheet_footer_container",
+                                                                        "class": "android.widget.LinearLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 159,
+                                                                            "top": 2104,
+                                                                            "right": 1239,
+                                                                            "bottom": 2347
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.doordash.driverapp:id/accept_decline_footer_container",
+                                                                                "class": "android.view.ViewGroup",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 159,
+                                                                                    "top": 2104,
+                                                                                    "right": 1239,
+                                                                                    "bottom": 2347
+                                                                                },
+                                                                                "children": [
+                                                                                    {
+                                                                                        "id": "com.doordash.driverapp:id/accept_decline_footer_text",
+                                                                                        "class": "android.widget.TextView",
+                                                                                        "isEnabled": true,
+                                                                                        "bounds": {
+                                                                                            "left": 699,
+                                                                                            "top": 2131,
+                                                                                            "right": 699,
+                                                                                            "bottom": 2168
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        "id": "com.doordash.driverapp:id/accept_button",
+                                                                                        "class": "android.widget.Button",
+                                                                                        "isClickable": true,
+                                                                                        "bounds": {
+                                                                                            "left": 195,
+                                                                                            "top": 2204,
+                                                                                            "right": 1203,
+                                                                                            "bottom": 2311
+                                                                                        }
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

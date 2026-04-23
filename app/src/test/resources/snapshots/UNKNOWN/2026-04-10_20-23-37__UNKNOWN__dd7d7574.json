@@ -1,0 +1,25 @@
+{
+    "timestamp": 1775870617024,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 0,
+            "right": 1080,
+            "bottom": 2400
+        }
+    }
+}

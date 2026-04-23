@@ -1,0 +1,208 @@
+{
+    "timestamp": 1774662008643,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/message_recycler_view",
+        "class": "androidx.recyclerview.widget.RecyclerView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 62,
+            "top": 261,
+            "right": 1142,
+            "bottom": 2195
+        },
+        "children": [
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 62,
+                    "top": 261,
+                    "right": 1142,
+                    "bottom": 912
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/image_self_view",
+                        "class": "android.widget.ImageView",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 670,
+                            "top": 274,
+                            "right": 1115,
+                            "bottom": 830
+                        }
+                    },
+                    {
+                        "text": "Sent at 20:14",
+                        "id": "com.doordash.driverapp:id/image_self_seenat_text_view",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 924,
+                            "top": 848,
+                            "right": 1106,
+                            "bottom": 894
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 62,
+                    "top": 912,
+                    "right": 1142,
+                    "bottom": 1112
+                },
+                "children": [
+                    {
+                        "text": "okay! one sec",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 824,
+                            "top": 930,
+                            "right": 1111,
+                            "bottom": 1030
+                        }
+                    },
+                    {
+                        "text": "Sent at 20:14",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 924,
+                            "top": 1048,
+                            "right": 1106,
+                            "bottom": 1094
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 62,
+                    "top": 1112,
+                    "right": 1142,
+                    "bottom": 1786
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/image_self_view",
+                        "class": "android.widget.ImageView",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 670,
+                            "top": 1148,
+                            "right": 1115,
+                            "bottom": 1704
+                        }
+                    },
+                    {
+                        "text": "Sent at 20:14",
+                        "id": "com.doordash.driverapp:id/image_self_seenat_text_view",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 924,
+                            "top": 1722,
+                            "right": 1106,
+                            "bottom": 1768
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 62,
+                    "top": 1786,
+                    "right": 1142,
+                    "bottom": 1986
+                },
+                "children": [
+                    {
+                        "text": "this alright?",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 855,
+                            "top": 1804,
+                            "right": 1111,
+                            "bottom": 1904
+                        }
+                    },
+                    {
+                        "text": "Sent at 20:14",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 924,
+                            "top": 1922,
+                            "right": 1106,
+                            "bottom": 1968
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 62,
+                    "top": 1986,
+                    "right": 1142,
+                    "bottom": 2195
+                },
+                "children": [
+                    {
+                        "text": "Yes 👍",
+                        "id": "com.doordash.driverapp:id/message_other_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 98,
+                            "top": 2013,
+                            "right": 267,
+                            "bottom": 2113
+                        }
+                    },
+                    {
+                        "text": "Received at 20:15",
+                        "id": "com.doordash.driverapp:id/message_other_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 98,
+                            "top": 2131,
+                            "right": 346,
+                            "bottom": 2177
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,27 @@
+{
+    "timestamp": 1774662087335,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "250 ft",
+        "id": "com.doordash.driverapp:id/stepDistance",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 18,
+            "top": 288,
+            "right": 237,
+            "bottom": 376
+        }
+    }
+}

@@ -1,0 +1,27 @@
+{
+    "timestamp": 1775913901439,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "ON_DASH_ALONG_THE_WAY",
+        "UNKNOWN",
+        "NAVIGATION_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "US Highway 281 North ",
+        "id": "com.doordash.driverapp:id/subManeuverText",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 258,
+            "top": 407,
+            "right": 1062,
+            "bottom": 466
+        }
+    }
+}

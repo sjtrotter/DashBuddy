@@ -1,0 +1,27 @@
+{
+    "timestamp": 1775869810389,
+    "breadcrumbs": [
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_EXPANDED",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/prism_sheet",
+        "class": "android.view.ViewGroup",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 2347,
+            "right": 1080,
+            "bottom": 2347
+        }
+    }
+}

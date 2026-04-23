@@ -1,0 +1,61 @@
+{
+    "timestamp": 1774662927332,
+    "breadcrumbs": [
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "androidx.compose.ui.platform.ComposeView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 278,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 278,
+                    "right": 1080,
+                    "bottom": 2347
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 278,
+                            "right": 1080,
+                            "bottom": 2347
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 278,
+                                    "right": 1080,
+                                    "bottom": 331
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,92 @@
+{
+    "timestamp": 1775913003466,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "NOTIFICATIONS_VIEW",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 859,
+            "right": 1080,
+            "bottom": 1146
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 948,
+                    "right": 143,
+                    "bottom": 1055
+                }
+            },
+            {
+                "desc": "notification icon",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 63,
+                    "top": 977,
+                    "right": 116,
+                    "bottom": 1030
+                }
+            },
+            {
+                "text": "Unlock 20 cent savings per gallon",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 170,
+                    "top": 940,
+                    "right": 855,
+                    "bottom": 992
+                }
+            },
+            {
+                "text": "Fuel up twice per month and unlock 20 cents off per gallon savings at Circle K.",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 170,
+                    "top": 1038,
+                    "right": 1044,
+                    "bottom": 1134
+                }
+            },
+            {
+                "text": "1 month ago",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 170,
+                    "top": 1187,
+                    "right": 370,
+                    "bottom": 1230
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1241,
+                    "right": 1080,
+                    "bottom": 1295
+                }
+            }
+        ]
+    }
+}

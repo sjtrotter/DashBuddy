@@ -1,0 +1,118 @@
+{
+    "timestamp": 1774662555352,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_EXPANDED",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "androidx.compose.ui.platform.ComposeView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 72,
+            "top": 2010,
+            "right": 1152,
+            "bottom": 2383
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1938,
+                    "right": 1080,
+                    "bottom": 2311
+                },
+                "children": [
+                    {
+                        "text": "How did this delivery go?",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 108,
+                            "top": 2046,
+                            "right": 1116,
+                            "bottom": 2098
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 466,
+                            "top": 2134,
+                            "right": 608,
+                            "bottom": 2276
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 617,
+                            "top": 2134,
+                            "right": 759,
+                            "bottom": 2276
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 72,
+                            "top": 2276,
+                            "right": 1152,
+                            "bottom": 2383
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 108,
+                                    "top": 2276,
+                                    "right": 1116,
+                                    "bottom": 2383
+                                },
+                                "children": [
+                                    {
+                                        "text": "Skip",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 566,
+                                            "top": 2304,
+                                            "right": 658,
+                                            "bottom": 2356
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.Button",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 108,
+                                            "top": 2285,
+                                            "right": 1116,
+                                            "bottom": 2374
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

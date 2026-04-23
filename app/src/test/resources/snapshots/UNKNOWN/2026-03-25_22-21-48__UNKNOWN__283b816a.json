@@ -1,0 +1,22 @@
+{
+    "timestamp": 1774495308714,
+    "breadcrumbs": [
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "DASH_SUMMARY_SCREEN",
+        "UNKNOWN",
+        "DASH_SUMMARY_SCREEN",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "Starting…",
+        "id": "com.doordash.driverapp:id/progress_message",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": "[373,1377][708,1429]"
+    }
+}

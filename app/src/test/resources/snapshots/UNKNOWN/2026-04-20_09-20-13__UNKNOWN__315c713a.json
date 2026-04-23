@@ -1,0 +1,154 @@
+{
+    "timestamp": 1776694813094,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "EARNINGS_VIEW",
+        "UNKNOWN",
+        "EARNINGS_VIEW",
+        "UNKNOWN",
+        "EARNINGS_VIEW",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1659,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1660,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 1660,
+                            "right": 1080,
+                            "bottom": 2400
+                        },
+                        "children": [
+                            {
+                                "class": "android.widget.ScrollView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 1660,
+                                    "right": 1080,
+                                    "bottom": 2150
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 1660,
+                                            "right": 1080,
+                                            "bottom": 2203
+                                        },
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 1660,
+                                                    "right": 1080,
+                                                    "bottom": 2203
+                                                },
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 36,
+                                                            "top": 1916,
+                                                            "right": 1044,
+                                                            "bottom": 2203
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 1660,
+                                                    "right": 1080,
+                                                    "bottom": 2150
+                                                },
+                                                "children": [
+                                                    {
+                                                        "text": "Stay busy with lots of offers",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 36,
+                                                            "top": 1713,
+                                                            "right": 1044,
+                                                            "bottom": 1916
+                                                        }
+                                                    },
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 36,
+                                                            "top": 1952,
+                                                            "right": 1044,
+                                                            "bottom": 2114
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "text": "Avg. offer wait",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 63,
+                                                                    "top": 1979,
+                                                                    "right": 1017,
+                                                                    "bottom": 2026
+                                                                }
+                                                            },
+                                                            {
+                                                                "text": "5 min",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 63,
+                                                                    "top": 2035,
+                                                                    "right": 1017,
+                                                                    "bottom": 2087
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
