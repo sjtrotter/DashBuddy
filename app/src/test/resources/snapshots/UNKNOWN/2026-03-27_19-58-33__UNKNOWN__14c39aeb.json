@@ -1,0 +1,109 @@
+{
+    "timestamp": 1774659513071,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW_TO_PICK_UP",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_PICK_UP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 38,
+            "top": 2301,
+            "right": 1042,
+            "bottom": 2761
+        },
+        "children": [
+            {
+                "id": "item_image",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 74,
+                    "top": 2306,
+                    "right": 341,
+                    "bottom": 2573
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 74,
+                            "top": 2306,
+                            "right": 341,
+                            "bottom": 2573
+                        }
+                    }
+                ]
+            },
+            {
+                "text": "H-E-B Texas Roots Fresh King-Size Russet Potatoes, 8 lb Bag",
+                "id": "item_name",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 377,
+                    "top": 2281,
+                    "right": 1015,
+                    "bottom": 2458
+                }
+            },
+            {
+                "text": "$6.07",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 377,
+                    "top": 2456,
+                    "right": 471,
+                    "bottom": 2499
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 377,
+                    "top": 2500,
+                    "right": 562,
+                    "bottom": 2606
+                },
+                "children": [
+                    {
+                        "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 404,
+                            "top": 2491,
+                            "right": 535,
+                            "bottom": 2347
+                        },
+                        "children": [
+                            {
+                                "text": "1 × Bag",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 404,
+                                    "top": 2460,
+                                    "right": 535,
+                                    "bottom": 2347
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

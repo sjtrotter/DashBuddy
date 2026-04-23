@@ -1,0 +1,165 @@
+{
+    "timestamp": 1774616342151,
+    "breadcrumbs": [
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[0,0][1080,2400]",
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[0,0][1080,2400]",
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[0,0][1080,2400]",
+                        "children": [
+                            {
+                                "desc": "Close sheet",
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": "[0,0][1080,1504]"
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": "[0,1504][1080,2400]",
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": "[0,1504][1080,2347]",
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[505,1504][576,1558]",
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isClickable": true,
+                                                        "isEnabled": true,
+                                                        "bounds": "[487,1478][594,1584]",
+                                                        "children": [
+                                                            {
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": "[505,1522][576,1531]"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "text": "Choose end time",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": "[36,1585][480,1651]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[36,1826][1044,1932]"
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": "[72,1678][1008,2079]",
+                                                "children": [
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": "[72,1679][531,2079]",
+                                                        "children": [
+                                                            {
+                                                                "text": "Today",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": "[246,1856][357,1903]"
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": "[549,1678][1008,2079]",
+                                                        "children": [
+                                                            {
+                                                                "text": "20:00",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": "[722,1696][836,1743]"
+                                                            },
+                                                            {
+                                                                "text": "20:30",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": "[724,1776][834,1823]"
+                                                            },
+                                                            {
+                                                                "text": "21:00",
+                                                                "class": "android.widget.TextView",
+                                                                "isEnabled": true,
+                                                                "bounds": "[728,1856][830,1903]"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isClickable": true,
+                                                "isEnabled": true,
+                                                "bounds": "[36,2106][1044,2213]",
+                                                "children": [
+                                                    {
+                                                        "text": "Done",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": "[485,2134][596,2186]"
+                                                    },
+                                                    {
+                                                        "class": "android.widget.Button",
+                                                        "isEnabled": true,
+                                                        "bounds": "[36,2106][1044,2213]"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isClickable": true,
+                                                "isEnabled": true,
+                                                "bounds": "[36,2231][1044,2338]",
+                                                "children": [
+                                                    {
+                                                        "class": "android.widget.Button",
+                                                        "isEnabled": true,
+                                                        "bounds": "[36,2231][1044,2338]"
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,86 @@
+{
+    "timestamp": 1774662926139,
+    "breadcrumbs": [
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 278,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "text": "Your $50.00 transfer was initiated",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 93,
+                    "top": 1223,
+                    "right": 988,
+                    "bottom": 1289
+                }
+            },
+            {
+                "text": "Your transfer to Visa ••••6222 is on its way. Instant transfers may take a few minutes depending on your bank.",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 1307,
+                    "right": 1044,
+                    "bottom": 1466
+                }
+            },
+            {
+                "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 2204,
+                    "right": 1044,
+                    "bottom": 2311
+                },
+                "children": [
+                    {
+                        "class": "android.widget.Button",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2204,
+                            "right": 1044,
+                            "bottom": 2311
+                        },
+                        "children": [
+                            {
+                                "text": "Got it",
+                                "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 482,
+                                    "top": 2225,
+                                    "right": 599,
+                                    "bottom": 2291
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

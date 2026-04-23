@@ -1,0 +1,128 @@
+{
+    "timestamp": 1774660752110,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 278,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 278,
+                    "right": 1080,
+                    "bottom": 2347
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 278,
+                            "right": 1080,
+                            "bottom": 2347
+                        },
+                        "children": [
+                            {
+                                "text": "Barilla Farfalle Pasta, 16 oz",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 318,
+                                    "right": 527,
+                                    "bottom": 365
+                                }
+                            },
+                            {
+                                "text": "2 × Items",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 369,
+                                    "right": 186,
+                                    "bottom": 412
+                                }
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 448,
+                                    "right": 1044,
+                                    "bottom": 1410
+                                },
+                                "children": [
+                                    {
+                                        "desc": "Step 1 completed",
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 72,
+                                            "top": 484,
+                                            "right": 125,
+                                            "bottom": 537
+                                        }
+                                    },
+                                    {
+                                        "text": "2 × items",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 161,
+                                            "top": 484,
+                                            "right": 919,
+                                            "bottom": 536
+                                        }
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 928,
+                                            "top": 457,
+                                            "right": 1035,
+                                            "bottom": 564
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2258,
+                            "right": 1044,
+                            "bottom": 2347
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

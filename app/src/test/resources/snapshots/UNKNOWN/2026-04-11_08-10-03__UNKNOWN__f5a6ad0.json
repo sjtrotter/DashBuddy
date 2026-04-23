@@ -1,0 +1,589 @@
+{
+    "timestamp": 1775913003356,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "NOTIFICATIONS_VIEW",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 385,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 332,
+                    "right": 1080,
+                    "bottom": 502
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 368,
+                            "right": 143,
+                            "bottom": 398
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 359,
+                    "right": 1080,
+                    "bottom": 646
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 448,
+                            "right": 143,
+                            "bottom": 555
+                        }
+                    },
+                    {
+                        "desc": "notification icon",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 63,
+                            "top": 475,
+                            "right": 116,
+                            "bottom": 528
+                        }
+                    },
+                    {
+                        "text": "Drop-off photo achievement",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 395,
+                            "right": 742,
+                            "bottom": 447
+                        }
+                    },
+                    {
+                        "text": "You took drop-off photos for 80%+ of contactless deliveries.",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 451,
+                            "right": 1044,
+                            "bottom": 547
+                        }
+                    },
+                    {
+                        "text": "1 week ago",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 523,
+                            "right": 348,
+                            "bottom": 566
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 517,
+                            "right": 1080,
+                            "bottom": 571
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 528,
+                    "right": 1080,
+                    "bottom": 762
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 556,
+                            "right": 143,
+                            "bottom": 663
+                        }
+                    },
+                    {
+                        "desc": "notification icon",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 63,
+                            "top": 543,
+                            "right": 116,
+                            "bottom": 596
+                        }
+                    },
+                    {
+                        "text": "Gas price relief for Dashers",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 449,
+                            "right": 708,
+                            "bottom": 501
+                        }
+                    },
+                    {
+                        "text": "10% cash back + weekly relief pay",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 505,
+                            "right": 717,
+                            "bottom": 548
+                        }
+                    },
+                    {
+                        "text": "1 week ago",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 566,
+                            "right": 348,
+                            "bottom": 609
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 593,
+                            "right": 1080,
+                            "bottom": 647
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 593,
+                    "right": 1080,
+                    "bottom": 880
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 682,
+                            "right": 143,
+                            "bottom": 789
+                        }
+                    },
+                    {
+                        "desc": "notification icon",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 63,
+                            "top": 709,
+                            "right": 116,
+                            "bottom": 762
+                        }
+                    },
+                    {
+                        "text": "Order accuracy streak",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 629,
+                            "right": 611,
+                            "bottom": 681
+                        }
+                    },
+                    {
+                        "text": "You had 10 straight deliveries with 100% order accuracy.",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 685,
+                            "right": 1044,
+                            "bottom": 781
+                        }
+                    },
+                    {
+                        "text": "2 weeks ago",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 799,
+                            "right": 370,
+                            "bottom": 842
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 826,
+                            "right": 1080,
+                            "bottom": 880
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 880,
+                    "right": 1080,
+                    "bottom": 1167
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 969,
+                            "right": 143,
+                            "bottom": 1076
+                        }
+                    },
+                    {
+                        "desc": "notification icon",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 63,
+                            "top": 944,
+                            "right": 116,
+                            "bottom": 997
+                        }
+                    },
+                    {
+                        "text": "Confirm delivery just after dropoff",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 820,
+                            "right": 849,
+                            "bottom": 872
+                        }
+                    },
+                    {
+                        "text": "Recently, you spent 10+ minutes near a dropoff before completing delivery in the app",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 840,
+                            "right": 1044,
+                            "bottom": 936
+                        }
+                    },
+                    {
+                        "text": "1 month ago",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 951,
+                            "right": 370,
+                            "bottom": 994
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 943,
+                            "right": 1080,
+                            "bottom": 997
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 962,
+                    "right": 1080,
+                    "bottom": 1249
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1016,
+                            "right": 143,
+                            "bottom": 1123
+                        }
+                    },
+                    {
+                        "desc": "notification icon",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 63,
+                            "top": 1043,
+                            "right": 116,
+                            "bottom": 1096
+                        }
+                    },
+                    {
+                        "text": "Unlock 20 cent savings per gallon",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 963,
+                            "right": 855,
+                            "bottom": 1015
+                        }
+                    },
+                    {
+                        "text": "Fuel up twice per month and unlock 20 cents off per gallon savings at Circle K.",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 1019,
+                            "right": 1044,
+                            "bottom": 1115
+                        }
+                    },
+                    {
+                        "text": "1 month ago",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 1133,
+                            "right": 370,
+                            "bottom": 1176
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 1160,
+                            "right": 1080,
+                            "bottom": 1214
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1214,
+                    "right": 1080,
+                    "bottom": 1448
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1277,
+                            "right": 143,
+                            "bottom": 1384
+                        }
+                    },
+                    {
+                        "desc": "notification icon",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 63,
+                            "top": 1304,
+                            "right": 116,
+                            "bottom": 1357
+                        }
+                    },
+                    {
+                        "text": "On-time delivery streak",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 1250,
+                            "right": 657,
+                            "bottom": 1302
+                        }
+                    },
+                    {
+                        "text": "You had 50 straight on-time deliveries.",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 1276,
+                            "right": 802,
+                            "bottom": 1319
+                        }
+                    },
+                    {
+                        "text": "1 month ago",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 1308,
+                            "right": 370,
+                            "bottom": 1351
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 1326,
+                            "right": 1080,
+                            "bottom": 1380
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1380,
+                    "right": 1080,
+                    "bottom": 1667
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1469,
+                            "right": 143,
+                            "bottom": 1576
+                        }
+                    },
+                    {
+                        "desc": "notification icon",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 63,
+                            "top": 1496,
+                            "right": 116,
+                            "bottom": 1549
+                        }
+                    },
+                    {
+                        "text": "Missing drop-off photos",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 1416,
+                            "right": 653,
+                            "bottom": 1468
+                        }
+                    },
+                    {
+                        "text": "30%+ of your leave-at-door deliveries lacked drop-off photos.",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 1472,
+                            "right": 1044,
+                            "bottom": 1568
+                        }
+                    },
+                    {
+                        "text": "1 month ago",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 170,
+                            "top": 1586,
+                            "right": 370,
+                            "bottom": 1629
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 1613,
+                            "right": 1080,
+                            "bottom": 1667
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

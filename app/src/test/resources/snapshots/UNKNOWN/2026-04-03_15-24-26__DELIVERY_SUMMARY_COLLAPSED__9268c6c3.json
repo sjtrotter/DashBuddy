@@ -1,0 +1,407 @@
+{
+    "timestamp": 1775247866201,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_COLLAPSED",
+        "UNKNOWN",
+        "DELIVERY_SUMMARY_COLLAPSED"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 136,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 385,
+                    "right": 1080,
+                    "bottom": 1053
+                },
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 385,
+                            "right": 1080,
+                            "bottom": 1053
+                        },
+                        "children": [
+                            {
+                                "class": "android.widget.FrameLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 385,
+                                    "right": 1080,
+                                    "bottom": 1053
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.TextureView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 385,
+                                            "right": 1080,
+                                            "bottom": 1053
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 385,
+                                            "right": 1080,
+                                            "bottom": 1053
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.ImageView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 5,
+                                            "top": 1001,
+                                            "right": 194,
+                                            "bottom": 1048
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.ImageView",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 200,
+                                            "top": 1001,
+                                            "right": 247,
+                                            "bottom": 1048
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1053,
+                    "right": 1080,
+                    "bottom": 1315
+                },
+                "children": [
+                    {
+                        "desc": "merchant/line",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1157,
+                            "right": 89,
+                            "bottom": 1210
+                        }
+                    },
+                    {
+                        "text": "Pickup for Kayla M",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 152,
+                            "top": 1080,
+                            "right": 492,
+                            "bottom": 1127
+                        }
+                    },
+                    {
+                        "text": "by 16:17 • H-E-B",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 152,
+                            "top": 1145,
+                            "right": 417,
+                            "bottom": 1188
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 179,
+                            "top": 1188,
+                            "right": 413,
+                            "bottom": 1295
+                        },
+                        "children": [
+                            {
+                                "text": "Current task",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 179,
+                                    "top": 1218,
+                                    "right": 413,
+                                    "bottom": 1265
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "desc": "chevron/right",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 1008,
+                            "top": 1165,
+                            "right": 1044,
+                            "bottom": 1201
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 27,
+                            "top": 1261,
+                            "right": 1053,
+                            "bottom": 1315
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1315,
+                    "right": 1080,
+                    "bottom": 1486
+                },
+                "children": [
+                    {
+                        "desc": "home/line",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1374,
+                            "right": 89,
+                            "bottom": 1427
+                        }
+                    },
+                    {
+                        "text": "Deliver to Kayla M",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 152,
+                            "top": 1342,
+                            "right": 482,
+                            "bottom": 1389
+                        }
+                    },
+                    {
+                        "text": "by 16:25",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 152,
+                            "top": 1407,
+                            "right": 287,
+                            "bottom": 1450
+                        }
+                    },
+                    {
+                        "desc": "chevron/right",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 1008,
+                            "top": 1383,
+                            "right": 1044,
+                            "bottom": 1419
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1442,
+                    "right": 1080,
+                    "bottom": 1504
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1504,
+                    "right": 1080,
+                    "bottom": 1649
+                },
+                "children": [
+                    {
+                        "id": "Artwork Image",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 27,
+                            "top": 1549,
+                            "right": 80,
+                            "bottom": 1602
+                        }
+                    },
+                    {
+                        "text": "Pause orders after delivery",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 116,
+                            "top": 1552,
+                            "right": 596,
+                            "bottom": 1599
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 901,
+                            "top": 1504,
+                            "right": 1053,
+                            "bottom": 1647
+                        },
+                        "children": [
+                            {
+                                "state": "Off",
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 919,
+                                    "top": 1522,
+                                    "right": 1035,
+                                    "bottom": 1629
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 900,
+                                            "top": 1522,
+                                            "right": 1007,
+                                            "bottom": 1629
+                                        }
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 919,
+                                            "top": 1540,
+                                            "right": 1035,
+                                            "bottom": 1611
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 901,
+                                    "top": 1504,
+                                    "right": 1053,
+                                    "bottom": 1647
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 1595,
+                            "right": 1080,
+                            "bottom": 1701
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1605,
+                    "right": 1080,
+                    "bottom": 1711
+                }
+            },
+            {
+                "text": "Earnings",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 27,
+                    "top": 1694,
+                    "right": 207,
+                    "bottom": 1746
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1773,
+                    "right": 1080,
+                    "bottom": 1876
+                },
+                "children": [
+                    {
+                        "text": "This offer",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 27,
+                            "top": 1800,
+                            "right": 196,
+                            "bottom": 1847
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

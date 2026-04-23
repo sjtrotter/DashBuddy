@@ -1,0 +1,136 @@
+{
+    "timestamp": 1775262811718,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/message_recycler_view",
+        "class": "androidx.recyclerview.widget.RecyclerView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 261,
+            "right": 1080,
+            "bottom": 1442
+        },
+        "children": [
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 261,
+                    "right": 1080,
+                    "bottom": 930
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/image_self_view",
+                        "class": "android.widget.ImageView",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 608,
+                            "top": 292,
+                            "right": 1053,
+                            "bottom": 848
+                        }
+                    },
+                    {
+                        "text": "Sent just now",
+                        "id": "com.doordash.driverapp:id/image_self_seenat_text_view",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 853,
+                            "top": 866,
+                            "right": 1044,
+                            "bottom": 912
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 930,
+                    "right": 1080,
+                    "bottom": 1242
+                },
+                "children": [
+                    {
+                        "text": "is that alright? or I can look for a different one or do a refune",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 515,
+                            "top": 948,
+                            "right": 1049,
+                            "bottom": 1160
+                        }
+                    },
+                    {
+                        "text": "Sent just now",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 853,
+                            "top": 1178,
+                            "right": 1044,
+                            "bottom": 1224
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1242,
+                    "right": 1080,
+                    "bottom": 1442
+                },
+                "children": [
+                    {
+                        "text": "*refund",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 866,
+                            "top": 1260,
+                            "right": 1049,
+                            "bottom": 1360
+                        }
+                    },
+                    {
+                        "text": "Pending",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 927,
+                            "top": 1378,
+                            "right": 1044,
+                            "bottom": 1424
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

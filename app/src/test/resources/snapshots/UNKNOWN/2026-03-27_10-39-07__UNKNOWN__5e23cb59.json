@@ -1,0 +1,51 @@
+{
+    "timestamp": 1774625947322,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "SET_DASH_END_TIME",
+        "ON_DASH_ALONG_THE_WAY",
+        "UNKNOWN"
+    ],
+    "root": {
+        "desc": "Navigate",
+        "id": "com.doordash.driverapp:id/navigate_button",
+        "class": "android.widget.Button",
+        "isClickable": true,
+        "bounds": {
+            "left": 36,
+            "top": 2204,
+            "right": 1044,
+            "bottom": 2311
+        },
+        "children": [
+            {
+                "id": "com.doordash.driverapp:id/imageView_prism_button_start_icon",
+                "class": "android.widget.ImageView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 72,
+                    "top": 2231,
+                    "right": 143,
+                    "bottom": 2284
+                }
+            },
+            {
+                "text": "Navigate",
+                "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 449,
+                    "top": 2225,
+                    "right": 632,
+                    "bottom": 2291
+                }
+            }
+        ]
+    }
+}

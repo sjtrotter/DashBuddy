@@ -1,0 +1,71 @@
+{
+    "timestamp": 1775871526011,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 43,
+            "top": 77,
+            "right": 1037,
+            "bottom": 405
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 43,
+                    "top": 77,
+                    "right": 1037,
+                    "bottom": 405
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 43,
+                            "top": 77,
+                            "right": 1037,
+                            "bottom": 405
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 43,
+                    "top": 77,
+                    "right": 1037,
+                    "bottom": 405
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 43,
+                            "top": 77,
+                            "right": 1037,
+                            "bottom": 405
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,246 @@
+{
+    "timestamp": 1774662010746,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 136,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 136,
+                    "right": 1080,
+                    "bottom": 2347
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 243,
+                            "right": 1080,
+                            "bottom": 2088
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 571,
+                                    "right": 1044,
+                                    "bottom": 1145
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 179,
+                                            "top": 603,
+                                            "right": 1008,
+                                            "bottom": 710
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "7230 Shady Hollow Ln",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 179,
+                                                    "top": 607,
+                                                    "right": 636,
+                                                    "bottom": 659
+                                                }
+                                            },
+                                            {
+                                                "text": "San Antonio, TX 78255",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 179,
+                                                    "top": 659,
+                                                    "right": 593,
+                                                    "bottom": 706
+                                                }
+                                            },
+                                            {
+                                                "class": "android.widget.Button",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 179,
+                                                    "top": 607,
+                                                    "right": 1008,
+                                                    "bottom": 706
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 36,
+                                            "top": 742,
+                                            "right": 1044,
+                                            "bottom": 1145
+                                        },
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 36,
+                                                    "top": 690,
+                                                    "right": 1044,
+                                                    "bottom": 744
+                                                }
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isClickable": true,
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 36,
+                                                    "top": 744,
+                                                    "right": 1044,
+                                                    "bottom": 1145
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 1181,
+                                    "right": 1044,
+                                    "bottom": 1342
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 179,
+                                            "top": 1209,
+                                            "right": 910,
+                                            "bottom": 1315
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "Hand it to customer",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 179,
+                                                    "top": 1236,
+                                                    "right": 584,
+                                                    "bottom": 1288
+                                                }
+                                            },
+                                            {
+                                                "class": "android.widget.Button",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 179,
+                                                    "top": 1236,
+                                                    "right": 919,
+                                                    "bottom": 1288
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 910,
+                                            "top": 1208,
+                                            "right": 1017,
+                                            "bottom": 1315
+                                        },
+                                        "children": [
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 910,
+                                                    "top": 1208,
+                                                    "right": 1017,
+                                                    "bottom": 1315
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 1378,
+                                    "right": 1044,
+                                    "bottom": 1521
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 36,
+                                            "top": 1378,
+                                            "right": 1044,
+                                            "bottom": 1521
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "799",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 179,
+                                                    "top": 1424,
+                                                    "right": 256,
+                                                    "bottom": 1476
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

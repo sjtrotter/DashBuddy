@@ -1,0 +1,172 @@
+{
+    "timestamp": 1775264259526,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/message_recycler_view",
+        "class": "androidx.recyclerview.widget.RecyclerView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 261,
+            "right": 1080,
+            "bottom": 1442
+        },
+        "children": [
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 261,
+                    "right": 1080,
+                    "bottom": 562
+                },
+                "children": [
+                    {
+                        "id": "com.doordash.driverapp:id/image_self_view",
+                        "class": "android.widget.ImageView",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 608,
+                            "top": 261,
+                            "right": 1053,
+                            "bottom": 480
+                        }
+                    },
+                    {
+                        "text": "Sent 17 mins ago",
+                        "id": "com.doordash.driverapp:id/image_self_seenat_text_view",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 811,
+                            "top": 498,
+                            "right": 1044,
+                            "bottom": 544
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 562,
+                    "right": 1080,
+                    "bottom": 762
+                },
+                "children": [
+                    {
+                        "text": "same fat content",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 706,
+                            "top": 580,
+                            "right": 1049,
+                            "bottom": 680
+                        }
+                    },
+                    {
+                        "text": "Sent 17 mins ago",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 811,
+                            "top": 698,
+                            "right": 1044,
+                            "bottom": 744
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 762,
+                    "right": 1080,
+                    "bottom": 1074
+                },
+                "children": [
+                    {
+                        "text": "I've got those to replace for now lmk if you wanna do something else or refund it",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 515,
+                            "top": 780,
+                            "right": 1049,
+                            "bottom": 992
+                        }
+                    },
+                    {
+                        "text": "Sent 17 mins ago",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 811,
+                            "top": 1010,
+                            "right": 1044,
+                            "bottom": 1056
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1074,
+                    "right": 1080,
+                    "bottom": 1442
+                },
+                "children": [
+                    {
+                        "text": "omw, went ahead with the replacements\neta is about 15 to 20 minutes",
+                        "id": "com.doordash.driverapp:id/message_self_message",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 515,
+                            "top": 1092,
+                            "right": 1049,
+                            "bottom": 1360
+                        }
+                    },
+                    {
+                        "text": "Pending",
+                        "id": "com.doordash.driverapp:id/message_self_seen_at",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 927,
+                            "top": 1378,
+                            "right": 1044,
+                            "bottom": 1424
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

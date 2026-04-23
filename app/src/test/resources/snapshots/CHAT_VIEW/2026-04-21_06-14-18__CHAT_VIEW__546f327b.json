@@ -1,0 +1,473 @@
+{
+    "timestamp": 1776770058625,
+    "breadcrumbs": [
+        "SET_DASH_END_TIME",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "CHAT_VIEW"
+    ],
+    "root": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 0,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "id": "android:id/content",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 0,
+                            "right": 1080,
+                            "bottom": 2400
+                        },
+                        "children": [
+                            {
+                                "id": "com.google.android.apps.nexuslauncher:id/launcher",
+                                "class": "android.widget.FrameLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 0,
+                                    "right": 1080,
+                                    "bottom": 2400
+                                },
+                                "children": [
+                                    {
+                                        "id": "com.google.android.apps.nexuslauncher:id/drag_layer",
+                                        "class": "android.widget.FrameLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 0,
+                                            "right": 1080,
+                                            "bottom": 2400
+                                        },
+                                        "children": [
+                                            {
+                                                "id": "com.google.android.apps.nexuslauncher:id/scrim_view",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 0,
+                                                    "right": 1080,
+                                                    "bottom": 2400
+                                                }
+                                            },
+                                            {
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 0,
+                                                    "right": 0,
+                                                    "bottom": 0
+                                                }
+                                            },
+                                            {
+                                                "id": "com.google.android.apps.nexuslauncher:id/overview_panel",
+                                                "class": "android.widget.ListView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 0,
+                                                    "right": 1080,
+                                                    "bottom": 2400
+                                                },
+                                                "children": [
+                                                    {
+                                                        "text": "Clear all",
+                                                        "id": "com.google.android.apps.nexuslauncher:id/clear_all",
+                                                        "class": "android.widget.Button",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 1096,
+                                                            "right": -74,
+                                                            "bottom": 1217
+                                                        }
+                                                    },
+                                                    {
+                                                        "id": "com.google.android.apps.nexuslauncher:id/task_view_single",
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isClickable": true,
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 200,
+                                                            "right": -74,
+                                                            "bottom": 2112
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "id": "com.google.android.apps.nexuslauncher:id/task_content_view",
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 0,
+                                                                    "top": 200,
+                                                                    "right": -74,
+                                                                    "bottom": 2112
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "id": "com.google.android.apps.nexuslauncher:id/snapshot",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 0,
+                                                                            "top": 200,
+                                                                            "right": -74,
+                                                                            "bottom": 2112
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/task_thumbnail_scrim",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 200,
+                                                                                    "right": -74,
+                                                                                    "bottom": 2112
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/splash_background",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 200,
+                                                                                    "right": -74,
+                                                                                    "bottom": 2112
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/splash_icon",
+                                                                                "class": "android.widget.ImageView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 1090,
+                                                                                    "right": -74,
+                                                                                    "bottom": 1222
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "id": "com.google.android.apps.nexuslauncher:id/task_view_single",
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isClickable": true,
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 227,
+                                                            "right": -54,
+                                                            "bottom": 2074
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "id": "com.google.android.apps.nexuslauncher:id/task_content_view",
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 0,
+                                                                    "top": 227,
+                                                                    "right": -54,
+                                                                    "bottom": 2074
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "desc": "Messages",
+                                                                        "id": "com.google.android.apps.nexuslauncher:id/snapshot",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 0,
+                                                                            "top": 227,
+                                                                            "right": -54,
+                                                                            "bottom": 2074
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/task_thumbnail",
+                                                                                "class": "android.widget.ImageView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 227,
+                                                                                    "right": -54,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/task_thumbnail_scrim",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 227,
+                                                                                    "right": -54,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/splash_background",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 227,
+                                                                                    "right": -54,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/splash_icon",
+                                                                                "class": "android.widget.ImageView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 1086,
+                                                                                    "right": -54,
+                                                                                    "bottom": 1214
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "id": "com.google.android.apps.nexuslauncher:id/task_view_single",
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isClickable": true,
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 0,
+                                                            "top": 227,
+                                                            "right": 85,
+                                                            "bottom": 2074
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "id": "com.google.android.apps.nexuslauncher:id/task_content_view",
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 0,
+                                                                    "top": 227,
+                                                                    "right": 85,
+                                                                    "bottom": 2074
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "desc": "DashBuddy",
+                                                                        "id": "com.google.android.apps.nexuslauncher:id/snapshot",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 0,
+                                                                            "top": 227,
+                                                                            "right": 85,
+                                                                            "bottom": 2074
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/task_thumbnail",
+                                                                                "class": "android.widget.ImageView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 227,
+                                                                                    "right": 85,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/task_thumbnail_scrim",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 227,
+                                                                                    "right": 85,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/splash_background",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 227,
+                                                                                    "right": 85,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/splash_icon",
+                                                                                "class": "android.widget.ImageView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 0,
+                                                                                    "top": 1086,
+                                                                                    "right": -54,
+                                                                                    "bottom": 1214
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "id": "com.google.android.apps.nexuslauncher:id/task_view_single",
+                                                        "class": "android.widget.FrameLayout",
+                                                        "isClickable": true,
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 124,
+                                                            "top": 227,
+                                                            "right": 956,
+                                                            "bottom": 2074
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "id": "com.google.android.apps.nexuslauncher:id/task_content_view",
+                                                                "class": "android.view.ViewGroup",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 124,
+                                                                    "top": 227,
+                                                                    "right": 956,
+                                                                    "bottom": 2074
+                                                                },
+                                                                "children": [
+                                                                    {
+                                                                        "desc": "Dasher",
+                                                                        "id": "com.google.android.apps.nexuslauncher:id/snapshot",
+                                                                        "class": "android.widget.FrameLayout",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 124,
+                                                                            "top": 227,
+                                                                            "right": 956,
+                                                                            "bottom": 2074
+                                                                        },
+                                                                        "children": [
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/task_thumbnail_live_tile",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 124,
+                                                                                    "top": 227,
+                                                                                    "right": 956,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/task_thumbnail_scrim",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 124,
+                                                                                    "top": 227,
+                                                                                    "right": 956,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/splash_background",
+                                                                                "class": "android.view.View",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 124,
+                                                                                    "top": 227,
+                                                                                    "right": 956,
+                                                                                    "bottom": 2074
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "id": "com.google.android.apps.nexuslauncher:id/splash_icon",
+                                                                                "class": "android.widget.ImageView",
+                                                                                "isEnabled": true,
+                                                                                "bounds": {
+                                                                                    "left": 476,
+                                                                                    "top": 1086,
+                                                                                    "right": 604,
+                                                                                    "bottom": 1214
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "desc": "Home",
+                                                "state": "Home screen 2 of 2",
+                                                "id": "com.google.android.apps.nexuslauncher:id/accessibility_action_view",
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 136,
+                                                    "right": 1080,
+                                                    "bottom": 2347
+                                                }
+                                            },
+                                            {
+                                                "id": "com.google.android.apps.nexuslauncher:id/overview_actions_view",
+                                                "class": "android.widget.FrameLayout",
+                                                "bounds": {
+                                                    "left": 0,
+                                                    "top": 1975,
+                                                    "right": 1080,
+                                                    "bottom": 2400
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

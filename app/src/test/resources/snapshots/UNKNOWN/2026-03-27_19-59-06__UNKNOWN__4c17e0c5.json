@@ -1,0 +1,27 @@
+{
+    "timestamp": 1774659546510,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.doordash.driverapp:id/right_button",
+        "class": "android.widget.ImageButton",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 955,
+            "top": 1478,
+            "right": 1026,
+            "bottom": 1549
+        }
+    }
+}

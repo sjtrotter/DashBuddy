@@ -1,0 +1,42 @@
+{
+    "timestamp": 1774616150146,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "SENSITIVE",
+        "APP_STARTING_OR_LOADING",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": "[108,235][972,2112]",
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[217,2035][863,2104]",
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": "[197,2061][883,2134]",
+                        "children": [
+                            {
+                                "text": "You scheduled a dash",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": "[221,2082][488,2114]"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

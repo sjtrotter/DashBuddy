@@ -1,0 +1,95 @@
+{
+    "timestamp": 1775914945159,
+    "breadcrumbs": [
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.widget.ScrollView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1692,
+            "right": 1080,
+            "bottom": 2150
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1692,
+                    "right": 1080,
+                    "bottom": 2150
+                },
+                "children": [
+                    {
+                        "text": "It’s peak pay time!",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1745,
+                            "right": 712,
+                            "bottom": 1850
+                        }
+                    },
+                    {
+                        "text": "+$1.00/order until 9:30 AM",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1854,
+                            "right": 657,
+                            "bottom": 1916
+                        }
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1952,
+                            "right": 1044,
+                            "bottom": 2114
+                        },
+                        "children": [
+                            {
+                                "text": "Avg. offer wait",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 63,
+                                    "top": 1979,
+                                    "right": 1017,
+                                    "bottom": 2026
+                                }
+                            },
+                            {
+                                "text": "3 min",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 63,
+                                    "top": 2035,
+                                    "right": 1017,
+                                    "bottom": 2087
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

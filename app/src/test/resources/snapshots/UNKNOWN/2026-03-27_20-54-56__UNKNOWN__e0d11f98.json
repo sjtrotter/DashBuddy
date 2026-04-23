@@ -1,0 +1,174 @@
+{
+    "timestamp": 1774662896864,
+    "breadcrumbs": [
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "DASH_SUMMARY_SCREEN",
+        "UNKNOWN",
+        "DASH_SUMMARY_SCREEN",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1607,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1607,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 1607,
+                            "right": 1080,
+                            "bottom": 2400
+                        },
+                        "children": [
+                            {
+                                "class": "android.widget.ScrollView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 1607,
+                                    "right": 1080,
+                                    "bottom": 2150
+                                },
+                                "children": [
+                                    {
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 0,
+                                            "top": 1607,
+                                            "right": 1080,
+                                            "bottom": 2150
+                                        },
+                                        "children": [
+                                            {
+                                                "text": "Keep it up",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 36,
+                                                    "top": 1660,
+                                                    "right": 421,
+                                                    "bottom": 1765
+                                                }
+                                            },
+                                            {
+                                                "text": "Your goal is about 7 hours away",
+                                                "class": "android.widget.TextView",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 36,
+                                                    "top": 1769,
+                                                    "right": 742,
+                                                    "bottom": 1831
+                                                }
+                                            },
+                                            {
+                                                "class": "android.view.View",
+                                                "isEnabled": true,
+                                                "bounds": {
+                                                    "left": 36,
+                                                    "top": 1867,
+                                                    "right": 1044,
+                                                    "bottom": 2114
+                                                },
+                                                "children": [
+                                                    {
+                                                        "text": "Your weekly goal",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 72,
+                                                            "top": 1903,
+                                                            "right": 370,
+                                                            "bottom": 1950
+                                                        }
+                                                    },
+                                                    {
+                                                        "class": "android.view.View",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 72,
+                                                            "top": 1937,
+                                                            "right": 1008,
+                                                            "bottom": 2044
+                                                        },
+                                                        "children": [
+                                                            {
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 72,
+                                                                    "top": 1937,
+                                                                    "right": 1008,
+                                                                    "bottom": 2044
+                                                                }
+                                                            },
+                                                            {
+                                                                "class": "android.view.View",
+                                                                "isEnabled": true,
+                                                                "bounds": {
+                                                                    "left": 39,
+                                                                    "top": 1937,
+                                                                    "right": 146,
+                                                                    "bottom": 2044
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "text": "$6.13",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 72,
+                                                            "top": 2031,
+                                                            "right": 164,
+                                                            "bottom": 2078
+                                                        }
+                                                    },
+                                                    {
+                                                        "text": "/$380.00",
+                                                        "class": "android.widget.TextView",
+                                                        "isEnabled": true,
+                                                        "bounds": {
+                                                            "left": 164,
+                                                            "top": 2031,
+                                                            "right": 339,
+                                                            "bottom": 2078
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

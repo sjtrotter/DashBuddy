@@ -1,0 +1,255 @@
+{
+    "timestamp": 1774661283019,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": {
+            "left": 36,
+            "top": 924,
+            "right": 1044,
+            "bottom": 1554
+        },
+        "children": [
+            {
+                "desc": "Step 2",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 72,
+                    "top": 960,
+                    "right": 125,
+                    "bottom": 1013
+                }
+            },
+            {
+                "text": "Enter weight from scale",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 161,
+                    "top": 960,
+                    "right": 919,
+                    "bottom": 1012
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 928,
+                    "top": 933,
+                    "right": 1035,
+                    "bottom": 1040
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 108,
+                    "top": 1072,
+                    "right": 972,
+                    "bottom": 1179
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 81,
+                            "top": 1072,
+                            "right": 188,
+                            "bottom": 1179
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 85,
+                                    "top": 1076,
+                                    "right": 184,
+                                    "bottom": 1175
+                                }
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 81,
+                                    "top": 1072,
+                                    "right": 188,
+                                    "bottom": 1179
+                                },
+                                "children": [
+                                    {
+                                        "desc": "Scale icon",
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 108,
+                                            "top": 1099,
+                                            "right": 161,
+                                            "bottom": 1152
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "text": "2.",
+                        "class": "android.widget.EditText",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 188,
+                            "top": 1072,
+                            "right": 905,
+                            "bottom": 1179
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 188,
+                                    "top": 1102,
+                                    "right": 498,
+                                    "bottom": 1149
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "text": "lb",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 932,
+                            "top": 1100,
+                            "right": 972,
+                            "bottom": 1152
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 72,
+                    "top": 1173,
+                    "right": 732,
+                    "bottom": 1277
+                },
+                "children": [
+                    {
+                        "text": "Try to keep the total weight ~ 2.40 lb",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 72,
+                            "top": 1203,
+                            "right": 732,
+                            "bottom": 1250
+                        }
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 72,
+                    "top": 1277,
+                    "right": 1008,
+                    "bottom": 1384
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 72,
+                            "top": 1277,
+                            "right": 1008,
+                            "bottom": 1384
+                        },
+                        "children": [
+                            {
+                                "text": "Confirm",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 455,
+                                    "top": 1305,
+                                    "right": 624,
+                                    "bottom": 1357
+                                }
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 72,
+                                    "top": 1277,
+                                    "right": 1008,
+                                    "bottom": 1384
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 72,
+                    "top": 1411,
+                    "right": 1008,
+                    "bottom": 1518
+                },
+                "children": [
+                    {
+                        "text": "Weigh items later",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 359,
+                            "top": 1439,
+                            "right": 719,
+                            "bottom": 1491
+                        }
+                    },
+                    {
+                        "class": "android.widget.Button",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 72,
+                            "top": 1411,
+                            "right": 1008,
+                            "bottom": 1518
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

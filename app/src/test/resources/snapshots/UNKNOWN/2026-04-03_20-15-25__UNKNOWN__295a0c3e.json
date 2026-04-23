@@ -1,0 +1,27 @@
+{
+    "timestamp": 1775265325484,
+    "breadcrumbs": [
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "0.1 mi",
+        "id": "com.doordash.driverapp:id/bottom_sheet_remaining_distance_v2",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 426,
+            "top": 1438,
+            "right": 530,
+            "bottom": 1485
+        }
+    }
+}

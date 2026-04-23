@@ -1,0 +1,121 @@
+{
+    "timestamp": 1774661489088,
+    "breadcrumbs": [
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN",
+        "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1443,
+            "right": 1080,
+            "bottom": 1643
+        },
+        "children": [
+            {
+                "class": "androidx.compose.ui.viewinterop.ViewFactoryHolder",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 54,
+                    "top": 1479,
+                    "right": 1026,
+                    "bottom": 1607
+                },
+                "children": [
+                    {
+                        "desc": ": Do not go to self checkout",
+                        "class": "android.view.ViewGroup",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 54,
+                            "top": 1479,
+                            "right": 1026,
+                            "bottom": 1607
+                        },
+                        "children": [
+                            {
+                                "id": "com.doordash.driverapp:id/actions_group",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 54,
+                                    "top": 1479,
+                                    "right": 54,
+                                    "bottom": 1479
+                                }
+                            },
+                            {
+                                "id": "com.doordash.driverapp:id/subdued_decoration_view",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 54,
+                                    "top": 1481,
+                                    "right": 63,
+                                    "bottom": 1605
+                                }
+                            },
+                            {
+                                "id": "com.doordash.driverapp:id/start_icon_image_view",
+                                "class": "android.widget.ImageView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 81,
+                                    "top": 1506,
+                                    "right": 152,
+                                    "bottom": 1577
+                                }
+                            },
+                            {
+                                "text": "Do not go to self checkout",
+                                "id": "com.doordash.driverapp:id/body_text_view",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 170,
+                                    "top": 1514,
+                                    "right": 891,
+                                    "bottom": 1572
+                                }
+                            },
+                            {
+                                "id": "com.doordash.driverapp:id/button_container",
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 170,
+                                    "top": 1572,
+                                    "right": 891,
+                                    "bottom": 1572
+                                }
+                            },
+                            {
+                                "id": "com.doordash.driverapp:id/end_icon_button",
+                                "class": "android.widget.Button",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 918,
+                                    "top": 1506,
+                                    "right": 990,
+                                    "bottom": 1577
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,207 @@
+{
+    "timestamp": 1774704639963,
+    "breadcrumbs": [
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 466,
+            "top": 136,
+            "right": 1080,
+            "bottom": 2347
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 314,
+                    "top": 136,
+                    "right": 421,
+                    "bottom": 243
+                },
+                "children": [
+                    {
+                        "desc": "Side Menu",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 502,
+                            "top": 163,
+                            "right": 555,
+                            "bottom": 216
+                        }
+                    },
+                    {
+                        "class": "android.widget.Button",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 475,
+                            "top": 136,
+                            "right": 582,
+                            "bottom": 243
+                        }
+                    }
+                ]
+            },
+            {
+                "text": "Edit Dash",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 591,
+                    "top": 164,
+                    "right": 789,
+                    "bottom": 216
+                }
+            },
+            {
+                "text": "Mar 28, 2026, 08:00\nTX: Leon Valley",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 502,
+                    "top": 279,
+                    "right": 875,
+                    "bottom": 382
+                }
+            },
+            {
+                "text": "Start Time",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 502,
+                    "top": 418,
+                    "right": 715,
+                    "bottom": 470
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 502,
+                    "top": 506,
+                    "right": 1080,
+                    "bottom": 631
+                }
+            },
+            {
+                "text": "End Time",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 502,
+                    "top": 667,
+                    "right": 697,
+                    "bottom": 719
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "bounds": {
+                    "left": 502,
+                    "top": 755,
+                    "right": 1080,
+                    "bottom": 880
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 466,
+                    "top": 2088,
+                    "right": 1080,
+                    "bottom": 2347
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 502,
+                            "top": 2097,
+                            "right": 1080,
+                            "bottom": 2204
+                        },
+                        "children": [
+                            {
+                                "text": "Save Dash",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 901,
+                                    "top": 2125,
+                                    "right": 1080,
+                                    "bottom": 2177
+                                }
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 502,
+                                    "top": 2097,
+                                    "right": 1080,
+                                    "bottom": 2204
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 502,
+                            "top": 2231,
+                            "right": 1080,
+                            "bottom": 2338
+                        },
+                        "children": [
+                            {
+                                "text": "Delete Dash",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 881,
+                                    "top": 2259,
+                                    "right": 1080,
+                                    "bottom": 2311
+                                }
+                            },
+                            {
+                                "class": "android.widget.Button",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 502,
+                                    "top": 2231,
+                                    "right": 1080,
+                                    "bottom": 2338
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

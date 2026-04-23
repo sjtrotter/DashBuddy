@@ -1,0 +1,49 @@
+{
+    "timestamp": 1775265582432,
+    "breadcrumbs": [
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": 12,
+            "top": 11,
+            "right": 1092,
+            "bottom": 2411
+        },
+        "children": [
+            {
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 10,
+                    "top": 9,
+                    "right": 1090,
+                    "bottom": 2409
+                },
+                "children": [
+                    {
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 10,
+                            "top": 9,
+                            "right": 1090,
+                            "bottom": 2409
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

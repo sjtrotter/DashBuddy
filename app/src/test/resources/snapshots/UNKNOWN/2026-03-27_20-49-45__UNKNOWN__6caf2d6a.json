@@ -1,0 +1,60 @@
+{
+    "timestamp": 1774662585423,
+    "breadcrumbs": [
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 369,
+            "top": 4031,
+            "right": 712,
+            "bottom": 4137
+        },
+        "children": [
+            {
+                "text": "22%",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 369,
+                    "top": 4042,
+                    "right": 511,
+                    "bottom": 4126
+                }
+            },
+            {
+                "desc": "",
+                "class": "android.widget.ImageView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 520,
+                    "top": 4058,
+                    "right": 573,
+                    "bottom": 4111
+                }
+            },
+            {
+                "text": "21%",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 582,
+                    "top": 4042,
+                    "right": 712,
+                    "bottom": 4126
+                }
+            }
+        ]
+    }
+}

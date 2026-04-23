@@ -1,0 +1,27 @@
+{
+    "timestamp": 1774662052274,
+    "breadcrumbs": [
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "• 20:44",
+        "id": "com.doordash.driverapp:id/bottom_sheet_eta_v2",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 528,
+            "top": 2285,
+            "right": 662,
+            "bottom": 2332
+        }
+    }
+}

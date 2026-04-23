@@ -1,0 +1,72 @@
+{
+    "timestamp": 1775913004732,
+    "breadcrumbs": [
+        "MAIN_MAP_IDLE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN",
+        "NOTIFICATIONS_VIEW",
+        "UNKNOWN",
+        "SENSITIVE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 261,
+            "right": 1080,
+            "bottom": 2079
+        },
+        "children": [
+            {
+                "desc": "",
+                "class": "android.widget.ImageView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 232,
+                    "top": 261,
+                    "right": 849,
+                    "bottom": 724
+                }
+            },
+            {
+                "text": "Unlock 20 cent savings per gallon",
+                "class": "android.widget.TextView",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 36,
+                    "top": 760,
+                    "right": 1044,
+                    "bottom": 826
+                }
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 862,
+                    "right": 1080,
+                    "bottom": 1449
+                },
+                "children": [
+                    {
+                        "text": "Dasher-exclusive offer: Circle K’s Inner Circle rewards program members earn 20 cents off per gallon savings reward when you fuel up 2 times in a calendar month at participating Circle K locations.\n\nEarn up to 2 rewards per month in March and April.\n\nQualifying visits must occur within the same month and require a minimum 5-gallon purchase. Rewards expire 30 days after issuance. Terms apply.",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 880,
+                            "right": 1044,
+                            "bottom": 1431
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

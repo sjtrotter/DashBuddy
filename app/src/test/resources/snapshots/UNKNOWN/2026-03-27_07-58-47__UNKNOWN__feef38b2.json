@@ -1,0 +1,39 @@
+{
+    "timestamp": 1774616327674,
+    "breadcrumbs": [
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN",
+        "SCHEDULE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isClickable": true,
+        "isEnabled": true,
+        "bounds": "[173,370][319,516]",
+        "children": [
+            {
+                "desc": "Saturday 2026-03-28",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[173,370][319,516]"
+            },
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": "[225,422][268,465]"
+            },
+            {
+                "class": "android.widget.Button",
+                "isEnabled": true,
+                "bounds": "[173,370][319,516]"
+            }
+        ]
+    }
+}

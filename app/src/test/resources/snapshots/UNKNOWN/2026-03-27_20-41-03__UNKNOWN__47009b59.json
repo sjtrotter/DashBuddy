@@ -1,0 +1,27 @@
+{
+    "timestamp": 1774662063291,
+    "breadcrumbs": [
+        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN",
+        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "UNKNOWN"
+    ],
+    "root": {
+        "text": "North Loop 1604 West ",
+        "id": "com.doordash.driverapp:id/primaryManeuverText",
+        "class": "android.widget.TextView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 237,
+            "top": 223,
+            "right": 1062,
+            "bottom": 317
+        }
+    }
+}

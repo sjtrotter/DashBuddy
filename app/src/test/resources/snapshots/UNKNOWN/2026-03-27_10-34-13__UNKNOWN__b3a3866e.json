@@ -1,0 +1,61 @@
+{
+    "timestamp": 1774625653261,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "SET_DASH_END_TIME",
+        "ON_DASH_ALONG_THE_WAY",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.widget.ScrollView",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 1792,
+            "right": 1080,
+            "bottom": 2150
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 1792,
+                    "right": 1080,
+                    "bottom": 2150
+                },
+                "children": [
+                    {
+                        "text": "Schedule your dash for later",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 1845,
+                            "right": 1044,
+                            "bottom": 2048
+                        }
+                    },
+                    {
+                        "text": "This zone's full right now",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2052,
+                            "right": 591,
+                            "bottom": 2114
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

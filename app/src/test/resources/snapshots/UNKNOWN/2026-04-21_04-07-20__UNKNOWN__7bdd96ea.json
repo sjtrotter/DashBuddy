@@ -1,0 +1,460 @@
+{
+    "timestamp": 1776762440233,
+    "breadcrumbs": [
+        "UNKNOWN",
+        "SET_DASH_END_TIME",
+        "ON_DASH_ALONG_THE_WAY",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "TIMELINE_VIEW",
+        "UNKNOWN",
+        "MAIN_MAP_IDLE",
+        "UNKNOWN"
+    ],
+    "root": {
+        "id": "com.android.systemui:id/legacy_window_root",
+        "class": "android.widget.FrameLayout",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 0,
+            "right": 1080,
+            "bottom": 2400
+        },
+        "children": [
+            {
+                "id": "com.android.systemui:id/scrim_behind",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                }
+            },
+            {
+                "id": "com.android.systemui:id/scrim_notifications",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                }
+            },
+            {
+                "id": "com.android.systemui:id/light_reveal_scrim",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                }
+            },
+            {
+                "id": "com.android.systemui:id/scrim_in_front",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                }
+            },
+            {
+                "id": "com.android.systemui:id/auth_ripple",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                }
+            },
+            {
+                "id": "com.android.systemui:id/shared_notification_container",
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "id": "com.android.systemui:id/notification_stack_scroller",
+                        "class": "android.widget.ScrollView",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 0,
+                            "right": 1080,
+                            "bottom": 2329
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "com.android.systemui:id/keyguard_root_view",
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 1080,
+                    "bottom": 2400
+                },
+                "children": [
+                    {
+                        "desc": "Lock screen",
+                        "id": "com.android.systemui:id/accessibility_actions_view",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 136,
+                            "right": 1080,
+                            "bottom": 2400
+                        }
+                    },
+                    {
+                        "desc": "04:07",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 62,
+                            "top": 176,
+                            "right": 556,
+                            "bottom": 430
+                        },
+                        "children": [
+                            {
+                                "text": "0",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 62,
+                                    "top": 225,
+                                    "right": 190,
+                                    "bottom": 381
+                                }
+                            },
+                            {
+                                "text": "4",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 158,
+                                    "top": 227,
+                                    "right": 286,
+                                    "bottom": 379
+                                }
+                            },
+                            {
+                                "text": ":",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 286,
+                                    "top": 242,
+                                    "right": 346,
+                                    "bottom": 364
+                                }
+                            },
+                            {
+                                "text": "0",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 346,
+                                    "top": 225,
+                                    "right": 474,
+                                    "bottom": 381
+                                }
+                            },
+                            {
+                                "text": "7",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 442,
+                                    "top": 225,
+                                    "right": 556,
+                                    "bottom": 381
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "id": "com.android.systemui:id/date_smartspace_view",
+                        "class": "android.widget.LinearLayout",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 71,
+                            "top": 430,
+                            "right": 661,
+                            "bottom": 537
+                        },
+                        "children": [
+                            {
+                                "class": "android.widget.LinearLayout",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 71,
+                                    "top": 430,
+                                    "right": 299,
+                                    "bottom": 537
+                                },
+                                "children": [
+                                    {
+                                        "text": "Tue, Apr 21",
+                                        "desc": "Tue, Apr 21",
+                                        "id": "com.android.systemui:id/date",
+                                        "class": "android.widget.TextView",
+                                        "isClickable": true,
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 71,
+                                            "top": 430,
+                                            "right": 281,
+                                            "bottom": 537
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "com.android.systemui:id/weather_smartspace_view",
+                                "class": "android.widget.LinearLayout",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 299,
+                                    "top": 457,
+                                    "right": 466,
+                                    "bottom": 510
+                                },
+                                "children": [
+                                    {
+                                        "text": "60°F",
+                                        "desc": "Light rain, 60°F",
+                                        "id": "com.android.systemui:id/weather_text_view",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 299,
+                                            "top": 457,
+                                            "right": 448,
+                                            "bottom": 510
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "text": "05:00",
+                                "desc": "Next alarm at 05:00",
+                                "id": "com.android.systemui:id/alarm_text_view",
+                                "class": "android.widget.TextView",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 466,
+                                    "top": 430,
+                                    "right": 643,
+                                    "bottom": 537
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "id": "com.android.systemui:id/nssl_placeholder",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 582,
+                            "right": 1080,
+                            "bottom": 1613
+                        }
+                    },
+                    {
+                        "id": "com.android.systemui:id/device_entry_icon_view",
+                        "class": "android.widget.FrameLayout",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 440,
+                            "top": 1613,
+                            "right": 640,
+                            "bottom": 1813
+                        },
+                        "children": [
+                            {
+                                "id": "com.android.systemui:id/device_entry_icon_bg",
+                                "class": "android.widget.ImageView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 440,
+                                    "top": 1613,
+                                    "right": 640,
+                                    "bottom": 1813
+                                }
+                            },
+                            {
+                                "desc": "Device locked",
+                                "id": "com.android.systemui:id/device_entry_icon_fg",
+                                "class": "android.widget.ImageView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 440,
+                                    "top": 1613,
+                                    "right": 640,
+                                    "bottom": 1813
+                                }
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 440,
+                                    "top": 1613,
+                                    "right": 640,
+                                    "bottom": 1813
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "id": "com.android.systemui:id/ambient_indication_container",
+                        "class": "android.widget.FrameLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 1813,
+                            "right": 1080,
+                            "bottom": 2222
+                        },
+                        "children": [
+                            {
+                                "id": "com.android.systemui:id/ambient_indication",
+                                "class": "android.view.ViewGroup",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 0,
+                                    "top": 1813,
+                                    "right": 1080,
+                                    "bottom": 2222
+                                },
+                                "children": [
+                                    {
+                                        "id": "com.android.systemui:id/ambient_indication_info_container",
+                                        "class": "android.widget.LinearLayout",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 1,
+                                            "top": 2018,
+                                            "right": 1080,
+                                            "bottom": 2018
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "com.android.systemui:id/keyguard_indication_area",
+                        "class": "android.widget.LinearLayout",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 2222,
+                            "right": 1080,
+                            "bottom": 2329
+                        },
+                        "children": [
+                            {
+                                "text": "Charged",
+                                "id": "com.android.systemui:id/keyguard_indication_text_bottom",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 182,
+                                    "top": 2223,
+                                    "right": 898,
+                                    "bottom": 2329
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "desc": "Home",
+                        "id": "com.android.systemui:id/start_button",
+                        "class": "android.widget.ImageView",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 36,
+                            "top": 2222,
+                            "right": 143,
+                            "bottom": 2329
+                        }
+                    },
+                    {
+                        "desc": "Wallet",
+                        "id": "com.android.systemui:id/end_button",
+                        "class": "android.widget.ImageView",
+                        "isClickable": true,
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 937,
+                            "top": 2222,
+                            "right": 1044,
+                            "bottom": 2329
+                        }
+                    },
+                    {
+                        "id": "com.android.systemui:id/burn_in_layer_empty_view",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 2399,
+                            "right": 1080,
+                            "bottom": 2400
+                        }
+                    },
+                    {
+                        "id": "com.android.systemui:id/burn_in_layer",
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 2399,
+                            "right": 1080,
+                            "bottom": 2400
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "com.android.systemui:id/keyguard_message_area_container",
+                "class": "android.widget.LinearLayout",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 136,
+                    "right": 1080,
+                    "bottom": 2400
+                }
+            }
+        ]
+    }
+}

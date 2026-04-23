@@ -1,0 +1,164 @@
+{
+    "timestamp": 1775265579025,
+    "breadcrumbs": [
+        "OFFER_POPUP",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "OFFER_POPUP_CONFIRM_DECLINE",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN",
+        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "UNKNOWN"
+    ],
+    "root": {
+        "class": "android.view.View",
+        "isEnabled": true,
+        "bounds": {
+            "left": 0,
+            "top": 2493,
+            "right": 1080,
+            "bottom": 4704
+        },
+        "children": [
+            {
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                    "left": 0,
+                    "top": 2493,
+                    "right": 1080,
+                    "bottom": 2742
+                },
+                "children": [
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 2493,
+                            "right": 1080,
+                            "bottom": 2635
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 9,
+                                    "top": 2510,
+                                    "right": 116,
+                                    "bottom": 2617
+                                },
+                                "children": [
+                                    {
+                                        "desc": "Close",
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 36,
+                                            "top": 2537,
+                                            "right": 89,
+                                            "bottom": 2590
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.Button",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 18,
+                                            "top": 2519,
+                                            "right": 107,
+                                            "bottom": 2608
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 125,
+                                    "top": 2531,
+                                    "right": 955,
+                                    "bottom": 2597
+                                }
+                            },
+                            {
+                                "class": "android.view.View",
+                                "isClickable": true,
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 964,
+                                    "top": 2510,
+                                    "right": 1071,
+                                    "bottom": 2617
+                                },
+                                "children": [
+                                    {
+                                        "desc": "Chat",
+                                        "class": "android.view.View",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 982,
+                                            "top": 2528,
+                                            "right": 1053,
+                                            "bottom": 2599
+                                        }
+                                    },
+                                    {
+                                        "class": "android.widget.Button",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 973,
+                                            "top": 2519,
+                                            "right": 1062,
+                                            "bottom": 2608
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                            "left": 0,
+                            "top": 2635,
+                            "right": 1080,
+                            "bottom": 2742
+                        },
+                        "children": [
+                            {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                    "left": 36,
+                                    "top": 2617,
+                                    "right": 1080,
+                                    "bottom": 2723
+                                },
+                                "children": [
+                                    {
+                                        "text": "Current dash",
+                                        "class": "android.widget.TextView",
+                                        "isEnabled": true,
+                                        "bounds": {
+                                            "left": 36,
+                                            "top": 2637,
+                                            "right": 1080,
+                                            "bottom": 2703
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
