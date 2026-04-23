@@ -1,10 +1,10 @@
 {
-    "timestamp": 1775247606091,
+    "timestamp": 1776631514925,
     "breadcrumbs": [
-        "OFFER_POPUP_CONFIRM_DECLINE",
         "UNKNOWN",
-        "OFFER_POPUP_CONFIRM_DECLINE",
-        "ON_DASH_MAP_WAITING_FOR_OFFER",
+        "PICKUP_DETAILS_PRE_ARRIVAL",
+        "UNKNOWN",
+        "APP_STARTING_OR_LOADING",
         "UNKNOWN",
         "ON_DASH_MAP_WAITING_FOR_OFFER",
         "UNKNOWN",
@@ -310,10 +310,10 @@
                                                 "class": "android.widget.TextView",
                                                 "isEnabled": true,
                                                 "bounds": {
-                                                    "left": 431,
-                                                    "top": 236,
-                                                    "right": 1041,
-                                                    "bottom": 336
+                                                    "left": 427,
+                                                    "top": 240,
+                                                    "right": 1045,
+                                                    "bottom": 342
                                                 }
                                             },
                                             {
@@ -322,10 +322,10 @@
                                                 "class": "android.view.View",
                                                 "isEnabled": true,
                                                 "bounds": {
-                                                    "left": 431,
-                                                    "top": 236,
-                                                    "right": 1041,
-                                                    "bottom": 336
+                                                    "left": 427,
+                                                    "top": 240,
+                                                    "right": 1045,
+                                                    "bottom": 342
                                                 },
                                                 "children": [
                                                     {
@@ -333,10 +333,10 @@
                                                         "class": "android.widget.TextView",
                                                         "isEnabled": true,
                                                         "bounds": {
-                                                            "left": 999,
-                                                            "top": 222,
-                                                            "right": 1027,
-                                                            "bottom": 238
+                                                            "left": 1001,
+                                                            "top": 227,
+                                                            "right": 1030,
+                                                            "bottom": 245
                                                         }
                                                     },
                                                     {
@@ -344,10 +344,10 @@
                                                         "class": "android.widget.TextView",
                                                         "isEnabled": true,
                                                         "bounds": {
-                                                            "left": 449,
-                                                            "top": 253,
+                                                            "left": 445,
+                                                            "top": 258,
                                                             "right": 941,
-                                                            "bottom": 311
+                                                            "bottom": 318
                                                         }
                                                     },
                                                     {
@@ -357,10 +357,10 @@
                                                         "isClickable": true,
                                                         "isEnabled": true,
                                                         "bounds": {
-                                                            "left": 954,
-                                                            "top": 249,
-                                                            "right": 1027,
-                                                            "bottom": 322
+                                                            "left": 956,
+                                                            "top": 253,
+                                                            "right": 1030,
+                                                            "bottom": 329
                                                         }
                                                     }
                                                 ]
@@ -370,10 +370,10 @@
                                                 "class": "android.widget.TextView",
                                                 "isEnabled": true,
                                                 "bounds": {
-                                                    "left": 431,
-                                                    "top": 236,
-                                                    "right": 1041,
-                                                    "bottom": 336
+                                                    "left": 427,
+                                                    "top": 338,
+                                                    "right": 1045,
+                                                    "bottom": 338
                                                 }
                                             }
                                         ]

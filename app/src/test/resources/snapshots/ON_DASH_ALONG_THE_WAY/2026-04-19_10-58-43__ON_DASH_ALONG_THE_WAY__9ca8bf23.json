@@ -1,14 +1,13 @@
 {
-    "timestamp": 1775340372623,
+    "timestamp": 1776614323511,
     "breadcrumbs": [
+        "MAIN_MAP_IDLE",
         "UNKNOWN",
-        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "MAIN_MAP_IDLE",
         "UNKNOWN",
-        "NAVIGATION_VIEW_TO_DROP_OFF",
+        "MAIN_MAP_IDLE",
         "UNKNOWN",
-        "DROPOFF_DETAILS_PRE_ARRIVAL",
-        "UNKNOWN",
-        "DROPOFF_DETAILS_PRE_ARRIVAL",
+        "MAIN_MAP_IDLE",
         "UNKNOWN",
         "ON_DASH_ALONG_THE_WAY"
     ],
@@ -110,14 +109,25 @@
                                                                         }
                                                                     },
                                                                     {
-                                                                        "text": "Looking for offers",
+                                                                        "text": "Navigate to zone",
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
                                                                         "bounds": {
                                                                             "left": 133,
-                                                                            "top": 182,
-                                                                            "right": 463,
-                                                                            "bottom": 232
+                                                                            "top": 163,
+                                                                            "right": 448,
+                                                                            "bottom": 213
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "text": "TX: Northwest San Antonio",
+                                                                        "class": "android.widget.TextView",
+                                                                        "isEnabled": true,
+                                                                        "bounds": {
+                                                                            "left": 133,
+                                                                            "top": 213,
+                                                                            "right": 514,
+                                                                            "bottom": 251
                                                                         }
                                                                     },
                                                                     {
@@ -240,9 +250,9 @@
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
                                                                                                     "left": 5,
-                                                                                                    "top": 1907,
+                                                                                                    "top": 1859,
                                                                                                     "right": 194,
-                                                                                                    "bottom": 1954
+                                                                                                    "bottom": 1906
                                                                                                 }
                                                                                             },
                                                                                             {
@@ -251,9 +261,9 @@
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
                                                                                                     "left": 200,
-                                                                                                    "top": 1907,
+                                                                                                    "top": 1859,
                                                                                                     "right": 247,
-                                                                                                    "bottom": 1954
+                                                                                                    "bottom": 1906
                                                                                                 }
                                                                                             }
                                                                                         ]
@@ -320,24 +330,26 @@
                                                                                         }
                                                                                     },
                                                                                     {
+                                                                                        "text": "Spot saved until 11:34 (35 mins)",
                                                                                         "id": "com.doordash.driverapp:id/bottom_view_info_title",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
                                                                                         "bounds": {
                                                                                             "left": 0,
                                                                                             "top": 2048,
-                                                                                            "right": 72,
+                                                                                            "right": 684,
                                                                                             "bottom": 2100
                                                                                         }
                                                                                     },
                                                                                     {
+                                                                                        "text": "Traffic conditions are considered in the travel time.",
                                                                                         "id": "com.doordash.driverapp:id/bottom_view_info_subtitle",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
                                                                                         "bounds": {
                                                                                             "left": 0,
                                                                                             "top": 2109,
-                                                                                            "right": 72,
+                                                                                            "right": 894,
                                                                                             "bottom": 2151
                                                                                         }
                                                                                     },
@@ -382,43 +394,6 @@
                                                                                 ]
                                                                             }
                                                                         ]
-                                                                    }
-                                                                ]
-                                                            },
-                                                            {
-                                                                "id": "com.doordash.driverapp:id/progress_container",
-                                                                "class": "android.widget.RelativeLayout",
-                                                                "isEnabled": true,
-                                                                "bounds": {
-                                                                    "left": 0,
-                                                                    "top": 278,
-                                                                    "right": 1080,
-                                                                    "bottom": 2347
-                                                                },
-                                                                "children": [
-                                                                    {
-                                                                        "state": "in progress",
-                                                                        "id": "com.doordash.driverapp:id/progress_bar",
-                                                                        "class": "android.widget.ProgressBar",
-                                                                        "isEnabled": true,
-                                                                        "bounds": {
-                                                                            "left": 486,
-                                                                            "top": 1259,
-                                                                            "right": 593,
-                                                                            "bottom": 1366
-                                                                        }
-                                                                    },
-                                                                    {
-                                                                        "text": "Loading…",
-                                                                        "id": "com.doordash.driverapp:id/progress_message",
-                                                                        "class": "android.widget.TextView",
-                                                                        "isEnabled": true,
-                                                                        "bounds": {
-                                                                            "left": 451,
-                                                                            "top": 1437,
-                                                                            "right": 628,
-                                                                            "bottom": 1484
-                                                                        }
                                                                     }
                                                                 ]
                                                             }

@@ -1,14 +1,8 @@
 {
-    "timestamp": 1774789837288,
+    "timestamp": 1776515024241,
     "breadcrumbs": [
         "UNKNOWN",
-        "SENSITIVE",
-        "UNKNOWN",
         "MAIN_MAP_IDLE",
-        "UNKNOWN",
-        "SENSITIVE",
-        "UNKNOWN",
-        "SENSITIVE",
         "UNKNOWN",
         "SCHEDULE_VIEW"
     ],
@@ -245,7 +239,7 @@
                                 },
                                 "children": [
                                     {
-                                        "desc": "Today, Sunday 2026-03-29",
+                                        "desc": "Today, Saturday 2026-04-18",
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
@@ -259,9 +253,9 @@
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
-                                            "left": 79,
+                                            "left": 82,
                                             "top": 422,
-                                            "right": 121,
+                                            "right": 119,
                                             "bottom": 465
                                         }
                                     },
@@ -289,7 +283,7 @@
                                 },
                                 "children": [
                                     {
-                                        "desc": "Monday 2026-03-30",
+                                        "desc": "Sunday 2026-04-19",
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
@@ -303,9 +297,9 @@
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
-                                            "left": 224,
+                                            "left": 228,
                                             "top": 422,
-                                            "right": 269,
+                                            "right": 264,
                                             "bottom": 465
                                         }
                                     },
@@ -333,7 +327,7 @@
                                 },
                                 "children": [
                                     {
-                                        "desc": "Tuesday 2026-03-31",
+                                        "desc": "Monday 2026-04-20",
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
@@ -347,9 +341,9 @@
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
-                                            "left": 375,
+                                            "left": 370,
                                             "top": 422,
-                                            "right": 410,
+                                            "right": 415,
                                             "bottom": 465
                                         }
                                     },
@@ -377,7 +371,7 @@
                                 },
                                 "children": [
                                     {
-                                        "desc": "Wednesday 2026-04-01",
+                                        "desc": "Tuesday 2026-04-21",
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
@@ -391,9 +385,9 @@
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
-                                            "left": 531,
+                                            "left": 521,
                                             "top": 422,
-                                            "right": 546,
+                                            "right": 556,
                                             "bottom": 465
                                         }
                                     },
@@ -421,7 +415,7 @@
                                 },
                                 "children": [
                                     {
-                                        "desc": "Thursday 2026-04-02",
+                                        "desc": "Wednesday 2026-04-22",
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
@@ -435,9 +429,9 @@
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
-                                            "left": 675,
+                                            "left": 665,
                                             "top": 422,
-                                            "right": 696,
+                                            "right": 706,
                                             "bottom": 465
                                         }
                                     },
@@ -465,7 +459,7 @@
                                 },
                                 "children": [
                                     {
-                                        "desc": "Friday 2026-04-03",
+                                        "desc": "Thursday 2026-04-23",
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
@@ -479,9 +473,9 @@
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
-                                            "left": 822,
+                                            "left": 812,
                                             "top": 422,
-                                            "right": 843,
+                                            "right": 853,
                                             "bottom": 465
                                         }
                                     },
@@ -509,7 +503,7 @@
                                 },
                                 "children": [
                                     {
-                                        "desc": "Saturday 2026-04-04",
+                                        "desc": "Friday 2026-04-24",
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
@@ -523,9 +517,9 @@
                                         "class": "android.view.View",
                                         "isEnabled": true,
                                         "bounds": {
-                                            "left": 969,
+                                            "left": 959,
                                             "top": 422,
-                                            "right": 991,
+                                            "right": 1001,
                                             "bottom": 465
                                         }
                                     },
@@ -611,248 +605,7 @@
                             "top": 700,
                             "right": 1080,
                             "bottom": 2347
-                        },
-                        "children": [
-                            {
-                                "class": "android.view.View",
-                                "isEnabled": true,
-                                "bounds": {
-                                    "left": 0,
-                                    "top": 700,
-                                    "right": 1080,
-                                    "bottom": 2311
-                                },
-                                "children": [
-                                    {
-                                        "text": "TX: Leon Valley",
-                                        "class": "android.widget.TextView",
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 36,
-                                            "top": 772,
-                                            "right": 316,
-                                            "bottom": 819
-                                        }
-                                    },
-                                    {
-                                        "class": "android.view.View",
-                                        "isClickable": true,
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 0,
-                                            "top": 855,
-                                            "right": 1080,
-                                            "bottom": 1051
-                                        },
-                                        "children": [
-                                            {
-                                                "text": "08:30 - 09:00",
-                                                "class": "android.widget.TextView",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 36,
-                                                    "top": 926,
-                                                    "right": 325,
-                                                    "bottom": 978
-                                                }
-                                            },
-                                            {
-                                                "class": "android.view.View",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 0,
-                                                    "top": 997,
-                                                    "right": 1080,
-                                                    "bottom": 1051
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "class": "android.view.View",
-                                        "isClickable": true,
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 0,
-                                            "top": 1051,
-                                            "right": 1080,
-                                            "bottom": 1247
-                                        },
-                                        "children": [
-                                            {
-                                                "text": "Mar 29, 10:30 - Mar 30, 00:00",
-                                                "class": "android.widget.TextView",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 36,
-                                                    "top": 1122,
-                                                    "right": 650,
-                                                    "bottom": 1174
-                                                }
-                                            },
-                                            {
-                                                "class": "android.view.View",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 0,
-                                                    "top": 1193,
-                                                    "right": 1080,
-                                                    "bottom": 1247
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "class": "android.view.View",
-                                        "isClickable": true,
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 0,
-                                            "top": 1247,
-                                            "right": 1080,
-                                            "bottom": 1441
-                                        },
-                                        "children": [
-                                            {
-                                                "text": "00:30 - 02:30",
-                                                "class": "android.widget.TextView",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 36,
-                                                    "top": 1318,
-                                                    "right": 322,
-                                                    "bottom": 1370
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "class": "android.view.View",
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 0,
-                                            "top": 1397,
-                                            "right": 1080,
-                                            "bottom": 1503
-                                        }
-                                    },
-                                    {
-                                        "text": "LACKLAND AFB – ID REQUIRED! Visitor Pass will not be issued",
-                                        "class": "android.widget.TextView",
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 36,
-                                            "top": 1495,
-                                            "right": 1044,
-                                            "bottom": 1598
-                                        }
-                                    },
-                                    {
-                                        "class": "android.view.View",
-                                        "isClickable": true,
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 0,
-                                            "top": 1634,
-                                            "right": 1080,
-                                            "bottom": 1828
-                                        },
-                                        "children": [
-                                            {
-                                                "text": "10:30 - 20:30",
-                                                "class": "android.widget.TextView",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 36,
-                                                    "top": 1705,
-                                                    "right": 310,
-                                                    "bottom": 1757
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "class": "android.view.View",
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 0,
-                                            "top": 1784,
-                                            "right": 1080,
-                                            "bottom": 1890
-                                        }
-                                    },
-                                    {
-                                        "text": "TX: Northwest San Antonio",
-                                        "class": "android.widget.TextView",
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 36,
-                                            "top": 1882,
-                                            "right": 528,
-                                            "bottom": 1929
-                                        }
-                                    },
-                                    {
-                                        "class": "android.view.View",
-                                        "isClickable": true,
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 0,
-                                            "top": 1965,
-                                            "right": 1080,
-                                            "bottom": 2161
-                                        },
-                                        "children": [
-                                            {
-                                                "text": "08:30 - 09:30",
-                                                "class": "android.widget.TextView",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 36,
-                                                    "top": 2036,
-                                                    "right": 320,
-                                                    "bottom": 2088
-                                                }
-                                            },
-                                            {
-                                                "class": "android.view.View",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 0,
-                                                    "top": 2107,
-                                                    "right": 1080,
-                                                    "bottom": 2161
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "class": "android.view.View",
-                                        "isClickable": true,
-                                        "isEnabled": true,
-                                        "bounds": {
-                                            "left": 0,
-                                            "top": 2161,
-                                            "right": 1080,
-                                            "bottom": 2355
-                                        },
-                                        "children": [
-                                            {
-                                                "text": "Mar 29, 10:30 - Mar 30, 04:00",
-                                                "class": "android.widget.TextView",
-                                                "isEnabled": true,
-                                                "bounds": {
-                                                    "left": 36,
-                                                    "top": 2232,
-                                                    "right": 647,
-                                                    "bottom": 2284
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
+                        }
                     }
                 ]
             }
