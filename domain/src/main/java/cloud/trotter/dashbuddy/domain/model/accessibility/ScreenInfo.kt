@@ -46,15 +46,6 @@ sealed class ScreenInfo {
     /** Contains the parsed offer details from an Offer Popup screen. */
     data class Offer(override val screen: Screen, val parsedOffer: ParsedOffer) : ScreenInfo()
 
-    /** Contains the OrderStatus either from a pickup or a dropoff. */
-    data class OrderDetails(
-        override val screen: Screen,
-        val storeName: String? = null,
-        val storeAddress: String? = null,
-        val customerNameHash: String? = null,
-        val customerAddressHash: String? = null,
-    ) : ScreenInfo()
-
     /** Specific info for Pickup screens. */
     data class PickupDetails(
         override val screen: Screen,
