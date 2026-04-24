@@ -92,6 +92,6 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 
         assertFalse("Along the way is forward navigation, not heading back", result.isHeadingBackToZone)
         assertNull("Pay not available on this screen", result.dashPay)
-        assertNull("Wait time not available on this screen", result.waitTimeEstimate)
+        assertEquals("Spot save timer extracted from bottom_view_info_title", "Spot saved until 3:00 PM", result.waitTimeEstimate)
     }
 }
