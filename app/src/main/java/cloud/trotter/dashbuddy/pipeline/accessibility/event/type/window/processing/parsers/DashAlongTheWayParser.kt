@@ -11,11 +11,15 @@ class DashAlongTheWayParser @Inject constructor() : ScreenParser {
     override val targetScreen = Screen.ON_DASH_ALONG_THE_WAY
 
     override fun parse(node: UiNode): ScreenInfo {
-        // Pay and wait time are not shown on this overlay; forward navigation is never "heading back".
+        // "Spot saved until 15:57 (43 mins)" — present when a spot-save timer is active.
+        val spotSaveText = node.findNode {
+            it.viewIdResourceName?.endsWith("bottom_view_info_title") == true
+        }?.text
+
         return ScreenInfo.WaitingForOffer(
             screen = targetScreen,
-            currentDashPay = null,
-            waitTimeEstimate = null,
+            dashPay = null,
+            waitTimeEstimate = spotSaveText,
             isHeadingBackToZone = false
         )
     }

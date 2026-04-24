@@ -20,14 +20,14 @@ class DashPausedStateFactory @Inject constructor() {
         isRecovery: Boolean
     ): Transition {
 
-        val durationMs = input.remainingMillis + 1000 // +1s buffer
+        val durationMs = input.remaining.millis + 1000 // +1s buffer
 
         val newState = AppStateV2.DashPaused(
             dashId = oldState.dashId,
             durationMs = durationMs
         )
 
-        Timber.i("⏸️ DASH PAUSED: '${input.rawTimeText}' remaining (safety timer: ${durationMs}ms)")
+        Timber.i("⏸️ DASH PAUSED: '${input.remaining.text}' remaining (safety timer: ${durationMs}ms)")
 
         val effects = mutableListOf<AppEffect>()
 
@@ -38,7 +38,7 @@ class DashPausedStateFactory @Inject constructor() {
                     ReducerUtils.createEvent(
                         oldState.dashId,
                         AppEventType.DASH_PAUSED,
-                        "Paused. Time left: ${input.rawTimeText}"
+                        "Paused. Time left: ${input.remaining.text}"
                     )
                 )
             )

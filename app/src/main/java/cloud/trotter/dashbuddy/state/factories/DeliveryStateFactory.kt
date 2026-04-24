@@ -33,7 +33,7 @@ class DeliveryStateFactory @Inject constructor() {
             val payload = mapOf(
                 "status" to input.status,
                 "customerHash" to input.customerNameHash,
-                "addressHash" to input.addressHash
+                "addressHash" to input.customerAddressHash
             )
 
             effects.add(

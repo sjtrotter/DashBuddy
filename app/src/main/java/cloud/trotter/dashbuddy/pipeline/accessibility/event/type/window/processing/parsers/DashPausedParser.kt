@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedDuration
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -17,8 +18,7 @@ class DashPausedParser @Inject constructor() : ScreenParser {
 
         return ScreenInfo.DashPaused(
             screen = targetScreen,
-            remainingMillis = parseTimeString(timeString),
-            rawTimeText = timeString
+            remaining = ParsedDuration(timeString, parseTimeString(timeString))
         )
     }
 

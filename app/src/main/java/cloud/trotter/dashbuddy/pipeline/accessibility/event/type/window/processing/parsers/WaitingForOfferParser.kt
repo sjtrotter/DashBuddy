@@ -22,7 +22,7 @@ class WaitingForOfferParser @Inject constructor() : ScreenParser {
             Timber.d("WaitingForOfferParser: new layout (pay/wait unavailable)")
             return ScreenInfo.WaitingForOffer(
                 screen = targetScreen,
-                currentDashPay = null,
+                dashPay = null,
                 waitTimeEstimate = null,
                 isHeadingBackToZone = false
             )
@@ -49,7 +49,7 @@ class WaitingForOfferParser @Inject constructor() : ScreenParser {
         Timber.d("WaitingForOfferParser: legacy layout — pay=$currentPay, wait='$waitTime', headingBack=$isHeadingBack")
         return ScreenInfo.WaitingForOffer(
             screen = targetScreen,
-            currentDashPay = currentPay,
+            dashPay = currentPay,
             waitTimeEstimate = waitTime,
             isHeadingBackToZone = isHeadingBack
         )

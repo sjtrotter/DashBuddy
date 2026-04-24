@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -35,7 +36,12 @@ class DropoffNavigationParser @Inject constructor() : ScreenParser {
             .filter { it.isNotBlank() }
             .joinToString(", ")
 
-        Timber.d("DropoffNav: raw customer='$rawName', raw address='$rawAddress'")
+        val deadlineText = node.findNode {
+            it.viewIdResourceName?.endsWith("bottom_sheet_task_arrive_by") == true
+        }?.text
+        val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
+
+        Timber.d("DropoffNav: raw customer='$rawName', raw address='$rawAddress', deadline='$deadlineText'")
 
         val nameHash = if (rawName.isNotBlank()) UtilityFunctions.generateSha256(rawName) else null
         val addressHash = if (rawAddress.isNotBlank()) UtilityFunctions.generateSha256(rawAddress) else null
@@ -43,7 +49,8 @@ class DropoffNavigationParser @Inject constructor() : ScreenParser {
         return ScreenInfo.DropoffDetails(
             screen = targetScreen,
             customerNameHash = nameHash,
-            addressHash = addressHash,
+            customerAddressHash = addressHash,
+            deadline = deadline,
             status = DropoffStatus.NAVIGATING
         )
     }
