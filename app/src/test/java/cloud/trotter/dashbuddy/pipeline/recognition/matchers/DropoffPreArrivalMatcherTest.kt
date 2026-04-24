@@ -159,6 +159,6 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
         val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
-        assertNull("Address hash is explicitly null (unstable IDs)", result.addressHash)
+        assertNull("Address hash is explicitly null (unstable IDs)", result.customerAddressHash)
     }
 }

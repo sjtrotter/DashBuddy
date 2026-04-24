@@ -117,7 +117,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
         assertEquals("Should parse wait time", "2-4 min", result.waitTimeEstimate)
-        assertEquals("Should parse running pay", 12.50, result.currentDashPay!!, 0.01)
+        assertEquals("Should parse running pay", 12.50, result.dashPay!!, 0.01)
     }
 
     @Test
@@ -126,7 +126,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
         assertEquals("Should detect heading back state", true, result.isHeadingBackToZone)
-        assertEquals("Should parse running pay", 7.25, result.currentDashPay!!, 0.01)
+        assertEquals("Should parse running pay", 7.25, result.dashPay!!, 0.01)
     }
 
     @Test
@@ -134,7 +134,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(newLayoutWaitingLog)!!
         val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
-        assertNull("Pay volatile in new layout", result.currentDashPay)
+        assertNull("Pay volatile in new layout", result.dashPay)
         assertNull("Wait time not extracted in new layout", result.waitTimeEstimate)
     }
 }

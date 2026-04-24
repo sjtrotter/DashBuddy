@@ -67,7 +67,7 @@ class DashPausedReducer @Inject constructor(
         return when (input) {
             // Internal Update
             is ScreenInfo.DashPaused -> {
-                val newEnd = System.currentTimeMillis() + input.remainingMillis
+                val newEnd = System.currentTimeMillis() + input.remaining.millis
                 Transition(state.copy(durationMs = newEnd))
             }
 

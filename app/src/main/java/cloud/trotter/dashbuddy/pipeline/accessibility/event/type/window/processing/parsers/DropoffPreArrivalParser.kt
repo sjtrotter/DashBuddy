@@ -55,7 +55,7 @@ class DropoffPreArrivalParser @Inject constructor() : ScreenParser {
         return ScreenInfo.DropoffDetails(
             screen = targetScreen,
             customerNameHash = customerHash,
-            addressHash = addressHash,
+            customerAddressHash = addressHash,
             deadline = deadline,
             status = status
         )

@@ -49,7 +49,7 @@ class DropoffNavigationParser @Inject constructor() : ScreenParser {
         return ScreenInfo.DropoffDetails(
             screen = targetScreen,
             customerNameHash = nameHash,
-            addressHash = addressHash,
+            customerAddressHash = addressHash,
             deadline = deadline,
             status = DropoffStatus.NAVIGATING
         )

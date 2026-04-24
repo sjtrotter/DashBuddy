@@ -101,8 +101,8 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val result = parser.parse(root) as ScreenInfo.DashPaused
 
         val expectedMillis = TimeUnit.MINUTES.toMillis(34) + TimeUnit.SECONDS.toMillis(15)
-        assertEquals("Should parse 34:15 as milliseconds", expectedMillis, result.remainingMillis)
-        assertEquals("Raw time text should be preserved", "34:15", result.rawTimeText)
+        assertEquals("Should parse 34:15 as milliseconds", expectedMillis, result.remaining.millis)
+        assertEquals("Raw time text should be preserved", "34:15", result.remaining.text)
     }
 
     @Test
@@ -111,8 +111,8 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val result = parser.parse(root) as ScreenInfo.DashPaused
 
         val expectedMillis = TimeUnit.MINUTES.toMillis(1)
-        assertEquals("Should parse 01:00 as 60000ms", expectedMillis, result.remainingMillis)
-        assertEquals("Raw time text should be preserved", "01:00", result.rawTimeText)
+        assertEquals("Should parse 01:00 as 60000ms", expectedMillis, result.remaining.millis)
+        assertEquals("Raw time text should be preserved", "01:00", result.remaining.text)
     }
 
     @Test
@@ -126,6 +126,6 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(log)!!
         val result = parser.parse(root) as ScreenInfo.DashPaused
 
-        assertEquals("00:00 should parse to 0ms", 0L, result.remainingMillis)
+        assertEquals("00:00 should parse to 0ms", 0L, result.remaining.millis)
     }
 }

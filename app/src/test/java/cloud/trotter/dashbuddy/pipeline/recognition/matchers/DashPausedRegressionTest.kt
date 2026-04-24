@@ -49,8 +49,8 @@ class DashPausedRegressionTest(filename: String, node: UiNode) :
             val info = result as ScreenInfo.DashPaused
             val formatted = String.format(
                 "%02d:%02d",
-                TimeUnit.MILLISECONDS.toMinutes(info.remainingMillis),
-                TimeUnit.MILLISECONDS.toSeconds(info.remainingMillis) % 60
+                TimeUnit.MILLISECONDS.toMinutes(info.remaining.millis),
+                TimeUnit.MILLISECONDS.toSeconds(info.remaining.millis) % 60
             )
             println("      (Resume In: $formatted)")
         }

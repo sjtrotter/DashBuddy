@@ -18,7 +18,7 @@ class DashAlongTheWayParser @Inject constructor() : ScreenParser {
 
         return ScreenInfo.WaitingForOffer(
             screen = targetScreen,
-            currentDashPay = null,
+            dashPay = null,
             waitTimeEstimate = spotSaveText,
             isHeadingBackToZone = false
         )

@@ -61,7 +61,8 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
 
             val rawDeadline = deadlineNode?.text
             val deadlineParts = rawDeadline?.split(" • ", limit = 2)
-            val deadline = deadlineParts?.getOrNull(0)?.trim()
+            val deadlineText = deadlineParts?.getOrNull(0)?.trim()
+            val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
             val storeHint = deadlineParts?.getOrNull(1)?.trim()
 
             val isCurrent = taskNode.findNode {

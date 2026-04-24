@@ -91,7 +91,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
         assertFalse("Along the way is forward navigation, not heading back", result.isHeadingBackToZone)
-        assertNull("Pay not available on this screen", result.currentDashPay)
+        assertNull("Pay not available on this screen", result.dashPay)
         assertNull("Wait time not available on this screen", result.waitTimeEstimate)
     }
 }

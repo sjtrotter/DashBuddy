@@ -53,10 +53,10 @@ class AwaitingReducer @Inject constructor(
         return when (input) {
             // Internal Update
             is ScreenInfo.WaitingForOffer -> {
-                if (state.currentSessionPay != input.currentDashPay || state.waitTimeEstimate != input.waitTimeEstimate) {
+                if (state.currentSessionPay != input.dashPay || state.waitTimeEstimate != input.waitTimeEstimate) {
                     Transition(
                         state.copy(
-                            currentSessionPay = input.currentDashPay,
+                            currentSessionPay = input.dashPay,
                             waitTimeEstimate = input.waitTimeEstimate
                         )
                     )

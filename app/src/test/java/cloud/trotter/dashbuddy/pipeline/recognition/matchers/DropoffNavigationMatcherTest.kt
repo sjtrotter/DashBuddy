@@ -116,8 +116,8 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(dropoffNavLog)!!
         val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
-        assertNotNull("Address hash should be present when address nodes exist", result.addressHash)
-        assertEquals("SHA-256 hash is 64 hex chars", 64, result.addressHash!!.length)
+        assertNotNull("Address hash should be present when address nodes exist", result.customerAddressHash)
+        assertEquals("SHA-256 hash is 64 hex chars", 64, result.customerAddressHash!!.length)
     }
 
     @Test
@@ -125,7 +125,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(noAddressLog)!!
         val result = parser.parse(root) as ScreenInfo.DropoffDetails
 
-        assertNull("Address hash should be null if no address nodes", result.addressHash)
+        assertNull("Address hash should be null if no address nodes", result.customerAddressHash)
     }
 
     @Test

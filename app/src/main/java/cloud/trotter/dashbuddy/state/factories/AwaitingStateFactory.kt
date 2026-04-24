@@ -24,7 +24,7 @@ class AwaitingStateFactory @Inject constructor() {
 
         val newState = AppStateV2.AwaitingOffer(
             dashId = dashId,
-            currentSessionPay = input.currentDashPay,
+            currentSessionPay = input.dashPay,
             waitTimeEstimate = input.waitTimeEstimate,
             isHeadingBackToZone = input.isHeadingBackToZone
         )
