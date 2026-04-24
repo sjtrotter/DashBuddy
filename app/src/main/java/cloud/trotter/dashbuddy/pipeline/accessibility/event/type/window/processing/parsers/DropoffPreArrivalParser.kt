@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -24,11 +25,11 @@ class DropoffPreArrivalParser @Inject constructor() : ScreenParser {
         } else null
 
         // "by 6:10 PM" — standalone text node immediately after the customer name.
-        val deliveryDeadlineText = node.findNode {
+        val deadlineText = node.findNode {
             it.text?.startsWith("by ", ignoreCase = true) == true &&
                 it.text?.contains(Regex("\\d{1,2}:\\d{2}")) == true
         }?.text
-        val deliveryDeadlineAt = deliveryDeadlineText?.let { UtilityFunctions.parseDeadlineMillis(it) }
+        val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
 
         // Address: two consecutive ID-less text nodes — first matches a street number pattern,
         // second ends with a 5-digit zip code. Not always present on this screen.
@@ -49,14 +50,13 @@ class DropoffPreArrivalParser @Inject constructor() : ScreenParser {
             else -> DropoffStatus.UNKNOWN
         }
 
-        Timber.d("DropoffPreArrival: deadline='$deliveryDeadlineText', address='$rawAddress', status=$status")
+        Timber.d("DropoffPreArrival: deadline='$deadlineText', address='$rawAddress', status=$status")
 
         return ScreenInfo.DropoffDetails(
             screen = targetScreen,
             customerNameHash = customerHash,
             addressHash = addressHash,
-            deliveryDeadlineText = deliveryDeadlineText,
-            deliveryDeadlineAt = deliveryDeadlineAt,
+            deadline = deadline,
             status = status
         )
     }

@@ -7,6 +7,15 @@ import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 
 /**
+ * Pairs a human-readable time string with its epoch-millis equivalent.
+ * Used anywhere a scheduled time appears in ScreenInfo (deadlines, dash end time, etc.).
+ *
+ * @param text The raw string as shown on screen, e.g. "Pick up by 17:39" or "Dash ends at 15:00".
+ * @param time Epoch millis derived from [text]; null if parsing failed.
+ */
+data class ParsedTime(val text: String, val time: Long?)
+
+/**
  * A sealed class representing the result of a screen recognition.
  * It contains not only the screen's identity (the 'Screen' enum) but also
  * any relevant, pre-parsed data associated with that screen.
@@ -21,7 +30,7 @@ sealed class ScreenInfo {
     data class WaitingForOffer(
         override val screen: Screen,
         val currentDashPay: Double?,      // e.g. 7.50 (if visible)
-        val waitTimeEstimate: String?,    // e.g. "1-4 min"
+        val waitTimeEstimate: String?,    // e.g. "1-4 min" or "Spot saved until 15:57 (43 mins)"
         val isHeadingBackToZone: Boolean  // true if "Heading back to zone" text is present
     ) : ScreenInfo()
 
@@ -43,10 +52,9 @@ sealed class ScreenInfo {
         val storeName: String? = null,
         val storeAddress: String? = null,
         val customerNameHash: String? = null,
-        val pickupDeadlineText: String? = null,  // e.g. "Pick up by 17:39"
-        val pickupDeadlineAt: Long? = null,      // epoch millis
-        val itemCount: Int? = null,              // e.g. 4
-        val redCardTotal: Double? = null,        // e.g. 23.95 (present when Red Card payment required)
+        val deadline: ParsedTime? = null,   // e.g. text="Pick up by 17:39", time=<epoch millis>
+        val itemCount: Int? = null,         // e.g. 4
+        val redCardTotal: Double? = null,   // e.g. 23.95 (present when Red Card payment required)
         val status: PickupStatus = PickupStatus.UNKNOWN
     ) : ScreenInfo()
 
@@ -55,8 +63,7 @@ sealed class ScreenInfo {
         override val screen: Screen,
         val customerNameHash: String? = null,
         val addressHash: String? = null,
-        val deliveryDeadlineText: String? = null,  // e.g. "Deliver by 8:16 PM" or "by 6:10 PM"
-        val deliveryDeadlineAt: Long? = null,       // epoch millis
+        val deadline: ParsedTime? = null,   // e.g. text="Deliver by 8:16 PM", time=<epoch millis>
         val status: DropoffStatus = DropoffStatus.UNKNOWN
     ) : ScreenInfo()
 
@@ -116,14 +123,14 @@ sealed class ScreenInfo {
      * A single entry in the active-dash timeline task chain.
      * @param taskType The action prefix as shown on screen, e.g. "Pickup for" or "Deliver to".
      * @param nameHash sha256 of the customer/recipient name.
-     * @param deadlineText The raw deadline text, e.g. "by 18:42" or "53 min to complete".
+     * @param deadline The raw deadline text, e.g. "by 18:42" or "53 min to complete".
      * @param storeHint Store abbreviation appended after " • " in pickup deadlines, e.g. "H-E-B".
      * @param isCurrent True when this task has the "Current task" marker.
      */
     data class TimelineTask(
         val taskType: String,
         val nameHash: String?,
-        val deadlineText: String?,
+        val deadline: String?,
         val storeHint: String?,
         val isCurrent: Boolean = false,
     )
@@ -131,10 +138,9 @@ sealed class ScreenInfo {
     /** Extracted data from the Timeline / dash-controls overlay. */
     data class Timeline(
         override val screen: Screen,
-        val currentDashEarnings: Double? = null,     // "This dash" amount
-        val currentOfferEarnings: Double? = null,   // "This offer" amount; null between tasks
-        val dashEndsAtText: String? = null,         // e.g. "Dash ends at 15:00"
-        val dashEndsAtMillis: Long? = null,         // epoch millis
+        val dashEarnings: Double? = null,            // "This dash" amount
+        val offerEarnings: Double? = null,           // "This offer" amount; null between tasks
+        val endsAt: ParsedTime? = null,              // e.g. text="Dash ends at 15:00", time=<epoch millis>
         val tasks: List<TimelineTask> = emptyList(), // empty when no active task chain
     ) : ScreenInfo()
 

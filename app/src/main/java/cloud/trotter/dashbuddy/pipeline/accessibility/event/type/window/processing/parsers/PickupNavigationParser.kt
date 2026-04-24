@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import javax.inject.Inject
@@ -31,17 +32,16 @@ class PickupNavigationParser @Inject constructor() : ScreenParser {
             .filter { it.isNotBlank() }
             .joinToString(", ")
 
-        val pickupDeadlineText = node.findNode {
+        val deadlineText = node.findNode {
             it.viewIdResourceName?.endsWith("bottom_sheet_task_arrive_by") == true
         }?.text
-        val pickupDeadlineAt = pickupDeadlineText?.let { UtilityFunctions.parseDeadlineMillis(it) }
+        val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
 
         return ScreenInfo.PickupDetails(
             screen = targetScreen,
             storeName = storeName.ifBlank { null },
             storeAddress = fullAddress.ifBlank { null },
-            pickupDeadlineText = pickupDeadlineText,
-            pickupDeadlineAt = pickupDeadlineAt,
+            deadline = deadline,
             status = PickupStatus.NAVIGATING
         )
     }

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -32,10 +33,10 @@ class PickupPreArrivalParser @Inject constructor() : ScreenParser {
             .joinToString(", ")
 
         // "Pick up by 17:39" — toolbar text node, no resource ID.
-        val pickupDeadlineText = node.findNode {
+        val deadlineText = node.findNode {
             it.text?.startsWith("Pick up by", ignoreCase = true) == true
         }?.text
-        val pickupDeadlineAt = pickupDeadlineText?.let { UtilityFunctions.parseDeadlineMillis(it) }
+        val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
 
         // "4 items" — parse leading integer.
         val itemCount = node.findNode {
@@ -47,8 +48,7 @@ class PickupPreArrivalParser @Inject constructor() : ScreenParser {
             screen = targetScreen,
             storeName = storeName,
             storeAddress = fullAddress.ifBlank { null },
-            pickupDeadlineText = pickupDeadlineText,
-            pickupDeadlineAt = pickupDeadlineAt,
+            deadline = deadline,
             itemCount = itemCount,
             status = PickupStatus.NAVIGATING
         )

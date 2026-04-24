@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo.TimelineTask
@@ -21,18 +22,18 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
         // --- Earnings ---
         // "This dash" is followed immediately by the dollar amount in allText order.
         val dashIdx = allTexts.indexOfFirst { it.equals("This dash", ignoreCase = true) }
-        val currentDashEarnings = if (dashIdx >= 0)
+        val dashEarnings = if (dashIdx >= 0)
             UtilityFunctions.parseCurrency(allTexts.getOrNull(dashIdx + 1))
         else null
 
         val offerIdx = allTexts.indexOfFirst { it.equals("This offer", ignoreCase = true) }
-        val currentOfferEarnings = if (offerIdx >= 0)
+        val offerEarnings = if (offerIdx >= 0)
             UtilityFunctions.parseCurrency(allTexts.getOrNull(offerIdx + 1))
         else null
 
         // --- Dash end time ---
-        val dashEndsAtText = allTexts.firstOrNull { it.startsWith("Dash ends at", ignoreCase = true) }
-        val dashEndsAtMillis = dashEndsAtText?.let { UtilityFunctions.parseDeadlineMillis(it) }
+        val endsAtText = allTexts.firstOrNull { it.startsWith("Dash ends at", ignoreCase = true) }
+        val endsAt = endsAtText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
 
         // --- Task chain ---
         // Each task is a pair of consecutive text nodes:
@@ -60,7 +61,7 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
 
             val rawDeadline = deadlineNode?.text
             val deadlineParts = rawDeadline?.split(" • ", limit = 2)
-            val deadlineText = deadlineParts?.getOrNull(0)?.trim()
+            val deadline = deadlineParts?.getOrNull(0)?.trim()
             val storeHint = deadlineParts?.getOrNull(1)?.trim()
 
             val isCurrent = taskNode.findNode {
@@ -70,23 +71,22 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
             tasks += TimelineTask(
                 taskType = prefix.trim(),
                 nameHash = nameHash,
-                deadlineText = deadlineText,
+                deadline = deadline,
                 storeHint = storeHint,
                 isCurrent = isCurrent,
             )
         }
 
         Timber.d(
-            "TimelineViewParser: dashEarnings=$currentDashEarnings, offerEarnings=$currentOfferEarnings, " +
-                "endsAt='$dashEndsAtText', tasks=${tasks.size}"
+            "TimelineViewParser: dashEarnings=$dashEarnings, offerEarnings=$offerEarnings, " +
+                "endsAt='$endsAtText', tasks=${tasks.size}"
         )
 
         return ScreenInfo.Timeline(
             screen = targetScreen,
-            currentDashEarnings = currentDashEarnings,
-            currentOfferEarnings = currentOfferEarnings,
-            dashEndsAtText = dashEndsAtText,
-            dashEndsAtMillis = dashEndsAtMillis,
+            dashEarnings = dashEarnings,
+            offerEarnings = offerEarnings,
+            endsAt = endsAt,
             tasks = tasks,
         )
     }
