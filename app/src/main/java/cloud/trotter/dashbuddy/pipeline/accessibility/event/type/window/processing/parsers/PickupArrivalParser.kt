@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
+import timber.log.Timber
 import javax.inject.Inject
 
 class PickupArrivalParser @Inject constructor() : ScreenParser {
@@ -30,10 +31,32 @@ class PickupArrivalParser @Inject constructor() : ScreenParser {
             !rawTitle.contains("notes", true)
         ) rawTitle else null
 
+        // "Pick up by 19:12" — toolbar text node, no resource ID.
+        val pickupDeadlineText = node.findNode {
+            it.text?.startsWith("Pick up by", ignoreCase = true) == true
+        }?.text
+        val pickupDeadlineAt = pickupDeadlineText?.let { UtilityFunctions.parseDeadlineMillis(it) }
+
+        // "5 items" — parse leading integer.
+        val itemCount = node.findNode {
+            it.viewIdResourceName?.endsWith("items_title_v2") == true
+        }?.text?.split(" ")?.firstOrNull()?.toIntOrNull()
+
+        // "Total amount of this order is $23.95" — present only for Red Card orders.
+        val redCardText = node.findNode {
+            it.viewIdResourceName?.endsWith("banner_label") == true
+        }?.text
+        val redCardTotal = UtilityFunctions.parseCurrency(redCardText)
+        Timber.d("PickupArrival: deadline='$pickupDeadlineText', items=$itemCount, redCard=$redCardTotal")
+
         return ScreenInfo.PickupDetails(
             screen = targetScreen,
             storeName = storeNameCandidate,
             customerNameHash = customerHash,
+            pickupDeadlineText = pickupDeadlineText,
+            pickupDeadlineAt = pickupDeadlineAt,
+            itemCount = itemCount,
+            redCardTotal = redCardTotal,
             status = PickupStatus.ARRIVED
         )
     }

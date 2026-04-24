@@ -48,6 +48,17 @@ object UtilityFunctions {
         }
     }
 
+    /**
+     * Extracts a time value from a deadline string and converts it to epoch millis.
+     * Handles formats like "Pick up by 17:39", "Deliver by 8:16 PM", "by 6:10 PM",
+     * "Dash ends at 15:00", etc. Returns null if no parseable time is found.
+     */
+    fun parseDeadlineMillis(text: String): Long? {
+        val timeRegex = Regex("(\\d{1,2}:\\d{2}(?:\\s*[AaPp][Mm])?)")
+        val timeText = timeRegex.find(text)?.groupValues?.get(1)?.trim() ?: return null
+        return parseTimeTextToMillis(timeText)
+    }
+
     fun generateSha256(input: String): String {
         return try {
             val digest = MessageDigest.getInstance("SHA-256")

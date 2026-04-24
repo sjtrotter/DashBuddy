@@ -45,8 +45,10 @@ import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processi
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupNavigationParser
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupPreArrivalParser
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupShoppingParser
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.RatingsViewParser
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.SensitiveScreenParser
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.SetDashEndTimeParser
+import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.TimelineViewParser
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.WaitingForOfferParser
 import dagger.Binds
 import dagger.Module
@@ -207,6 +209,12 @@ abstract class PipelineModule {
 
     @Binds @IntoSet @Singleton
     abstract fun bindSetDashEndTimeParser(impl: SetDashEndTimeParser): ScreenParser
+
+    @Binds @IntoSet @Singleton
+    abstract fun bindRatingsViewParser(impl: RatingsViewParser): ScreenParser
+
+    @Binds @IntoSet @Singleton
+    abstract fun bindTimelineViewParser(impl: TimelineViewParser): ScreenParser
 
     @Binds @IntoSet @Singleton
     abstract fun bindWaitingForOfferParser(impl: WaitingForOfferParser): ScreenParser

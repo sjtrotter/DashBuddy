@@ -43,6 +43,10 @@ sealed class ScreenInfo {
         val storeName: String? = null,
         val storeAddress: String? = null,
         val customerNameHash: String? = null,
+        val pickupDeadlineText: String? = null,  // e.g. "Pick up by 17:39"
+        val pickupDeadlineAt: Long? = null,      // epoch millis
+        val itemCount: Int? = null,              // e.g. 4
+        val redCardTotal: Double? = null,        // e.g. 23.95 (present when Red Card payment required)
         val status: PickupStatus = PickupStatus.UNKNOWN
     ) : ScreenInfo()
 
@@ -51,6 +55,8 @@ sealed class ScreenInfo {
         override val screen: Screen,
         val customerNameHash: String? = null,
         val addressHash: String? = null,
+        val deliveryDeadlineText: String? = null,  // e.g. "Deliver by 8:16 PM" or "by 6:10 PM"
+        val deliveryDeadlineAt: Long? = null,       // epoch millis
         val status: DropoffStatus = DropoffStatus.UNKNOWN
     ) : ScreenInfo()
 
@@ -104,6 +110,49 @@ sealed class ScreenInfo {
         override val screen: Screen,
         val remainingMillis: Long,
         val rawTimeText: String
+    ) : ScreenInfo()
+
+    /**
+     * A single entry in the active-dash timeline task chain.
+     * @param taskType The action prefix as shown on screen, e.g. "Pickup for" or "Deliver to".
+     * @param nameHash sha256 of the customer/recipient name.
+     * @param deadlineText The raw deadline text, e.g. "by 18:42" or "53 min to complete".
+     * @param storeHint Store abbreviation appended after " • " in pickup deadlines, e.g. "H-E-B".
+     * @param isCurrent True when this task has the "Current task" marker.
+     */
+    data class TimelineTask(
+        val taskType: String,
+        val nameHash: String?,
+        val deadlineText: String?,
+        val storeHint: String?,
+        val isCurrent: Boolean = false,
+    )
+
+    /** Extracted data from the Timeline / dash-controls overlay. */
+    data class Timeline(
+        override val screen: Screen,
+        val currentDashEarnings: Double? = null,     // "This dash" amount
+        val currentOfferEarnings: Double? = null,   // "This offer" amount; null between tasks
+        val dashEndsAtText: String? = null,         // e.g. "Dash ends at 15:00"
+        val dashEndsAtMillis: Long? = null,         // epoch millis
+        val tasks: List<TimelineTask> = emptyList(), // empty when no active task chain
+    ) : ScreenInfo()
+
+    /** Extracted performance metrics from the Ratings screen. */
+    data class Ratings(
+        override val screen: Screen,
+        val acceptanceRate: Double? = null,
+        val completionRate: Double? = null,
+        val onTimeRate: Double? = null,
+        val customerRating: Double? = null,
+        val deliveriesLast30Days: Int? = null,
+        val lifetimeDeliveries: Int? = null,
+        val originalItemsFoundRate: Double? = null,
+        val totalItemsFoundRate: Double? = null,
+        val substitutionIssuesRate: Double? = null,
+        val itemsWithQualityIssuesRate: Double? = null,
+        val itemsWrongOrMissingRate: Double? = null,
+        val lifetimeShoppingOrders: Int? = null,
     ) : ScreenInfo()
 
     data class Sensitive(override val screen: Screen) : ScreenInfo()

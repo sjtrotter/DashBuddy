@@ -35,7 +35,12 @@ class DropoffNavigationParser @Inject constructor() : ScreenParser {
             .filter { it.isNotBlank() }
             .joinToString(", ")
 
-        Timber.d("DropoffNav: raw customer='$rawName', raw address='$rawAddress'")
+        val deliveryDeadlineText = node.findNode {
+            it.viewIdResourceName?.endsWith("bottom_sheet_task_arrive_by") == true
+        }?.text
+        val deliveryDeadlineAt = deliveryDeadlineText?.let { UtilityFunctions.parseDeadlineMillis(it) }
+
+        Timber.d("DropoffNav: raw customer='$rawName', raw address='$rawAddress', deadline='$deliveryDeadlineText'")
 
         val nameHash = if (rawName.isNotBlank()) UtilityFunctions.generateSha256(rawName) else null
         val addressHash = if (rawAddress.isNotBlank()) UtilityFunctions.generateSha256(rawAddress) else null
@@ -44,6 +49,8 @@ class DropoffNavigationParser @Inject constructor() : ScreenParser {
             screen = targetScreen,
             customerNameHash = nameHash,
             addressHash = addressHash,
+            deliveryDeadlineText = deliveryDeadlineText,
+            deliveryDeadlineAt = deliveryDeadlineAt,
             status = DropoffStatus.NAVIGATING
         )
     }
