@@ -33,6 +33,9 @@ class DeliveryStateFactory @Inject constructor() {
 
         val effects = mutableListOf<AppEffect>()
 
+        // Always resume — idempotent, and on recovery we want GPS running if we're mid-delivery.
+        effects.add(AppEffect.ResumeOdometer)
+
         if (!isRecovery) {
             val payload = mapOf(
                 "status" to input.status,
