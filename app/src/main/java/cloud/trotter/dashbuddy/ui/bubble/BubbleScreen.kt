@@ -79,21 +79,31 @@ fun BubbleScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (showFullChat) "Chat History" else "DashBuddy HUD") },
+                title = {
+                    if (showFullChat) {
+                        Text("Chat History")
+                    } else {
+                        StatusBadgeTitle(appState = appState)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 actions = {
-                    IconButton(onClick = { viewModel.sendTestMessage() }) {
-                        Text("MSG", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    IconButton(onClick = { showFullChat = !showFullChat }) {
-                        Icon(
-                            imageVector = if (showFullChat) Icons.Default.Close
-                            else Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = "Toggle Chat",
-                            tint = MaterialTheme.colorScheme.onSurface
+                    if (showFullChat) {
+                        IconButton(onClick = { showFullChat = false }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close chat",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    } else {
+                        SessionMetricsActions(
+                            appState = appState,
+                            earnings = sessionEarnings,
+                            miles = sessionMiles
                         )
                     }
                 }
@@ -106,8 +116,6 @@ fun BubbleScreen(
             } else {
                 DashboardView(
                     appState = appState,
-                    sessionEarnings = sessionEarnings,
-                    sessionMiles = sessionMiles,
                     messages = messages,
                     onOpenChat = { showFullChat = true }
                 )
@@ -123,8 +131,6 @@ fun BubbleScreen(
 @Composable
 fun DashboardView(
     appState: AppStateV2,
-    sessionEarnings: Double,
-    sessionMiles: Double,
     messages: List<ChatMessage>,
     onOpenChat: () -> Unit
 ) {
@@ -134,7 +140,6 @@ fun DashboardView(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        MetricsStrip(appState = appState, earnings = sessionEarnings, miles = sessionMiles)
         ModeCard(appState = appState, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.weight(1f))
         LatestMessageTicker(messages = messages, onClick = onOpenChat)
@@ -142,65 +147,57 @@ fun DashboardView(
 }
 
 // ---------------------------------------------------------------------------
-// Always-visible earnings + miles strip
+// TopAppBar title — status badge only (left side)
 // ---------------------------------------------------------------------------
 
 @Composable
-fun MetricsStrip(appState: AppStateV2, earnings: Double, miles: Double) {
+private fun StatusBadgeTitle(appState: AppStateV2) {
+    val (badgeText, badgeColor) = statusBadge(appState)
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = badgeColor.copy(alpha = 0.15f)
+    ) {
+        Text(
+            text = badgeText,
+            style = MaterialTheme.typography.labelSmall,
+            color = badgeColor,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TopAppBar actions — session earnings + miles (right side, active dashes only)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun SessionMetricsActions(appState: AppStateV2, earnings: Double, miles: Double) {
     val isActive = appState !is AppStateV2.IdleOffline &&
             appState !is AppStateV2.Initializing &&
             appState !is AppStateV2.PostDash
 
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    if (isActive) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(end = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Status badge
-            val (badgeText, badgeColor) = statusBadge(appState)
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = badgeColor.copy(alpha = 0.2f)
-            ) {
-                Text(
-                    text = badgeText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = badgeColor,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            if (isActive) {
-                Text(
-                    text = "$${String.format("%.2f", earnings)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-                Text(
-                    text = "  ·  ",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f)
-                )
-                Text(
-                    text = "${"%.1f".format(miles)} mi",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            } else {
-                Text(
-                    text = "Not dashing",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
-                )
-            }
+            Text(
+                text = "$${String.format("%.2f", earnings)}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "  ·  ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            )
+            Text(
+                text = "${"%.1f".format(miles)} mi",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
