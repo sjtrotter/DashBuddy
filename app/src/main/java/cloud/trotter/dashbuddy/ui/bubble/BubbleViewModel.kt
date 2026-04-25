@@ -9,12 +9,20 @@ import cloud.trotter.dashbuddy.state.StateManagerV2
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
+
+data class SessionSummary(
+    val earnings: Double,
+    val miles: Double,
+    val durationMillis: Long,
+    val acceptanceRate: String
+)
 
 @HiltViewModel
 class BubbleViewModel @Inject constructor(
@@ -63,5 +71,24 @@ class BubbleViewModel @Inject constructor(
     // Real-time session miles from GPS odometer
     val sessionMiles = odometerRepository.sessionMilesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    // Snapshot of the last completed dash — populated when PostDash is seen, persists through idle.
+    // Miles are captured at that moment before the odometer resets on the next session.
+    val lastSessionSummary = combine(stateManager.state, odometerRepository.sessionMilesFlow) { state, miles ->
+        state to miles
+    }
+        .scan(null as SessionSummary?) { last, (state, miles) ->
+            if (state is AppStateV2.PostDash) {
+                SessionSummary(
+                    earnings = state.totalEarnings,
+                    miles = miles,
+                    durationMillis = state.durationMillis,
+                    acceptanceRate = state.acceptanceRateForSession
+                )
+            } else {
+                last
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
 }

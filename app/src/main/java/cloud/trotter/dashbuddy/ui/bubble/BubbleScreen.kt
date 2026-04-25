@@ -77,6 +77,7 @@ fun BubbleScreen(
     val appState by viewModel.appState.collectAsState()
     val sessionMiles by viewModel.sessionMiles.collectAsState()
     val sessionEarnings by viewModel.sessionEarnings.collectAsState()
+    val lastSessionSummary by viewModel.lastSessionSummary.collectAsState()
     var showFullChat by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -106,7 +107,8 @@ fun BubbleScreen(
                         SessionMetricsActions(
                             appState = appState,
                             earnings = sessionEarnings,
-                            miles = sessionMiles
+                            miles = sessionMiles,
+                            lastSessionSummary = lastSessionSummary
                         )
                     }
                 }
@@ -120,6 +122,7 @@ fun BubbleScreen(
                 DashboardView(
                     appState = appState,
                     messages = messages,
+                    lastSessionSummary = lastSessionSummary,
                     onOpenChat = { showFullChat = true }
                 )
             }
@@ -135,6 +138,7 @@ fun BubbleScreen(
 fun DashboardView(
     appState: AppStateV2,
     messages: List<ChatMessage>,
+    lastSessionSummary: SessionSummary?,
     onOpenChat: () -> Unit
 ) {
     Column(
@@ -143,7 +147,7 @@ fun DashboardView(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ModeCard(appState = appState, modifier = Modifier.fillMaxWidth())
+        ModeCard(appState = appState, lastSessionSummary = lastSessionSummary, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.weight(1f))
         LatestMessageTicker(messages = messages, onClick = onOpenChat)
     }
@@ -175,33 +179,59 @@ private fun StatusBadgeTitle(appState: AppStateV2) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun SessionMetricsActions(appState: AppStateV2, earnings: Double, miles: Double) {
+private fun SessionMetricsActions(
+    appState: AppStateV2,
+    earnings: Double,
+    miles: Double,
+    lastSessionSummary: SessionSummary?
+) {
     val isActive = appState !is AppStateV2.IdleOffline &&
             appState !is AppStateV2.Initializing &&
             appState !is AppStateV2.PostDash
 
-    if (isActive) {
-        Row(
-            modifier = Modifier.padding(end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "$${String.format("%.2f", earnings)}",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "  ·  ",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-            )
-            Text(
-                text = "${"%.1f".format(miles)} mi",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+    val displayEarnings: Double?
+    val displayMiles: Double?
+    val dimmed: Boolean
+
+    when {
+        isActive -> {
+            displayEarnings = earnings
+            displayMiles = miles
+            dimmed = false
         }
+        appState is AppStateV2.IdleOffline && lastSessionSummary != null -> {
+            displayEarnings = lastSessionSummary.earnings
+            displayMiles = lastSessionSummary.miles
+            dimmed = true
+        }
+        else -> return
+    }
+
+    Row(
+        modifier = Modifier.padding(end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val textColor = if (dimmed)
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+        else
+            MaterialTheme.colorScheme.onSurface
+
+        Text(
+            text = "$${String.format("%.2f", displayEarnings)}",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = textColor
+        )
+        Text(
+            text = "  ·  ",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+        )
+        Text(
+            text = "${"%.1f".format(displayMiles)} mi",
+            style = MaterialTheme.typography.titleSmall,
+            color = textColor
+        )
     }
 }
 
@@ -231,7 +261,7 @@ private fun statusBadge(appState: AppStateV2): Pair<String, Color> {
 // ---------------------------------------------------------------------------
 
 @Composable
-fun ModeCard(appState: AppStateV2, modifier: Modifier = Modifier) {
+fun ModeCard(appState: AppStateV2, lastSessionSummary: SessionSummary? = null, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -240,7 +270,7 @@ fun ModeCard(appState: AppStateV2, modifier: Modifier = Modifier) {
         Box(modifier = Modifier.padding(16.dp)) {
             when (appState) {
                 is AppStateV2.Initializing -> ModeInitializing()
-                is AppStateV2.IdleOffline -> ModeIdle()
+                is AppStateV2.IdleOffline -> ModeIdle(lastSessionSummary)
                 is AppStateV2.AwaitingOffer -> ModeAwaiting(appState)
                 is AppStateV2.OfferPresented -> ModeOffer(appState)
                 is AppStateV2.OnPickup -> ModePickup(appState)
@@ -260,8 +290,27 @@ private fun ModeInitializing() {
 }
 
 @Composable
-private fun ModeIdle() {
-    ModeRow(label = "Status", value = "Offline — not dashing")
+private fun ModeIdle(lastSessionSummary: SessionSummary?) {
+    if (lastSessionSummary != null) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Last dash",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+            Text(
+                text = "$${String.format("%.2f", lastSessionSummary.earnings)}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            ModeRow(label = "Miles", value = "${"%.1f".format(lastSessionSummary.miles)} mi")
+            ModeRow(label = "Duration", value = formatDuration(lastSessionSummary.durationMillis))
+            ModeRow(label = "Acceptance", value = lastSessionSummary.acceptanceRate)
+        }
+    } else {
+        ModeRow(label = "Status", value = "Offline — not dashing")
+    }
 }
 
 @Composable
