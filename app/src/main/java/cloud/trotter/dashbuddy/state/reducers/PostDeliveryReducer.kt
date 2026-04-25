@@ -38,7 +38,7 @@ class PostDeliveryReducer @Inject constructor(
         return when (event) {
             is ScreenUpdateEvent -> {
                 val input = event.screenInfo ?: return null
-                handleScreenUpdate(state, input)
+                handleScreenUpdate(state, input, event.odometer)
             }
 
             is TimeoutEvent -> handleTimeout(state, event)
@@ -46,9 +46,13 @@ class PostDeliveryReducer @Inject constructor(
         }
     }
 
-    private fun handleScreenUpdate(state: AppStateV2.PostDelivery, input: ScreenInfo): Transition? {
+    private fun handleScreenUpdate(
+        state: AppStateV2.PostDelivery,
+        input: ScreenInfo,
+        odometer: Double?
+    ): Transition? {
         // 1. EXIT LOGIC: User has left the screen.
-        val exitTransition = checkForExit(state, input)
+        val exitTransition = checkForExit(state, input, odometer)
         if (exitTransition != null) {
             return attachFinalRecording(state, exitTransition)
         }
@@ -168,11 +172,15 @@ class PostDeliveryReducer @Inject constructor(
 
     // --- Helpers ---
 
-    private fun checkForExit(state: AppStateV2.PostDelivery, input: ScreenInfo): Transition? {
+    private fun checkForExit(
+        state: AppStateV2.PostDelivery,
+        input: ScreenInfo,
+        odometer: Double?
+    ): Transition? {
         return when (input) {
             is ScreenInfo.WaitingForOffer -> awaitingStateFactory.createEntry(state, input, false)
-            is ScreenInfo.DropoffDetails -> deliveryStateFactory.createEntry(state, input, false)
-            is ScreenInfo.PickupDetails -> pickupStateFactory.createEntry(state, input, false)
+            is ScreenInfo.DropoffDetails -> deliveryStateFactory.createEntry(state, input, false, odometerMiles = odometer)
+            is ScreenInfo.PickupDetails -> pickupStateFactory.createEntry(state, input, false, odometerMiles = odometer)
             is ScreenInfo.Offer -> offerStateFactory.createEntry(state, input, false)
             else -> null
         }

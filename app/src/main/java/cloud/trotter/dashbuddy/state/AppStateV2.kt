@@ -74,7 +74,9 @@ sealed class AppStateV2 {
         val pickupDeadline: ParsedTime? = null,   // e.g. "Pick up by 17:39"
         val arrivedAt: Long? = null,              // epoch millis when ARRIVED status first set
         val itemCount: Int? = null,               // number of items to pick up
-        val redCardTotal: Double? = null          // Red Card payment total when applicable
+        val redCardTotal: Double? = null,         // Red Card payment total when applicable
+        val odometerAtEntry: Double? = null,      // odometer snapshot when pickup task began
+        val odometerAtArrival: Double? = null     // odometer snapshot when ARRIVED at store
     ) : AppStateV2()
 
     data class OnDelivery(
@@ -84,7 +86,9 @@ sealed class AppStateV2 {
         val customerNameHash: String? = null,
         val customerAddressHash: String? = null,
         val deliveryDeadline: ParsedTime? = null, // e.g. "Deliver by 8:16 PM"
-        val arrivedAt: Long? = null               // epoch millis when ARRIVED status first detected
+        val arrivedAt: Long? = null,              // epoch millis when ARRIVED status first detected
+        val odometerAtEntry: Double? = null,      // odometer snapshot when delivery task began
+        val odometerAtArrival: Double? = null     // odometer snapshot when ARRIVED at customer
     ) : AppStateV2()
 
     data class PostDelivery(

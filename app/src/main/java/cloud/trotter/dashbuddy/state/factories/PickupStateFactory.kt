@@ -18,7 +18,8 @@ class PickupStateFactory @Inject constructor() {
     fun createEntry(
         oldState: AppStateV2,
         input: ScreenInfo.PickupDetails,
-        isRecovery: Boolean
+        isRecovery: Boolean,
+        odometerMiles: Double? = null
     ): Transition {
         val safeStoreName = input.storeName ?: "Unknown"
 
@@ -29,7 +30,8 @@ class PickupStateFactory @Inject constructor() {
             status = input.status,
             pickupDeadline = input.deadline,
             itemCount = input.itemCount,
-            redCardTotal = input.redCardTotal
+            redCardTotal = input.redCardTotal,
+            odometerAtEntry = odometerMiles
         )
 
         Timber.i("🛍️ PICKUP: $safeStoreName [${input.status}]")

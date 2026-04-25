@@ -34,7 +34,7 @@ class OfferReducer @Inject constructor(
         return when (event) {
             is ScreenUpdateEvent -> {
                 val input = event.screenInfo ?: return null
-                handleScreenUpdate(state, input)
+                handleScreenUpdate(state, input, event.odometer)
             }
 
             is ClickEvent -> handleClick(state, event)
@@ -79,7 +79,8 @@ class OfferReducer @Inject constructor(
 
     private fun handleScreenUpdate(
         state: AppStateV2.OfferPresented,
-        input: ScreenInfo
+        input: ScreenInfo,
+        odometer: Double?
     ): Transition? {
         // Helper to simplify logging + transitioning
         fun request(
@@ -145,7 +146,7 @@ class OfferReducer @Inject constructor(
             is ScreenInfo.PickupDetails -> {
                 val outcome = resolveOutcome(state)
                 request(
-                    pickupStateFactory.createEntry(state, input, isRecovery = false),
+                    pickupStateFactory.createEntry(state, input, isRecovery = false, odometerMiles = odometer),
                     outcome,
                     "Transitioned to Pickup"
                 )
