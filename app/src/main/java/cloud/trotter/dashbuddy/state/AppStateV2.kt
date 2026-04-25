@@ -83,7 +83,8 @@ sealed class AppStateV2 {
         val storeName: String? = null,            // carried from OnPickup
         val customerNameHash: String? = null,
         val customerAddressHash: String? = null,
-        val deliveryDeadline: ParsedTime? = null  // e.g. "Deliver by 8:16 PM"
+        val deliveryDeadline: ParsedTime? = null, // e.g. "Deliver by 8:16 PM"
+        val arrivedAt: Long? = null               // epoch millis when ARRIVED status first detected
     ) : AppStateV2()
 
     data class PostDelivery(
