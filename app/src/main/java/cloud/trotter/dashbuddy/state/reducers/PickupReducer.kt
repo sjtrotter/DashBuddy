@@ -28,7 +28,7 @@ class PickupReducer @Inject constructor(
         return when (event) {
             is ScreenUpdateEvent -> {
                 val input = event.screenInfo ?: return null
-                handleScreenUpdate(state, input)
+                handleScreenUpdate(state, input, event.odometer)
             }
             // Pickup state usually handles internal clicks for "Arrived", etc.
             // You can add `is ClickEvent` here later if needed.
@@ -36,7 +36,11 @@ class PickupReducer @Inject constructor(
         }
     }
 
-    private fun handleScreenUpdate(state: AppStateV2.OnPickup, input: ScreenInfo): Transition? {
+    private fun handleScreenUpdate(
+        state: AppStateV2.OnPickup,
+        input: ScreenInfo,
+        odometer: Double?
+    ): Transition? {
 
         // Helper: Simple forwarder (no wrapping needed)
         fun request(result: Transition) = result
@@ -55,18 +59,16 @@ class PickupReducer @Inject constructor(
 
                 if (hasStoreChanged || hasStatusChanged || hasDeadlineChanged || hasItemCountChanged || hasRedCardChanged) {
                     val nextStoreName = if (hasStoreChanged) newStoreName else state.storeName
-                    val arrivedAt = if (hasStatusChanged && input.status == PickupStatus.ARRIVED) {
-                        System.currentTimeMillis()
-                    } else {
-                        state.arrivedAt
-                    }
+                    val justArrived = hasStatusChanged && input.status == PickupStatus.ARRIVED
+                    val arrivedAt = if (justArrived) System.currentTimeMillis() else state.arrivedAt
                     val nextState = state.copy(
                         storeName = nextStoreName,
                         status = input.status,
                         pickupDeadline = input.deadline ?: state.pickupDeadline,
                         arrivedAt = arrivedAt,
                         itemCount = input.itemCount ?: state.itemCount,
-                        redCardTotal = input.redCardTotal ?: state.redCardTotal
+                        redCardTotal = input.redCardTotal ?: state.redCardTotal,
+                        odometerAtArrival = if (justArrived && state.odometerAtArrival == null) odometer else state.odometerAtArrival
                     )
                     if (hasStatusChanged) Timber.i("🛍️ PICKUP STATUS: ${state.status} → ${input.status} @ $nextStoreName")
                     val effects = mutableListOf<AppEffect>()
@@ -88,7 +90,7 @@ class PickupReducer @Inject constructor(
                     effects.add(AppEffect.UpdateBubble("Pickup: ${nextState.storeName}", persona))
 
                     // Logging Effects
-                    if (hasStatusChanged && input.status == PickupStatus.ARRIVED) {
+                    if (justArrived) {
                         effects.add(AppEffect.PauseOdometer)
                         effects.add(
                             AppEffect.LogEvent(
@@ -123,7 +125,7 @@ class PickupReducer @Inject constructor(
             }
 
             is ScreenInfo.DropoffDetails -> request(
-                deliveryStateFactory.createEntry(state, input, isRecovery = false)
+                deliveryStateFactory.createEntry(state, input, isRecovery = false, odometerMiles = odometer)
             )
 
             is ScreenInfo.WaitingForOffer -> request(

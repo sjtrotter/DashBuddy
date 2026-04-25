@@ -24,14 +24,18 @@ class DeliveryReducer @Inject constructor(
         return when (event) {
             is ScreenUpdateEvent -> {
                 val input = event.screenInfo ?: return null
-                handleScreenUpdate(state, input)
+                handleScreenUpdate(state, input, event.odometer)
             }
 
             else -> null
         }
     }
 
-    private fun handleScreenUpdate(state: AppStateV2.OnDelivery, input: ScreenInfo): Transition? {
+    private fun handleScreenUpdate(
+        state: AppStateV2.OnDelivery,
+        input: ScreenInfo,
+        odometer: Double?
+    ): Transition? {
         fun request(result: Transition) = result
 
         return when (input) {
@@ -56,7 +60,8 @@ class DeliveryReducer @Inject constructor(
                             arrivedAt = arrivedAt,
                             deliveryDeadline = input.deadline ?: state.deliveryDeadline,
                             customerNameHash = input.customerNameHash ?: state.customerNameHash,
-                            customerAddressHash = input.customerAddressHash ?: state.customerAddressHash
+                            customerAddressHash = input.customerAddressHash ?: state.customerAddressHash,
+                            odometerAtArrival = if (justArrived && state.odometerAtArrival == null) odometer else state.odometerAtArrival
                         ),
                         effects
                     )

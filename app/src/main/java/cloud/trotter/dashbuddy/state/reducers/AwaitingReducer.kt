@@ -34,7 +34,7 @@ class AwaitingReducer @Inject constructor(
         return when (event) {
             is ScreenUpdateEvent -> {
                 val input = event.screenInfo ?: return null
-                handleScreenUpdate(state, input)
+                handleScreenUpdate(state, input, event.odometer)
             }
             // Awaiting state generally doesn't handle Clicks/Timeouts directly,
             // but the structure is here if you need it later.
@@ -44,7 +44,8 @@ class AwaitingReducer @Inject constructor(
 
     private fun handleScreenUpdate(
         state: AppStateV2.AwaitingOffer,
-        input: ScreenInfo
+        input: ScreenInfo,
+        odometer: Double?
     ): Transition? {
 
         // Helper: Factories now return Transition directly. We just pass it through.
@@ -82,11 +83,11 @@ class AwaitingReducer @Inject constructor(
             )
 
             is ScreenInfo.PickupDetails -> request(
-                pickupStateFactory.createEntry(state, input, isRecovery = false)
+                pickupStateFactory.createEntry(state, input, isRecovery = false, odometerMiles = odometer)
             )
 
             is ScreenInfo.DropoffDetails -> request(
-                deliveryStateFactory.createEntry(state, input, isRecovery = false)
+                deliveryStateFactory.createEntry(state, input, isRecovery = false, odometerMiles = odometer)
             )
 
             is ScreenInfo.DashSummary -> request(
