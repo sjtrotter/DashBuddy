@@ -89,6 +89,7 @@ class PickupReducer @Inject constructor(
 
                     // Logging Effects
                     if (hasStatusChanged && input.status == PickupStatus.ARRIVED) {
+                        effects.add(AppEffect.PauseOdometer)
                         effects.add(
                             AppEffect.LogEvent(
                                 ReducerUtils.createEvent(

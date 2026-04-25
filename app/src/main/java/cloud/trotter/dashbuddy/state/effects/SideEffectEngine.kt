@@ -86,6 +86,8 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.EndDash -> bubbleManager.endDash()
             is AppEffect.StartOdometer -> odometerEffectHandler.startUp()
             is AppEffect.StopOdometer -> odometerEffectHandler.shutDown()
+            is AppEffect.PauseOdometer -> odometerEffectHandler.pause()
+            is AppEffect.ResumeOdometer -> odometerEffectHandler.resume()
 
             is AppEffect.ProcessTipNotification -> tipEffectHandler.process(scope, effect)
 
