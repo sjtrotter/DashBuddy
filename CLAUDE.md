@@ -85,6 +85,44 @@ them to state-specific handlers. The output is a `StateFlow<AppStateV2>`. There 
 State transitions trigger handlers: `DefaultEffectHandler` (DB writes), `OdometerEffectHandler` (
 mileage), `NotificationHandler`, `TimeoutHandler`, `TipEffectHandler`, `UiInteractionHandler`.
 
+## Reactive UI Principles
+
+We picked Jetpack Compose for a reason — **leverage it**. Especially in the bubble HUD, which is a
+glance surface where stale data is worse than no data because it gives the dasher false confidence.
+Every UI element that depends on time, state, or external data should re-render automatically when
+that input changes. No manual refresh, no waiting for the next state-machine transition to update
+something the user is looking at right now.
+
+**Core rules:**
+
+1. **State drives UI continuously, not just on transitions.** Anything time-derived — timers,
+   countdowns, deadlines, relative timestamps — must tick. A composable that renders
+   `formatDuration(now - arrivedAt)` once at state-change time is broken; it freezes the moment the
+   reducer last fired.
+2. **State classes hold the anchor, the UI derives the value.** Store `arrivedAt: Long?` on
+   `OnPickup`, not `secondsAtStore: Int`. Store `pickupDeadlineMs: Long?`, not
+   `"7 min left"`. The composable reads the anchor + a ticker and computes the display string.
+   Keeps the state minimal, lets the UI stay fresh without reducer churn.
+3. **The 1-Hz ticker is a `produceState` loop.** Cheap, idiomatic, scoped to the composable:
+
+   ```kotlin
+   @Composable
+   fun rememberNow(tickMs: Long = 1000L): State<Long> = produceState(System.currentTimeMillis()) {
+       while (true) { value = System.currentTimeMillis(); delay(tickMs) }
+   }
+   ```
+
+   Then `val now by rememberNow()` and derive whatever you need. Don't roll your own
+   `LaunchedEffect` + `mutableStateOf` for each timer — use the helper.
+4. **Don't conflate "state changed" with "UI updated".** Compose recomposes when any observed
+   state changes — including a `now: Long` flow. Time-sensitive views are driven by the ticker, not
+   by waiting for a `StateManagerV2` emission.
+5. **Bubble HUD has the strictest reactivity bar.** If a value can change while the dasher is
+   looking at it, it must re-render without a state transition. Treat any frozen-looking value as
+   a defect, not a styling choice.
+
+When in doubt: would the dasher believe a stale value? If yes, it's reactive-broken.
+
 ## Snapshot Regression Testing
 
 Tests are data-driven using captured UI hierarchy JSON files under
@@ -180,6 +218,8 @@ project number, owner, and `gh` CLI path used to do this.
 | `chore`         | Housekeeping, non-feature maintenance                  |
 | `cleanup`       | Code hygiene, removing dead code, string extraction    |
 | `documentation` | Docs improvements                                      |
+| `data-enrichment`  | Parser fields for event sourcing fidelity / replay  |
+| `on-dash-testing`  | Bug or behavior discovered while actively dashing in the field |
 
 Apply multiple labels when appropriate (e.g. `refactor` + `architecture`, `testing` +
 `offer-engine`).
