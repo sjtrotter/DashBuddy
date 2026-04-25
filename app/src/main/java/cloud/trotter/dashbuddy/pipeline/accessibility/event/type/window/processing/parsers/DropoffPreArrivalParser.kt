@@ -16,10 +16,14 @@ class DropoffPreArrivalParser @Inject constructor() : ScreenParser {
 
     override fun parse(node: UiNode): ScreenInfo {
         val deliverToNode = node.findNode {
-            it.text?.startsWith("Deliver to", ignoreCase = true) == true
+            it.text?.startsWith("Deliver to", ignoreCase = true) == true ||
+                it.text?.startsWith("Heading to", ignoreCase = true) == true
         }
         val rawTitle = deliverToNode?.text ?: ""
-        val rawCustomerName = rawTitle.replace("Deliver to", "", ignoreCase = true).trim()
+        val rawCustomerName = rawTitle
+            .replace("Deliver to", "", ignoreCase = true)
+            .replace("Heading to", "", ignoreCase = true)
+            .trim()
         val customerHash = if (rawCustomerName.isNotBlank()) {
             UtilityFunctions.generateSha256(rawCustomerName)
         } else null

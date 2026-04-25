@@ -57,10 +57,19 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='Deliver to Morgan K', id=no_id, state=null, class=android.widget.TextView)
 """.trimIndent()
 
-    // No "Deliver to" header at all — should NOT match
+    // "Heading to [store]" + "Directions" only — pickup navigation, should NOT match
     private val unrelatedLog = """
 UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='Heading to Subway', id=no_id, state=null, class=android.widget.TextView)
+  UiNode(text='Directions', id=no_id, state=null, class=android.widget.TextView)
+""".trimIndent()
+
+    // "Heading to [customer]" + contact buttons — Shop & Deliver delivery, should match
+    private val headingToCustomerLog = """
+UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
+  UiNode(text='Heading to Alex P', id=no_id, state=null, class=android.widget.TextView)
+  UiNode(text='Call', id=no_id, state=null, class=android.widget.TextView)
+  UiNode(text='Message', id=no_id, state=null, class=android.widget.TextView)
   UiNode(text='Directions', id=no_id, state=null, class=android.widget.TextView)
 """.trimIndent()
 
@@ -103,11 +112,19 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `returns null for unrelated screen without Deliver to header`() {
+    fun `returns null for Heading to store with Directions only (pickup navigation)`() {
         val root = LogToUiNodeParser.parseLog(unrelatedLog)
         assertNotNull("Failed to parse log", root)
 
-        assertNull("Missing Deliver to header should not match", matcher.matches(root!!))
+        assertNull("Heading to store + Directions only should not match pre-arrival", matcher.matches(root!!))
+    }
+
+    @Test
+    fun `matches Heading to customer with contact buttons (Shop and Deliver delivery)`() {
+        val root = LogToUiNodeParser.parseLog(headingToCustomerLog)
+        assertNotNull("Failed to parse log", root)
+
+        assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, matcher.matches(root!!))
     }
 
     // --- PARSING TESTS ---
