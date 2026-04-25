@@ -19,10 +19,14 @@ class DeliveryStateFactory @Inject constructor() {
         input: ScreenInfo.DropoffDetails,
         isRecovery: Boolean
     ): Transition {
+        val storeName = (oldState as? AppStateV2.OnPickup)?.storeName
+
         val newState = AppStateV2.OnDelivery(
             dashId = oldState.dashId,
-            customerNameHash = null,
-            customerAddressHash = null
+            storeName = storeName,
+            customerNameHash = input.customerNameHash,
+            customerAddressHash = input.customerAddressHash,
+            deliveryDeadline = input.deadline
         )
 
         Timber.i("🚗 DELIVERY: en route to customer [${input.customerNameHash?.take(6) ?: "?"}]")

@@ -49,10 +49,25 @@ class PickupReducer @Inject constructor(
 
                 val hasStoreChanged = newStoreName != state.storeName && newStoreName != "Unknown"
                 val hasStatusChanged = input.status != state.status
+                val hasDeadlineChanged = input.deadline != state.pickupDeadline
+                val hasItemCountChanged = input.itemCount != state.itemCount
+                val hasRedCardChanged = input.redCardTotal != state.redCardTotal
 
-                if (hasStoreChanged || hasStatusChanged) {
+                if (hasStoreChanged || hasStatusChanged || hasDeadlineChanged || hasItemCountChanged || hasRedCardChanged) {
                     val nextStoreName = if (hasStoreChanged) newStoreName else state.storeName
-                    val nextState = state.copy(storeName = nextStoreName, status = input.status)
+                    val arrivedAt = if (hasStatusChanged && input.status == PickupStatus.ARRIVED) {
+                        System.currentTimeMillis()
+                    } else {
+                        state.arrivedAt
+                    }
+                    val nextState = state.copy(
+                        storeName = nextStoreName,
+                        status = input.status,
+                        pickupDeadline = input.deadline ?: state.pickupDeadline,
+                        arrivedAt = arrivedAt,
+                        itemCount = input.itemCount ?: state.itemCount,
+                        redCardTotal = input.redCardTotal ?: state.redCardTotal
+                    )
                     if (hasStatusChanged) Timber.i("🛍️ PICKUP STATUS: ${state.status} → ${input.status} @ $nextStoreName")
                     val effects = mutableListOf<AppEffect>()
 

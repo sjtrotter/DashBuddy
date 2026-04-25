@@ -34,8 +34,21 @@ class DeliveryReducer @Inject constructor(
 
         return when (input) {
             is ScreenInfo.DropoffDetails -> {
-                // Internal update (e.g. Navigation instructions changing)
-                Transition(state)
+                // Internal update: enrich fields as more data becomes available
+                val deadlineChanged = input.deadline != null && input.deadline != state.deliveryDeadline
+                val customerChanged = input.customerNameHash != null && input.customerNameHash != state.customerNameHash
+                val addressChanged = input.customerAddressHash != null && input.customerAddressHash != state.customerAddressHash
+                if (deadlineChanged || customerChanged || addressChanged) {
+                    Transition(
+                        state.copy(
+                            deliveryDeadline = input.deadline ?: state.deliveryDeadline,
+                            customerNameHash = input.customerNameHash ?: state.customerNameHash,
+                            customerAddressHash = input.customerAddressHash ?: state.customerAddressHash
+                        )
+                    )
+                } else {
+                    Transition(state)
+                }
             }
 
             is ScreenInfo.WaitingForOffer -> request(
