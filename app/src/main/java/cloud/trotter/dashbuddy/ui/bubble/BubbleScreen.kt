@@ -39,11 +39,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -241,7 +244,7 @@ fun ModeCard(appState: AppStateV2, modifier: Modifier = Modifier) {
                 is AppStateV2.AwaitingOffer -> ModeAwaiting(appState)
                 is AppStateV2.OfferPresented -> ModeOffer(appState)
                 is AppStateV2.OnPickup -> ModePickup(appState)
-                is AppStateV2.OnDelivery -> ModeDelivery()
+                is AppStateV2.OnDelivery -> ModeDelivery(appState)
                 is AppStateV2.PostDelivery -> ModePostDelivery(appState)
                 is AppStateV2.DashPaused -> ModePaused(appState)
                 is AppStateV2.PausedOrInterrupted -> ModePausedOrInterrupted(appState)
@@ -294,30 +297,62 @@ private fun ModeOffer(state: AppStateV2.OfferPresented) {
 
 @Composable
 private fun ModePickup(state: AppStateV2.OnPickup) {
+    val now by rememberNow()
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ModePrimaryText(state.storeName)
-        ModeRow(
-            label = "Status",
-            value = when (state.status) {
-                PickupStatus.NAVIGATING -> "Heading to store"
-                PickupStatus.ARRIVED -> "Arrived — waiting for order"
-                PickupStatus.SHOPPING -> "Shopping for items"
-                PickupStatus.CONFIRMED -> "Order confirmed"
-                PickupStatus.UNKNOWN -> "At pickup"
+
+        when (state.status) {
+            PickupStatus.NAVIGATING, PickupStatus.UNKNOWN -> {
+                ModeRow(label = "Status", value = "Heading to store")
+                state.pickupDeadline?.text?.let { ModeRow(label = "Pick up by", value = it) }
+                state.itemCount?.let { ModeRow(label = "Items", value = it.toString()) }
             }
-        )
-        if (state.orders.isNotEmpty()) {
-            ModeRow(label = "Items", value = state.orders.size.toString())
-        }
-        if (state.arrivalConfirmed) {
-            ModeRow(label = "Arrival", value = "Confirmed")
+
+            PickupStatus.ARRIVED, PickupStatus.SHOPPING -> {
+                val waitMillis = state.arrivedAt?.let { now - it } ?: 0L
+                ModeRow(
+                    label = if (state.status == PickupStatus.SHOPPING) "Shopping" else "Waiting",
+                    value = formatDuration(waitMillis)
+                )
+                state.pickupDeadline?.text?.let { ModeRow(label = "Pick up by", value = it) }
+                state.itemCount?.let { ModeRow(label = "Items", value = it.toString()) }
+                state.redCardTotal?.let {
+                    ModeRow(label = "Red Card", value = "$${String.format("%.2f", it)}")
+                }
+            }
+
+            PickupStatus.CONFIRMED -> {
+                val elapsed = state.arrivedAt?.let { now - it }
+                ModeRow(label = "Status", value = "Order confirmed")
+                elapsed?.let { ModeRow(label = "Pickup took", value = formatDuration(it)) }
+                state.itemCount?.let { ModeRow(label = "Items", value = it.toString()) }
+            }
         }
     }
 }
 
 @Composable
-private fun ModeDelivery() {
-    ModePrimaryText("Delivering…")
+private fun ModeDelivery(state: AppStateV2.OnDelivery) {
+    val now by rememberNow()
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        state.storeName?.let { ModePrimaryText(it) } ?: ModePrimaryText("Delivering…")
+
+        state.customerNameHash?.take(6)?.let {
+            ModeRow(label = "Customer", value = "Cust. $it")
+        }
+
+        state.deliveryDeadline?.text?.let {
+            ModeRow(label = "Deliver by", value = it)
+        }
+
+        // Wait timer — only shown once GPS-confirmed arrival detected
+        state.arrivedAt?.let { arrivedAt ->
+            val waitMillis = now - arrivedAt
+            ModeRow(label = "At door", value = formatDuration(waitMillis))
+        }
+    }
 }
 
 @Composable
@@ -564,6 +599,15 @@ fun HtmlText(
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+@Composable
+private fun rememberNow(tickMs: Long = 1000L): State<Long> =
+    produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(tickMs)
+            value = System.currentTimeMillis()
+        }
+    }
 
 @Composable
 private fun ModePrimaryText(text: String) {
