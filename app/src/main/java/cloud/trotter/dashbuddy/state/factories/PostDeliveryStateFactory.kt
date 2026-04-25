@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.state.factories
 
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.util.UtilityFunctions
@@ -21,6 +22,10 @@ class PostDeliveryStateFactory @Inject constructor() {
             dashId = oldState.dashId
         )
 
+        // Always resume — idempotent safety net. The dasher is done at the door regardless
+        // of whether we detected arrival earlier (hand-to-me deliveries skip post-arrival screens).
+        val baseEffects = listOf(AppEffect.ResumeOdometer)
+
         // Pre-populate if we have data immediately
         return when (input) {
             is ScreenInfo.DeliverySummary -> {
@@ -33,26 +38,25 @@ class PostDeliveryStateFactory @Inject constructor() {
                             totalPay = pay.total,
                             merchantNames = merchants,
                             summaryText = "Paid: ${UtilityFunctions.formatCurrency(pay.total)}"
-                        )
+                        ),
+                        baseEffects
                     )
                 } else {
-                    // We only have the header total
                     val total = input.totalPay
                     Transition(
                         baseState.copy(
                             totalPay = total,
                             latestExpandButton = input.expandButton,
                             summaryText = if (total > 0) "Paid: ${
-                                UtilityFunctions.formatCurrency(
-                                    total
-                                )
+                                UtilityFunctions.formatCurrency(total)
                             }" else "Processing..."
-                        )
+                        ),
+                        baseEffects
                     )
                 }
             }
 
-            else -> Transition(baseState)
+            else -> Transition(baseState, baseEffects)
         }
     }
 

@@ -1,8 +1,10 @@
 package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
 import cloud.trotter.dashbuddy.domain.model.state.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
+import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.factories.AwaitingStateFactory
 import cloud.trotter.dashbuddy.state.factories.DashPausedStateFactory
@@ -34,17 +36,29 @@ class DeliveryReducer @Inject constructor(
 
         return when (input) {
             is ScreenInfo.DropoffDetails -> {
-                // Internal update: enrich fields as more data becomes available
+                val effects = mutableListOf<AppEffect>()
+
+                // Arrival detection: GPS-confirmed arrival shows "Continue" or "Complete Delivery"
+                // buttons on the dropoff screen. Capture the timestamp once and pause the odometer.
+                val justArrived = input.status == DropoffStatus.ARRIVED && state.arrivedAt == null
+                if (justArrived) {
+                    effects.add(AppEffect.PauseOdometer)
+                }
+
+                val arrivedAt = if (justArrived) System.currentTimeMillis() else state.arrivedAt
                 val deadlineChanged = input.deadline != null && input.deadline != state.deliveryDeadline
                 val customerChanged = input.customerNameHash != null && input.customerNameHash != state.customerNameHash
                 val addressChanged = input.customerAddressHash != null && input.customerAddressHash != state.customerAddressHash
-                if (deadlineChanged || customerChanged || addressChanged) {
+
+                if (justArrived || deadlineChanged || customerChanged || addressChanged) {
                     Transition(
                         state.copy(
+                            arrivedAt = arrivedAt,
                             deliveryDeadline = input.deadline ?: state.deliveryDeadline,
                             customerNameHash = input.customerNameHash ?: state.customerNameHash,
                             customerAddressHash = input.customerAddressHash ?: state.customerAddressHash
-                        )
+                        ),
+                        effects
                     )
                 } else {
                     Transition(state)
