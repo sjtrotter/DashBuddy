@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.state.reducers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
 import cloud.trotter.dashbuddy.domain.model.state.ScreenUpdateEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.state.AppStateV2
@@ -51,6 +52,24 @@ class IdleReducer @Inject constructor(
             is ScreenInfo.WaitingForOffer -> {
                 // Just return the transition package from the factory
                 awaitingStateFactory.createEntry(state, input, isRecovery = false)
+            }
+
+            is ScreenInfo.Ratings -> {
+                val snapshot = RatingsSnapshot(
+                    acceptanceRate = input.acceptanceRate,
+                    completionRate = input.completionRate,
+                    onTimeRate = input.onTimeRate,
+                    customerRating = input.customerRating,
+                    deliveriesLast30Days = input.deliveriesLast30Days,
+                    lifetimeDeliveries = input.lifetimeDeliveries,
+                    originalItemsFoundRate = input.originalItemsFoundRate,
+                    totalItemsFoundRate = input.totalItemsFoundRate,
+                    substitutionIssuesRate = input.substitutionIssuesRate,
+                    itemsWithQualityIssuesRate = input.itemsWithQualityIssuesRate,
+                    itemsWrongOrMissingRate = input.itemsWrongOrMissingRate,
+                    lifetimeShoppingOrders = input.lifetimeShoppingOrders,
+                )
+                Transition(state.copy(latestRatings = snapshot))
             }
 
             else -> null

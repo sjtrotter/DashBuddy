@@ -26,7 +26,10 @@ class PickupStateFactory @Inject constructor() {
             dashId = oldState.dashId,
             storeName = safeStoreName,
             customerNameHash = input.customerNameHash,
-            status = input.status
+            status = input.status,
+            pickupDeadline = input.deadline,
+            itemCount = input.itemCount,
+            redCardTotal = input.redCardTotal
         )
 
         Timber.i("🛍️ PICKUP: $safeStoreName [${input.status}]")

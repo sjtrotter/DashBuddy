@@ -1,11 +1,13 @@
 package cloud.trotter.dashbuddy.state
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ClickAction
+import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.dash.DashType
 import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
 
 sealed class AppStateV2 {
     abstract val timestamp: Long
@@ -22,7 +24,8 @@ sealed class AppStateV2 {
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String? = null,
         val lastKnownZone: String? = null,
-        val dashType: DashType? = null
+        val dashType: DashType? = null,
+        val latestRatings: RatingsSnapshot? = null
     ) : AppStateV2()
 
     data class PostDash(
@@ -45,7 +48,8 @@ sealed class AppStateV2 {
         // Live data from the "Looking..." screen
         val currentSessionPay: Double? = null,
         val waitTimeEstimate: String? = null,
-        val isHeadingBackToZone: Boolean = false
+        val isHeadingBackToZone: Boolean = false,
+        val spotSaveDeadline: Long? = null  // epoch millis; populated after #137 parser lands
     ) : AppStateV2()
 
     data class OfferPresented(
@@ -66,14 +70,20 @@ sealed class AppStateV2 {
         val customerNameHash: String? = null,
         val status: PickupStatus = PickupStatus.UNKNOWN,
         val arrivalConfirmed: Boolean = false,
-        val orders: List<String> = emptyList()
+        val orders: List<String> = emptyList(),
+        val pickupDeadline: ParsedTime? = null,   // e.g. "Pick up by 17:39"
+        val arrivedAt: Long? = null,              // epoch millis when ARRIVED status first set
+        val itemCount: Int? = null,               // number of items to pick up
+        val redCardTotal: Double? = null          // Red Card payment total when applicable
     ) : AppStateV2()
 
     data class OnDelivery(
         override val timestamp: Long = System.currentTimeMillis(),
         override val dashId: String?,
+        val storeName: String? = null,            // carried from OnPickup
         val customerNameHash: String? = null,
-        val customerAddressHash: String? = null
+        val customerAddressHash: String? = null,
+        val deliveryDeadline: ParsedTime? = null  // e.g. "Deliver by 8:16 PM"
     ) : AppStateV2()
 
     data class PostDelivery(

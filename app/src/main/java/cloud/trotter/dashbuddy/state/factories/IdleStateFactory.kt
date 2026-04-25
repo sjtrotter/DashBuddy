@@ -18,9 +18,12 @@ class IdleStateFactory @Inject constructor() {
         input: ScreenInfo.IdleMap,
         isRecovery: Boolean
     ): Transition {
+        val previousRatings = (oldState as? AppStateV2.IdleOffline)?.latestRatings
+
         val newState = AppStateV2.IdleOffline(
             lastKnownZone = input.zoneName,
-            dashType = input.dashType
+            dashType = input.dashType,
+            latestRatings = previousRatings
         )
 
         val endingDash = oldState.dashId != null
