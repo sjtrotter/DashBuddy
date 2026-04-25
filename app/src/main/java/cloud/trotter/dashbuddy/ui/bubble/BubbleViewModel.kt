@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -65,16 +64,4 @@ class BubbleViewModel @Inject constructor(
     val sessionMiles = odometerRepository.sessionMilesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    // Debug helper — remove before shipping
-    fun sendTestMessage() {
-        val currentId =
-            bubbleManager.activeDashId.value ?: "debug_session_${System.currentTimeMillis()}"
-        if (bubbleManager.activeDashId.value == null) {
-            bubbleManager.startDash(currentId)
-        }
-        bubbleManager.postMessage(
-            "Test Message ${System.currentTimeMillis() % 1000}",
-            ChatPersona.Dispatcher
-        )
-    }
 }

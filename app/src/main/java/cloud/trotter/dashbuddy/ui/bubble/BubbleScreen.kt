@@ -83,11 +83,7 @@ fun BubbleScreen(
                     if (showFullChat) {
                         Text("Chat History")
                     } else {
-                        MetricsTopBarContent(
-                            appState = appState,
-                            earnings = sessionEarnings,
-                            miles = sessionMiles
-                        )
+                        StatusBadgeTitle(appState = appState)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -95,15 +91,19 @@ fun BubbleScreen(
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 actions = {
-                    IconButton(onClick = { viewModel.sendTestMessage() }) {
-                        Text("MSG", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    IconButton(onClick = { showFullChat = !showFullChat }) {
-                        Icon(
-                            imageVector = if (showFullChat) Icons.Default.Close
-                            else Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = "Toggle Chat",
-                            tint = MaterialTheme.colorScheme.onSurface
+                    if (showFullChat) {
+                        IconButton(onClick = { showFullChat = false }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close chat",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    } else {
+                        SessionMetricsActions(
+                            appState = appState,
+                            earnings = sessionEarnings,
+                            miles = sessionMiles
                         )
                     }
                 }
@@ -147,31 +147,41 @@ fun DashboardView(
 }
 
 // ---------------------------------------------------------------------------
-// TopAppBar metrics content — status badge + session earnings + miles
+// TopAppBar title — status badge only (left side)
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun MetricsTopBarContent(appState: AppStateV2, earnings: Double, miles: Double) {
+private fun StatusBadgeTitle(appState: AppStateV2) {
+    val (badgeText, badgeColor) = statusBadge(appState)
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = badgeColor.copy(alpha = 0.15f)
+    ) {
+        Text(
+            text = badgeText,
+            style = MaterialTheme.typography.labelSmall,
+            color = badgeColor,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TopAppBar actions — session earnings + miles (right side, active dashes only)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun SessionMetricsActions(appState: AppStateV2, earnings: Double, miles: Double) {
     val isActive = appState !is AppStateV2.IdleOffline &&
             appState !is AppStateV2.Initializing &&
             appState !is AppStateV2.PostDash
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        val (badgeText, badgeColor) = statusBadge(appState)
-        Surface(
-            shape = RoundedCornerShape(4.dp),
-            color = badgeColor.copy(alpha = 0.15f)
+    if (isActive) {
+        Row(
+            modifier = Modifier.padding(end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = badgeText,
-                style = MaterialTheme.typography.labelSmall,
-                color = badgeColor,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-            )
-        }
-        if (isActive) {
-            Spacer(modifier = Modifier.width(10.dp))
             Text(
                 text = "$${String.format("%.2f", earnings)}",
                 style = MaterialTheme.typography.titleSmall,
