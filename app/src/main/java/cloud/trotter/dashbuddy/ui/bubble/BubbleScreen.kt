@@ -286,7 +286,7 @@ fun ModeCard(appState: AppStateV2, lastSessionSummary: SessionSummary? = null, m
 
 @Composable
 private fun ModeInitializing() {
-    ModeRow(label = "Status", value = "Starting up…")
+    ModeRow(label = "Status", value = "Waiting to dash!")
 }
 
 @Composable

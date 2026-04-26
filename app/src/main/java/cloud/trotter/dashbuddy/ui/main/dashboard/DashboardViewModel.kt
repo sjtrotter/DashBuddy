@@ -60,10 +60,8 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun showWelcomeBubble() {
-        // We start a "Test Session" for them to play with
-        bubbleManager.startDash("manual_test_${System.currentTimeMillis()}")
         bubbleManager.postMessage(
-            text = "Welcome to DashBuddy! Click the bubble icon ( ↘️ ) in the corner of this notification to keep me on screen.",
+            text = "DashBuddy is ready. Open DoorDash and start a dash — I'll track everything from here.",
             ChatPersona.Dispatcher,
             expand = true
         )
