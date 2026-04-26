@@ -3,6 +3,41 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this
 repository.
 
+## Project Vision & Strategic Pillars
+
+DashBuddy exists to give independent contractor delivery drivers the same information the
+platform already has about their own work. Mission: **driver sovereignty through
+transparent, on-device, user-owned tooling.**
+
+The roadmap rests on three pillars, each defended by a separate architectural and licensing
+posture so neutralizing one does not collapse the others:
+
+1. **Driver Sovereignty (the product).** Free local tier (True Net Profitability, bubble HUD,
+   on-device session tracking, CSV export). Paid managed-cloud tier ($5/mo, $49/yr, $99
+   lifetime for first 500 users) for sync and aggregation-derived market context.
+   Source-available license; auditable byte-for-byte.
+2. **Distributed Integrity (the matchers).** Recognition layer published as a separate
+   Apache-2.0 repo, delivered to running app instances via signed JSON over CDN. Forkable;
+   if upstream is compromised, drivers can switch sources via configuration. See #192.
+3. **Academic Federation (the research).** Opt-in (k=10 cohort, on-device DP budget, edge
+   PII scrub) anonymized aggregation across university-hosted instances under IRB review.
+   No central corpus; only aggregate query results returned. AGPL-3.0 aggregator. See #193,
+   #194.
+
+**Pledges (non-negotiable).** All recognition / evaluation / economic computation happens
+on-device. Sensitive screens (banking, identity, payment) are blocked at the matcher layer.
+Network access is opt-in per feature. PII scrubbing runs at the edge before any upload.
+
+**Framing discipline.** When writing public-facing material — issues, RFCs, README, grant
+copy, marketing — describe the academic pillar as **empirical measurement of the visible
+offer surface**, never as reverse-engineering, model recovery, or algorithm characterization.
+The DoorDash ICA §15.4 prohibits reverse-engineering of the platform; DashBuddy does not
+do that and our written material must not suggest otherwise. See `LEGAL.md` for the
+good-faith ICA interpretation that governs scope decisions.
+
+Cross-references: monetization plan #141; matchers infra RFC #192; aggregation RFC #193;
+academic federation RFC #194.
+
 ## Build Commands
 
 ```bash
