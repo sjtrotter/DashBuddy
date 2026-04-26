@@ -59,7 +59,12 @@ class PickupReducer @Inject constructor(
 
                 if (hasStoreChanged || hasStatusChanged || hasDeadlineChanged || hasItemCountChanged || hasRedCardChanged) {
                     val nextStoreName = if (hasStoreChanged) newStoreName else state.storeName
-                    val justArrived = hasStatusChanged && input.status == PickupStatus.ARRIVED
+                    // Treat a direct NAVIGATING→SHOPPING transition (Shop & Deliver) the same as ARRIVED:
+                    // set arrivedAt and odometerAtArrival if not already set.
+                    val justArrived = hasStatusChanged && (
+                        input.status == PickupStatus.ARRIVED ||
+                        (input.status == PickupStatus.SHOPPING && state.arrivedAt == null)
+                    )
                     val arrivedAt = if (justArrived) System.currentTimeMillis() else state.arrivedAt
                     val nextState = state.copy(
                         storeName = nextStoreName,
@@ -73,21 +78,21 @@ class PickupReducer @Inject constructor(
                     if (hasStatusChanged) Timber.i("🛍️ PICKUP STATUS: ${state.status} → ${input.status} @ $nextStoreName")
                     val effects = mutableListOf<AppEffect>()
 
-                    // Persona Selection
-                    val persona = when (input.status) {
-                        PickupStatus.NAVIGATING -> ChatPersona.Navigator
-                        PickupStatus.ARRIVED -> ChatPersona.Merchant(nextStoreName)
-                        PickupStatus.CONFIRMED -> ChatPersona.Customer(
-                            // input.customerNameHash is not in PickupDetails anymore in some versions,
-                            // check your ScreenInfo definition. Assuming it exists:
-                            input.customerNameHash?.take(6) ?: "Customer"
-                        )
-
-                        PickupStatus.SHOPPING -> ChatPersona.Shopper
-                        else -> ChatPersona.Dispatcher
+                    // Only post a chat message when the status or store actually changes — not on
+                    // silent data refreshes (deadline, item count, red card total).
+                    if (hasStatusChanged || hasStoreChanged) {
+                        // Persona Selection
+                        val persona = when (input.status) {
+                            PickupStatus.NAVIGATING -> ChatPersona.Navigator
+                            PickupStatus.ARRIVED -> ChatPersona.Merchant(nextStoreName)
+                            PickupStatus.CONFIRMED -> ChatPersona.Customer(
+                                input.customerNameHash?.take(6) ?: "Customer"
+                            )
+                            PickupStatus.SHOPPING -> ChatPersona.Shopper
+                            else -> ChatPersona.Dispatcher
+                        }
+                        effects.add(AppEffect.UpdateBubble("Pickup: ${nextState.storeName}", persona))
                     }
-
-                    effects.add(AppEffect.UpdateBubble("Pickup: ${nextState.storeName}", persona))
 
                     // Logging Effects
                     if (justArrived) {

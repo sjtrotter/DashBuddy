@@ -315,6 +315,8 @@ private fun ModeIdle(lastSessionSummary: SessionSummary?) {
 
 @Composable
 private fun ModeAwaiting(state: AppStateV2.AwaitingOffer) {
+    val now by rememberNow()
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ModePrimaryText("Waiting for orders")
         if (state.isHeadingBackToZone) {
@@ -322,6 +324,14 @@ private fun ModeAwaiting(state: AppStateV2.AwaitingOffer) {
         }
         state.waitTimeEstimate?.let {
             ModeRow(label = "Est. wait", value = it)
+        }
+        state.spotSaveDeadline?.let { deadline ->
+            val remaining = deadline - now
+            if (remaining > 0) {
+                ModeRow(label = "Spot saved", value = formatDuration(remaining))
+            } else {
+                ModeRow(label = "Spot saved", value = "Expired")
+            }
         }
     }
 }

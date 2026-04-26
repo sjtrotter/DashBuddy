@@ -39,8 +39,9 @@ sealed class ScreenInfo {
     data class WaitingForOffer(
         override val screen: Screen,
         val dashPay: Double?,             // e.g. 7.50 (if visible)
-        val waitTimeEstimate: String?,    // e.g. "1-4 min" or "Spot saved until 15:57 (43 mins)"
-        val isHeadingBackToZone: Boolean  // true if "Heading back to zone" text is present
+        val waitTimeEstimate: String?,    // e.g. "1-4 min" (zone wait estimate from new layout)
+        val isHeadingBackToZone: Boolean, // true if "Heading back to zone" text is present
+        val spotSaveDeadline: Long? = null // epoch millis of "Spot saved until HH:mm"; null if not present
     ) : ScreenInfo()
 
     /** Contains the parsed offer details from an Offer Popup screen. */

@@ -49,6 +49,30 @@ object UtilityFunctions {
     }
 
     /**
+     * Strips known deadline prefixes from a raw node text string, returning just the time portion.
+     * Examples:
+     *   "Pick up by 17:39"   → "17:39"
+     *   "Deliver by 8:16 PM" → "8:16 PM"
+     *   "by 6:10 PM"         → "6:10 PM"
+     *   "Dash ends at 15:00" → "15:00"
+     *   "17:39"              → "17:39"  (no-op if no known prefix)
+     */
+    fun stripDeadlinePrefix(text: String): String {
+        val prefixes = listOf(
+            "Pick up by ",
+            "Deliver by ",
+            "Dash ends at ",
+            "by "
+        )
+        for (prefix in prefixes) {
+            if (text.startsWith(prefix, ignoreCase = true)) {
+                return text.substring(prefix.length).trim()
+            }
+        }
+        return text.trim()
+    }
+
+    /**
      * Extracts a time value from a deadline string and converts it to epoch millis.
      * Handles formats like "Pick up by 17:39", "Deliver by 8:16 PM", "by 6:10 PM",
      * "Dash ends at 15:00", etc. Returns null if no parseable time is found.

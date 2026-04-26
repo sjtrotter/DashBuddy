@@ -19,11 +19,28 @@ class WaitingForOfferParser @Inject constructor() : ScreenParser {
         } != null
 
         if (isNewLayout) {
-            Timber.d("WaitingForOfferParser: new layout (pay/wait unavailable)")
+            // "Zone offer wait" label is followed by a sibling text node with the estimate, e.g. "1-3 min".
+            val zoneWaitNode = node.findNode {
+                it.text?.contains("Zone offer wait", ignoreCase = true) == true
+            }
+            val waitTimeEstimate = if (zoneWaitNode != null) {
+                // Walk up to parent, then find the next text sibling after the label node.
+                val parent = zoneWaitNode.parent
+                if (parent != null) {
+                    val siblings = parent.children
+                    val labelIdx = siblings.indexOf(zoneWaitNode)
+                    siblings.getOrNull(labelIdx + 1)?.text?.takeIf { it.isNotBlank() }
+                } else null
+            } else null
+
+            val payNode = node.findNode { it.viewIdResourceName?.endsWith("running_total_pay") == true }
+            val currentPay = UtilityFunctions.parseCurrency(payNode?.text)
+
+            Timber.d("WaitingForOfferParser: new layout — wait='$waitTimeEstimate', pay=$currentPay")
             return ScreenInfo.WaitingForOffer(
                 screen = targetScreen,
-                dashPay = null,
-                waitTimeEstimate = null,
+                dashPay = currentPay,
+                waitTimeEstimate = waitTimeEstimate,
                 isHeadingBackToZone = false
             )
         }
