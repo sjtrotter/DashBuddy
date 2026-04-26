@@ -33,7 +33,9 @@ class DropoffPreArrivalParser @Inject constructor() : ScreenParser {
             it.text?.startsWith("by ", ignoreCase = true) == true &&
                 it.text?.contains(Regex("\\d{1,2}:\\d{2}")) == true
         }?.text
-        val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
+        val deadline = deadlineText?.let {
+            ParsedTime(UtilityFunctions.stripDeadlinePrefix(it), UtilityFunctions.parseDeadlineMillis(it))
+        }
 
         // Address: two consecutive ID-less text nodes — first matches a street number pattern,
         // second ends with a 5-digit zip code. Not always present on this screen.

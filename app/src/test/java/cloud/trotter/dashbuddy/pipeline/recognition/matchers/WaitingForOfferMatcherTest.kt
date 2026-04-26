@@ -41,8 +41,17 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='${'$'}7.25', id=running_total_pay, state=null, class=android.widget.TextView)
 """.trimIndent()
 
-    // New layout: "Finding offers" text
+    // New layout: "Finding offers" heading + "Zone offer wait" signal (required for match)
     private val newLayoutWaitingLog = """
+UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
+  UiNode(text='Finding offers', id=no_id, state=null, class=android.widget.TextView)
+  UiNode(, id=no_id, state=null, class=android.widget.LinearLayout)
+    UiNode(text='Zone offer wait', id=no_id, state=null, class=android.widget.TextView)
+    UiNode(text='1-3 min', id=no_id, state=null, class=android.widget.TextView)
+""".trimIndent()
+
+    // Interstitial map flash: "Finding offers" text but no zone-wait or pay signal — should NOT match
+    private val interstitialFlashLog = """
 UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='Finding offers', id=no_id, state=null, class=android.widget.TextView)
   UiNode(, id=no_id, state=null, class=android.widget.ProgressBar)
@@ -109,6 +118,14 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         assertNull(matcher.matches(root!!))
     }
 
+    @Test
+    fun `returns null for interstitial map flash (Finding offers without zone signal)`() {
+        val root = LogToUiNodeParser.parseLog(interstitialFlashLog)
+        assertNotNull("Failed to parse log", root)
+
+        assertNull("Map interstitial without zone-wait signal should not match", matcher.matches(root!!))
+    }
+
     // --- PARSING TESTS ---
 
     @Test
@@ -130,11 +147,11 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `new layout returns null for volatile fields`() {
+    fun `new layout extracts zone wait estimate and no session pay`() {
         val root = LogToUiNodeParser.parseLog(newLayoutWaitingLog)!!
         val result = parser.parse(root) as ScreenInfo.WaitingForOffer
 
         assertNull("Pay volatile in new layout", result.dashPay)
-        assertNull("Wait time not extracted in new layout", result.waitTimeEstimate)
+        assertEquals("Zone wait time extracted from sibling", "1-3 min", result.waitTimeEstimate)
     }
 }

@@ -35,7 +35,9 @@ class PickupNavigationParser @Inject constructor() : ScreenParser {
         val deadlineText = node.findNode {
             it.viewIdResourceName?.endsWith("bottom_sheet_task_arrive_by") == true
         }?.text
-        val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
+        val deadline = deadlineText?.let {
+            ParsedTime(UtilityFunctions.stripDeadlinePrefix(it), UtilityFunctions.parseDeadlineMillis(it))
+        }
 
         return ScreenInfo.PickupDetails(
             screen = targetScreen,

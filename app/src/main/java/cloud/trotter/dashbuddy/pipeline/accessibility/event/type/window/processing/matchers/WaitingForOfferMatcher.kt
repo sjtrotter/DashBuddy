@@ -29,10 +29,22 @@ class WaitingForOfferMatcher @Inject constructor() : ScreenMatcher {
         } != null
         if (hasProgressBar || hasLegacyTitle) return targetScreen
 
-        // New layout: "Finding offers" text.
-        val isNewLayout = node.findNode {
+        // New layout: "Finding offers" text MUST be accompanied by a positive zone/pay signal.
+        // A bare "Finding offers" on a map interstitial flash is NOT sufficient — require
+        // either "Zone offer wait" (zone wait estimate is visible) or the session pay node.
+        val hasFindingOffers = node.findNode {
             it.text?.contains("Finding offers", ignoreCase = true) == true
         } != null
-        return if (isNewLayout) targetScreen else null
+
+        if (!hasFindingOffers) return null
+
+        val hasZoneWaitSignal = node.findNode {
+            it.text?.contains("Zone offer wait", ignoreCase = true) == true
+        } != null
+        val hasSessionPay = node.findNode {
+            it.viewIdResourceName?.endsWith("running_total_pay") == true
+        } != null
+
+        return if (hasZoneWaitSignal || hasSessionPay) targetScreen else null
     }
 }

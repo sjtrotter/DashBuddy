@@ -36,7 +36,9 @@ class PickupArrivalParser @Inject constructor() : ScreenParser {
         val deadlineText = node.findNode {
             it.text?.startsWith("Pick up by", ignoreCase = true) == true
         }?.text
-        val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
+        val deadline = deadlineText?.let {
+            ParsedTime(UtilityFunctions.stripDeadlinePrefix(it), UtilityFunctions.parseDeadlineMillis(it))
+        }
 
         // "5 items" — parse leading integer.
         val itemCount = node.findNode {

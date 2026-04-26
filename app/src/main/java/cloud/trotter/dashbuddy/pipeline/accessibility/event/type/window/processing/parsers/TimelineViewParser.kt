@@ -33,7 +33,9 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
 
         // --- Dash end time ---
         val endsAtText = allTexts.firstOrNull { it.startsWith("Dash ends at", ignoreCase = true) }
-        val endsAt = endsAtText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
+        val endsAt = endsAtText?.let {
+            ParsedTime(UtilityFunctions.stripDeadlinePrefix(it), UtilityFunctions.parseDeadlineMillis(it))
+        }
 
         // --- Task chain ---
         // Each task is a pair of consecutive text nodes:
@@ -62,7 +64,9 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
             val rawDeadline = deadlineNode?.text
             val deadlineParts = rawDeadline?.split(" • ", limit = 2)
             val deadlineText = deadlineParts?.getOrNull(0)?.trim()
-            val deadline = deadlineText?.let { ParsedTime(it, UtilityFunctions.parseDeadlineMillis(it)) }
+            val deadline = deadlineText?.let {
+                ParsedTime(UtilityFunctions.stripDeadlinePrefix(it), UtilityFunctions.parseDeadlineMillis(it))
+            }
             val storeHint = deadlineParts?.getOrNull(1)?.trim()
 
             val isCurrent = taskNode.findNode {
