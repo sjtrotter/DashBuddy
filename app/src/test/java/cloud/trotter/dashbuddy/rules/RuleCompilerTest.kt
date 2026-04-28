@@ -1,0 +1,456 @@
+package cloud.trotter.dashbuddy.rules
+
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Unit tests for [RuleCompiler] predicate compilation.
+ *
+ * Each test compiles a predicate from a JSON snippet and verifies it returns the
+ * expected boolean for specific inputs. No JSON file on disk is loaded — inputs are
+ * constructed inline.
+ */
+class RuleCompilerTest {
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    private fun raw(
+        title: String? = null,
+        text: String? = null,
+        bigText: String? = null,
+        tickerText: String? = null,
+    ) = RawNotificationData(
+        title = title, text = text, bigText = bigText, tickerText = tickerText,
+        packageName = "com.doordash.driverapp", postTime = 0L, isClearable = false,
+    )
+
+    private fun node(
+        viewId: String? = null,
+        text: String? = null,
+        contentDescription: String? = null,
+        className: String? = null,
+        isClickable: Boolean = false,
+        isEnabled: Boolean = false,
+        isChecked: Int = 0,
+    ) = UiNode(
+        viewIdResourceName = viewId,
+        text = text,
+        contentDescription = contentDescription,
+        className = className,
+        isClickable = isClickable,
+        isEnabled = isEnabled,
+        isChecked = isChecked,
+    )
+
+    private fun tree(vararg children: UiNode, text: String? = null): UiNode {
+        val root = UiNode(text = text, children = children.toMutableList())
+        root.restoreParents()
+        return root
+    }
+
+    private fun json(vararg pairs: Pair<String, Any>) = JsonObject(
+        pairs.associate { (k, v) ->
+            k to when (v) {
+                is String -> JsonPrimitive(v)
+                is Boolean -> JsonPrimitive(v)
+                is Int -> JsonPrimitive(v)
+                else -> throw IllegalArgumentException("Unsupported type: ${v::class}")
+            }
+        }
+    )
+
+    private fun parseJson(s: String) = Json.parseToJsonElement(s)
+
+    // =========================================================================
+    // compileNodePred — ID predicates
+    // =========================================================================
+
+    @Test
+    fun `hasIdSuffix matches by suffix`() {
+        val pred = RuleCompiler.compileNodePred(json("hasIdSuffix" to "accept_button"))
+        assertTrue(pred(node(viewId = "com.example:id/accept_button")))
+        assertFalse(pred(node(viewId = "com.example:id/decline_button")))
+    }
+
+    @Test
+    fun `hasIdSuffix is case insensitive`() {
+        val pred = RuleCompiler.compileNodePred(json("hasIdSuffix" to "Accept_Button"))
+        assertTrue(pred(node(viewId = "com.example:id/accept_button")))
+    }
+
+    @Test
+    fun `hasIdSuffix returns false for null viewId`() {
+        val pred = RuleCompiler.compileNodePred(json("hasIdSuffix" to "accept_button"))
+        assertFalse(pred(node(viewId = null)))
+    }
+
+    @Test
+    fun `hasIdExact requires exact match`() {
+        val pred = RuleCompiler.compileNodePred(json("hasIdExact" to "com.example:id/btn"))
+        assertTrue(pred(node(viewId = "com.example:id/btn")))
+        assertFalse(pred(node(viewId = "com.example:id/btn_extra")))
+        assertFalse(pred(node(viewId = null)))
+    }
+
+    @Test
+    fun `hasIdContaining matches substring in viewId`() {
+        val pred = RuleCompiler.compileNodePred(json("hasIdContaining" to "action"))
+        assertTrue(pred(node(viewId = "com.example:id/primary_action_button")))
+        assertFalse(pred(node(viewId = "com.example:id/accept_button")))
+    }
+
+    @Test
+    fun `hasNoId matches null or blank viewId`() {
+        val pred = RuleCompiler.compileNodePred(json("hasNoId" to "true"))
+        assertTrue(pred(node(viewId = null)))
+        assertTrue(pred(node(viewId = "")))
+        assertFalse(pred(node(viewId = "some:id/btn")))
+    }
+
+    // =========================================================================
+    // compileNodePred — text predicates
+    // =========================================================================
+
+    @Test
+    fun `hasText matches exact text case-insensitively`() {
+        val pred = RuleCompiler.compileNodePred(json("hasText" to "Accept"))
+        assertTrue(pred(node(text = "Accept")))
+        assertTrue(pred(node(text = "ACCEPT")))
+        assertTrue(pred(node(text = "accept")))
+        // hasText is equals (not contains), so partial match fails
+        assertFalse(pred(node(text = "Accept offer")))
+        assertFalse(pred(node(text = null)))
+    }
+
+    @Test
+    fun `hasTextCaseSensitive is exact and case-sensitive`() {
+        val pred = RuleCompiler.compileNodePred(json("hasTextCaseSensitive" to "Accept"))
+        assertTrue(pred(node(text = "Accept")))
+        assertFalse(pred(node(text = "ACCEPT")))
+        assertFalse(pred(node(text = "accept")))
+    }
+
+    @Test
+    fun `hasTextContaining matches substring case-insensitively`() {
+        val pred = RuleCompiler.compileNodePred(json("hasTextContaining" to "Decline"))
+        assertTrue(pred(node(text = "Decline offer")))
+        assertTrue(pred(node(text = "decline offer")))
+        assertFalse(pred(node(text = "Accept")))
+        assertFalse(pred(node(text = null)))
+    }
+
+    @Test
+    fun `hasTextStartsWith matches prefix case-insensitively`() {
+        val pred = RuleCompiler.compileNodePred(json("hasTextStartsWith" to "Arrived"))
+        assertTrue(pred(node(text = "Arrived at store")))
+        assertTrue(pred(node(text = "arrived")))
+        assertFalse(pred(node(text = "You Arrived")))
+        assertFalse(pred(node(text = null)))
+    }
+
+    @Test
+    fun `hasTextMatchesRegex uses compiled regex`() {
+        val pred = RuleCompiler.compileNodePred(parseJson("""{"hasTextMatchesRegex": "\\d{1,2}/\\d{1,2}"}"""))
+        assertTrue(pred(node(text = "Delivered at 4/26")))
+        assertFalse(pred(node(text = "No date here")))
+        assertFalse(pred(node(text = null)))
+    }
+
+    // =========================================================================
+    // compileNodePred — content description & class predicates
+    // =========================================================================
+
+    @Test
+    fun `hasDesc matches content description case-insensitively`() {
+        val pred = RuleCompiler.compileNodePred(json("hasDesc" to "close"))
+        assertTrue(pred(node(contentDescription = "Close")))
+        assertFalse(pred(node(contentDescription = "Open")))
+    }
+
+    @Test
+    fun `hasClassNameEndsWith matches class suffix`() {
+        val pred = RuleCompiler.compileNodePred(json("hasClassNameEndsWith" to "TextView"))
+        assertTrue(pred(node(className = "android.widget.TextView")))
+        assertFalse(pred(node(className = "android.widget.Button")))
+    }
+
+    // =========================================================================
+    // compileNodePred — boolean flag predicates
+    // =========================================================================
+
+    @Test
+    fun `isClickable passes for clickable nodes`() {
+        val pred = RuleCompiler.compileNodePred(json("isClickable" to true))
+        assertTrue(pred(node(isClickable = true)))
+        assertFalse(pred(node(isClickable = false)))
+    }
+
+    @Test
+    fun `isEnabled passes for enabled nodes`() {
+        val pred = RuleCompiler.compileNodePred(json("isEnabled" to true))
+        assertTrue(pred(node(isEnabled = true)))
+        assertFalse(pred(node(isEnabled = false)))
+    }
+
+    @Test
+    fun `isChecked passes for checked nodes`() {
+        val pred = RuleCompiler.compileNodePred(json("isChecked" to true))
+        assertTrue(pred(node(isChecked = 1)))
+        assertFalse(pred(node(isChecked = 0)))
+    }
+
+    @Test
+    fun `hasChildren passes for nodes with children`() {
+        val pred = RuleCompiler.compileNodePred(json("hasChildren" to true))
+        val withChild = UiNode(children = mutableListOf(UiNode(text = "child")))
+        assertTrue(pred(withChild))
+        assertFalse(pred(node()))
+    }
+
+    @Test
+    fun `isLeaf passes for nodes without children`() {
+        val pred = RuleCompiler.compileNodePred(json("isLeaf" to true))
+        assertTrue(pred(node()))
+        val withChild = UiNode(children = mutableListOf(UiNode(text = "child")))
+        assertFalse(pred(withChild))
+    }
+
+    // =========================================================================
+    // compileNodePred — logical combinators
+    // =========================================================================
+
+    @Test
+    fun `all requires every predicate to pass`() {
+        val pred = RuleCompiler.compileNodePred(
+            parseJson("""{"all": [{"hasText": "Accept"}, {"isClickable": true}]}""")
+        )
+        assertTrue(pred(node(text = "Accept", isClickable = true)))
+        assertFalse(pred(node(text = "Accept", isClickable = false)))
+        assertFalse(pred(node(text = "Other", isClickable = true)))
+    }
+
+    @Test
+    fun `any passes when at least one predicate passes`() {
+        val pred = RuleCompiler.compileNodePred(
+            parseJson("""{"any": [{"hasText": "Accept"}, {"hasText": "Decline"}]}""")
+        )
+        assertTrue(pred(node(text = "Accept")))
+        assertTrue(pred(node(text = "Decline")))
+        assertFalse(pred(node(text = "Other")))
+    }
+
+    @Test
+    fun `not negates the inner predicate`() {
+        val pred = RuleCompiler.compileNodePred(parseJson("""{"not": {"hasText": "Accept"}}"""))
+        assertFalse(pred(node(text = "Accept")))
+        assertTrue(pred(node(text = "Decline")))
+        assertTrue(pred(node(text = null)))
+    }
+
+    // =========================================================================
+    // compileTreePred
+    // =========================================================================
+
+    @Test
+    fun `allTextContains passes when joined tree text contains substring`() {
+        val pred = RuleCompiler.compileTreePred(json("allTextContains" to "accept"))
+        val t = tree(node(text = "Accept"), text = "Other")
+        assertTrue(pred(t))
+    }
+
+    @Test
+    fun `allTextContains fails when substring not in tree`() {
+        val pred = RuleCompiler.compileTreePred(json("allTextContains" to "missing"))
+        assertFalse(pred(tree(node(text = "Accept"))))
+    }
+
+    @Test
+    fun `allTextContainsAll requires all strings in tree text`() {
+        val pred = RuleCompiler.compileTreePred(
+            parseJson("""{"allTextContainsAll": ["accept", "decline"]}""")
+        )
+        val t = tree(node(text = "Accept"), node(text = "Decline"))
+        assertTrue(pred(t))
+        assertFalse(pred(tree(node(text = "Accept"))))
+    }
+
+    @Test
+    fun `allTextContainsAny requires at least one string in tree text`() {
+        val pred = RuleCompiler.compileTreePred(
+            parseJson("""{"allTextContainsAny": ["accept", "confirm"]}""")
+        )
+        assertTrue(pred(tree(node(text = "Accept"))))
+        assertTrue(pred(tree(node(text = "Confirm pickup"))))
+        assertFalse(pred(tree(node(text = "Other"))))
+    }
+
+    @Test
+    fun `exists passes when matching node found in tree`() {
+        val pred = RuleCompiler.compileTreePred(parseJson("""{"exists": {"hasText": "Accept"}}"""))
+        val t = tree(node(text = "Accept"), node(text = "Other"))
+        assertTrue(pred(t))
+    }
+
+    @Test
+    fun `exists fails when no matching node in tree`() {
+        val pred = RuleCompiler.compileTreePred(parseJson("""{"exists": {"hasText": "Accept"}}"""))
+        assertFalse(pred(tree(node(text = "Decline"))))
+    }
+
+    @Test
+    fun `notExists passes when no matching node`() {
+        val pred = RuleCompiler.compileTreePred(parseJson("""{"notExists": {"hasText": "Accept"}}"""))
+        assertTrue(pred(tree(node(text = "Decline"))))
+        assertFalse(pred(tree(node(text = "Accept"))))
+    }
+
+    @Test
+    fun `tree all combinator`() {
+        val pred = RuleCompiler.compileTreePred(
+            parseJson("""{"all": [{"allTextContains": "foo"}, {"allTextContains": "bar"}]}""")
+        )
+        assertTrue(pred(tree(node(text = "foo"), node(text = "bar"))))
+        assertFalse(pred(tree(node(text = "foo"))))
+    }
+
+    @Test
+    fun `tree not combinator`() {
+        val pred = RuleCompiler.compileTreePred(
+            parseJson("""{"not": {"allTextContains": "sensitive"}}""")
+        )
+        assertTrue(pred(tree(node(text = "Normal screen"))))
+        assertFalse(pred(tree(node(text = "sensitive content"))))
+    }
+
+    // =========================================================================
+    // compileNotifPred
+    // =========================================================================
+
+    @Test
+    fun `titleContains matches notification title case-insensitively`() {
+        val pred = RuleCompiler.compileNotifPred(json("titleContains" to "New Order"))
+        assertTrue(pred(raw(title = "New Order")))
+        assertTrue(pred(raw(title = "NEW ORDER AVAILABLE")))
+        assertFalse(pred(raw(title = "DoorDash")))
+        assertFalse(pred(raw(title = null)))
+    }
+
+    @Test
+    fun `textContains matches notification text`() {
+        val pred = RuleCompiler.compileNotifPred(json("textContains" to "expired"))
+        assertTrue(pred(raw(text = "Your scheduled dash has expired")))
+        assertFalse(pred(raw(text = "Your dash is active")))
+    }
+
+    @Test
+    fun `anyFieldMatchesRegex matches against full text`() {
+        val pred = RuleCompiler.compileNotifPred(
+            parseJson("""{"anyFieldMatchesRegex": "added \\$\\d+\\.\\d{2} tip"}""")
+        )
+        assertTrue(pred(raw(bigText = "added \$5.00 tip on a past H-E-B order delivered at 4/26, 3:15 PM")))
+        assertFalse(pred(raw(text = "You received a tip")))
+    }
+
+    @Test
+    fun `anyFieldContainsAll requires all substrings present across all fields`() {
+        val pred = RuleCompiler.compileNotifPred(
+            parseJson("""{"anyFieldContainsAll": ["scheduled", "expired"]}""")
+        )
+        assertTrue(pred(raw(text = "Your scheduled dash has expired")))
+        assertFalse(pred(raw(text = "Your scheduled dash starts soon")))
+        assertFalse(pred(raw(text = "Your promo has expired")))
+    }
+
+    @Test
+    fun `anyFieldContainsAny passes when any substring matches`() {
+        val pred = RuleCompiler.compileNotifPred(
+            parseJson("""{"anyFieldContainsAny": ["new order", "order available"]}""")
+        )
+        assertTrue(pred(raw(title = "New Order")))
+        assertTrue(pred(raw(text = "An order available for pickup")))
+        assertFalse(pred(raw(title = "DoorDash", text = "Something else")))
+    }
+
+    @Test
+    fun `isClearable matches clearable notifications`() {
+        val pred = RuleCompiler.compileNotifPred(json("isClearable" to true))
+        val clearable = RawNotificationData(
+            title = null, text = null, bigText = null, tickerText = null,
+            packageName = "com.doordash.driverapp", postTime = 0L, isClearable = true,
+        )
+        val notClearable = clearable.copy(isClearable = false)
+        assertTrue(pred(clearable))
+        assertFalse(pred(notClearable))
+    }
+
+    @Test
+    fun `notif not combinator negates predicate`() {
+        val pred = RuleCompiler.compileNotifPred(
+            parseJson("""{"not": {"titleContains": "New Order"}}""")
+        )
+        assertFalse(pred(raw(title = "New Order")))
+        assertTrue(pred(raw(title = "DoorDash")))
+    }
+
+    @Test
+    fun `notif all combinator`() {
+        val pred = RuleCompiler.compileNotifPred(
+            parseJson("""{"all": [{"titleContains": "New"}, {"textContains": "order"}]}""")
+        )
+        assertTrue(pred(raw(title = "New Order", text = "An order is available")))
+        assertFalse(pred(raw(title = "New Order", text = "Something else")))
+        assertFalse(pred(raw(title = "DoorDash", text = "An order is available")))
+    }
+
+    // =========================================================================
+    // Security caps
+    // =========================================================================
+
+    @Test(expected = RuleCompileException::class)
+    fun `regex length exceeding MAX_REGEX_LENGTH throws`() {
+        val pattern = "a".repeat(RuleCompiler.MAX_REGEX_LENGTH + 1)
+        RuleCompiler.compileNodePred(parseJson("""{"hasTextMatchesRegex": "$pattern"}"""))
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `invalid regex throws RuleCompileException`() {
+        RuleCompiler.compileNodePred(parseJson("""{"hasTextMatchesRegex": "[invalid("}"""))
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `unknown node predicate key throws`() {
+        RuleCompiler.compileNodePred(parseJson("""{"unknownKey": "value"}"""))
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `unknown tree predicate key throws`() {
+        RuleCompiler.compileTreePred(parseJson("""{"unknownKey": "value"}"""))
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `unknown notif predicate key throws`() {
+        RuleCompiler.compileNotifPred(parseJson("""{"unknownKey": "value"}"""))
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `node pred depth limit throws`() {
+        var json = """{"hasText": "x"}"""
+        repeat(RuleCompiler.MAX_DEPTH + 2) { json = """{"not": $json}""" }
+        RuleCompiler.compileNodePred(Json.parseToJsonElement(json))
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `tree pred depth limit throws`() {
+        var json = """{"allTextContains": "x"}"""
+        repeat(RuleCompiler.MAX_DEPTH + 2) { json = """{"not": $json}""" }
+        RuleCompiler.compileTreePred(Json.parseToJsonElement(json))
+    }
+}

@@ -15,6 +15,7 @@ class MapperEnforcementTest {
             "allText",          // lazy property
             "structuralHash",   // lazy property
             "contentHash",      // lazy property
+            "hasViewId",        // computed interpreter helper (not stored)
         )
         // Get all property names from the Domain model
         val domainProps =

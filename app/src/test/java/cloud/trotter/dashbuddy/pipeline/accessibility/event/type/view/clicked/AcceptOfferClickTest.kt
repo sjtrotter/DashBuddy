@@ -2,16 +2,18 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ClickInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.mock
 
 /**
  * Regression tests for [ClickClassifier] → [ClickInfo.AcceptOffer].
  */
 class AcceptOfferClickTest {
 
-    private val classifier = ClickClassifier()
+    private val classifier = ClickClassifier(mock<JsonRuleInterpreter>())
 
     private fun node(viewId: String? = null, text: String? = null) =
         UiNode(viewIdResourceName = viewId, text = text)

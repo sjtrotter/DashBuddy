@@ -183,6 +183,43 @@ data class UiNode(
     }
 
     // ========================================================================
+    //  INTERPRETER HELPERS
+    //  Used by the JSON rule interpreter (RuleCompiler). Internalise patterns
+    //  that appear across many Kotlin matchers so the DSL stays simple.
+    // ========================================================================
+
+    /** Walk [n] levels up the parent chain. Null if tree is shallower than [n]. */
+    fun ancestor(n: Int): UiNode? {
+        var current: UiNode? = this
+        repeat(n) { current = current?.parent }
+        return current
+    }
+
+    /**
+     * Return the sibling at (this node's index in parent's children + [offset]).
+     * Null if there is no parent or the computed index is out of bounds.
+     */
+    fun sibling(offset: Int): UiNode? {
+        val siblings = parent?.children ?: return null
+        val idx = siblings.indexOf(this) + offset
+        return siblings.getOrNull(idx)
+    }
+
+    /**
+     * Find [label] in this node's [allText] DFS list and return the entry at label+[offset].
+     * [allText] is lazy — computed once and cached — so repeated calls are free.
+     * Returns null if [label] is not found or the offset index is out of bounds.
+     */
+    fun textAfterLabel(label: String, offset: Int = 1): String? {
+        val idx = allText.indexOfFirst { it.equals(label, ignoreCase = true) }
+        return if (idx >= 0) allText.getOrNull(idx + offset) else null
+    }
+
+    /** True when [viewIdResourceName] is non-null and non-blank. */
+    val hasViewId: Boolean
+        get() = !viewIdResourceName.isNullOrBlank()
+
+    // ========================================================================
     //  DATA COLLECTION (Lazy)
     // ========================================================================
 

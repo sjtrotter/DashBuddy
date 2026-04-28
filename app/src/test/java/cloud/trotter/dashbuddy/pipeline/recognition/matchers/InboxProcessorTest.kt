@@ -9,7 +9,9 @@ import cloud.trotter.dashbuddy.test.util.SnapshotLibrarian
 import cloud.trotter.dashbuddy.test.util.SnapshotScreenDiagnostics
 import cloud.trotter.dashbuddy.test.util.SnapshotSecurityScanner
 import cloud.trotter.dashbuddy.test.util.SnapshotSession
+import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
+import org.mockito.kotlin.mock
 import cloud.trotter.dashbuddy.test.util.TestParserFactory
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import org.junit.AfterClass
@@ -36,7 +38,8 @@ class InboxProcessorTest(
         private val recognizer: ScreenClassifier by lazy {
             ScreenClassifier(
                 injectedMatchers = TestMatcherFactory.createAllMatchers(),
-                injectedParsers = TestParserFactory.createAllParsers()
+                injectedParsers = TestParserFactory.createAllParsers(),
+                interpreter = mock<JsonRuleInterpreter>(),
             )
         }
 
