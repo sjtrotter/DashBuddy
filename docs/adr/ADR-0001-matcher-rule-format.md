@@ -45,10 +45,11 @@ memory. Every hot-path invocation is a pure lambda call — no parsing, no refle
 interpreter, debug builds run both and log any disagreement. This validates the JSON rules against
 real traffic before the Kotlin implementations are removed.
 
-**Parsers:** Matchers (recognition) translate cleanly to declarative rules. Parsers (field
-extraction) vary widely in complexity. Simple parsers are fully expressible in DSL; complex ones
-declare `native: "ClassName"` to fall back to the bundled Kotlin implementation. This is the
-pragmatic starting point — the DSL can grow over time.
+**Parsers:** Every parser is fully expressible in the DSL. There are no `native` fallbacks — any
+fix must be shippable OTA without a Play Store release. Where existing Kotlin parsers use complex
+procedural logic, the rule format provides extended primitives (`forEach`, `siblingAfter`,
+`allTextAt`, `conditionalEnum`, `presence`, `regexGroup`) or the matching/parsing strategy is
+redesigned to eliminate the complexity.
 
 ---
 
@@ -124,7 +125,8 @@ instead of `target/guards/if`. The first branch whose `if` passes wins.
       ]}
     }
   ],
-  parse: { native: "OfferParser" },
+  // parse block: forEach per-order card — see Parser DSL → forEach section for full example
+  parse: { /* orders, storeName, pay, distance — forEach { nodes: hasIdSuffix "display_name", scope.ascend: 2, ... } */ },
 }
 ```
 
@@ -153,16 +155,30 @@ with `all`/`any` at the node level.
 | `{ hasIdSuffix: "s" }` | `viewIdResourceName` ends with `s` | `.endsWith("s")` |
 | `{ hasIdExact: "s" }` | `viewIdResourceName` exactly equals `s` | `== "s"` |
 | `{ hasIdContaining: "s" }` | `viewIdResourceName` contains `s` | `.contains("s")` |
-| `{ hasText: "s" }` | `text` equals `s` (case-insensitive) | `.equals("s", ignoreCase=true)` |
+| `{ hasNoId }` | `viewIdResourceName` is null or blank | null/blank check |
+| `{ hasText: "s" }` | `text` equals `s` **(case-insensitive)** | `.equals("s", ignoreCase=true)` |
+| `{ hasTextCaseSensitive: "s" }` | `text` exactly equals `s` **(case-sensitive)** | `== "s"` |
 | `{ hasTextContaining: "s" }` | `text` contains `s` (case-insensitive) | `.contains("s", ignoreCase=true)` |
 | `{ hasTextStartsWith: "s" }` | `text` starts with `s` (case-insensitive) | `.startsWith("s", ignoreCase=true)` |
 | `{ hasTextMatchesRegex: "p" }` | `text` matches regex pattern `p` | `Regex(p).containsMatchIn(text)` |
 | `{ hasDesc: "s" }` | `contentDescription` equals `s` (case-insensitive) | `.equals("s", ignoreCase=true)` |
 | `{ hasDescContaining: "s" }` | `contentDescription` contains `s` (case-insensitive) | `.contains("s", ignoreCase=true)` |
+| `{ hasStateDescription: "s" }` | `stateDescription` equals `s` (case-insensitive) | `.equals("s", ignoreCase=true)` |
+| `{ hasStateDescriptionContaining: "s" }` | `stateDescription` contains `s` (case-insensitive) | `.contains("s", ignoreCase=true)` |
 | `{ hasClassName: "s" }` | `className` exactly equals `s` | `== "s"` |
 | `{ hasClassNameEndsWith: "s" }` | `className` ends with `s` (case-insensitive) | `.endsWith("s", ignoreCase=true)` |
+| `{ isClickable }` | node is clickable | `node.isClickable == true` |
+| `{ isEnabled }` | node is enabled | `node.isEnabled == true` |
+| `{ isChecked }` | node is in checked state | `node.isChecked == 1` |
+| `{ hasChildren }` | node has at least one child | `node.children.isNotEmpty()` |
+| `{ isLeaf }` | node has no children | `node.children.isEmpty()` |
 | `{ all: [ nodePred, ... ] }` | All node predicates must pass | logical AND within a node |
 | `{ any: [ nodePred, ... ] }` | At least one node predicate must pass | logical OR within a node |
+| `{ not: nodePred }` | Negate a node predicate | logical NOT within a node |
+
+The table above covers the **complete** `UiNode` data model surface. Every field exposed by
+`AccessibilityNodeInfo` that DashBuddy captures is addressable via a predicate, so community
+contributors do not need to read the Kotlin source to know what is available.
 
 ### Representative Examples
 
@@ -206,7 +222,7 @@ with `all`/`any` at the node level.
     "Card status", "Lock card", "Emergency contact details", "Withdraw",
     "Expiry", "Enter the code we sent", "t=completed_view"
   ]},
-  parse: { native: "SensitiveScreenParser" },
+  parse: { fields: {} },  // sensitive screens carry no extracted data
 }
 ```
 
@@ -219,7 +235,14 @@ with `all`/`any` at the node level.
   overrideable: true,
   target: "TIMELINE_VIEW",
   if: { allTextContainsAll: ["dash ends at", "pause orders"] },
-  parse: { native: "TimelineViewParser" },
+  // parse block: tasks forEach + allTextAt session totals — see Parser DSL sections for full example
+  parse: {
+    fields: {
+      tasks:         { source: { forEach: { /* ... */ } } },
+      dashEarnings:  { source: { allTextAt: "This dash",  offset: 1 }, transform: "parseCurrency" },
+      offerEarnings: { source: { allTextAt: "This offer", offset: 1 }, transform: "parseCurrency" },
+    }
+  }
 }
 ```
 
@@ -245,7 +268,16 @@ with `all`/`any` at the node level.
       { hasDesc: "Side Menu" }
     ]}}
   ]},
-  parse: { native: "IdleMapParser" },
+  parse: {
+    fields: {
+      dashType: {
+        source: { conditionalEnum: [
+          { if: { exists: { hasDesc: "Time mode off" } }, then: "PER_OFFER" },
+          { if: { always: true },                         then: "TIME"      }
+        ]}
+      }
+    }
+  }
 }
 ```
 
@@ -331,6 +363,7 @@ dollar amount). When either ordering or viewId could change, structural is safer
 | `{ combineFields: [src, src], separator: ", " }` | Join multiple sources with separator; skip nulls |
 | `{ any: [src, ...] }` | First non-null source wins — for dual-layout / fallback extraction |
 | `{ conditionalEnum: [ { if: <treePred>, then: "VALUE" }, ... ] }` | Presence-based enum; first matching `if` wins; null if none |
+| `{ presence: <treePred> }` | Returns `true` if the tree predicate passes, `false` otherwise — cleaner than `conditionalEnum` for boolean fields |
 | `{ forEach: { ... } }` | Multi-entity extraction — see below |
 
 **`any` source** handles screens with layout variants or ID-renamed nodes:
@@ -383,10 +416,7 @@ orders: {
         transform: "parseItemCount", fallback: 1,
       },
       hasRedCard: {
-        source: { conditionalEnum: [
-          { if: { exists: { all: [{ hasIdSuffix: "tag" }, { hasTextContaining: "Red Card" }]}}, then: "true" },
-          { if: { always: true }, then: "false" }
-        ]}
+        source: { presence: { exists: { all: [{ hasIdSuffix: "tag" }, { hasTextContaining: "Red Card" }] } } }
       },
     }
   }}
@@ -407,12 +437,8 @@ tasks: {
       nameHash: { field: "text", transform: ["stripPrefixes:[\"Pickup for \",\"Deliver to \",\"Pickup from \"]", "trim", "sha256"] },
       deadline: { source: { siblingAfter: 1, field: "text" }, transform: ["extractBefore: \" • \"", "parseDeadline"] },
       storeHint: { source: { siblingAfter: 1, field: "text" }, transform: "extractAfter: \" • \"" },
-      isCurrent: {
-        source: { conditionalEnum: [
-          { if: { exists: { hasText: "Current task" } }, then: "true" },
-          { if: { always: true }, then: "false" }
-        ]}
-      },
+      // presence: returns true/false directly — preferred over conditionalEnum for booleans
+      isCurrent: { source: { presence: { exists: { hasText: "Current task" } } } },
     }
   }}
 }
@@ -706,22 +732,31 @@ operate on those fields directly — no tree traversal.
 
 ### Notification Predicate Vocabulary
 
-| Predicate | Meaning |
-|---|---|
-| `{ titleContains: "s" }` | `raw.title.contains(s, ignoreCase=true)` |
-| `{ titleEquals: "s" }` | `raw.title.equals(s, ignoreCase=true)` |
-| `{ textContains: "s" }` | `raw.text.contains(s, ignoreCase=true)` |
-| `{ bigTextContains: "s" }` | `raw.bigText.contains(s, ignoreCase=true)` |
-| `{ anyFieldContains: "s" }` | Any of title/text/bigText/tickerText contains `s` |
-| `{ anyFieldContainsAll: ["a","b"] }` | All strings present somewhere in any field |
-| `{ anyFieldContainsAny: ["a","b"] }` | At least one string present somewhere in any field |
-| `{ anyFieldMatchesRegex: "p" }` | `toFullString()` matches regex `p` |
-| `{ all: [ pred, ... ] }` | AND |
-| `{ any: [ pred, ... ] }` | OR |
-| `{ not: pred }` | NOT |
+Covers the complete `RawNotificationData` field surface so every field is addressable:
+
+| Predicate | Field | Meaning |
+|---|---|---|
+| `{ titleEquals: "s" }` | `title` | `raw.title.equals(s, ignoreCase=true)` |
+| `{ titleContains: "s" }` | `title` | `raw.title.contains(s, ignoreCase=true)` |
+| `{ titleMatchesRegex: "p" }` | `title` | regex match against `raw.title` |
+| `{ textEquals: "s" }` | `text` | `raw.text.equals(s, ignoreCase=true)` |
+| `{ textContains: "s" }` | `text` | `raw.text.contains(s, ignoreCase=true)` |
+| `{ textMatchesRegex: "p" }` | `text` | regex match against `raw.text` |
+| `{ bigTextContains: "s" }` | `bigText` | `raw.bigText.contains(s, ignoreCase=true)` |
+| `{ bigTextMatchesRegex: "p" }` | `bigText` | regex match against `raw.bigText` |
+| `{ tickerTextContains: "s" }` | `tickerText` | `raw.tickerText.contains(s, ignoreCase=true)` |
+| `{ tickerTextMatchesRegex: "p" }` | `tickerText` | regex match against `raw.tickerText` |
+| `{ isClearable }` | `isClearable` | `raw.isClearable == true` — useful for persistent vs transient |
+| `{ anyFieldContains: "s" }` | all | Any of title/text/bigText/tickerText contains `s` |
+| `{ anyFieldContainsAll: ["a","b"] }` | all | All strings present somewhere across all fields |
+| `{ anyFieldContainsAny: ["a","b"] }` | all | At least one string present somewhere across all fields |
+| `{ anyFieldMatchesRegex: "p" }` | all | Regex match against `toFullString()` (all non-null fields joined) |
+| `{ all: [ pred, ... ] }` | — | AND |
+| `{ any: [ pred, ... ] }` | — | OR |
+| `{ not: pred }` | — | NOT |
 
 The `extract` block is only valid when `if` uses a regex predicate. Capture groups are 1-indexed.
-Transforms are the same primitive catalog as parsers.
+Transforms are the same primitive catalog as screen parsers.
 
 ### Special Notification Types
 
@@ -816,6 +851,60 @@ fun RuleNode.compile(): (UiNode) -> Boolean = when (this) {
 }
 ```
 
+### Data Model Enrichment
+
+To simplify the interpreter implementation and keep the DSL predicates clean, several helpers
+should be added to `UiNode` and `RawNotificationData`. These are not new concepts — they
+internalize patterns that already appear across many Kotlin matchers and parsers — but surfacing
+them as named extensions makes interpreter code obvious and eliminates the need for DSL workarounds.
+
+**`UiNode` helpers:**
+
+```kotlin
+// Walk N levels up the parent chain; null if fewer than N ancestors exist
+fun UiNode.ancestor(n: Int): UiNode? {
+    var current: UiNode? = this
+    repeat(n) { current = current?.parent }
+    return current
+}
+
+// Return the sibling at (this.indexInParent + offset); null if out of bounds
+fun UiNode.sibling(offset: Int): UiNode? {
+    val siblings = parent?.children ?: return null
+    val idx = siblings.indexOf(this) + offset
+    return siblings.getOrNull(idx)
+}
+
+// Find `label` in this node's DFS allText list and return the string at label+offset.
+// Encapsulates the allTextAt source type — interpreter delegates to this instead of
+// reimplementing the index arithmetic.
+fun UiNode.textAfterLabel(label: String, offset: Int = 1): String? {
+    val idx = allText.indexOfFirst { it.equals(label, ignoreCase = true) }
+    return if (idx >= 0) allText.getOrNull(idx + offset) else null
+}
+
+// Convenience for the common hasNoId predicate — avoids repeating the null/blank check
+val UiNode.hasViewId: Boolean get() = !viewIdResourceName.isNullOrBlank()
+```
+
+These helpers map directly to DSL constructs:
+
+| DSL construct | Interpreter call |
+|---|---|
+| `{ siblingAfter: N }` | `currentNode.sibling(N)` |
+| `scope: { ascend: N }` in `forEach` | `matchedNode.ancestor(N)` |
+| `{ allTextAt: "label", offset: N }` | `tree.textAfterLabel("label", N)` |
+| `{ hasNoId }` | `!node.hasViewId` |
+
+**`presence` source:** The `{ presence: <treePred> }` source type compiles to a lambda that
+returns `true` / `false` based on whether the tree predicate passes. Internally it reuses the
+same compiled predicate as the `exists` tree predicate — no new interpreter machinery needed.
+
+```kotlin
+// Compiled result of: { source: { presence: { exists: { hasText: "Current task" } } } }
+{ tree: UiNode -> tree.findNode { it.text.equals("Current task", ignoreCase = true) } != null }
+```
+
 ### Dual-Running Validation (debug builds only)
 
 While both Kotlin matchers and JSON-interpreted rules are active, every event is classified by
@@ -834,6 +923,81 @@ if (BuildConfig.DEBUG && jsonRuleset != null) {
     }
 }
 ```
+
+---
+
+## Security Considerations
+
+The interpreter is the trust boundary between the signed rule file and the app. A malicious or
+malformed rule file must not be able to crash the app, exhaust memory, cause runaway CPU usage,
+or bypass `overrideable: false` protections. Eight mitigations are required:
+
+### 1. Signature before parse
+
+The Ed25519 signature is verified **before the JSON is parsed**. A rule file that fails signature
+verification is discarded immediately — its bytes never reach the JSON deserializer. This prevents
+crafted inputs from exploiting parser edge cases in the JSON library.
+
+### 2. File size cap (1 MB)
+
+The fetched payload is rejected before writing to DataStore if its byte length exceeds 1 MB.
+Legitimate rule files are expected to be well under 100 KB; the 1 MB ceiling stops a content
+delivery compromise from allocating large buffers.
+
+### 3. AST depth cap (20 levels)
+
+During the compile step, the tree of `RuleNode` / `NodePredicate` objects is walked recursively.
+A maliciously deeply-nested predicate can cause a stack overflow. The compiler tracks nesting depth
+and throws `RuleCompileException` if it exceeds 20 levels. 20 is far above any legitimate rule;
+the deepest current matcher is 5 levels.
+
+### 4. ReDoS mitigation (regex length + timeout)
+
+Every `hasTextMatchesRegex`, `hasDescMatchesRegex`, `titleMatchesRegex`, etc. value is validated
+at compile time:
+
+- **Max pattern length: 200 characters.** Any regex longer than this is rejected.
+- **Compile-time timeout (50 ms).** The `Regex` object is constructed inside a coroutine with a
+  50 ms deadline. If construction times out (pathological backtracking during compilation is
+  possible with Java's `java.util.regex`), the rule is rejected.
+- **Match-time timeout (5 ms per invocation).** At runtime, regex matches run with an
+  interruptible approach (or equivalent timeout wrapper). If a match exceeds 5 ms, it returns
+  `false` and logs a warning.
+
+### 5. `forEach` result cap (50 nodes)
+
+The `forEach` source iterates all nodes matching a predicate and builds a list. A malformed rule
+could match every node in a large tree (thousands of nodes) and allocate an unbounded list. The
+interpreter caps the collected list at 50 entries; additional matches are silently ignored. 50 is
+above any legitimate `forEach` result (OfferParser: 1–3 orders; TimelineViewParser: 1–6 tasks).
+
+### 6. `ancestor()` depth cap (100)
+
+`scope: { ascend: N }` calls `UiNode.ancestor(N)`. A rule specifying `ascend: 999999` would walk
+the entire parent chain on every matched node. The interpreter rejects any `ascend` value greater
+than 100 at compile time.
+
+### 7. `overrideable: false` enforcement in the interpreter
+
+`overrideable: false` is a **CI hard gate** (no community PR can merge a change to these rules)
+**and** an in-app enforcement point. At startup, the interpreter:
+
+1. Reads the bundled `rules.default.json` and records the `id`, `target`, and `if` of every rule
+   with `overrideable: false`.
+2. When loading a fetched rule file, verifies that every `overrideable: false` rule id is present
+   with the same `target` and an equivalent `if` block (deep equality of the compiled AST).
+3. If any `overrideable: false` rule is missing or has a changed `if`, the fetched file is rejected
+   and the bundled defaults are used.
+
+This ensures that even a key compromise cannot produce a signed rule file that removes or weakens
+`SENSITIVE` screen protection.
+
+### 8. JSON5 is server-side only
+
+JSON5 is a human-authoring convenience. The canonical `rules.json` distributed by the CDN is
+always **plain JSON** (produced by the toolchain from the JSON5 source). The in-app interpreter
+has no JSON5 parser. This eliminates the comment-injection and trailing-comma ambiguity surface
+that exists in JSON5 parsers.
 
 ---
 
