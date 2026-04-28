@@ -25,7 +25,11 @@ sealed class AppEffect {
         val metadata: String? = null // Optional context
     ) : AppEffect()
 
-    data class ProcessTipNotification(val rawText: String) : AppEffect()
+    data class ProcessTipNotification(
+        val amount: Double,
+        val storeName: String,
+        val deliveredAt: String,
+    ) : AppEffect()
 
     // Dash Paused!
     data class ScheduleTimeout(val durationMs: Long, val type: TimeoutType) : AppEffect()

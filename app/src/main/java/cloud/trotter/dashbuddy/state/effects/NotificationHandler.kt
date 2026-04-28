@@ -1,45 +1,73 @@
 package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.state.NotificationEvent
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.state.AppStateV2
 import cloud.trotter.dashbuddy.state.model.Transition
 import cloud.trotter.dashbuddy.state.reducers.ReducerUtils
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class NotificationHandler @Inject constructor() {
 
-    // Keywords to filter noise
-    private val keywords = listOf("New Order", "Tip", "Review", "Dasher", "Complete", "Paid")
-
     fun handle(
         currentState: AppStateV2,
-        stateEvent: NotificationEvent,
-    ): Transition { // <--- Return type updated
-        val notif = stateEvent.notification
-        val fullText = notif.toFullString()
-
+        event: NotificationEvent,
+    ): Transition {
         val effects = mutableListOf<AppEffect>()
 
-        // 1. Log Event (Filtered)
-        if (keywords.any { fullText.contains(it, ignoreCase = true) }) {
-            val logEvent = ReducerUtils.createEvent(
-                dashId = currentState.dashId,
-                type = AppEventType.NOTIFICATION_RECEIVED,
-                payload = fullText
-            )
-            effects.add(AppEffect.LogEvent(logEvent))
+        when (val info = event.info) {
+            is NotificationInfo.AdditionalTip -> {
+                effects.add(
+                    AppEffect.ProcessTipNotification(
+                        amount = info.amount,
+                        storeName = info.storeName,
+                        deliveredAt = info.deliveredAt,
+                    )
+                )
+                val logEvent = ReducerUtils.createEvent(
+                    dashId = currentState.dashId,
+                    type = AppEventType.NOTIFICATION_RECEIVED,
+                    payload = "TIP_ADDED: \$${info.amount} from ${info.storeName}"
+                )
+                effects.add(AppEffect.LogEvent(logEvent))
+            }
+
+            is NotificationInfo.NewOrder -> {
+                // Screen pipeline drives offer state; log the signal but take no action.
+                val logEvent = ReducerUtils.createEvent(
+                    dashId = currentState.dashId,
+                    type = AppEventType.NOTIFICATION_RECEIVED,
+                    payload = "NEW_ORDER"
+                )
+                effects.add(AppEffect.LogEvent(logEvent))
+            }
+
+            is NotificationInfo.ScheduledDashExpired -> {
+                val logEvent = ReducerUtils.createEvent(
+                    dashId = currentState.dashId,
+                    type = AppEventType.NOTIFICATION_RECEIVED,
+                    payload = "SCHEDULED_DASH_EXPIRED"
+                )
+                effects.add(AppEffect.LogEvent(logEvent))
+            }
+
+            is NotificationInfo.Unknown -> {
+                // Log raw text so we can identify new notification types in the field.
+                Timber.d("NotificationHandler: UNKNOWN notification — ${info.rawText}")
+                val logEvent = ReducerUtils.createEvent(
+                    dashId = currentState.dashId,
+                    type = AppEventType.NOTIFICATION_RECEIVED,
+                    payload = "UNKNOWN: ${info.rawText}"
+                )
+                effects.add(AppEffect.LogEvent(logEvent))
+            }
         }
 
-        // 2. Logic (Tip Detection)
-        if (fullText.contains("tip", true) && fullText.contains("added", true)) {
-            effects.add(AppEffect.ProcessTipNotification(fullText))
-        }
-
-        // Return new Transition object directly
         return Transition(currentState, effects)
     }
 }
