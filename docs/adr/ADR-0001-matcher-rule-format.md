@@ -159,6 +159,8 @@ with `all`/`any` at the node level.
 | `{ hasTextMatchesRegex: "p" }` | `text` matches regex pattern `p` | `Regex(p).containsMatchIn(text)` |
 | `{ hasDesc: "s" }` | `contentDescription` equals `s` (case-insensitive) | `.equals("s", ignoreCase=true)` |
 | `{ hasDescContaining: "s" }` | `contentDescription` contains `s` (case-insensitive) | `.contains("s", ignoreCase=true)` |
+| `{ hasClassName: "s" }` | `className` exactly equals `s` | `== "s"` |
+| `{ hasClassNameEndsWith: "s" }` | `className` ends with `s` (case-insensitive) | `.endsWith("s", ignoreCase=true)` |
 | `{ all: [ nodePred, ... ] }` | All node predicates must pass | logical AND within a node |
 | `{ any: [ nodePred, ... ] }` | At least one node predicate must pass | logical OR within a node |
 
@@ -298,53 +300,268 @@ with `all`/`any` at the node level.
 
 ### Parser DSL
 
-The `parse.fields` block defines one entry per output field. Each entry specifies a `source`
-(how to find the raw value) and an optional `transform` pipeline.
+The `parse.fields` block defines one entry per output field. There are no "native" fallbacks —
+every parser must be fully expressible in this DSL so any fix can ship OTA without a Play Store
+release. Where the current Kotlin parsers use complex procedural logic, the rule format provides
+extended primitives, or the matching/parsing strategy is redesigned to be simpler.
 
-**Source types:**
+#### Design principles
+
+**Matchers as the first validation line.** The matcher `if` predicate should encode as many
+screen invariants as possible. A parser only runs when the matcher has already confirmed the
+screen is structurally correct. Numeric cross-field validation that cannot be expressed as a
+predicate belongs in a `validate` block.
+
+**Structural sources over `allTextAt` where possible.** `UiNode.allText` is a `lazy` property
+(computed once, cached per node), so calling it in parsers is not a separate tree walk. However,
+`allTextAt` relies on DFS-order adjacency — if DoorDash reorders elements, index offsets shift.
+Prefer `nodeByIdSuffix` / `nodeWhere` when a reliable `viewIdResourceName` exists. Use
+`allTextAt` only when no viewId is available and the label → value adjacency is a design
+invariant of the screen (e.g., DoorDash always renders "This dash" immediately before its
+dollar amount). When either ordering or viewId could change, structural is safer.
+
+#### Source types
 
 | Source | Meaning |
 |---|---|
 | `{ nodeByIdSuffix: "s", field: "text" }` | `findNode { viewIdResourceName?.endsWith("s") }?.text` |
+| `{ nodeByIdSuffix: "s", field: "contentDescription" }` | Same but reads `contentDescription` |
 | `{ nodeWhere: <nodePred>, field: "text" }` | `findNode { nodePred matches }?.text` |
-| `{ combineFields: [src, src], separator: ", " }` | Join multiple sources with separator |
-| `{ allTextAt: "label", offset: 1 }` | Value immediately after a label text in `allText` list |
-| `{ childOfNodeWhere: <nodePred>, childIdSuffix: "s", field: "text" }` | Finds parent, then finds child by id |
+| `{ allTextAt: "label", offset: N }` | `allText[indexOf(label) + N]`; null if label not found |
+| `{ combineFields: [src, src], separator: ", " }` | Join multiple sources with separator; skip nulls |
+| `{ any: [src, ...] }` | First non-null source wins — for dual-layout / fallback extraction |
+| `{ conditionalEnum: [ { if: <treePred>, then: "VALUE" }, ... ] }` | Presence-based enum; first matching `if` wins; null if none |
+| `{ forEach: { ... } }` | Multi-entity extraction — see below |
 
-**Transform primitives** (auditable catalog; new primitives require an app update):
+**`any` source** handles screens with layout variants or ID-renamed nodes:
+
+```json5
+// WaitingForOffer: new layout uses label/value pair; legacy uses button child text
+waitTimeEstimate: {
+  source: { any: [
+    { allTextAt: "Zone offer wait", offset: 1 },     // new layout — design-invariant adjacency
+    { nodeByIdSuffix: "textView_prism_button_title", field: "text" } // legacy button
+  ]},
+  transform: "stripPrefix:est. ",  // strips "est. " when present; no-op otherwise
+}
+
+// DashSummaryParser: header_pay was removed late 2025; fall back to first currency-shaped node
+totalEarnings: {
+  source: { any: [
+    { nodeByIdSuffix: "header_pay", field: "text" },
+    { nodeWhere: { hasTextMatchesRegex: "^\\$[\\d,]+\\.\\d{2}$" }, field: "text" }
+  ]},
+  transform: "parseCurrency",
+}
+```
+
+#### Collection extraction with `forEach`
+
+`forEach` iterates over all tree nodes matching a node predicate, optionally ascending to a
+scope ancestor, and extracts one structured object per matched node. The result is a typed list.
+
+`scope.ascend: N` walks N levels up from the matched node to a container; relative sources in
+the `extract` block then search within that container rather than the whole tree.
+
+```json5
+// OfferParser: each display_name node is inside a per-order card 2 levels up
+orders: {
+  source: { forEach: {
+    nodes: { hasIdSuffix: "display_name" },
+    scope: { ascend: 2 },
+    exclude: { any: [{ hasText: "Customer dropoff" }, { hasText: "Business handoff" }] },
+    extract: {
+      storeName: { field: "text" },
+      orderType: {
+        source: { conditionalEnum: [
+          { if: { exists: { all: [{ hasIdSuffix: "work_unit_type" }, { hasTextContaining: "Shop" }] }}, then: "SHOP_FOR_ITEMS" },
+          { if: { always: true }, then: "PICKUP" }
+        ]}
+      },
+      itemCount: {
+        source: { descendantByIdSuffix: "display_name_secondary", field: "text" },
+        transform: "parseItemCount", fallback: 1,
+      },
+      hasRedCard: {
+        source: { conditionalEnum: [
+          { if: { exists: { all: [{ hasIdSuffix: "tag" }, { hasTextContaining: "Red Card" }]}}, then: "true" },
+          { if: { always: true }, then: "false" }
+        ]}
+      },
+    }
+  }}
+}
+```
+
+```json5
+// TimelineViewParser: each task-prefix node is immediately followed by a sibling deadline node
+tasks: {
+  source: { forEach: {
+    nodes: { any: [
+      { hasTextStartsWith: "Pickup for " },
+      { hasTextStartsWith: "Deliver to " },
+      { hasTextStartsWith: "Pickup from " },
+    ]},
+    extract: {
+      taskType: { field: "text", transform: "extractPrefix:[\"Pickup for \",\"Deliver to \",\"Pickup from \"]" },
+      nameHash: { field: "text", transform: ["stripPrefixes:[\"Pickup for \",\"Deliver to \",\"Pickup from \"]", "trim", "sha256"] },
+      deadline: { source: { siblingAfter: 1, field: "text" }, transform: ["extractBefore: \" • \"", "parseDeadline"] },
+      storeHint: { source: { siblingAfter: 1, field: "text" }, transform: "extractAfter: \" • \"" },
+      isCurrent: {
+        source: { conditionalEnum: [
+          { if: { exists: { hasText: "Current task" } }, then: "true" },
+          { if: { always: true }, then: "false" }
+        ]}
+      },
+    }
+  }}
+}
+```
+
+For `allTextAt` patterns that are design-invariant (DoorDash always renders these pairs in
+DFS order):
+
+```json5
+// TimelineViewParser — session totals
+dashEarnings:  { source: { allTextAt: "This dash",  offset: 1 }, transform: "parseCurrency" }
+offerEarnings: { source: { allTextAt: "This offer", offset: 1 }, transform: "parseCurrency" }
+
+// DashSummaryParser — label-value rows (label is always immediately before value in DFS)
+durationMillis: { source: { allTextAt: "Total online time",  offset: 1 }, transform: "parseHrMin" }
+offersAccepted: { source: { allTextAt: "Offers accepted",    offset: 1 }, transform: "parseAccepted" }
+offersTotal:    { source: { allTextAt: "Offers accepted",    offset: 1 }, transform: "parseTotal" }
+weeklyEarnings: { source: { allTextAt: "Earnings this week", offset: 1 }, transform: "parseCurrency" }
+
+// RatingsViewParser — metric pairs (title immediately precedes description in DFS)
+acceptanceRate:    { source: { allTextAt: "Acceptance rate",    offset: 1 }, transform: "parsePercent" }
+completionRate:    { source: { allTextAt: "Completion rate",    offset: 1 }, transform: "parsePercent" }
+customerRating:    { source: { allTextAt: "Customer rating",    offset: 1 }, transform: "toDouble" }
+lifetimeDeliveries:{ source: { allTextAt: "Lifetime deliveries",offset: 1 }, transform: "toInt" }
+```
+
+#### Relative sources (within `forEach` extract blocks)
+
+| Source | Meaning |
+|---|---|
+| `{ field: "text" }` | `currentNode.text` |
+| `{ field: "contentDescription" }` | `currentNode.contentDescription` |
+| `{ siblingAfter: N, field: "text" }` | `parent.children[indexOf(current) + N].text` |
+| `{ descendantByIdSuffix: "s", field: "text" }` | First descendant in scope with that ID suffix |
+| `{ always: true }` | Sentinel for the else-branch in `conditionalEnum` |
+
+#### `hasNoId` node predicate
+
+Required for `DropoffPreArrivalParser`'s address lines, which carry no `viewIdResourceName`.
+Using content-shape regex avoids the positional index approach in the current Kotlin parser
+and is more robust when surrounding node counts change.
+
+| Predicate | Meaning | Kotlin equivalent |
+|---|---|---|
+| `{ hasNoId }` | `viewIdResourceName` is null or blank | null/blank viewId check |
+
+```json5
+// Address lines: first no-viewId node matching street number pattern; second matching zip
+addressLine1: { source: { nodeWhere: { all: [{ hasNoId }, { hasTextMatchesRegex: "^\\d{1,5}\\s+\\S" }] }, field: "text" } }
+addressLine2: { source: { nodeWhere: { all: [{ hasNoId }, { hasTextMatchesRegex: "\\d{5}$"          }] }, field: "text" } }
+address:      { source: { combineFields: ["addressLine1", "addressLine2"], separator: ", " }, transform: "sha256" }
+```
+
+#### Transform primitives (auditable catalog; new primitives require an app update)
 
 | Transform | Input → Output |
 |---|---|
 | `parseCurrency` | `"$5.00"` → `Double` |
 | `parseDistance` | `"3.2 mi"` → `Double` |
-| `parseDeadline` | `"Pick up by 17:39"` → `ParsedTime(text, epochMs)` |
-| `parseDuration` | `"35:00"` → `Long` milliseconds |
-| `parseLeadingInt` | `"4 items"` → `Int` |
+| `parseDeadline` | `"Pick up by 17:39"`, `"by 6:10 PM"`, `"Spot saved until 15:57"` → `ParsedTime` |
+| `parseDuration` | `"35:00"` (MM:SS) → `Long` milliseconds |
+| `parseHrMin` | `"2 hr 15 min"` → `Long` milliseconds |
+| `parseLeadingInt` | `"4 items"` → `Int` (leading digit sequence) |
+| `parseItemCount` | `"2 orders"` or `"4 items"` → `Int` |
+| `parseAccepted` | `"3 out of 5"` → `Int` (numerator) |
+| `parseTotal` | `"3 out of 5"` → `Int` (denominator) |
+| `parsePercent` | `"85.7%"` → `Double` |
+| `regexGroup:<pattern>:<N>` | Run regex; return capture group N; null if no match |
 | `sha256` | `String` → SHA-256 hex `String` |
 | `trim` | strip whitespace |
 | `lowercase` | to lowercase |
 | `toDouble` | `String` → `Double` |
 | `toInt` | `String` → `Int` |
-| `stripPrefix:<s>` | remove literal prefix `s` (case-insensitive) |
-| `stripSuffix:<s>` | remove literal suffix `s` (case-insensitive) |
+| `stripPrefix:<s>` | if starts with `s`, remove it; otherwise return value unchanged |
+| `stripSuffix:<s>` | if ends with `s`, remove it; otherwise return value unchanged |
+| `stripPrefixes:[list]` | remove first matching prefix from a JSON array of strings |
+| `extractPrefix:[list]` | return the first matching prefix from a JSON array |
+| `extractBefore:<s>` | return substring before first `s`; null if `s` not found |
+| `extractAfter:<s>` | return substring after first `s`; null if `s` not found |
 
-Transforms can be chained as an array: `transform: ["stripPrefix:Deliver to ", "trim", "sha256"]`.
+Transforms chain as an array: `transform: ["stripPrefixes:[...]", "trim", "sha256"]`.
 
-**`rejectIf`:** If the extracted raw value's node matches the predicate, discard and treat as
-null (used in `PickupArrivalParser` to exclude "Parking instructions" from `storeName`).
+**`rejectIf`:** If the extracted node matches the predicate, treat the field as null.
+Used in `PickupArrivalParser` to exclude "Parking instructions" / "Notes" from `storeName`.
 
-**Native parsers:** Parsers with conditional layout detection, positional allText indexing,
-multi-entity iteration, or cross-field validation reference the bundled Kotlin class directly:
+**`fallback`:** Static value used when the source resolves to null.
+
+**`validate`:** Checked after all fields are extracted. If it fails, the rule emits
+`ScreenInfo.Simple`. Used for numeric cross-field sanity that cannot be a matcher predicate:
 
 ```json5
-parse: { native: "OfferParser" }        // OfferParser.kt — complex multi-order extraction
-parse: { native: "TimelineViewParser" } // positional allText + sibling traversal
-parse: { native: "DeliverySummaryParser" } // conditional expand/collapse + validation
-parse: { native: "WaitingForOfferParser" } // dual-layout detection + sibling traversal
+// DashSummaryParser: dash session total must not exceed weekly total
+validate: { fieldLe: { field: "totalEarnings", leField: "weeklyEarnings", tolerance: 0.02 } }
 ```
 
-Native parsers are bundled with the APK and referenced by class name. They cannot be overridden
-by community rules — they are fixed behavior until a new app version ships.
+**`regexGroup` example** — `PickupShoppingParser` extracts the item count from "To shop (N)":
+
+```json5
+itemCount: {
+  source: { nodeWhere: { hasTextMatchesRegex: "To shop \\(\\d+\\)" }, field: "text" },
+  transform: "regexGroup:To shop \\((\\d+)\\):1",
+}
+```
+
+#### Parser redesign: DeliverySummary expanded vs collapsed
+
+The current `DeliverySummaryParser` determines the screen variant (`EXPANDED` / `COLLAPSED`)
+based on whether the pay breakdown is visible. This is a matching invariant, not a parsing
+task. Redesign as two rules whose matchers enforce the invariant before the parser runs:
+
+```json5
+// Rule 1: Expanded (DoorDash pay and Customer tips both visible — matcher validates this)
+{
+  id: "doordash.screen.delivery_summary.expanded",
+  priority: 15,
+  target: "DELIVERY_SUMMARY_EXPANDED",
+  if: { all: [
+    { exists: { hasIdSuffix: "final_value" } },
+    { allTextContainsAll: ["doordash pay", "customer tips"] }   // invariant
+  ]},
+  parse: {
+    fields: {
+      totalPay:       { source: { nodeByIdSuffix: "final_value",     field: "text" }, transform: "parseCurrency" },
+      sessionEarnings:{ source: { nodeByIdSuffix: "earnings_ticker", field: "text" }, transform: "parseCurrency" },
+      doorDashPay:    { source: { allTextAt: "DoorDash pay",  offset: 1 }, transform: "parseCurrency" },
+      customerTips:   { source: { allTextAt: "Customer tips", offset: 1 }, transform: "parseCurrency" },
+    },
+    // Numeric reconciliation: breakdown items should sum close to headline
+    validate: { fieldLe: { field: "totalPay", geField: "doorDashPay", tolerance: 0.02 } }
+  }
+}
+
+// Rule 2: Collapsed (pay breakdown not yet tapped open)
+{
+  id: "doordash.screen.delivery_summary.collapsed",
+  priority: 16,
+  target: "DELIVERY_SUMMARY_COLLAPSED",
+  if: { all: [
+    { exists: { hasIdSuffix: "final_value" } },
+    { not: { allTextContains: "doordash pay" } }
+  ]},
+  parse: {
+    fields: {
+      totalPay:       { source: { nodeByIdSuffix: "final_value",     field: "text" }, transform: "parseCurrency" },
+      sessionEarnings:{ source: { nodeByIdSuffix: "earnings_ticker", field: "text" }, transform: "parseCurrency" },
+    }
+  }
+}
+```
 
 ### Special Screen Types
 
