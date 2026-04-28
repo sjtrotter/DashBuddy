@@ -1,11 +1,11 @@
 package cloud.trotter.dashbuddy.pipeline.notification.mapper
 
 import android.service.notification.StatusBarNotification
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 
-fun StatusBarNotification.toDomain(): NotificationInfo {
+fun StatusBarNotification.toDomain(): RawNotificationData {
     val extras = this.notification.extras
-    return NotificationInfo(
+    return RawNotificationData(
         packageName = this.packageName,
         title = extras.getString("android.title"),
         text = extras.getString("android.text"),

@@ -12,10 +12,12 @@ import javax.inject.Inject
 class NotificationPipeline @Inject constructor(
     private val source: NotificationSource,
     private val filter: NotificationFilter,
-    private val factory: NotificationFactory
+    private val classifier: NotificationClassifier,
+    private val factory: NotificationFactory,
 ) {
     fun output(): Flow<StateEvent> = source.events
-        .mapNotNull { sbn -> sbn.toDomain() } // Parse
-        .filter { info -> filter.isRelevant(info) }       // Filter Spam
-        .map { info -> factory.create(info) }             // Produce Event
+        .mapNotNull { sbn -> sbn.toDomain() }          // StatusBarNotification → RawNotificationData
+        .filter { raw -> filter.isRelevant(raw) }       // package guard
+        .map { raw -> raw to classifier.classify(raw) } // classify: RawNotificationData → NotificationInfo
+        .map { (raw, info) -> factory.create(raw, info) } // produce NotificationEvent
 }
