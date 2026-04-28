@@ -3,6 +3,13 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this
 repository.
 
+## Alpha Status
+
+**This is alpha software. There is exactly one user: the developer.** Do not
+prioritize backward compatibility, migration paths, graceful degradation for end users, or
+polish concerns unless they directly affect the developer's ability to test the app. Treat
+every decision with a single-user, single-device assumption until explicitly told otherwise.
+
 ## Project Vision & Strategic Pillars
 
 DashBuddy exists to give independent contractor delivery drivers the same information the
