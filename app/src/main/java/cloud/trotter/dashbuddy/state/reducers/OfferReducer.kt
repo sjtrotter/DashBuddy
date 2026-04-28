@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state.reducers
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ClickAction
+import cloud.trotter.dashbuddy.domain.model.accessibility.ClickInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
@@ -54,16 +54,16 @@ class OfferReducer @Inject constructor(
 
     private fun handleClick(state: AppStateV2.OfferPresented, event: ClickEvent): Transition {
         // 1. Update State (So resolveOutcome works later when the screen changes)
-        val newClickInfo = state.currentScreen to event.action
+        val newClickInfo = state.currentScreen to event.info
 
         // 2. Immediate Feedback (Optimistic UI)
-        val bubbleEffect = when (event.action) {
-            ClickAction.ACCEPT_OFFER -> AppEffect.UpdateBubble(
+        val bubbleEffect = when (event.info) {
+            is ClickInfo.AcceptOffer -> AppEffect.UpdateBubble(
                 "Offer Accepted",
                 persona = ChatPersona.Dispatcher
             )
 
-            ClickAction.DECLINE_OFFER -> AppEffect.UpdateBubble(
+            is ClickInfo.DeclineOffer -> AppEffect.UpdateBubble(
                 "Offer Declined",
                 persona = ChatPersona.Dispatcher
             )
@@ -191,8 +191,8 @@ class OfferReducer @Inject constructor(
         val action = state.clickInfo?.second
 
         return when (action) {
-            ClickAction.ACCEPT_OFFER -> AppEventType.OFFER_ACCEPTED
-            ClickAction.DECLINE_OFFER -> AppEventType.OFFER_DECLINED
+            is ClickInfo.AcceptOffer -> AppEventType.OFFER_ACCEPTED
+            is ClickInfo.DeclineOffer -> AppEventType.OFFER_DECLINED
             else -> AppEventType.OFFER_TIMEOUT
         }
     }

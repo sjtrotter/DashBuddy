@@ -70,7 +70,7 @@ class ClickLogRepository @Inject constructor(
         val entryDto = ClickLogEntryDto(
             timestamp = event.timestamp,
             dateReadable = prettyTimeFormat.format(now),
-            action = event.action.name, // Convert Enum to String
+            action = event.info::class.simpleName ?: "Unknown",
             targetId = event.sourceNode.viewIdResourceName,
             targetText = event.sourceNode.text,
             sourceNode = event.sourceNode.toDto() // Map the domain node to UiNodeDto
