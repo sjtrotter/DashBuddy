@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.log.StateAwareTree
+import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.worker.DailyGasPriceWorker
 import dagger.hilt.android.HiltAndroidApp
@@ -44,6 +45,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     // Needed for Hilt to inject repositories into WorkManager classes
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var jsonRuleInterpreter: JsonRuleInterpreter
 
     // Global Context Accessor (Still useful for Utils, but avoid if possible)
     companion object {
@@ -95,11 +99,14 @@ class DashBuddyApplication : Application(), Configuration.Provider {
             )
         )
 
-        // 2. Initialize State
+        // 2. Load JSON rule interpreter (dual-run validation; Kotlin matchers remain authoritative)
+        jsonRuleInterpreter.loadDefaults()
+
+        // 3. Initialize State
         stateManagerV2.initialize()
         Timber.i("StateManagerV2 initialized.")
 
-        // 3. Schedule Background Tasks
+        // 4. Schedule Background Tasks
         scheduleBackgroundWorkers()
 
         Timber.i("DashBuddyApplication initialized.")

@@ -4,9 +4,11 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
 import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
 import cloud.trotter.dashbuddy.test.util.TestParserFactory
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
+import org.mockito.kotlin.mock
 import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,7 +28,8 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
         private val recognizer: ScreenClassifier by lazy {
             ScreenClassifier(
                 injectedMatchers = TestMatcherFactory.createAllMatchers(),
-                injectedParsers = TestParserFactory.createAllParsers()
+                injectedParsers = TestParserFactory.createAllParsers(),
+                interpreter = mock<JsonRuleInterpreter>(),
             )
         }
 

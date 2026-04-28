@@ -1,0 +1,594 @@
+{
+  "format_version": 1,
+  "platform_id": "doordash.driver",
+  "min_app_version": "0.230.0",
+
+  "screens": [
+
+    {
+      "id": "doordash.screen.sensitive",
+      "platform_id": "doordash.driver",
+      "priority": 0,
+      "overrideable": false,
+      "target": "SENSITIVE",
+      "if": { "allTextContainsAny": [
+        "Bank Account", "Routing Number", "Verify Identity", "Social Security",
+        "Crimson", "Biometric", "Available Balance", "View card details",
+        "Linked accounts", "Debit card", "Account number", "Statements & documents",
+        "Card status", "Lock card", "Emergency contact details", "Withdraw",
+        "Expiry", "Enter the code we sent", "t=completed_view"
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.timeline",
+      "platform_id": "doordash.driver",
+      "priority": 10,
+      "overrideable": true,
+      "target": "TIMELINE_VIEW",
+      "if": { "allTextContainsAll": ["dash ends at", "pause orders"] }
+    },
+
+    {
+      "id": "doordash.screen.offer",
+      "platform_id": "doordash.driver",
+      "priority": 20,
+      "overrideable": true,
+      "branches": [
+        {
+          "target": "OFFER_POPUP_CONFIRM_DECLINE",
+          "if": { "exists": { "hasTextContaining": "sure you want to decline" } }
+        },
+        {
+          "target": "OFFER_POPUP",
+          "guards": [
+            { "exists": { "hasIdSuffix": "progress_bar" } }
+          ],
+          "if": { "all": [
+            { "exists": { "hasText": "Decline" } },
+            { "exists": { "any": [{ "hasText": "Accept" }, { "hasText": "Add to route" }] } }
+          ]}
+        }
+      ]
+    },
+
+    {
+      "id": "doordash.screen.delivery_summary.expanded",
+      "platform_id": "doordash.driver",
+      "priority": 30,
+      "overrideable": true,
+      "target": "DELIVERY_SUMMARY_EXPANDED",
+      "guards": [
+        { "allTextContains": "pause orders" }
+      ],
+      "if": { "all": [
+        { "exists": { "hasIdSuffix": "final_value" } },
+        { "allTextContainsAll": ["this offer", "doordash pay"] }
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.delivery_summary.collapsed",
+      "platform_id": "doordash.driver",
+      "priority": 31,
+      "overrideable": true,
+      "target": "DELIVERY_SUMMARY_COLLAPSED",
+      "guards": [
+        { "allTextContains": "pause orders" }
+      ],
+      "if": { "all": [
+        { "exists": { "hasIdSuffix": "final_value" } },
+        { "any": [
+          { "allTextContains": "this offer" },
+          { "allTextContains": "delivery complete" }
+        ]},
+        { "not": { "allTextContains": "doordash pay" } }
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.app_startup",
+      "platform_id": "doordash.driver",
+      "priority": 40,
+      "overrideable": true,
+      "target": "APP_STARTING_OR_LOADING",
+      "if": { "all": [
+        { "exists": { "all": [
+          { "hasTextCaseSensitive": "Starting\u2026" },
+          { "hasClassNameEndsWith": "TextView" }
+        ]}},
+        { "exists": { "all": [
+          { "hasText": "Cancel" },
+          { "hasClassNameEndsWith": "Button" }
+        ]}}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.dash_paused",
+      "platform_id": "doordash.driver",
+      "priority": 50,
+      "overrideable": true,
+      "target": "DASH_PAUSED",
+      "if": { "all": [
+        { "exists": { "hasText": "Dash Paused" } },
+        { "exists": { "all": [
+          { "hasIdSuffix": "resumeButton" },
+          { "hasDesc": "Resume dash" }
+        ]}},
+        { "exists": { "hasIdSuffix": "progress_number" } }
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.pickup_navigation",
+      "platform_id": "doordash.driver",
+      "priority": 60,
+      "overrideable": true,
+      "target": "NAVIGATION_VIEW_TO_PICK_UP",
+      "guards": [
+        { "exists": { "all": [
+          { "hasIdSuffix": "bottom_sheet_task_title" },
+          { "hasTextContaining": "Deliver to" }
+        ]}},
+        { "exists": { "all": [
+          { "hasIdSuffix": "bottom_sheet_task_arrive_by" },
+          { "hasTextContaining": "Deliver by" }
+        ]}}
+      ],
+      "if": { "exists": { "hasIdSuffix": "bottom_sheet_task_title" } }
+    },
+
+    {
+      "id": "doordash.screen.dropoff_navigation",
+      "platform_id": "doordash.driver",
+      "priority": 61,
+      "overrideable": true,
+      "branches": [
+        {
+          "target": "NAVIGATION_VIEW_TO_DROP_OFF",
+          "if": { "exists": { "all": [
+            { "hasIdSuffix": "bottom_sheet_task_title" },
+            { "hasTextContaining": "Deliver to" }
+          ]}}
+        },
+        {
+          "target": "NAVIGATION_VIEW_TO_DROP_OFF",
+          "if": { "all": [
+            { "exists": { "all": [
+              { "hasIdSuffix": "bottom_sheet_task_title" },
+              { "hasTextContaining": "Heading to" }
+            ]}},
+            { "exists": { "all": [
+              { "hasIdSuffix": "bottom_sheet_task_arrive_by" },
+              { "hasTextContaining": "Deliver by" }
+            ]}}
+          ]}
+        }
+      ]
+    },
+
+    {
+      "id": "doordash.screen.pickup_arrival",
+      "platform_id": "doordash.driver",
+      "priority": 70,
+      "overrideable": true,
+      "target": "PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE",
+      "if": { "all": [
+        { "exists": { "all": [
+          { "hasIdSuffix": "customer_name_label" },
+          { "hasTextContaining": "Order for" }
+        ]}},
+        { "exists": { "all": [
+          { "hasIdSuffix": "textView_prism_button_title" },
+          { "any": [
+            { "hasTextContaining": "Confirm" },
+            { "hasTextContaining": "Continue" },
+            { "hasTextContaining": "Start" }
+          ]}
+        ]}}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.pickup_pre_arrival",
+      "platform_id": "doordash.driver",
+      "priority": 71,
+      "overrideable": true,
+      "target": "PICKUP_DETAILS_PRE_ARRIVAL",
+      "if": { "all": [
+        { "exists": { "all": [
+          { "hasIdSuffix": "user_name_label" },
+          { "hasTextContaining": "Pickup from" }
+        ]}},
+        { "exists": { "all": [
+          { "hasIdSuffix": "textView_prism_button_title" },
+          { "any": [
+            { "hasText": "Directions" },
+            { "hasText": "Arrived at store" }
+          ]}
+        ]}}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.pickup_shopping",
+      "platform_id": "doordash.driver",
+      "priority": 72,
+      "overrideable": true,
+      "target": "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+      "if": { "all": [
+        { "exists": { "hasText": "Shop and Deliver" } },
+        { "any": [
+          { "exists": { "hasIdSuffix": "tab_layout" } },
+          { "exists": { "hasTextStartsWith": "To shop" } }
+        ]}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.dropoff_pre_arrival",
+      "platform_id": "doordash.driver",
+      "priority": 73,
+      "overrideable": true,
+      "target": "DROPOFF_DETAILS_PRE_ARRIVAL",
+      "if": { "all": [
+        { "exists": { "any": [
+          { "hasTextStartsWith": "Deliver to" },
+          { "hasTextStartsWith": "Heading to" }
+        ]}},
+        { "exists": { "any": [
+          { "hasText": "Directions" },
+          { "hasText": "Continue" },
+          { "hasText": "Complete Delivery" },
+          { "hasText": "Call" },
+          { "hasText": "Message" }
+        ]}}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.schedule",
+      "platform_id": "doordash.driver",
+      "priority": 80,
+      "overrideable": true,
+      "target": "SCHEDULE_VIEW",
+      "if": { "all": [
+        { "exists": { "all": [
+          { "hasText": "Schedule" },
+          { "hasClassName": "android.widget.TextView" }
+        ]}},
+        { "any": [
+          { "exists": { "hasText": "Available" } },
+          { "exists": { "hasText": "Scheduled" } }
+        ]}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.ratings",
+      "platform_id": "doordash.driver",
+      "priority": 90,
+      "overrideable": true,
+      "target": "RATINGS_VIEW",
+      "if": { "allTextContainsAll": ["ratings", "acceptance rate", "completion rate", "overall"] }
+    },
+
+    {
+      "id": "doordash.screen.safety",
+      "platform_id": "doordash.driver",
+      "priority": 91,
+      "overrideable": true,
+      "target": "SAFETY_VIEW",
+      "if": { "allTextContainsAll": ["safedash", "safety tools", "report safety issue", "share your location"] }
+    },
+
+    {
+      "id": "doordash.screen.chat",
+      "platform_id": "doordash.driver",
+      "priority": 92,
+      "overrideable": true,
+      "target": "CHAT_VIEW",
+      "guards": [
+        { "allTextContains": "folder" }
+      ],
+      "if": { "allTextContainsAll": ["dasher", "messages"] }
+    },
+
+    {
+      "id": "doordash.screen.earnings",
+      "platform_id": "doordash.driver",
+      "priority": 93,
+      "overrideable": true,
+      "target": "EARNINGS_VIEW",
+      "if": { "all": [
+        { "allTextContainsAll": ["earnings", "this week"] },
+        { "allTextContainsAny": ["past weeks", "balance", "crimson"] }
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.help",
+      "platform_id": "doordash.driver",
+      "priority": 94,
+      "overrideable": true,
+      "target": "HELP_VIEW",
+      "if": { "allTextContainsAll": [
+        "doordash dasher", "close webview", "safety resources",
+        "additional resources", "chat with support"
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.navigation_generic",
+      "platform_id": "doordash.driver",
+      "priority": 95,
+      "overrideable": true,
+      "target": "NAVIGATION_VIEW",
+      "guards": [
+        { "allTextContains": "accept" },
+        { "allTextContains": "decline" }
+      ],
+      "if": { "all": [
+        { "allTextContainsAll": ["min", "exit"] },
+        { "allTextContainsAny": ["mi", "ft"] }
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.notifications_view",
+      "platform_id": "doordash.driver",
+      "priority": 96,
+      "overrideable": true,
+      "target": "NOTIFICATIONS_VIEW",
+      "guards": [
+        { "allTextContains": "battery" }
+      ],
+      "if": { "allTextContains": "notifications" }
+    },
+
+    {
+      "id": "doordash.screen.promos",
+      "platform_id": "doordash.driver",
+      "priority": 97,
+      "overrideable": true,
+      "target": "PROMOS_VIEW",
+      "if": { "allTextContainsAll": ["navigate up", "promotions"] }
+    },
+
+    {
+      "id": "doordash.screen.pickup_picked_up",
+      "platform_id": "doordash.driver",
+      "priority": 98,
+      "overrideable": true,
+      "target": "PICKUP_DETAILS_PICKED_UP",
+      "if": { "allTextContainsAll": ["confirm pickup", "loading\u2026"] }
+    },
+
+    {
+      "id": "doordash.screen.pickup_post_arrival_multi",
+      "platform_id": "doordash.driver",
+      "priority": 99,
+      "overrideable": true,
+      "target": "PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI",
+      "guards": [
+        { "allTextContains": "confirm at store" },
+        { "allTextContains": "customer" }
+      ],
+      "if": { "allTextContainsAll": [
+        "pick up", "orders", "you have",
+        "orders to pick up at", "pick up each one to continue"
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.pickup_pre_arrival_multi",
+      "platform_id": "doordash.driver",
+      "priority": 100,
+      "overrideable": true,
+      "target": "PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI",
+      "if": { "allTextContainsAll": [
+        "confirm at store", "orders", "you have",
+        "orders to pick up at", "pick up each one to continue"
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.pickup_verify",
+      "platform_id": "doordash.driver",
+      "priority": 101,
+      "overrideable": true,
+      "target": "PICKUP_DETAILS_VERIFY_PICKUP",
+      "guards": [
+        { "allTextContains": "pick up by" }
+      ],
+      "if": { "allTextContainsAll": [
+        "verify order", "order for", "confirm pickup", "can't verify order"
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.on_dash_map",
+      "platform_id": "doordash.driver",
+      "priority": 110,
+      "overrideable": true,
+      "target": "MAIN_MAP_ON_DASH",
+      "guards": [
+        { "exists": { "hasDesc": "Earnings Mode Switcher" } },
+        { "exists": { "any": [
+          { "hasTextContaining": "looking for offers" },
+          { "hasTextContaining": "finding offers" }
+        ]}}
+      ],
+      "if": { "exists": { "hasText": "Return to dash" } }
+    },
+
+    {
+      "id": "doordash.screen.dash_along_the_way",
+      "platform_id": "doordash.driver",
+      "priority": 111,
+      "overrideable": true,
+      "target": "ON_DASH_ALONG_THE_WAY",
+      "if": { "all": [
+        { "exists": { "hasIdSuffix": "navigate_button" } },
+        { "any": [
+          { "exists": { "hasIdSuffix": "bottom_view_info_ctd_v2_title" } },
+          { "exists": { "hasIdSuffix": "bottom_view_info_title" } }
+        ]}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.waiting_for_offer",
+      "platform_id": "doordash.driver",
+      "priority": 120,
+      "overrideable": true,
+      "target": "ON_DASH_MAP_WAITING_FOR_OFFER",
+      "guards": [
+        { "exists": { "hasDesc": "Earnings Mode Switcher" } },
+        { "exists": { "hasText": "Return to dash" } },
+        { "exists": { "hasTextContaining": "look for orders along the way" } }
+      ],
+      "if": { "any": [
+        { "exists": { "hasIdSuffix": "looking_for_order_progress_bar" } },
+        { "exists": { "hasText": "Looking for offers" } },
+        { "all": [
+          { "exists": { "hasTextContaining": "Finding offers" } },
+          { "any": [
+            { "exists": { "hasTextContaining": "Zone offer wait" } },
+            { "exists": { "hasIdSuffix": "running_total_pay" } }
+          ]}
+        ]}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.set_dash_end_time",
+      "platform_id": "doordash.driver",
+      "priority": 130,
+      "overrideable": true,
+      "target": "SET_DASH_END_TIME",
+      "if": { "all": [
+        { "exists": { "hasIdSuffix": "starting_point_name" } },
+        { "any": [
+          { "exists": { "hasTextContaining": "Select end time" } },
+          { "exists": { "hasIdSuffix": "end_time_description" } }
+        ]}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.idle_map",
+      "platform_id": "doordash.driver",
+      "priority": 140,
+      "overrideable": true,
+      "target": "MAIN_MAP_IDLE",
+      "guards": [
+        { "exists": { "hasText": "Return to dash" } },
+        { "exists": { "any": [
+          { "hasTextContaining": "looking for offers" },
+          { "hasTextContaining": "finding offers" }
+        ]}}
+      ],
+      "if": { "all": [
+        { "exists": { "hasDesc": "Earnings Mode Switcher" } },
+        { "exists": { "any": [
+          { "hasIdSuffix": "side_nav_compose_view" },
+          { "hasDesc": "Side Menu" }
+        ]}}
+      ]}
+    },
+
+    {
+      "id": "doordash.screen.dash_summary",
+      "platform_id": "doordash.driver",
+      "priority": 150,
+      "overrideable": true,
+      "target": "DASH_SUMMARY_SCREEN",
+      "if": { "all": [
+        { "exists": { "hasText": "Dash summary" } },
+        { "exists": { "all": [
+          { "hasIdSuffix": "textView_prism_button_title" },
+          { "hasText": "Done" }
+        ]}}
+      ]}
+    }
+
+  ],
+
+  "clicks": [
+
+    {
+      "id": "doordash.click.accept_offer",
+      "platform_id": "doordash.driver",
+      "priority": 10,
+      "overrideable": true,
+      "target": "AcceptOffer",
+      "if": { "hasIdSuffix": "accept_button" }
+    },
+
+    {
+      "id": "doordash.click.decline_offer",
+      "platform_id": "doordash.driver",
+      "priority": 20,
+      "overrideable": true,
+      "target": "DeclineOffer",
+      "if": { "hasText": "Decline offer" }
+    },
+
+    {
+      "id": "doordash.click.arrived_at_store",
+      "platform_id": "doordash.driver",
+      "priority": 30,
+      "overrideable": true,
+      "target": "ArrivedAtStore",
+      "if": { "all": [
+        { "hasIdSuffix": "primary_action_button" },
+        { "any": [
+          { "hasText": "Arrived at store" },
+          { "hasText": "Arrived" }
+        ]}
+      ]}
+    }
+
+  ],
+
+  "notifications": [
+
+    {
+      "id": "doordash.notification.additional_tip",
+      "platform_id": "doordash.driver",
+      "priority": 10,
+      "overrideable": true,
+      "target": "AdditionalTip",
+      "if": { "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)" },
+      "extract": {
+        "amount":      { "fromGroup": 1, "transform": "parseDouble" },
+        "storeName":   { "fromGroup": 2, "transform": "trim" },
+        "deliveredAt": { "fromGroup": 3, "transform": "trim" }
+      }
+    },
+
+    {
+      "id": "doordash.notification.new_order",
+      "platform_id": "doordash.driver",
+      "priority": 20,
+      "overrideable": true,
+      "target": "NewOrder",
+      "if": { "titleContains": "new order" }
+    },
+
+    {
+      "id": "doordash.notification.scheduled_expired",
+      "platform_id": "doordash.driver",
+      "priority": 30,
+      "overrideable": true,
+      "target": "ScheduledDashExpired",
+      "if": { "all": [
+        { "anyFieldContains": "scheduled" },
+        { "anyFieldContains": "expired" }
+      ]}
+    }
+
+  ]
+}

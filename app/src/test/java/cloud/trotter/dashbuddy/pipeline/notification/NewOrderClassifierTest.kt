@@ -2,16 +2,18 @@ package cloud.trotter.dashbuddy.pipeline.notification
 
 import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.mock
 
 /**
  * Regression tests for [NotificationClassifier] → [NotificationInfo.NewOrder].
  */
 class NewOrderClassifierTest {
 
-    private val classifier = NotificationClassifier()
+    private val classifier = NotificationClassifier(mock<JsonRuleInterpreter>())
 
     private fun raw(title: String? = null, text: String? = null) =
         RawNotificationData(
