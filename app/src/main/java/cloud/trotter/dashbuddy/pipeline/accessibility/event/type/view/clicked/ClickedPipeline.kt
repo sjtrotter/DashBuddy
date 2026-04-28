@@ -12,18 +12,15 @@ import javax.inject.Inject
 class ClickedPipeline @Inject constructor(
     private val source: AccessibilitySource,
     private val classifier: ClickClassifier,
-    private val factory: ClickFactory
+    private val factory: ClickFactory,
 ) {
     fun output(): Flow<StateEvent> = source.events
         .filter { it.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED }
+        .filter { it.packageName == "com.doordash.driverapp" }  // drop non-DD clicks
         .mapNotNull { event ->
             val sourceNode = event.source ?: return@mapNotNull null
             val node = sourceNode.toUiNode() ?: return@mapNotNull null
-
-            // Enrich
-            val action = classifier.classify(node)
-
-            // Produce
-            factory.create(node, action)
+            val info = classifier.classify(node)
+            factory.create(node, info)
         }
 }

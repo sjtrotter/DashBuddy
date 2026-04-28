@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.state
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ClickAction
+import cloud.trotter.dashbuddy.domain.model.accessibility.ClickInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -60,7 +60,7 @@ sealed class AppStateV2 {
         val amount: Double?,
         val currentOfferHash: String,
         val currentScreen: Screen,
-        val clickInfo: Pair<Screen, ClickAction>? = null
+        val clickInfo: Pair<Screen, ClickInfo>? = null
     ) : AppStateV2()
 
     data class OnPickup(
