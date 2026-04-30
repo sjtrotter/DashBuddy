@@ -309,3 +309,119 @@ becomes a ruleset shipped via OTA, not a Kotlin glue change shipped via Play
 Store. Transition logic, side effects, and guards remain Kotlin. The
 multi-dimensional state record is the natural long-term endpoint but is not
 required for cross-platform support.
+
+---
+
+## Amendment 2026-04-30 — `mode` is inferred, not declared
+
+The original framing above describes rules as *declaring* `mode` and `flow`
+symmetrically (e.g., "a `DashPausedMatcher` rule sets `mode: paused`"). On
+review, that framing is wrong in a way that matters before any implementation
+begins. This amendment refines it.
+
+### What's wrong with the original framing
+
+A rule observes a screen. It does not *know* the dasher's actual mode. What it
+knows is "screens like this typically appear when the dasher is in mode X" —
+which is an *observation* feeding a *state estimator*, not a state assignment.
+A rule that declares `mode: paused` is conflating "I saw the DashPaused screen"
+with "the dasher is now paused," which the state machine has more context to
+decide (was the dasher mid-leg? did they just tap Resume? is this a stale
+event?).
+
+There is also a redundancy problem: many `flow` values *imply* a `mode`. A
+dasher in `flow: leg:pickup:navigation` is necessarily `mode: online` — the
+only way to be on a pickup leg is to be online. Declaring both in such rules
+is duplicative and creates the possibility of internal contradictions.
+
+### The refined model
+
+- **`flow` is what rules declare.** A screen rule observes a UI; what flow
+  that UI represents is a structural property of the rule. `OFFER_POPUP →
+  flow: offer:presented` is a true statement about the screen and is the
+  primary contribution of `state:` declarations.
+- **`mode` is what the state machine infers.** The state machine integrates
+  flow observations, mode hints (when present), transition history, parsed
+  data, and elapsed time into the actual mode. Most rules contribute no mode
+  information at all.
+- **Some rules carry mode-defining *hints*** when the screen genuinely
+  identifies the mode unambiguously: the DashPaused screen → "implies
+  paused"; the Dash Summary post-dash screen → "implies offline"; a
+  "Resume Dash" button click → "transitioning to online." These are inputs
+  to the state estimator, not assignments. Conflicting observations are
+  noise the integrator handles.
+
+### Updated usage pattern for `state:`
+
+Most rules:
+
+```json5
+state: { flow: "leg:pickup:navigation" }
+```
+
+A small subset of rules — only those whose screens uniquely identify the mode
+in a way that flow alone wouldn't:
+
+```json5
+state: { mode: "paused" }              // DashPaused, mode-only signal
+state: { mode: "offline" }             // Dash Summary post-dash
+state: { mode: "online", flow: "..." } // rare; only when the screen genuinely identifies both unambiguously
+```
+
+Many rules — purely informational screens (settings, help, sensitive screens,
+transient loaders, etc.):
+
+```json5
+// no `state:` field at all
+```
+
+A missing `state:` field means "this rule contributes no state observation."
+The state estimator sees nothing from these events and the dasher's state is
+unchanged. This is the safe default and should be the most common shape.
+
+### Implication for the state machine
+
+The state machine becomes a *state estimator* rather than a state mapper.
+Its responsibilities expand slightly to include:
+
+- Reconciling new `flow` observations against current state (most flow
+  transitions are obvious; some require checking whether they're plausible
+  from the current state).
+- Deriving `mode` from the combination of flow values, occasional mode
+  hints, transition history, and elapsed time since the last mode-defining
+  event.
+- Treating contradictory observations (e.g., a `mode: online` hint while the
+  current estimated mode is `paused`) as signals to investigate — possibly a
+  missed Resume tap, possibly a stale event, possibly a rule bug. Logging
+  the disagreement is a good first response; "trust the latest observation"
+  may be wrong.
+
+This is closer to a sensor-fusion model than a mapping table. It is
+materially better than the original framing because it makes the state
+machine the source of truth for state, with rules contributing only what they
+can legitimately observe.
+
+### Phase B1 implementation impact
+
+The translation layer described in Phase B1 above remains correct in shape,
+but its inputs change:
+
+- **In:** stream of `(flow?, modeHint?, parsedData)` events from rules
+- **Out:** updated `AppStateV2` sealed-class state
+
+The translator now has to do real work — reconcile observations against
+prior state, derive mode from flow when no explicit hint is given, decide
+when to log/ignore contradictions. That work was implicit in the original
+framing (where rules "set" state directly); this amendment makes it explicit
+and gives the state machine the responsibility it always should have had.
+
+### Related issue captured separately
+
+A second concern surfaced in the same conversation — *how does the
+accessibility service know which Android packages to watch when multiple
+platform rulesets are installed?* — is captured in **#217**
+("Accessibility service: user opt-in model for multi-platform watched-package
+configuration") rather than this ADR. It is a runtime / UX concern downstream
+of the multi-platform architecture, not part of the rule format itself, and
+the design (user opt-in per platform, never auto-derived from installed
+rulesets) belongs in its own decision record.
