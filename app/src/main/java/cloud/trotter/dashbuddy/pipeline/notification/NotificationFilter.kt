@@ -13,5 +13,5 @@ import javax.inject.Inject
 class NotificationFilter @Inject constructor() {
 
     fun isRelevant(raw: RawNotificationData): Boolean =
-        raw.packageName == "com.doordash.driverapp"
+        raw.packageName == "com.doordash.driverapp" && raw.isClearable
 }

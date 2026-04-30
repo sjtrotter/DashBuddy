@@ -7,9 +7,9 @@ fun StatusBarNotification.toDomain(): RawNotificationData {
     val extras = this.notification.extras
     return RawNotificationData(
         packageName = this.packageName,
-        title = extras.getString("android.title"),
-        text = extras.getString("android.text"),
-        bigText = extras.getString("android.bigText"),
+        title = extras.getCharSequence("android.title")?.toString(),
+        text = extras.getCharSequence("android.text")?.toString(),
+        bigText = extras.getCharSequence("android.bigText")?.toString(),
         tickerText = this.notification.tickerText?.toString(),
         postTime = this.postTime,
         isClearable = this.isClearable
