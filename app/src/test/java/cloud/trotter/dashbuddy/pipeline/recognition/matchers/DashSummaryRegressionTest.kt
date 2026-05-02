@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashSummaryMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashSummaryParser
@@ -42,9 +42,9 @@ class DashSummaryRegressionTest(filename: String, node: UiNode) :
         val matcher = DashSummaryMatcher()
         val parser = DashSummaryParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.DashSummary
-            assertEquals(Screen.DASH_SUMMARY_SCREEN, info.screen)
+        runTest(matcher, parser) { screen, result ->
+            val info = result as ParsedFields.SessionEndedFields
+            assertEquals(Screen.DASH_SUMMARY_SCREEN, screen)
             println("      Earnings: $${info.totalEarnings}  Offers: ${info.offersAccepted}/${info.offersTotal}")
         }
     }

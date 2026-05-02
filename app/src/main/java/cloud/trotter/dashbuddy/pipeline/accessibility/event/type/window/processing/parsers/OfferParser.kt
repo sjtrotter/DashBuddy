@@ -1,13 +1,13 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
@@ -17,7 +17,7 @@ class OfferParser @Inject constructor() : ScreenParser {
 
     override val targetScreen = Screen.OFFER_POPUP
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         // --- Parse Header (Pay, Distance, Time) ---
         var payAmount: Double? = null
         var distanceMiles: Double? = null
@@ -42,8 +42,8 @@ class OfferParser @Inject constructor() : ScreenParser {
         val dueByTimeMillis = timeText?.let { UtilityFunctions.parseTimeTextToMillis(it) }
 
         if (payAmount == null) {
-            Timber.w("OfferParser: no pay amount found, falling back to Simple.")
-            return ScreenInfo.Simple(targetScreen)
+            Timber.w("OfferParser: no pay amount found, falling back to None.")
+            return ParsedFields.None
         }
 
         // --- Parse Orders ---
@@ -109,6 +109,6 @@ class OfferParser @Inject constructor() : ScreenParser {
             rawExtractedTexts = "ID-Parsed"
         )
         Timber.i("OfferParser: $parsedOffer")
-        return ScreenInfo.Offer(targetScreen, parsedOffer)
+        return ParsedFields.OfferFields(parsedOffer = parsedOffer)
     }
 }

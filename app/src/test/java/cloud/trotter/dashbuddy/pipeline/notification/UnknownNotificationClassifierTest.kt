@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -9,11 +9,11 @@ import org.junit.Test
 import org.mockito.kotlin.mock
 
 /**
- * Regression tests for [NotificationClassifier] → [NotificationInfo.Unknown].
+ * Regression tests for [NotificationClassifier] producing `unknown` intent.
  *
  * These are real notification payloads observed in session logs that have not yet
- * been promoted to a first-class subtype. When a pattern is understood and a new
- * subtype is added, move the corresponding test to that type's test file.
+ * been promoted to a first-class intent type. When a pattern is understood and a new
+ * intent is added, move the corresponding test to that type's test file.
  */
 class UnknownNotificationClassifierTest {
 
@@ -31,45 +31,47 @@ class UnknownNotificationClassifierTest {
         )
 
     @Test
-    fun `all-null notification is Unknown`() {
+    fun `all-null notification is unknown`() {
         val result = classifier.classify(raw())
-        assertTrue(result is NotificationInfo.Unknown)
+        assertEquals("unknown", (result.parsed as ParsedFields.ClickFields).intent)
     }
 
     @Test
-    fun `Unknown preserves raw text for analysis`() {
+    fun `unknown preserves raw text for analysis`() {
         val result = classifier.classify(raw(title = "Peak Pay", text = "\$3 boost in your zone"))
-        val unknown = result as NotificationInfo.Unknown
-        assertTrue(unknown.rawText.isNotBlank())
+        val fields = result.parsed as ParsedFields.ClickFields
+        assertEquals("unknown", fields.intent)
+        assertTrue(fields.nodeText!!.isNotBlank())
     }
 
     @Test
-    fun `peak pay notification is currently Unknown`() {
-        // Not yet classified — add a PeakPayAvailable subtype when observed in more detail
+    fun `peak pay notification is currently unknown`() {
+        // Not yet classified — add a peak_pay intent when observed in more detail
         val result = classifier.classify(raw(title = "Peak Pay", text = "\$3 boost active in your zone"))
-        assertTrue(result is NotificationInfo.Unknown)
+        assertEquals("unknown", (result.parsed as ParsedFields.ClickFields).intent)
     }
 
     @Test
-    fun `generic DoorDash notification is Unknown`() {
+    fun `generic DoorDash notification is unknown`() {
         val result = classifier.classify(raw(title = "DoorDash", text = "Something we haven't seen before"))
-        assertTrue(result is NotificationInfo.Unknown)
+        assertEquals("unknown", (result.parsed as ParsedFields.ClickFields).intent)
     }
 
     @Test
-    fun `transfer notification is currently Unknown`() {
-        // Crimson transfer — not yet classified; captured raw for future TRANSFER_COMPLETE subtype
+    fun `transfer notification is currently unknown`() {
+        // Crimson transfer — not yet classified; captured raw for future transfer intent
         val result = classifier.classify(
             raw(title = "DoorDash", text = "Your \$55.42 transfer was initiated | Visa ████6222")
         )
-        assertTrue(result is NotificationInfo.Unknown)
+        assertEquals("unknown", (result.parsed as ParsedFields.ClickFields).intent)
     }
 
     @Test
-    fun `Unknown raw text joins all non-null fields`() {
+    fun `unknown raw text joins all non-null fields`() {
         val result = classifier.classify(raw(title = "DoorDash", text = "Some text"))
-        val unknown = result as NotificationInfo.Unknown
-        assertTrue(unknown.rawText.contains("DoorDash"))
-        assertTrue(unknown.rawText.contains("Some text"))
+        val fields = result.parsed as ParsedFields.ClickFields
+        assertEquals("unknown", fields.intent)
+        assertTrue(fields.nodeText!!.contains("DoorDash"))
+        assertTrue(fields.nodeText!!.contains("Some text"))
     }
 }

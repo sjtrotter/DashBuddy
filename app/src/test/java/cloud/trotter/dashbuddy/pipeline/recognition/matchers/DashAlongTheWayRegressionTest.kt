@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashAlongTheWayMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashAlongTheWayParser
@@ -42,9 +41,8 @@ class DashAlongTheWayRegressionTest(filename: String, node: UiNode) :
         val matcher = DashAlongTheWayMatcher()
         val parser = DashAlongTheWayParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.WaitingForOffer
-            assertEquals(Screen.ON_DASH_ALONG_THE_WAY, info.screen)
+        runTest(matcher, parser) { screen, _ ->
+            assertEquals(Screen.ON_DASH_ALONG_THE_WAY, screen)
         }
     }
 }

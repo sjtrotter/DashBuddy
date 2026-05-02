@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
@@ -12,7 +12,7 @@ class WaitingForOfferParser @Inject constructor() : ScreenParser {
 
     override val targetScreen = Screen.ON_DASH_MAP_WAITING_FOR_OFFER
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         // New layout ("Finding offers") doesn't expose pay or wait time reliably.
         val isNewLayout = node.findNode {
             it.text?.contains("Finding offers", ignoreCase = true) == true
@@ -37,11 +37,10 @@ class WaitingForOfferParser @Inject constructor() : ScreenParser {
             val currentPay = UtilityFunctions.parseCurrency(payNode?.text)
 
             Timber.d("WaitingForOfferParser: new layout — wait='$waitTimeEstimate', pay=$currentPay")
-            return ScreenInfo.WaitingForOffer(
-                screen = targetScreen,
-                dashPay = currentPay,
+            return ParsedFields.IdleFields(
+                sessionPay = currentPay,
                 waitTimeEstimate = waitTimeEstimate,
-                isHeadingBackToZone = false
+                isHeadingBackToZone = false,
             )
         }
 
@@ -64,11 +63,10 @@ class WaitingForOfferParser @Inject constructor() : ScreenParser {
         val currentPay = UtilityFunctions.parseCurrency(payNode?.text)
 
         Timber.d("WaitingForOfferParser: legacy layout — pay=$currentPay, wait='$waitTime', headingBack=$isHeadingBack")
-        return ScreenInfo.WaitingForOffer(
-            screen = targetScreen,
-            dashPay = currentPay,
+        return ParsedFields.IdleFields(
+            sessionPay = currentPay,
             waitTimeEstimate = waitTime,
-            isHeadingBackToZone = isHeadingBack
+            isHeadingBackToZone = isHeadingBack,
         )
     }
 }

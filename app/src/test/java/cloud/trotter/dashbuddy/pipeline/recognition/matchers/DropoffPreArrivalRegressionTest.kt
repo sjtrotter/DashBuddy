@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DropoffPreArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DropoffPreArrivalParser
@@ -43,11 +43,11 @@ class DropoffPreArrivalRegressionTest(filename: String, node: UiNode) :
         val matcher = DropoffPreArrivalMatcher()
         val parser = DropoffPreArrivalParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.DropoffDetails
-            assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, info.screen)
+        runTest(matcher, parser) { screen, result ->
+            val info = result as ParsedFields.TaskFields
+            assertEquals(Screen.DROPOFF_DETAILS_PRE_ARRIVAL, screen)
             assertNotNull("Customer name hash must be present", info.customerNameHash)
-            println("      Status: ${info.status}  Customer hash: ${info.customerNameHash?.take(8)}...")
+            println("      SubFlow: ${info.subFlow}  Customer hash: ${info.customerNameHash?.take(8)}...")
         }
     }
 }

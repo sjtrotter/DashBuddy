@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
-import cloud.trotter.dashbuddy.state.AppStateV2
+import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,26 +37,25 @@ class BubbleViewModel @Inject constructor(
 
     // Current app state — drives the mode card in the HUD
     val appState = stateManager.state
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppStateV2.Initializing)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppState())
 
-    // Session earnings: carries the last known value forward through states that don't have it
-    // (e.g. OnDelivery and OnPickup don't carry a pay field, but we still want to show
-    // the running session total from the most recent AwaitingOffer or PostDelivery)
-    // Session earnings: carries the last known value forward through states that don't expose pay.
-    // Resets to 0.0 when dashId changes (new dash started) — same signal as odometer.resetSession().
-    // Preserves through PostDash and IdleOffline so a SessionSummary snapshot can read both
-    // earnings and miles before the new dash wipes them.
+    // Session earnings: carries the last known value forward through states
+    // that don't have it. Resets when session changes.
     val sessionEarnings = stateManager.state
-        .scan(Pair<String?, Double>(null, 0.0)) { (lastDashId, lastKnown), state ->
-            val isNewDash = state.dashId != null && state.dashId != lastDashId && lastDashId != null
+        .scan(Pair<String?, Double>(null, 0.0)) { (lastSessionId, lastKnown), state ->
+            val dd = state.regions.platforms[Platform.DoorDash]
+            val session = dd?.session
+            val sessionId = session?.sessionId
+            val isNewSession = sessionId != null && sessionId != lastSessionId && lastSessionId != null
             val earnings = when {
-                isNewDash -> 0.0
-                state is AppStateV2.AwaitingOffer -> state.currentSessionPay ?: lastKnown
-                state is AppStateV2.PostDelivery  -> if (state.totalPay > 0) state.totalPay else lastKnown
-                state is AppStateV2.PostDash      -> state.totalEarnings
+                isNewSession -> 0.0
+                session != null -> {
+                    val running = session.runningEarnings
+                    if (running > 0) running else lastKnown
+                }
                 else -> lastKnown
             }
-            Pair(state.dashId ?: lastDashId, earnings)
+            Pair(sessionId ?: lastSessionId, earnings)
         }
         .map { it.second }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
@@ -72,23 +74,25 @@ class BubbleViewModel @Inject constructor(
     val sessionMiles = odometerRepository.sessionMilesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    // Snapshot of the last completed dash — populated when PostDash is seen, persists through idle.
-    // Miles are captured at that moment before the odometer resets on the next session.
+    // Snapshot of the last completed dash — populated when session ends,
+    // persists through idle.
     val lastSessionSummary = combine(stateManager.state, odometerRepository.sessionMilesFlow) { state, miles ->
         state to miles
     }
         .scan(null as SessionSummary?) { last, (state, miles) ->
-            if (state is AppStateV2.PostDash) {
+            val dd = state.regions.platforms[Platform.DoorDash]
+            val session = dd?.session
+            // Capture summary when flow is SessionEnded
+            if (state.regions.flow.flow == Flow.SessionEnded && session != null) {
                 SessionSummary(
-                    earnings = state.totalEarnings,
+                    earnings = session.runningEarnings,
                     miles = miles,
-                    durationMillis = state.durationMillis,
-                    acceptanceRate = state.acceptanceRateForSession
+                    durationMillis = System.currentTimeMillis() - session.startedAt,
+                    acceptanceRate = "" // will populate from SessionEndedFields later
                 )
             } else {
                 last
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
 }

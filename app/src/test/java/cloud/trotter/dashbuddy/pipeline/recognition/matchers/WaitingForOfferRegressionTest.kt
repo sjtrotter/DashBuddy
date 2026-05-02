@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.WaitingForOfferMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.WaitingForOfferParser
@@ -42,9 +41,8 @@ class WaitingForOfferRegressionTest(filename: String, node: UiNode) :
         val matcher = WaitingForOfferMatcher()
         val parser = WaitingForOfferParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.WaitingForOffer
-            assertEquals(Screen.ON_DASH_MAP_WAITING_FOR_OFFER, info.screen)
+        runTest(matcher, parser) { screen, _ ->
+            assertEquals(Screen.ON_DASH_MAP_WAITING_FOR_OFFER, screen)
         }
     }
 }

@@ -6,8 +6,10 @@ import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
-import cloud.trotter.dashbuddy.state.AppStateV2
-import cloud.trotter.dashbuddy.state.AppStateV2.Initializing.isActive
+import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,21 +29,20 @@ class DashboardViewModel @Inject constructor(
     private val bubbleManager: BubbleManager,
 ) : AndroidViewModel(application) {
 
-    // --- STATE OBSERVABLES (Read Only) ---
-
-    // 1. Am I Dashing? (Used to change UI color/status)
-    // We derive this purely from the current AppState.
+    // 1. Am I Dashing?
     val isDashing: StateFlow<Boolean> = stateManager.state
-        .map { it.isActive }
+        .map { state ->
+            val dd = state.regions.platforms[Platform.DoorDash]
+            dd != null && dd.mode != Mode.Offline
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    // 2. Current Status Text (e.g. "Looking for offers...", "On Delivery")
+    // 2. Current Status Text
     val statusText: StateFlow<String> = stateManager.state
         .map { state -> getStatusText(state) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Offline")
 
-    // 3. Session Miles (Formatted String)
-    // Listens to your new OdometerRepository session flow
+    // 3. Session Miles
     val sessionMiles: StateFlow<String> = odometerRepository.sessionMeters
         .map { meters ->
             val miles = meters * 0.000621371
@@ -52,8 +53,6 @@ class DashboardViewModel @Inject constructor(
     // 4. First Run Check
     val isFirstRun: StateFlow<Boolean> = appStateRepository.isFirstRun
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    // --- ACTIONS ---
 
     fun completeSetup() = viewModelScope.launch {
         appStateRepository.setFirstRunComplete()
@@ -67,20 +66,25 @@ class DashboardViewModel @Inject constructor(
         )
     }
 
-    private fun getStatusText(state: AppStateV2): String {
-        return when (state) {
-            is AppStateV2.IdleOffline -> "Ready to Dash"
-            is AppStateV2.Initializing -> "Starting..."
-            is AppStateV2.PostDash -> "Dash Complete"
+    private fun getStatusText(state: AppState): String {
+        val dd = state.regions.platforms[Platform.DoorDash]
+        val flow = state.regions.flow.flow
 
-            // Active States
-            is AppStateV2.AwaitingOffer -> "Looking for offers..."
-            is AppStateV2.OfferPresented -> "Reviewing Offer"
-            is AppStateV2.OnPickup -> "Heading to Pickup"
-            is AppStateV2.OnDelivery -> "Heading to Drop-off"
-            is AppStateV2.PostDelivery -> "Delivery Complete"
-            is AppStateV2.DashPaused -> "Paused"
-            is AppStateV2.PausedOrInterrupted -> "Interrupted"
+        if (dd == null || dd.mode == Mode.Offline) {
+            return when (flow) {
+                Flow.SessionEnded -> "Dash Complete"
+                else -> "Ready to Dash"
+            }
+        }
+        if (dd.mode == Mode.Paused) return "Paused"
+
+        return when (flow) {
+            Flow.Idle -> "Looking for offers..."
+            Flow.OfferPresented -> "Reviewing Offer"
+            Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> "Heading to Pickup"
+            Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> "Heading to Drop-off"
+            Flow.PostTask -> "Delivery Complete"
+            Flow.SessionEnded -> "Dash Complete"
         }
     }
 }

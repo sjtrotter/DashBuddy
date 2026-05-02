@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SetDashEndTimeMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.SetDashEndTimeParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -85,7 +85,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses zone name from starting_point_name node`() {
         val root = LogToUiNodeParser.parseLog(setEndTimeLog)!!
-        val result = parser.parse(root) as ScreenInfo.IdleMap
+        val result = parser.parse(root) as ParsedFields.IdleFields
 
         assertEquals("TX: Leon Valley", result.zoneName)
     }
@@ -93,8 +93,8 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `dash type is always null on this screen`() {
         val root = LogToUiNodeParser.parseLog(setEndTimeLog)!!
-        val result = parser.parse(root) as ScreenInfo.IdleMap
+        val result = parser.parse(root) as ParsedFields.IdleFields
 
-        assertNull("DashType toggle not visible on this screen", result.dashType)
+        assertNull("SessionType toggle not visible on this screen", result.sessionType)
     }
 }

@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SetDashEndTimeMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.SetDashEndTimeParser
@@ -42,9 +42,9 @@ class SetDashEndTimeRegressionTest(filename: String, node: UiNode) :
         val matcher = SetDashEndTimeMatcher()
         val parser = SetDashEndTimeParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.IdleMap
-            assertEquals(Screen.SET_DASH_END_TIME, info.screen)
+        runTest(matcher, parser) { screen, result ->
+            val info = result as ParsedFields.IdleFields
+            assertEquals(Screen.SET_DASH_END_TIME, screen)
             println("      Zone: ${info.zoneName}")
         }
     }

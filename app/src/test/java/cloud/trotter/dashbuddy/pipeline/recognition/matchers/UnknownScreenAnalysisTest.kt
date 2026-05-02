@@ -3,7 +3,6 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
 import cloud.trotter.dashbuddy.test.util.TestParserFactory
@@ -53,18 +52,15 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
 
         // --- STEP 1: VALIDATION (Real Production Logic) ---
         // We ask the actual ScreenRecognizer what it thinks this is.
-        val identification = recognizer.identify(myNode)
+        val observation = recognizer.classify(myNode)
+        val identifiedScreen = observation.target
+            ?.let { runCatching { Screen.valueOf(it) }.getOrNull() }
+            ?: Screen.UNKNOWN
 
-        // If it returns anything OTHER than Simple(Screen.UNKNOWN), we have a problem.
-        if (identification !is ScreenInfo.Simple || identification.screen != Screen.UNKNOWN) {
-            val matchedType = if (identification is ScreenInfo.Simple) {
-                identification.screen.name
-            } else {
-                identification::class.simpleName
-            }
-
+        // If it returns anything OTHER than UNKNOWN, we have a problem.
+        if (identifiedScreen != Screen.UNKNOWN) {
             val msg = "❌ VALIDATION FAILED: This screen is NOT unknown!\n" +
-                    "   It was matched as: $matchedType\n" +
+                    "   It was matched as: ${identifiedScreen.name}\n" +
                     "   Action: Move this file to the correct regression folder."
             println(msg)
             fail(msg)

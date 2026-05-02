@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DropoffPreArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DropoffPreArrivalParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -132,39 +132,39 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is NAVIGATING when Directions button is present`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(DropoffStatus.NAVIGATING, result.status)
+        assertEquals(TaskSubFlow.NAVIGATION, result.subFlow)
     }
 
     @Test
     fun `status is ARRIVED when Continue button is present`() {
         val root = LogToUiNodeParser.parseLog(arrivedContinueLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(DropoffStatus.ARRIVED, result.status)
+        assertEquals(TaskSubFlow.ARRIVED, result.subFlow)
     }
 
     @Test
     fun `status is ARRIVED when Complete Delivery button is present`() {
         val root = LogToUiNodeParser.parseLog(completeDeliveryLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(DropoffStatus.ARRIVED, result.status)
+        assertEquals(TaskSubFlow.ARRIVED, result.subFlow)
     }
 
     @Test
-    fun `status is UNKNOWN when only contact buttons present`() {
+    fun `subFlow is NAVIGATION when only contact buttons present`() {
         val root = LogToUiNodeParser.parseLog(contactOnlyLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(DropoffStatus.UNKNOWN, result.status)
+        assertEquals(TaskSubFlow.NAVIGATION, result.subFlow)
     }
 
     @Test
     fun `hashes customer name extracted from Deliver to header`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         // "Sam H" extracted from "Deliver to Sam H" — verified as SHA-256
         assertNotNull("Customer name hash should not be null", result.customerNameHash)
@@ -174,7 +174,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `address hash is always null (unstable IDs, not extracted)`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertNull("Address hash is explicitly null (unstable IDs)", result.customerAddressHash)
     }

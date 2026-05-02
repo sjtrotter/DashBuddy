@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -9,7 +9,7 @@ import org.junit.Test
 import org.mockito.kotlin.mock
 
 /**
- * Regression tests for [NotificationClassifier] → [NotificationInfo.ScheduledDashExpired].
+ * Regression tests for [NotificationClassifier] producing `scheduled_dash_expired` intent.
  */
 class ScheduledDashExpiredClassifierTest {
 
@@ -31,7 +31,7 @@ class ScheduledDashExpiredClassifierTest {
         val result = classifier.classify(
             raw(title = "Scheduled Dash", text = "Your scheduled dash has expired")
         )
-        assertEquals(NotificationInfo.ScheduledDashExpired, result)
+        assertEquals("scheduled_dash_expired", (result.parsed as ParsedFields.ClickFields).intent)
     }
 
     @Test
@@ -39,7 +39,7 @@ class ScheduledDashExpiredClassifierTest {
         val result = classifier.classify(
             raw(title = "DoorDash", text = "The scheduled dash you booked has expired")
         )
-        assertEquals(NotificationInfo.ScheduledDashExpired, result)
+        assertEquals("scheduled_dash_expired", (result.parsed as ParsedFields.ClickFields).intent)
     }
 
     @Test
@@ -47,7 +47,7 @@ class ScheduledDashExpiredClassifierTest {
         val result = classifier.classify(
             raw(title = "SCHEDULED DASH", text = "EXPIRED")
         )
-        assertEquals(NotificationInfo.ScheduledDashExpired, result)
+        assertEquals("scheduled_dash_expired", (result.parsed as ParsedFields.ClickFields).intent)
     }
 
     @Test
@@ -55,7 +55,7 @@ class ScheduledDashExpiredClassifierTest {
         val result = classifier.classify(
             raw(title = "Scheduled Dash", text = "Your scheduled dash starts in 15 minutes")
         )
-        assertTrue(result !is NotificationInfo.ScheduledDashExpired)
+        assertTrue((result.parsed as ParsedFields.ClickFields).intent != "scheduled_dash_expired")
     }
 
     @Test
@@ -63,6 +63,6 @@ class ScheduledDashExpiredClassifierTest {
         val result = classifier.classify(
             raw(title = "DoorDash", text = "Your promo has expired")
         )
-        assertTrue(result !is NotificationInfo.ScheduledDashExpired)
+        assertTrue((result.parsed as ParsedFields.ClickFields).intent != "scheduled_dash_expired")
     }
 }

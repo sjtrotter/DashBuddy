@@ -2,9 +2,10 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
@@ -14,7 +15,7 @@ class DropoffPreArrivalParser @Inject constructor() : ScreenParser {
 
     override val targetScreen = Screen.DROPOFF_DETAILS_PRE_ARRIVAL
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         val deliverToNode = node.findNode {
             it.text?.startsWith("Deliver to", ignoreCase = true) == true ||
                 it.text?.startsWith("Heading to", ignoreCase = true) == true
@@ -48,22 +49,22 @@ class DropoffPreArrivalParser @Inject constructor() : ScreenParser {
         val rawAddress = listOfNotNull(addr1, addr2).filter { it.isNotBlank() }.joinToString(", ")
         val addressHash = rawAddress.ifBlank { null }?.let { UtilityFunctions.generateSha256(it) }
 
-        val status = when {
-            node.findNode { it.text.equals("Directions", true) } != null -> DropoffStatus.NAVIGATING
+        // Determine subFlow from button text.
+        val subFlow = when {
             node.findNode {
                 it.text.equals("Continue", true) || it.text.equals("Complete Delivery", true)
-            } != null -> DropoffStatus.ARRIVED
-            else -> DropoffStatus.UNKNOWN
+            } != null -> TaskSubFlow.ARRIVED
+            else -> TaskSubFlow.NAVIGATION
         }
 
-        Timber.d("DropoffPreArrival: deadline='$deadlineText', address='$rawAddress', status=$status")
+        Timber.d("DropoffPreArrival: deadline='$deadlineText', address='$rawAddress', subFlow=$subFlow")
 
-        return ScreenInfo.DropoffDetails(
-            screen = targetScreen,
+        return ParsedFields.TaskFields(
+            phase = TaskPhase.DROPOFF,
+            subFlow = subFlow,
             customerNameHash = customerHash,
             customerAddressHash = addressHash,
             deadline = deadline,
-            status = status
         )
     }
 }

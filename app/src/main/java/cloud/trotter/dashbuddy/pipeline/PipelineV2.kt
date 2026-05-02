@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline
 
+import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.pipeline.accessibility.AccessibilityPipeline
 import cloud.trotter.dashbuddy.pipeline.notification.NotificationPipeline
-import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -13,11 +13,12 @@ import javax.inject.Singleton
 @Singleton
 class PipelineV2 @Inject constructor(
     accessibilityPipeline: AccessibilityPipeline,
-    notificationPipeline: NotificationPipeline
+    notificationPipeline: NotificationPipeline,
 ) {
+    // Both sub-pipelines now emit Observation subtypes, which extend StateEvent.
     val events: Flow<StateEvent> = merge(
         accessibilityPipeline.output(),
-        notificationPipeline.output()
+        notificationPipeline.output(),
     )
         .flowOn(Dispatchers.Default)
 }

@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
-import cloud.trotter.dashbuddy.domain.model.state.StateEvent
+import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.pipeline.notification.input.NotificationSource
 import cloud.trotter.dashbuddy.pipeline.notification.mapper.toDomain
 import kotlinx.coroutines.flow.Flow
@@ -8,16 +9,28 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import javax.inject.Inject
+import javax.inject.Singleton
 
+/**
+ * Notification sub-pipe: maps StatusBarNotification → classified observation.
+ */
+@Singleton
 class NotificationPipeline @Inject constructor(
     private val source: NotificationSource,
     private val filter: NotificationFilter,
     private val classifier: NotificationClassifier,
-    private val factory: NotificationFactory,
+    private val captureBus: CaptureBus,
 ) {
-    fun output(): Flow<StateEvent> = source.events
-        .mapNotNull { sbn -> sbn.toDomain() }          // StatusBarNotification → RawNotificationData
-        .filter { raw -> filter.isRelevant(raw) }       // package guard
-        .map { raw -> raw to classifier.classify(raw) } // classify: RawNotificationData → NotificationInfo
-        .map { (raw, info) -> factory.create(raw, info) } // produce NotificationEvent
+    companion object {
+        const val PIPELINE_ID = "notification"
+    }
+
+    fun output(): Flow<Observation.Notification> = source.events
+        .mapNotNull { sbn -> sbn.toDomain() }
+        .filter { raw -> filter.isRelevant(raw) }
+        .map { raw ->
+            val obs = classifier.classify(raw).copy(timestamp = raw.postTime)
+            captureBus.offer(PIPELINE_ID, raw, obs.target)
+            obs
+        }
 }

@@ -20,8 +20,4 @@ annotation class OdometerPreferences
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
-annotation class StateRecoveryPreferences
-
-@Qualifier
-@Retention(AnnotationRetention.BINARY)
 annotation class StrategyPreferences

@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.core.data.pay.PayParser
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DeliverySummaryMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DeliverySummaryParser
@@ -42,9 +42,9 @@ class DeliverySummaryExpandedRegressionTest(filename: String, node: UiNode) :
         val matcher = DeliverySummaryMatcher()
         val parser = DeliverySummaryParser(PayParser())
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.DeliverySummary
-            assertNotNull("Result should be DeliverySummary", info)
+        runTest(matcher, parser) { _, result ->
+            val info = result as ParsedFields.PostTaskFields
+            assertNotNull("Result should be PostTaskFields", info)
         }
     }
 }

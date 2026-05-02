@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.di
 
+import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
+import cloud.trotter.dashbuddy.core.data.capture.DiskCaptureBus
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.AppStartupMatcher
@@ -60,6 +62,13 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class PipelineModule {
+
+    // =========================================================================
+    // CAPTURE
+    // =========================================================================
+
+    @Binds @Singleton
+    abstract fun bindCaptureBus(impl: DiskCaptureBus): CaptureBus
 
     // =========================================================================
     // MATCHERS

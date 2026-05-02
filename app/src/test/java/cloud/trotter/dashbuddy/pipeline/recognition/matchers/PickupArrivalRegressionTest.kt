@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupArrivalParser
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
@@ -43,10 +43,10 @@ class PickupArrivalRegressionTest(filename: String, node: UiNode) :
         val matcher = PickupArrivalMatcher()
         val parser = PickupArrivalParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.PickupDetails
-            assertEquals(Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE, info.screen)
-            assertEquals("Status should always be ARRIVED", PickupStatus.ARRIVED, info.status)
+        runTest(matcher, parser) { screen, result ->
+            val info = result as ParsedFields.TaskFields
+            assertEquals(Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE, screen)
+            assertEquals("SubFlow should always be ARRIVED", TaskSubFlow.ARRIVED, info.subFlow)
             println("      Store: ${info.storeName}  Customer hash: ${info.customerNameHash?.take(8)}...")
         }
     }

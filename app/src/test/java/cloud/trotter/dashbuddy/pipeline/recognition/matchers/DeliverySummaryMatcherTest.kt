@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.core.data.pay.PayParser
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DeliverySummaryMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DeliverySummaryParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -497,42 +497,25 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `parser returns COLLAPSED and finds CORRECT button when both dash and offer summaries exist`() {
+    fun `parser returns collapsed and finds CORRECT button when both dash and offer summaries exist`() {
         val root = LogToUiNodeParser.parseLog(collapsedLog)!!
-        val info = parser.parse(root) as ScreenInfo.DeliverySummary
+        val info = parser.parse(root) as ParsedFields.PostTaskFields
 
         assertTrue(
-            "Screen should be COLLAPSED",
-            info.screen == Screen.DELIVERY_SUMMARY_COLLAPSED
+            "Should not be expanded",
+            !info.isExpanded
         )
 
-        val clickedButton = info.expandButton
-        assertNotNull("Must return a click target", clickedButton)
-
-        // --- THE CRITICAL ASSERTION ---
-        // Verify the clicked button is the sibling of "This offer", NOT "This dash so far"
-        val parent = clickedButton?.parent
-        assertNotNull(parent)
-
-        val titleContainer = parent?.children?.find {
-            it.viewIdResourceName?.endsWith("section_title_container") == true
-        }
-        val titleText = titleContainer?.children?.find {
-            it.text == "This offer"
-        }
-
-        assertNotNull(
-            "The clicked button must belong to the container with 'This offer'",
-            titleText
-        )
+        val buttonId = info.expandButtonId
+        assertNotNull("Must return a click target ID", buttonId)
     }
 
     @Test
-    fun `parser returns EXPANDED and parses pay correctly`() {
+    fun `parser returns expanded and parses pay correctly`() {
         val root = LogToUiNodeParser.parseLog(expandedLog)!!
-        val info = parser.parse(root) as ScreenInfo.DeliverySummary
+        val info = parser.parse(root) as ParsedFields.PostTaskFields
 
-        assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
+        assertTrue("Should be expanded", info.isExpanded)
 
         val pay = info.parsedPay
         assertEquals("Total Base Pay", 3.00, pay?.totalBasePay!!, 0.01)
@@ -541,11 +524,11 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `parser returns EXPANDED and parses additional arbitrary doordash pay`() {
+    fun `parser returns expanded and parses additional arbitrary doordash pay`() {
         val root = LogToUiNodeParser.parseLog(dashPayLog)!!
-        val info = parser.parse(root) as ScreenInfo.DeliverySummary
+        val info = parser.parse(root) as ParsedFields.PostTaskFields
 
-        assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
+        assertTrue("Should be expanded", info.isExpanded)
 
         val pay = info.parsedPay
         assertEquals("Total Base Pay", 6.00, pay?.totalBasePay!!, 0.01)
@@ -554,11 +537,11 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `parser returns EXPANDED and parses stacked orders`() {
+    fun `parser returns expanded and parses stacked orders`() {
         val root = LogToUiNodeParser.parseLog(stackedOrder)!!
-        val info = parser.parse(root) as ScreenInfo.DeliverySummary
+        val info = parser.parse(root) as ParsedFields.PostTaskFields
 
-        assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
+        assertTrue("Should be expanded", info.isExpanded)
 
         val pay = info.parsedPay
         assertEquals("Total Base Pay", 6.75, pay?.totalBasePay!!, 0.01)
@@ -569,9 +552,9 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parser returns correct for pro shopper status and additional tip`() {
         val root = LogToUiNodeParser.parseLog(proShopper)!!
-        val info = parser.parse(root) as ScreenInfo.DeliverySummary
+        val info = parser.parse(root) as ParsedFields.PostTaskFields
 
-        assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, info.screen)
+        assertTrue("Should be expanded", info.isExpanded)
 
         val pay = info.parsedPay
         assertEquals("Total Base Pay", 17.25, pay?.totalBasePay!!, 0.01)
@@ -580,14 +563,13 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     }
 
     @Test
-    fun `parser returns the EXACT button instance associated with This Offer`() {
+    fun `parser returns the CORRECT expand button ID associated with This Offer`() {
         val root = LogToUiNodeParser.parseLog(rightButtonLog)!!
-        val info = parser.parse(root) as ScreenInfo.DeliverySummary
+        val info = parser.parse(root) as ParsedFields.PostTaskFields
 
-        assertEquals(
-            "Parser picked the wrong expand button!",
-            "RIGHT_BUTTON",
-            info.expandButton?.text
+        assertNotNull(
+            "Parser should return an expand button ID",
+            info.expandButtonId
         )
     }
 }

@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashAlongTheWayMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashAlongTheWayParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -88,10 +88,10 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parsed result is WaitingForOffer with isHeadingBackToZone false`() {
         val root = LogToUiNodeParser.parseLog(alongTheWayLog)!!
-        val result = parser.parse(root) as ScreenInfo.WaitingForOffer
+        val result = parser.parse(root) as ParsedFields.IdleFields
 
         assertFalse("Along the way is forward navigation, not heading back", result.isHeadingBackToZone)
-        assertNull("Pay not available on this screen", result.dashPay)
+        assertNull("Pay not available on this screen", result.sessionPay)
         assertNull("Spot save text moves to spotSaveDeadline, not waitTimeEstimate", result.waitTimeEstimate)
         assertNotNull("Spot save deadline parsed from bottom_view_info_title", result.spotSaveDeadline)
     }

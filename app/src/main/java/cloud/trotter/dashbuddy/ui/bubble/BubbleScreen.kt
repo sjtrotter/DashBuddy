@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
@@ -62,8 +61,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
-import cloud.trotter.dashbuddy.state.AppStateV2
+import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -136,7 +138,7 @@ fun BubbleScreen(
 
 @Composable
 fun DashboardView(
-    appState: AppStateV2,
+    appState: AppState,
     messages: List<ChatMessage>,
     lastSessionSummary: SessionSummary?,
     onOpenChat: () -> Unit
@@ -158,7 +160,7 @@ fun DashboardView(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun StatusBadgeTitle(appState: AppStateV2) {
+private fun StatusBadgeTitle(appState: AppState) {
     val (badgeText, badgeColor) = statusBadge(appState)
     Surface(
         shape = RoundedCornerShape(4.dp),
@@ -180,14 +182,13 @@ private fun StatusBadgeTitle(appState: AppStateV2) {
 
 @Composable
 private fun SessionMetricsActions(
-    appState: AppStateV2,
+    appState: AppState,
     earnings: Double,
     miles: Double,
     lastSessionSummary: SessionSummary?
 ) {
-    val isActive = appState !is AppStateV2.IdleOffline &&
-            appState !is AppStateV2.Initializing &&
-            appState !is AppStateV2.PostDash
+    val dd = appState.regions.platforms[Platform.DoorDash]
+    val isActive = dd?.mode == Mode.Online || dd?.mode == Mode.Paused
 
     val displayEarnings: Double?
     val displayMiles: Double?
@@ -199,7 +200,7 @@ private fun SessionMetricsActions(
             displayMiles = miles
             dimmed = false
         }
-        appState is AppStateV2.IdleOffline && lastSessionSummary != null -> {
+        dd?.mode == Mode.Offline && lastSessionSummary != null -> {
             displayEarnings = lastSessionSummary.earnings
             displayMiles = lastSessionSummary.miles
             dimmed = true
@@ -236,23 +237,34 @@ private fun SessionMetricsActions(
 }
 
 @Composable
-private fun statusBadge(appState: AppStateV2): Pair<String, Color> {
+private fun statusBadge(appState: AppState): Pair<String, Color> {
     val green = Color(0xFF4CAF50)
     val amber = Color(0xFFFFC107)
     val blue = Color(0xFF2196F3)
     val grey = MaterialTheme.colorScheme.outline
 
-    return when (appState) {
-        is AppStateV2.Initializing -> "STARTING" to grey
-        is AppStateV2.IdleOffline -> "OFFLINE" to grey
-        is AppStateV2.AwaitingOffer -> "WAITING" to green
-        is AppStateV2.OfferPresented -> "OFFER" to blue
-        is AppStateV2.OnPickup -> "PICKUP" to green
-        is AppStateV2.OnDelivery -> "DELIVERING" to green
-        is AppStateV2.PostDelivery -> "DELIVERED" to green
-        is AppStateV2.DashPaused -> "PAUSED" to amber
-        is AppStateV2.PausedOrInterrupted -> "PAUSED" to amber
-        is AppStateV2.PostDash -> "DONE" to grey
+    val dd = appState.regions.platforms[Platform.DoorDash]
+    val flow = appState.regions.flow.flow
+
+    // Mode-driven badges
+    if (dd?.mode == Mode.Paused) return "PAUSED" to amber
+    if (dd == null || dd.mode == Mode.Offline) {
+        return when (flow) {
+            Flow.SessionEnded -> "DONE" to grey
+            else -> "OFFLINE" to grey
+        }
+    }
+
+    // Flow-driven badges (online)
+    return when (flow) {
+        Flow.Idle -> "WAITING" to green
+        Flow.OfferPresented -> "OFFER" to blue
+        Flow.TaskPickupNavigation -> "PICKUP" to green
+        Flow.TaskPickupArrived -> "AT STORE" to green
+        Flow.TaskDropoffNavigation -> "DELIVERING" to green
+        Flow.TaskDropoffArrived -> "AT DOOR" to green
+        Flow.PostTask -> "DELIVERED" to green
+        Flow.SessionEnded -> "DONE" to grey
     }
 }
 
@@ -261,32 +273,42 @@ private fun statusBadge(appState: AppStateV2): Pair<String, Color> {
 // ---------------------------------------------------------------------------
 
 @Composable
-fun ModeCard(appState: AppStateV2, lastSessionSummary: SessionSummary? = null, modifier: Modifier = Modifier) {
+fun ModeCard(appState: AppState, lastSessionSummary: SessionSummary? = null, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.padding(16.dp)) {
-            when (appState) {
-                is AppStateV2.Initializing -> ModeInitializing()
-                is AppStateV2.IdleOffline -> ModeIdle(lastSessionSummary)
-                is AppStateV2.AwaitingOffer -> ModeAwaiting(appState)
-                is AppStateV2.OfferPresented -> ModeOffer(appState)
-                is AppStateV2.OnPickup -> ModePickup(appState)
-                is AppStateV2.OnDelivery -> ModeDelivery(appState)
-                is AppStateV2.PostDelivery -> ModePostDelivery(appState)
-                is AppStateV2.DashPaused -> ModePaused(appState)
-                is AppStateV2.PausedOrInterrupted -> ModePausedOrInterrupted(appState)
-                is AppStateV2.PostDash -> ModePostDash(appState)
+            val dd = appState.regions.platforms[Platform.DoorDash]
+            val flow = appState.regions.flow
+
+            when {
+                // Paused
+                dd?.mode == Mode.Paused -> ModePaused()
+
+                // Offline
+                dd == null || dd.mode == Mode.Offline -> {
+                    when (flow.flow) {
+                        Flow.SessionEnded -> ModePostDash(dd)
+                        else -> ModeIdle(lastSessionSummary)
+                    }
+                }
+
+                // Online — flow-driven
+                else -> when (flow.flow) {
+                    Flow.Idle -> ModeAwaiting(dd)
+                    Flow.OfferPresented -> ModeOffer(flow)
+                    Flow.TaskPickupNavigation,
+                    Flow.TaskPickupArrived -> ModePickup(dd)
+                    Flow.TaskDropoffNavigation,
+                    Flow.TaskDropoffArrived -> ModeDelivery(dd)
+                    Flow.PostTask -> ModePostDelivery(dd)
+                    Flow.SessionEnded -> ModePostDash(dd)
+                }
             }
         }
     }
-}
-
-@Composable
-private fun ModeInitializing() {
-    ModeRow(label = "Status", value = "Waiting to dash!")
 }
 
 @Composable
@@ -314,100 +336,75 @@ private fun ModeIdle(lastSessionSummary: SessionSummary?) {
 }
 
 @Composable
-private fun ModeAwaiting(state: AppStateV2.AwaitingOffer) {
+private fun ModeAwaiting(dd: cloud.trotter.dashbuddy.domain.state.PlatformRegion) {
     val now by rememberNow()
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ModePrimaryText("Waiting for orders")
-        if (state.isHeadingBackToZone) {
-            ModeRow(label = "Heads up", value = "Heading back to zone")
-        }
-        state.waitTimeEstimate?.let {
-            ModeRow(label = "Est. wait", value = it)
-        }
-        state.spotSaveDeadline?.let { deadline ->
-            val remaining = deadline - now
-            if (remaining > 0) {
-                ModeRow(label = "Spot saved", value = formatDuration(remaining))
-            } else {
-                ModeRow(label = "Spot saved", value = "Expired")
-            }
-        }
     }
 }
 
 @Composable
-private fun ModeOffer(state: AppStateV2.OfferPresented) {
+private fun ModeOffer(flow: cloud.trotter.dashbuddy.domain.state.FlowRegion) {
+    val offer = flow.pendingOffer
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        state.merchantName?.let { ModePrimaryText(it) }
-        state.amount?.let { amount ->
-            Text(
-                text = "$${String.format("%.2f", amount)}",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        if (state.merchantName == null && state.amount == null) {
+        if (offer != null) {
+            val merchantName = offer.offerFields.parsedOffer.orders.joinToString(", ") { it.storeName }
+            if (merchantName.isNotBlank()) ModePrimaryText(merchantName)
+            offer.offerFields.parsedOffer.payAmount?.let { amount ->
+                Text(
+                    text = "$${String.format("%.2f", amount)}",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        } else {
             ModePrimaryText("Offer incoming…")
         }
     }
 }
 
 @Composable
-private fun ModePickup(state: AppStateV2.OnPickup) {
+private fun ModePickup(dd: cloud.trotter.dashbuddy.domain.state.PlatformRegion) {
     val now by rememberNow()
+    val task = dd.activeTask
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ModePrimaryText(state.storeName)
+        ModePrimaryText(task?.storeName ?: "Heading to store")
 
-        when (state.status) {
-            PickupStatus.NAVIGATING, PickupStatus.UNKNOWN -> {
-                ModeRow(label = "Status", value = "Heading to store")
-                state.pickupDeadline?.text?.let { ModeRow(label = "Pick up by", value = it) }
-                state.itemCount?.let { ModeRow(label = "Items", value = it.toString()) }
-            }
+        val arrivedAt = task?.arrivedAt
+        if (arrivedAt != null) {
+            // At store — show wait timer
+            val waitMillis = now - arrivedAt
+            val label = if (task.activity == "shopping") "Shopping" else "Waiting"
+            ModeRow(label = label, value = formatDuration(waitMillis))
+        } else {
+            ModeRow(label = "Status", value = "Heading to store")
+        }
 
-            PickupStatus.ARRIVED, PickupStatus.SHOPPING -> {
-                val waitMillis = state.arrivedAt?.let { now - it } ?: 0L
-                ModeRow(
-                    label = if (state.status == PickupStatus.SHOPPING) "Shopping" else "Waiting",
-                    value = formatDuration(waitMillis)
-                )
-                state.pickupDeadline?.text?.let { ModeRow(label = "Pick up by", value = it) }
-                state.itemCount?.let { ModeRow(label = "Items", value = it.toString()) }
-                state.redCardTotal?.let {
-                    ModeRow(label = "Red Card", value = "$${String.format("%.2f", it)}")
-                }
-            }
-
-            PickupStatus.CONFIRMED -> {
-                val elapsed = state.arrivedAt?.let { now - it }
-                ModeRow(label = "Status", value = "Order confirmed")
-                elapsed?.let { ModeRow(label = "Pickup took", value = formatDuration(it)) }
-                state.itemCount?.let { ModeRow(label = "Items", value = it.toString()) }
-            }
+        task?.itemCount?.let { ModeRow(label = "Items", value = it.toString()) }
+        task?.redCardTotal?.let {
+            ModeRow(label = "Red Card", value = "$${String.format("%.2f", it)}")
         }
     }
 }
 
 @Composable
-private fun ModeDelivery(state: AppStateV2.OnDelivery) {
+private fun ModeDelivery(dd: cloud.trotter.dashbuddy.domain.state.PlatformRegion) {
     val now by rememberNow()
+    val task = dd.activeTask
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        state.storeName?.let { ModePrimaryText(it) } ?: ModePrimaryText("Delivering…")
+        val storeName = dd.activeJob?.offerStoreHint?.firstOrNull()
+        storeName?.let { ModePrimaryText(it) } ?: ModePrimaryText("Delivering…")
 
-        state.customerNameHash?.take(6)?.let {
+        task?.customerNameHash?.take(6)?.let {
             ModeRow(label = "Customer", value = "Cust. $it")
         }
 
-        state.deliveryDeadline?.text?.let {
-            ModeRow(label = "Deliver by", value = it)
-        }
-
-        // Wait timer — only shown once GPS-confirmed arrival detected
-        state.arrivedAt?.let { arrivedAt ->
+        // Wait timer — only shown once arrived
+        task?.arrivedAt?.let { arrivedAt ->
             val waitMillis = now - arrivedAt
             ModeRow(label = "At door", value = formatDuration(waitMillis))
         }
@@ -415,70 +412,49 @@ private fun ModeDelivery(state: AppStateV2.OnDelivery) {
 }
 
 @Composable
-private fun ModePostDelivery(state: AppStateV2.PostDelivery) {
+private fun ModePostDelivery(dd: cloud.trotter.dashbuddy.domain.state.PlatformRegion) {
+    val session = dd.session
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        state.parsedPay?.let { pay ->
-            if (pay.total > 0) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "+$${String.format("%.2f", pay.total)}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4CAF50)
-                    )
-                }
-            }
-        }
-        if (state.merchantNames.isNotBlank() && state.merchantNames != "Delivery") {
-            ModeRow(label = "From", value = state.merchantNames)
-        }
-        if (state.summaryText.isNotBlank() && state.summaryText != "Processing…") {
+        if (session != null && session.runningEarnings > 0) {
             Text(
-                text = state.summaryText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "+$${String.format("%.2f", session.runningEarnings)}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF4CAF50)
             )
+        } else {
+            ModePrimaryText("Delivery complete")
         }
     }
 }
 
 @Composable
-private fun ModePaused(state: AppStateV2.DashPaused) {
+private fun ModePaused() {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ModePrimaryText("Dash paused")
-        ModeRow(label = "Paused for", value = formatDuration(state.durationMs))
     }
 }
 
 @Composable
-private fun ModePausedOrInterrupted(state: AppStateV2.PausedOrInterrupted) {
+private fun ModePostDash(dd: cloud.trotter.dashbuddy.domain.state.PlatformRegion?) {
+    val session = dd?.session
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ModePrimaryText("Interrupted")
-        ModeRow(
-            label = "Was",
-            value = state.previousState::class.simpleName?.replace(
-                Regex("([A-Z])"), " $1"
-            )?.trim() ?: "Unknown"
-        )
-    }
-}
-
-@Composable
-private fun ModePostDash(state: AppStateV2.PostDash) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val earnings = session?.runningEarnings ?: 0.0
         Text(
-            text = "$${String.format("%.2f", state.totalEarnings)}",
+            text = "$${String.format("%.2f", earnings)}",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
-        ModeRow(label = "Duration", value = formatDuration(state.durationMillis))
-        ModeRow(label = "Acceptance", value = state.acceptanceRateForSession)
+        session?.let {
+            val durationMillis = System.currentTimeMillis() - it.startedAt
+            ModeRow(label = "Duration", value = formatDuration(durationMillis))
+        }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Latest message ticker — replaces the old Recent Messages card
+// Latest message ticker
 // ---------------------------------------------------------------------------
 
 @Composable

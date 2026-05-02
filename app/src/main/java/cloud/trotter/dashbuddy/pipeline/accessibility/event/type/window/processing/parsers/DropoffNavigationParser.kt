@@ -2,9 +2,10 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
@@ -14,7 +15,7 @@ class DropoffNavigationParser @Inject constructor() : ScreenParser {
 
     override val targetScreen = Screen.NAVIGATION_VIEW_TO_DROP_OFF
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         val titleText = node.findNode {
             it.viewIdResourceName?.endsWith("bottom_sheet_task_title") == true
         }?.text ?: ""
@@ -48,12 +49,12 @@ class DropoffNavigationParser @Inject constructor() : ScreenParser {
         val nameHash = if (rawName.isNotBlank()) UtilityFunctions.generateSha256(rawName) else null
         val addressHash = if (rawAddress.isNotBlank()) UtilityFunctions.generateSha256(rawAddress) else null
 
-        return ScreenInfo.DropoffDetails(
-            screen = targetScreen,
+        return ParsedFields.TaskFields(
+            phase = TaskPhase.DROPOFF,
+            subFlow = TaskSubFlow.NAVIGATION,
             customerNameHash = nameHash,
             customerAddressHash = addressHash,
             deadline = deadline,
-            status = DropoffStatus.NAVIGATING
         )
     }
 }

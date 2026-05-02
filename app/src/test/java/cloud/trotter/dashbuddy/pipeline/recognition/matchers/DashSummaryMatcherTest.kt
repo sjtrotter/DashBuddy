@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashSummaryMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashSummaryParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -131,13 +131,13 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(log1)!!
         assertEquals(Screen.DASH_SUMMARY_SCREEN, matcher.matches(root))
 
-        val info = parser.parse(root) as ScreenInfo.DashSummary
-        assertEquals("Total Pay", 60.41, info.totalEarnings!!, 0.01)
+        val info = parser.parse(root) as ParsedFields.SessionEndedFields
+        assertEquals("Total Pay", 60.41, info.totalEarnings, 0.01)
         assertEquals("Weekly Pay", 151.93, info.weeklyEarnings!!, 0.01)
         assertEquals("Accepted", 6, info.offersAccepted)
         assertEquals("Total Offers", 15, info.offersTotal)
         val expectedMillis = (3 * 3600 * 1000L) + (14 * 60 * 1000L)
-        assertEquals("Duration", expectedMillis, info.onlineDurationMillis)
+        assertEquals("Duration", expectedMillis, info.sessionDurationMillis)
     }
 
     @Test
@@ -145,11 +145,11 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
         val root = LogToUiNodeParser.parseLog(log2)!!
         assertEquals(Screen.DASH_SUMMARY_SCREEN, matcher.matches(root))
 
-        val info = parser.parse(root) as ScreenInfo.DashSummary
-        assertEquals("Total Pay", 42.20, info.totalEarnings!!, 0.01)
+        val info = parser.parse(root) as ParsedFields.SessionEndedFields
+        assertEquals("Total Pay", 42.20, info.totalEarnings, 0.01)
         assertEquals("Accepted", 4, info.offersAccepted)
         assertEquals("Total Offers", 21, info.offersTotal)
         val expectedMillis = (2 * 3600 * 1000L) + (27 * 60 * 1000L)
-        assertEquals("Duration", expectedMillis, info.onlineDurationMillis)
+        assertEquals("Duration", expectedMillis, info.sessionDurationMillis)
     }
 }
