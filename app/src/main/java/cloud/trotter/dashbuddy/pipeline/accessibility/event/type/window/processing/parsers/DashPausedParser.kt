@@ -1,9 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedDuration
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import javax.inject.Inject
 
@@ -11,14 +10,14 @@ class DashPausedParser @Inject constructor() : ScreenParser {
 
     override val targetScreen = Screen.DASH_PAUSED
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         val timeString = node.findNode {
             it.viewIdResourceName?.endsWith("progress_number") == true
         }?.text ?: "35:00"
 
-        return ScreenInfo.DashPaused(
-            screen = targetScreen,
-            remaining = ParsedDuration(timeString, parseTimeString(timeString))
+        return ParsedFields.PausedFields(
+            remainingText = timeString,
+            remainingMillis = parseTimeString(timeString),
         )
     }
 

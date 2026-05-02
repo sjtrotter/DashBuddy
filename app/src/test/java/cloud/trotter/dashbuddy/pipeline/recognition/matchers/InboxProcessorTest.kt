@@ -82,8 +82,10 @@ class InboxProcessorTest(
         printFileLink(INBOX, filename)
 
         // 1. IDENTIFY
-        val identification = recognizer.identify(node)
-        val identifiedScreen = identification.screen
+        val observation = recognizer.classify(node)
+        val identifiedScreen = observation.target
+            ?.let { runCatching { Screen.valueOf(it) }.getOrNull() }
+            ?: Screen.UNKNOWN
 
         // 2. SECURITY SCAN
         val securityReport = SnapshotSecurityScanner.scan(node)

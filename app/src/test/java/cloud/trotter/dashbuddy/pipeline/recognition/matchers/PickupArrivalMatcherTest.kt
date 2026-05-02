@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupArrivalParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -123,15 +123,15 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is always ARRIVED`() {
         val root = LogToUiNodeParser.parseLog(arrivalConfirmLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(PickupStatus.ARRIVED, result.status)
+        assertEquals(TaskSubFlow.ARRIVED, result.subFlow)
     }
 
     @Test
     fun `parses customer name hash from customer_name node`() {
         val root = LogToUiNodeParser.parseLog(arrivalConfirmLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         // Name is hashed — we can only verify it's a 64-char hex SHA-256
         assertNotNull("Customer name hash should not be null", result.customerNameHash)
@@ -141,7 +141,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses store name from instructions_title when not parking instructions`() {
         val root = LogToUiNodeParser.parseLog(arrivalConfirmLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertEquals("Chipotle", result.storeName)
     }
@@ -149,7 +149,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `store name is null when instructions_title contains instructions keyword`() {
         val root = LogToUiNodeParser.parseLog(parkingInstructionsLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertNull("Parking instructions should not be used as store name", result.storeName)
     }
@@ -157,7 +157,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `store name is null when instructions_title is absent`() {
         val root = LogToUiNodeParser.parseLog(arrivalStartLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertNull("Missing instructions_title should result in null store name", result.storeName)
     }

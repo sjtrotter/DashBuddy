@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.WaitingForOfferMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.WaitingForOfferParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -131,27 +131,27 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses wait time and current pay from legacy layout`() {
         val root = LogToUiNodeParser.parseLog(legacyWaitingLog)!!
-        val result = parser.parse(root) as ScreenInfo.WaitingForOffer
+        val result = parser.parse(root) as ParsedFields.IdleFields
 
         assertEquals("Should parse wait time", "2-4 min", result.waitTimeEstimate)
-        assertEquals("Should parse running pay", 12.50, result.dashPay!!, 0.01)
+        assertEquals("Should parse running pay", 12.50, result.sessionPay!!, 0.01)
     }
 
     @Test
     fun `parses heading back to zone flag`() {
         val root = LogToUiNodeParser.parseLog(headingBackLog)!!
-        val result = parser.parse(root) as ScreenInfo.WaitingForOffer
+        val result = parser.parse(root) as ParsedFields.IdleFields
 
         assertEquals("Should detect heading back state", true, result.isHeadingBackToZone)
-        assertEquals("Should parse running pay", 7.25, result.dashPay!!, 0.01)
+        assertEquals("Should parse running pay", 7.25, result.sessionPay!!, 0.01)
     }
 
     @Test
     fun `new layout extracts zone wait estimate and no session pay`() {
         val root = LogToUiNodeParser.parseLog(newLayoutWaitingLog)!!
-        val result = parser.parse(root) as ScreenInfo.WaitingForOffer
+        val result = parser.parse(root) as ParsedFields.IdleFields
 
-        assertNull("Pay volatile in new layout", result.dashPay)
+        assertNull("Pay volatile in new layout", result.sessionPay)
         assertEquals("Zone wait time extracted from sibling", "1-3 min", result.waitTimeEstimate)
     }
 }

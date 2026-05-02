@@ -2,9 +2,10 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
@@ -14,7 +15,7 @@ class PickupArrivalParser @Inject constructor() : ScreenParser {
 
     override val targetScreen = Screen.PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         val rawCustomerName = node.findNode {
             it.viewIdResourceName?.endsWith("customer_name") == true
         }?.text
@@ -52,14 +53,14 @@ class PickupArrivalParser @Inject constructor() : ScreenParser {
         val redCardTotal = UtilityFunctions.parseCurrency(redCardText)
         Timber.d("PickupArrival: deadline='$deadlineText', items=$itemCount, redCard=$redCardTotal")
 
-        return ScreenInfo.PickupDetails(
-            screen = targetScreen,
+        return ParsedFields.TaskFields(
+            phase = TaskPhase.PICKUP,
+            subFlow = TaskSubFlow.ARRIVED,
             storeName = storeNameCandidate,
             customerNameHash = customerHash,
             deadline = deadline,
             itemCount = itemCount,
             redCardTotal = redCardTotal,
-            status = PickupStatus.ARRIVED
         )
     }
 }

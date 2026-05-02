@@ -56,6 +56,13 @@ class JsonRuleInterpreter @Inject constructor(
         try {
             val root = Json.parseToJsonElement(jsonString).jsonObject
 
+            // ADR-0003 seven-step compatibility check
+            val rejection = RulesetLoader.validate(root, source)
+            if (rejection != null) {
+                Timber.e("JsonRuleInterpreter: rejected '$source': $rejection")
+                return
+            }
+
             val screens = root["screens"]?.jsonArray
                 ?.let { RuleCompiler.compileScreenRules(it) }
                 ?: emptyList()

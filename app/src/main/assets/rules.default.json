@@ -1,7 +1,16 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "platform_id": "doordash.driver",
   "min_app_version": "0.230.0",
+  "pipelines": {
+    "accessibility.window": 1,
+    "accessibility.click": 1,
+    "notification": 1
+  },
+  "state_machine": {
+    "api_version_major": 1,
+    "api_version_minor": 0
+  },
 
   "screens": [
 
@@ -34,6 +43,7 @@
       "platform_id": "doordash.driver",
       "priority": 20,
       "overrideable": true,
+      "state": { "flow": "offer:presented", "modeHint": "online" },
       "branches": [
         {
           "target": "OFFER_POPUP_CONFIRM_DECLINE",
@@ -58,6 +68,7 @@
       "priority": 30,
       "overrideable": true,
       "target": "DELIVERY_SUMMARY_EXPANDED",
+      "state": { "flow": "post:task" },
       "guards": [
         { "allTextContains": "pause orders" }
       ],
@@ -73,6 +84,7 @@
       "priority": 31,
       "overrideable": true,
       "target": "DELIVERY_SUMMARY_COLLAPSED",
+      "state": { "flow": "post:task" },
       "guards": [
         { "allTextContains": "pause orders" }
       ],
@@ -110,6 +122,7 @@
       "priority": 50,
       "overrideable": true,
       "target": "DASH_PAUSED",
+      "state": { "modeHint": "paused" },
       "if": { "all": [
         { "exists": { "hasText": "Dash Paused" } },
         { "exists": { "all": [
@@ -126,6 +139,7 @@
       "priority": 60,
       "overrideable": true,
       "target": "NAVIGATION_VIEW_TO_PICK_UP",
+      "state": { "flow": "task:pickup:navigation" },
       "guards": [
         { "exists": { "all": [
           { "hasIdSuffix": "bottom_sheet_task_title" },
@@ -144,6 +158,7 @@
       "platform_id": "doordash.driver",
       "priority": 61,
       "overrideable": true,
+      "state": { "flow": "task:dropoff:navigation" },
       "branches": [
         {
           "target": "NAVIGATION_VIEW_TO_DROP_OFF",
@@ -174,6 +189,7 @@
       "priority": 70,
       "overrideable": true,
       "target": "PICKUP_DETAILS_POST_ARRIVAL_PICKUP_SINGLE",
+      "state": { "flow": "task:pickup:arrived" },
       "if": { "all": [
         { "exists": { "all": [
           { "hasIdSuffix": "customer_name_label" },
@@ -196,6 +212,7 @@
       "priority": 71,
       "overrideable": true,
       "target": "PICKUP_DETAILS_PRE_ARRIVAL",
+      "state": { "flow": "task:pickup:navigation" },
       "if": { "all": [
         { "exists": { "all": [
           { "hasIdSuffix": "user_name_label" },
@@ -217,6 +234,7 @@
       "priority": 72,
       "overrideable": true,
       "target": "PICKUP_DETAILS_POST_ARRIVAL_SHOP",
+      "state": { "flow": "task:pickup:arrived" },
       "if": { "all": [
         { "exists": { "hasText": "Shop and Deliver" } },
         { "any": [
@@ -232,6 +250,7 @@
       "priority": 73,
       "overrideable": true,
       "target": "DROPOFF_DETAILS_PRE_ARRIVAL",
+      "state": { "flow": "task:dropoff:arrived" },
       "if": { "all": [
         { "exists": { "any": [
           { "hasTextStartsWith": "Deliver to" },
@@ -362,6 +381,7 @@
       "priority": 98,
       "overrideable": true,
       "target": "PICKUP_DETAILS_PICKED_UP",
+      "state": { "flow": "task:pickup:arrived" },
       "if": { "allTextContainsAll": ["confirm pickup", "loading\u2026"] }
     },
 
@@ -371,6 +391,7 @@
       "priority": 99,
       "overrideable": true,
       "target": "PICKUP_DETAILS_POST_ARRIVAL_PICKUP_MULTI",
+      "state": { "flow": "task:pickup:arrived" },
       "guards": [
         { "allTextContains": "confirm at store" },
         { "allTextContains": "customer" }
@@ -387,6 +408,7 @@
       "priority": 100,
       "overrideable": true,
       "target": "PICKUP_DETAILS_PRE_ARRIVAL_PICKUP_MULTI",
+      "state": { "flow": "task:pickup:navigation" },
       "if": { "allTextContainsAll": [
         "confirm at store", "orders", "you have",
         "orders to pick up at", "pick up each one to continue"
@@ -399,6 +421,7 @@
       "priority": 101,
       "overrideable": true,
       "target": "PICKUP_DETAILS_VERIFY_PICKUP",
+      "state": { "flow": "task:pickup:arrived" },
       "guards": [
         { "allTextContains": "pick up by" }
       ],
@@ -413,6 +436,7 @@
       "priority": 110,
       "overrideable": true,
       "target": "MAIN_MAP_ON_DASH",
+      "state": { "flow": "idle", "modeHint": "online" },
       "guards": [
         { "exists": { "hasDesc": "Earnings Mode Switcher" } },
         { "exists": { "any": [
@@ -429,6 +453,7 @@
       "priority": 111,
       "overrideable": true,
       "target": "ON_DASH_ALONG_THE_WAY",
+      "state": { "flow": "idle", "modeHint": "online" },
       "if": { "all": [
         { "exists": { "hasIdSuffix": "navigate_button" } },
         { "any": [
@@ -444,6 +469,7 @@
       "priority": 120,
       "overrideable": true,
       "target": "ON_DASH_MAP_WAITING_FOR_OFFER",
+      "state": { "flow": "idle", "modeHint": "online" },
       "guards": [
         { "exists": { "hasDesc": "Earnings Mode Switcher" } },
         { "exists": { "hasText": "Return to dash" } },
@@ -483,6 +509,7 @@
       "priority": 140,
       "overrideable": true,
       "target": "MAIN_MAP_IDLE",
+      "state": { "modeHint": "offline" },
       "guards": [
         { "exists": { "hasText": "Return to dash" } },
         { "exists": { "any": [
@@ -505,6 +532,7 @@
       "priority": 150,
       "overrideable": true,
       "target": "DASH_SUMMARY_SCREEN",
+      "state": { "flow": "session:ended", "modeHint": "offline" },
       "if": { "all": [
         { "exists": { "hasText": "Dash summary" } },
         { "exists": { "all": [

@@ -1,8 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupShoppingMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupShoppingParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -87,7 +86,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `store name is null (not available on shopping screen)`() {
         val root = LogToUiNodeParser.parseLog(shoppingLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         // Store name uses "sticky" logic from previous screen — not parsed here
         assertNull("Store name not available on shopping screen", result.storeName)
@@ -96,8 +95,8 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is SHOPPING`() {
         val root = LogToUiNodeParser.parseLog(shoppingLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(PickupStatus.SHOPPING, result.status)
+        assertEquals("shopping", result.activity)
     }
 }

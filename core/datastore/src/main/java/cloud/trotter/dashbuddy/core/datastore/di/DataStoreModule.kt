@@ -42,12 +42,6 @@ object DataStoreModule {
 
     @Provides
     @Singleton
-    @StateRecoveryPreferences
-    fun provideStateRecoveryDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("state_recovery_prefs") }
-
-    @Provides
-    @Singleton
     @StrategyPreferences
     fun provideStrategyDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("strategy_prefs") }

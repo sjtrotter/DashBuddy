@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DashPausedMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DashPausedParser
@@ -45,12 +45,12 @@ class DashPausedRegressionTest(filename: String, node: UiNode) :
         val matcher = DashPausedMatcher()
         val parser = DashPausedParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.DashPaused
+        runTest(matcher, parser) { _, result ->
+            val info = result as ParsedFields.PausedFields
             val formatted = String.format(
                 "%02d:%02d",
-                TimeUnit.MILLISECONDS.toMinutes(info.remaining.millis),
-                TimeUnit.MILLISECONDS.toSeconds(info.remaining.millis) % 60
+                TimeUnit.MILLISECONDS.toMinutes(info.remainingMillis),
+                TimeUnit.MILLISECONDS.toSeconds(info.remainingMillis) % 60
             )
             println("      (Resume In: $formatted)")
         }

@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupNavigationMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupNavigationParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -90,7 +90,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses store name from Heading to prefix`() {
         val root = LogToUiNodeParser.parseLog(pickupNavLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertEquals("Chipotle", result.storeName)
     }
@@ -98,7 +98,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses full address from address lines`() {
         val root = LogToUiNodeParser.parseLog(pickupNavLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertEquals("123 Main St, Austin, TX 78701", result.storeAddress)
     }
@@ -106,9 +106,9 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is NAVIGATING`() {
         val root = LogToUiNodeParser.parseLog(pickupNavLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(PickupStatus.NAVIGATING, result.status)
+        assertEquals(TaskSubFlow.NAVIGATION, result.subFlow)
     }
 
     @Test
@@ -118,7 +118,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='Heading to Subway', id=bottom_sheet_task_title, state=null, class=android.widget.TextView)
 """.trimIndent()
         val root = LogToUiNodeParser.parseLog(log)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertNull("Address should be null if no address nodes", result.storeAddress)
     }

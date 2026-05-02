@@ -1,10 +1,11 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
+import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import javax.inject.Inject
@@ -13,7 +14,7 @@ class PickupNavigationParser @Inject constructor() : ScreenParser {
 
     override val targetScreen = Screen.NAVIGATION_VIEW_TO_PICK_UP
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         val titleText = node.findNode {
             it.viewIdResourceName?.endsWith("bottom_sheet_task_title") == true
         }?.text ?: ""
@@ -39,12 +40,12 @@ class PickupNavigationParser @Inject constructor() : ScreenParser {
             ParsedTime(UtilityFunctions.stripDeadlinePrefix(it), UtilityFunctions.parseDeadlineMillis(it))
         }
 
-        return ScreenInfo.PickupDetails(
-            screen = targetScreen,
+        return ParsedFields.TaskFields(
+            phase = TaskPhase.PICKUP,
+            subFlow = TaskSubFlow.NAVIGATION,
             storeName = storeName.ifBlank { null },
             storeAddress = fullAddress.ifBlank { null },
             deadline = deadline,
-            status = PickupStatus.NAVIGATING
         )
     }
 }

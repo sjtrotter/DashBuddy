@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import timber.log.Timber
 import javax.inject.Inject
@@ -11,10 +11,8 @@ class RatingsViewParser @Inject constructor() : ScreenParser {
 
     override val targetScreen = Screen.RATINGS_VIEW
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         // Metrics appear as consecutive textView_title / textView_description sibling pairs.
-        // Section headers (e.g. "Your ratings", "Overall", "Shopping") also use textView_title
-        // but have no adjacent textView_description — they are skipped naturally by this loop.
         val metricNodes = node.findNodes {
             it.viewIdResourceName?.endsWith("textView_title") == true ||
                 it.viewIdResourceName?.endsWith("textView_description") == true
@@ -39,8 +37,7 @@ class RatingsViewParser @Inject constructor() : ScreenParser {
 
         Timber.d("RatingsViewParser: extracted ${metrics.size} metric(s): $metrics")
 
-        return ScreenInfo.Ratings(
-            screen = targetScreen,
+        return ParsedFields.RatingsFields(
             acceptanceRate = metrics["Acceptance rate"]?.parsePercent(),
             completionRate = metrics["Completion rate"]?.parsePercent(),
             onTimeRate = metrics["On-time rate"]?.parsePercent(),

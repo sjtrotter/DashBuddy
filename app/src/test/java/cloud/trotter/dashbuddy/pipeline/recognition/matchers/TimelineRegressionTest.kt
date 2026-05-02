@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.TimelineViewMatcher
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
@@ -40,9 +39,8 @@ class TimelineRegressionTest(filename: String, node: UiNode) :
     fun `validate snapshot`() {
         val matcher = TimelineViewMatcher()
 
-        runTest(matcher) { result ->
-            val info = result as ScreenInfo.Simple
-            assertEquals(Screen.TIMELINE_VIEW, info.screen)
+        runTest(matcher) { screen, _ ->
+            assertEquals(Screen.TIMELINE_VIEW, screen)
         }
     }
 }

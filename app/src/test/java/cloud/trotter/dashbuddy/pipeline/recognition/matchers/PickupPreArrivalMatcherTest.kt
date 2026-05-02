@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupPreArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupPreArrivalParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -132,7 +132,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses store name from user_name node`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertEquals("Chipotle", result.storeName)
     }
@@ -140,7 +140,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses full address from address lines`() {
         val root = LogToUiNodeParser.parseLog(preArrivalDirectionsLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertEquals("350 Congress Ave, Austin, TX 78701", result.storeAddress)
     }
@@ -148,15 +148,15 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is always NAVIGATING regardless of button text`() {
         val root = LogToUiNodeParser.parseLog(preArrivalArrivedButtonLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(PickupStatus.NAVIGATING, result.status)
+        assertEquals(TaskSubFlow.NAVIGATION, result.subFlow)
     }
 
     @Test
     fun `skips address line 1 when it duplicates the store name`() {
         val root = LogToUiNodeParser.parseLog(duplicateAddressLog)!!
-        val result = parser.parse(root) as ScreenInfo.PickupDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         // address_line_1 == storeName ("Wendy's"), so only line_2 should appear
         assertEquals("Austin, TX 78704", result.storeAddress)

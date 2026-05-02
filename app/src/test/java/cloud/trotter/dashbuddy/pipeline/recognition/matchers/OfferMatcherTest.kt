@@ -1,10 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.OfferMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.OfferParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -190,7 +189,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     fun `parser returns Simple when pay amount is missing`() {
         val root = LogToUiNodeParser.parseLog(noPayLog)!!
         // Parser returns Simple (not Offer) when payAmount is null — no parseable offer
-        assertTrue("Missing pay should produce Simple result", parser.parse(root) is ScreenInfo.Simple)
+        assertTrue("Missing pay should produce None result", parser.parse(root) is ParsedFields.None)
     }
 
     // --- PARSING TESTS ---
@@ -198,7 +197,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses pay amount from text_field node`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertEquals(7.50, result.parsedOffer.payAmount!!, 0.01)
     }
@@ -206,7 +205,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses distance miles from text_field node`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertEquals(2.8, result.parsedOffer.distanceMiles!!, 0.01)
     }
@@ -214,7 +213,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses due-by time text from Deliver by text_field`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertEquals("8:45 PM", result.parsedOffer.dueByTimeText)
     }
@@ -222,7 +221,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses single order with store name`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertEquals(1, result.parsedOffer.orders.size)
         assertEquals("Chipotle", result.parsedOffer.orders[0].storeName)
@@ -231,7 +230,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses order type as PICKUP when work_unit_type says Pickup`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertEquals(OrderType.PICKUP, result.parsedOffer.orders[0].orderType)
     }
@@ -239,7 +238,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses order type as SHOP_FOR_ITEMS when work_unit_type says Shop for items`() {
         val root = LogToUiNodeParser.parseLog(shopOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertEquals(OrderType.SHOP_FOR_ITEMS, result.parsedOffer.orders[0].orderType)
     }
@@ -247,7 +246,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `parses item count from display_name_secondary for shop order`() {
         val root = LogToUiNodeParser.parseLog(shopOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertEquals(8, result.parsedOffer.orders[0].itemCount)
     }
@@ -255,7 +254,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `expands multi-order into separate ParsedOrders`() {
         val root = LogToUiNodeParser.parseLog(multiOrderOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         // "(2 orders)" -> 2 ParsedOrder entries
         assertEquals(2, result.parsedOffer.orders.size)
@@ -267,7 +266,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `detects Red Card badge on order`() {
         val root = LogToUiNodeParser.parseLog(redCardOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertTrue("Red Card badge should be detected", result.parsedOffer.orders[0].badges.contains(OrderBadge.RED_CARD))
     }
@@ -275,7 +274,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `creates fallback order when no display_name nodes found`() {
         val root = LogToUiNodeParser.parseLog(addToRouteOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         // addToRouteOfferLog has a display_name node, this verifies it parsed correctly
         assertEquals(1, result.parsedOffer.orders.size)
@@ -285,7 +284,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `offer hash is not null or blank`() {
         val root = LogToUiNodeParser.parseLog(singleOrderOfferLog)!!
-        val result = parser.parse(root) as ScreenInfo.Offer
+        val result = parser.parse(root) as ParsedFields.OfferFields
 
         assertTrue("Offer hash should be set", result.parsedOffer.offerHash.isNotBlank())
     }

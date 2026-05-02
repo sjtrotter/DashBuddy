@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.dash.DashType
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.IdleMapMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.IdleMapParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -467,8 +467,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
 
         assertEquals(Screen.MAIN_MAP_IDLE, matcher.matches(root!!))
 
-        val info = parser.parse(root) as ScreenInfo.IdleMap
-        assertEquals(Screen.MAIN_MAP_IDLE, info.screen)
-        assertEquals(DashType.BY_TIME, info.dashType)
+        val info = parser.parse(root) as ParsedFields.IdleFields
+        assertEquals(SessionType.ByTime, info.sessionType)
     }
 }

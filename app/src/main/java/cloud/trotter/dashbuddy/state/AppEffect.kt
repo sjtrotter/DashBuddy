@@ -7,8 +7,19 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutType
 
 sealed class AppEffect {
+
+    /**
+     * Optional idempotency key. When non-null, the effect is checked against
+     * the `effects_fired` table during crash-recovery replay to prevent
+     * duplicate execution. Only effects with observable side effects
+     * (DB writes, notifications) need a key.
+     */
+    open val effectKey: String? get() = null
+
     // 1. Log to Database (The Core of Event Sourcing)
-    data class LogEvent(val event: AppEventEntity) : AppEffect()
+    data class LogEvent(val event: AppEventEntity) : AppEffect() {
+        override val effectKey: String get() = "log:${event.eventType}:${event.occurredAt}"
+    }
 
     // 2. Update UI (The Bubble)
     data class UpdateBubble(
@@ -51,6 +62,8 @@ sealed class AppEffect {
         val effects: List<AppEffect>
     ) : AppEffect()
 
-    data class StartDash(val dashId: String) : AppEffect()
+    data class StartDash(val dashId: String) : AppEffect() {
+        override val effectKey: String get() = "start_dash:$dashId"
+    }
     data object EndDash : AppEffect()
 }

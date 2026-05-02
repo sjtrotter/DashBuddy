@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Mode
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -44,17 +46,22 @@ object RuleCompiler {
         val id = obj["id"]!!.jsonPrimitive.content
         val priority = obj["priority"]!!.jsonPrimitive.int
         val overrideable = obj["overrideable"]?.jsonPrimitive?.booleanOrNull ?: true
+        val (ruleFlow, ruleModeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
 
         val branches: List<CompiledBranch> = if ("branches" in obj) {
-            obj["branches"]!!.jsonArray.map { compileBranch(it.jsonObject) }
+            obj["branches"]!!.jsonArray.map { compileBranch(it.jsonObject, ruleFlow, ruleModeHint) }
         } else {
-            listOf(compileBranch(obj))
+            listOf(compileBranch(obj, ruleFlow, ruleModeHint))
         }
 
-        return CompiledScreenRule(id, priority, overrideable, branches)
+        return CompiledScreenRule(id, priority, overrideable, branches, ruleFlow, ruleModeHint)
     }
 
-    private fun compileBranch(obj: JsonObject): CompiledBranch {
+    private fun compileBranch(
+        obj: JsonObject,
+        ruleFlow: Flow? = null,
+        ruleModeHint: Mode? = null,
+    ): CompiledBranch {
         val targetName = obj["target"]!!.jsonPrimitive.content
         val target = try {
             Screen.valueOf(targetName)
@@ -63,7 +70,13 @@ object RuleCompiler {
         }
         val guards = obj["guards"]?.jsonArray?.map { compileTreePred(it) } ?: emptyList()
         val condition = compileTreePred(obj["if"]!!)
-        return CompiledBranch(target, guards, condition)
+        // Branch-level state: overrides rule-level defaults if present
+        val (branchFlow, branchModeHint) = parseStateBlock(obj["state"] as? JsonObject, "$targetName-branch")
+        return CompiledBranch(
+            target, guards, condition,
+            flow = branchFlow ?: ruleFlow,
+            modeHint = branchModeHint ?: ruleModeHint,
+        )
     }
 
     // ==========================================================================
@@ -79,6 +92,7 @@ object RuleCompiler {
         val overrideable = obj["overrideable"]?.jsonPrimitive?.booleanOrNull ?: true
         val targetName = obj["target"]!!.jsonPrimitive.content
         val condition = compileNodePred(obj["if"]!!)
+        val (flow, modeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
 
         val factory: (UiNode) -> ClickInfo = when (targetName) {
             "AcceptOffer" -> { _ -> ClickInfo.AcceptOffer }
@@ -87,7 +101,7 @@ object RuleCompiler {
             else -> throw RuleCompileException("Unknown click target: '$targetName'")
         }
 
-        return CompiledClickRule(id, priority, overrideable, condition, factory)
+        return CompiledClickRule(id, priority, overrideable, condition, factory, flow, modeHint)
     }
 
     // ==========================================================================
@@ -104,6 +118,7 @@ object RuleCompiler {
         val targetName = obj["target"]!!.jsonPrimitive.content
         val ifJson = obj["if"]
         val extract = obj["extract"] as? JsonObject
+        val (flow, modeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
 
         val classify: (RawNotificationData) -> NotificationInfo? = when {
             targetName == "AdditionalTip" && extract != null ->
@@ -122,7 +137,7 @@ object RuleCompiler {
             else -> throw RuleCompileException("Unknown notification target: '$targetName'")
         }
 
-        return CompiledNotificationRule(id, priority, overrideable, classify)
+        return CompiledNotificationRule(id, priority, overrideable, classify, flow, modeHint)
     }
 
     /**
@@ -454,6 +469,33 @@ object RuleCompiler {
             }
             else -> throw RuleCompileException("Unknown notification predicate key: '$key'")
         }
+    }
+
+    // ==========================================================================
+    //  State block parser (ADR-0005)
+    // ==========================================================================
+
+    /**
+     * Parse a `"state": { "flow": "...", "modeHint": "..." }` block.
+     * Returns (Flow?, Mode?) — both null if no state block present.
+     * Rejects unknown flow/mode values at compile time.
+     */
+    fun parseStateBlock(stateObj: JsonObject?, ruleId: String): Pair<Flow?, Mode?> {
+        if (stateObj == null) return null to null
+
+        val flowStr = stateObj["flow"]?.jsonPrimitive?.content
+        val modeStr = stateObj["modeHint"]?.jsonPrimitive?.content
+            ?: stateObj["mode"]?.jsonPrimitive?.content  // accept "mode" as alias
+
+        val flow = flowStr?.let {
+            Flow.fromWire(it)
+                ?: throw RuleCompileException("Rule '$ruleId': unknown flow value '$it'")
+        }
+        val modeHint = modeStr?.let {
+            Mode.fromWire(it)
+                ?: throw RuleCompileException("Rule '$ruleId': unknown mode value '$it'")
+        }
+        return flow to modeHint
     }
 
     // ==========================================================================

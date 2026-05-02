@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
+import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
@@ -35,6 +37,7 @@ class SideEffectEngine @Inject constructor(
     private val strategyRepository: StrategyRepository,
     private val screenShotHandler: ScreenShotHandler,
     private val uiInteractionHandler: UiInteractionHandler,
+    private val effectsFiredDao: EffectsFiredDao,
 ) {
 
     // 1. OUTPUT STREAM: Events going BACK to the StateMachine (The Loopback)
@@ -50,14 +53,33 @@ class SideEffectEngine @Inject constructor(
     /**
      * Entry point: The StateManager pushes an effect here.
      * We execute it in the provided scope.
+     *
+     * @param recovering When true (crash-recovery replay):
+     *   - External effects (UI, sound, clicks) are suppressed.
+     *   - Keyed effects are checked against `effects_fired` for idempotency.
+     *   - Loopback effects (timers, evaluations) replay deterministically.
      */
-    fun process(effect: AppEffect, scope: CoroutineScope) {
+    fun process(effect: AppEffect, scope: CoroutineScope, recovering: Boolean = false) {
         scope.launch(Dispatchers.Default) {
-            execute(effect, scope)
+            execute(effect, scope, recovering)
         }
     }
 
-    private suspend fun execute(effect: AppEffect, scope: CoroutineScope) {
+    private suspend fun execute(effect: AppEffect, scope: CoroutineScope, recovering: Boolean) {
+        // Idempotency: skip keyed effects already fired
+        val key = effect.effectKey
+        if (key != null && recovering) {
+            if (effectsFiredDao.hasBeenFired(key)) {
+                Timber.d("Skipping already-fired effect: %s", key)
+                return
+            }
+        }
+
+        // Suppress external effects during recovery
+        if (recovering && isExternalEffect(effect)) {
+            Timber.d("Suppressing external effect during recovery: %s", effect::class.simpleName)
+            return
+        }
         when (effect) {
             // --- FIRE & FORGET (UI / IO) ---
             is AppEffect.LogEvent -> {
@@ -137,12 +159,41 @@ class SideEffectEngine @Inject constructor(
 
             is AppEffect.Delayed -> {
                 delay(effect.delayMs)
-                execute(effect.effect, scope) // Recursive
+                execute(effect.effect, scope, recovering)
             }
 
             is AppEffect.SequentialEffect -> {
-                effect.effects.forEach { child -> execute(child, scope) }
+                effect.effects.forEach { child -> execute(child, scope, recovering) }
             }
         }
+
+        // Record keyed effect as fired for idempotency
+        if (key != null) {
+            scope.launch(Dispatchers.IO) {
+                effectsFiredDao.markFired(
+                    EffectsFiredEntity(
+                        effectKey = key,
+                        firedAt = System.currentTimeMillis(),
+                        correlationVersion = 0, // caller can set if needed
+                    )
+                )
+            }
+        }
+    }
+
+    private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
+        is AppEffect.UpdateBubble,
+        is AppEffect.PlayNotificationSound,
+        is AppEffect.CaptureScreenshot,
+        is AppEffect.ClickNode,
+        is AppEffect.StartOdometer,
+        is AppEffect.StopOdometer,
+        is AppEffect.PauseOdometer,
+        is AppEffect.ResumeOdometer,
+        is AppEffect.StartDash,
+        is AppEffect.EndDash,
+        is AppEffect.ProcessTipNotification,
+        -> true
+        else -> false
     }
 }

@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DropoffNavigationMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DropoffNavigationParser
 import cloud.trotter.dashbuddy.test.LogToUiNodeParser
@@ -96,15 +96,15 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `status is NAVIGATING`() {
         val root = LogToUiNodeParser.parseLog(dropoffNavLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
-        assertEquals(DropoffStatus.NAVIGATING, result.status)
+        assertEquals(TaskSubFlow.NAVIGATION, result.subFlow)
     }
 
     @Test
     fun `hashes customer name extracted from Deliver to prefix`() {
         val root = LogToUiNodeParser.parseLog(dropoffNavLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         // Name "John D" extracted from "Deliver to John D" — verified as SHA-256
         assertNotNull("Customer name hash should be present", result.customerNameHash)
@@ -114,7 +114,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `hashes address from address lines`() {
         val root = LogToUiNodeParser.parseLog(dropoffNavLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertNotNull("Address hash should be present when address nodes exist", result.customerAddressHash)
         assertEquals("SHA-256 hash is 64 hex chars", 64, result.customerAddressHash!!.length)
@@ -123,7 +123,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
     @Test
     fun `address hash is null when no address nodes present`() {
         val root = LogToUiNodeParser.parseLog(noAddressLog)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertNull("Address hash should be null if no address nodes", result.customerAddressHash)
     }
@@ -135,7 +135,7 @@ UiNode(, id=no_id, state=null, class=android.widget.FrameLayout)
   UiNode(text='Deliver to ', id=bottom_sheet_task_title, state=null, class=android.widget.TextView)
 """.trimIndent()
         val root = LogToUiNodeParser.parseLog(log)!!
-        val result = parser.parse(root) as ScreenInfo.DropoffDetails
+        val result = parser.parse(root) as ParsedFields.TaskFields
 
         assertNull("Blank name after prefix should produce null hash", result.customerNameHash)
     }

@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.room.Room
 import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.chat.ChatDao
+import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotDao
+import cloud.trotter.dashbuddy.core.database.observation.ObservationDao
+import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,7 +28,7 @@ object DatabaseModule {
             DashBuddyDatabase::class.java,
             "dashbuddy-v2.db"
         )
-            .fallbackToDestructiveMigration(false)
+            .fallbackToDestructiveMigration(true)
             .build()
     }
 
@@ -35,8 +38,23 @@ object DatabaseModule {
     }
 
     @Provides
+    fun provideAppStateSnapshotDao(db: DashBuddyDatabase): AppStateSnapshotDao {
+        return db.appStateSnapshotDao()
+    }
+
+    @Provides
     fun provideChatDao(db: DashBuddyDatabase): ChatDao {
         return db.chatDao()
+    }
+
+    @Provides
+    fun provideEffectsFiredDao(db: DashBuddyDatabase): EffectsFiredDao {
+        return db.effectsFiredDao()
+    }
+
+    @Provides
+    fun provideObservationDao(db: DashBuddyDatabase): ObservationDao {
+        return db.observationDao()
     }
 
     @Provides

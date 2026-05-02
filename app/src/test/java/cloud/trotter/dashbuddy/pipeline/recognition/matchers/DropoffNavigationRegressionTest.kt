@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.DropoffNavigationMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.DropoffNavigationParser
 import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
@@ -44,10 +44,10 @@ class DropoffNavigationRegressionTest(filename: String, node: UiNode) :
         val matcher = DropoffNavigationMatcher()
         val parser = DropoffNavigationParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.DropoffDetails
-            assertEquals(Screen.NAVIGATION_VIEW_TO_DROP_OFF, info.screen)
-            assertEquals("Status should be NAVIGATING", DropoffStatus.NAVIGATING, info.status)
+        runTest(matcher, parser) { screen, result ->
+            val info = result as ParsedFields.TaskFields
+            assertEquals(Screen.NAVIGATION_VIEW_TO_DROP_OFF, screen)
+            assertEquals("SubFlow should be NAVIGATION", TaskSubFlow.NAVIGATION, info.subFlow)
             assertNotNull("Customer name hash must be present", info.customerNameHash)
         }
     }

@@ -2,9 +2,9 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo.TimelineTask
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.TimelineTaskEntry
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
@@ -16,7 +16,7 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
 
     private val taskPrefixes = listOf("Pickup for ", "Deliver to ", "Pickup from ")
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         val allTexts = node.allText
 
         // --- Earnings ---
@@ -38,11 +38,7 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
         }
 
         // --- Task chain ---
-        // Each task is a pair of consecutive text nodes:
-        //   "Pickup for Jane D" | "Deliver to Jane D"  (type+name)
-        //   "by 18:42" | "by 18:09 • H-E-B" | "53 min to complete"  (deadline[• storeHint])
-        // A "Current task" marker may appear as a child of the task entry node.
-        val tasks = mutableListOf<TimelineTask>()
+        val tasks = mutableListOf<TimelineTaskEntry>()
         val taskNodes = node.findNodes { n ->
             taskPrefixes.any { n.text?.startsWith(it, ignoreCase = true) == true }
         }
@@ -73,7 +69,7 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
                 it.text.equals("Current task", ignoreCase = true)
             } != null
 
-            tasks += TimelineTask(
+            tasks += TimelineTaskEntry(
                 taskType = prefix.trim(),
                 nameHash = nameHash,
                 deadline = deadline,
@@ -87,11 +83,11 @@ class TimelineViewParser @Inject constructor() : ScreenParser {
                 "endsAt='$endsAtText', tasks=${tasks.size}"
         )
 
-        return ScreenInfo.Timeline(
-            screen = targetScreen,
-            dashEarnings = dashEarnings,
+        return ParsedFields.TimelineFields(
+            sessionEarnings = dashEarnings,
             offerEarnings = offerEarnings,
-            endsAt = endsAt,
+            endsAtText = endsAt?.text,
+            endsAtMillis = endsAt?.time,
             tasks = tasks,
         )
     }

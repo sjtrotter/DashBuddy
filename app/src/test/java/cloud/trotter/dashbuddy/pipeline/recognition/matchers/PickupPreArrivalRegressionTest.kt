@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.PickupPreArrivalMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.PickupPreArrivalParser
@@ -43,9 +43,9 @@ class PickupPreArrivalRegressionTest(filename: String, node: UiNode) :
         val matcher = PickupPreArrivalMatcher()
         val parser = PickupPreArrivalParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.PickupDetails
-            assertEquals(Screen.PICKUP_DETAILS_PRE_ARRIVAL, info.screen)
+        runTest(matcher, parser) { screen, result ->
+            val info = result as ParsedFields.TaskFields
+            assertEquals(Screen.PICKUP_DETAILS_PRE_ARRIVAL, screen)
             assertNotNull("Store name must be present", info.storeName)
             assertNotNull("Address must be present", info.storeAddress)
             println("      Store: ${info.storeName}  Address: ${info.storeAddress}")

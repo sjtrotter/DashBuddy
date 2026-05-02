@@ -1,7 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ClickInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -28,6 +29,12 @@ class ClickClassifierTest {
         contentDescription = contentDescription,
     )
 
+    private fun Observation.Click.intent(): String =
+        (parsed as ParsedFields.ClickFields).intent
+
+    private fun Observation.Click.clickFields(): ParsedFields.ClickFields =
+        parsed as ParsedFields.ClickFields
+
     // =========================================================================
     // AcceptOffer
     // =========================================================================
@@ -35,13 +42,13 @@ class ClickClassifierTest {
     @Test
     fun `classifies accept_button as AcceptOffer`() {
         val result = classifier.classify(node(viewId = "accept_button"))
-        assertEquals(ClickInfo.AcceptOffer, result)
+        assertEquals("accept_offer", result.intent())
     }
 
     @Test
     fun `AcceptOffer takes priority over text when both present`() {
         val result = classifier.classify(node(viewId = "accept_button", text = "Decline offer"))
-        assertEquals(ClickInfo.AcceptOffer, result)
+        assertEquals("accept_offer", result.intent())
     }
 
     // =========================================================================
@@ -51,14 +58,14 @@ class ClickClassifierTest {
     @Test
     fun `classifies 'Decline offer' text as DeclineOffer`() {
         val result = classifier.classify(node(text = "Decline offer"))
-        assertEquals(ClickInfo.DeclineOffer, result)
+        assertEquals("decline_offer", result.intent())
     }
 
     @Test
     fun `DeclineOffer matches case-insensitively`() {
         // hasText uses ignoreCase = true internally
         val result = classifier.classify(node(text = "decline offer"))
-        assertEquals(ClickInfo.DeclineOffer, result)
+        assertEquals("decline_offer", result.intent())
     }
 
     // =========================================================================
@@ -70,7 +77,7 @@ class ClickClassifierTest {
         val result = classifier.classify(
             node(viewId = "primary_action_button", text = "Arrived at store")
         )
-        assertEquals(ClickInfo.ArrivedAtStore, result)
+        assertEquals("arrived_at_store", result.intent())
     }
 
     @Test
@@ -78,7 +85,7 @@ class ClickClassifierTest {
         val result = classifier.classify(
             node(viewId = "primary_action_button", text = "Arrived")
         )
-        assertEquals(ClickInfo.ArrivedAtStore, result)
+        assertEquals("arrived_at_store", result.intent())
     }
 
     @Test
@@ -86,7 +93,7 @@ class ClickClassifierTest {
         val result = classifier.classify(
             node(viewId = "primary_action_button", text = "Confirm pickup")
         )
-        assertTrue(result is ClickInfo.Unknown)
+        assertEquals("unknown", result.intent())
     }
 
     @Test
@@ -94,7 +101,7 @@ class ClickClassifierTest {
         val result = classifier.classify(
             node(viewId = "some_other_button", text = "Arrived")
         )
-        assertTrue(result is ClickInfo.Unknown)
+        assertEquals("unknown", result.intent())
     }
 
     // =========================================================================
@@ -104,36 +111,36 @@ class ClickClassifierTest {
     @Test
     fun `returns Unknown for unrecognized node`() {
         val result = classifier.classify(node(viewId = "some_button", text = "Some action"))
-        assertTrue(result is ClickInfo.Unknown)
+        assertEquals("unknown", result.intent())
     }
 
     @Test
     fun `Unknown preserves nodeId for analysis`() {
         val result = classifier.classify(node(viewId = "confirm_delivery_button"))
-        val unknown = result as ClickInfo.Unknown
-        assertEquals("confirm_delivery_button", unknown.nodeId)
+        val fields = result.clickFields()
+        assertEquals("confirm_delivery_button", fields.nodeId)
     }
 
     @Test
     fun `Unknown preserves nodeText for analysis`() {
         val result = classifier.classify(node(viewId = "primary_action_button", text = "Complete delivery"))
-        val unknown = result as ClickInfo.Unknown
-        assertEquals("Complete delivery", unknown.nodeText)
+        val fields = result.clickFields()
+        assertEquals("Complete delivery", fields.nodeText)
     }
 
     @Test
     fun `Unknown with null viewId and null text has null fields`() {
         val result = classifier.classify(node())
-        val unknown = result as ClickInfo.Unknown
-        assertNull(unknown.nodeId)
-        assertNull(unknown.nodeText)
+        val fields = result.clickFields()
+        assertNull(fields.nodeId)
+        assertNull(fields.nodeText)
     }
 
     @Test
     fun `Unknown strips no_id placeholder from nodeId`() {
         val result = classifier.classify(node(viewId = "no_id", text = "Got it"))
-        val unknown = result as ClickInfo.Unknown
-        assertNull(unknown.nodeId)
-        assertNotNull(unknown.nodeText)
+        val fields = result.clickFields()
+        assertNull(fields.nodeId)
+        assertNotNull(fields.nodeText)
     }
 }

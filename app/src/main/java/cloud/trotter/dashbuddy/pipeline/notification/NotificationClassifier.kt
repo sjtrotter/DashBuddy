@@ -1,15 +1,17 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
 import cloud.trotter.dashbuddy.BuildConfig
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import timber.log.Timber
 import java.util.regex.Pattern
 import javax.inject.Inject
 
 /**
- * Classifies a [RawNotificationData] into a typed [NotificationInfo] subtype.
+ * Classifies a [RawNotificationData] into a typed [Observation.Notification].
  *
  * The Kotlin implementation is authoritative. In debug builds the JSON interpreter runs
  * in parallel and logs any disagreement via [dualRunNotification].
@@ -30,7 +32,7 @@ class NotificationClassifier @Inject constructor(
         Pattern.CASE_INSENSITIVE
     )
 
-    fun classify(raw: RawNotificationData): NotificationInfo {
+    fun classify(raw: RawNotificationData): Observation.Notification {
         val fullText = raw.toFullString()
 
         // 1. Additional tip
@@ -40,55 +42,85 @@ class NotificationClassifier @Inject constructor(
             val storeName = tipMatcher.group(2) ?: return unknown(raw, fullText)
             val deliveredAt = tipMatcher.group(3) ?: return unknown(raw, fullText)
             val result = try {
-                NotificationInfo.AdditionalTip(
-                    amount = amountStr.toDouble(),
-                    storeName = storeName.trim(),
-                    deliveredAt = deliveredAt
+                makeNotification(
+                    "additional_tip",
+                    "doordash.notification.additional_tip",
+                    ParsedFields.ClickFields(
+                        intent = "additional_tip",
+                        nodeText = "$amountStr|$storeName|$deliveredAt",
+                    ),
                 )
             } catch (e: NumberFormatException) {
                 Timber.w("NotificationClassifier: could not parse tip amount '$amountStr'")
-                unknown(raw, fullText)
+                return unknown(raw, fullText)
             }
-            dualRunNotification(raw, result)
+            dualRunNotification(raw, "AdditionalTip")
             return result
         }
 
         // 2. New order
         val title = raw.title.orEmpty()
         if (title.contains("new order", ignoreCase = true)) {
-            dualRunNotification(raw, NotificationInfo.NewOrder)
-            return NotificationInfo.NewOrder
+            val obs = makeNotification("new_order", "doordash.notification.new_order")
+            dualRunNotification(raw, "NewOrder")
+            return obs
         }
 
         // 3. Scheduled dash expired
         if (fullText.contains("scheduled", ignoreCase = true) &&
             fullText.contains("expired", ignoreCase = true)
         ) {
-            dualRunNotification(raw, NotificationInfo.ScheduledDashExpired)
-            return NotificationInfo.ScheduledDashExpired
+            val obs = makeNotification("scheduled_dash_expired", "doordash.notification.scheduled_dash_expired")
+            dualRunNotification(raw, "ScheduledDashExpired")
+            return obs
         }
 
         // 4. Unknown — preserve raw text for later analysis
         return unknown(raw, fullText)
     }
 
-    private fun unknown(raw: RawNotificationData, rawText: String): NotificationInfo.Unknown {
+    private fun makeNotification(
+        target: String,
+        ruleId: String,
+        parsed: ParsedFields = ParsedFields.ClickFields(intent = target),
+    ): Observation.Notification = Observation.Notification(
+        timestamp = System.currentTimeMillis(),
+        captureId = null,
+        ruleId = ruleId,
+        metadata = ReplayMetadata.EMPTY,
+        flow = null,
+        modeHint = null,
+        parsed = parsed,
+        target = target.uppercase(),
+    )
+
+    private fun unknown(raw: RawNotificationData, rawText: String): Observation.Notification {
         Timber.d("NotificationClassifier: UNKNOWN — $rawText")
-        val result = NotificationInfo.Unknown(rawText)
-        dualRunNotification(raw, result)
-        return result
+        val obs = Observation.Notification(
+            timestamp = System.currentTimeMillis(),
+            captureId = null,
+            ruleId = null,
+            metadata = ReplayMetadata.EMPTY,
+            flow = null,
+            modeHint = null,
+            parsed = ParsedFields.ClickFields(
+                intent = "unknown",
+                nodeText = rawText,
+            ),
+            target = "UNKNOWN",
+        )
+        dualRunNotification(raw, "Unknown")
+        return obs
     }
 
     /**
      * Debug-only: compare Kotlin classification with JSON interpreter result.
-     * JSON interpreter is never authoritative in this phase.
      */
-    private fun dualRunNotification(raw: RawNotificationData, kotlinResult: NotificationInfo) {
+    private fun dualRunNotification(raw: RawNotificationData, kotlinType: String) {
         if (!BuildConfig.DEBUG) return
         val ruleset = interpreter.notificationRuleset ?: return
 
         val jsonResult = ruleset.classifyFirst(raw)
-        val kotlinType = kotlinResult::class.simpleName
         val jsonType = jsonResult?.let { it::class.simpleName } ?: "Unknown(no-rule)"
         if (kotlinType != jsonType) {
             Timber.w(

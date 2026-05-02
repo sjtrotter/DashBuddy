@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.IdleMapMatcher
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers.IdleMapParser
@@ -45,8 +45,8 @@ class IdleMapRegressionTest(filename: String, node: UiNode) :
         val matcher = IdleMapMatcher()
         val parser = IdleMapParser()
 
-        runTest(matcher, parser) { result ->
-            val info = result as ScreenInfo.IdleMap
+        runTest(matcher, parser) { _, result ->
+            val info = result as ParsedFields.IdleFields
             // Print specific details nicely indented
             println("     ℹ️ Zone: ${info.zoneName}")
 

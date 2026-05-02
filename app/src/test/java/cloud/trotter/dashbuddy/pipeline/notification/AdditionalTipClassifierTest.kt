@@ -1,7 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -9,7 +10,7 @@ import org.junit.Test
 import org.mockito.kotlin.mock
 
 /**
- * Regression tests for [NotificationClassifier] → [NotificationInfo.AdditionalTip].
+ * Regression tests for [NotificationClassifier] producing `additional_tip` intent.
  *
  * Each test case corresponds to a real notification payload observed in the field.
  * Add a new test whenever a new tip notification format is found in session logs.
@@ -29,6 +30,9 @@ class AdditionalTipClassifierTest {
             isClearable = true,
         )
 
+    private fun Observation.Notification.clickFields(): ParsedFields.ClickFields =
+        parsed as ParsedFields.ClickFields
+
     private fun assertTip(
         raw: RawNotificationData,
         expectedAmount: Double,
@@ -36,11 +40,12 @@ class AdditionalTipClassifierTest {
         expectedDeliveredAt: String,
     ) {
         val result = classifier.classify(raw)
-        assertTrue("Expected AdditionalTip, got $result", result is NotificationInfo.AdditionalTip)
-        val tip = result as NotificationInfo.AdditionalTip
-        assertEquals(expectedAmount, tip.amount, 0.001)
-        assertEquals(expectedStore, tip.storeName)
-        assertEquals(expectedDeliveredAt, tip.deliveredAt)
+        val fields = result.clickFields()
+        assertEquals("Expected additional_tip intent", "additional_tip", fields.intent)
+        val parts = fields.nodeText!!.split("|")
+        assertEquals(expectedAmount, parts[0].toDouble(), 0.001)
+        assertEquals(expectedStore, parts[1])
+        assertEquals(expectedDeliveredAt, parts[2])
     }
 
     // =========================================================================
@@ -164,18 +169,18 @@ class AdditionalTipClassifierTest {
     )
 
     // =========================================================================
-    // Non-matching — should NOT classify as AdditionalTip
+    // Non-matching — should NOT classify as additional_tip
     // =========================================================================
 
     @Test
-    fun `generic tip mention without full pattern is not AdditionalTip`() {
+    fun `generic tip mention without full pattern is not additional_tip`() {
         val result = classifier.classify(raw(text = "You received a tip on your order"))
-        assertTrue(result !is NotificationInfo.AdditionalTip)
+        assertTrue(result.clickFields().intent != "additional_tip")
     }
 
     @Test
-    fun `empty notification is not AdditionalTip`() {
+    fun `empty notification is not additional_tip`() {
         val result = classifier.classify(raw())
-        assertTrue(result !is NotificationInfo.AdditionalTip)
+        assertTrue(result.clickFields().intent != "additional_tip")
     }
 }

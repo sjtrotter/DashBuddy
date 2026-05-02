@@ -1,16 +1,16 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ClickInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.mock
 
 /**
- * Regression tests for [ClickClassifier] → [ClickInfo.Unknown].
+ * Regression tests for [ClickClassifier] -> [Observation.Click] with intent "unknown".
  *
  * Add a row here whenever a new unrecognized click is found in session logs.
  * When the pattern is understood and a new subtype is added, move the test to that type's file.
@@ -22,40 +22,46 @@ class UnknownClickTest {
     private fun node(viewId: String? = null, text: String? = null) =
         UiNode(viewIdResourceName = viewId, text = text)
 
+    private fun Observation.Click.intent(): String =
+        (parsed as ParsedFields.ClickFields).intent
+
+    private fun Observation.Click.clickFields(): ParsedFields.ClickFields =
+        parsed as ParsedFields.ClickFields
+
     @Test
     fun `unrecognized button id is Unknown`() {
-        assertTrue(classifier.classify(node(viewId = "confirm_delivery_button")) is ClickInfo.Unknown)
+        assertEquals("unknown", classifier.classify(node(viewId = "confirm_delivery_button")).intent())
     }
 
     @Test
     fun `Unknown preserves nodeId`() {
-        val result = classifier.classify(node(viewId = "complete_delivery_btn")) as ClickInfo.Unknown
-        assertEquals("complete_delivery_btn", result.nodeId)
+        val fields = classifier.classify(node(viewId = "complete_delivery_btn")).clickFields()
+        assertEquals("complete_delivery_btn", fields.nodeId)
     }
 
     @Test
     fun `Unknown preserves nodeText`() {
-        val result = classifier.classify(node(viewId = "primary_action_button", text = "Complete delivery")) as ClickInfo.Unknown
-        assertEquals("Complete delivery", result.nodeText)
+        val fields = classifier.classify(node(viewId = "primary_action_button", text = "Complete delivery")).clickFields()
+        assertEquals("Complete delivery", fields.nodeText)
     }
 
     @Test
     fun `no_id placeholder is stripped from nodeId`() {
-        val result = classifier.classify(node(viewId = "no_id", text = "Got it")) as ClickInfo.Unknown
-        assertNull(result.nodeId)
+        val fields = classifier.classify(node(viewId = "no_id", text = "Got it")).clickFields()
+        assertNull(fields.nodeId)
     }
 
     @Test
     fun `blank viewId is stripped from nodeId`() {
-        val result = classifier.classify(node(viewId = "", text = "Submit")) as ClickInfo.Unknown
-        assertNull(result.nodeId)
+        val fields = classifier.classify(node(viewId = "", text = "Submit")).clickFields()
+        assertNull(fields.nodeId)
     }
 
     @Test
     fun `null id and null text yields Unknown with null fields`() {
-        val result = classifier.classify(node()) as ClickInfo.Unknown
-        assertNull(result.nodeId)
-        assertNull(result.nodeText)
+        val fields = classifier.classify(node()).clickFields()
+        assertNull(fields.nodeId)
+        assertNull(fields.nodeText)
     }
 
     // =========================================================================
@@ -65,17 +71,17 @@ class UnknownClickTest {
     @Test
     fun `'Got it' on confirmation dialog is Unknown`() {
         // Seen on Crimson transfer and PIN delivery intro screens
-        assertTrue(classifier.classify(node(text = "Got it")) is ClickInfo.Unknown)
+        assertEquals("unknown", classifier.classify(node(text = "Got it")).intent())
     }
 
     @Test
     fun `'Continue' button is Unknown`() {
-        assertTrue(classifier.classify(node(text = "Continue")) is ClickInfo.Unknown)
+        assertEquals("unknown", classifier.classify(node(text = "Continue")).intent())
     }
 
     @Test
     fun `'Complete delivery' button is Unknown`() {
         // Seen on PIN delivery flow — candidate for ConfirmDelivery subtype
-        assertTrue(classifier.classify(node(viewId = "primary_action_button", text = "Complete delivery")) is ClickInfo.Unknown)
+        assertEquals("unknown", classifier.classify(node(viewId = "primary_action_button", text = "Complete delivery")).intent())
     }
 }

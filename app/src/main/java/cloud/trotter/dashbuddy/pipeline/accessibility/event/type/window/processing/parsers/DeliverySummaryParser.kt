@@ -2,8 +2,8 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.process
 
 import cloud.trotter.dashbuddy.core.data.pay.PayParser
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import timber.log.Timber
 import javax.inject.Inject
@@ -16,7 +16,7 @@ class DeliverySummaryParser @Inject constructor(
     // Lookup key matches the matcher's targetScreen.
     override val targetScreen: Screen = Screen.DELIVERY_SUMMARY_EXPANDED
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         val earningsContainer = node.findNodes { it.matchesId("earnings_container") }
             .find { container ->
                 container.hasNode { it.text?.contains("This offer", ignoreCase = true) == true }
@@ -45,19 +45,19 @@ class DeliverySummaryParser @Inject constructor(
 
         Timber.d("DeliverySummaryParser: expanded=$isVisuallyExpanded, headline=\$$headlineTotal, parsedTotal=${parsedPay?.total}")
 
-        val expandButton = if (parsedPay == null) {
-            earningsContainer?.findDescendantById("expandable_view")
+        val expandButtonId = if (parsedPay == null) {
+            val expandNode = earningsContainer?.findDescendantById("expandable_view")
                 ?: earningsContainer?.findDescendantById("expandable_layout")
                 ?: node.findNodes { it.matchesId("expandable_view") }.lastOrNull()
+            expandNode?.viewIdResourceName
         } else null
 
-        return ScreenInfo.DeliverySummary(
-            screen = if (parsedPay != null) Screen.DELIVERY_SUMMARY_EXPANDED else Screen.DELIVERY_SUMMARY_COLLAPSED,
-            isExpanded = parsedPay != null,
+        return ParsedFields.PostTaskFields(
             totalPay = headlineTotal,
             parsedPay = parsedPay,
-            expandButton = expandButton,
-            sessionEarnings = sessionEarnings
+            isExpanded = parsedPay != null,
+            expandButtonId = expandButtonId,
+            sessionEarnings = sessionEarnings,
         )
     }
 }

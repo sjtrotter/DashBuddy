@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.parsers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.domain.model.accessibility.ScreenInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenParser
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import timber.log.Timber
@@ -17,7 +17,7 @@ class DashSummaryParser @Inject constructor() : ScreenParser {
     private val offersPattern = Pattern.compile("(\\d+)\\s*out of\\s*(\\d+)", Pattern.CASE_INSENSITIVE)
     private val currencyPattern = Pattern.compile("^\\$[\\d,]+\\.\\d{2}$")
 
-    override fun parse(node: UiNode): ScreenInfo {
+    override fun parse(node: UiNode): ParsedFields {
         Timber.v("DashSummaryParser: analyzing node tree...")
 
         // DoorDash removed the header_pay ID in a late-2025 app update; fall back to finding
@@ -57,19 +57,20 @@ class DashSummaryParser @Inject constructor() : ScreenParser {
 
         // Sanity check: dash total should not exceed weekly total.
         if (totalEarnings != null && weeklyEarnings != null && totalEarnings > (weeklyEarnings + 0.02)) {
-            Timber.w("Sanity Check FAILED: Dash Total ($totalEarnings) > Weekly Total ($weeklyEarnings). Returning Simple.")
-            return ScreenInfo.Simple(targetScreen)
+            Timber.w("Sanity Check FAILED: Dash Total ($totalEarnings) > Weekly Total ($weeklyEarnings). Returning None.")
+            return ParsedFields.None
         }
 
-        val startTime = System.currentTimeMillis() - durationMillis
-        return ScreenInfo.DashSummary(
-            screen = targetScreen,
+        if (totalEarnings == null) {
+            return ParsedFields.None
+        }
+
+        return ParsedFields.SessionEndedFields(
             totalEarnings = totalEarnings,
-            weeklyEarnings = weeklyEarnings,
+            sessionDurationMillis = durationMillis,
             offersAccepted = offersAccepted,
             offersTotal = offersTotal,
-            onlineDurationMillis = durationMillis,
-            estimatedStartTime = startTime
+            weeklyEarnings = weeklyEarnings,
         ).also { Timber.i("DashSummaryParser result: $it") }
     }
 
