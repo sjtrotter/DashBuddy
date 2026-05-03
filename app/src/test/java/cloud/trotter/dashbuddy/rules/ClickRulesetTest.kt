@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.rules
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ClickInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -19,10 +18,10 @@ class ClickRulesetTest {
         id: String,
         priority: Int,
         condition: (UiNode) -> Boolean,
-        factory: (UiNode) -> ClickInfo,
+        intentFactory: (UiNode) -> String,
     ) = CompiledClickRule(
         id = id, priority = priority, overrideable = true,
-        condition = condition, factory = factory,
+        condition = condition, intentFactory = intentFactory,
     )
 
     // =========================================================================
@@ -32,17 +31,17 @@ class ClickRulesetTest {
     @Test
     fun `classifyFirst returns null when no rules match`() {
         val ruleset = ClickRuleset(
-            listOf(rule("r1", 10, { it.viewIdResourceName == "accept_button" }, { ClickInfo.AcceptOffer }))
+            listOf(rule("r1", 10, { it.viewIdResourceName == "accept_button" }, { "accept_offer" }))
         )
         assertNull(ruleset.classifyFirst(node(viewId = "decline_button")))
     }
 
     @Test
-    fun `classifyFirst returns factory result for matching rule`() {
+    fun `classifyFirst returns intent for matching rule`() {
         val ruleset = ClickRuleset(
-            listOf(rule("r1", 10, { it.viewIdResourceName == "accept_button" }, { ClickInfo.AcceptOffer }))
+            listOf(rule("r1", 10, { it.viewIdResourceName == "accept_button" }, { "accept_offer" }))
         )
-        assertEquals(ClickInfo.AcceptOffer, ruleset.classifyFirst(node(viewId = "accept_button")))
+        assertEquals("accept_offer", ruleset.classifyFirst(node(viewId = "accept_button"))?.intent)
     }
 
     // =========================================================================
@@ -53,23 +52,23 @@ class ClickRulesetTest {
     fun `first matching rule by priority wins`() {
         val ruleset = ClickRuleset(
             listOf(
-                rule("r2", 20, { true }, { ClickInfo.DeclineOffer }),
-                rule("r1", 10, { true }, { ClickInfo.AcceptOffer }),
+                rule("r2", 20, { true }, { "decline_offer" }),
+                rule("r1", 10, { true }, { "accept_offer" }),
             )
         )
         // Priority 10 rule wins even though it was added second
-        assertEquals(ClickInfo.AcceptOffer, ruleset.classifyFirst(node()))
+        assertEquals("accept_offer", ruleset.classifyFirst(node())?.intent)
     }
 
     @Test
     fun `non-matching rule is skipped and next rule is checked`() {
         val ruleset = ClickRuleset(
             listOf(
-                rule("r1", 10, { it.viewIdResourceName == "accept_button" }, { ClickInfo.AcceptOffer }),
-                rule("r2", 20, { it.text == "Decline offer" }, { ClickInfo.DeclineOffer }),
+                rule("r1", 10, { it.viewIdResourceName == "accept_button" }, { "accept_offer" }),
+                rule("r2", 20, { it.text == "Decline offer" }, { "decline_offer" }),
             )
         )
-        assertEquals(ClickInfo.DeclineOffer, ruleset.classifyFirst(node(text = "Decline offer")))
+        assertEquals("decline_offer", ruleset.classifyFirst(node(text = "Decline offer"))?.intent)
     }
 
     // =========================================================================
@@ -77,13 +76,13 @@ class ClickRulesetTest {
     // =========================================================================
 
     @Test
-    fun `factory lambda receives the matched node`() {
+    fun `intentFactory lambda receives the matched node`() {
         var capturedNode: UiNode? = null
         val ruleset = ClickRuleset(
             listOf(
                 rule("r1", 10, { true }, { n ->
                     capturedNode = n
-                    ClickInfo.AcceptOffer
+                    "accept_offer"
                 })
             )
         )
@@ -105,33 +104,33 @@ class ClickRulesetTest {
     fun `ruleCount reflects number of compiled rules`() {
         val ruleset = ClickRuleset(
             listOf(
-                rule("r1", 10, { false }, { ClickInfo.AcceptOffer }),
-                rule("r2", 20, { false }, { ClickInfo.DeclineOffer }),
+                rule("r1", 10, { false }, { "accept_offer" }),
+                rule("r2", 20, { false }, { "decline_offer" }),
             )
         )
         assertEquals(2, ruleset.ruleCount)
     }
 
     // =========================================================================
-    // Realistic scenario: AcceptOffer → DeclineOffer → ArrivedAtStore priority
+    // Realistic scenario: accept_offer → decline_offer priority
     // =========================================================================
 
     @Test
-    fun `AcceptOffer rule fires before DeclineOffer when both conditions true`() {
+    fun `accept_offer rule fires before decline_offer when both conditions true`() {
         val ruleset = ClickRuleset(
             listOf(
                 rule("accept", 10,
                     { it.viewIdResourceName?.endsWith("accept_button") == true },
-                    { ClickInfo.AcceptOffer }),
+                    { "accept_offer" }),
                 rule("decline", 20,
                     { it.text?.equals("Decline offer", ignoreCase = true) == true },
-                    { ClickInfo.DeclineOffer }),
+                    { "decline_offer" }),
             )
         )
-        // Node has accept_button ID AND "Decline offer" text — AcceptOffer wins on priority
+        // Node has accept_button ID AND "Decline offer" text — accept_offer wins on priority
         assertEquals(
-            ClickInfo.AcceptOffer,
-            ruleset.classifyFirst(node(viewId = "com.example:id/accept_button", text = "Decline offer"))
+            "accept_offer",
+            ruleset.classifyFirst(node(viewId = "com.example:id/accept_button", text = "Decline offer"))?.intent
         )
     }
 
@@ -141,7 +140,7 @@ class ClickRulesetTest {
             listOf(
                 rule("accept", 10,
                     { it.viewIdResourceName?.endsWith("accept_button") == true },
-                    { ClickInfo.AcceptOffer }),
+                    { "accept_offer" }),
             )
         )
         val result = ruleset.classifyFirst(node(viewId = "some_unknown_button", text = "Got it"))

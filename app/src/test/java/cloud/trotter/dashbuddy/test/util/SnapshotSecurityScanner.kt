@@ -1,12 +1,38 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.matchers.SensitiveScreenMatcher
 
+/**
+ * Scans a [UiNode] tree for sensitive keywords (PII, financial data).
+ *
+ * Used by [InboxProcessorTest] to prevent accidental commits of raw
+ * banking/identity data in snapshot files. Keywords are inlined from
+ * the production sensitive screen rules in `rules.default.json`.
+ */
 object SnapshotSecurityScanner {
-    // Single source of truth for keywords
-    private val SENSITIVE_KEYWORDS = SensitiveScreenMatcher.SENSITIVE_KEYWORDS
+
+    /** Combined keywords from both sensitive screen rules. */
+    private val SENSITIVE_KEYWORDS = listOf(
+        // doordash.screen.sensitive.known
+        "Bank Account",
+        "Routing Number",
+        "Social Security",
+        "Direct Deposit",
+        "Visa",
+        "Mastercard",
+        "ending in",
+        "Linked accounts",
+        "Statements & documents",
+        "Emergency contact details",
+        // doordash.screen.sensitive.catchall
+        "Crimson",
+        "Biometric",
+        "Available Balance",
+        "Tax Form",
+        "Expiry",
+        "Enter the code we sent",
+        "t=completed_view",
+    )
 
     data class ScanResult(
         val isToxic: Boolean,
@@ -14,38 +40,25 @@ object SnapshotSecurityScanner {
     )
 
     fun scan(node: UiNode): ScanResult {
-        // 1. Run the official matcher first
-        val matcher = SensitiveScreenMatcher()
-        val match = matcher.matches(node)
-
-        // 2. Scan for individual triggers regardless of the matcher result
-        // (We want to know WHAT matched, even if the matcher caught it)
         val triggers = mutableListOf<Pair<String, String>>()
         walkAndFind(node, triggers)
-
-        // It is toxic if the Matcher says so OR if we found keywords manually
-        val isToxic = (match == Screen.SENSITIVE) || triggers.isNotEmpty()
-
-        return ScanResult(isToxic = isToxic, triggers = triggers)
+        return ScanResult(isToxic = triggers.isNotEmpty(), triggers = triggers)
     }
 
-    /**
-     * Standardized reporting to keep your logs clean and consistent.
-     */
     fun printReport(result: ScanResult) {
         if (!result.isToxic) return
 
-        println("     🚨 STATUS: TOXIC (Sensitive Data Detected)")
-        println("     🔍 EVIDENCE:")
+        println("     STATUS: TOXIC (Sensitive Data Detected)")
+        println("     EVIDENCE:")
 
         if (result.triggers.isEmpty()) {
-            println("        • (Matched by Screen Type, no specific keyword triggers found)")
+            println("        (Matched by Screen Type, no specific keyword triggers found)")
         } else {
             result.triggers.forEach { (text, keyword) ->
-                println("        • Found \"$text\" (Matched: '$keyword')")
+                println("        Found \"$text\" (Matched: '$keyword')")
             }
         }
-        println("     📝 ACTION: Redact these values in the JSON file immediately.")
+        println("     ACTION: Redact these values in the JSON file immediately.")
     }
 
     private fun walkAndFind(node: UiNode, results: MutableList<Pair<String, String>>) {

@@ -4,9 +4,12 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
+import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 
 /**
@@ -17,7 +20,9 @@ import org.mockito.kotlin.mock
  */
 class NotificationClassifierTest {
 
-    private val classifier = NotificationClassifier(mock<JsonRuleInterpreter>())
+    private val classifier = NotificationClassifier(mock<JsonRuleInterpreter> {
+        on { notificationRuleset } doReturn TestRulesetFactory.notificationRuleset
+    })
 
     // =========================================================================
     // Helpers
@@ -38,19 +43,9 @@ class NotificationClassifierTest {
         isClearable = true,
     )
 
-    /** Extract the [ParsedFields.ClickFields] from a classification result. */
-    private fun Observation.Notification.clickFields(): ParsedFields.ClickFields =
-        parsed as ParsedFields.ClickFields
-
-    /** Parse the pipe-delimited nodeText for tip notifications: "amount|store|deliveredAt". */
-    private fun ParsedFields.ClickFields.tipAmount(): Double =
-        nodeText!!.split("|")[0].toDouble()
-
-    private fun ParsedFields.ClickFields.tipStore(): String =
-        nodeText!!.split("|")[1]
-
-    private fun ParsedFields.ClickFields.tipDeliveredAt(): String =
-        nodeText!!.split("|")[2]
+    /** Extract [ParsedFields.NotificationFields] from a classification result. */
+    private fun Observation.Notification.notifFields(): ParsedFields.NotificationFields =
+        parsed as ParsedFields.NotificationFields
 
     // =========================================================================
     // AdditionalTip
@@ -64,11 +59,11 @@ class NotificationClassifierTest {
                 bigText = "added \$5.00 tip on a past H-E-B order delivered at 4/26, 3:15 PM"
             )
         )
-        val fields = result.clickFields()
+        val fields = result.notifFields()
         assertEquals("additional_tip", fields.intent)
-        assertEquals(5.00, fields.tipAmount(), 0.001)
-        assertEquals("H-E-B", fields.tipStore())
-        assertEquals("4/26, 3:15 PM", fields.tipDeliveredAt())
+        assertEquals(5.00, fields.amount!!, 0.001)
+        assertEquals("H-E-B", fields.storeName)
+        assertEquals("4/26, 3:15 PM", fields.deliveredAt)
     }
 
     @Test
@@ -79,10 +74,10 @@ class NotificationClassifierTest {
                 text = "added \$8.00 tip on a past Pizza Hut order delivered at 4/26, 2:40 PM"
             )
         )
-        val fields = result.clickFields()
+        val fields = result.notifFields()
         assertEquals("additional_tip", fields.intent)
-        assertEquals(8.00, fields.tipAmount(), 0.001)
-        assertEquals("Pizza Hut", fields.tipStore())
+        assertEquals(8.00, fields.amount!!, 0.001)
+        assertEquals("Pizza Hut", fields.storeName)
     }
 
     @Test
@@ -92,10 +87,10 @@ class NotificationClassifierTest {
                 bigText = "added \$20.85 tip on a past H-E-B Grocery order delivered at 4/26, 2:08 PM"
             )
         )
-        val fields = result.clickFields()
+        val fields = result.notifFields()
         assertEquals("additional_tip", fields.intent)
-        assertEquals(20.85, fields.tipAmount(), 0.001)
-        assertEquals("H-E-B Grocery", fields.tipStore())
+        assertEquals(20.85, fields.amount!!, 0.001)
+        assertEquals("H-E-B Grocery", fields.storeName)
     }
 
     @Test
@@ -105,9 +100,9 @@ class NotificationClassifierTest {
                 bigText = "added \$25.53 tip on a past H-E-B order delivered at 4/26, 7:16 PM"
             )
         )
-        val fields = result.clickFields()
+        val fields = result.notifFields()
         assertEquals("additional_tip", fields.intent)
-        assertEquals(25.53, fields.tipAmount(), 0.001)
+        assertEquals(25.53, fields.amount!!, 0.001)
     }
 
     @Test
@@ -115,9 +110,9 @@ class NotificationClassifierTest {
         val result = classifier.classify(
             raw(bigText = "added \$4.50 tip on a past Little Caesars order delivered at 4/26, 8:29 PM")
         )
-        val fields = result.clickFields()
+        val fields = result.notifFields()
         assertEquals("additional_tip", fields.intent)
-        assertEquals("4/26, 8:29 PM", fields.tipDeliveredAt())
+        assertEquals("4/26, 8:29 PM", fields.deliveredAt)
     }
 
     // =========================================================================
@@ -129,7 +124,7 @@ class NotificationClassifierTest {
         val result = classifier.classify(
             raw(title = "New Order", text = "A new delivery order is available")
         )
-        assertEquals("new_order", result.clickFields().intent)
+        assertEquals("new_order", result.notifFields().intent)
     }
 
     @Test
@@ -137,7 +132,7 @@ class NotificationClassifierTest {
         val result = classifier.classify(
             raw(title = "new order", text = "Tap to view")
         )
-        assertEquals("new_order", result.clickFields().intent)
+        assertEquals("new_order", result.notifFields().intent)
     }
 
     // =========================================================================
@@ -152,7 +147,7 @@ class NotificationClassifierTest {
                 text = "Your scheduled dash has expired"
             )
         )
-        assertEquals("scheduled_dash_expired", result.clickFields().intent)
+        assertEquals("scheduled_dash_expired", result.notifFields().intent)
     }
 
     // =========================================================================
@@ -164,7 +159,7 @@ class NotificationClassifierTest {
         val result = classifier.classify(
             raw(title = "DoorDash", text = "Something we haven't seen before")
         )
-        assertEquals("unknown", result.clickFields().intent)
+        assertEquals("unknown", result.notifFields().intent)
     }
 
     @Test
@@ -172,9 +167,10 @@ class NotificationClassifierTest {
         val result = classifier.classify(
             raw(title = "Peak Pay", text = "\$3 boost active in your zone")
         )
-        val fields = result.clickFields()
+        val fields = result.notifFields()
         assertEquals("unknown", fields.intent)
-        assertTrue(fields.nodeText!!.contains("Peak Pay") || fields.nodeText!!.contains("boost"))
+        assertNotNull(fields.rawText)
+        assertTrue(fields.rawText!!.contains("Peak Pay") || fields.rawText!!.contains("boost"))
     }
 
     @Test
@@ -182,7 +178,7 @@ class NotificationClassifierTest {
         val result = classifier.classify(
             raw(title = null, text = null, bigText = null, tickerText = null)
         )
-        assertEquals("unknown", result.clickFields().intent)
+        assertEquals("unknown", result.notifFields().intent)
     }
 
     @Test
@@ -192,6 +188,6 @@ class NotificationClassifierTest {
             raw(title = "DoorDash", text = "You received a tip on your order")
         )
         // Should NOT classify as additional_tip
-        assertTrue(result.clickFields().intent != "additional_tip")
+        assertTrue(result.notifFields().intent != "additional_tip")
     }
 }

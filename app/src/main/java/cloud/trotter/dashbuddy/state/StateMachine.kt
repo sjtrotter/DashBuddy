@@ -58,7 +58,7 @@ class StateMachine @Inject constructor(
         nextFlow: cloud.trotter.dashbuddy.domain.state.FlowRegion,
         obs: Observation,
     ): Map<Platform, PlatformRegion> {
-        val platform = obs.platform ?: return prev
+        val platform = obs.platform
         val prevRegion = prev[platform] ?: PlatformRegion(platform)
         val nextRegion = platformStepper.step(prevRegion, prevFlow, nextFlow, obs, healingPolicy)
         return prev + (platform to nextRegion)

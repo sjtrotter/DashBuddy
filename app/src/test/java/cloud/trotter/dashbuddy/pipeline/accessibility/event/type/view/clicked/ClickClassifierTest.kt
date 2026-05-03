@@ -4,16 +4,20 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
+import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 
 class ClickClassifierTest {
 
-    private val classifier = ClickClassifier(mock<JsonRuleInterpreter>())
+    private val classifier = ClickClassifier(mock<JsonRuleInterpreter> {
+        on { clickRuleset } doReturn TestRulesetFactory.clickRuleset
+    })
 
     // =========================================================================
     // Helpers

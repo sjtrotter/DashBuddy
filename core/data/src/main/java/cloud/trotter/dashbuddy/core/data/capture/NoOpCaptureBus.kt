@@ -3,10 +3,15 @@ package cloud.trotter.dashbuddy.core.data.capture
 import javax.inject.Inject
 
 /**
- * No-op capture bus for release builds (and until CaptureService is implemented).
+ * No-op capture bus for release builds. Discards all captures.
  */
 class NoOpCaptureBus @Inject constructor() : CaptureBus {
-    override fun <T> offer(pipelineId: String, payload: T, ruleId: String?) {
-        // Intentionally empty — release builds don't capture.
-    }
+    override fun offer(
+        captureId: String,
+        source: String,
+        classification: String?,
+        platform: String,
+        envelopeJson: String,
+        contentHash: Int?,
+    ): String? = null
 }

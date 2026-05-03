@@ -3,7 +3,6 @@ package cloud.trotter.dashbuddy.core.data.settings
 import android.util.Log
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.dashbuddy.core.network.BuildConfig
-import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,21 +25,20 @@ class DevSettingsRepository @Inject constructor(
     // ============================================================================================
     // IN-MEMORY SNAPSHOT STATES
     // ============================================================================================
-    private val defaultSnapshotWhitelist =
-        if (BuildConfig.DEBUG) Screen.entries.toSet() else emptySet()
-    private val _snapshotWhitelist = MutableStateFlow(defaultSnapshotWhitelist)
+    // Empty whitelist = "capture all screens" in debug; non-empty = only listed screens
+    private val _snapshotWhitelist = MutableStateFlow<Set<String>>(emptySet())
     val snapshotWhitelist = _snapshotWhitelist.asStateFlow()
 
     private val _devSnapshotsEnabled = MutableStateFlow(BuildConfig.DEBUG)
     val devSnapshotsEnabled = _devSnapshotsEnabled.asStateFlow()
 
-    fun toggleSnapshotScreen(screen: Screen, isEnabled: Boolean) {
+    fun toggleSnapshotScreen(screenName: String, isEnabled: Boolean) {
         val current = _snapshotWhitelist.value.toMutableSet()
-        if (isEnabled) current.add(screen) else current.remove(screen)
+        if (isEnabled) current.add(screenName) else current.remove(screenName)
         _snapshotWhitelist.value = current
     }
 
-    fun enableSensitiveSnapshots(enabled: Boolean) = toggleSnapshotScreen(Screen.SENSITIVE, enabled)
+    fun enableSensitiveSnapshots(enabled: Boolean) = toggleSnapshotScreen("SENSITIVE", enabled)
 
     // ============================================================================================
     // PERSISTED STREAMS

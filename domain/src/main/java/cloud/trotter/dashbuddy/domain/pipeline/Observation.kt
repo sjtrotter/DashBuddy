@@ -34,6 +34,8 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         val parsed: ParsedFields
         /** Platform-specific screen/event identity for debugging and bridging. */
         val target: String?
+        /** Rule-originated UI actions to execute (ADR-0006). */
+        val actions: List<RequestedAction>
     }
 
     /** A screen classification from the accessibility window pipeline. */
@@ -46,6 +48,7 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val modeHint: Mode?,
         override val parsed: ParsedFields,
         override val target: String? = null,
+        override val actions: List<RequestedAction> = emptyList(),
     ) : FlowObservation
 
     /** A click/tap event classified by the click pipeline. */
@@ -58,6 +61,7 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val modeHint: Mode?,
         override val parsed: ParsedFields,
         override val target: String? = null,
+        override val actions: List<RequestedAction> = emptyList(),
     ) : FlowObservation
 
     /** A notification event classified by the notification pipeline. */
@@ -70,6 +74,7 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val modeHint: Mode?,
         override val parsed: ParsedFields,
         override val target: String? = null,
+        override val actions: List<RequestedAction> = emptyList(),
     ) : FlowObservation
 
     /** A timeout fired by the state machine's internal timer system. */

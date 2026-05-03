@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.pipeline.accessibility
 
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
+import cloud.trotter.dashbuddy.core.data.capture.EnvelopeBuilder
+import cloud.trotter.dashbuddy.core.data.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked.ClickClassifier
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
@@ -25,6 +27,7 @@ class ClickSubPipe @Inject constructor(
 ) {
     companion object {
         const val PIPELINE_ID = "accessibility.click"
+        private const val PLATFORM = "doordash"
     }
 
     fun output(): Flow<Observation.Click> = source.events
@@ -35,7 +38,25 @@ class ClickSubPipe @Inject constructor(
             val node = sourceNode.toUiNode() ?: return@mapNotNull null
             val obs = classifier.classify(node)
             Timber.d("Click Event: ${obs.target}")
-            captureBus.offer(PIPELINE_ID, node, obs.target)
-            obs
+
+            val capture = EnvelopeBuilder.build(
+                pipelineId = PIPELINE_ID,
+                schema = UiNodeSchema,
+                platform = PLATFORM,
+                ruleId = obs.ruleId,
+                classificationName = obs.target,
+                payload = node,
+                contentHash = node.structuralHash,
+            )
+            val captureId = captureBus.offer(
+                captureId = capture.captureId,
+                source = PIPELINE_ID,
+                classification = obs.target,
+                platform = PLATFORM,
+                envelopeJson = capture.envelopeJson,
+                contentHash = capture.contentHash,
+            )
+
+            obs.copy(captureId = captureId)
         }
 }

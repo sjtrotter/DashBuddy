@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility
 
 import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
+import cloud.trotter.dashbuddy.core.data.capture.EnvelopeBuilder
+import cloud.trotter.dashbuddy.core.data.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.ScreenDiffer
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
@@ -18,9 +20,6 @@ import javax.inject.Singleton
  * Window sub-pipe: merges content-changed and state-changed sources,
  * deduplicates, gates sensitive screens, classifies, captures, and
  * emits [Observation.Screen].
- *
- * Odometer reading has been moved to the Reducer (Phase 3). The state
- * machine reads it when processing a screen observation.
  */
 @Singleton
 class WindowSubPipe @Inject constructor(
@@ -33,6 +32,7 @@ class WindowSubPipe @Inject constructor(
 ) {
     companion object {
         const val PIPELINE_ID = "accessibility.window"
+        private const val PLATFORM = "doordash"
     }
 
     fun output(): Flow<Observation.Screen> = merge(
@@ -47,7 +47,25 @@ class WindowSubPipe @Inject constructor(
         }
         .map { tree ->
             val obs = classifier.classify(tree)
-            captureBus.offer(PIPELINE_ID, tree, obs.target)
-            obs
+
+            val capture = EnvelopeBuilder.build(
+                pipelineId = PIPELINE_ID,
+                schema = UiNodeSchema,
+                platform = PLATFORM,
+                ruleId = obs.ruleId,
+                classificationName = obs.target,
+                payload = tree,
+                contentHash = tree.structuralHash,
+            )
+            val captureId = captureBus.offer(
+                captureId = capture.captureId,
+                source = PIPELINE_ID,
+                classification = obs.target,
+                platform = PLATFORM,
+                envelopeJson = capture.envelopeJson,
+                contentHash = capture.contentHash,
+            )
+
+            obs.copy(captureId = captureId)
         }
 }

@@ -33,28 +33,28 @@ class UnknownNotificationClassifierTest {
     @Test
     fun `all-null notification is unknown`() {
         val result = classifier.classify(raw())
-        assertEquals("unknown", (result.parsed as ParsedFields.ClickFields).intent)
+        assertEquals("unknown", (result.parsed as ParsedFields.NotificationFields).intent)
     }
 
     @Test
     fun `unknown preserves raw text for analysis`() {
         val result = classifier.classify(raw(title = "Peak Pay", text = "\$3 boost in your zone"))
-        val fields = result.parsed as ParsedFields.ClickFields
+        val fields = result.parsed as ParsedFields.NotificationFields
         assertEquals("unknown", fields.intent)
-        assertTrue(fields.nodeText!!.isNotBlank())
+        assertTrue(fields.rawText!!.isNotBlank())
     }
 
     @Test
     fun `peak pay notification is currently unknown`() {
         // Not yet classified — add a peak_pay intent when observed in more detail
         val result = classifier.classify(raw(title = "Peak Pay", text = "\$3 boost active in your zone"))
-        assertEquals("unknown", (result.parsed as ParsedFields.ClickFields).intent)
+        assertEquals("unknown", (result.parsed as ParsedFields.NotificationFields).intent)
     }
 
     @Test
     fun `generic DoorDash notification is unknown`() {
         val result = classifier.classify(raw(title = "DoorDash", text = "Something we haven't seen before"))
-        assertEquals("unknown", (result.parsed as ParsedFields.ClickFields).intent)
+        assertEquals("unknown", (result.parsed as ParsedFields.NotificationFields).intent)
     }
 
     @Test
@@ -63,15 +63,15 @@ class UnknownNotificationClassifierTest {
         val result = classifier.classify(
             raw(title = "DoorDash", text = "Your \$55.42 transfer was initiated | Visa ████6222")
         )
-        assertEquals("unknown", (result.parsed as ParsedFields.ClickFields).intent)
+        assertEquals("unknown", (result.parsed as ParsedFields.NotificationFields).intent)
     }
 
     @Test
     fun `unknown raw text joins all non-null fields`() {
         val result = classifier.classify(raw(title = "DoorDash", text = "Some text"))
-        val fields = result.parsed as ParsedFields.ClickFields
+        val fields = result.parsed as ParsedFields.NotificationFields
         assertEquals("unknown", fields.intent)
-        assertTrue(fields.nodeText!!.contains("DoorDash"))
-        assertTrue(fields.nodeText!!.contains("Some text"))
+        assertTrue(fields.rawText!!.contains("DoorDash"))
+        assertTrue(fields.rawText!!.contains("Some text"))
     }
 }

@@ -1,13 +1,9 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
-import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
-import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
-import cloud.trotter.dashbuddy.test.util.TestParserFactory
+import cloud.trotter.dashbuddy.rules.ScreenRuleset
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
-import org.mockito.kotlin.mock
+import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,14 +18,8 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
     companion object {
         private const val FOLDER = "UNKNOWN"
 
-        // 1. REPLICATE THE DAGGER GRAPH
-        // We manually instantiate the recognizer exactly how Hilt would do it.
-        private val recognizer: ScreenClassifier by lazy {
-            ScreenClassifier(
-                injectedMatchers = TestMatcherFactory.createAllMatchers(),
-                injectedParsers = TestParserFactory.createAllParsers(),
-                interpreter = mock<JsonRuleInterpreter>(),
-            )
+        private val screenRuleset: ScreenRuleset by lazy {
+            TestRulesetFactory.screenRuleset
         }
 
         @JvmStatic
@@ -38,7 +28,7 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
             return try {
                 TestResourceLoader.loadForParameterized(FOLDER)
             } catch (_: Exception) {
-                println("⚠️ No UNKNOWN snapshots found. Create folder 'snapshots/$FOLDER' to use this tool.")
+                println("No UNKNOWN snapshots found. Create folder 'snapshots/$FOLDER' to use this tool.")
                 emptyList()
             }
         }
@@ -46,58 +36,52 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
 
     @Test
     fun `verify unknown and analyze`() {
-        println("\n╔══════════════════════════════════════════════════════════════╗")
-        println("║ 🕵️ INSPECTING: $myFilename")
-        println("╚══════════════════════════════════════════════════════════════╝")
+        println("\n  INSPECTING: $myFilename")
 
-        // --- STEP 1: VALIDATION (Real Production Logic) ---
-        // We ask the actual ScreenRecognizer what it thinks this is.
-        val observation = recognizer.classify(myNode)
-        val identifiedScreen = observation.target
-            ?.let { runCatching { Screen.valueOf(it) }.getOrNull() }
-            ?: Screen.UNKNOWN
+        // --- STEP 1: VALIDATION (JSON ruleset) ---
+        val result = screenRuleset.matchFirst(myNode)
+        val identifiedScreen = result?.target ?: "UNKNOWN"
 
         // If it returns anything OTHER than UNKNOWN, we have a problem.
-        if (identifiedScreen != Screen.UNKNOWN) {
-            val msg = "❌ VALIDATION FAILED: This screen is NOT unknown!\n" +
-                    "   It was matched as: ${identifiedScreen.name}\n" +
+        if (identifiedScreen != "UNKNOWN") {
+            val msg = "VALIDATION FAILED: This screen is NOT unknown!\n" +
+                    "   It was matched as: $identifiedScreen\n" +
                     "   Action: Move this file to the correct regression folder."
             println(msg)
             fail(msg)
         }
 
-        println("   ✅ CONFIRMED: Production Recognizer says this is UNKNOWN.")
-        println("   🔎 GENERATING ANALYSIS REPORT...")
+        println("   CONFIRMED: Ruleset says this is UNKNOWN.")
+        println("   GENERATING ANALYSIS REPORT...")
 
         // --- STEP 2: ANALYSIS ---
-        // (X-Ray Logic remains the same)
         val candidates = collectMatcherCandidates(myNode)
 
         if (candidates.isEmpty()) {
-            println("   ❌ No usable text or IDs found in this tree!")
+            println("   No usable text or IDs found in this tree!")
             return
         }
 
         // Text Anchors
         val textNodes = candidates.filter { !it.text.isNullOrBlank() }
         if (textNodes.isNotEmpty()) {
-            println("\n   🔤 TEXT ANCHORS (Use for unique phrases):")
-            textNodes.forEach { println("      • \"${it.text}\"") }
+            println("\n   TEXT ANCHORS (Use for unique phrases):")
+            textNodes.forEach { println("      \"${it.text}\"") }
         }
 
         // Content Descriptions
         val descNodes = candidates.filter { !it.contentDescription.isNullOrBlank() }
         if (descNodes.isNotEmpty()) {
-            println("\n   🏷️ CONTENT DESCRIPTIONS (Icons/Buttons):")
-            descNodes.forEach { println("      • \"${it.contentDescription}\"") }
+            println("\n   CONTENT DESCRIPTIONS (Icons/Buttons):")
+            descNodes.forEach { println("      \"${it.contentDescription}\"") }
         }
 
         // Resource IDs
         val idNodes = candidates.filter { !it.viewIdResourceName.isNullOrBlank() }
         if (idNodes.isNotEmpty()) {
-            println("\n   🆔 RESOURCE IDs (Use with caution):")
+            println("\n   RESOURCE IDs (Use with caution):")
             idNodes.forEach {
-                println("      • ${it.viewIdResourceName}  (Class: ${it.className})")
+                println("      ${it.viewIdResourceName}  (Class: ${it.className})")
             }
         }
         println("\n---------------------------------------------------")
