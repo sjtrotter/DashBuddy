@@ -50,6 +50,9 @@ class SideEffectEngine @Inject constructor(
     // Internal tracker for Timers (Replaces TimeoutHandler)
     private val activeTimers = ConcurrentHashMap<Any, Job>()
 
+    // Action throttle tracker: effectKey → last fired timestamp
+    private val actionLastFiredAt = ConcurrentHashMap<String, Long>()
+
     /**
      * Entry point: The StateManager pushes an effect here.
      * We execute it in the provided scope.
@@ -99,6 +102,22 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.ClickNode -> {
                 Timber.i("Executing Effect: Clicking Node (${effect.description})")
                 uiInteractionHandler.performClick(effect.node, effect.description)
+            }
+
+            is AppEffect.RequestAction -> {
+                val actionKey = effect.effectKey
+                val now = System.currentTimeMillis()
+                val throttle = effect.action.throttleMs ?: 500L
+                val lastFired = actionLastFiredAt[actionKey] ?: 0L
+                if (lastFired + throttle > now) {
+                    Timber.v("Throttled action: %s", actionKey)
+                    return
+                }
+                actionLastFiredAt[actionKey] = now
+                when (effect.action.verb) {
+                    "click" -> resolveAndClick(effect.action)
+                    else -> Timber.w("Unknown action verb: %s", effect.action.verb)
+                }
             }
 
             is AppEffect.PlayNotificationSound -> { /* Implementation */
@@ -181,11 +200,31 @@ class SideEffectEngine @Inject constructor(
         }
     }
 
+    /**
+     * Resolve a [RequestedAction]'s [NodeRef] against the live UI tree and click.
+     *
+     * Builds a template [UiNode] from the [NodeRef] fingerprint and delegates
+     * to [UiInteractionHandler.performClick], which handles live-root lookup
+     * and native-node matching internally.
+     */
+    private fun resolveAndClick(action: cloud.trotter.dashbuddy.domain.pipeline.RequestedAction) {
+        val ref = action.targetRef
+        // Build a minimal UiNode template for performClick's matching logic
+        val template = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(
+            viewIdResourceName = ref.viewIdSuffix,
+            text = ref.text,
+            className = ref.classNameHint,
+        )
+        Timber.i("Auto-Click [%s]: target id=%s", action.ruleId, ref.viewIdSuffix)
+        uiInteractionHandler.performClick(template, "Auto-Click [${action.ruleId}]")
+    }
+
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
         is AppEffect.UpdateBubble,
         is AppEffect.PlayNotificationSound,
         is AppEffect.CaptureScreenshot,
         is AppEffect.ClickNode,
+        is AppEffect.RequestAction,
         is AppEffect.StartOdometer,
         is AppEffect.StopOdometer,
         is AppEffect.PauseOdometer,

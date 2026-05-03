@@ -1,19 +1,14 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
-import cloud.trotter.dashbuddy.test.base.BaseParameterizedTest
+import cloud.trotter.dashbuddy.rules.ScreenRuleset
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.SnapshotLibrarian
 import cloud.trotter.dashbuddy.test.util.SnapshotScreenDiagnostics
 import cloud.trotter.dashbuddy.test.util.SnapshotSecurityScanner
 import cloud.trotter.dashbuddy.test.util.SnapshotSession
-import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
-import cloud.trotter.dashbuddy.test.util.TestMatcherFactory
-import org.mockito.kotlin.mock
-import cloud.trotter.dashbuddy.test.util.TestParserFactory
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
+import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.AfterClass
 import org.junit.Assert.fail
 import org.junit.BeforeClass
@@ -27,20 +22,14 @@ class InboxProcessorTest(
     private val filename: String,
     private val node: UiNode,
     private val breadcrumbs: List<String>
-) : BaseParameterizedTest(filename, node) {
-
-    override val stats = sharedStats
+) {
 
     companion object {
         private const val INBOX = "INBOX"
         val sharedStats = SnapshotTestStats(INBOX)
 
-        private val recognizer: ScreenClassifier by lazy {
-            ScreenClassifier(
-                injectedMatchers = TestMatcherFactory.createAllMatchers(),
-                injectedParsers = TestParserFactory.createAllParsers(),
-                interpreter = mock<JsonRuleInterpreter>(),
-            )
+        private val screenRuleset: ScreenRuleset by lazy {
+            TestRulesetFactory.screenRuleset
         }
 
         @JvmStatic
@@ -74,18 +63,16 @@ class InboxProcessorTest(
     @Test
     fun `process inbox file`() {
         if (filename == "EMPTY_INBOX") {
-            println("\n   🎉 Inbox is empty!")
+            println("\n   Inbox is empty!")
             return
         }
 
-        println("\n  📥 Processing: $filename")
+        println("\n  Processing: $filename")
         printFileLink(INBOX, filename)
 
-        // 1. IDENTIFY
-        val observation = recognizer.classify(node)
-        val identifiedScreen = observation.target
-            ?.let { runCatching { Screen.valueOf(it) }.getOrNull() }
-            ?: Screen.UNKNOWN
+        // 1. IDENTIFY via JSON ruleset
+        val result = screenRuleset.matchFirst(node)
+        val identifiedScreen = result?.target ?: "UNKNOWN"
 
         // 2. SECURITY SCAN
         val securityReport = SnapshotSecurityScanner.scan(node)
@@ -93,25 +80,26 @@ class InboxProcessorTest(
         // --- DECISION MATRIX ---
 
         // A. TOXIC
-        if (identifiedScreen == Screen.SENSITIVE || securityReport.isToxic) {
+        if (identifiedScreen == "SENSITIVE" || securityReport.isToxic) {
             handleToxicFile(securityReport)
             return
         }
 
         // B. UNKNOWN
-        if (identifiedScreen == Screen.UNKNOWN) {
+        if (identifiedScreen == "UNKNOWN") {
             handleUnknownFile()
             return
         }
 
         // C. KNOWN & CLEAN
-        handleKnownFile(identifiedScreen.name)
+        handleKnownFile(identifiedScreen)
     }
 
     // --- HANDLERS ---
 
     private fun handleKnownFile(screenName: String) {
-        println("     ✅ STATUS: IDENTIFIED ($screenName)")
+        println("     STATUS: IDENTIFIED ($screenName)")
+        sharedStats.recordSuccess()
 
         try {
             val targetFolder = SnapshotLibrarian.archiveSnapshot(
@@ -119,21 +107,21 @@ class InboxProcessorTest(
                 sourceFolder = INBOX,
                 targetFolder = screenName
             )
-            println("     📦 MOVED: snapshots/$screenName/$filename")
+            println("     MOVED: snapshots/$screenName/$filename")
             SnapshotLibrarian.pruneFolder(targetFolder)
 
         } catch (e: Exception) {
-            println("     ❌ ERROR: ${e.message}")
+            println("     ERROR: ${e.message}")
         }
     }
 
     private fun handleUnknownFile() {
-        println("     ❓ STATUS: UNKNOWN")
+        println("     STATUS: UNKNOWN")
 
         val variantResult = SnapshotSession.checkVariant(node, filename)
 
         if (variantResult is SnapshotSession.VariantResult.Duplicate) {
-            println("     🗑️ DELETING DUPLICATE")
+            println("     DELETING DUPLICATE")
             println("        (Identical structure to: ${variantResult.originalFilename})")
 
             val file = File("src/test/resources/snapshots/$INBOX/$filename")
@@ -154,8 +142,7 @@ class InboxProcessorTest(
     private fun printFileLink(folder: String, filename: String) {
         try {
             val file = File("src/test/resources/snapshots/$folder/$filename")
-            // Android Studio auto-links absolute paths
-            println("     🔗 OPEN: ${file.absolutePath}")
+            println("     OPEN: ${file.absolutePath}")
         } catch (_: Exception) {
         }
     }

@@ -1,16 +1,17 @@
-# 🧪 DashBuddy Recognition Pipeline Tests
+# DashBuddy Recognition Pipeline Tests
 
 This directory contains the **Snapshot Testing Infrastructure** for the DashBuddy Screen Recognition
 Pipeline. Unlike standard unit tests, this system is **data-driven**, using captured UI
 hierarchies (JSON) to verify that the app correctly identifies screens.
 
-## 📂 Directory Structure
+## Directory Structure
 
 * **`java/.../matchers/`**: Contains the test logic.
     * `InboxProcessorTest.kt`: The "Bot" that sorts new snapshots.
     * `UnknownScreenAnalysisTest.kt`: The "X-Ray" tool for analyzing unrecognized screens.
-    * `SensitiveDataScanTest.kt`: Safety check for PII.
-    * `*RegressionTest.kt`: Standard tests for known screen types.
+* **`java/.../rules/`**: Contains rule engine tests.
+    * `DefaultRulesIntegrationTest.kt`: Canonical regression — compiles `rules.default.json` and
+      spot-checks screen, click, and notification classification.
 * **`resources/snapshots/`**: Contains the test data.
     * `INBOX/`: The landing zone for raw, unclassified JSON dumps.
     * `SENSITIVE/`: **Redacted** snapshots of banking/personal screens.
@@ -18,7 +19,7 @@ hierarchies (JSON) to verify that the app correctly identifies screens.
 
 ---
 
-## 🚀 The Inbox Workflow (How to Add Tests)
+## The Inbox Workflow (How to Add Tests)
 
 We use an **"Inbox Zero"** approach to adding new test cases. You do not need to manually create
 folders or move files.
@@ -38,7 +39,7 @@ Run the **`InboxProcessorTest`** in Android Studio.
 This automation bot performs three actions:
 
 1. **Safety Check:** Scans for sensitive keywords (Bank, Routing #, etc.).
-2. **Recognition:** Runs the files against the pipeline.
+2. **Recognition:** Runs the files against the JSON ruleset (`rules.default.json`).
 3. **Auto-Sort:**
     * **If Recognized:** It **MOVES** the file to the correct regression folder (e.g.,
       `snapshots/DASH_PAUSED/`).
@@ -47,52 +48,51 @@ This automation bot performs three actions:
 
 ### 3. Handle the Results
 
-* **✅ Files Disappeared?** Good. They were recognized and moved to their folders. You can now commit
+* **Files Disappeared?** Good. They were recognized and moved to their folders. You can now commit
   them.
-* **❌ Test Failed (Sensitive)?** The file contains PII.
+* **Test Failed (Sensitive)?** The file contains PII.
     1. Open the JSON file in `INBOX`.
     2. Manually replace numbers/names with `[REDACTED]`.
     3. Move the file manually to `snapshots/SENSITIVE/`.
-* **❓ Files Left in Inbox?** These are **Unknown Screens**.
+* **Files Left in Inbox?** These are **Unknown Screens**.
     1. Read the "X-Ray Report" in the console output.
-    2. Use the text/IDs found to write a new `ScreenMatcher`.
-    3. Add the matcher to `TestMatcherFactory.kt`.
-    4. Run `InboxProcessorTest` again to auto-sort them.
+    2. Use the text/IDs found to write a new rule in `rules.default.json`.
+    3. Run `InboxProcessorTest` again to auto-sort them.
 
 ---
 
-## 🛡️ Handling Sensitive Data
+## Handling Sensitive Data
 
 **Strict Rule:** Never commit raw financial or personal data to Git.
 
-1. **Detection:** The `SensitiveScreenMatcher` runs first. It triggers on keywords like "Routing
-   Number", "Available Balance", etc.
+1. **Detection:** The sensitive screen rules in `rules.default.json` run at highest priority. They
+   trigger on keywords like "Routing Number", "Available Balance", etc.
 2. **Redaction:** You must manually edit the JSON files to remove values while preserving the
    structure (IDs/Layouts).
-3. **Verification:** Place redacted files in `snapshots/SENSITIVE/` and run
-   `SensitiveScreenRegressionTest` to ensure they are still recognized as "Sensitive" (and thus
-   blocked from logging).
+3. **Verification:** Place redacted files in `snapshots/SENSITIVE/` and verify they are still
+   recognized as SENSITIVE by the ruleset.
 
 ---
 
-## 🏗️ Adding New Matchers
+## Adding New Screen Recognition
 
-If you create a new `ScreenMatcher`:
+To recognize a new screen type:
 
-1. **Define:** Create the matcher class in `src/main/java/.../matchers/`.
-2. **Register (tests):** Add the new matcher to **`TestMatcherFactory.kt`**.
-    * *Note: This mimics the Dagger/Hilt injection graph for local tests.*
-3. **Register (live):** Add the matcher to the Hilt module that provides the matcher set to the
-   live accessibility pipeline.
-4. **Test:** Run `InboxProcessorTest` to verify it now picks up previously "Unknown" files.
+1. **Add a rule** to `app/src/main/assets/rules.default.json` under the `screens` array.
+2. **Add a `Screen` enum entry** in `domain/.../model/accessibility/Screen.kt` if needed.
+3. **Test:** Run `InboxProcessorTest` to verify it now picks up previously "Unknown" files.
 
 ---
 
-## 🚦 Running Regression
+## Running Regression
 
 To verify the entire pipeline (e.g., before a Pull Request):
 
-Run **`AllMatchersSuite`**.
+Run **`DefaultRulesIntegrationTest`** plus the full test suite:
 
-This executes all regression tests (`IdleMap`, `DashPaused`, `Loading`, etc.) in parallel, ensuring
-no recent changes have broken existing recognition logic.
+```bash
+./gradlew testDebugUnitTest
+```
+
+This exercises the JSON ruleset against all test data, ensuring no recent rule changes have broken
+existing recognition logic.

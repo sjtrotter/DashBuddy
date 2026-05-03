@@ -51,6 +51,8 @@ sealed class ParsedFields {
     data class PostTaskFields(
         override val activity: String? = null,
         val totalPay: Double,
+        val doorDashPay: Double? = null,
+        val customerTips: Double? = null,
         val parsedPay: ParsedPay? = null,
         val isExpanded: Boolean = false,
         val expandButtonId: String? = null,
@@ -108,6 +110,15 @@ sealed class ParsedFields {
         val intent: String,
         val nodeId: String? = null,
         val nodeText: String? = null,
+    ) : ParsedFields()
+
+    data class NotificationFields(
+        override val activity: String? = null,
+        val intent: String,
+        val amount: Double? = null,
+        val storeName: String? = null,
+        val deliveredAt: String? = null,
+        val rawText: String? = null,
     ) : ParsedFields()
 }
 

@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.rules
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.Screen
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -18,10 +17,14 @@ class ScreenRulesetTest {
         UiNode(text = text, viewIdResourceName = viewId)
 
     private fun branch(
-        target: Screen,
+        target: String,
         guards: List<(UiNode) -> Boolean> = emptyList(),
         condition: (UiNode) -> Boolean,
-    ) = CompiledBranch(target = target, guards = guards, condition = condition)
+    ) = CompiledBranch(
+        target = target,
+        rejectChecks = guards.map { guard -> { tree: UiNode, _: Bindings -> guard(tree) } },
+        requireCheck = { tree, _ -> condition(tree) },
+    )
 
     private fun rule(
         id: String,
@@ -34,6 +37,9 @@ class ScreenRulesetTest {
         branches = branches.toList(),
     )
 
+    /** Extract target string from ScreenMatchResult for concise assertions. */
+    private fun ScreenRuleset.matchTarget(tree: UiNode): String? = matchFirst(tree)?.target
+
     // =========================================================================
     // Basic matching
     // =========================================================================
@@ -41,17 +47,17 @@ class ScreenRulesetTest {
     @Test
     fun `matchFirst returns null when no rules match`() {
         val ruleset = ScreenRuleset(
-            listOf(rule("r1", 10, branch(Screen.OFFER_POPUP) { it.text == "Offer" }))
+            listOf(rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }))
         )
-        assertNull(ruleset.matchFirst(node(text = "Something else")))
+        assertNull(ruleset.matchTarget(node(text = "Something else")))
     }
 
     @Test
     fun `matchFirst returns the target of the matching branch`() {
         val ruleset = ScreenRuleset(
-            listOf(rule("r1", 10, branch(Screen.OFFER_POPUP) { it.text == "Offer" }))
+            listOf(rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }))
         )
-        assertEquals(Screen.OFFER_POPUP, ruleset.matchFirst(node(text = "Offer")))
+        assertEquals("OFFER_POPUP", ruleset.matchTarget(node(text = "Offer")))
     }
 
     // =========================================================================
@@ -63,24 +69,24 @@ class ScreenRulesetTest {
         val ruleset = ScreenRuleset(
             listOf(
                 // Priority 20 — would match IDLE_MAP
-                rule("low-priority", 20, branch(Screen.MAIN_MAP_IDLE) { true }),
+                rule("low-priority", 20, branch("MAIN_MAP_IDLE") { true }),
                 // Priority 10 — evaluated first; matches OFFER
-                rule("high-priority", 10, branch(Screen.OFFER_POPUP) { true }),
+                rule("high-priority", 10, branch("OFFER_POPUP") { true }),
             )
         )
         // Priority-10 rule wins even though it was added second
-        assertEquals(Screen.OFFER_POPUP, ruleset.matchFirst(node()))
+        assertEquals("OFFER_POPUP", ruleset.matchTarget(node()))
     }
 
     @Test
     fun `matchFirst skips non-matching rules and continues to next`() {
         val ruleset = ScreenRuleset(
             listOf(
-                rule("r1", 10, branch(Screen.OFFER_POPUP) { it.text == "Offer" }),
-                rule("r2", 20, branch(Screen.MAIN_MAP_IDLE) { it.text == "Map" }),
+                rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }),
+                rule("r2", 20, branch("MAIN_MAP_IDLE") { it.text == "Map" }),
             )
         )
-        assertEquals(Screen.MAIN_MAP_IDLE, ruleset.matchFirst(node(text = "Map")))
+        assertEquals("MAIN_MAP_IDLE", ruleset.matchTarget(node(text = "Map")))
     }
 
     // =========================================================================
@@ -94,12 +100,12 @@ class ScreenRulesetTest {
             listOf(
                 rule(
                     "r1", 10,
-                    branch(Screen.OFFER_POPUP, guards = listOf(guardFires)) { true }
+                    branch("OFFER_POPUP", guards = listOf(guardFires)) { true }
                 )
             )
         )
         // Guard fires → branch is skipped → no match → null
-        assertNull(ruleset.matchFirst(node()))
+        assertNull(ruleset.matchTarget(node()))
     }
 
     @Test
@@ -109,11 +115,11 @@ class ScreenRulesetTest {
             listOf(
                 rule(
                     "r1", 10,
-                    branch(Screen.OFFER_POPUP, guards = listOf(guardSilent)) { true }
+                    branch("OFFER_POPUP", guards = listOf(guardSilent)) { true }
                 )
             )
         )
-        assertEquals(Screen.OFFER_POPUP, ruleset.matchFirst(node()))
+        assertEquals("OFFER_POPUP", ruleset.matchTarget(node()))
     }
 
     @Test
@@ -124,11 +130,11 @@ class ScreenRulesetTest {
             listOf(
                 rule(
                     "r1", 10,
-                    branch(Screen.OFFER_POPUP, guards = listOf(g1, g2)) { true }
+                    branch("OFFER_POPUP", guards = listOf(g1, g2)) { true }
                 )
             )
         )
-        assertNull(ruleset.matchFirst(node()))
+        assertNull(ruleset.matchTarget(node()))
     }
 
     // =========================================================================
@@ -141,25 +147,25 @@ class ScreenRulesetTest {
             listOf(
                 rule(
                     "branched", 10,
-                    branch(Screen.DELIVERY_SUMMARY_EXPANDED) { it.text == "expanded" },
-                    branch(Screen.DELIVERY_SUMMARY_COLLAPSED) { it.text == "collapsed" },
+                    branch("DELIVERY_SUMMARY_EXPANDED") { it.text == "expanded" },
+                    branch("DELIVERY_SUMMARY_COLLAPSED") { it.text == "collapsed" },
                 )
             )
         )
-        assertEquals(Screen.DELIVERY_SUMMARY_EXPANDED, ruleset.matchFirst(node(text = "expanded")))
-        assertEquals(Screen.DELIVERY_SUMMARY_COLLAPSED, ruleset.matchFirst(node(text = "collapsed")))
+        assertEquals("DELIVERY_SUMMARY_EXPANDED", ruleset.matchTarget(node(text = "expanded")))
+        assertEquals("DELIVERY_SUMMARY_COLLAPSED", ruleset.matchTarget(node(text = "collapsed")))
     }
 
     @Test
     fun `subsequent rule evaluated when earlier rule has no matching branch`() {
         val ruleset = ScreenRuleset(
             listOf(
-                rule("r1", 10, branch(Screen.OFFER_POPUP) { it.text == "Offer" }),
-                rule("r2", 20, branch(Screen.MAIN_MAP_IDLE) { true }),
+                rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }),
+                rule("r2", 20, branch("MAIN_MAP_IDLE") { true }),
             )
         )
         // r1 doesn't match "Map", r2 matches everything
-        assertEquals(Screen.MAIN_MAP_IDLE, ruleset.matchFirst(node(text = "Map")))
+        assertEquals("MAIN_MAP_IDLE", ruleset.matchTarget(node(text = "Map")))
     }
 
     // =========================================================================
@@ -170,9 +176,9 @@ class ScreenRulesetTest {
     fun `ruleCount reflects the number of compiled rules`() {
         val ruleset = ScreenRuleset(
             listOf(
-                rule("r1", 10, branch(Screen.OFFER_POPUP) { true }),
-                rule("r2", 20, branch(Screen.MAIN_MAP_IDLE) { true }),
-                rule("r3", 30, branch(Screen.DASH_PAUSED) { true }),
+                rule("r1", 10, branch("OFFER_POPUP") { true }),
+                rule("r2", 20, branch("MAIN_MAP_IDLE") { true }),
+                rule("r3", 30, branch("DASH_PAUSED") { true }),
             )
         )
         assertEquals(3, ruleset.ruleCount)
@@ -180,6 +186,6 @@ class ScreenRulesetTest {
 
     @Test
     fun `empty ruleset returns null`() {
-        assertNull(ScreenRuleset(emptyList()).matchFirst(node()))
+        assertNull(ScreenRuleset(emptyList()).matchTarget(node()))
     }
 }

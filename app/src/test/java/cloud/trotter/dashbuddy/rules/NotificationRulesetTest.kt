@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.rules
 
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,7 +21,7 @@ class NotificationRulesetTest {
     private fun rule(
         id: String,
         priority: Int,
-        classify: (RawNotificationData) -> NotificationInfo?,
+        classify: (RawNotificationData) -> NotificationClassifyResult?,
     ) = CompiledNotificationRule(id = id, priority = priority, overrideable = true, classify = classify)
 
     // =========================================================================
@@ -32,7 +32,7 @@ class NotificationRulesetTest {
     fun `classifyFirst returns null when no rule matches`() {
         val ruleset = NotificationRuleset(
             listOf(rule("r1", 10) { raw ->
-                if (raw.title?.contains("New Order") == true) NotificationInfo.NewOrder else null
+                if (raw.title?.contains("New Order") == true) NotificationClassifyResult("new_order") else null
             })
         )
         assertNull(ruleset.classifyFirst(raw(title = "DoorDash")))
@@ -41,9 +41,9 @@ class NotificationRulesetTest {
     @Test
     fun `classifyFirst returns first non-null classify result`() {
         val ruleset = NotificationRuleset(
-            listOf(rule("r1", 10) { NotificationInfo.NewOrder })
+            listOf(rule("r1", 10) { NotificationClassifyResult("new_order") })
         )
-        assertEquals(NotificationInfo.NewOrder, ruleset.classifyFirst(raw()))
+        assertEquals("new_order", ruleset.classifyFirst(raw())?.intent)
     }
 
     // =========================================================================
@@ -54,12 +54,12 @@ class NotificationRulesetTest {
     fun `lower priority rule wins when both match`() {
         val ruleset = NotificationRuleset(
             listOf(
-                rule("high-priority", 10) { NotificationInfo.NewOrder },
-                rule("low-priority", 20) { NotificationInfo.ScheduledDashExpired },
+                rule("high-priority", 10) { NotificationClassifyResult("new_order") },
+                rule("low-priority", 20) { NotificationClassifyResult("scheduled_dash_expired") },
             )
         )
-        // Priority-10 rule evaluated first → returns NewOrder
-        assertEquals(NotificationInfo.NewOrder, ruleset.classifyFirst(raw()))
+        // Priority-10 rule evaluated first → returns new_order
+        assertEquals("new_order", ruleset.classifyFirst(raw())?.intent)
     }
 
     @Test
@@ -67,23 +67,23 @@ class NotificationRulesetTest {
         val ruleset = NotificationRuleset(
             listOf(
                 rule("r1", 10) { null },  // always returns null
-                rule("r2", 20) { NotificationInfo.NewOrder },
+                rule("r2", 20) { NotificationClassifyResult("new_order") },
             )
         )
-        assertEquals(NotificationInfo.NewOrder, ruleset.classifyFirst(raw()))
+        assertEquals("new_order", ruleset.classifyFirst(raw())?.intent)
     }
 
     @Test
     fun `rules are evaluated in ascending priority regardless of insertion order`() {
         val ruleset = NotificationRuleset(
             listOf(
-                rule("last", 30) { NotificationInfo.ScheduledDashExpired },
+                rule("last", 30) { NotificationClassifyResult("scheduled_dash_expired") },
                 rule("first", 10) { null },  // always returns null
-                rule("second", 20) { NotificationInfo.NewOrder },
+                rule("second", 20) { NotificationClassifyResult("new_order") },
             )
         )
-        // Priority 10 returns null, priority 20 returns NewOrder → NewOrder wins
-        assertEquals(NotificationInfo.NewOrder, ruleset.classifyFirst(raw()))
+        // Priority 10 returns null, priority 20 returns new_order → new_order wins
+        assertEquals("new_order", ruleset.classifyFirst(raw())?.intent)
     }
 
     // =========================================================================
@@ -97,16 +97,23 @@ class NotificationRulesetTest {
             listOf(rule("tip", 10) { raw ->
                 val m = regex.find(raw.toFullString()) ?: return@rule null
                 val amount = m.groupValues[1].toDoubleOrNull() ?: return@rule null
-                NotificationInfo.AdditionalTip(amount, m.groupValues[2].trim(), m.groupValues[3].trim())
+                NotificationClassifyResult(
+                    intent = "additional_tip",
+                    fields = mapOf(
+                        "amount" to amount,
+                        "storeName" to m.groupValues[2].trim(),
+                        "deliveredAt" to m.groupValues[3].trim(),
+                    ),
+                )
             })
         )
         val result = ruleset.classifyFirst(
             raw(bigText = "added \$5.00 tip on a past H-E-B order delivered at 4/26, 3:15 PM")
         )
-        assertTrue(result is NotificationInfo.AdditionalTip)
-        val tip = result as NotificationInfo.AdditionalTip
-        assertEquals(5.00, tip.amount, 0.001)
-        assertEquals("H-E-B", tip.storeName)
+        assertNotNull(result)
+        assertEquals("additional_tip", result!!.intent)
+        assertEquals(5.00, result.fields["amount"] as Double, 0.001)
+        assertEquals("H-E-B", result.fields["storeName"])
     }
 
     // =========================================================================

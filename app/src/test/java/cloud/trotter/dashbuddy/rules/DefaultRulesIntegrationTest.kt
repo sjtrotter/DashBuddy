@@ -1,8 +1,6 @@
 package cloud.trotter.dashbuddy.rules
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ClickInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -65,28 +63,28 @@ class DefaultRulesIntegrationTest {
     }
 
     // =========================================================================
-    // Click classification — spot checks matching the Kotlin ClickClassifier
+    // Click classification — spot checks
     // =========================================================================
 
     @Test
-    fun `accept_button id classifies as AcceptOffer`() {
+    fun `accept_button id classifies as accept_offer`() {
         val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/accept_button")
-        assertEquals(ClickInfo.AcceptOffer, clickRuleset.classifyFirst(node))
+        assertEquals("accept_offer", clickRuleset.classifyFirst(node)?.intent)
     }
 
     @Test
-    fun `'Decline offer' text classifies as DeclineOffer`() {
+    fun `'Decline offer' text classifies as decline_offer`() {
         val node = UiNode(text = "Decline offer")
-        assertEquals(ClickInfo.DeclineOffer, clickRuleset.classifyFirst(node))
+        assertEquals("decline_offer", clickRuleset.classifyFirst(node)?.intent)
     }
 
     @Test
-    fun `primary_action_button + Arrived at store classifies as ArrivedAtStore`() {
+    fun `primary_action_button + Arrived at store classifies as arrived_at_store`() {
         val node = UiNode(
             viewIdResourceName = "com.doordash.driverapp:id/primary_action_button",
             text = "Arrived at store",
         )
-        assertEquals(ClickInfo.ArrivedAtStore, clickRuleset.classifyFirst(node))
+        assertEquals("arrived_at_store", clickRuleset.classifyFirst(node)?.intent)
     }
 
     @Test
@@ -96,19 +94,19 @@ class DefaultRulesIntegrationTest {
     }
 
     // =========================================================================
-    // Notification classification — spot checks matching the Kotlin classifier
+    // Notification classification — spot checks
     // =========================================================================
 
     @Test
-    fun `New Order title classifies as NewOrder`() {
+    fun `New Order title classifies as new_order`() {
         val raw = raw(title = "New Order")
-        assertEquals(NotificationInfo.NewOrder, notificationRuleset.classifyFirst(raw))
+        assertEquals("new_order", notificationRuleset.classifyFirst(raw)?.intent)
     }
 
     @Test
     fun `Scheduled dash expired notification classifies correctly`() {
         val raw = raw(text = "Your scheduled dash has expired")
-        assertEquals(NotificationInfo.ScheduledDashExpired, notificationRuleset.classifyFirst(raw))
+        assertEquals("scheduled_dash_expired", notificationRuleset.classifyFirst(raw)?.intent)
     }
 
     @Test
@@ -116,11 +114,10 @@ class DefaultRulesIntegrationTest {
         val raw = raw(bigText = "added \$5.00 tip on a past H-E-B order delivered at 4/26, 3:15 PM")
         val result = notificationRuleset.classifyFirst(raw)
         assertNotNull("Expected AdditionalTip result", result)
-        assertTrue("Expected AdditionalTip, got $result", result is NotificationInfo.AdditionalTip)
-        val tip = result as NotificationInfo.AdditionalTip
-        assertEquals(5.00, tip.amount, 0.001)
-        assertEquals("H-E-B", tip.storeName)
-        assertEquals("4/26, 3:15 PM", tip.deliveredAt)
+        assertEquals("additional_tip", result!!.intent)
+        assertEquals(5.00, result.fields["amount"] as Double, 0.001)
+        assertEquals("H-E-B", result.fields["storeName"])
+        assertEquals("4/26, 3:15 PM", result.fields["deliveredAt"])
     }
 
     @Test

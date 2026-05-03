@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.rules
 
-import cloud.trotter.dashbuddy.domain.model.notification.NotificationInfo
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 
 /**
@@ -16,13 +15,21 @@ class NotificationRuleset(rules: List<CompiledNotificationRule>) {
     val ruleCount: Int get() = sorted.size
 
     /**
-     * Evaluate the sorted rules against [raw] and return the first matching [NotificationInfo],
-     * or null if no rule matches (caller should fall back to [NotificationInfo.Unknown]).
+     * Evaluate the sorted rules against [raw] and return the first match as a
+     * [NotificationMatchResult], or null if no rule matches.
      */
-    fun classifyFirst(raw: RawNotificationData): NotificationInfo? {
+    fun classifyFirst(raw: RawNotificationData): NotificationMatchResult? {
         for (rule in sorted) {
             val result = rule.classify(raw)
-            if (result != null) return result
+            if (result != null) {
+                return NotificationMatchResult(
+                    ruleId = rule.id,
+                    intent = result.intent,
+                    fields = result.fields,
+                    flow = rule.flow,
+                    modeHint = rule.modeHint,
+                )
+            }
         }
         return null
     }

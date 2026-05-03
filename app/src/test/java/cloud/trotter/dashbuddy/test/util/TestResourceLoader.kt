@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.core.database.log.dto.SnapshotWrapperDto
 import cloud.trotter.dashbuddy.core.database.log.dto.UiNodeDto
 import cloud.trotter.dashbuddy.core.database.log.mapper.toDomain
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import java.io.File
@@ -42,7 +42,7 @@ object TestResourceLoader {
         return try {
             val content = file.readText()
             if (content.contains("\"isGolden\": true")) return true
-            val wrapperDto = jsonParser.decodeFromString<SnapshotWrapperDto>(content)
+            val wrapperDto = jsonParser.decodeFromString<SnapshotWrapperLegacy>(content)
             wrapperDto.isGolden
         } catch (_: Exception) {
             false
@@ -58,7 +58,7 @@ object TestResourceLoader {
             val isWrapper = jsonElement.jsonObject.containsKey("root")
 
             if (isWrapper) {
-                val wrapperDto = jsonParser.decodeFromString<SnapshotWrapperDto>(jsonString)
+                val wrapperDto = jsonParser.decodeFromString<SnapshotWrapperLegacy>(jsonString)
                 val domainNode = wrapperDto.root.toDomain()
                 domainNode to wrapperDto.breadcrumbs
             } else {
@@ -99,3 +99,16 @@ object TestResourceLoader {
         }
     }
 }
+
+/**
+ * Legacy wrapper DTO for backward-compatible loading of snapshot files
+ * that were written with the old DiskCaptureBus (SnapshotWrapperDto format).
+ * New captures use [CaptureEnvelope] format; this only exists for the test corpus.
+ */
+@Serializable
+internal data class SnapshotWrapperLegacy(
+    val timestamp: Long,
+    val breadcrumbs: List<String> = emptyList(),
+    val isGolden: Boolean = false,
+    val root: UiNodeDto,
+)

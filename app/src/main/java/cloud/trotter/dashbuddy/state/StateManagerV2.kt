@@ -41,7 +41,7 @@ class StateManagerV2 @Inject constructor(
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val gson: Gson = GsonBuilder()
-        .registerTypeHierarchyAdapter(ParsedFields::class.java, ParsedFieldsAdapter())
+        .registerTypeAdapterFactory(parsedFieldsAdapterFactory())
         .create()
 
     // UI input stream (clicks, debug buttons)
@@ -127,7 +127,7 @@ class StateManagerV2 @Inject constructor(
             platform = platform.name,
             flow = flowObs?.flow?.name,
             modeHint = flowObs?.modeHint?.name,
-            parsedJson = if (flowObs != null) gson.toJson(flowObs.parsed) else "{}",
+            parsedJson = if (flowObs != null) gson.toJson(flowObs.parsed, ParsedFields::class.java) else "{}",
             captureId = captureId,
             metadataJson = gson.toJson(metadata),
             correlationVersion = state.correlationVersion,

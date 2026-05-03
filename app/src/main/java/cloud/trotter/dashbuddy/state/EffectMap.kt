@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -35,6 +36,7 @@ class EffectMap @Inject constructor() {
     private val gson = Gson()
 
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
+        addAll(diffActions(obs))
         addAll(diffFlowRegion(prev.regions.flow, next.regions.flow, obs))
         val allPlatforms = (prev.regions.platforms.keys + next.regions.platforms.keys).distinct()
         for (p in allPlatforms) {
@@ -394,25 +396,24 @@ class EffectMap @Inject constructor() {
      */
     private fun diffNotification(obs: Observation): List<AppEffect> {
         if (obs !is Observation.Notification) return emptyList()
-        val fields = obs.parsed as? ParsedFields.ClickFields ?: return emptyList()
+        val fields = obs.parsed as? ParsedFields.NotificationFields ?: return emptyList()
 
         return buildList {
             when (fields.intent) {
                 "additional_tip" -> {
-                    val parts = fields.nodeText?.split("|")
-                    if (parts != null && parts.size == 3) {
-                        val amount = parts[0].toDoubleOrNull()
-                        if (amount != null) {
-                            add(
-                                AppEffect.ProcessTipNotification(
-                                    amount = amount,
-                                    storeName = parts[1],
-                                    deliveredAt = parts[2],
-                                )
+                    val amount = fields.amount
+                    val storeName = fields.storeName
+                    val deliveredAt = fields.deliveredAt
+                    if (amount != null && storeName != null && deliveredAt != null) {
+                        add(
+                            AppEffect.ProcessTipNotification(
+                                amount = amount,
+                                storeName = storeName,
+                                deliveredAt = deliveredAt,
                             )
-                        }
+                        )
                     }
-                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "TIP_ADDED: ${fields.nodeText}"))
+                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "TIP_ADDED: \$$amount $storeName"))
                 }
                 "new_order" -> {
                     add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "NEW_ORDER"))
@@ -421,9 +422,54 @@ class EffectMap @Inject constructor() {
                     add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "SCHEDULED_DASH_EXPIRED"))
                 }
                 else -> {
-                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "UNKNOWN: ${fields.nodeText}"))
+                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "UNKNOWN: ${fields.rawText}"))
                 }
             }
+        }
+    }
+
+    // =========================================================================
+    // RULE-ORIGINATED ACTIONS (ADR-0006)
+    // =========================================================================
+
+    /**
+     * Extract actions from the observation and emit [AppEffect.RequestAction]
+     * for each that passes its gate. Runs at top level — NOT inside any
+     * region stepper — honouring ADR-0005 §13 and ADR-0006 §2/§9.
+     */
+    private fun diffActions(obs: Observation): List<AppEffect> {
+        val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
+        if (flowObs.actions.isEmpty()) return emptyList()
+        return flowObs.actions
+            .filter { evaluateGate(it.onlyIf, flowObs.parsed) }
+            .map { AppEffect.RequestAction(it) }
+    }
+
+    private fun evaluateGate(gate: ParsedFieldsGate?, parsed: ParsedFields): Boolean {
+        if (gate == null) return true
+        val fieldsMap = parsedFieldsToMap(parsed)
+        return when (gate) {
+            is ParsedFieldsGate.FieldEquals -> fieldsMap[gate.field] == gate.value
+            is ParsedFieldsGate.FieldNotEquals -> fieldsMap[gate.field] != gate.value
+            is ParsedFieldsGate.FieldNotNull -> fieldsMap[gate.field] != null
+        }
+    }
+
+    /**
+     * Extract named fields from a [ParsedFields] subtype into a flat map
+     * for gate evaluation. Uses Kotlin reflection on data class properties.
+     */
+    private fun parsedFieldsToMap(parsed: ParsedFields): Map<String, Any?> {
+        if (parsed is ParsedFields.None) return emptyMap()
+        return try {
+            parsed::class.java.declaredFields
+                .filter { it.name != "activity" }
+                .associate { field ->
+                    field.isAccessible = true
+                    field.name to field.get(parsed)
+                }
+        } catch (_: Exception) {
+            emptyMap()
         }
     }
 

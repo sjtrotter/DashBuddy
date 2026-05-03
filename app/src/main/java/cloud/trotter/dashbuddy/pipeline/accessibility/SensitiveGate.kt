@@ -9,9 +9,9 @@ import javax.inject.Singleton
  * (banking, identity, payment). Runs before the classifier — sensitive
  * events never reach the state machine or capture system.
  *
- * Extracted from SensitiveScreenMatcher; the matcher remains for backward
- * compatibility during the transition but the gate is the architectural
- * enforcement point per ADR-0005.
+ * The gate is the architectural enforcement point per ADR-0005.
+ * The JSON ruleset also has sensitive rules (priority 0 and 999) for
+ * classification, but this gate runs earlier to prevent capture.
  */
 @Singleton
 class SensitiveGate @Inject constructor() {

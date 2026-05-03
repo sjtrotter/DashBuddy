@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.rules
 
-import cloud.trotter.dashbuddy.domain.model.accessibility.ClickInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 
 /**
@@ -16,12 +15,19 @@ class ClickRuleset(rules: List<CompiledClickRule>) {
     val ruleCount: Int get() = sorted.size
 
     /**
-     * Evaluate the sorted rules against [node] and return the first matching [ClickInfo],
-     * or null if no rule matches (caller should fall back to [ClickInfo.Unknown]).
+     * Evaluate the sorted rules against [node] and return the first match as a
+     * [ClickMatchResult], or null if no rule matches.
      */
-    fun classifyFirst(node: UiNode): ClickInfo? {
+    fun classifyFirst(node: UiNode): ClickMatchResult? {
         for (rule in sorted) {
-            if (rule.condition(node)) return rule.factory(node)
+            if (rule.condition(node)) {
+                return ClickMatchResult(
+                    ruleId = rule.id,
+                    intent = rule.intentFactory(node),
+                    flow = rule.flow,
+                    modeHint = rule.modeHint,
+                )
+            }
         }
         return null
     }
