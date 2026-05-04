@@ -15,6 +15,7 @@ class MapperEnforcementTest {
             "allText",          // lazy property
             "structuralHash",   // lazy property
             "contentHash",      // lazy property
+            "stableHash",       // lazy property (identity-based dedup)
             "hasViewId",        // computed interpreter helper (not stored)
         )
         // Get all property names from the Domain model
