@@ -3,8 +3,11 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
+import org.mockito.kotlin.doReturn
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.mockito.kotlin.mock
@@ -17,7 +20,10 @@ import org.mockito.kotlin.mock
  */
 class UnknownClickTest {
 
-    private val classifier = ClickClassifier(mock<JsonRuleInterpreter>())
+    private val classifier = ClickClassifier(
+        mock<JsonRuleInterpreter>(),
+        mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+    )
 
     private fun node(viewId: String? = null, text: String? = null) =
         UiNode(viewIdResourceName = viewId, text = text)

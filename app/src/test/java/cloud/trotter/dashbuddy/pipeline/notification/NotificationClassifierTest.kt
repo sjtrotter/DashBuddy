@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.notification
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
@@ -20,9 +22,12 @@ import org.mockito.kotlin.mock
  */
 class NotificationClassifierTest {
 
-    private val classifier = NotificationClassifier(mock<JsonRuleInterpreter> {
-        on { notificationRuleset } doReturn TestRulesetFactory.notificationRuleset
-    })
+    private val classifier = NotificationClassifier(
+        mock<JsonRuleInterpreter> {
+            on { notificationRuleset } doReturn TestRulesetFactory.notificationRuleset
+        },
+        mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+    )
 
     // =========================================================================
     // Helpers

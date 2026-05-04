@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 
-import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -15,6 +15,7 @@ import javax.inject.Inject
  */
 class ClickClassifier @Inject constructor(
     private val interpreter: JsonRuleInterpreter,
+    private val metadataProvider: ReplayMetadataProvider,
 ) {
 
     fun classify(node: UiNode): Observation.Click {
@@ -26,7 +27,7 @@ class ClickClassifier @Inject constructor(
                     timestamp = System.currentTimeMillis(),
                     captureId = null,
                     ruleId = result.ruleId,
-                    metadata = ReplayMetadata.EMPTY,
+                    metadata = metadataProvider.current(),
                     flow = result.flow,
                     modeHint = result.modeHint,
                     parsed = ParsedFields.ClickFields(intent = result.intent),
@@ -43,7 +44,7 @@ class ClickClassifier @Inject constructor(
             timestamp = System.currentTimeMillis(),
             captureId = null,
             ruleId = null,
-            metadata = ReplayMetadata.EMPTY,
+            metadata = metadataProvider.current(),
             flow = null,
             modeHint = null,
             parsed = ParsedFields.ClickFields(

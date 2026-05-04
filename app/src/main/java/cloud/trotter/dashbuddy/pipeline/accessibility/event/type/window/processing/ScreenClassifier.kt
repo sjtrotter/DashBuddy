@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing
 
-import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedAction
@@ -13,6 +13,7 @@ import javax.inject.Singleton
 @Singleton
 class ScreenClassifier @Inject constructor(
     private val interpreter: JsonRuleInterpreter,
+    private val metadataProvider: ReplayMetadataProvider,
 ) {
 
     fun classify(node: UiNode): Observation.Screen {
@@ -54,7 +55,7 @@ class ScreenClassifier @Inject constructor(
             timestamp = System.currentTimeMillis(),
             captureId = null,
             ruleId = ruleId,
-            metadata = ReplayMetadata.EMPTY,
+            metadata = metadataProvider.current(),
             flow = flow,
             modeHint = modeHint,
             parsed = parsed,

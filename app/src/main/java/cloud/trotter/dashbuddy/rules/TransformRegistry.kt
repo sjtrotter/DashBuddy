@@ -337,7 +337,7 @@ object TransformRegistry {
     /**
      * Assert that the sum of named fields approximately equals a target field.
      * ```json
-     * { "assert": "sumApproxEquals", "fields": ["doorDashPay","customerTips"],
+     * { "assert": "sumApproxEquals", "fields": ["appPay","customerTips"],
      *   "target": "totalPay", "tolerance": 0.02 }
      * ```
      */

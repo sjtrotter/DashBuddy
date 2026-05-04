@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
-import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -15,6 +15,7 @@ import javax.inject.Inject
  */
 class NotificationClassifier @Inject constructor(
     private val interpreter: JsonRuleInterpreter,
+    private val metadataProvider: ReplayMetadataProvider,
 ) {
 
     fun classify(raw: RawNotificationData): Observation.Notification {
@@ -26,7 +27,7 @@ class NotificationClassifier @Inject constructor(
                     timestamp = System.currentTimeMillis(),
                     captureId = null,
                     ruleId = result.ruleId,
-                    metadata = ReplayMetadata.EMPTY,
+                    metadata = metadataProvider.current(),
                     flow = result.flow,
                     modeHint = result.modeHint,
                     parsed = ParsedFields.NotificationFields(
@@ -47,7 +48,7 @@ class NotificationClassifier @Inject constructor(
             timestamp = System.currentTimeMillis(),
             captureId = null,
             ruleId = null,
-            metadata = ReplayMetadata.EMPTY,
+            metadata = metadataProvider.current(),
             flow = null,
             modeHint = null,
             parsed = ParsedFields.NotificationFields(

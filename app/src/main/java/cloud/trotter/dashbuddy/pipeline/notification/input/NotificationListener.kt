@@ -4,6 +4,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 //import cloud.trotter.dashbuddy.pipeline.Pipeline
 //import cloud.trotter.dashbuddy.pipeline.features.notification.NotificationInfo
+import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject
@@ -26,7 +27,7 @@ class NotificationListener : NotificationListenerService() {
 
         // 1. Filter: Only care about specific apps?
         val packageName = sbn.packageName
-        val validPackages = setOf("com.doordash.driverapp")
+        val validPackages = Platform.watchedPackages()
 
         if (packageName !in validPackages) return
 

@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.di
 
 import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
 import cloud.trotter.dashbuddy.core.data.capture.DiskCaptureBus
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
+import cloud.trotter.dashbuddy.pipeline.ReplayMetadataProviderImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -18,4 +20,7 @@ abstract class PipelineModule {
 
     @Binds @Singleton
     abstract fun bindCaptureBus(impl: DiskCaptureBus): CaptureBus
+
+    @Binds @Singleton
+    abstract fun bindReplayMetadataProvider(impl: ReplayMetadataProviderImpl): ReplayMetadataProvider
 }

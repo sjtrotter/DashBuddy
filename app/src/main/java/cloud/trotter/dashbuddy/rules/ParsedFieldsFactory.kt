@@ -107,7 +107,7 @@ object ParsedFieldsFactory {
         return ParsedFields.PostTaskFields(
             activity = f.str("activity"),
             totalPay = f.double("totalPay") ?: 0.0,
-            doorDashPay = f.double("doorDashPay"),
+            appPay = f.double("appPay"),
             customerTips = f.double("customerTips"),
             parsedPay = parsedPay,
             isExpanded = f.bool("isExpanded") ?: false,

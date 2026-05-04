@@ -2,10 +2,13 @@ package cloud.trotter.dashbuddy.pipeline.notification
 
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 
 /**
@@ -17,7 +20,10 @@ import org.mockito.kotlin.mock
  */
 class UnknownNotificationClassifierTest {
 
-    private val classifier = NotificationClassifier(mock<JsonRuleInterpreter>())
+    private val classifier = NotificationClassifier(
+        mock<JsonRuleInterpreter>(),
+        mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+    )
 
     private fun raw(title: String? = null, text: String? = null, bigText: String? = null) =
         RawNotificationData(

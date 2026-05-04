@@ -22,6 +22,7 @@ data class PlatformRegion(
     val sessionType: SessionType? = null,
     val ratings: RatingsSnapshot? = null,
     val surgeMultiplier: Double? = null,
+    val lastPostTaskPayHash: Int? = null,
     val lastObservedAt: Long = 0,
 )
 

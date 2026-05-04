@@ -25,6 +25,5 @@ local.properties
 .kotlin/
 
 # Claude Code local session state (commit CLAUDE.md, not this)
-.claude/settings.local.json
+.claude/
 CLAUDE.local.md
-/.claude/worktrees/magical-meninsky-93448f/

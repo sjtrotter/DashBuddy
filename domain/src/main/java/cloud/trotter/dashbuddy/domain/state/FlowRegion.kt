@@ -33,4 +33,5 @@ data class PendingOffer(
     val presentedAt: Long,
     val evaluation: OfferEvaluation? = null,
     val returnFlow: Flow,
+    val lastClickIntent: String? = null,
 )
