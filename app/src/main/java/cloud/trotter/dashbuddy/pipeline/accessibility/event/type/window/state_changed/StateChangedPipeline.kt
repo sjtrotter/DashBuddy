@@ -1,19 +1,26 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.state_changed
 
 import android.view.accessibility.AccessibilityEvent
-import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.onEach
+import timber.log.Timber
 import javax.inject.Inject
 
 class StateChangedPipeline @Inject constructor(
     private val source: AccessibilitySource
 ) {
-    fun output(): Flow<UiNode> = source.events
+    fun output(): Flow<TreeSnapshot> = source.events
         .filter { it.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED }
-        .mapNotNull { _ ->
-            source.getCurrentRootNode()
+        .onEach {
+            Timber.d("⚡ STATE_CHANGED from %s  types=0x%02x", it.className, it.contentChangeTypes)
+        }
+        .mapNotNull { event ->
+            source.getCurrentRootNode()?.let { tree ->
+                TreeSnapshot(tree, TreeSnapshot.Source.STATE_CHANGED, event.contentChangeTypes)
+            }
         }
 }

@@ -62,6 +62,8 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val parsed: ParsedFields,
         override val target: String? = null,
         override val actions: List<RequestedAction> = emptyList(),
+        /** The last classified screen target when this click occurred. */
+        val screenTarget: String? = null,
     ) : FlowObservation
 
     /** A notification event classified by the notification pipeline. */
