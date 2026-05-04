@@ -8,7 +8,7 @@ import javax.inject.Inject
  * Package-only pre-filter. The [NotificationListener] already gates on package, but this
  * provides defense-in-depth if [RawNotificationData] is ever injected from another path.
  *
- * Content-based filtering no longer happens here — the [NotificationClassifier] handles
+ * Content-based filtering no longer happens here — the [ObservationClassifier] handles
  * classification and the `unknown` intent captures anything unrecognized.
  */
 class NotificationFilter @Inject constructor() {

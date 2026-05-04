@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
+import cloud.trotter.dashbuddy.pipeline.ObservationClassifier
+import cloud.trotter.dashbuddy.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
@@ -15,14 +17,14 @@ import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 
 /**
- * Unit tests for [NotificationClassifier].
+ * Unit tests for notification classification via [ObservationClassifier].
  *
  * Strings are taken from real notification payloads collected during field sessions.
  * Add new test cases here whenever an UNKNOWN notification is identified in the logs.
  */
 class NotificationClassifierTest {
 
-    private val classifier = NotificationClassifier(
+    private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter> {
             on { notificationRuleset } doReturn TestRulesetFactory.notificationRuleset
         },
@@ -48,6 +50,9 @@ class NotificationClassifierTest {
         isClearable = true,
     )
 
+    private fun classifyNotification(raw: RawNotificationData): Observation.Notification =
+        classifier.classify(PipelineEvent.Notification(raw.postTime, raw)) as Observation.Notification
+
     /** Extract [ParsedFields.NotificationFields] from a classification result. */
     private fun Observation.Notification.notifFields(): ParsedFields.NotificationFields =
         parsed as ParsedFields.NotificationFields
@@ -58,7 +63,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `classifies tip from bigText — standard format`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(
                 title = "DoorDash",
                 bigText = "added \$5.00 tip on a past H-E-B order delivered at 4/26, 3:15 PM"
@@ -73,7 +78,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `classifies tip from text field`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(
                 title = "Tip Added",
                 text = "added \$8.00 tip on a past Pizza Hut order delivered at 4/26, 2:40 PM"
@@ -87,7 +92,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `classifies tip with multi-word store name`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(
                 bigText = "added \$20.85 tip on a past H-E-B Grocery order delivered at 4/26, 2:08 PM"
             )
@@ -100,7 +105,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `classifies tip with large amount`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(
                 bigText = "added \$25.53 tip on a past H-E-B order delivered at 4/26, 7:16 PM"
             )
@@ -112,7 +117,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `classifies tip with PM time`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(bigText = "added \$4.50 tip on a past Little Caesars order delivered at 4/26, 8:29 PM")
         )
         val fields = result.notifFields()
@@ -126,7 +131,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `classifies new order notification`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(title = "New Order", text = "A new delivery order is available")
         )
         assertEquals("new_order", result.notifFields().intent)
@@ -134,7 +139,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `classifies new order — title case insensitive`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(title = "new order", text = "Tap to view")
         )
         assertEquals("new_order", result.notifFields().intent)
@@ -146,7 +151,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `classifies scheduled dash expired`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(
                 title = "Scheduled Dash",
                 text = "Your scheduled dash has expired"
@@ -161,7 +166,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `returns Unknown for unrecognized notification`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(title = "DoorDash", text = "Something we haven't seen before")
         )
         assertEquals("unknown", result.notifFields().intent)
@@ -169,7 +174,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `Unknown preserves raw text for analysis`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(title = "Peak Pay", text = "\$3 boost active in your zone")
         )
         val fields = result.notifFields()
@@ -180,7 +185,7 @@ class NotificationClassifierTest {
 
     @Test
     fun `returns Unknown when all fields are null`() {
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(title = null, text = null, bigText = null, tickerText = null)
         )
         assertEquals("unknown", result.notifFields().intent)
@@ -188,11 +193,9 @@ class NotificationClassifierTest {
 
     @Test
     fun `tip pattern does not match partial text`() {
-        // "tip" appears but without the full "added $X.XX tip on a past..." pattern
-        val result = classifier.classify(
+        val result = classifyNotification(
             raw(title = "DoorDash", text = "You received a tip on your order")
         )
-        // Should NOT classify as additional_tip
         assertTrue(result.notifFields().intent != "additional_tip")
     }
 }

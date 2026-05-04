@@ -257,6 +257,20 @@ data class UiNode(
         result
     }
 
+    /**
+     * Structural hash that ignores anonymous wrapper nodes.
+     *
+     * Compose recomposition transiently adds/removes generic View wrappers
+     * (no [viewIdResourceName], generic [className]) without changing the
+     * semantic screen content. [structuralHash] is sensitive to these and
+     * produces false-positive "new screen" signals.
+     *
+     * [stableHash] treats anonymous wrappers as transparent — their children
+     * contribute directly to the parent's hash, so adding or removing a
+     * wrapper does not change the result.
+     */
+    val stableHash: Int by lazy { computeStableHash(this) }
+
     // ========================================================================
     //  DEBUGGING & LOGGING
     // ========================================================================
@@ -282,4 +296,34 @@ data class UiNode(
             appendNode(builder, child, indent + 1)
         }
     }
+}
+
+// ============================================================================
+//  Stable hash helpers (package-private)
+// ============================================================================
+
+private fun computeStableHash(node: UiNode): Int {
+    // Anonymous wrapper: no ID, generic class — hash through to children only
+    if (node.viewIdResourceName == null && node.className.isAnonymousWrapper()) {
+        var result = 0
+        for (child in node.children) {
+            result = 31 * result + computeStableHash(child)
+        }
+        return result
+    }
+    // Named or meaningful node — include in hash
+    var result = node.className?.hashCode() ?: 0
+    result = 31 * result + (node.viewIdResourceName?.hashCode() ?: 0)
+    for (child in node.children) {
+        result = 31 * result + computeStableHash(child)
+    }
+    return result
+}
+
+private fun String?.isAnonymousWrapper(): Boolean = when (this) {
+    "android.view.View",
+    "android.view.ViewGroup",
+    "android.widget.FrameLayout",
+    "android.widget.LinearLayout" -> true
+    else -> false
 }

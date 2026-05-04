@@ -15,6 +15,14 @@ import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 sealed class ParsedFields {
     abstract val activity: String?
 
+    /**
+     * Hash of the stable identity fields for this observation.
+     * Used for post-classification dedup — only fields that represent
+     * semantic identity are included. Transient/ticking fields
+     * (deadlines, timestamps, expanding state) are excluded.
+     */
+    open fun dedupeHash(): Int = 0
+
     data object None : ParsedFields() {
         override val activity: String? = null
     }
@@ -27,12 +35,21 @@ sealed class ParsedFields {
         val waitTimeEstimate: String? = null,
         val isHeadingBackToZone: Boolean = false,
         val spotSaveDeadline: Long? = null,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun dedupeHash(): Int {
+            var h = zoneName.hashCode()
+            h = 31 * h + sessionType.hashCode()
+            h = 31 * h + sessionPay.hashCode()
+            return h
+        }
+    }
 
     data class OfferFields(
         override val activity: String? = null,
         val parsedOffer: ParsedOffer,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun dedupeHash(): Int = parsedOffer.offerHash.hashCode()
+    }
 
     data class TaskFields(
         override val activity: String? = null,
@@ -46,7 +63,15 @@ sealed class ParsedFields {
         val itemCount: Int? = null,
         val redCardTotal: Double? = null,
         val arrivalConfirmed: Boolean = false,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun dedupeHash(): Int {
+            var h = phase.hashCode()
+            h = 31 * h + subFlow.hashCode()
+            h = 31 * h + storeName.hashCode()
+            h = 31 * h + arrivalConfirmed.hashCode()
+            return h
+        }
+    }
 
     data class PostTaskFields(
         override val activity: String? = null,
@@ -59,7 +84,14 @@ sealed class ParsedFields {
         val sessionEarnings: Double? = null,
         val offersAccepted: Int? = null,
         val offersTotal: Int? = null,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun dedupeHash(): Int {
+            var h = totalPay.hashCode()
+            h = 31 * h + appPay.hashCode()
+            h = 31 * h + customerTips.hashCode()
+            return h
+        }
+    }
 
     data class SessionEndedFields(
         override val activity: String? = null,
@@ -68,13 +100,18 @@ sealed class ParsedFields {
         val offersAccepted: Int? = null,
         val offersTotal: Int? = null,
         val weeklyEarnings: Double? = null,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun dedupeHash(): Int = totalEarnings.hashCode()
+    }
 
     data class PausedFields(
         override val activity: String? = null,
         val remainingText: String,
         val remainingMillis: Long,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        // Paused is a single state — identity is just "paused".
+        override fun dedupeHash(): Int = "paused".hashCode()
+    }
 
     data class TimelineFields(
         override val activity: String? = null,
@@ -83,7 +120,13 @@ sealed class ParsedFields {
         val endsAtText: String? = null,
         val endsAtMillis: Long? = null,
         val tasks: List<TimelineTaskEntry> = emptyList(),
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun dedupeHash(): Int {
+            var h = sessionEarnings.hashCode()
+            h = 31 * h + tasks.size
+            return h
+        }
+    }
 
     data class RatingsFields(
         override val activity: String? = null,
@@ -99,7 +142,13 @@ sealed class ParsedFields {
         val itemsWithQualityIssuesRate: Double? = null,
         val itemsWrongOrMissingRate: Double? = null,
         val lifetimeShoppingOrders: Int? = null,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun dedupeHash(): Int {
+            var h = customerRating.hashCode()
+            h = 31 * h + lifetimeDeliveries.hashCode()
+            return h
+        }
+    }
 
     data class SensitiveFields(
         override val activity: String? = null,
@@ -110,7 +159,10 @@ sealed class ParsedFields {
         val intent: String,
         val nodeId: String? = null,
         val nodeText: String? = null,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        // Every click is unique — always passes dedup.
+        override fun dedupeHash(): Int = System.nanoTime().hashCode()
+    }
 
     data class NotificationFields(
         override val activity: String? = null,
@@ -119,7 +171,14 @@ sealed class ParsedFields {
         val storeName: String? = null,
         val deliveredAt: String? = null,
         val rawText: String? = null,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun dedupeHash(): Int {
+            var h = intent.hashCode()
+            h = 31 * h + amount.hashCode()
+            h = 31 * h + storeName.hashCode()
+            return h
+        }
+    }
 }
 
 /**
