@@ -446,7 +446,7 @@
                 "read": "text",
                 "transform": "parseCurrency"
               },
-              "doorDashPay": {
+              "appPay": {
                 "find": {
                   "hasTextContaining": "DoorDash pay"
                 },
@@ -499,7 +499,7 @@
             {
               "assert": "sumApproxEquals",
               "fields": [
-                "doorDashPay",
+                "appPay",
                 "customerTips"
               ],
               "target": "totalPay",
@@ -1101,7 +1101,14 @@
             "find": {
               "hasIdSuffix": "user_name"
             },
-            "read": "text"
+            "read": "text",
+            "transform": {
+              "stripPrefixes": [
+                "Pickup from ",
+                "Heading to ",
+                "Pick up at "
+              ]
+            }
           },
           "storeAddress": {
             "join": [
@@ -1229,16 +1236,148 @@
                   "hasText": "Directions"
                 },
                 {
+                  "hasText": "Call"
+                },
+                {
+                  "hasText": "Message"
+                }
+              ]
+            }
+          }
+        ],
+        "not": {
+          "exists": {
+            "any": [
+              {
+                "hasText": "Continue"
+              },
+              {
+                "hasText": "Complete Delivery"
+              },
+              {
+                "hasText": "Mark as delivered"
+              }
+            ]
+          }
+        }
+      },
+      "parse": {
+        "fields": {
+          "phase": "DROPOFF",
+          "subFlow": "NAVIGATION",
+          "customerNameHash": {
+            "find": {
+              "any": [
+                {
+                  "hasTextStartsWith": "Deliver to"
+                },
+                {
+                  "hasTextStartsWith": "Heading to"
+                }
+              ]
+            },
+            "read": "text",
+            "transform": [
+              {
+                "stripPrefixes": [
+                  "Deliver to ",
+                  "Heading to "
+                ]
+              },
+              "trim",
+              "sha256"
+            ]
+          },
+          "customerAddressHash": {
+            "join": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                },
+                "read": "text"
+              },
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                },
+                "navigate": "sibling(1)",
+                "rejectIf": {
+                  "not": {
+                    "hasTextMatchesRegex": "\\d{5}$"
+                  }
+                },
+                "read": "text"
+              }
+            ],
+            "separator": ", ",
+            "transform": "sha256"
+          },
+          "deadlineText": {
+            "find": {
+              "hasTextMatchesRegex": "\\bby\\s+\\d{1,2}:\\d{2}"
+            },
+            "read": "text",
+            "transform": "stripDeadlinePrefix"
+          },
+          "deadlineMillis": {
+            "find": {
+              "hasTextMatchesRegex": "\\bby\\s+\\d{1,2}:\\d{2}"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          }
+        }
+      },
+      "shape": "task"
+    },
+    {
+      "id": "doordash.screen.dropoff_arrival",
+      "platform_id": "doordash.driver",
+      "priority": 74,
+      "overrideable": true,
+      "state": {
+        "flow": "task:dropoff:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasTextStartsWith": "Deliver to"
+                },
+                {
+                  "hasTextStartsWith": "Heading to"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
                   "hasText": "Continue"
                 },
                 {
                   "hasText": "Complete Delivery"
                 },
                 {
-                  "hasText": "Call"
-                },
-                {
-                  "hasText": "Message"
+                  "hasText": "Mark as delivered"
                 }
               ]
             }
@@ -1248,28 +1387,7 @@
       "parse": {
         "fields": {
           "phase": "DROPOFF",
-          "subFlow": {
-            "conditionalEnum": [
-              {
-                "if": {
-                  "exists": {
-                    "any": [
-                      {
-                        "hasText": "Continue"
-                      },
-                      {
-                        "hasText": "Complete Delivery"
-                      }
-                    ]
-                  }
-                },
-                "then": "ARRIVED"
-              },
-              {
-                "else": "NAVIGATION"
-              }
-            ]
-          },
+          "subFlow": "ARRIVED",
           "customerNameHash": {
             "find": {
               "any": [

@@ -3,8 +3,10 @@ package cloud.trotter.dashbuddy.rules
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,6 +33,8 @@ class JsonRuleInterpreter @Inject constructor(
     var clickRuleset: ClickRuleset? = null
         private set
     var notificationRuleset: NotificationRuleset? = null
+        private set
+    var loadedFormatVersion: Int? = null
         private set
 
     /** Load the bundled default rules from `assets/rules.default.json`. */
@@ -76,6 +80,7 @@ class JsonRuleInterpreter @Inject constructor(
             screenRuleset = ScreenRuleset(screens)
             clickRuleset = ClickRuleset(clicks)
             notificationRuleset = NotificationRuleset(notifications)
+            loadedFormatVersion = root["format_version"]?.jsonPrimitive?.int
 
             Timber.i(
                 "JsonRuleInterpreter: loaded from '$source' " +

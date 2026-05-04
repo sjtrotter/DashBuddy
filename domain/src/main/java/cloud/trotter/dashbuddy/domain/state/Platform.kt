@@ -8,12 +8,12 @@ package cloud.trotter.dashbuddy.domain.state
  * state machine creates a [PlatformRegion] per platform automatically
  * on first observation.
  */
-enum class Platform(val wire: String) {
-    DoorDash("doordash"),
-    Uber("uber"),
-    Instacart("instacart"),
-    WalmartSpark("walmart_spark"),
-    Unknown("_unknown"),
+enum class Platform(val wire: String, val packageName: String?) {
+    DoorDash("doordash", "com.doordash.driverapp"),
+    Uber("uber", "com.ubercab.driver4"),
+    Instacart("instacart", "com.instacart.shopper"),
+    WalmartSpark("walmart_spark", "com.walmart.spark"),
+    Unknown("_unknown", null),
     ;
 
     companion object {
@@ -26,5 +26,9 @@ enum class Platform(val wire: String) {
         }
 
         fun fromWire(wire: String): Platform? = byWire[wire]
+
+        /** All known package names for OS-level event subscription. */
+        fun watchedPackages(): Set<String> =
+            entries.mapNotNull { it.packageName }.toSet()
     }
 }

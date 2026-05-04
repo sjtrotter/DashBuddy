@@ -208,6 +208,21 @@ class PlatformRegionStepper @Inject constructor() {
         // Update session fields from observations
         r = updateSessionFields(r, obs)
 
+        // Accumulate delivery pay when entering PostTask
+        if (prev != Flow.PostTask && next == Flow.PostTask) {
+            val postFields = obs.parsed as? ParsedFields.PostTaskFields
+            if (postFields != null && postFields.totalPay > 0) {
+                r.session?.let { session ->
+                    val accumulated = session.accumulatedDeliveryPay + postFields.totalPay
+                    val best = maxOf(session.runningEarnings, accumulated)
+                    r = r.copy(session = session.copy(
+                        accumulatedDeliveryPay = accumulated,
+                        runningEarnings = best,
+                    ))
+                }
+            }
+        }
+
         // Update ratings if we got a ratings observation
         r = updateRatings(r, obs)
 
@@ -236,6 +251,8 @@ class PlatformRegionStepper @Inject constructor() {
                 }
             }
             is ParsedFields.PostTaskFields -> {
+                val payHash = parsed.parsedPay?.hashCode()
+                r = r.copy(lastPostTaskPayHash = payHash)
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
                     if (earnings != null) {
@@ -434,6 +451,7 @@ class PlatformRegionStepper @Inject constructor() {
         val job = region.activeJob ?: return region
         return region.copy(
             activeJob = null,
+            lastPostTaskPayHash = null,
             // Keep recent tasks — they reference the job by ID
         )
     }

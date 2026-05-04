@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.capture
 
 import cloud.trotter.dashbuddy.domain.capture.CaptureSchema
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.PipelineRegistry
 import cloud.trotter.dashbuddy.domain.pipeline.RuleEngineConstants
 import kotlinx.serialization.Serializable
@@ -33,18 +34,22 @@ object EnvelopeBuilder {
         classificationName: String?,
         payload: T,
         contentHash: Int? = null,
-        appVersion: String? = null,
-        rulesetFormatVersion: Int? = null,
+        metadata: ReplayMetadata? = null,
     ): CaptureResult {
         val captureId = UUID.randomUUID().toString()
         val payloadJsonStr = schema.serialize(payload)
         val payloadElement = json.parseToJsonElement(payloadJsonStr)
 
-        val metadata = ReplayMetadataDto(
-            engineVersion = RuleEngineConstants.VERSION,
-            rulesetFormatVersion = rulesetFormatVersion,
-            pipelineVersions = PipelineRegistry.pipelines,
-            appVersion = appVersion,
+        val meta = metadata
+        val metadataDto = ReplayMetadataDto(
+            engineVersion = meta?.engineVersion ?: RuleEngineConstants.VERSION,
+            rulesetFormatVersion = meta?.rulesetFormatVersion,
+            rulesetReleaseTag = meta?.rulesetReleaseTag,
+            rulesetSignature = meta?.rulesetSignature,
+            pipelineVersions = meta?.pipelineVersions ?: PipelineRegistry.pipelines,
+            stateMachineApiVersion = meta?.stateMachineApiVersion,
+            appVersion = meta?.appVersion,
+            deviceFingerprint = meta?.deviceFingerprint,
         )
 
         val envelope = CaptureEnvelopeDto(
@@ -55,7 +60,7 @@ object EnvelopeBuilder {
             platform = platform,
             ruleId = ruleId,
             classificationName = classificationName,
-            metadata = metadata,
+            metadata = metadataDto,
             payload = payloadElement,
         )
 

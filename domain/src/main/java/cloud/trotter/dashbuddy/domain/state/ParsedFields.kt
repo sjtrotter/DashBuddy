@@ -51,7 +51,7 @@ sealed class ParsedFields {
     data class PostTaskFields(
         override val activity: String? = null,
         val totalPay: Double,
-        val doorDashPay: Double? = null,
+        val appPay: Double? = null,
         val customerTips: Double? = null,
         val parsedPay: ParsedPay? = null,
         val isExpanded: Boolean = false,

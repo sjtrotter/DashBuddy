@@ -108,10 +108,15 @@ class FlowRegionStepper @Inject constructor() {
      * Record accept/decline clicks on the pending offer for outcome resolution.
      */
     private fun handleOfferClick(prev: FlowRegion, obs: Observation.Click): FlowRegion {
-        if (prev.pendingOffer == null || prev.flow != Flow.OfferPresented) return prev
-        // Click fields carry intent: "accept_offer", "decline_offer"
-        // We don't clear pendingOffer here — the flow change does that
-        return prev.copy(lastObservedAt = obs.timestamp)
+        val offer = prev.pendingOffer ?: return prev
+        if (prev.flow != Flow.OfferPresented) return prev
+        val fields = obs.parsed as? ParsedFields.ClickFields
+        // Store intent on PendingOffer so EffectMap can resolve outcome
+        // even when the resolving observation is a Screen (not a Click)
+        return prev.copy(
+            pendingOffer = offer.copy(lastClickIntent = fields?.intent),
+            lastObservedAt = obs.timestamp,
+        )
     }
 
     /**

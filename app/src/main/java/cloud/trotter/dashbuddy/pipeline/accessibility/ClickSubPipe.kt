@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
 import cloud.trotter.dashbuddy.core.data.capture.EnvelopeBuilder
 import cloud.trotter.dashbuddy.core.data.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked.ClickClassifier
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toUiNode
@@ -27,32 +28,32 @@ class ClickSubPipe @Inject constructor(
 ) {
     companion object {
         const val PIPELINE_ID = "accessibility.click"
-        private const val PLATFORM = "doordash"
     }
 
     fun output(): Flow<Observation.Click> = source.events
         .filter { it.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED }
-        .filter { it.packageName == "com.doordash.driverapp" }
         .mapNotNull { event ->
             val sourceNode = event.source ?: return@mapNotNull null
             val node = sourceNode.toUiNode() ?: return@mapNotNull null
             val obs = classifier.classify(node)
+            val platform = Platform.fromRuleId(obs.ruleId).wire
             Timber.d("Click Event: ${obs.target}")
 
             val capture = EnvelopeBuilder.build(
                 pipelineId = PIPELINE_ID,
                 schema = UiNodeSchema,
-                platform = PLATFORM,
+                platform = platform,
                 ruleId = obs.ruleId,
                 classificationName = obs.target,
                 payload = node,
                 contentHash = node.structuralHash,
+                metadata = obs.metadata,
             )
             val captureId = captureBus.offer(
                 captureId = capture.captureId,
                 source = PIPELINE_ID,
                 classification = obs.target,
-                platform = PLATFORM,
+                platform = platform,
                 envelopeJson = capture.envelopeJson,
                 contentHash = capture.contentHash,
             )

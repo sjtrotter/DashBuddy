@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
 import cloud.trotter.dashbuddy.core.data.capture.EnvelopeBuilder
 import cloud.trotter.dashbuddy.core.data.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.ScreenDiffer
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
 import cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.processing.ScreenClassifier
@@ -32,7 +33,6 @@ class WindowSubPipe @Inject constructor(
 ) {
     companion object {
         const val PIPELINE_ID = "accessibility.window"
-        private const val PLATFORM = "doordash"
     }
 
     fun output(): Flow<Observation.Screen> = merge(
@@ -47,21 +47,23 @@ class WindowSubPipe @Inject constructor(
         }
         .map { tree ->
             val obs = classifier.classify(tree)
+            val platform = Platform.fromRuleId(obs.ruleId).wire
 
             val capture = EnvelopeBuilder.build(
                 pipelineId = PIPELINE_ID,
                 schema = UiNodeSchema,
-                platform = PLATFORM,
+                platform = platform,
                 ruleId = obs.ruleId,
                 classificationName = obs.target,
                 payload = tree,
                 contentHash = tree.structuralHash,
+                metadata = obs.metadata,
             )
             val captureId = captureBus.offer(
                 captureId = capture.captureId,
                 source = PIPELINE_ID,
                 classification = obs.target,
-                platform = PLATFORM,
+                platform = platform,
                 envelopeJson = capture.envelopeJson,
                 contentHash = capture.contentHash,
             )

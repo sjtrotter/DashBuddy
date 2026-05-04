@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.input
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
+import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject
@@ -21,7 +22,7 @@ class AccessibilityListener : AccessibilityService() {
         if (event == null) return
 
         // `set' here for expandability later. i.e. if we decide to do Uber or Grubhub, etc.
-        val validPackages = setOf("com.doordash.driverapp")
+        val validPackages = Platform.watchedPackages()
         if (event.packageName?.toString() !in validPackages) {
             Timber.d("Ignoring event from ${event.packageName}")
             return

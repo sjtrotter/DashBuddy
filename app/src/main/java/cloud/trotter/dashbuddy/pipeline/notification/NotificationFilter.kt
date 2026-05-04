@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.notification
 
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.state.Platform
 import javax.inject.Inject
 
 /**
@@ -13,5 +14,5 @@ import javax.inject.Inject
 class NotificationFilter @Inject constructor() {
 
     fun isRelevant(raw: RawNotificationData): Boolean =
-        raw.packageName == "com.doordash.driverapp" && raw.isClearable
+        raw.packageName in Platform.watchedPackages() && raw.isClearable
 }

@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ModeConfidence
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
@@ -87,7 +88,7 @@ class EffectMap @Inject constructor() {
             prevOffer.offerHash != nextOffer.offerHash
         ) {
             // Log resolution of old offer
-            val outcome = resolveOfferOutcome(obs)
+            val outcome = resolveOfferOutcome(obs, prevOffer)
             add(logEffect(null, outcome, "Replaced by new offer"))
 
             // Log + evaluate new offer
@@ -101,7 +102,7 @@ class EffectMap @Inject constructor() {
 
         // Offer resolved (accepted/declined/timeout)
         if (prevOffer != null && nextOffer == null) {
-            val outcome = resolveOfferOutcome(obs)
+            val outcome = resolveOfferOutcome(obs, prevOffer)
             val description = when (outcome) {
                 AppEventType.OFFER_ACCEPTED -> "Transitioned to Pickup"
                 AppEventType.OFFER_DECLINED -> "Returned to search"
@@ -311,8 +312,10 @@ class EffectMap @Inject constructor() {
                 prevTask.phase == TaskPhase.PICKUP &&
                 nextTask.phase == TaskPhase.PICKUP
             ) {
-                val storeChanged = nextTask.storeName != prevTask.storeName &&
-                    nextTask.storeName != null && nextTask.storeName != "Unknown"
+                val prevName = prevTask.storeName?.trim()
+                val nextName = nextTask.storeName?.trim()
+                val storeChanged = nextName != prevName &&
+                    nextName != null && nextName != "Unknown"
                 val activityChanged = nextTask.activity != prevTask.activity
 
                 if (storeChanged || activityChanged) {
@@ -367,8 +370,8 @@ class EffectMap @Inject constructor() {
         return buildList {
             val payData = parsed.parsedPay
 
-            // If we got expanded pay data, log it
-            if (payData != null) {
+            // If we got expanded pay data AND it's different from last emission, log it
+            if (payData != null && next.lastPostTaskPayHash != prev.lastPostTaskPayHash) {
                 val receiptText = buildString {
                     append("Saved: ${UtilityFunctions.formatCurrency(payData.total)}")
                     payData.customerTips.forEach { item ->
@@ -477,10 +480,17 @@ class EffectMap @Inject constructor() {
     // HELPERS
     // =========================================================================
 
-    private fun resolveOfferOutcome(obs: Observation): AppEventType {
+    private fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
+        // 1. Stored click intent on PendingOffer — covers the common case where
+        //    the click was observed first and the resolving obs is a Screen
+        when (prevOffer?.lastClickIntent) {
+            "accept_offer" -> return AppEventType.OFFER_ACCEPTED
+            "decline_offer" -> return AppEventType.OFFER_DECLINED
+        }
+        // 2. Direct click observation — covers the edge case where click and
+        //    flow change arrive in the same observation
         val clickFields = when (obs) {
             is Observation.Click -> obs.parsed as? ParsedFields.ClickFields
-            is Observation.Screen -> null
             else -> null
         }
         return when (clickFields?.intent) {

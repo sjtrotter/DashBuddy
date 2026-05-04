@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.view.clicked
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
@@ -15,9 +17,12 @@ import org.mockito.kotlin.mock
 
 class ClickClassifierTest {
 
-    private val classifier = ClickClassifier(mock<JsonRuleInterpreter> {
-        on { clickRuleset } doReturn TestRulesetFactory.clickRuleset
-    })
+    private val classifier = ClickClassifier(
+        mock<JsonRuleInterpreter> {
+            on { clickRuleset } doReturn TestRulesetFactory.clickRuleset
+        },
+        mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+    )
 
     // =========================================================================
     // Helpers
