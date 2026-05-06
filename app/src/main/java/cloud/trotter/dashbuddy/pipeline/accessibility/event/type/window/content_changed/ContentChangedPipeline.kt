@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.pipeline.accessibility.event.type.window.content_changed
 
 import android.view.accessibility.AccessibilityEvent
+import cloud.trotter.dashbuddy.BuildConfig
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
 import kotlinx.coroutines.FlowPreview
@@ -30,10 +32,22 @@ class ContentChangedPipeline @Inject constructor(
         .onEach {
             Timber.d("💧 DRIP: triggered by %s, accumulated types=0x%02x", it.className, pendingChangeTypes.get())
         }
-        .mapNotNull { _ ->
+        .mapNotNull { event ->
             val types = pendingChangeTypes.getAndSet(0)
             source.getCurrentRootNode()?.let { tree ->
-                TreeSnapshot(tree, TreeSnapshot.Source.CONTENT_CHANGED, types)
+                if (BuildConfig.DEBUG) {
+                    val nodeCount = countNodes(tree)
+                    Timber.d("🌳 Tree snapshot: %d nodes, pkg=%s", nodeCount, event.packageName)
+                }
+                TreeSnapshot(
+                    tree = tree,
+                    source = TreeSnapshot.Source.CONTENT_CHANGED,
+                    contentChangeTypes = types,
+                    packageName = event.packageName?.toString(),
+                )
             }
         }
+
+    private fun countNodes(node: UiNode): Int =
+        1 + node.children.sumOf { countNodes(it) }
 }

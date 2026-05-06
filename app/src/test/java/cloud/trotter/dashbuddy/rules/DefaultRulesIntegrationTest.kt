@@ -28,15 +28,24 @@ class DefaultRulesIntegrationTest {
 
     @Before
     fun loadRules() {
-        val json = File("src/main/assets/rules.default.json").readText()
-        val root = Json.parseToJsonElement(json).jsonObject
+        val dir = File("src/main/assets/rules")
+        val allScreens = mutableListOf<CompiledScreenRule>()
+        val allClicks = mutableListOf<CompiledClickRule>()
+        val allNotifications = mutableListOf<CompiledNotificationRule>()
 
-        val screens = root["screens"]?.jsonArray
-            ?.let { RuleCompiler.compileScreenRules(it) } ?: emptyList()
-        val clicks = root["clicks"]?.jsonArray
-            ?.let { RuleCompiler.compileClickRules(it) } ?: emptyList()
-        val notifications = root["notifications"]?.jsonArray
-            ?.let { RuleCompiler.compileNotificationRules(it) } ?: emptyList()
+        dir.listFiles { f -> f.extension == "json" }?.forEach { file ->
+            val root = Json.parseToJsonElement(file.readText()).jsonObject
+            root["screens"]?.jsonArray
+                ?.let { allScreens += RuleCompiler.compileScreenRules(it) }
+            root["clicks"]?.jsonArray
+                ?.let { allClicks += RuleCompiler.compileClickRules(it) }
+            root["notifications"]?.jsonArray
+                ?.let { allNotifications += RuleCompiler.compileNotificationRules(it) }
+        }
+
+        val screens = allScreens
+        val clicks = allClicks
+        val notifications = allNotifications
 
         screenRuleset = ScreenRuleset(screens)
         clickRuleset = ClickRuleset(clicks)

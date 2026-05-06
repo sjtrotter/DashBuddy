@@ -83,6 +83,7 @@ data class CompiledClickRule(
     val intentFactory: (UiNode) -> String,
     val flow: Flow? = null,
     val modeHint: Mode? = null,
+    val screenConstraint: String? = null,
 )
 
 /**
@@ -94,6 +95,7 @@ data class CompiledNotificationRule(
     val priority: Int,
     val overrideable: Boolean,
     val classify: (RawNotificationData) -> NotificationClassifyResult?,
+    val shape: String? = null,
     val flow: Flow? = null,
     val modeHint: Mode? = null,
 )
@@ -123,6 +125,7 @@ data class NotificationMatchResult(
     val ruleId: String,
     val intent: String,
     val fields: Map<String, Any?> = emptyMap(),
+    val shape: String? = null,
     val flow: Flow? = null,
     val modeHint: Mode? = null,
 )

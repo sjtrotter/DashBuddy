@@ -32,9 +32,14 @@ internal data class RawNotificationDto(
     val text: String? = null,
     val tickerText: String? = null,
     val bigText: String? = null,
+    val subText: String? = null,
     val packageName: String,
     val postTime: Long,
     val isClearable: Boolean,
+    val isOngoing: Boolean = false,
+    val category: String? = null,
+    val channelId: String? = null,
+    val actionLabels: List<String> = emptyList(),
 )
 
 private fun RawNotificationData.toDto() = RawNotificationDto(
@@ -42,9 +47,14 @@ private fun RawNotificationData.toDto() = RawNotificationDto(
     text = text,
     tickerText = tickerText,
     bigText = bigText,
+    subText = subText,
     packageName = packageName,
     postTime = postTime,
     isClearable = isClearable,
+    isOngoing = isOngoing,
+    category = category,
+    channelId = channelId,
+    actionLabels = actionLabels,
 )
 
 private fun RawNotificationDto.toDomain() = RawNotificationData(
@@ -52,7 +62,12 @@ private fun RawNotificationDto.toDomain() = RawNotificationData(
     text = text,
     tickerText = tickerText,
     bigText = bigText,
+    subText = subText,
     packageName = packageName,
     postTime = postTime,
     isClearable = isClearable,
+    isOngoing = isOngoing,
+    category = category,
+    channelId = channelId,
+    actionLabels = actionLabels,
 )

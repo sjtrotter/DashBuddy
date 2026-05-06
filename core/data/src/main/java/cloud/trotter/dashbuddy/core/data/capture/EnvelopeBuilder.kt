@@ -35,6 +35,7 @@ object EnvelopeBuilder {
         payload: T,
         contentHash: Int? = null,
         metadata: ReplayMetadata? = null,
+        windowContext: WindowContextDto? = null,
     ): CaptureResult {
         val captureId = UUID.randomUUID().toString()
         val payloadJsonStr = schema.serialize(payload)
@@ -62,6 +63,7 @@ object EnvelopeBuilder {
             classificationName = classificationName,
             metadata = metadataDto,
             payload = payloadElement,
+            windowContext = windowContext,
         )
 
         return CaptureResult(
@@ -89,6 +91,7 @@ internal data class CaptureEnvelopeDto(
     val classificationName: String?,
     val metadata: ReplayMetadataDto,
     val payload: JsonElement,
+    val windowContext: WindowContextDto? = null,
 )
 
 @Serializable
@@ -101,4 +104,15 @@ internal data class ReplayMetadataDto(
     val stateMachineApiVersion: String? = null,
     val appVersion: String? = null,
     val deviceFingerprint: String? = null,
+)
+
+@Serializable
+data class WindowContextDto(
+    val windowId: Int,
+    val windowType: Int,
+    val windowTitle: String? = null,
+    val windowLayer: Int,
+    val isActive: Boolean,
+    val isFocused: Boolean,
+    val totalWindowCount: Int,
 )

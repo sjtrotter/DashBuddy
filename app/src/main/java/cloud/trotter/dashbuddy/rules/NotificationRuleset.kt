@@ -17,15 +17,24 @@ class NotificationRuleset(rules: List<CompiledNotificationRule>) {
     /**
      * Evaluate the sorted rules against [raw] and return the first match as a
      * [NotificationMatchResult], or null if no rule matches.
+     *
+     * When [platformWire] is non-null, only rules whose ID starts with that
+     * platform prefix are evaluated.
      */
-    fun classifyFirst(raw: RawNotificationData): NotificationMatchResult? {
-        for (rule in sorted) {
+    fun classifyFirst(raw: RawNotificationData, platformWire: String? = null): NotificationMatchResult? {
+        val rules = if (platformWire != null) {
+            sorted.filter { it.id.startsWith("$platformWire.") }
+        } else {
+            sorted
+        }
+        for (rule in rules) {
             val result = rule.classify(raw)
             if (result != null) {
                 return NotificationMatchResult(
                     ruleId = rule.id,
                     intent = result.intent,
                     fields = result.fields,
+                    shape = rule.shape,
                     flow = rule.flow,
                     modeHint = rule.modeHint,
                 )

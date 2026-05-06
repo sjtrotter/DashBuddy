@@ -45,4 +45,10 @@ object DataStoreModule {
     @StrategyPreferences
     fun provideStrategyDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("strategy_prefs") }
+
+    @Provides
+    @Singleton
+    @PlatformPreferences
+    fun providePlatformDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("platform_prefs") }
 }

@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.pipeline.accessibility.input
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toUiNode
 import kotlinx.coroutines.channels.BufferOverflow
@@ -56,6 +57,30 @@ class AccessibilitySource @Inject constructor() {
             null
         } finally {
             // nothing here... do we need it?
+        }
+    }
+
+    // --- 3. Multi-Window Support ---
+
+    /**
+     * Returns all accessibility windows currently visible.
+     * Requires `flagRetrieveInteractiveWindows` in the service config.
+     */
+    fun getWindows(): List<AccessibilityWindowInfo> {
+        val service = serviceRef?.get() ?: return emptyList()
+        return service.windows ?: emptyList()
+    }
+
+    /**
+     * Snapshots the UI tree rooted at a specific window's root node.
+     * Use this to capture non-active windows (e.g., overlay offer screens).
+     */
+    fun getRootForWindow(window: AccessibilityWindowInfo): UiNode? {
+        val root = window.root ?: return null
+        return try {
+            root.toUiNode()
+        } catch (_: Exception) {
+            null
         }
     }
 }

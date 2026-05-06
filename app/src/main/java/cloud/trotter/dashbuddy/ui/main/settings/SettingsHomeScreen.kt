@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Folder
@@ -71,6 +72,18 @@ fun SettingsHomeScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Section 0: Monitoring
+            SettingsGroup(title = "Monitoring") {
+                SettingsNavItem(
+                    icon = Icons.Default.Apps,
+                    title = "Gig Apps",
+                    subtitle = "Choose which apps to monitor",
+                    onClick = { onNavigate(Screen.PlatformSettings.route) }
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             // Section 1: The Brain

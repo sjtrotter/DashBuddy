@@ -26,6 +26,9 @@ class ScreenRuleset(
      * Evaluate the sorted rules against [tree] and return the first match,
      * or null if no rule matches (caller should fall back to UNKNOWN).
      *
+     * When [platformWire] is non-null, only rules whose ID starts with that
+     * platform prefix are evaluated (e.g. "doordash" only runs "doordash.*" rules).
+     *
      * The 5-phase pipeline runs per branch:
      * 1. Resolve rule-level bindings (mandatory miss → skip rule)
      * 2. Resolve branch-level bindings (mandatory miss → skip branch)
@@ -34,8 +37,13 @@ class ScreenRuleset(
      * 5. Parse fields → ParsedFields via factory
      * 6. Validate assertions (Skip → next branch, DropParsed → match with None)
      */
-    fun matchFirst(tree: UiNode): ScreenMatchResult? {
-        for (rule in sorted) {
+    fun matchFirst(tree: UiNode, platformWire: String? = null): ScreenMatchResult? {
+        val rules = if (platformWire != null) {
+            sorted.filter { it.id.startsWith("$platformWire.") }
+        } else {
+            sorted
+        }
+        for (rule in rules) {
             // Phase 1: Resolve rule-level bindings
             val ruleBindings = mutableMapOf<String, UiNode?>()
             var ruleSkip = false

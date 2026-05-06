@@ -17,9 +17,16 @@ class ClickRuleset(rules: List<CompiledClickRule>) {
     /**
      * Evaluate the sorted rules against [node] and return the first match as a
      * [ClickMatchResult], or null if no rule matches.
+     *
+     * When [platformWire] is non-null, only rules whose ID starts with that
+     * platform prefix are evaluated. When [screenTarget] is non-null, rules
+     * with a `screenIs` constraint only match if it equals the active screen.
      */
-    fun classifyFirst(node: UiNode): ClickMatchResult? {
-        for (rule in sorted) {
+    fun classifyFirst(node: UiNode, platformWire: String? = null, screenTarget: String? = null): ClickMatchResult? {
+        val rules = sorted
+            .filter { platformWire == null || it.id.startsWith("$platformWire.") }
+            .filter { it.screenConstraint == null || it.screenConstraint == screenTarget }
+        for (rule in rules) {
             if (rule.condition(node)) {
                 return ClickMatchResult(
                     ruleId = rule.id,

@@ -11,7 +11,13 @@ fun StatusBarNotification.toDomain(): RawNotificationData {
         text = extras.getCharSequence("android.text")?.toString(),
         bigText = extras.getCharSequence("android.bigText")?.toString(),
         tickerText = this.notification.tickerText?.toString(),
+        subText = extras.getCharSequence("android.subText")?.toString(),
         postTime = this.postTime,
-        isClearable = this.isClearable
+        isClearable = this.isClearable,
+        isOngoing = this.isOngoing,
+        category = this.notification.category,
+        channelId = this.notification.channelId,
+        actionLabels = this.notification.actions
+            ?.mapNotNull { it.title?.toString() } ?: emptyList(),
     )
 }

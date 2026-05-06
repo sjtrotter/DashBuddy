@@ -15,4 +15,5 @@ sealed class Screen(val route: String) {
     data object EvidenceSettings : Screen("settings/evidence")
     data object GeneralSettings : Screen("settings/general")
     data object DeveloperSettings : Screen("settings/developer")
+    data object PlatformSettings : Screen("settings/platforms")
 }

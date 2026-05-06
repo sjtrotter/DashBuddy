@@ -10,7 +10,7 @@ package cloud.trotter.dashbuddy.domain.state
  */
 enum class Platform(val wire: String, val packageName: String?) {
     DoorDash("doordash", "com.doordash.driverapp"),
-    Uber("uber", "com.ubercab.driver4"),
+    Uber("uber", "com.ubercab.driver"),
     Instacart("instacart", "com.instacart.shopper"),
     WalmartSpark("walmart_spark", "com.walmart.spark"),
     Unknown("_unknown", null),
@@ -26,6 +26,14 @@ enum class Platform(val wire: String, val packageName: String?) {
         }
 
         fun fromWire(wire: String): Platform? = byWire[wire]
+
+        private val byPackage = entries
+            .filter { it.packageName != null }
+            .associateBy { it.packageName }
+
+        /** Resolve the platform from a source package name, or [Unknown]. */
+        fun fromPackage(packageName: String?): Platform =
+            byPackage[packageName] ?: Unknown
 
         /** All known package names for OS-level event subscription. */
         fun watchedPackages(): Set<String> =

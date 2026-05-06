@@ -1,0 +1,120 @@
+{
+  "format_version": 2,
+  "engine_version": "1.0.0",
+  "platform_id": "uber.driver",
+  "min_app_version": "0.230.0",
+  "pipelines": {
+    "accessibility.window": { "version": 1 },
+    "accessibility.click": { "version": 1 },
+    "notification": { "version": 1, "allowOngoing": true }
+  },
+  "state_machine": {
+    "api_version_major": 1,
+    "api_version_minor": 0
+  },
+  "screens": [
+    {
+      "id": "uber.screen.splash",
+      "platform_id": "uber.driver",
+      "priority": 40,
+      "overrideable": true,
+      "require": {
+        "exists": {
+          "hasIdSuffix": "rootSplashBackground"
+        }
+      }
+    },
+    {
+      "id": "uber.screen.awaiting_offer",
+      "platform_id": "uber.driver",
+      "priority": 110,
+      "overrideable": true,
+      "state": {
+        "flow": "idle",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "status_assistant"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                { "hasTextContaining": "Finding trips" },
+                { "hasText": "You're online" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.idle_map",
+      "platform_id": "uber.driver",
+      "priority": 130,
+      "overrideable": true,
+      "state": {
+        "flow": "idle",
+        "modeHint": "offline"
+      },
+      "require": {
+        "exists": {
+          "hasIdSuffix": "home_screen_overlay_container"
+        }
+      }
+    },
+    {
+      "id": "uber.screen.home_dashboard",
+      "platform_id": "uber.driver",
+      "priority": 140,
+      "overrideable": true,
+      "branches": [
+        {
+          "target": "home_dashboard",
+          "state": { "flow": "idle", "modeHint": "offline" },
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "glide_bottom_nav_home" } },
+              { "exists": { "hasIdSuffix": "go_online_button" } }
+            ]
+          }
+        },
+        {
+          "target": "home_dashboard",
+          "state": { "flow": "idle", "modeHint": "online" },
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "glide_bottom_nav_home" } },
+              { "exists": { "hasIdSuffix": "ub__system_banner_text" } }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "clicks": [
+    {
+      "id": "uber.click.go_online",
+      "platform_id": "uber.driver",
+      "priority": 10,
+      "overrideable": true,
+      "if": {
+        "hasIdSuffix": "go_online_button"
+      }
+    },
+    {
+      "id": "uber.click.go_offline",
+      "platform_id": "uber.driver",
+      "priority": 20,
+      "overrideable": true,
+      "screenIs": "home_dashboard",
+      "if": {
+        "hasIdSuffix": "carbon_action_button"
+      }
+    }
+  ],
+  "notifications": []
+}
