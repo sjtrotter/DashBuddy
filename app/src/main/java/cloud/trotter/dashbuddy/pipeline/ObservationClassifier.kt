@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.RequestedAction
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
 import timber.log.Timber
 import javax.inject.Inject
@@ -35,22 +36,30 @@ class ObservationClassifier @Inject constructor(
     @Volatile
     private var lastScreenTimestamp: Long = 0L
 
-    fun classify(event: PipelineEvent): Observation = when (event) {
-        is PipelineEvent.Screen -> classifyScreen(event)
-        is PipelineEvent.Click -> classifyClick(event)
-        is PipelineEvent.Notification -> classifyNotification(event)
+    fun classify(event: PipelineEvent): Observation {
+        val platformWire = when (event) {
+            is PipelineEvent.Screen -> Platform.fromPackage(event.packageName).wire
+            is PipelineEvent.Click -> Platform.fromPackage(event.packageName).wire
+            is PipelineEvent.Notification -> Platform.fromPackage(event.raw.packageName).wire
+        }.takeIf { it != Platform.Unknown.wire }
+
+        return when (event) {
+            is PipelineEvent.Screen -> classifyScreen(event, platformWire)
+            is PipelineEvent.Click -> classifyClick(event, platformWire)
+            is PipelineEvent.Notification -> classifyNotification(event, platformWire)
+        }
     }
 
     // ── Screen ──────────────────────────────────────────────────────────
 
-    private fun classifyScreen(event: PipelineEvent.Screen): Observation.Screen {
+    private fun classifyScreen(event: PipelineEvent.Screen, platformWire: String?): Observation.Screen {
         val ruleset = interpreter.screenRuleset
         if (ruleset == null) {
             Timber.w("ObservationClassifier: no screen ruleset loaded")
             return makeScreenObservation("UNKNOWN", null, null, ParsedFields.None, null)
         }
 
-        val result = ruleset.matchFirst(event.tree)
+        val result = ruleset.matchFirst(event.tree, platformWire)
         if (result == null) {
             Timber.i("SCREEN: UNKNOWN")
             return makeScreenObservation("UNKNOWN", null, null, ParsedFields.None, null)
@@ -100,10 +109,10 @@ class ObservationClassifier @Inject constructor(
 
     // ── Click ───────────────────────────────────────────────────────────
 
-    private fun classifyClick(event: PipelineEvent.Click): Observation.Click {
+    private fun classifyClick(event: PipelineEvent.Click, platformWire: String?): Observation.Click {
         val ruleset = interpreter.clickRuleset
         if (ruleset != null) {
-            val result = ruleset.classifyFirst(event.node)
+            val result = ruleset.classifyFirst(event.node, platformWire, lastScreenTarget)
             if (result != null) {
                 return Observation.Click(
                     timestamp = System.currentTimeMillis(),
@@ -143,11 +152,21 @@ class ObservationClassifier @Inject constructor(
 
     // ── Notification ────────────────────────────────────────────────────
 
-    private fun classifyNotification(event: PipelineEvent.Notification): Observation.Notification {
+    private fun classifyNotification(event: PipelineEvent.Notification, platformWire: String?): Observation.Notification {
         val ruleset = interpreter.notificationRuleset
         if (ruleset != null) {
-            val result = ruleset.classifyFirst(event.raw)
+            val result = ruleset.classifyFirst(event.raw, platformWire)
             if (result != null) {
+                val parsed = when (result.shape) {
+                    "noise" -> ParsedFields.NoiseFields()
+                    "sensitive" -> ParsedFields.SensitiveFields()
+                    else -> ParsedFields.NotificationFields(
+                        intent = result.intent,
+                        amount = result.fields["amount"] as? Double,
+                        storeName = result.fields["storeName"] as? String,
+                        deliveredAt = result.fields["deliveredAt"] as? String,
+                    )
+                }
                 return Observation.Notification(
                     timestamp = event.raw.postTime,
                     captureId = null,
@@ -155,12 +174,7 @@ class ObservationClassifier @Inject constructor(
                     metadata = metadataProvider.current(),
                     flow = result.flow,
                     modeHint = result.modeHint,
-                    parsed = ParsedFields.NotificationFields(
-                        intent = result.intent,
-                        amount = result.fields["amount"] as? Double,
-                        storeName = result.fields["storeName"] as? String,
-                        deliveredAt = result.fields["deliveredAt"] as? String,
-                    ),
+                    parsed = parsed,
                     target = result.intent,
                 )
             }

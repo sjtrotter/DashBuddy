@@ -2,61 +2,59 @@ package cloud.trotter.dashbuddy.pipeline.notification.input
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-//import cloud.trotter.dashbuddy.pipeline.Pipeline
-//import cloud.trotter.dashbuddy.pipeline.features.notification.NotificationInfo
+import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class NotificationListener : NotificationListenerService() {
 
-//    @Inject
-//    lateinit var pipeline: Pipeline
-
     @Inject
     lateinit var notificationSource: NotificationSource
 
+    @Inject
+    lateinit var platformPreferences: PlatformPreferencesRepository
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Cached set of enabled package names — updated reactively from preferences. */
+    @Volatile
+    private var enabledPackages: Set<String> = Platform.watchedPackages()
+
     override fun onListenerConnected() {
         Timber.i("Notification Listener Connected!")
+
+        serviceScope.launch {
+            platformPreferences.enabledPackages.collect { packages ->
+                enabledPackages = packages
+            }
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
+        if (sbn.packageName !in enabledPackages) return
 
-        // 1. Filter: Only care about specific apps?
-        val packageName = sbn.packageName
-        val validPackages = Platform.watchedPackages()
-
-        if (packageName !in validPackages) return
-
-        // new event pipeline! (under construction)
+        Timber.d(
+            "\uD83D\uDCEC Notification from %s: clearable=%s ongoing=%s channel=%s",
+            sbn.packageName, sbn.isClearable, sbn.isOngoing, sbn.notification.channelId,
+        )
         notificationSource.emit(sbn)
-
-        // 2. Parse: Extract richer data available in StatusBarNotification
-//        val notification = sbn.notification
-//        val extras = notification.extras
-//        val title = extras.getCharSequence("android.title")?.toString() ?: ""
-//        val text = extras.getCharSequence("android.text")?.toString() ?: ""
-//        val bigText = extras.getCharSequence("android.bigText")?.toString()
-//
-//        Timber.d("Notification from $packageName: $title | $text")
-//
-//        // 3. Map to your existing NotificationInfo object
-//        val info = NotificationInfo(
-//            title = title,
-//            text = text,
-//            bigText = bigText,
-//            packageName = packageName,
-//            timestamp = sbn.postTime
-//        )
-
-        // 4. Input to pipeline
-//        pipeline.onNotificationPosted(info)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         // Optional: Handle when a notification is dismissed
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        serviceScope.cancel()
     }
 }

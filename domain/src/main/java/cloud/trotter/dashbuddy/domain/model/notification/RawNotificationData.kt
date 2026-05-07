@@ -10,10 +10,18 @@ data class RawNotificationData(
     val text: String?,
     val tickerText: String?,
     val bigText: String?,
+    val subText: String? = null,
     val packageName: String,
     val postTime: Long,
     val isClearable: Boolean,
+    val isOngoing: Boolean = false,
+    val category: String? = null,
+    val channelId: String? = null,
+    val actionLabels: List<String> = emptyList(),
 ) {
     fun toFullString(): String =
-        listOfNotNull(title, text, bigText, tickerText).joinToString(" | ")
+        listOfNotNull(title, text, bigText, tickerText, subText).joinToString(" | ")
+
+    /** Content hash for CaptureBus dedup — identical text content deduplicates per session. */
+    val contentHash: Int get() = toFullString().hashCode()
 }

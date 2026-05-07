@@ -81,6 +81,10 @@ class EffectMap @Inject constructor() {
 
             // Evaluate
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
+
+            // Speak offer aloud
+            val platform = next.activePlatform?.name ?: "Unknown"
+            add(AppEffect.SpeakOffer(offer.parsedOffer, platform))
         }
 
         // Offer replaced (different hash)
@@ -98,6 +102,10 @@ class EffectMap @Inject constructor() {
             val safeMerchant = merchantName.replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
             add(AppEffect.CaptureScreenshot("Offer - $safeMerchant"))
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
+
+            // Speak offer aloud
+            val platform = next.activePlatform?.name ?: "Unknown"
+            add(AppEffect.SpeakOffer(offer.parsedOffer, platform))
         }
 
         // Offer resolved (accepted/declined/timeout)

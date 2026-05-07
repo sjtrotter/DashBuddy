@@ -26,6 +26,7 @@ import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
+import cloud.trotter.dashbuddy.ui.main.settings.PlatformSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.ui.main.settings.StrategySettingsScreen
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardScreen
@@ -113,6 +114,13 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.DeveloperSettings.route) {
                             PlaceholderScreen(
                                 title = "Developer Options",
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 6. Platform / Gig Apps
+                        composable(Screen.PlatformSettings.route) {
+                            PlatformSettingsScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }

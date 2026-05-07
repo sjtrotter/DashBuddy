@@ -3,18 +3,24 @@ package cloud.trotter.dashbuddy.pipeline.notification
 import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
 import cloud.trotter.dashbuddy.core.data.capture.EnvelopeBuilder
 import cloud.trotter.dashbuddy.core.data.capture.schema.RawNotificationSchema
+import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationIdentity
 import cloud.trotter.dashbuddy.domain.pipeline.identity
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.pipeline.notification.input.NotificationSource
 import cloud.trotter.dashbuddy.pipeline.notification.mapper.toDomain
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,12 +35,27 @@ class NotificationPipeline @Inject constructor(
     private val filter: NotificationFilter,
     private val classifier: ObservationClassifier,
     private val captureBus: CaptureBus,
+    private val platformPreferences: PlatformPreferencesRepository,
 ) {
     companion object {
         const val PIPELINE_ID = "notification"
     }
 
     private var lastIdentity: ObservationIdentity? = null
+
+    /** Cached enabled platforms — updated reactively from preferences. */
+    @Volatile
+    private var enabledPlatforms: Set<Platform> = Platform.entries.toSet()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    init {
+        scope.launch {
+            platformPreferences.enabledPlatforms.collect { platforms ->
+                enabledPlatforms = platforms
+            }
+        }
+    }
 
     fun output(): Flow<Observation.Notification> = source.events
         .mapNotNull { sbn -> sbn.toDomain() }
@@ -44,13 +65,25 @@ class NotificationPipeline @Inject constructor(
             val obs = classifier.classify(event) as Observation.Notification
             obs to raw
         }
+        // Gate: drop noise observations (known-irrelevant, never capture or forward)
+        .filter { (obs, _) ->
+            val isNoise = obs.parsed is ParsedFields.NoiseFields
+            if (isNoise) Timber.v("Noise gate: dropped notification %s", obs.target)
+            !isNoise
+        }
+        // Gate: drop observations from disabled platforms (defense-in-depth)
+        .filter { (_, raw) ->
+            val platform = Platform.fromPackage(raw.packageName)
+            platform == Platform.Unknown || platform in enabledPlatforms
+        }
         // Dedup + Capture
         .mapNotNull { (obs, raw) ->
             val identity = obs.identity()
             if (identity == lastIdentity) return@mapNotNull null
             if (obs.target != "UNKNOWN") lastIdentity = identity
 
-            val platform = Platform.fromRuleId(obs.ruleId).wire
+            // Derive platform from the source package, not from the matched rule
+            val platform = Platform.fromPackage(raw.packageName).wire
             val capture = EnvelopeBuilder.build(
                 pipelineId = PIPELINE_ID,
                 schema = RawNotificationSchema,
@@ -58,6 +91,7 @@ class NotificationPipeline @Inject constructor(
                 ruleId = obs.ruleId,
                 classificationName = obs.target,
                 payload = raw,
+                contentHash = raw.contentHash,
                 metadata = obs.metadata,
             )
             val captureId = captureBus.offer(

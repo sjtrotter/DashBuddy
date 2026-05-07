@@ -30,6 +30,7 @@ object ParsedFieldsFactory {
             when (shape) {
                 // Shapes that require no parsed fields
                 "sensitive" -> ParsedFields.SensitiveFields()
+                "noise" -> ParsedFields.NoiseFields()
                 "none" -> ParsedFields.None
 
                 // Shapes that require parsed fields

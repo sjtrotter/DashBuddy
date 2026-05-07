@@ -545,8 +545,9 @@ object RuleCompiler {
         val condition = compileNodePred(obj["if"]!!)
         val (flow, modeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
         val intentFactory: (UiNode) -> String = { _ -> intent }
+        val screenConstraint = obj["screenIs"]?.jsonPrimitive?.content
 
-        return CompiledClickRule(id, priority, overrideable, condition, intentFactory, flow, modeHint)
+        return CompiledClickRule(id, priority, overrideable, condition, intentFactory, flow, modeHint, screenConstraint)
     }
 
     /** Convert CamelCase to snake_case. "AcceptOffer" → "accept_offer" */
@@ -576,6 +577,7 @@ object RuleCompiler {
         val id = obj["id"]!!.jsonPrimitive.content
         val priority = obj["priority"]!!.jsonPrimitive.int
         val overrideable = obj["overrideable"]?.jsonPrimitive?.booleanOrNull ?: true
+        val shape = obj["shape"]?.jsonPrimitive?.content
         val intent = obj["intent"]?.jsonPrimitive?.content
             ?: obj["target"]?.jsonPrimitive?.content?.let { camelToSnake(it) }
             ?: deriveTargetFromId(id)
@@ -596,7 +598,7 @@ object RuleCompiler {
             }
         }
 
-        return CompiledNotificationRule(id, priority, overrideable, classify, flow, modeHint)
+        return CompiledNotificationRule(id, priority, overrideable, classify, shape, flow, modeHint)
     }
 
     private fun compileAdditionalTipRule(
@@ -861,6 +863,24 @@ object RuleCompiler {
             }
             "isClearable" ->
                 { raw -> raw.isClearable }
+            "isOngoing" ->
+                { raw -> raw.isOngoing }
+            "channelIdEquals" -> {
+                val s = (value as JsonPrimitive).content
+                ;{ raw -> raw.channelId == s }
+            }
+            "channelIdContains" -> {
+                val s = (value as JsonPrimitive).content
+                ;{ raw -> raw.channelId?.contains(s, ignoreCase = true) == true }
+            }
+            "categoryEquals" -> {
+                val s = (value as JsonPrimitive).content
+                ;{ raw -> raw.category == s }
+            }
+            "hasAction" -> {
+                val s = (value as JsonPrimitive).content
+                ;{ raw -> raw.actionLabels.any { it.contains(s, ignoreCase = true) } }
+            }
             "anyFieldContains" -> {
                 val s = (value as JsonPrimitive).content
                 ;{ raw -> raw.toFullString().contains(s, ignoreCase = true) }

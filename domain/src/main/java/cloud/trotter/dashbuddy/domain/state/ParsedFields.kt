@@ -154,6 +154,10 @@ sealed class ParsedFields {
         override val activity: String? = null,
     ) : ParsedFields()
 
+    data class NoiseFields(
+        override val activity: String? = null,
+    ) : ParsedFields()
+
     data class ClickFields(
         override val activity: String? = null,
         val intent: String,

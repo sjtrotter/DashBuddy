@@ -20,7 +20,12 @@ class StateChangedPipeline @Inject constructor(
         }
         .mapNotNull { event ->
             source.getCurrentRootNode()?.let { tree ->
-                TreeSnapshot(tree, TreeSnapshot.Source.STATE_CHANGED, event.contentChangeTypes)
+                TreeSnapshot(
+                    tree = tree,
+                    source = TreeSnapshot.Source.STATE_CHANGED,
+                    contentChangeTypes = event.contentChangeTypes,
+                    packageName = event.packageName?.toString(),
+                )
             }
         }
 }

@@ -52,6 +52,7 @@ sealed class AppEffect {
     data object PauseOdometer : AppEffect()   // pause GPS while stationary; session total preserved
     data object ResumeOdometer : AppEffect()  // resume GPS after stationary pause
     data class EvaluateOffer(val parsedOffer: ParsedOffer) : AppEffect()
+    data class SpeakOffer(val parsedOffer: ParsedOffer, val platformName: String) : AppEffect()
 
     data class ClickNode(
         val node: UiNode,

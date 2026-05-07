@@ -18,12 +18,14 @@ sealed interface PipelineEvent {
         override val timestamp: Long,
         val tree: UiNode,
         val snapshot: TreeSnapshot,
+        val packageName: String? = null,
     ) : PipelineEvent
 
     /** A click on a single node, extracted from TYPE_VIEW_CLICKED. */
     data class Click(
         override val timestamp: Long,
         val node: UiNode,
+        val packageName: String? = null,
     ) : PipelineEvent
 
     /** A notification from the notification listener service. */

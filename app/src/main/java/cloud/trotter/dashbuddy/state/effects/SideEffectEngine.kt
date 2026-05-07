@@ -38,6 +38,7 @@ class SideEffectEngine @Inject constructor(
     private val screenShotHandler: ScreenShotHandler,
     private val uiInteractionHandler: UiInteractionHandler,
     private val effectsFiredDao: EffectsFiredDao,
+    private val ttsEffectHandler: TtsEffectHandler,
 ) {
 
     // 1. OUTPUT STREAM: Events going BACK to the StateMachine (The Loopback)
@@ -122,6 +123,8 @@ class SideEffectEngine @Inject constructor(
 
             is AppEffect.PlayNotificationSound -> { /* Implementation */
             }
+
+            is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.parsedOffer, effect.platformName)
 
             is AppEffect.StartDash -> bubbleManager.startDash(effect.dashId)
             is AppEffect.EndDash -> bubbleManager.endDash()
@@ -232,6 +235,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.StartDash,
         is AppEffect.EndDash,
         is AppEffect.ProcessTipNotification,
+        is AppEffect.SpeakOffer,
         -> true
         else -> false
     }
