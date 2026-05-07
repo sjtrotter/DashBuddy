@@ -51,11 +51,6 @@ class AccessibilityListener : AccessibilityService() {
                     pkg,
                     event.className,
                 )
-                // TYPE_VIEW_SCROLLED from RecyclerView = offer scrolled in/out.
-                // Probe all windows to see if offer is in a separate window layer.
-                if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
-                    probeAllWindows()
-                }
             }
             return
         }
@@ -63,21 +58,6 @@ class AccessibilityListener : AccessibilityService() {
         if (pkg !in enabledPackages) return
 
         accessibilitySource.emit(event)
-    }
-
-    /** Debug: log all accessible windows when offer arrival/departure is suspected. */
-    private fun probeAllWindows() {
-        val windowList = windows ?: return
-        Timber.i("🪟 WINDOW PROBE (%d windows):", windowList.size)
-        windowList.forEachIndexed { i, w ->
-            val root = w.root
-            val rootChildCount = root?.childCount ?: -1
-            Timber.i(
-                "  [%d] id=%d type=%d layer=%d active=%s focused=%s title=%s pkg=%s rootChildren=%d",
-                i, w.id, w.type, w.layer, w.isActive, w.isFocused,
-                w.title, root?.packageName, rootChildCount
-            )
-        }
     }
 
     override fun onInterrupt() {
@@ -99,14 +79,12 @@ class AccessibilityListener : AccessibilityService() {
 
         // In debug builds, widen to ALL event types and ALL packages so we can
         // observe what fires without needing handlers for every type.
-        // Also set notificationTimeout=0 for immediate event delivery (no batching).
         if (BuildConfig.DEBUG) {
             serviceInfo = serviceInfo.apply {
                 eventTypes = AccessibilityServiceInfo.DEFAULT or AccessibilityEvent.TYPES_ALL_MASK
                 packageNames = null // all packages — code-level filter still gates the pipeline
-                notificationTimeout = 0 // no batching — immediate delivery
             }
-            Timber.i("Debug: accessibility service widened to typeAllMask, all packages, timeout=0")
+            Timber.i("Debug: accessibility service widened to typeAllMask, all packages")
         }
 
         // Register with the source

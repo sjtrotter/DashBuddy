@@ -14,6 +14,76 @@
   },
   "screens": [
     {
+      "id": "uber.screen.offer",
+      "platform_id": "uber.driver",
+      "priority": 15,
+      "overrideable": true,
+      "branches": [
+        {
+          "target": "OFFER",
+          "state": { "flow": "offer:presented", "modeHint": "online" },
+          "shape": "offer",
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "primary_touch_area" } },
+              { "exists": { "hasTextMatchesRegex": "\\$\\d+\\.\\d{2}" } },
+              { "exists": {
+                  "any": [
+                    { "hasText": "Accept" },
+                    { "hasText": "Match" }
+                  ]
+                }
+              }
+            ]
+          },
+          "parse": {
+            "fields": {
+              "payAmount": {
+                "find": { "hasTextMatchesRegex": "^\\$\\d" },
+                "read": "text",
+                "transform": "parseCurrency"
+              },
+              "distance": {
+                "find": { "hasTextMatchesRegex": "\\d[\\d.]*\\s*mi" },
+                "read": "text",
+                "transform": "parseDistance"
+              },
+              "deliveryTimeText": {
+                "find": { "hasTextMatchesRegex": "\\d+\\s*min" },
+                "read": "text"
+              },
+              "orders": {
+                "each": { "hasClassNameEndsWith": "CardView" },
+                "extract": {
+                  "storeName": {
+                    "find": {
+                      "all": [
+                        { "hasClassName": "android.widget.TextView" },
+                        { "not": { "any": [
+                          { "hasTextMatchesRegex": "^\\$" },
+                          { "hasTextContaining": "min" },
+                          { "hasText": "Accept" },
+                          { "hasText": "Match" },
+                          { "hasText": "Delivery" },
+                          { "hasTextContaining": "Exclusive" },
+                          { "hasTextContaining": "Guaranteed" },
+                          { "hasTextContaining": ", " }
+                        ]}}
+                      ]
+                    },
+                    "read": "text"
+                  },
+                  "orderType": {
+                    "literal": "PICKUP"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "uber.screen.splash",
       "platform_id": "uber.driver",
       "priority": 40,
@@ -96,6 +166,20 @@
     }
   ],
   "clicks": [
+    {
+      "id": "uber.click.accept_offer",
+      "platform_id": "uber.driver",
+      "priority": 5,
+      "overrideable": true,
+      "screenIs": "OFFER",
+      "intent": "accept",
+      "if": {
+        "any": [
+          { "hasText": "Accept" },
+          { "hasText": "Match" }
+        ]
+      }
+    },
     {
       "id": "uber.click.go_online",
       "platform_id": "uber.driver",
