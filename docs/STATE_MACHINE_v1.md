@@ -55,117 +55,498 @@ Three input streams are merged into a single processing loop:
 
 ---
 
-## 2. Supported Shapes
+## 2. Type Definitions
 
-Shapes are the typed output of rule classification. Each rule declares a `"shape"`
-string that `ParsedFieldsFactory` maps to a `ParsedFields` subtype. The state
-machine consumes these via `Observation.FlowObservation.parsed`.
+Types referenced throughout this document. Defined in the `:domain` module.
 
-### 2.1 Gate Shapes (Dropped Before State Machine)
+### `Flow`
 
-These shapes are intercepted by pipeline gates and never reach the state machine.
+The primary state-machine input axis. Rules declare `"flow"` to signal which
+lifecycle phase the driver is in.
 
-| Shape | Type | Pipelines | Fields | Purpose |
-|---|---|---|---|---|
-| `"sensitive"` | `SensitiveFields` | screen, notification | `activity?` | PII/security screens (banking, identity, payment). Pledge: never stored or forwarded. |
-| `"noise"` | `NoiseFields` | screen, notification | `activity?` | Known-irrelevant signals. Surgically suppressed to reduce processing noise. |
+| Enum | Wire | Description |
+|---|---|---|
+| `Idle` | `"idle"` | Waiting for offers on the idle map |
+| `OfferPresented` | `"offer:presented"` | An offer popup is on screen |
+| `TaskPickupNavigation` | `"task:pickup:navigation"` | Navigating to pickup location |
+| `TaskPickupArrived` | `"task:pickup:arrived"` | Arrived at the store, waiting for order |
+| `TaskDropoffNavigation` | `"task:dropoff:navigation"` | Navigating to delivery location |
+| `TaskDropoffArrived` | `"task:dropoff:arrived"` | Arrived at customer, completing delivery |
+| `PostTask` | `"post:task"` | Viewing delivery completion summary / payout screen |
+| `SessionEnded` | `"session:ended"` | End-of-shift summary screen |
 
-### 2.2 Null Shape
+Shapes that don't map to flows (`paused`, `timeline`, `ratings`) are classified
+without a `flow` value and contribute `modeHint` or contextual data without
+changing the flow region.
 
-| Shape | Type | Pipelines | Fields | Purpose |
-|---|---|---|---|---|
-| `"none"` | `None` | any | (none) | Explicit no-data. Also the fallback when shape is `null` or fields are empty. |
-
-### 2.3 Screen Shapes
-
-| Shape | Type | Fields | Purpose |
+| Flow | TaskPhase | TaskSubFlow | Associated Shape |
 |---|---|---|---|
-| `"idle"` | `IdleFields` | `zoneName: String?`, `sessionType: SessionType?`, `sessionPay: Double?`, `waitTimeEstimate: String?`, `isHeadingBackToZone: Boolean`, `spotSaveDeadline: Long?` | Driver waiting for offers on the idle map. |
-| `"offer"` | `OfferFields` | `parsedOffer: ParsedOffer` (contains `offerHash`, `payAmount`, `distanceMiles`, `dueByTimeText`, `dueByTimeMillis`, `itemCount`, `orders[]`) | Offer popup presented. Each order carries `storeName`, `itemCount`, `orderType`, `badges[]`. |
-| `"task"` | `TaskFields` | `phase: TaskPhase`, `subFlow: TaskSubFlow`, `storeName: String?`, `storeAddress: String?`, `customerNameHash: String?`, `customerAddressHash: String?`, `deadline: ParsedTime?`, `itemCount: Int?`, `redCardTotal: Double?`, `arrivalConfirmed: Boolean` | Active delivery segment. Covers all four task flows via phase/subFlow discriminators. |
-| `"post_task"` | `PostTaskFields` | `totalPay: Double`, `appPay: Double?`, `customerTips: Double?`, `parsedPay: ParsedPay?` (line items), `isExpanded: Boolean`, `expandButtonId: String?`, `sessionEarnings: Double?`, `offersAccepted: Int?`, `offersTotal: Int?` | Delivery completion summary. Pay breakdown available when expanded. |
-| `"session_ended"` | `SessionEndedFields` | `totalEarnings: Double`, `sessionDurationMillis: Long?`, `offersAccepted: Int?`, `offersTotal: Int?`, `weeklyEarnings: Double?` | End-of-shift summary screen. |
-| `"paused"` | `PausedFields` | `remainingText: String`, `remainingMillis: Long` | Session paused with countdown timer. |
-| `"timeline"` | `TimelineFields` | `sessionEarnings: Double?`, `offerEarnings: Double?`, `endsAtText: String?`, `endsAtMillis: Long?`, `tasks: List<TimelineTaskEntry>` | Timeline/dash-controls overlay. Each task entry has `taskType`, `nameHash`, `deadline`, `storeHint`, `isCurrent`. |
-| `"ratings"` | `RatingsFields` | `acceptanceRate: Double?`, `completionRate: Double?`, `onTimeRate: Double?`, `customerRating: Double?`, `deliveriesLast30Days: Int?`, `lifetimeDeliveries: Int?`, `originalItemsFoundRate: Double?`, `totalItemsFoundRate: Double?`, `substitutionIssuesRate: Double?`, `itemsWithQualityIssuesRate: Double?`, `itemsWrongOrMissingRate: Double?`, `lifetimeShoppingOrders: Int?` | Driver ratings view. Includes both delivery and shopping metrics. |
+| `Idle` | — | — | `idle` |
+| `OfferPresented` | — | — | `offer` |
+| `TaskPickupNavigation` | `PICKUP` | `NAVIGATION` | `task` |
+| `TaskPickupArrived` | `PICKUP` | `ARRIVED` | `task` |
+| `TaskDropoffNavigation` | `DROPOFF` | `NAVIGATION` | `task` |
+| `TaskDropoffArrived` | `DROPOFF` | `ARRIVED` | `task` |
+| `PostTask` | — | — | `post_task` |
+| `SessionEnded` | — | — | `session_ended` |
 
-### 2.4 Click Shape
+### `Mode`
 
-| Shape | Type | Fields | Purpose |
-|---|---|---|---|
-| `"click"` | `ClickFields` | `intent: String`, `nodeId: String?`, `nodeText: String?` | Classified UI tap. Intent values: `"accept_offer"`, `"decline_offer"`, `"arrived_at_store"`, etc. |
+The orthogonal availability axis. Mode lives on the platform region (R2+), not
+globally. Mode is **inferred** from flow + modeHint, never declared directly by rules.
 
-### 2.5 Notification Shape
-
-| Shape | Type | Fields | Purpose |
-|---|---|---|---|
-| `"notification"` | `NotificationFields` | `intent: String`, `amount: Double?`, `storeName: String?`, `deliveredAt: String?`, `rawText: String?` | Classified notification event. Intent values: `"additional_tip"`, `"new_order"`, `"scheduled_dash_expired"`. |
-
-### 2.6 Common Fields
-
-All shapes inherit `activity: String?` — a free-typed platform tag for sub-classification
-within a flow (e.g., `"shopping"`, `"scanning_card"`).
-
-All shapes expose `dedupeHash(): Int` for post-classification deduplication. Identity fields
-are included; transient/ticking fields are excluded.
-
----
-
-## 3. Supported Flows
-
-The `Flow` enum is the primary state-machine input axis. Rules declare `"flow"` to signal
-which lifecycle phase the driver is in.
-
-| Flow Enum | Wire Value | TaskPhase | TaskSubFlow | Associated Shape |
-|---|---|---|---|---|
-| `Idle` | `"idle"` | — | — | `idle` |
-| `OfferPresented` | `"offer:presented"` | — | — | `offer` |
-| `TaskPickupNavigation` | `"task:pickup:navigation"` | `PICKUP` | `NAVIGATION` | `task` |
-| `TaskPickupArrived` | `"task:pickup:arrived"` | `PICKUP` | `ARRIVED` | `task` |
-| `TaskDropoffNavigation` | `"task:dropoff:navigation"` | `DROPOFF` | `NAVIGATION` | `task` |
-| `TaskDropoffArrived` | `"task:dropoff:arrived"` | `DROPOFF` | `ARRIVED` | `task` |
-| `PostTask` | `"post:task"` | — | — | `post_task` |
-| `SessionEnded` | `"session:ended"` | — | — | `session_ended` |
-
-Shapes that don't map to flows (`paused`, `timeline`, `ratings`) are classified without
-a `flow` value and contribute `modeHint` or contextual data without changing the flow
-region.
-
----
-
-## 4. Supported Modes
-
-The `Mode` enum is the orthogonal availability axis. Mode lives on the platform region
-(R2+), not globally. Mode is **inferred** from flow + modeHint, never declared directly
-by rules.
-
-| Mode | Wire | Meaning |
+| Enum | Wire | Description |
 |---|---|---|
 | `Offline` | `"offline"` | Not logged in or session ended |
 | `Online` | `"online"` | Actively working — waiting, delivering, post-task |
-| `Paused` | `"paused"` | Explicitly paused by worker |
+| `Paused` | `"paused"` | Explicitly paused by the worker |
 
----
+### `Platform`
 
-## 5. Supported Platforms
+Each platform gets its own R2+ region with independent mode, session, and healing.
 
-Each platform gets its own R2+ region with independent mode, session, and healing state.
-
-| Platform | Wire | Package Name | Rule Coverage |
+| Enum | Wire | Package | Rule Coverage |
 |---|---|---|---|
 | `DoorDash` | `"doordash"` | `com.doordash.driverapp` | Full (screens, clicks, notifications) |
 | `Uber` | `"uber"` | `com.ubercab.driver` | Partial (offer screen, clicks) |
 | `Instacart` | `"instacart"` | `com.instacart.shopper` | Declared, no rules yet |
 | `WalmartSpark` | `"walmart_spark"` | `com.walmart.spark` | Declared, no rules yet |
-| `Unknown` | `"_unknown"` | `null` | Fallback for unrecognized sources |
+| `Unknown` | `"_unknown"` | — | Fallback for unrecognized sources |
 
 Platform is derived from `ruleId` — e.g., `doordash.screen.offer` → `DoorDash`.
 
+### `TaskPhase`
+
+Which phase of a task the worker is in. A Task is a single segment: one
+location, one purpose.
+
+| Enum | Description |
+|---|---|
+| `PICKUP` | Heading to or at the merchant to collect the order |
+| `DROPOFF` | Heading to or at the customer to deliver the order |
+
+### `TaskSubFlow`
+
+Whether the worker is navigating to or has arrived at the task location.
+
+| Enum | Description |
+|---|---|
+| `NAVIGATION` | In transit to the task location |
+| `ARRIVED` | Physically at the task location |
+
+### `SessionType`
+
+The earning mode for a session.
+
+| Enum | Display Name | Description |
+|---|---|---|
+| `PerOffer` | `"Earn per Offer"` | Standard pay-per-delivery mode |
+| `ByTime` | `"Earn by Time"` | Hourly/time-based earning mode |
+
+### `ParsedTime`
+
+A time value extracted from the UI, preserving both the display text and
+the computed epoch milliseconds.
+
+| Field | Type | Description |
+|---|---|---|
+| `text` | `String` | Raw display text (e.g., `"8:52 PM"`, `"34:15"`) |
+| `time` | `Long?` | Computed epoch milliseconds. Null if parsing failed |
+
+### `ParsedOffer`
+
+The full parsed representation of a delivery offer. Wrapped by `OfferFields`.
+
+| Field | Type | Description |
+|---|---|---|
+| `offerHash` | `String` | SHA-256 hash of core offer details for identity/dedup |
+| `itemCount` | `Int` | Total items across all orders. Default `1` |
+| `payAmount` | `Double?` | Guaranteed pay amount (e.g., `7.75`) |
+| `payTextRaw` | `String?` | Raw pay text (e.g., `"$7.75 Guaranteed (incl. tips)"`) |
+| `distanceMiles` | `Double?` | Delivery distance in miles |
+| `distanceTextRaw` | `String?` | Raw distance text (e.g., `"2.8 mi"`) |
+| `dueByTimeText` | `String?` | Deadline display text (e.g., `"Deliver by 8:52 PM"`) |
+| `dueByTimeMillis` | `Long?` | Deadline as epoch milliseconds |
+| `timeToCompleteMinutes` | `Long?` | Estimated minutes to complete |
+| `badges` | `Set<OfferBadge>` | Offer-level badges (see `OfferBadge`) |
+| `initialCountdownSeconds` | `Int?` | Acceptance countdown timer (e.g., `36`) |
+| `orders` | `List<ParsedOrder>` | Individual orders within this offer |
+| `rawExtractedTexts` | `String?` | Full extracted text for later review |
+
+### `ParsedOrder`
+
+A single order within an offer. An offer may contain 1-3 orders (stacked).
+
+| Field | Type | Description |
+|---|---|---|
+| `orderIndex` | `Int` | Position in the offer (0-based) |
+| `orderType` | `OrderType` | What kind of order this is |
+| `storeName` | `String` | Merchant name |
+| `itemCount` | `Int` | Number of items in this order |
+| `isItemCountEstimated` | `Boolean` | True if item count was inferred, not explicit |
+| `badges` | `Set<OrderBadge>` | Order-level badges (see `OrderBadge`) |
+
+### `OrderType`
+
+The type of order within an offer.
+
+| Enum | Type Name | Shopping? | Description |
+|---|---|---|---|
+| `PICKUP` | `"Pickup"` | No | Standard pickup from an establishment |
+| `RESTAURANT_PICKUP` | `"Restaurant Pickup"` | No | Explicitly labeled restaurant pickup |
+| `SHOP_FOR_ITEMS` | `"Shop for items"` | Yes | Dasher shops for items at the store |
+| `RETAIL_PICKUP` | `"Retail pickup"` | No | Pre-packaged retail store pickup |
+
+### `OfferBadge`
+
+Offer-level badges/indicators on the offer screen.
+
+| Enum | Match Strategy | Description |
+|---|---|---|
+| `HIGH_PAYING` | Regex: `High-paying (shopping )?offer!` | DoorDash-flagged high pay |
+| `PRIORITY_ACCESS` | Regex: `your (Platinum\|Gold\|Silver) status\|Pro Shopper` | Status-based priority |
+| `ALL_ORDERS_SAME_STORE` | Exact: `All orders are from the same store` | Stacked orders, one store |
+| `BOTH_ORDERS_SAME_CUSTOMER` | Exact: `Both orders go to the same customer` | Stacked orders, one customer |
+| `ITEMS_CAN_BE_ADDED` | Exact: `Items can be added before checkout` | Customer can add items |
+| `SHARPIE_RECOMMENDED` | Exact: `Black marker or Sharpie recommended` | Shop & Deliver hint |
+| `CONTAINS_RESTRICTED_ITEMS` | Exact: `Contains restricted items` | Restricted items present |
+| `AGE_RESTRICTED_18_PLUS` | Exact: `Must be 18+ to accept order` | Age gate |
+| `AGE_RESTRICTED_21_PLUS` | Exact: `Must be 21+ to accept order` | Age gate (alcohol) |
+| `CHECK_RECIPIENT_ID` | Exact: `Check recipient's ID` | ID check required |
+| `INCLUDES_ALCOHOL` | Contains: `including alcohol` | Alcohol in order |
+| `COLLECT_CASH` | Exact: `Collect cash from customer` | Cash on delivery |
+| `MAY_NEED_RETURNS` | Exact: `May need returns` | Returns possible |
+
+### `OrderBadge`
+
+Order-level badges that apply to a specific order within an offer.
+
+| Enum | Badge Text | Description |
+|---|---|---|
+| `RED_CARD` | `"Red Card required"` | Red Card needed for payment at the store |
+| `LARGE_ORDER` | `"Large Order - Catering"` | Large catering order |
+| `PIZZA_BAG` | `"Pizza bag required"` | Pizza bag equipment needed |
+| `ALCOHOL` | `"Alcohol"` | This order contains alcohol |
+
+### `ParsedPay`
+
+A pay breakdown from the delivery completion screen. Separates platform pay
+from customer tips.
+
+| Field | Type | Description |
+|---|---|---|
+| `appPayComponents` | `List<ParsedPayItem>` | Platform pay items (Base Pay, Peak Pay, etc.) |
+| `customerTips` | `List<ParsedPayItem>` | Per-store customer tips |
+| `totalBasePay` | `Double` | Derived: sum of `appPayComponents` amounts |
+| `totalTip` | `Double` | Derived: sum of `customerTips` amounts |
+| `total` | `Double` | Derived: `totalBasePay + totalTip` |
+
+### `ParsedPayItem`
+
+A single line item in a pay breakdown.
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `String` | Label (e.g., `"Base Pay"`, `"Peak Pay"`, or store name for tips) |
+| `amount` | `Double` | Dollar amount |
+
+### `TimelineTaskEntry`
+
+A single entry in the timeline/dash-controls task chain overlay.
+
+| Field | Type | Description |
+|---|---|---|
+| `taskType` | `String` | Type identifier (e.g., pickup, dropoff) |
+| `nameHash` | `String?` | Hashed name for identity without PII |
+| `deadline` | `ParsedTime?` | Task deadline |
+| `storeHint` | `String?` | Store name hint |
+| `isCurrent` | `Boolean` | Whether this is the currently active task. Default `false` |
+
+### `RatingsSnapshot`
+
+A point-in-time snapshot of driver performance metrics, captured when the
+Ratings screen is observed. Stored on `PlatformRegion` so the bubble HUD can
+display it without re-observing the ratings screen.
+
+| Field | Type | Description |
+|---|---|---|
+| `capturedAt` | `Long` | When the snapshot was taken |
+| `acceptanceRate` | `Double?` | Offer acceptance rate |
+| `completionRate` | `Double?` | Delivery completion rate |
+| `onTimeRate` | `Double?` | On-time or early rate |
+| `customerRating` | `Double?` | Customer rating (out of 5.0) |
+| `deliveriesLast30Days` | `Int?` | Deliveries in the last 30 days |
+| `lifetimeDeliveries` | `Int?` | Total lifetime deliveries |
+| `originalItemsFoundRate` | `Double?` | Shopping: original items found rate |
+| `totalItemsFoundRate` | `Double?` | Shopping: total items found rate |
+| `substitutionIssuesRate` | `Double?` | Shopping: substitution issues rate |
+| `itemsWithQualityIssuesRate` | `Double?` | Shopping: quality issues rate |
+| `itemsWrongOrMissingRate` | `Double?` | Shopping: wrong/missing items rate |
+| `lifetimeShoppingOrders` | `Int?` | Total lifetime shopping orders |
+
+### `ModeConfidence`
+
+Tracks confidence for implausible mode transitions. When the pipeline observes
+a flow that implies a mode change that doesn't make sense given the current
+state, the stepper accrues confidence instead of immediately transitioning.
+
+| Field | Type | Description |
+|---|---|---|
+| `pendingMode` | `Mode?` | The mode we're trying to transition to |
+| `pendingFlow` | `Flow?` | The flow that triggered the pending transition |
+| `supportingObservations` | `Int` | How many observations support this transition |
+| `firstSeenAt` | `Long?` | When the first supporting observation arrived |
+
+| Constant | Value | Description |
+|---|---|---|
+| `DEFAULT_OBSERVATION_THRESHOLD` | `2` | Observations needed to heal |
+| `DEFAULT_TIME_WINDOW_MS` | `10_000` | Time window for accrual (10s) |
+
+### `TimeoutType`
+
+Timer types used by the state machine's internal timer system.
+
+| Enum | Description |
+|---|---|
+| `SESSION_PAUSED_SAFETY` | Force offline after extended pause |
+| `RETRY_CLICK` | Retry an automated click action |
+| `SETTLE_UI` | Wait for UI to stabilize after interaction |
+| `DECLINE_POPUP_WAIT` | Wait for decline confirmation popup |
+| `SCREENSHOT_WAIT` | Delay before capturing screenshot |
+
+### `ChatPersona`
+
+Typed author identity for bubble HUD messages.
+
+| Persona | ID | Display Name | Use |
+|---|---|---|---|
+| `Dispatcher` | `bot_dispatcher` | "Dispatch" | General state updates |
+| `System` | `bot_system` | "System" | System-level messages |
+| `Dasher` | `dasher_self` | "You" | User's own actions echoed back |
+| `Merchant(name)` | `merchant_*` | Store name | Store-related updates |
+| `Customer(name)` | `customer_*` | Customer name | Customer-related updates |
+| `GoodOffer` | `good_offer` | "Good Offer" | Offer above acceptance thresholds |
+| `BadOffer` | `bad_offer` | "Bad Offer" | Offer below acceptance thresholds |
+| `Inspector` | `inspector` | "Inspector" | Debug/diagnostic messages |
+| `Navigator` | `navigator` | "Navigator" | Navigation updates |
+| `Shopper` | `shopper` | "Shopper" | Shopping task updates |
+| `Earnings` | `earnings` | "Earnings" | Earnings summaries |
+
 ---
 
-## 6. Observation Types (State Machine Inputs)
+## 3. Supported Shapes
 
-### 6.1 Flow Observations (Carry State Contributions)
+Shapes are the typed output of rule classification. Each rule declares a `"shape"`
+string that `ParsedFieldsFactory` maps to a `ParsedFields` subtype. The state
+machine consumes these via `Observation.FlowObservation.parsed`.
+
+All shapes inherit a common field:
+
+| Field | Type | Description |
+|---|---|---|
+| `activity` | `String?` | Free-typed platform tag for sub-classification within a flow (e.g., `"shopping"`, `"scanning_card"`) |
+
+All shapes expose `dedupeHash(): Int` for post-classification deduplication.
+Identity fields are included; transient/ticking fields are excluded.
+
+### 3.1 Gate Shapes (Dropped Before State Machine)
+
+These shapes are intercepted by pipeline gates and **never reach the state machine**.
+
+#### `"sensitive"` — `SensitiveFields`
+
+**Pipelines:** screen, notification  
+**Purpose:** PII/security screens (banking, identity, payment). Pledge: never stored or forwarded.
+
+No additional fields beyond `activity`.
+
+#### `"noise"` — `NoiseFields`
+
+**Pipelines:** screen, notification  
+**Purpose:** Known-irrelevant signals. Surgically suppressed to reduce processing noise.
+
+No additional fields beyond `activity`.
+
+### 3.2 Null Shape
+
+#### `"none"` — `None`
+
+**Pipelines:** any  
+**Purpose:** Explicit no-data. Also the fallback when `shape` is `null` or when
+the declared shape has empty fields.
+
+No fields (singleton object).
+
+### 3.3 Screen Shapes
+
+#### `"idle"` — `IdleFields`
+
+**Pipelines:** screen  
+**Purpose:** Driver waiting for offers on the idle map.  
+**Dedup identity:** `zoneName` + `sessionType` + `sessionPay`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `zoneName` | `String?` | No | Current delivery zone name (e.g., `"Downtown"`) |
+| `sessionType` | `SessionType?` | No | Current earning mode (`PerOffer` or `ByTime`) |
+| `sessionPay` | `Double?` | No | Running session earnings displayed on idle screen |
+| `waitTimeEstimate` | `String?` | No | Estimated wait time for next offer (e.g., `"2-5 min"`) |
+| `isHeadingBackToZone` | `Boolean` | No | Whether the driver is returning to their zone. Default `false` |
+| `spotSaveDeadline` | `Long?` | No | Epoch millis deadline to return before losing the spot |
+
+#### `"offer"` — `OfferFields`
+
+**Pipelines:** screen  
+**Purpose:** Offer popup presented to the driver.  
+**Dedup identity:** `parsedOffer.offerHash`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `parsedOffer` | `ParsedOffer` | Yes | The full parsed offer. See `ParsedOffer` in Section 2 for all fields |
+
+#### `"task"` — `TaskFields`
+
+**Pipelines:** screen  
+**Purpose:** Active delivery segment. A single shape covers all four task flows
+via `phase`/`subFlow` discriminators.  
+**Dedup identity:** `phase` + `subFlow` + `storeName` + `arrivalConfirmed`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `phase` | `TaskPhase` | Yes | `PICKUP` or `DROPOFF` |
+| `subFlow` | `TaskSubFlow` | Yes | `NAVIGATION` or `ARRIVED` |
+| `storeName` | `String?` | No | Merchant name (authoritative — from task screen, not offer) |
+| `storeAddress` | `String?` | No | Merchant address |
+| `customerNameHash` | `String?` | No | One-way hash of customer name (PII never stored in cleartext) |
+| `customerAddressHash` | `String?` | No | One-way hash of customer address |
+| `deadline` | `ParsedTime?` | No | Delivery deadline (display text + epoch millis) |
+| `itemCount` | `Int?` | No | Number of items to pick up or deliver |
+| `redCardTotal` | `Double?` | No | Red Card payment amount (pay-at-store orders) |
+| `arrivalConfirmed` | `Boolean` | No | Whether the platform has confirmed arrival. Default `false` |
+
+#### `"post_task"` — `PostTaskFields`
+
+**Pipelines:** screen  
+**Purpose:** Delivery completion summary. Pay breakdown available when the
+payout card is expanded.  
+**Dedup identity:** `totalPay` + `appPay` + `customerTips`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `totalPay` | `Double` | **Yes** | Total payout for this delivery |
+| `appPay` | `Double?` | No | Platform's share (base pay + bonuses) |
+| `customerTips` | `Double?` | No | Customer tip total |
+| `parsedPay` | `ParsedPay?` | No | Structured pay breakdown with line items. Only populated when `isExpanded = true` |
+| `isExpanded` | `Boolean` | No | Whether the pay detail card is expanded. Default `false` |
+| `expandButtonId` | `String?` | No | View ID of the expand button (for ADR-0006 auto-click) |
+| `sessionEarnings` | `Double?` | No | Running session total shown on this screen |
+| `offersAccepted` | `Int?` | No | Offers accepted this session |
+| `offersTotal` | `Int?` | No | Total offers received this session |
+
+#### `"session_ended"` — `SessionEndedFields`
+
+**Pipelines:** screen  
+**Purpose:** End-of-shift summary screen.  
+**Dedup identity:** `totalEarnings`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `totalEarnings` | `Double` | **Yes** | Total session earnings |
+| `sessionDurationMillis` | `Long?` | No | How long the session lasted |
+| `offersAccepted` | `Int?` | No | Offers accepted during the session |
+| `offersTotal` | `Int?` | No | Total offers received during the session |
+| `weeklyEarnings` | `Double?` | No | Running weekly earnings total |
+
+#### `"paused"` — `PausedFields`
+
+**Pipelines:** screen  
+**Purpose:** Session paused with countdown timer. The driver has a limited
+window to resume before being taken offline.  
+**Dedup identity:** Fixed — all paused observations are the same identity.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `remainingText` | `String` | **Yes** | Countdown display text (e.g., `"34:15"`) |
+| `remainingMillis` | `Long` | **Yes** | Remaining pause time in milliseconds |
+
+#### `"timeline"` — `TimelineFields`
+
+**Pipelines:** screen  
+**Purpose:** Timeline/dash-controls overlay showing the current task chain.  
+**Dedup identity:** `sessionEarnings` + `tasks.size`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `sessionEarnings` | `Double?` | No | Session earnings shown in the overlay |
+| `offerEarnings` | `Double?` | No | Earnings for the current offer/job |
+| `endsAtText` | `String?` | No | Scheduled end time display text |
+| `endsAtMillis` | `Long?` | No | Scheduled end time as epoch millis |
+| `tasks` | `List<TimelineTaskEntry>` | No | The task chain. See `TimelineTaskEntry` in Section 2 |
+
+#### `"ratings"` — `RatingsFields`
+
+**Pipelines:** screen  
+**Purpose:** Driver ratings/performance view. Includes both delivery and
+shopping metrics.  
+**Dedup identity:** `customerRating` + `lifetimeDeliveries`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `acceptanceRate` | `Double?` | No | Offer acceptance rate (0.0 - 1.0) |
+| `completionRate` | `Double?` | No | Delivery completion rate |
+| `onTimeRate` | `Double?` | No | On-time or early delivery rate |
+| `customerRating` | `Double?` | No | Customer rating (0.0 - 5.0) |
+| `deliveriesLast30Days` | `Int?` | No | Deliveries completed in the last 30 days |
+| `lifetimeDeliveries` | `Int?` | No | Total lifetime deliveries |
+| `originalItemsFoundRate` | `Double?` | No | Shopping: original items found rate |
+| `totalItemsFoundRate` | `Double?` | No | Shopping: total items found rate |
+| `substitutionIssuesRate` | `Double?` | No | Shopping: substitution issues rate |
+| `itemsWithQualityIssuesRate` | `Double?` | No | Shopping: quality issues rate |
+| `itemsWrongOrMissingRate` | `Double?` | No | Shopping: wrong/missing items rate |
+| `lifetimeShoppingOrders` | `Int?` | No | Total lifetime shopping orders |
+
+### 3.4 Click Shape
+
+#### `"click"` — `ClickFields`
+
+**Pipelines:** click  
+**Purpose:** Classified UI tap/click event.  
+**Dedup identity:** None — every click is unique.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `intent` | `String` | Yes | Semantic meaning. Values: `"accept_offer"`, `"decline_offer"`, `"arrived_at_store"`, `"go_online"`, `"go_offline"` |
+| `nodeId` | `String?` | No | Accessibility view ID of the clicked element |
+| `nodeText` | `String?` | No | Display text of the clicked element |
+
+### 3.5 Notification Shape
+
+#### `"notification"` — `NotificationFields`
+
+**Pipelines:** notification  
+**Purpose:** Classified status bar notification with extracted data.  
+**Dedup identity:** `intent` + `amount` + `storeName`
+
+> **Design note:** This is currently a generic carrier shape — all notification
+> rules extract into these same fields. As notification coverage expands, this
+> will likely evolve toward intent-specific shapes that derive richer semantic
+> meaning from each notification type (e.g., a dedicated tip event, a surge
+> alert, a schedule reminder, etc.) rather than flattening everything into the
+> same five fields.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `intent` | `String` | Yes | Semantic classification. Values: `"additional_tip"`, `"new_order"`, `"scheduled_dash_expired"` |
+| `amount` | `Double?` | No | Monetary amount if applicable (e.g., tip amount) |
+| `storeName` | `String?` | No | Associated store name |
+| `deliveredAt` | `String?` | No | Delivery timestamp text (e.g., `"5/7, 2:30 PM"`) |
+| `rawText` | `String?` | No | Original notification text for fallback parsing |
+
+---
+
+## 4. Observation Types (State Machine Inputs)
+
+### 4.1 Flow Observations (Carry State Contributions)
 
 | Type | Source | Carries | Description |
 |---|---|---|---|
@@ -173,7 +554,7 @@ Platform is derived from `ruleId` — e.g., `doordash.screen.offer` → `DoorDas
 | `Observation.Click` | Accessibility click pipeline | `flow`, `modeHint`, `parsed`, `target`, `actions`, `screenTarget` | Classified tap/click event. Includes the screen context. |
 | `Observation.Notification` | Notification pipeline | `flow`, `modeHint`, `parsed`, `target`, `actions` | Classified status bar notification. |
 
-### 6.2 Control Observations (No Flow/Mode Contribution)
+### 4.2 Control Observations (No Flow/Mode Contribution)
 
 | Type | Source | Payload | Description |
 |---|---|---|---|
@@ -181,7 +562,7 @@ Platform is derived from `ruleId` — e.g., `doordash.screen.offer` → `DoorDas
 | `Observation.UiInput` | Bubble HUD | `action: String`, `payload: Map` | Manual user interaction from the overlay. |
 | `Observation.Loopback` | Side-effect engine | `effect: String`, `payload: Map` | Feedback from effect execution (e.g., `"offer_evaluated"`). |
 
-### 6.3 Timeout Types
+### 4.3 Timeout Types
 
 | TimeoutType | Purpose | Default Duration |
 |---|---|---|
@@ -193,9 +574,9 @@ Platform is derived from `ruleId` — e.g., `doordash.screen.offer` → `DoorDas
 
 ---
 
-## 7. AppState Structure (Region Data)
+## 5. AppState Structure (Region Data)
 
-### 7.1 Top-Level Container
+### 5.1 Top-Level Container
 
 ```
 AppState
@@ -207,7 +588,7 @@ AppState
 └── correlationVersion: Long          (monotonic, incremented per observation)
 ```
 
-### 7.2 Region 0 — FlowRegion
+### 5.2 Region 0 — FlowRegion
 
 What the driver is looking at right now. Updates immediately on every observation.
 
@@ -230,7 +611,7 @@ What the driver is looking at right now. Updates immediately on every observatio
 | `returnFlow` | `Flow` | Flow to restore on decline/timeout |
 | `lastClickIntent` | `String?` | `"accept_offer"` or `"decline_offer"` |
 
-### 7.3 Region 2+ — PlatformRegion
+### 5.3 Region 2+ — PlatformRegion
 
 Per-platform durable state. One instance per active platform.
 
@@ -292,7 +673,7 @@ Per-platform durable state. One instance per active platform.
 | `completedAt` | `Long?` | When task completed |
 | `recovered` | `Boolean` | True if synthesized by healing (app launched mid-task) |
 
-### 7.4 Region 1 — CrossPlatformRegion
+### 5.4 Region 1 — CrossPlatformRegion
 
 Derived, read-only. Recomputed from R2+ after every step.
 
@@ -318,9 +699,9 @@ Derived, read-only. Recomputed from R2+ after every step.
 
 ---
 
-## 8. Mode Transition Table
+## 6. Mode Transition Table
 
-### 8.1 Plausibility Rules
+### 6.1 Plausibility Rules
 
 | From | To | Plausible? | Condition |
 |---|---|---|---|
@@ -331,7 +712,7 @@ Derived, read-only. Recomputed from R2+ after every step.
 | `Offline` | `Online` | **No** (heal) | Could be app restart mid-task |
 | `Offline` | `Paused` | **No** (heal) | Inconsistent — shouldn't happen |
 
-### 8.2 Healing Policy
+### 6.2 Healing Policy
 
 Implausible transitions are **not rejected** — they accrue confidence and heal:
 
@@ -340,7 +721,7 @@ Implausible transitions are **not rejected** — they accrue confidence and heal
 - When threshold is met: force the transition and synthesize missing state
   (e.g., create Job + Task with `recovered = true`)
 
-### 8.3 Mode Inference from Flow
+### 6.3 Mode Inference from Flow
 
 | Flow | Implied Mode |
 |---|---|
@@ -357,37 +738,37 @@ Explicit `modeHint` from rule always takes precedence over flow-inferred mode.
 
 ---
 
-## 9. Effects (State Machine Outputs)
+## 7. Effects (State Machine Outputs)
 
 Effects are produced by `EffectMap.diff()` which diffs before/after state per region.
 
-### 9.1 Persistence Effects
+### 7.1 Persistence Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `LogEvent` | `event: AppEventEntity` | `"log:{type}:{time}"` | Append event to database. |
 
-### 9.2 UI Effects
+### 7.2 UI Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `UpdateBubble` | `text`, `persona: ChatPersona`, `expand: Boolean` | — | Post message to bubble HUD notification. |
 | `PlayNotificationSound` | — | — | Play alert sound. |
 
-### 9.3 Capture Effects
+### 7.3 Capture Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `CaptureScreenshot` | `filenamePrefix`, `metadata?` | — | Take screenshot via accessibility service, save to gallery. |
 
-### 9.4 Timer Effects
+### 7.4 Timer Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `ScheduleTimeout` | `durationMs`, `type: TimeoutType` | — | Schedule a timer that produces `Observation.Timeout` on expiry. |
 | `CancelTimeout` | `type: TimeoutType` | — | Cancel a scheduled timer. |
 
-### 9.5 Odometer Effects
+### 7.5 Odometer Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
@@ -396,41 +777,41 @@ Effects are produced by `EffectMap.diff()` which diffs before/after state per re
 | `PauseOdometer` | — | — | Pause GPS while stationary. Session total preserved. |
 | `ResumeOdometer` | — | — | Resume GPS after stationary pause. |
 
-### 9.6 Offer Effects
+### 7.6 Offer Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `EvaluateOffer` | `parsedOffer: ParsedOffer` | — | Run offer through evaluator. Result loops back as `Loopback("offer_evaluated")`. |
 | `SpeakOffer` | `parsedOffer`, `platformName` | — | TTS announcement: "{platform} offer. ${pay}. {store}. {distance} miles. {dueBy}." |
 
-### 9.7 Automation Effects (ADR-0006)
+### 7.7 Automation Effects (ADR-0006)
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `ClickNode` | `node: UiNode`, `description` | — | Click a UI element by resolving against live accessibility tree. |
 | `RequestAction` | `action: RequestedAction` | `"action:{ruleId}:{dedupeKey}"` | Rule-originated click with throttling and gate conditions. |
 
-### 9.8 Notification Effects
+### 7.8 Notification Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `ProcessTipNotification` | `amount`, `storeName`, `deliveredAt` | — | Post tip notification to bubble. |
 
-### 9.9 Session Effects
+### 7.9 Session Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `StartDash` | `dashId: String` | `"start_dash:{id}"` | Mark session start. |
 | `EndDash` | — | — | Mark session end. |
 
-### 9.10 Composition Effects
+### 7.10 Composition Effects
 
 | Effect | Fields | Key | Description |
 |---|---|---|---|
 | `Delayed` | `delayMs`, `effect: AppEffect` | — | Execute wrapped effect after delay. |
 | `SequentialEffect` | `effects: List<AppEffect>` | — | Execute effects in order. |
 
-### 9.11 Idempotency
+### 7.11 Idempotency
 
 Effects with a non-null `effectKey` are checked against the `effects_fired` table during
 crash-recovery replay to prevent duplicate execution. External effects (`UpdateBubble`,
@@ -439,11 +820,11 @@ Loopback effects are replayed deterministically.
 
 ---
 
-## 10. Effect Emission Triggers
+## 8. Effect Emission Triggers
 
 When `EffectMap.diff()` detects a region change, it emits the following effects:
 
-### 10.1 Flow Region Triggers
+### 8.1 Flow Region Triggers
 
 | Trigger | Effects Emitted |
 |---|---|
@@ -452,7 +833,7 @@ When `EffectMap.diff()` detects a region change, it emits the following effects:
 | Offer resolved (left OfferPresented) | `LogEvent(ACCEPTED/DECLINED/TIMEOUT)`, conditional `UpdateBubble` |
 | Click on offer button | `UpdateBubble("Offer Accepted"/"Offer Declined")` |
 
-### 10.2 Platform Region Triggers
+### 8.2 Platform Region Triggers
 
 | Trigger | Effects Emitted |
 |---|---|
@@ -465,21 +846,21 @@ When `EffectMap.diff()` detects a region change, it emits the following effects:
 | Arrival detected | `PauseOdometer`, `LogEvent(PICKUP_ARRIVED)` (if pickup phase) |
 | Store/activity update | `UpdateBubble` with new info |
 
-### 10.3 PostTask Triggers
+### 8.3 PostTask Triggers
 
 | Trigger | Effects Emitted |
 |---|---|
 | Expanded pay data | `UpdateBubble` with receipt text and tip breakdown |
 | Leaving PostTask | `LogEvent(DELIVERY_COMPLETED)` |
 
-### 10.4 Notification Triggers
+### 8.4 Notification Triggers
 
 | Trigger | Effects Emitted |
 |---|---|
 | Tip notification (intent: `additional_tip`) | `ProcessTipNotification`, `LogEvent(NOTIFICATION_RECEIVED)` |
 | Other classified notification | `LogEvent(NOTIFICATION_RECEIVED)` |
 
-### 10.5 Rule-Originated Actions
+### 8.5 Rule-Originated Actions
 
 | Trigger | Effects Emitted |
 |---|---|
@@ -487,9 +868,9 @@ When `EffectMap.diff()` detects a region change, it emits the following effects:
 
 ---
 
-## 11. Rule Types
+## 9. Rule Types
 
-### 11.1 Screen Rules
+### 9.1 Screen Rules
 
 Classify the accessibility UI tree into a flow + shape.
 
@@ -511,7 +892,7 @@ session_ended, sensitive (earnings).
 
 **Current Uber screen rules:** offer.
 
-### 11.2 Click Rules
+### 9.2 Click Rules
 
 Classify tap events into an intent.
 
@@ -527,7 +908,7 @@ Classify tap events into an intent.
 
 **Current Uber click rules:** `accept_offer`, `go_online`, `go_offline`.
 
-### 11.3 Notification Rules
+### 9.3 Notification Rules
 
 Classify status bar notifications with optional field extraction.
 
@@ -547,12 +928,12 @@ Classify status bar notifications with optional field extraction.
 
 ---
 
-## 12. Rule-Originated Actions (ADR-0006)
+## 10. Rule-Originated Actions (ADR-0006)
 
 Rules can declare `"actions"` blocks that ride on observations through the state machine
 and are executed as effects by the side-effect engine.
 
-### 12.1 Supported Verbs
+### 10.1 Supported Verbs
 
 | Verb | Description |
 |---|---|
@@ -560,7 +941,7 @@ and are executed as effects by the side-effect engine.
 
 (Only verb currently supported.)
 
-### 12.2 Gate Conditions
+### 10.2 Gate Conditions
 
 Actions fire only if their `onlyIf` gate passes against the observation's parsed fields:
 
@@ -570,7 +951,7 @@ Actions fire only if their `onlyIf` gate passes against the observation's parsed
 | `FieldNotEquals(field, value)` | Field does not equal value |
 | `FieldNotNull(field)` | Field is present and non-null |
 
-### 12.3 Throttling
+### 10.3 Throttling
 
 - Default throttle: 500ms per `effectKey`
 - `dedupeKey` can be specified per-action to customize the throttle key
@@ -578,7 +959,7 @@ Actions fire only if their `onlyIf` gate passes against the observation's parsed
 
 ---
 
-## 13. Logged Event Types
+## 11. Logged Event Types
 
 All database-persisted events via `LogEvent`:
 
@@ -599,27 +980,7 @@ All database-persisted events via `LogEvent`:
 
 ---
 
-## 14. Bubble HUD Personas
-
-Effects that post to the bubble use typed personas:
-
-| Persona | ID | Display Name | Use |
-|---|---|---|---|
-| `Dispatcher` | `bot_dispatcher` | "Dispatch" | General state updates |
-| `System` | `bot_system` | "System" | System messages |
-| `Dasher` | `dasher_self` | "You" | User actions |
-| `Merchant(name)` | `merchant_*` | Store name | Store-related updates |
-| `Customer(name)` | `customer_*` | Customer name | Customer-related updates |
-| `GoodOffer` | `good_offer` | "Good Offer" | Recommended offers |
-| `BadOffer` | `bad_offer` | "Bad Offer" | Below-threshold offers |
-| `Inspector` | `inspector` | "Inspector" | Debug/diagnostic messages |
-| `Navigator` | `navigator` | "Navigator" | Navigation updates |
-| `Shopper` | `shopper` | "Shopper" | Shopping task updates |
-| `Earnings` | `earnings` | "Earnings" | Earnings summaries |
-
----
-
-## 15. Pipeline Configuration
+## 12. Pipeline Configuration
 
 Rule files declare pipeline capabilities in their header:
 
