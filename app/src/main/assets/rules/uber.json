@@ -172,7 +172,7 @@
       "priority": 5,
       "overrideable": true,
       "screenIs": "OFFER",
-      "intent": "accept",
+      "intent": "accept_offer",
       "if": {
         "any": [
           { "hasText": "Accept" },
@@ -185,6 +185,7 @@
       "platform_id": "uber.driver",
       "priority": 10,
       "overrideable": true,
+      "intent": "go_online",
       "if": {
         "hasIdSuffix": "go_online_button"
       }
@@ -195,10 +196,58 @@
       "priority": 20,
       "overrideable": true,
       "screenIs": "home_dashboard",
+      "intent": "go_offline",
       "if": {
         "hasIdSuffix": "carbon_action_button"
       }
+    },
+    {
+      "id": "uber.click.open_inbox",
+      "platform_id": "uber.driver",
+      "priority": 30,
+      "overrideable": true,
+      "screenIs": "home_dashboard",
+      "intent": "open_inbox",
+      "if": {
+        "hasIdSuffix": "glide_bottom_nav_inbox"
+      }
     }
   ],
-  "notifications": []
+  "notifications": [
+    {
+      "id": "uber.notification.online_status",
+      "platform_id": "uber.driver",
+      "priority": 10,
+      "overrideable": true,
+      "if": {
+        "titleContains": "currently online"
+      },
+      "shape": "noise"
+    },
+    {
+      "id": "uber.notification.quest_promo",
+      "platform_id": "uber.driver",
+      "priority": 20,
+      "overrideable": true,
+      "if": {
+        "titleContains": "Quest awaits"
+      },
+      "intent": "quest_promo",
+      "shape": "notification"
+    },
+    {
+      "id": "uber.notification.quest_deadline",
+      "platform_id": "uber.driver",
+      "priority": 30,
+      "overrideable": true,
+      "if": {
+        "all": [
+          { "titleContains": "Last chance" },
+          { "anyFieldContains": "Quest" }
+        ]
+      },
+      "intent": "quest_deadline",
+      "shape": "notification"
+    }
+  ]
 }

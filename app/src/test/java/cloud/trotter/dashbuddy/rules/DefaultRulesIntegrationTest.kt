@@ -78,13 +78,13 @@ class DefaultRulesIntegrationTest {
     @Test
     fun `accept_button id classifies as accept_offer`() {
         val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/accept_button")
-        assertEquals("accept_offer", clickRuleset.classifyFirst(node)?.intent)
+        assertEquals("accept_offer", clickRuleset.classifyFirst(node, screenTarget = "OFFER_POPUP")?.intent)
     }
 
     @Test
     fun `'Decline offer' text classifies as decline_offer`() {
         val node = UiNode(text = "Decline offer")
-        assertEquals("decline_offer", clickRuleset.classifyFirst(node)?.intent)
+        assertEquals("decline_offer", clickRuleset.classifyFirst(node, screenTarget = "OFFER_POPUP_CONFIRM_DECLINE")?.intent)
     }
 
     @Test
@@ -93,7 +93,7 @@ class DefaultRulesIntegrationTest {
             viewIdResourceName = "com.doordash.driverapp:id/primary_action_button",
             text = "Arrived at store",
         )
-        assertEquals("arrived_at_store", clickRuleset.classifyFirst(node)?.intent)
+        assertEquals("arrived_at_store", clickRuleset.classifyFirst(node, screenTarget = "pickup_arrival")?.intent)
     }
 
     @Test

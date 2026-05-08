@@ -40,8 +40,14 @@ class ClickClassifierTest {
         contentDescription = contentDescription,
     )
 
-    private fun classifyClick(node: UiNode): Observation.Click =
-        classifier.classify(PipelineEvent.Click(System.currentTimeMillis(), node)) as Observation.Click
+    private fun classifyClick(node: UiNode, screenTarget: String? = null): Observation.Click {
+        // Set screen context so rules with screenIs constraints can match
+        ObservationClassifier::class.java.getDeclaredField("lastScreenTarget").apply {
+            isAccessible = true
+            set(classifier, screenTarget)
+        }
+        return classifier.classify(PipelineEvent.Click(System.currentTimeMillis(), node)) as Observation.Click
+    }
 
     private fun Observation.Click.intent(): String =
         (parsed as ParsedFields.ClickFields).intent
@@ -55,13 +61,13 @@ class ClickClassifierTest {
 
     @Test
     fun `classifies accept_button as AcceptOffer`() {
-        val result = classifyClick(node(viewId = "accept_button"))
+        val result = classifyClick(node(viewId = "accept_button"), "OFFER_POPUP")
         assertEquals("accept_offer", result.intent())
     }
 
     @Test
     fun `AcceptOffer takes priority over text when both present`() {
-        val result = classifyClick(node(viewId = "accept_button", text = "Decline offer"))
+        val result = classifyClick(node(viewId = "accept_button", text = "Decline offer"), "OFFER_POPUP")
         assertEquals("accept_offer", result.intent())
     }
 
@@ -71,13 +77,13 @@ class ClickClassifierTest {
 
     @Test
     fun `classifies 'Decline offer' text as DeclineOffer`() {
-        val result = classifyClick(node(text = "Decline offer"))
+        val result = classifyClick(node(text = "Decline offer"), "OFFER_POPUP_CONFIRM_DECLINE")
         assertEquals("decline_offer", result.intent())
     }
 
     @Test
     fun `DeclineOffer matches case-insensitively`() {
-        val result = classifyClick(node(text = "decline offer"))
+        val result = classifyClick(node(text = "decline offer"), "OFFER_POPUP_CONFIRM_DECLINE")
         assertEquals("decline_offer", result.intent())
     }
 
@@ -88,7 +94,7 @@ class ClickClassifierTest {
     @Test
     fun `classifies primary_action_button + 'Arrived at store' text as ArrivedAtStore`() {
         val result = classifyClick(
-            node(viewId = "primary_action_button", text = "Arrived at store")
+            node(viewId = "primary_action_button", text = "Arrived at store"), "pickup_arrival"
         )
         assertEquals("arrived_at_store", result.intent())
     }
@@ -96,7 +102,7 @@ class ClickClassifierTest {
     @Test
     fun `classifies primary_action_button + 'Arrived' text as ArrivedAtStore`() {
         val result = classifyClick(
-            node(viewId = "primary_action_button", text = "Arrived")
+            node(viewId = "primary_action_button", text = "Arrived"), "pickup_arrival"
         )
         assertEquals("arrived_at_store", result.intent())
     }
