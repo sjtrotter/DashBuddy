@@ -28,7 +28,10 @@ class FlowRegionStepper @Inject constructor() {
 
     fun step(prev: FlowRegion, obs: Observation): FlowRegion {
         val flowObs = obs as? Observation.FlowObservation ?: return handleNonFlowObs(prev, obs)
-        val newFlow = flowObs.flow ?: return prev.copy(lastObservedAt = obs.timestamp)
+        val newFlow = flowObs.flow ?: return when (obs) {
+            is Observation.Click -> handleOfferClick(prev, obs)
+            else -> prev.copy(lastObservedAt = obs.timestamp)
+        }
 
         return when (newFlow) {
             Flow.OfferPresented -> stepOffer(prev, flowObs, newFlow)
