@@ -54,11 +54,18 @@ class HealingPolicy @Inject constructor() {
 
     /**
      * Checks whether accrued confidence meets the threshold for healing.
+     *
+     * Requires [observationThreshold] supporting observations before healing.
+     * Stale confidence (older than [timeWindowMs]) is ignored — the caller
+     * should reset confidence when the window expires.
      */
     fun shouldHeal(confidence: ModeConfidence, now: Long): Boolean {
-        if (confidence.supportingObservations >= observationThreshold) return true
+        // Discard stale confidence: if the first observation is older than
+        // the time window, the accrued evidence is no longer meaningful.
         val firstSeen = confidence.firstSeenAt ?: return false
-        return (now - firstSeen) <= timeWindowMs
+        if (now - firstSeen > timeWindowMs) return false
+
+        return confidence.supportingObservations >= observationThreshold
     }
 
     /**

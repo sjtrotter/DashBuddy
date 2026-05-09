@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.util.UtilityFunctions
 import com.google.gson.Gson
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,6 +34,15 @@ import javax.inject.Singleton
  */
 @Singleton
 class EffectMap @Inject constructor() {
+
+    companion object {
+        /**
+         * Safety buffer added to the platform's reported pause countdown
+         * before scheduling the offline timeout. Accounts for clock skew
+         * between the parsed timestamp and the actual timer start.
+         */
+        const val PAUSE_TIMEOUT_BUFFER_MS = 1000L
+    }
 
     private val gson = Gson()
 
@@ -155,8 +165,19 @@ class EffectMap @Inject constructor() {
         return buildList {
             addAll(diffMode(p, next, obs))
             addAll(diffTask(p, next, prevFlow, nextFlow, obs))
-            addAll(diffPostTask(p, next, prevFlow, nextFlow, obs))
+            addAll(diffPostTask(p, next, nextFlow, obs))
             addAll(diffNotification(obs, next.session?.sessionId))
+
+            // Delivery completed: leaving PostTask for a non-PostTask flow
+            if (prevFlow.flow == Flow.PostTask && nextFlow.flow != Flow.PostTask) {
+                val sessionId = next.session?.sessionId ?: p.session?.sessionId
+                val completedTask = next.recentTasks.lastOrNull()
+                val payload = mapOf(
+                    "storeName" to (completedTask?.storeName ?: "Unknown"),
+                    "jobId" to (p.activeJob?.jobId),
+                )
+                add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, payload))
+            }
         }
     }
 
@@ -186,7 +207,7 @@ class EffectMap @Inject constructor() {
 
                     // Cancel pause safety timer if resuming from paused
                     if (prev.mode == Mode.Paused) {
-                        add(AppEffect.CancelTimeout(oldTimeoutType(TimeoutType.SESSION_PAUSED_SAFETY)))
+                        add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY))
                     }
                 }
 
@@ -217,7 +238,7 @@ class EffectMap @Inject constructor() {
 
                     // Cancel pause safety timer
                     if (prev.mode == Mode.Paused) {
-                        add(AppEffect.CancelTimeout(oldTimeoutType(TimeoutType.SESSION_PAUSED_SAFETY)))
+                        add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY))
                     }
                 }
 
@@ -225,7 +246,7 @@ class EffectMap @Inject constructor() {
                 prev.mode == Mode.Online && next.mode == Mode.Paused -> {
                     val flowObs = obs as? Observation.FlowObservation
                     val pausedFields = flowObs?.parsed as? ParsedFields.PausedFields
-                    val durationMs = (pausedFields?.remainingMillis ?: 0L) + 1000L
+                    val durationMs = (pausedFields?.remainingMillis ?: 0L) + PAUSE_TIMEOUT_BUFFER_MS
                     val remainingText = pausedFields?.remainingText ?: "?"
 
                     add(
@@ -237,7 +258,7 @@ class EffectMap @Inject constructor() {
                     add(
                         AppEffect.ScheduleTimeout(
                             durationMs,
-                            oldTimeoutType(TimeoutType.SESSION_PAUSED_SAFETY),
+                            TimeoutType.SESSION_PAUSED_SAFETY,
                         )
                     )
                     add(AppEffect.UpdateBubble("Dash Paused!"))
@@ -294,6 +315,7 @@ class EffectMap @Inject constructor() {
                     "addressHash" to nextTask.customerAddressHash,
                 )
                 add(logEffect(sessionId, AppEventType.PICKUP_CONFIRMED, payload))
+                add(logEffect(sessionId, AppEventType.DELIVERY_NAV_STARTED, payload))
                 add(AppEffect.ResumeOdometer)
 
                 val customer = customerHash?.take(6) ?: "Customer"
@@ -306,11 +328,17 @@ class EffectMap @Inject constructor() {
             ) {
                 add(AppEffect.PauseOdometer)
 
-                if (nextTask.phase == TaskPhase.PICKUP) {
-                    add(
+                when (nextTask.phase) {
+                    TaskPhase.PICKUP -> add(
                         logEffect(
                             sessionId, AppEventType.PICKUP_ARRIVED,
                             mapOf("storeName" to (nextTask.storeName ?: "Unknown")),
+                        )
+                    )
+                    TaskPhase.DROPOFF -> add(
+                        logEffect(
+                            sessionId, AppEventType.DELIVERY_ARRIVED,
+                            mapOf("customerHash" to nextTask.customerNameHash),
                         )
                     )
                 }
@@ -361,20 +389,18 @@ class EffectMap @Inject constructor() {
     }
 
     /**
-     * Handle PostTask automation effects (expand button clicking).
-     * This preserves the existing PostDeliveryReducer's closed-loop automation.
+     * Handle PostTask effects while on the PostTask screen.
+     * DELIVERY_COMPLETED is emitted from [diffPlatformRegion] when leaving PostTask.
      */
     private fun diffPostTask(
         prev: PlatformRegion,
         next: PlatformRegion,
-        prevFlow: FlowRegion,
         nextFlow: FlowRegion,
         obs: Observation,
     ): List<AppEffect> {
         if (nextFlow.flow != Flow.PostTask) return emptyList()
         val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
         val parsed = flowObs.parsed as? ParsedFields.PostTaskFields ?: return emptyList()
-        val sessionId = next.session?.sessionId
 
         return buildList {
             val payData = parsed.parsedPay
@@ -388,16 +414,6 @@ class EffectMap @Inject constructor() {
                     }
                 }
                 add(AppEffect.UpdateBubble(receiptText, ChatPersona.Earnings))
-            }
-
-            // Leaving post-task → log delivery completed
-            if (prevFlow.flow == Flow.PostTask && nextFlow.flow != Flow.PostTask) {
-                val payload: Any = payData
-                    ?: mapOf(
-                        "total" to parsed.totalPay,
-                        "warning" to "Collapsed Data Only - Breakdown Missing",
-                    )
-                add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, payload))
             }
         }
     }
@@ -502,7 +518,12 @@ class EffectMap @Inject constructor() {
 
     /**
      * Extract named fields from a [ParsedFields] subtype into a flat map
-     * for gate evaluation. Uses Kotlin reflection on data class properties.
+     * for gate evaluation. Uses Java reflection on data class fields.
+     *
+     * `activity` is excluded because it is a classification tag inherited
+     * from the sealed parent — rules gate on structural fields, not the
+     * activity discriminator. If gate evaluation fails, the gate rejects
+     * (safe default — the action simply won't fire).
      */
     private fun parsedFieldsToMap(parsed: ParsedFields): Map<String, Any?> {
         if (parsed is ParsedFields.None) return emptyMap()
@@ -513,7 +534,8 @@ class EffectMap @Inject constructor() {
                     field.isAccessible = true
                     field.name to field.get(parsed)
                 }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Timber.w(e, "Gate field extraction failed for %s", parsed::class.simpleName)
             emptyMap()
         }
     }
@@ -570,17 +592,4 @@ class EffectMap @Inject constructor() {
         )
     }
 
-    /**
-     * Bridge: convert new TimeoutType to old TimeoutType until SideEffectEngine
-     * is updated to use the new enum directly.
-     */
-    private fun oldTimeoutType(type: TimeoutType): cloud.trotter.dashbuddy.domain.model.state.TimeoutType {
-        return when (type) {
-            TimeoutType.SESSION_PAUSED_SAFETY -> cloud.trotter.dashbuddy.domain.model.state.TimeoutType.DASH_PAUSED_SAFETY
-            TimeoutType.SETTLE_UI -> cloud.trotter.dashbuddy.domain.model.state.TimeoutType.SETTLE_UI
-            TimeoutType.RETRY_CLICK -> cloud.trotter.dashbuddy.domain.model.state.TimeoutType.RETRY_CLICK_TIMEOUT
-            TimeoutType.DECLINE_POPUP_WAIT -> cloud.trotter.dashbuddy.domain.model.state.TimeoutType.DECLINE_POPUP_WAIT
-            TimeoutType.SCREENSHOT_WAIT -> cloud.trotter.dashbuddy.domain.model.state.TimeoutType.SETTLE_UI // fallback
-        }
-    }
 }

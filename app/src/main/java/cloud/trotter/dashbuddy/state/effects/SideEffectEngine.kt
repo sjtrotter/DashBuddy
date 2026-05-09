@@ -54,6 +54,11 @@ class SideEffectEngine @Inject constructor(
     // Action throttle tracker: effectKey → last fired timestamp
     private val actionLastFiredAt = ConcurrentHashMap<String, Long>()
 
+    companion object {
+        /** Default throttle between repeated firings of the same action. */
+        const val DEFAULT_ACTION_THROTTLE_MS = 500L
+    }
+
     /**
      * Entry point: The StateManager pushes an effect here.
      * We execute it in the provided scope.
@@ -108,7 +113,7 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.RequestAction -> {
                 val actionKey = effect.effectKey
                 val now = System.currentTimeMillis()
-                val throttle = effect.action.throttleMs ?: 500L
+                val throttle = effect.action.throttleMs ?: DEFAULT_ACTION_THROTTLE_MS
                 val lastFired = actionLastFiredAt[actionKey] ?: 0L
                 if (lastFired + throttle > now) {
                     Timber.v("Throttled action: %s", actionKey)

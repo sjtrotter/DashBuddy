@@ -4,7 +4,7 @@ import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
-import cloud.trotter.dashbuddy.domain.model.state.TimeoutType
+import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedAction
 
 sealed class AppEffect {
