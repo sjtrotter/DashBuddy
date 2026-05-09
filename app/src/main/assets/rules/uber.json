@@ -48,9 +48,10 @@
                 "read": "text",
                 "transform": "parseDistance"
               },
-              "deliveryTimeText": {
+              "timeToCompleteMinutes": {
                 "find": { "hasTextMatchesRegex": "\\d+\\s*min" },
-                "read": "text"
+                "read": "text",
+                "transform": "parseLeadingInt"
               },
               "orders": {
                 "each": { "hasClassNameEndsWith": "CardView" },
@@ -359,6 +360,7 @@
       "priority": 5,
       "overrideable": true,
       "screenIs": "OFFER",
+      "state": { "flow": "task:pickup:navigation", "modeHint": "online" },
       "intent": "accept_offer",
       "if": {
         "any": [
@@ -372,6 +374,7 @@
       "platform_id": "uber.driver",
       "priority": 10,
       "overrideable": true,
+      "state": { "modeHint": "online" },
       "intent": "go_online",
       "if": {
         "hasIdSuffix": "go_online_button"
@@ -383,9 +386,51 @@
       "priority": 20,
       "overrideable": true,
       "screenIs": "home_dashboard",
+      "state": { "flow": "session:ended", "modeHint": "offline" },
       "intent": "go_offline",
       "if": {
         "hasIdSuffix": "carbon_action_button"
+      }
+    },
+    {
+      "id": "uber.click.order_verified",
+      "platform_id": "uber.driver",
+      "priority": 15,
+      "overrideable": true,
+      "screenIs": "pickup_verification_items",
+      "state": { "flow": "task:dropoff:navigation", "modeHint": "online" },
+      "intent": "order_verified",
+      "if": {
+        "all": [
+          { "hasText": "Order verified" },
+          { "hasClassName": "android.widget.Button" }
+        ]
+      }
+    },
+    {
+      "id": "uber.click.issue_with_order",
+      "platform_id": "uber.driver",
+      "priority": 16,
+      "overrideable": true,
+      "screenIs": "pickup_verification_items",
+      "intent": "issue_with_order",
+      "if": {
+        "all": [
+          { "hasText": "Issue with order" },
+          { "hasClassName": "android.widget.Button" }
+        ]
+      }
+    },
+    {
+      "id": "uber.click.delivered",
+      "platform_id": "uber.driver",
+      "priority": 20,
+      "overrideable": true,
+      "screenIs": "delivery_confirmation",
+      "state": { "flow": "post:task", "modeHint": "online" },
+      "intent": "delivered",
+      "if": {
+        "hasIdSuffix": "task_button_button"
       }
     },
     {

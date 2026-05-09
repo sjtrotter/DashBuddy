@@ -156,7 +156,7 @@ class EffectMap @Inject constructor() {
             addAll(diffMode(p, next, obs))
             addAll(diffTask(p, next, prevFlow, nextFlow, obs))
             addAll(diffPostTask(p, next, prevFlow, nextFlow, obs))
-            addAll(diffNotification(obs))
+            addAll(diffNotification(obs, next.session?.sessionId))
         }
     }
 
@@ -181,7 +181,7 @@ class EffectMap @Inject constructor() {
                         )
                         add(logEffect(nextSession.sessionId, AppEventType.DASH_START, payload))
                         add(AppEffect.StartOdometer)
-                        add(AppEffect.StartDash(nextSession.sessionId))
+                        add(AppEffect.StartDash(nextSession.sessionId, next.platform.name))
                     }
 
                     // Cancel pause safety timer if resuming from paused
@@ -196,13 +196,14 @@ class EffectMap @Inject constructor() {
                         // Check if this is a session summary screen
                         val flowObs = obs as? Observation.FlowObservation
                         val parsed = flowObs?.parsed
+                        val platform = prev.platform.name
                         if (parsed is ParsedFields.SessionEndedFields) {
                             val earnings = UtilityFunctions.formatCurrency(parsed.totalEarnings)
                             add(logEffect(sessionId, AppEventType.DASH_STOP, parsed))
                             add(AppEffect.StopOdometer)
                             add(
                                 AppEffect.UpdateBubble(
-                                    "Dash Ended. Total: $earnings",
+                                    "Session Ended. Total: $earnings",
                                     ChatPersona.Dispatcher,
                                 )
                             )
@@ -211,7 +212,7 @@ class EffectMap @Inject constructor() {
                             add(logEffect(sessionId, AppEventType.DASH_STOP, "Return to Map"))
                             add(AppEffect.StopOdometer)
                         }
-                        add(AppEffect.EndDash)
+                        add(AppEffect.EndDash(platform))
                     }
 
                     // Cancel pause safety timer
@@ -405,12 +406,13 @@ class EffectMap @Inject constructor() {
      * Handle notification-driven effects. These are global interceptors
      * that apply regardless of state.
      */
-    private fun diffNotification(obs: Observation): List<AppEffect> {
+    private fun diffNotification(obs: Observation, sessionId: String?): List<AppEffect> {
         if (obs !is Observation.Notification) return emptyList()
         val fields = obs.parsed as? ParsedFields.NotificationFields ?: return emptyList()
 
         return buildList {
             when (fields.intent) {
+                // DoorDash
                 "additional_tip" -> {
                     val amount = fields.amount
                     val storeName = fields.storeName
@@ -424,16 +426,48 @@ class EffectMap @Inject constructor() {
                             )
                         )
                     }
-                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "TIP_ADDED: \$$amount $storeName"))
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TIP_ADDED: \$$amount $storeName"))
                 }
                 "new_order" -> {
-                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "NEW_ORDER"))
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "NEW_ORDER"))
                 }
                 "scheduled_dash_expired" -> {
-                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "SCHEDULED_DASH_EXPIRED"))
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "SCHEDULED_DASH_EXPIRED"))
                 }
+                "demand_nudge" -> {
+                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "DEMAND_NUDGE"))
+                }
+                "peak_pay_promo" -> {
+                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "PEAK_PAY_PROMO"))
+                }
+
+                // Uber trip leg notifications
+                "trip_en_route_pickup" -> {
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TRIP_EN_ROUTE_PICKUP"))
+                }
+                "trip_arrived_pickup" -> {
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TRIP_ARRIVED_PICKUP"))
+                }
+                "trip_en_route_dropoff" -> {
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TRIP_EN_ROUTE_DROPOFF"))
+                }
+                "trip_at_dropoff" -> {
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TRIP_AT_DROPOFF"))
+                }
+                "tip_received" -> {
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TIP_RECEIVED: ${fields.rawText}"))
+                }
+
+                // Uber promo notifications
+                "quest_promo" -> {
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "QUEST_PROMO"))
+                }
+                "quest_deadline" -> {
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "QUEST_DEADLINE"))
+                }
+
                 else -> {
-                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "UNKNOWN: ${fields.rawText}"))
+                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "UNHANDLED: ${fields.intent} — ${fields.rawText}"))
                 }
             }
         }

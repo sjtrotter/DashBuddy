@@ -48,15 +48,16 @@ class BubbleManager @Inject constructor(
         pushDynamicShortcut()
     }
 
-    fun startDash(dashId: String) {
+    fun startDash(dashId: String, platformName: String = "DoorDash") {
         _activeDashId.value = dashId
-        // Assuming we map System messages to the Dispatcher persona
-        postMessage("Dash Started", ChatPersona.Dispatcher)
+        val verb = if (platformName.equals("uber", ignoreCase = true)) "Ubering" else "Dashing"
+        postMessage("Started $verb!", ChatPersona.Dispatcher)
     }
 
-    fun endDash() {
+    fun endDash(platformName: String? = null) {
         _activeDashId.value = null
-        postMessage("Dash Ended", ChatPersona.Dispatcher)
+        val verb = if (platformName.equals("uber", ignoreCase = true)) "Ubering" else "Dashing"
+        postMessage("Done $verb!", ChatPersona.Dispatcher)
     }
 
     fun postMessage(

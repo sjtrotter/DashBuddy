@@ -70,8 +70,8 @@ sealed class AppEffect {
         val effects: List<AppEffect>
     ) : AppEffect()
 
-    data class StartDash(val dashId: String) : AppEffect() {
+    data class StartDash(val dashId: String, val platformName: String = "DoorDash") : AppEffect() {
         override val effectKey: String get() = "start_dash:$dashId"
     }
-    data object EndDash : AppEffect()
+    data class EndDash(val platformName: String? = null) : AppEffect()
 }
