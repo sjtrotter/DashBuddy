@@ -16,17 +16,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Disk-based capture bus. Writes pre-serialized [CaptureEnvelope] JSON to
+ * Disk-based capture bus. Writes pre-serialized [cloud.trotter.dashbuddy.domain.capture.CaptureEnvelope] JSON to
  * the external files directory for debugging and regression-test corpus building.
  *
  * Layout: `captures/PLATFORM/SOURCE/CLASSIFICATION/TIMESTAMP__PLATFORM__SOURCE__CLASSIFICATION__HASH.json`
  *
- * Deduplicates by [contentHash] per bucket — only the first occurrence of a
+ * Deduplicates by contentHash per bucket — only the first occurrence of a
  * structurally unique payload is saved per session.
  */
 @Singleton
 class DiskCaptureBus @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : CaptureBus {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())

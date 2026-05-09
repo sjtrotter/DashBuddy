@@ -32,4 +32,5 @@ data class ObservationEntity(
     val captureId: String?,
     val metadataJson: String,
     val correlationVersion: Long,
+    val timeoutType: String? = null,
 )

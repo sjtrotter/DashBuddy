@@ -50,8 +50,13 @@ class StateManagerV2 @Inject constructor(
     private val _state = MutableStateFlow(AppState())
     val state = _state.asStateFlow()
 
-    /** Snapshot interval: write a snapshot every N accepted observations. */
-    private val snapshotInterval = 5
+    companion object {
+        /** Write a state snapshot every N accepted observations. */
+        const val SNAPSHOT_INTERVAL = 5
+
+        /** Prune state snapshots older than this (24 hours). */
+        const val SNAPSHOT_RETENTION_MS = 24 * 60 * 60 * 1000L
+    }
 
     fun initialize() {
         Timber.i("Initializing V2 State Machine (multi-region)...")
@@ -118,10 +123,10 @@ class StateManagerV2 @Inject constructor(
 
     private fun Observation.toEntity(state: AppState): ObservationEntity {
         val flowObs = this as? Observation.FlowObservation
-        val ddSession = state.regions.platforms.values.firstOrNull()?.session
+        val session = state.regions.platforms[platform]?.session
         return ObservationEntity(
             occurredAt = timestamp,
-            sessionId = ddSession?.sessionId,
+            sessionId = session?.sessionId,
             pipelineId = pipelineIdOf(this),
             ruleId = ruleId,
             platform = platform.name,
@@ -131,6 +136,7 @@ class StateManagerV2 @Inject constructor(
             captureId = captureId,
             metadataJson = gson.toJson(metadata),
             correlationVersion = state.correlationVersion,
+            timeoutType = (this as? Observation.Timeout)?.type?.name,
         )
     }
 
@@ -147,24 +153,25 @@ class StateManagerV2 @Inject constructor(
 
     private fun maybeSnapshot(next: AppState, prev: AppState) {
         val shouldSnapshot =
-            next.correlationVersion % snapshotInterval == 0L ||
+            next.correlationVersion % SNAPSHOT_INTERVAL == 0L ||
                     isMajorTransition(prev, next)
 
         if (!shouldSnapshot) return
 
         scope.launch(Dispatchers.IO) {
             try {
-                val ddSession = next.regions.platforms.values.firstOrNull()?.session
+                val activeSession = next.regions.platforms.values
+                    .maxByOrNull { it.lastObservedAt }?.session
                 snapshotDao.insert(
                     AppStateSnapshotEntity(
                         correlationVersion = next.correlationVersion,
                         capturedAt = System.currentTimeMillis(),
-                        sessionId = ddSession?.sessionId,
+                        sessionId = activeSession?.sessionId,
                         stateJson = gson.toJson(next),
                     )
                 )
                 // Prune snapshots older than 24h
-                snapshotDao.pruneOlderThan(System.currentTimeMillis() - 24 * 60 * 60 * 1000L)
+                snapshotDao.pruneOlderThan(System.currentTimeMillis() - SNAPSHOT_RETENTION_MS)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to write state snapshot")
             }
@@ -172,14 +179,17 @@ class StateManagerV2 @Inject constructor(
     }
 
     private fun isMajorTransition(prev: AppState, next: AppState): Boolean {
-        val prevDD = prev.regions.platforms.values.firstOrNull()
-        val nextDD = next.regions.platforms.values.firstOrNull()
+        val allPlatforms = (prev.regions.platforms.keys + next.regions.platforms.keys)
+        for (p in allPlatforms) {
+            val prevRegion = prev.regions.platforms[p]
+            val nextRegion = next.regions.platforms[p]
 
-        // Session start/end
-        if (prevDD?.session?.sessionId != nextDD?.session?.sessionId) return true
+            // Session start/end
+            if (prevRegion?.session?.sessionId != nextRegion?.session?.sessionId) return true
 
-        // Job start/end
-        if (prevDD?.activeJob?.jobId != nextDD?.activeJob?.jobId) return true
+            // Job start/end
+            if (prevRegion?.activeJob?.jobId != nextRegion?.activeJob?.jobId) return true
+        }
 
         // Flow transitions that mark lifecycle boundaries
         val prevFlow = prev.regions.flow.flow
@@ -293,7 +303,9 @@ class StateManagerV2 @Inject constructor(
 
             "internal.timeout" -> Observation.Timeout(
                 timestamp = occurredAt,
-                type = TimeoutType.SETTLE_UI, // best-effort; timeout type not stored
+                type = timeoutType?.let {
+                    runCatching { enumValueOf<TimeoutType>(it) }.getOrNull()
+                } ?: TimeoutType.SETTLE_UI,
             )
 
             "internal.ui" -> Observation.UiInput(
@@ -334,7 +346,7 @@ class StateManagerV2 @Inject constructor(
         return when (event) {
             is TimeoutEvent -> Observation.Timeout(
                 timestamp = event.timestamp,
-                type = bridgeTimeoutType(event.type),
+                type = event.type,
             )
 
             is OfferEvaluationEvent -> Observation.Loopback(
@@ -350,15 +362,4 @@ class StateManagerV2 @Inject constructor(
         }
     }
 
-    private fun bridgeTimeoutType(
-        type: cloud.trotter.dashbuddy.domain.model.state.TimeoutType,
-    ): TimeoutType {
-        return when (type) {
-            cloud.trotter.dashbuddy.domain.model.state.TimeoutType.DASH_PAUSED_SAFETY -> TimeoutType.SESSION_PAUSED_SAFETY
-            cloud.trotter.dashbuddy.domain.model.state.TimeoutType.SETTLE_UI -> TimeoutType.SETTLE_UI
-            cloud.trotter.dashbuddy.domain.model.state.TimeoutType.RETRY_CLICK_TIMEOUT -> TimeoutType.RETRY_CLICK
-            cloud.trotter.dashbuddy.domain.model.state.TimeoutType.DECLINE_POPUP_WAIT -> TimeoutType.DECLINE_POPUP_WAIT
-            else -> TimeoutType.SETTLE_UI
-        }
-    }
 }

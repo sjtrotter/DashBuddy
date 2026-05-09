@@ -117,7 +117,7 @@ class FlowRegionStepper @Inject constructor() {
         // Store intent on PendingOffer so EffectMap can resolve outcome
         // even when the resolving observation is a Screen (not a Click)
         return prev.copy(
-            pendingOffer = offer.copy(lastClickIntent = fields?.intent),
+            pendingOffer = offer.copy(lastClickIntent = fields?.intent ?: offer.lastClickIntent),
             lastObservedAt = obs.timestamp,
         )
     }

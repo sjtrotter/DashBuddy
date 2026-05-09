@@ -32,6 +32,11 @@ import javax.inject.Singleton
 @Singleton
 class PlatformRegionStepper @Inject constructor() {
 
+    companion object {
+        /** Max completed tasks retained per platform during a session. */
+        const val MAX_RECENT_TASKS = 20
+    }
+
     fun step(
         prev: PlatformRegion,
         prevFlow: FlowRegion,
@@ -91,7 +96,7 @@ class PlatformRegionStepper @Inject constructor() {
             }
             prev.mode != Mode.Offline && newMode == Mode.Offline -> {
                 // Ending a session — move active task/job to recent, clear active
-                region = endSession(region)
+                region = endSession(region, obs.timestamp)
             }
         }
 
@@ -104,13 +109,18 @@ class PlatformRegionStepper @Inject constructor() {
         obs: Observation,
         healing: HealingPolicy,
     ): PlatformRegion {
-        val confidence = if (prev.confidence.pendingMode == inference.impliedMode) {
-            // Same pending mode — accrue
-            prev.confidence.copy(
-                supportingObservations = prev.confidence.supportingObservations + 1,
+        val prevConf = prev.confidence
+        val samePending = prevConf.pendingMode == inference.impliedMode
+        val stale = prevConf.firstSeenAt != null &&
+            (obs.timestamp - prevConf.firstSeenAt!!) > healing.timeWindowMs
+
+        val confidence = if (samePending && !stale) {
+            // Same pending mode, within window — accrue
+            prevConf.copy(
+                supportingObservations = prevConf.supportingObservations + 1,
             )
         } else {
-            // Different pending mode — reset
+            // Different pending mode or stale window — reset
             ModeConfidence(
                 pendingMode = inference.impliedMode,
                 pendingFlow = (obs as? Observation.FlowObservation)?.flow,
@@ -179,7 +189,7 @@ class PlatformRegionStepper @Inject constructor() {
             TimeoutType.SESSION_PAUSED_SAFETY -> {
                 // Pause timer expired — transition to offline
                 if (prev.mode == Mode.Paused) {
-                    endSession(prev.copy(mode = Mode.Offline, lastObservedAt = obs.timestamp))
+                    endSession(prev.copy(mode = Mode.Offline, lastObservedAt = obs.timestamp), obs.timestamp)
                 } else prev
             }
             else -> prev // Automation timeouts handled by EffectMap
@@ -365,7 +375,7 @@ class PlatformRegionStepper @Inject constructor() {
                 // New task (different phase or no active task)
                 val completedTask = currentTask?.copy(completedAt = obs.timestamp)
                 val recentTasks = if (completedTask != null) {
-                    region.recentTasks + completedTask
+                    (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS)
                 } else region.recentTasks
 
                 return region.copy(
@@ -409,7 +419,7 @@ class PlatformRegionStepper @Inject constructor() {
             val completedTask = postTask.copy(completedAt = obs.timestamp)
             return region.copy(
                 activeTask = null,
-                recentTasks = region.recentTasks + completedTask,
+                recentTasks = (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS),
             )
         }
 
@@ -420,7 +430,7 @@ class PlatformRegionStepper @Inject constructor() {
                 val completedTask = leavingTask.copy(completedAt = obs.timestamp)
                 return region.copy(
                     activeTask = null,
-                    recentTasks = region.recentTasks + completedTask,
+                    recentTasks = (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS),
                 )
             }
         }
@@ -432,10 +442,10 @@ class PlatformRegionStepper @Inject constructor() {
     // HELPERS
     // =========================================================================
 
-    private fun endSession(region: PlatformRegion): PlatformRegion {
-        val completedTask = region.activeTask?.copy(completedAt = System.currentTimeMillis())
+    private fun endSession(region: PlatformRegion, timestamp: Long): PlatformRegion {
+        val completedTask = region.activeTask?.copy(completedAt = timestamp)
         val recentTasks = if (completedTask != null) {
-            region.recentTasks + completedTask
+            (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS)
         } else region.recentTasks
 
         return region.copy(
