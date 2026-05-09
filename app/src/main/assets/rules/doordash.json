@@ -781,6 +781,18 @@
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
       },
+      "reject": [
+        {
+          "exists": {
+            "any": [
+              { "hasText": "Continue" },
+              { "hasText": "Complete Delivery" },
+              { "hasText": "Mark as delivered" },
+              { "hasIdSuffix": "complete_delivery_steps_button" }
+            ]
+          }
+        }
+      ],
       "branches": [
         {
           "target": "NAVIGATION_VIEW_TO_DROP_OFF",
@@ -1345,12 +1357,12 @@
       "shape": "task"
     },
     {
-      "id": "doordash.screen.dropoff_arrival",
+      "id": "doordash.screen.dropoff_pre_arrival_completion",
       "platform_id": "doordash.driver",
       "priority": 74,
       "overrideable": true,
       "state": {
-        "flow": "task:dropoff:arrived",
+        "flow": "task:dropoff:navigation",
         "modeHint": "online"
       },
       "require": {
@@ -1378,6 +1390,9 @@
                 },
                 {
                   "hasText": "Mark as delivered"
+                },
+                {
+                  "hasIdSuffix": "complete_delivery_steps_button"
                 }
               ]
             }
@@ -1387,7 +1402,7 @@
       "parse": {
         "fields": {
           "phase": "DROPOFF",
-          "subFlow": "ARRIVED",
+          "subFlow": "NAVIGATION",
           "customerNameHash": {
             "find": {
               "any": [
@@ -2394,6 +2409,8 @@
       "platform_id": "doordash.driver",
       "priority": 10,
       "overrideable": true,
+      "screenIs": "OFFER_POPUP",
+      "intent": "accept_offer",
       "if": {
         "hasIdSuffix": "accept_button"
       }
@@ -2403,6 +2420,8 @@
       "platform_id": "doordash.driver",
       "priority": 20,
       "overrideable": true,
+      "screenIs": "OFFER_POPUP_CONFIRM_DECLINE",
+      "intent": "decline_offer",
       "if": {
         "hasText": "Decline offer"
       }
@@ -2412,6 +2431,8 @@
       "platform_id": "doordash.driver",
       "priority": 30,
       "overrideable": true,
+      "screenIs": "pickup_arrival",
+      "intent": "arrived_at_store",
       "if": {
         "all": [
           {
@@ -2428,6 +2449,78 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "id": "doordash.click.initial_decline",
+      "platform_id": "doordash.driver",
+      "priority": 15,
+      "overrideable": true,
+      "screenIs": "OFFER_POPUP",
+      "intent": "initial_decline",
+      "if": {
+        "hasIdSuffix": "secondary_action_button_dash_plus"
+      }
+    },
+    {
+      "id": "doordash.click.resume_dash",
+      "platform_id": "doordash.driver",
+      "priority": 40,
+      "overrideable": true,
+      "screenIs": "dash_paused",
+      "intent": "resume_dash",
+      "if": {
+        "hasIdSuffix": "resumeButton"
+      }
+    },
+    {
+      "id": "doordash.click.start_navigation",
+      "platform_id": "doordash.driver",
+      "priority": 50,
+      "overrideable": true,
+      "intent": "start_navigation",
+      "if": {
+        "any": [
+          { "hasIdSuffix": "directions_button" },
+          { "hasIdSuffix": "navigate_button" }
+        ]
+      }
+    },
+    {
+      "id": "doordash.click.complete_delivery",
+      "platform_id": "doordash.driver",
+      "priority": 60,
+      "overrideable": true,
+      "screenIs": "dropoff_pre_arrival_completion",
+      "intent": "complete_delivery",
+      "if": {
+        "any": [
+          { "hasIdSuffix": "complete_delivery_steps_button" },
+          { "hasText": "Complete Delivery" },
+          { "hasText": "Mark as delivered" }
+        ]
+      }
+    },
+    {
+      "id": "doordash.click.submit_photo",
+      "platform_id": "doordash.driver",
+      "priority": 70,
+      "overrideable": true,
+      "screenIs": "dropoff_pre_arrival",
+      "intent": "submit_photo",
+      "if": {
+        "hasIdSuffix": "submit_button"
+      }
+    },
+    {
+      "id": "doordash.click.checkout",
+      "platform_id": "doordash.driver",
+      "priority": 80,
+      "overrideable": true,
+      "screenIs": "pickup_shopping",
+      "intent": "checkout",
+      "if": {
+        "hasIdSuffix": "button_checkout"
       }
     }
   ],
@@ -2479,6 +2572,28 @@
           }
         ]
       }
+    },
+    {
+      "id": "doordash.notification.demand_nudge",
+      "platform_id": "doordash.driver",
+      "priority": 50,
+      "overrideable": true,
+      "if": {
+        "titleContains": "Dash now"
+      },
+      "intent": "demand_nudge",
+      "shape": "notification"
+    },
+    {
+      "id": "doordash.notification.peak_pay_promo",
+      "platform_id": "doordash.driver",
+      "priority": 60,
+      "overrideable": true,
+      "if": {
+        "titleContains": "Incentives Update"
+      },
+      "intent": "peak_pay_promo",
+      "shape": "notification"
     }
   ]
 }
