@@ -39,7 +39,7 @@
           "parse": {
             "fields": {
               "payAmount": {
-                "find": { "hasTextMatchesRegex": "^\\$\\d" },
+                "find": { "hasTextMatchesRegex": "\\$\\d" },
                 "read": "text",
                 "transform": "parseCurrency"
               },
@@ -61,12 +61,17 @@
                         { "hasClassName": "android.widget.TextView" },
                         { "not": { "any": [
                           { "hasTextMatchesRegex": "^\\$" },
+                          { "hasTextMatchesRegex": "^\\+" },
                           { "hasTextContaining": "min" },
                           { "hasText": "Accept" },
                           { "hasText": "Match" },
                           { "hasText": "Delivery" },
                           { "hasTextContaining": "Exclusive" },
                           { "hasTextContaining": "Guaranteed" },
+                          { "hasTextContaining": "Includes" },
+                          { "hasTextContaining": "Add a" },
+                          { "hasTextContaining": "Shop &" },
+                          { "hasTextMatchesRegex": "^\\d+ items?" },
                           { "hasTextContaining": ", " }
                         ]}}
                       ]
@@ -92,6 +97,182 @@
         "exists": {
           "hasIdSuffix": "rootSplashBackground"
         }
+      }
+    },
+    {
+      "id": "uber.screen.pickup_verification",
+      "platform_id": "uber.driver",
+      "priority": 50,
+      "overrideable": true,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "branches": [
+        {
+          "target": "pickup_verification_info",
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "on_job_view" } },
+              { "exists": { "hasText": "Pickup verification" } }
+            ]
+          }
+        },
+        {
+          "target": "pickup_verification_pin",
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "on_job_view" } },
+              { "exists": { "hasTextContaining": "Enter Uber Eats order number" } }
+            ]
+          }
+        },
+        {
+          "target": "pickup_verification_items",
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "on_job_view" } },
+              { "exists": { "hasText": "Verify order" } },
+              { "exists": {
+                  "any": [
+                    { "hasText": "Order verified" },
+                    { "hasText": "Issue with order" }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "uber.screen.customer_chat",
+      "platform_id": "uber.driver",
+      "priority": 55,
+      "overrideable": true,
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "on_job_view" } },
+          { "exists": { "hasIdSuffix": "ub__intercom_coordinator_layout" } }
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.photo_capture",
+      "platform_id": "uber.driver",
+      "priority": 60,
+      "overrideable": true,
+      "state": {
+        "flow": "task:dropoff:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "on_job_view" } },
+          { "exists": { "hasIdSuffix": "ub__carbon_facecamera_root_view" } }
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.delivery_confirmation",
+      "platform_id": "uber.driver",
+      "priority": 65,
+      "overrideable": true,
+      "state": {
+        "flow": "task:dropoff:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "on_job_view" } },
+          { "exists": { "hasIdSuffix": "earner_trip_image_capture_taskbar_container" } }
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.shop_and_pay",
+      "platform_id": "uber.driver",
+      "priority": 68,
+      "overrideable": true,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "branches": [
+        {
+          "target": "shop_and_pay_list",
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "on_job_view" } },
+              { "exists": { "hasTextContaining": "Shop priority items" } }
+            ]
+          }
+        },
+        {
+          "target": "shop_and_pay_checkout",
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "on_job_view" } },
+              { "exists": { "hasTextContaining": "shopping bags" } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "uber.screen.post_trip",
+      "platform_id": "uber.driver",
+      "priority": 75,
+      "overrideable": true,
+      "state": {
+        "flow": "post:task",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "on_job_view" } },
+          { "exists": { "hasTextContaining": "more customers order again" } }
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.earnings_activity",
+      "platform_id": "uber.driver",
+      "priority": 78,
+      "overrideable": true,
+      "require": {
+        "all": [
+          { "exists": { "hasText": "Earnings Activity" } },
+          { "exists": { "hasIdSuffix": "recycler_view" } }
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.session_summary",
+      "platform_id": "uber.driver",
+      "priority": 80,
+      "overrideable": true,
+      "state": {
+        "flow": "session:ended",
+        "modeHint": "offline"
+      },
+      "require": {
+        "exists": { "hasTextContaining": "Session summary" }
+      }
+    },
+    {
+      "id": "uber.screen.active_trip",
+      "platform_id": "uber.driver",
+      "priority": 100,
+      "overrideable": true,
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "exists": { "hasIdSuffix": "on_job_view" }
       }
     },
     {
@@ -161,6 +342,12 @@
               { "exists": { "hasIdSuffix": "ub__system_banner_text" } }
             ]
           }
+        },
+        {
+          "target": "home_dashboard",
+          "require": {
+            "exists": { "hasIdSuffix": "glide_bottom_nav_home" }
+          }
         }
       ]
     }
@@ -214,6 +401,61 @@
     }
   ],
   "notifications": [
+    {
+      "id": "uber.notification.trip_en_route_pickup",
+      "platform_id": "uber.driver",
+      "priority": 3,
+      "overrideable": true,
+      "if": {
+        "titleMatchesRegex": "^Going to (?!\\d)"
+      },
+      "intent": "trip_en_route_pickup",
+      "shape": "notification"
+    },
+    {
+      "id": "uber.notification.trip_arrived_pickup",
+      "platform_id": "uber.driver",
+      "priority": 4,
+      "overrideable": true,
+      "if": {
+        "titleContains": "Arrived at "
+      },
+      "intent": "trip_arrived_pickup",
+      "shape": "notification"
+    },
+    {
+      "id": "uber.notification.trip_en_route_dropoff",
+      "platform_id": "uber.driver",
+      "priority": 5,
+      "overrideable": true,
+      "if": {
+        "titleMatchesRegex": "^Going to \\d"
+      },
+      "intent": "trip_en_route_dropoff",
+      "shape": "notification"
+    },
+    {
+      "id": "uber.notification.trip_at_dropoff",
+      "platform_id": "uber.driver",
+      "priority": 6,
+      "overrideable": true,
+      "if": {
+        "titleMatchesRegex": "(Leave the order at|Meet at door for)"
+      },
+      "intent": "trip_at_dropoff",
+      "shape": "notification"
+    },
+    {
+      "id": "uber.notification.tip_received",
+      "platform_id": "uber.driver",
+      "priority": 8,
+      "overrideable": true,
+      "if": {
+        "titleMatchesRegex": "received a \\$\\d"
+      },
+      "intent": "tip_received",
+      "shape": "notification"
+    },
     {
       "id": "uber.notification.online_status",
       "platform_id": "uber.driver",

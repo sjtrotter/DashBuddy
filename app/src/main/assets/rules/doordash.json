@@ -2572,6 +2572,28 @@
           }
         ]
       }
+    },
+    {
+      "id": "doordash.notification.demand_nudge",
+      "platform_id": "doordash.driver",
+      "priority": 50,
+      "overrideable": true,
+      "if": {
+        "titleContains": "Dash now"
+      },
+      "intent": "demand_nudge",
+      "shape": "notification"
+    },
+    {
+      "id": "doordash.notification.peak_pay_promo",
+      "platform_id": "doordash.driver",
+      "priority": 60,
+      "overrideable": true,
+      "if": {
+        "titleContains": "Incentives Update"
+      },
+      "intent": "peak_pay_promo",
+      "shape": "notification"
     }
   ]
 }
