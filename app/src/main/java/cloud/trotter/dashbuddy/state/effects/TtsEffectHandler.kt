@@ -78,6 +78,7 @@ class TtsEffectHandler @Inject constructor(
         offer.orders.firstOrNull()?.let { parts += it.storeName.trim() }
         offer.distanceMiles?.let { parts += "%.1f miles".format(it) }
         offer.dueByTimeText?.let { parts += it }
+            ?: offer.timeToCompleteMinutes?.let { parts += "$it minutes" }
         return parts.joinToString(". ") + "."
     }
 

@@ -126,8 +126,8 @@ class SideEffectEngine @Inject constructor(
 
             is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.parsedOffer, effect.platformName)
 
-            is AppEffect.StartDash -> bubbleManager.startDash(effect.dashId)
-            is AppEffect.EndDash -> bubbleManager.endDash()
+            is AppEffect.StartDash -> bubbleManager.startDash(effect.dashId, effect.platformName)
+            is AppEffect.EndDash -> bubbleManager.endDash(effect.platformName)
             is AppEffect.StartOdometer -> odometerEffectHandler.startUp()
             is AppEffect.StopOdometer -> odometerEffectHandler.shutDown()
             is AppEffect.PauseOdometer -> odometerEffectHandler.pause()

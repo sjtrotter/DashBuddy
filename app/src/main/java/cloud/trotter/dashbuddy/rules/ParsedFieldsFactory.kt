@@ -210,10 +210,11 @@ object ParsedFieldsFactory {
         val payAmount = f.double("payAmount")
         val distance = f.double("distance")
         val deliveryTimeText = f.str("deliveryTimeText")
+        val timeToCompleteMinutes = f.long("timeToCompleteMinutes")
 
         // Compute offer hash from extracted fields (same as Kotlin parser)
         val storeNames = orders.joinToString(",") { it.storeName }
-        val hashInput = "$payAmount|$distance|$deliveryTimeText|$storeNames"
+        val hashInput = "$payAmount|$distance|${deliveryTimeText ?: timeToCompleteMinutes}|$storeNames"
         val offerHash = f.str("offerHash") ?: generateSha256(hashInput)
 
         return ParsedFields.OfferFields(
@@ -225,6 +226,7 @@ object ParsedFieldsFactory {
                 distanceMiles = distance,
                 dueByTimeText = deliveryTimeText,
                 dueByTimeMillis = f.long("deliveryTime"),
+                timeToCompleteMinutes = timeToCompleteMinutes,
                 orders = orders,
             ),
         )
