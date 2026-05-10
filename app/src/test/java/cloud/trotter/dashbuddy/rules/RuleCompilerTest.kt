@@ -649,4 +649,46 @@ class RuleCompilerTest {
         )
         assertTrue(overrides.isEmpty())
     }
+
+    // =========================================================================
+    // enumeratePermissions
+    // =========================================================================
+
+    @Test
+    fun `enumeratePermissions returns tiers from effects and overrides`() {
+        val rule = CompiledScreenRule(
+            id = "test.rule", priority = 10, overrideable = true,
+            branches = listOf(
+                CompiledBranch(
+                    target = "OFFER",
+                    requireCheck = { _, _ -> true },
+                    effects = listOf(
+                        CompiledEffect(verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT),
+                        CompiledEffect(verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.LOG),
+                    ),
+                    transitionOverrides = mapOf(
+                        "mode:online" to listOf(
+                            CompiledEffect(verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.ODOMETER_START),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val tiers = compiler.enumeratePermissions(listOf(rule))
+        // SCREENSHOT → ACCESSIBILITY, LOG → NONE (excluded), ODOMETER_START → LOCATION
+        assertTrue(tiers.contains(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.ACCESSIBILITY))
+        assertTrue(tiers.contains(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.LOCATION))
+        assertFalse("NONE should be excluded", tiers.contains(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.NONE))
+    }
+
+    @Test
+    fun `enumeratePermissions returns empty for rules with no effects`() {
+        val rule = CompiledScreenRule(
+            id = "test.rule", priority = 10, overrideable = true,
+            branches = listOf(
+                CompiledBranch(target = "IDLE", requireCheck = { _, _ -> true }),
+            ),
+        )
+        assertTrue(compiler.enumeratePermissions(listOf(rule)).isEmpty())
+    }
 }

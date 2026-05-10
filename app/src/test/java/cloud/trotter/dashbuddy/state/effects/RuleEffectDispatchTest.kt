@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
+import cloud.trotter.dashbuddy.domain.pipeline.PermissionTier
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.state.AppEffect
 import org.junit.Assert.assertEquals
@@ -109,6 +110,48 @@ class RuleEffectDispatchTest {
         )
         for (verb in lifecycleVerbs) {
             assertTrue("$verb should have defaults", verb.hasDefault)
+        }
+    }
+
+    // =========================================================================
+    // Permission tiers — correct verb assignments
+    // =========================================================================
+
+    @Test
+    fun `CLICK requires ACCESSIBILITY tier`() {
+        assertEquals(PermissionTier.ACCESSIBILITY, EffectVerb.CLICK.tier)
+    }
+
+    @Test
+    fun `SCREENSHOT requires ACCESSIBILITY tier`() {
+        assertEquals(PermissionTier.ACCESSIBILITY, EffectVerb.SCREENSHOT.tier)
+    }
+
+    @Test
+    fun `SPEAK requires AUDIO tier`() {
+        assertEquals(PermissionTier.AUDIO, EffectVerb.SPEAK.tier)
+    }
+
+    @Test
+    fun `odometer verbs require LOCATION tier`() {
+        val odometerVerbs = listOf(
+            EffectVerb.ODOMETER_START, EffectVerb.ODOMETER_STOP,
+            EffectVerb.ODOMETER_PAUSE, EffectVerb.ODOMETER_RESUME,
+        )
+        for (verb in odometerVerbs) {
+            assertEquals("$verb should require LOCATION", PermissionTier.LOCATION, verb.tier)
+        }
+    }
+
+    @Test
+    fun `non-privileged verbs have NONE tier`() {
+        val noneVerbs = listOf(
+            EffectVerb.BUBBLE, EffectVerb.LOG, EffectVerb.EVALUATE_OFFER,
+            EffectVerb.SESSION_START, EffectVerb.SESSION_END,
+            EffectVerb.SCHEDULE_TIMEOUT, EffectVerb.CANCEL_TIMEOUT,
+        )
+        for (verb in noneVerbs) {
+            assertEquals("$verb should have NONE tier", PermissionTier.NONE, verb.tier)
         }
     }
 

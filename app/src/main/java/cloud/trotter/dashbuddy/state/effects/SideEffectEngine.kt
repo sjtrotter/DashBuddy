@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
+import cloud.trotter.dashbuddy.domain.pipeline.PermissionTier
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.state.AppEffect
@@ -214,8 +215,13 @@ class SideEffectEngine @Inject constructor(
 
     /**
      * Dispatch a [RequestedEffect] to the appropriate handler based on its verb.
+     * Permission tier is checked before execution — denied verbs are logged and skipped.
      */
     private suspend fun dispatchRuleEffect(e: RequestedEffect, scope: CoroutineScope) {
+        if (!isPermissionGranted(e.verb.tier)) {
+            Timber.w("Denied effect %s — permission tier %s not granted", e.verb, e.verb.tier)
+            return
+        }
         when (e.verb) {
             // --- Observation-driven verbs ---
             EffectVerb.CLICK -> resolveAndClick(e)
@@ -329,6 +335,16 @@ class SideEffectEngine @Inject constructor(
         "bad_offer" -> ChatPersona.BadOffer
         else -> ChatPersona.Dispatcher
     }
+
+    /**
+     * Check if the given [PermissionTier] is granted.
+     *
+     * For alpha (single user, all permissions already granted via system settings),
+     * this returns true for all tiers. When multi-user or permission-gated features
+     * are needed, swap in a DataStore-backed implementation.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun isPermissionGranted(tier: PermissionTier): Boolean = true
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
         is AppEffect.UpdateBubble,

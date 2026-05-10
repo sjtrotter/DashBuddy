@@ -38,6 +38,36 @@ object RuleCompiler {
     private const val MAX_EACH_SIZE = 50
 
     // ==========================================================================
+    //  Permission introspection
+    // ==========================================================================
+
+    /**
+     * Scan compiled screen rules and return the set of [PermissionTier] values
+     * used by any effect verb. Used at rule-load time to determine what
+     * permissions a ruleset requires.
+     */
+    fun enumeratePermissions(
+        screenRules: List<CompiledScreenRule>,
+    ): Set<cloud.trotter.dashbuddy.domain.pipeline.PermissionTier> {
+        val tiers = mutableSetOf<cloud.trotter.dashbuddy.domain.pipeline.PermissionTier>()
+        for (rule in screenRules) {
+            for (branch in rule.branches) {
+                for (effect in branch.effects) {
+                    tiers.add(effect.verb.tier)
+                }
+                for ((_, overrideEffects) in branch.transitionOverrides) {
+                    for (effect in overrideEffects) {
+                        tiers.add(effect.verb.tier)
+                    }
+                }
+            }
+        }
+        // NONE is always implicitly granted — don't include it
+        tiers.remove(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.NONE)
+        return tiers
+    }
+
+    // ==========================================================================
     //  Screen rules
     // ==========================================================================
 
