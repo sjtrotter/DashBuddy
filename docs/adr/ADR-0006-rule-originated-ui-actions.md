@@ -1,6 +1,6 @@
 # ADR-0006: Rule-Originated UI Actions
 
-**Status:** Proposed
+**Status:** Superseded by [ADR-0008](ADR-0008-rule-driven-effect-system.md)
 **Date:** 2026-05-02
 **Builds on:** ADR-0001, ADR-0005
 **Related:** Bug bundle issue #220 (Bugs 8a, 8c, 9)
