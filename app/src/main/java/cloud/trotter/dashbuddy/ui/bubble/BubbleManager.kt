@@ -48,16 +48,23 @@ class BubbleManager @Inject constructor(
         pushDynamicShortcut()
     }
 
-    fun startDash(dashId: String, platformName: String = "DoorDash") {
-        _activeDashId.value = dashId
-        val verb = if (platformName.equals("uber", ignoreCase = true)) "Ubering" else "Dashing"
+    fun startSession(sessionId: String, platformName: String) {
+        _activeDashId.value = sessionId
+        val verb = sessionVerb(platformName)
         postMessage("Started $verb!", ChatPersona.Dispatcher)
     }
 
-    fun endDash(platformName: String? = null) {
+    fun endSession(platformName: String? = null) {
         _activeDashId.value = null
-        val verb = if (platformName.equals("uber", ignoreCase = true)) "Ubering" else "Dashing"
+        val verb = sessionVerb(platformName)
         postMessage("Done $verb!", ChatPersona.Dispatcher)
+    }
+
+    private fun sessionVerb(platformName: String?): String = when {
+        platformName.equals("uber", ignoreCase = true) -> "Ubering"
+        platformName.equals("doordash", ignoreCase = true) -> "Dashing"
+        platformName != null -> "driving for $platformName"
+        else -> "driving"
     }
 
     fun postMessage(

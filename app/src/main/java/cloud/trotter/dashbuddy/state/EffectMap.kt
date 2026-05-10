@@ -202,7 +202,7 @@ class EffectMap @Inject constructor() {
                         )
                         add(logEffect(nextSession.sessionId, AppEventType.DASH_START, payload))
                         add(AppEffect.StartOdometer)
-                        add(AppEffect.StartDash(nextSession.sessionId, next.platform.name))
+                        add(AppEffect.StartSession(nextSession.sessionId, next.platform.name))
                     }
 
                     // Cancel pause safety timer if resuming from paused
@@ -241,7 +241,7 @@ class EffectMap @Inject constructor() {
                             add(logEffect(sessionId, AppEventType.DASH_STOP, "Return to Map"))
                             add(AppEffect.StopOdometer)
                         }
-                        add(AppEffect.EndDash(platform))
+                        add(AppEffect.EndSession(platform))
                     }
 
                     // Cancel pause safety timer

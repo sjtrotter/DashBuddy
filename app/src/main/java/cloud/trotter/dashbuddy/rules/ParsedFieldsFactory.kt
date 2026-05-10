@@ -128,8 +128,8 @@ object ParsedFieldsFactory {
 
     private fun buildPaused(f: Map<String, Any?>) = ParsedFields.PausedFields(
         activity = f.str("activity"),
-        remainingText = f.str("remainingText") ?: "35:00",
-        remainingMillis = f.long("remainingMillis") ?: (35 * 60 * 1000L),
+        remainingText = f.str("remainingText"),
+        remainingMillis = f.long("remainingMillis"),
     )
 
     private fun buildTimeline(f: Map<String, Any?>): ParsedFields.TimelineFields {

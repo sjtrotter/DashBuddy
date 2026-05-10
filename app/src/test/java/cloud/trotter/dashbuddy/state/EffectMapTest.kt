@@ -247,7 +247,7 @@ class EffectMapTest {
     // =========================================================================
 
     @Test
-    fun `session start emits DASH_START, StartOdometer, StartDash`() {
+    fun `session start emits DASH_START, StartOdometer, StartSession`() {
         val (platform, _) = stateWithPlatform(mode = Mode.Offline, sessionId = null)
         val prev = AppState(regions = Regions(
             platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Offline)),
@@ -262,11 +262,11 @@ class EffectMapTest {
 
         assertTrue("Should emit DASH_START", effects.logEventTypes().contains(AppEventType.DASH_START))
         assertTrue("Should emit StartOdometer", effects.any { it is AppEffect.StartOdometer })
-        assertTrue("Should emit StartDash", effects.any { it is AppEffect.StartDash })
+        assertTrue("Should emit StartSession", effects.any { it is AppEffect.StartSession })
     }
 
     @Test
-    fun `session end emits DASH_STOP, StopOdometer, EndDash`() {
+    fun `session end emits DASH_STOP, StopOdometer, EndSession`() {
         val (platform, onlineRegion) = stateWithPlatform(mode = Mode.Online, sessionId = "sess-1")
         val prev = AppState(regions = Regions(
             platforms = mapOf(platform to onlineRegion),
@@ -283,7 +283,7 @@ class EffectMapTest {
 
         assertTrue("Should emit DASH_STOP", effects.logEventTypes().contains(AppEventType.DASH_STOP))
         assertTrue("Should emit StopOdometer", effects.any { it is AppEffect.StopOdometer })
-        assertTrue("Should emit EndDash", effects.any { it is AppEffect.EndDash })
+        assertTrue("Should emit EndSession", effects.any { it is AppEffect.EndSession })
     }
 
     @Test
@@ -527,8 +527,8 @@ class EffectMapTest {
 
         assertTrue("No StartOdometer", effects.none { it is AppEffect.StartOdometer })
         assertTrue("No StopOdometer", effects.none { it is AppEffect.StopOdometer })
-        assertTrue("No StartDash", effects.none { it is AppEffect.StartDash })
-        assertTrue("No EndDash", effects.none { it is AppEffect.EndDash })
+        assertTrue("No StartSession", effects.none { it is AppEffect.StartSession })
+        assertTrue("No EndSession", effects.none { it is AppEffect.EndSession })
     }
 
     // =========================================================================
@@ -586,7 +586,7 @@ class EffectMapTest {
 
         // Default effects should NOT be present
         assertTrue("No StartOdometer", effects.none { it is AppEffect.StartOdometer })
-        assertTrue("No StartDash", effects.none { it is AppEffect.StartDash })
+        assertTrue("No StartSession", effects.none { it is AppEffect.StartSession })
     }
 
     @Test
@@ -643,7 +643,7 @@ class EffectMapTest {
 
         // Defaults suppressed
         assertTrue("No StopOdometer", effects.none { it is AppEffect.StopOdometer })
-        assertTrue("No EndDash", effects.none { it is AppEffect.EndDash })
+        assertTrue("No EndSession", effects.none { it is AppEffect.EndSession })
     }
 
     @Test
@@ -770,7 +770,7 @@ class EffectMapTest {
 
         // Defaults should fire since MODE_TO_ONLINE has no override
         assertTrue("Should emit StartOdometer", effects.any { it is AppEffect.StartOdometer })
-        assertTrue("Should emit StartDash", effects.any { it is AppEffect.StartDash })
+        assertTrue("Should emit StartSession", effects.any { it is AppEffect.StartSession })
         assertTrue("Should emit DASH_START", effects.logEventTypes().contains(AppEventType.DASH_START))
     }
 }
