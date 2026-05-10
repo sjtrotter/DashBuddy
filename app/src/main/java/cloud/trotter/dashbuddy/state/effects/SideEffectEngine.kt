@@ -110,19 +110,19 @@ class SideEffectEngine @Inject constructor(
                 uiInteractionHandler.performClick(effect.node, effect.description)
             }
 
-            is AppEffect.RequestAction -> {
-                val actionKey = effect.effectKey
+            is AppEffect.RequestEffect -> {
+                val effectKey = effect.effectKey
                 val now = System.currentTimeMillis()
-                val throttle = effect.action.throttleMs ?: DEFAULT_ACTION_THROTTLE_MS
-                val lastFired = actionLastFiredAt[actionKey] ?: 0L
+                val throttle = effect.effect.throttleMs ?: DEFAULT_ACTION_THROTTLE_MS
+                val lastFired = actionLastFiredAt[effectKey] ?: 0L
                 if (lastFired + throttle > now) {
-                    Timber.v("Throttled action: %s", actionKey)
+                    Timber.v("Throttled effect: %s", effectKey)
                     return
                 }
-                actionLastFiredAt[actionKey] = now
-                when (effect.action.verb) {
-                    "click" -> resolveAndClick(effect.action)
-                    else -> Timber.w("Unknown action verb: %s", effect.action.verb)
+                actionLastFiredAt[effectKey] = now
+                when (effect.effect.verb) {
+                    cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK -> resolveAndClick(effect.effect)
+                    else -> Timber.w("Unhandled effect verb: %s", effect.effect.verb)
                 }
             }
 
@@ -209,22 +209,25 @@ class SideEffectEngine @Inject constructor(
     }
 
     /**
-     * Resolve a [RequestedAction]'s [NodeRef] against the live UI tree and click.
+     * Resolve a [RequestedEffect]'s [NodeRef] against the live UI tree and click.
      *
      * Builds a template [UiNode] from the [NodeRef] fingerprint and delegates
      * to [UiInteractionHandler.performClick], which handles live-root lookup
      * and native-node matching internally.
      */
-    private fun resolveAndClick(action: cloud.trotter.dashbuddy.domain.pipeline.RequestedAction) {
-        val ref = action.targetRef
+    private fun resolveAndClick(effect: cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect) {
+        val ref = effect.targetRef ?: run {
+            Timber.w("CLICK effect missing targetRef: %s", effect.ruleId)
+            return
+        }
         // Build a minimal UiNode template for performClick's matching logic
         val template = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(
             viewIdResourceName = ref.viewIdSuffix,
             text = ref.text,
             className = ref.classNameHint,
         )
-        Timber.i("Auto-Click [%s]: target id=%s", action.ruleId, ref.viewIdSuffix)
-        uiInteractionHandler.performClick(template, "Auto-Click [${action.ruleId}]")
+        Timber.i("Auto-Click [%s]: target id=%s", effect.ruleId, ref.viewIdSuffix)
+        uiInteractionHandler.performClick(template, "Auto-Click [${effect.ruleId}]")
     }
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
@@ -232,7 +235,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.PlayNotificationSound,
         is AppEffect.CaptureScreenshot,
         is AppEffect.ClickNode,
-        is AppEffect.RequestAction,
+        is AppEffect.RequestEffect,
         is AppEffect.StartOdometer,
         is AppEffect.StopOdometer,
         is AppEffect.PauseOdometer,

@@ -47,7 +47,7 @@ class EffectMap @Inject constructor() {
     private val gson = Gson()
 
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
-        addAll(diffActions(obs))
+        addAll(diffRuleEffects(obs))
         addAll(diffFlowRegion(prev.regions.flow, next.regions.flow, obs))
         val allPlatforms = (prev.regions.platforms.keys + next.regions.platforms.keys).distinct()
         for (p in allPlatforms) {
@@ -490,20 +490,20 @@ class EffectMap @Inject constructor() {
     }
 
     // =========================================================================
-    // RULE-ORIGINATED ACTIONS (ADR-0006)
+    // RULE-ORIGINATED EFFECTS
     // =========================================================================
 
     /**
-     * Extract actions from the observation and emit [AppEffect.RequestAction]
-     * for each that passes its gate. Runs at top level — NOT inside any
-     * region stepper — honouring ADR-0005 §13 and ADR-0006 §2/§9.
+     * Extract rule-declared effects from the observation and emit
+     * [AppEffect.RequestEffect] for each that passes its gate.
+     * Runs at top level — NOT inside any region stepper.
      */
-    private fun diffActions(obs: Observation): List<AppEffect> {
+    private fun diffRuleEffects(obs: Observation): List<AppEffect> {
         val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
-        if (flowObs.actions.isEmpty()) return emptyList()
-        return flowObs.actions
+        if (flowObs.effects.isEmpty()) return emptyList()
+        return flowObs.effects
             .filter { evaluateGate(it.onlyIf, flowObs.parsed) }
-            .map { AppEffect.RequestAction(it) }
+            .map { AppEffect.RequestEffect(it) }
     }
 
     private fun evaluateGate(gate: ParsedFieldsGate?, parsed: ParsedFields): Boolean {

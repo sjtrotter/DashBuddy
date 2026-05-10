@@ -113,8 +113,9 @@ object RuleCompiler {
             compileValidateEntry(entry.jsonObject)
         } ?: emptyList()
 
-        // --- Actions (Phase 3 of the plan — stub for now) ---
-        val actions = obj["actions"]?.jsonArray?.map { compileActionEntry(it.jsonObject) } ?: emptyList()
+        // --- Effects (accepts both "effects" and legacy "actions" keys) ---
+        val effectsArray = obj["effects"]?.jsonArray ?: obj["actions"]?.jsonArray
+        val effects = effectsArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
 
         return CompiledBranch(
             target = targetName,
@@ -124,7 +125,7 @@ object RuleCompiler {
             parser = parser,
             parseShape = parseShape,
             validators = validators,
-            actions = actions,
+            effects = effects,
             flow = branchFlow ?: ruleFlow,
             modeHint = branchModeHint ?: ruleModeHint,
         )
@@ -488,13 +489,57 @@ object RuleCompiler {
     }
 
     // ==========================================================================
-    //  Action entry compiler (ADR-0006)
+    //  Effect entry compiler (evolved from ADR-0006 actions)
     // ==========================================================================
 
-    private fun compileActionEntry(obj: JsonObject): CompiledAction {
-        return CompiledAction(
-            verb = obj["command"]!!.jsonPrimitive.content,
-            targetBindName = obj["target"]!!.jsonPrimitive.content.removePrefix("$"),
+    /** Allowed arg keys per verb. Unknown keys are rejected at compile time. */
+    private val allowedArgs: Map<cloud.trotter.dashbuddy.domain.pipeline.EffectVerb, Set<String>> = mapOf(
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT to setOf("prefix"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.BUBBLE to setOf("text", "persona"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.LOG to setOf("type", "payload"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SPEAK to setOf("text", "platform"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCHEDULE_TIMEOUT to setOf("type", "durationMs"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CANCEL_TIMEOUT to setOf("type"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SESSION_START to setOf("platformName"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SESSION_END to setOf("platformName"),
+    )
+
+    internal fun compileEffectEntry(obj: JsonObject): CompiledEffect {
+        // Accept both "verb" (new) and "command" (legacy) keys
+        val wireVerb = obj["verb"]?.jsonPrimitive?.content
+            ?: obj["command"]?.jsonPrimitive?.content
+            ?: throw RuleCompileException("Effect missing 'verb'")
+
+        val verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.fromWire(wireVerb)
+            ?: throw RuleCompileException("Unknown effect verb: '$wireVerb'")
+
+        // Target enforcement: require target for CLICK, reject for all others
+        val targetRaw = obj["target"]?.jsonPrimitive?.content
+        if (verb.requiresTarget && targetRaw == null) {
+            throw RuleCompileException("Verb '$wireVerb' requires 'target'")
+        }
+        if (!verb.requiresTarget && targetRaw != null) {
+            throw RuleCompileException("Verb '$wireVerb' does not use 'target'")
+        }
+        val targetBindName = targetRaw?.removePrefix("$")
+
+        // Validate args keys against per-verb allowlist
+        val args = obj["args"]?.jsonObject?.let { argsObj ->
+            val allowed = allowedArgs[verb] ?: emptySet()
+            val argMap = mutableMapOf<String, String>()
+            for ((key, value) in argsObj) {
+                if (key !in allowed) {
+                    throw RuleCompileException("Unknown arg '$key' for verb '$wireVerb'. Allowed: $allowed")
+                }
+                argMap[key] = value.jsonPrimitive.content
+            }
+            argMap.toMap()
+        } ?: emptyMap()
+
+        return CompiledEffect(
+            verb = verb,
+            targetBindName = targetBindName,
+            args = args,
             onlyIf = obj["onlyIf"]?.jsonObject?.let { compileGate(it) },
             dedupeKey = obj["dedupeKey"]?.jsonPrimitive?.content,
             throttleMs = obj["throttleMs"]?.jsonPrimitive?.longOrNull,

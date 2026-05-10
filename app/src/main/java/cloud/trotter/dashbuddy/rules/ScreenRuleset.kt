@@ -1,8 +1,9 @@
 package cloud.trotter.dashbuddy.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
-import cloud.trotter.dashbuddy.domain.pipeline.RequestedAction
+import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
 
@@ -102,8 +103,8 @@ class ScreenRuleset(
                 }
                 if (branchSkip) continue
 
-                // Resolve compiled actions against current bindings
-                val resolvedActions = resolveActions(branch.actions, allBindings, rule.id)
+                // Resolve compiled effects against current bindings
+                val resolvedEffects = resolveEffects(branch.effects, allBindings, rule.id)
 
                 return ScreenMatchResult(
                     ruleId = rule.id,
@@ -111,7 +112,7 @@ class ScreenRuleset(
                     flow = branch.flow,
                     modeHint = branch.modeHint,
                     parsed = parsed,
-                    actions = resolvedActions,
+                    effects = resolvedEffects,
                 )
             }
         }
@@ -119,26 +120,33 @@ class ScreenRuleset(
     }
 
     /**
-     * Resolve [CompiledAction] bind names against current [bindings] to produce
-     * [RequestedAction] with concrete [NodeRef]. Actions whose target node is
-     * null are silently dropped (rule still matches — ADR-0006 §4).
+     * Resolve [CompiledEffect] bind names against current [bindings] to produce
+     * [RequestedEffect]. For target-bound verbs (e.g. [EffectVerb.CLICK]),
+     * effects whose target node is null are silently dropped. For non-target
+     * verbs, [targetRef] is null and the effect always resolves.
      */
-    private fun resolveActions(
-        actions: List<CompiledAction>,
+    private fun resolveEffects(
+        effects: List<CompiledEffect>,
         bindings: Bindings,
         ruleId: String,
-    ): List<RequestedAction> = actions.mapNotNull { action ->
-        val node = bindings[action.targetBindName]
-        if (node == null) {
-            Timber.v("Action target '${action.targetBindName}' not bound; skipping action")
-            return@mapNotNull null
+    ): List<RequestedEffect> = effects.mapNotNull { effect ->
+        val targetRef = if (effect.targetBindName != null) {
+            val node = bindings[effect.targetBindName]
+            if (node == null) {
+                Timber.v("Effect target '${effect.targetBindName}' not bound; skipping effect")
+                return@mapNotNull null
+            }
+            buildNodeRef(node)
+        } else {
+            null
         }
-        RequestedAction(
-            verb = action.verb,
-            targetRef = buildNodeRef(node),
-            onlyIf = action.onlyIf,
-            dedupeKey = action.dedupeKey,
-            throttleMs = action.throttleMs,
+        RequestedEffect(
+            verb = effect.verb,
+            args = effect.args,
+            targetRef = targetRef,
+            onlyIf = effect.onlyIf,
+            dedupeKey = effect.dedupeKey,
+            throttleMs = effect.throttleMs,
             ruleId = ruleId,
         )
     }

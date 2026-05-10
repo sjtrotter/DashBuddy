@@ -1,21 +1,23 @@
 package cloud.trotter.dashbuddy.domain.pipeline
 
 /**
- * A UI action requested by a rule's `actions:` block.
+ * A side effect requested by a rule's `effects:` block.
  *
- * Actions ride on [Observation.FlowObservation] through the state machine
- * (which treats them as opaque) and are emitted as effects by [EffectMap].
- * The side-effect engine resolves the [targetRef] against the live UI tree
- * and executes the verb.
+ * Effects ride on [Observation.FlowObservation] through the state machine
+ * (which treats them as opaque) and are emitted as [AppEffect]s by EffectMap.
+ * The side-effect engine resolves the verb and executes it, optionally
+ * using [targetRef] for UI-targeted verbs like [EffectVerb.CLICK].
  *
- * See ADR-0006 for the full design.
+ * See ADR-0006 for the original actions design; this generalises it to
+ * the full [EffectVerb] vocabulary.
  */
-data class RequestedAction(
-    val verb: String,
-    val targetRef: NodeRef,
-    val onlyIf: ParsedFieldsGate?,
-    val dedupeKey: String?,
-    val throttleMs: Long?,
+data class RequestedEffect(
+    val verb: EffectVerb,
+    val args: Map<String, String> = emptyMap(),
+    val targetRef: NodeRef? = null,
+    val onlyIf: ParsedFieldsGate? = null,
+    val dedupeKey: String? = null,
+    val throttleMs: Long? = null,
     val ruleId: String,
 )
 
@@ -34,7 +36,7 @@ data class NodeRef(
 
 /**
  * Gate condition evaluated against parsed fields to decide whether
- * an action should fire.
+ * an effect should fire.
  */
 sealed class ParsedFieldsGate {
     data class FieldEquals(val field: String, val value: Any?) : ParsedFieldsGate()
