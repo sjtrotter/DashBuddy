@@ -1,0 +1,1633 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sjtrotter/dashbuddy-matchers/rules.schema.json",
+  "title": "DashBuddy Rule Format",
+  "description": "Schema for DashBuddy screen matcher, click classifier, and notification classifier rule files. See ADR-0001 for design rationale.",
+  "type": "object",
+  "required": ["format_version", "platform_id"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for IDE support."
+    },
+    "format_version": {
+      "type": "integer",
+      "description": "DSL format version. Current: 2.",
+      "minimum": 1
+    },
+    "platform_id": {
+      "type": "string",
+      "description": "Platform identifier (e.g. 'doordash.driver', 'uber.driver').",
+      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+    },
+    "screens": {
+      "type": "array",
+      "description": "Screen matching rules. Evaluated in priority order; first match wins.",
+      "items": { "$ref": "#/$defs/screenRule" }
+    },
+    "clicks": {
+      "type": "array",
+      "description": "Click classification rules. Evaluated against a single tapped UiNode.",
+      "items": { "$ref": "#/$defs/clickRule" }
+    },
+    "notifications": {
+      "type": "array",
+      "description": "Notification classification rules.",
+      "items": { "$ref": "#/$defs/notificationRule" }
+    }
+  },
+
+  "$defs": {
+
+    "screenRule": {
+      "type": "object",
+      "description": "A screen matching rule. Uses the 5-phase pipeline: bind -> reject -> require -> parse -> validate. Can be single-target (require at top level) or multi-branch (branches array).",
+      "required": ["id", "priority"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique rule identifier: {platform}.screen.{name}",
+          "pattern": "^[a-z][a-z0-9_]*\\.screen\\."
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Evaluation order. Lower = evaluated first.",
+          "minimum": 0
+        },
+        "overrideable": {
+          "type": "boolean",
+          "description": "Whether this rule can be overridden by platform updates. Default: true.",
+          "default": true
+        },
+        "state": { "$ref": "#/$defs/stateBlock" },
+        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "bind": { "$ref": "#/$defs/bindBlock" },
+        "reject": {
+          "type": "array",
+          "description": "Phase 2: Fail-fast negative checks. Any match skips this rule/branch.",
+          "items": { "$ref": "#/$defs/treePredicate" }
+        },
+        "guards": {
+          "type": "array",
+          "description": "v1 compat alias for 'reject'.",
+          "items": { "$ref": "#/$defs/treePredicate" }
+        },
+        "require": {
+          "$ref": "#/$defs/treePredicate",
+          "description": "Phase 3: Positive match condition. Must pass for the rule to match."
+        },
+        "if": {
+          "$ref": "#/$defs/treePredicate",
+          "description": "v1 compat alias for 'require'."
+        },
+        "parse": { "$ref": "#/$defs/parseBlock" },
+        "validate": {
+          "type": "array",
+          "description": "Phase 5: Assertions on parsed field values.",
+          "items": { "$ref": "#/$defs/validateEntry" }
+        },
+        "effects": {
+          "type": "array",
+          "description": "Side effects to execute on successful match.",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "actions": {
+          "type": "array",
+          "description": "Legacy alias for 'effects'.",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
+        "branches": {
+          "type": "array",
+          "description": "Multiple matching paths. First branch to pass all phases wins.",
+          "items": { "$ref": "#/$defs/branchObject" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "branchObject": {
+      "type": "object",
+      "description": "A single branch within a multi-branch screen rule. Must have 'require' or 'if'.",
+      "anyOf": [
+        { "required": ["require"] },
+        { "required": ["if"] }
+      ],
+      "properties": {
+        "state": { "$ref": "#/$defs/stateBlock" },
+        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "bind": { "$ref": "#/$defs/bindBlock" },
+        "reject": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/treePredicate" }
+        },
+        "guards": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/treePredicate" }
+        },
+        "require": { "$ref": "#/$defs/treePredicate" },
+        "if": { "$ref": "#/$defs/treePredicate" },
+        "parse": { "$ref": "#/$defs/parseBlock" },
+        "validate": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/validateEntry" }
+        },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" }
+      }
+    },
+
+    "clickBranchObject": {
+      "type": "object",
+      "description": "A single branch within a multi-branch click rule.",
+      "anyOf": [
+        { "required": ["require"] },
+        { "required": ["if"] }
+      ],
+      "properties": {
+        "state": { "$ref": "#/$defs/stateBlock" },
+        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "screenIs": {
+          "type": "string",
+          "description": "Only match when the active screen target equals this value."
+        },
+        "intent": {
+          "type": "string",
+          "description": "Output intent string for this branch."
+        },
+        "bind": { "$ref": "#/$defs/bindBlock" },
+        "reject": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nodePredicate" }
+        },
+        "require": { "$ref": "#/$defs/nodePredicate" },
+        "if": { "$ref": "#/$defs/nodePredicate" },
+        "parse": { "$ref": "#/$defs/parseBlock" },
+        "validate": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/validateEntry" }
+        },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" }
+      }
+    },
+
+    "notificationBranchObject": {
+      "type": "object",
+      "description": "A single branch within a multi-branch notification rule.",
+      "anyOf": [
+        { "required": ["require"] },
+        { "required": ["if"] }
+      ],
+      "properties": {
+        "state": { "$ref": "#/$defs/stateBlock" },
+        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "intent": {
+          "type": "string",
+          "description": "Output intent string for this branch."
+        },
+        "reject": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/notificationPredicate" }
+        },
+        "require": { "$ref": "#/$defs/notificationPredicate" },
+        "if": { "$ref": "#/$defs/notificationPredicate" },
+        "parse": { "$ref": "#/$defs/notificationParseBlock" },
+        "validate": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/validateEntry" }
+        },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" }
+      }
+    },
+
+    "clickRule": {
+      "type": "object",
+      "description": "A click classification rule. Predicate operates on the single tapped UiNode. Supports the full pipeline: bind -> reject -> require -> parse -> validate -> effects.",
+      "required": ["id", "priority"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique rule identifier: {platform}.click.{name}",
+          "pattern": "^[a-z][a-z0-9_]*\\.click\\."
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "overrideable": {
+          "type": "boolean",
+          "default": true
+        },
+        "screenIs": {
+          "type": "string",
+          "description": "Only match when the active screen target equals this value."
+        },
+        "intent": {
+          "type": "string",
+          "description": "Output intent string. Auto-derived from rule ID if omitted."
+        },
+        "target": {
+          "type": "string",
+          "description": "v1 compat: CamelCase target converted to snake_case intent."
+        },
+        "state": { "$ref": "#/$defs/stateBlock" },
+        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "bind": { "$ref": "#/$defs/bindBlock" },
+        "reject": {
+          "type": "array",
+          "description": "Fail-fast negative checks. Any match skips this rule/branch.",
+          "items": { "$ref": "#/$defs/nodePredicate" }
+        },
+        "require": {
+          "$ref": "#/$defs/nodePredicate",
+          "description": "Positive match condition. Must pass for the rule to match."
+        },
+        "if": {
+          "$ref": "#/$defs/nodePredicate",
+          "description": "Alias for 'require'."
+        },
+        "parse": { "$ref": "#/$defs/parseBlock" },
+        "validate": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/validateEntry" }
+        },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "actions": {
+          "type": "array",
+          "description": "Legacy alias for 'effects'.",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
+        "branches": {
+          "type": "array",
+          "description": "Multiple matching paths. First branch to pass all phases wins.",
+          "items": { "$ref": "#/$defs/clickBranchObject" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "notificationRule": {
+      "type": "object",
+      "description": "A notification classification rule. Supports the full pipeline: reject -> require -> parse -> validate -> effects.",
+      "required": ["id", "priority"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique rule identifier: {platform}.notification.{name}",
+          "pattern": "^[a-z][a-z0-9_]*\\.notification\\."
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "overrideable": {
+          "type": "boolean",
+          "default": true
+        },
+        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "intent": {
+          "type": "string",
+          "description": "Output intent string. Auto-derived from rule ID if omitted."
+        },
+        "target": {
+          "type": "string",
+          "description": "v1 compat alias for 'intent'."
+        },
+        "state": { "$ref": "#/$defs/stateBlock" },
+        "reject": {
+          "type": "array",
+          "description": "Fail-fast negative checks. Any match skips this rule/branch.",
+          "items": { "$ref": "#/$defs/notificationPredicate" }
+        },
+        "require": {
+          "$ref": "#/$defs/notificationPredicate",
+          "description": "Positive match condition. Must pass for the rule to match."
+        },
+        "if": {
+          "$ref": "#/$defs/notificationPredicate",
+          "description": "Alias for 'require'."
+        },
+        "parse": { "$ref": "#/$defs/notificationParseBlock" },
+        "validate": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/validateEntry" }
+        },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "actions": {
+          "type": "array",
+          "description": "Legacy alias for 'effects'.",
+          "items": { "$ref": "#/$defs/effectEntry" }
+        },
+        "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
+        "branches": {
+          "type": "array",
+          "description": "Multiple matching paths. First branch to pass all phases wins.",
+          "items": { "$ref": "#/$defs/notificationBranchObject" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "stateBlock": {
+      "type": "object",
+      "description": "Contextual flow and mode state declared by the rule.",
+      "properties": {
+        "flow": { "$ref": "#/$defs/flowEnum" },
+        "modeHint": { "$ref": "#/$defs/modeEnum" },
+        "mode": {
+          "$ref": "#/$defs/modeEnum",
+          "description": "v1 compat alias for 'modeHint'."
+        }
+      }
+    },
+
+    "bindBlock": {
+      "type": "object",
+      "description": "Phase 1: Named variable bindings. Keys are binding names; referenced as $name in later phases.",
+      "additionalProperties": { "$ref": "#/$defs/bindEntry" }
+    },
+
+    "bindEntry": {
+      "type": "object",
+      "description": "A single binding declaration.",
+      "required": ["find"],
+      "properties": {
+        "find": {
+          "$ref": "#/$defs/nodePredicate",
+          "description": "Node predicate to locate the target node."
+        },
+        "optional": {
+          "type": "boolean",
+          "description": "If true, null result doesn't disqualify the rule. Default: false.",
+          "default": false
+        }
+      }
+    },
+
+    "parseBlock": {
+      "type": "object",
+      "description": "Phase 4: Field extraction specification.",
+      "properties": {
+        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "fields": {
+          "type": "object",
+          "description": "Named fields to extract. Each value is a parse expression.",
+          "additionalProperties": { "$ref": "#/$defs/parseExpression" }
+        }
+      }
+    },
+
+    "notificationParseBlock": {
+      "type": "object",
+      "description": "Parse block for notification rules. Extracts fields from notification string properties using regex.",
+      "properties": {
+        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "fields": {
+          "type": "object",
+          "description": "Named fields to extract. Each value is a notification parse expression.",
+          "additionalProperties": { "$ref": "#/$defs/notificationParseExpression" }
+        }
+      }
+    },
+
+    "notificationParseExpression": {
+      "description": "A parse expression that extracts a value from notification data. Can be a string literal, or an object with from/find/group/transform.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "String literal value."
+        },
+        {
+          "type": "boolean",
+          "description": "Boolean literal value."
+        },
+        {
+          "type": "integer",
+          "description": "Integer literal value."
+        },
+        { "$ref": "#/$defs/notificationParseExpressionObject" }
+      ]
+    },
+
+    "notificationParseExpressionObject": {
+      "description": "Object-form notification parse expression.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Constant value.",
+          "required": ["literal"],
+          "properties": {
+            "literal": {
+              "description": "The constant value (string, boolean, integer, or number)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Extract from a notification field using regex.",
+          "required": ["from"],
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/notificationFieldSource"
+            },
+            "find": {
+              "type": "string",
+              "description": "Regex pattern to match within the source field.",
+              "maxLength": 200
+            },
+            "group": {
+              "type": "integer",
+              "description": "Capture group index (0 = whole match). Default: 0.",
+              "minimum": 0,
+              "default": 0
+            },
+            "transform": { "$ref": "#/$defs/transformSpec" },
+            "fallback": {
+              "description": "Default value if extraction returns null."
+            }
+          }
+        }
+      ]
+    },
+
+    "notificationFieldSource": {
+      "type": "string",
+      "description": "Notification data field to read from.",
+      "enum": [
+        "title",
+        "text",
+        "bigText",
+        "tickerText",
+        "subText",
+        "fullString"
+      ]
+    },
+
+    "parseExpression": {
+      "description": "A parse expression that extracts a value from the UI tree. Can be a string literal, or an object with a primary key that determines the extraction method.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "String literal value (shorthand for {\"literal\": \"value\"})."
+        },
+        {
+          "type": "boolean",
+          "description": "Boolean literal value."
+        },
+        {
+          "type": "integer",
+          "description": "Integer literal value."
+        },
+        { "$ref": "#/$defs/parseExpressionObject" }
+      ]
+    },
+
+    "parseExpressionObject": {
+      "description": "Object-form parse expression. The primary key determines the extraction method.",
+      "oneOf": [
+        { "$ref": "#/$defs/parseLiteral" },
+        { "$ref": "#/$defs/parseFind" },
+        { "$ref": "#/$defs/parseFindAll" },
+        { "$ref": "#/$defs/parseTextAfterLabel" },
+        { "$ref": "#/$defs/parsePresence" },
+        { "$ref": "#/$defs/parseConditionalEnum" },
+        { "$ref": "#/$defs/parseEach" },
+        { "$ref": "#/$defs/parseJoin" },
+        { "$ref": "#/$defs/parseCoalesce" },
+        { "$ref": "#/$defs/parseSiblingOf" },
+        { "$ref": "#/$defs/parseFromBinding" }
+      ]
+    },
+
+    "parseLiteral": {
+      "type": "object",
+      "description": "Constant value.",
+      "required": ["literal"],
+      "properties": {
+        "literal": {
+          "description": "The constant value (string, boolean, integer, or number)."
+        }
+      }
+    },
+
+    "parseFind": {
+      "type": "object",
+      "description": "Locate a single node by predicate, optionally read a property and transform.",
+      "required": ["find"],
+      "properties": {
+        "find": { "$ref": "#/$defs/nodePredicate" },
+        "from": {
+          "type": "string",
+          "description": "Start search from a bound node ($name). Omit to start from tree root.",
+          "pattern": "^\\$"
+        },
+        "read": { "$ref": "#/$defs/readProperty" },
+        "navigate": { "$ref": "#/$defs/navigateSpec" },
+        "transform": { "$ref": "#/$defs/transformSpec" },
+        "fallback": {
+          "description": "Default value if the expression returns null."
+        },
+        "rejectIf": {
+          "$ref": "#/$defs/nodePredicate",
+          "description": "Null out result if the found node matches this predicate."
+        }
+      }
+    },
+
+    "parseFindAll": {
+      "type": "object",
+      "description": "Locate all matching nodes (capped at 50). Returns array of read values.",
+      "required": ["findAll"],
+      "properties": {
+        "findAll": { "$ref": "#/$defs/nodePredicate" },
+        "from": {
+          "type": "string",
+          "pattern": "^\\$"
+        },
+        "read": { "$ref": "#/$defs/readProperty" }
+      }
+    },
+
+    "parseTextAfterLabel": {
+      "type": "object",
+      "description": "Extract text from the sibling after a label node. Shorthand for find-by-text + sibling(offset) + read.",
+      "required": ["textAfterLabel"],
+      "properties": {
+        "textAfterLabel": {
+          "type": "string",
+          "description": "Label text to find (case-insensitive)."
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^\\$"
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Sibling offset from the label node. Default: 1.",
+          "default": 1
+        },
+        "transform": { "$ref": "#/$defs/transformSpec" }
+      }
+    },
+
+    "parsePresence": {
+      "type": "object",
+      "description": "Boolean: does a predicate match? Returns true/false.",
+      "required": ["presence"],
+      "properties": {
+        "presence": {
+          "$ref": "#/$defs/treePredicate",
+          "description": "Tree predicate to test. Result is boolean."
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^\\$"
+        }
+      }
+    },
+
+    "parseConditionalEnum": {
+      "type": "object",
+      "description": "If/then/else chain returning a string value.",
+      "required": ["conditionalEnum"],
+      "properties": {
+        "conditionalEnum": {
+          "type": "array",
+          "description": "Array of {if, then} cases with optional {else} fallback.",
+          "items": { "$ref": "#/$defs/conditionalEnumCase" },
+          "minItems": 1
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^\\$"
+        }
+      }
+    },
+
+    "conditionalEnumCase": {
+      "description": "A single case in a conditionalEnum: either {if, then} or {else}.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["if", "then"],
+          "properties": {
+            "if": { "$ref": "#/$defs/treePredicate" },
+            "then": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["else"],
+          "properties": {
+            "else": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "parseEach": {
+      "type": "object",
+      "description": "Iterate over all matching nodes, extract per-item fields. Returns array of objects.",
+      "required": ["each", "extract"],
+      "properties": {
+        "each": {
+          "$ref": "#/$defs/nodePredicate",
+          "description": "Predicate to find iteration target nodes."
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^\\$"
+        },
+        "scope": {
+          "type": "string",
+          "description": "Walk up to ancestor before extracting. Format: 'ancestor(N)'.",
+          "pattern": "^ancestor\\(\\d+\\)$"
+        },
+        "exclude": {
+          "$ref": "#/$defs/nodePredicate",
+          "description": "Filter out scoped nodes matching this predicate."
+        },
+        "extract": {
+          "type": "object",
+          "description": "Per-item field extraction. Each value is a parse expression scoped to the item node.",
+          "additionalProperties": { "$ref": "#/$defs/parseExpression" }
+        }
+      }
+    },
+
+    "parseJoin": {
+      "type": "object",
+      "description": "Concatenate multiple expressions with a separator.",
+      "required": ["join"],
+      "properties": {
+        "join": {
+          "type": "array",
+          "description": "Parse expressions whose string results are concatenated.",
+          "items": { "$ref": "#/$defs/parseExpression" },
+          "minItems": 1
+        },
+        "separator": {
+          "type": "string",
+          "description": "Separator between joined values. Default: empty string.",
+          "default": ""
+        },
+        "skipNulls": {
+          "type": "boolean",
+          "description": "Skip null values instead of including empty strings. Default: true.",
+          "default": true
+        },
+        "transform": { "$ref": "#/$defs/transformSpec" }
+      }
+    },
+
+    "parseCoalesce": {
+      "type": "object",
+      "description": "Return the first non-null expression result.",
+      "required": ["coalesce"],
+      "properties": {
+        "coalesce": {
+          "type": "array",
+          "description": "Parse expressions tried in order; first non-null wins.",
+          "items": { "$ref": "#/$defs/parseExpression" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "parseSiblingOf": {
+      "type": "object",
+      "description": "Shorthand for find -> sibling(offset) -> read -> transform.",
+      "required": ["siblingOf"],
+      "properties": {
+        "siblingOf": {
+          "$ref": "#/$defs/nodePredicate",
+          "description": "Predicate to find the reference node."
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^\\$"
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Sibling offset from the found node. Default: 1.",
+          "default": 1
+        },
+        "read": { "$ref": "#/$defs/readProperty" },
+        "transform": { "$ref": "#/$defs/transformSpec" }
+      }
+    },
+
+    "parseFromBinding": {
+      "type": "object",
+      "description": "Read a property from a bound node with optional transform.",
+      "required": ["from", "read"],
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Binding name to read from.",
+          "pattern": "^\\$"
+        },
+        "read": { "$ref": "#/$defs/readProperty" },
+        "transform": { "$ref": "#/$defs/transformSpec" }
+      }
+    },
+
+    "readProperty": {
+      "type": "string",
+      "description": "UiNode property to read.",
+      "enum": [
+        "text",
+        "allText",
+        "contentDescription",
+        "stateDescription",
+        "viewIdResourceName",
+        "className"
+      ]
+    },
+
+    "navigateSpec": {
+      "type": "string",
+      "description": "Navigation from a found node. Supported: 'parent', 'ancestor(N)', 'sibling(N)', 'findChild(idSuffix)', 'findDescendant(idSuffix)'.",
+      "pattern": "^(parent|ancestor\\(-?\\d+\\)|sibling\\(-?\\d+\\)|findChild\\([^)]+\\)|findDescendant\\([^)]+\\))$"
+    },
+
+    "transformSpec": {
+      "description": "Value transformation. Can be a plain transform name (string), a parameterized transform (object), or a chain (array).",
+      "oneOf": [
+        { "$ref": "#/$defs/plainTransform" },
+        { "$ref": "#/$defs/parameterizedTransform" },
+        {
+          "type": "array",
+          "description": "Transform chain: apply each transform in sequence.",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/plainTransform" },
+              { "$ref": "#/$defs/parameterizedTransform" }
+            ]
+          },
+          "minItems": 1
+        }
+      ]
+    },
+
+    "plainTransform": {
+      "type": "string",
+      "description": "Named transform from TransformRegistry.",
+      "enum": [
+        "parseCurrency",
+        "parseDistance",
+        "parseItemCount",
+        "parseDeadline",
+        "parseTime",
+        "parseDuration",
+        "parseHrMin",
+        "parseLeadingInt",
+        "parsePercent",
+        "sha256",
+        "trim",
+        "lower",
+        "upper",
+        "toDouble",
+        "toInt",
+        "stripDeadlinePrefix"
+      ]
+    },
+
+    "parameterizedTransform": {
+      "type": "object",
+      "description": "Transform with parameters. Exactly one key (the transform name).",
+      "oneOf": [
+        {
+          "required": ["stripPrefix"],
+          "properties": {
+            "stripPrefix": {
+              "type": "string",
+              "description": "Prefix to remove (case-insensitive)."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["stripSuffix"],
+          "properties": {
+            "stripSuffix": {
+              "type": "string",
+              "description": "Suffix to remove (case-insensitive)."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["stripPrefixes"],
+          "properties": {
+            "stripPrefixes": {
+              "type": "array",
+              "description": "Prefixes to try; first match is removed.",
+              "items": { "type": "string" },
+              "minItems": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["extractBefore"],
+          "properties": {
+            "extractBefore": {
+              "type": "string",
+              "description": "Separator; returns text before it."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["extractAfter"],
+          "properties": {
+            "extractAfter": {
+              "type": "string",
+              "description": "Separator; returns text after it."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["replace"],
+          "properties": {
+            "replace": {
+              "type": "object",
+              "required": ["pattern"],
+              "properties": {
+                "pattern": {
+                  "type": "string",
+                  "description": "Substring to find (case-insensitive)."
+                },
+                "replacement": {
+                  "type": "string",
+                  "description": "Replacement text. Default: empty string.",
+                  "default": ""
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["split"],
+          "properties": {
+            "split": {
+              "type": "object",
+              "required": ["separator", "index"],
+              "properties": {
+                "separator": {
+                  "type": "string",
+                  "description": "Separator to split on."
+                },
+                "index": {
+                  "type": "integer",
+                  "description": "Zero-based index of the segment to return.",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["regex"],
+          "properties": {
+            "regex": {
+              "type": "object",
+              "required": ["pattern"],
+              "properties": {
+                "pattern": {
+                  "type": "string",
+                  "description": "Regex pattern (case-insensitive). Max 200 chars.",
+                  "maxLength": 200
+                },
+                "group": {
+                  "type": "integer",
+                  "description": "Capture group index. Default: 0 (full match).",
+                  "minimum": 0,
+                  "default": 0
+                },
+                "then": {
+                  "$ref": "#/$defs/transformSpec",
+                  "description": "Transform to apply to the captured value."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "validateEntry": {
+      "type": "object",
+      "description": "A validation assertion on parsed fields.",
+      "required": ["assert"],
+      "properties": {
+        "assert": {
+          "type": "string",
+          "description": "Assertion name.",
+          "enum": [
+            "sumApproxEquals",
+            "fieldsLe",
+            "fieldsGe",
+            "fieldNotNull",
+            "fieldEquals"
+          ]
+        },
+        "onFail": {
+          "type": "string",
+          "description": "Behavior on assertion failure. 'skip' tries next branch; 'dropParsed' matches but discards parsed fields.",
+          "enum": ["skip", "dropParsed"],
+          "default": "skip"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Field names to sum (sumApproxEquals).",
+          "items": { "type": "string" }
+        },
+        "target": {
+          "type": "string",
+          "description": "Target field name that the sum must approximately equal (sumApproxEquals)."
+        },
+        "field": {
+          "type": "string",
+          "description": "Field name to check (fieldsLe, fieldsGe, fieldNotNull, fieldEquals)."
+        },
+        "le": {
+          "type": "string",
+          "description": "Field name for the upper bound (fieldsLe)."
+        },
+        "ge": {
+          "type": "string",
+          "description": "Field name for the lower bound (fieldsGe)."
+        },
+        "tolerance": {
+          "type": "number",
+          "description": "Allowed variance for approximate comparisons. Default: 0.02.",
+          "default": 0.02
+        },
+        "value": {
+          "description": "Expected value for fieldEquals (string, number, or boolean)."
+        }
+      }
+    },
+
+    "effectEntry": {
+      "type": "object",
+      "description": "A side effect to execute on successful match. Has exactly one verb key plus optional meta keys (onlyIf, dedupeKey, throttleMs).",
+      "properties": {
+        "onlyIf": {
+          "$ref": "#/$defs/gateCondition",
+          "description": "Conditional gate: only fire if parsed field matches condition."
+        },
+        "dedupeKey": {
+          "type": "string",
+          "description": "Stable key for deduplication. Supports {fieldName} template interpolation."
+        },
+        "throttleMs": {
+          "type": "integer",
+          "description": "Minimum milliseconds between firings of the same dedupeKey. Default: 500.",
+          "minimum": 0
+        },
+        "click": {
+          "type": "string",
+          "description": "Click a bound node. Value is '$bindName'. Requires ACCESSIBILITY permission.",
+          "pattern": "^\\$"
+        },
+        "screenshot": {
+          "type": "object",
+          "description": "Capture the current screen. Requires ACCESSIBILITY permission.",
+          "properties": {
+            "prefix": {
+              "type": "string",
+              "description": "Screenshot filename prefix. Supports {fieldName} templates."
+            }
+          },
+          "additionalProperties": false
+        },
+        "bubble": {
+          "type": "object",
+          "description": "Post a message to the bubble HUD.",
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Message text. Supports {fieldName} templates."
+            },
+            "persona": {
+              "type": "string",
+              "description": "Chat persona for the bubble.",
+              "enum": [
+                "dispatcher",
+                "system",
+                "earnings",
+                "inspector",
+                "navigator",
+                "shopper",
+                "good_offer",
+                "bad_offer"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "log": {
+          "type": "object",
+          "description": "Write a structured log entry.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Event type identifier."
+            },
+            "payload": {
+              "type": "string",
+              "description": "Event payload. Supports {fieldName} templates."
+            }
+          },
+          "additionalProperties": false
+        },
+        "evaluate_offer": {
+          "type": "object",
+          "description": "Trigger offer evaluation.",
+          "additionalProperties": false
+        },
+        "speak": {
+          "type": "object",
+          "description": "Speak text via TTS. Requires AUDIO permission.",
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Text to speak. Supports {fieldName} templates."
+            },
+            "platform": {
+              "type": "string",
+              "description": "Platform context for the speech."
+            }
+          },
+          "additionalProperties": false
+        },
+        "session_start": {
+          "type": "object",
+          "description": "Mark session started.",
+          "properties": {
+            "platformName": {
+              "type": "string",
+              "description": "Platform name for the session."
+            }
+          },
+          "additionalProperties": false
+        },
+        "session_end": {
+          "type": "object",
+          "description": "Mark session ended.",
+          "properties": {
+            "platformName": {
+              "type": "string",
+              "description": "Platform name for the session."
+            }
+          },
+          "additionalProperties": false
+        },
+        "odometer_start": {
+          "type": "object",
+          "description": "Start GPS mileage tracking. Requires LOCATION permission.",
+          "additionalProperties": false
+        },
+        "odometer_stop": {
+          "type": "object",
+          "description": "Stop GPS mileage tracking. Requires LOCATION permission.",
+          "additionalProperties": false
+        },
+        "odometer_pause": {
+          "type": "object",
+          "description": "Pause GPS mileage tracking. Requires LOCATION permission.",
+          "additionalProperties": false
+        },
+        "odometer_resume": {
+          "type": "object",
+          "description": "Resume GPS mileage tracking. Requires LOCATION permission.",
+          "additionalProperties": false
+        },
+        "schedule_timeout": {
+          "type": "object",
+          "description": "Schedule a timeout.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Timeout type identifier."
+            },
+            "durationMs": {
+              "type": "string",
+              "description": "Timeout duration in milliseconds (as string)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "cancel_timeout": {
+          "type": "object",
+          "description": "Cancel a scheduled timeout.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Timeout type to cancel."
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+
+    "gateCondition": {
+      "description": "Conditional gate for effects. Evaluated against parsed fields.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["fieldEquals"],
+          "properties": {
+            "fieldEquals": {
+              "type": "object",
+              "required": ["field", "value"],
+              "properties": {
+                "field": { "type": "string" },
+                "value": { "description": "Expected value (string, number, or boolean)." }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["fieldNotEquals"],
+          "properties": {
+            "fieldNotEquals": {
+              "type": "object",
+              "required": ["field", "value"],
+              "properties": {
+                "field": { "type": "string" },
+                "value": { "description": "Value that must NOT match." }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["fieldNotNull"],
+          "properties": {
+            "fieldNotNull": {
+              "type": "object",
+              "required": ["field"],
+              "properties": {
+                "field": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "transitionOverrides": {
+      "type": "object",
+      "description": "Override default effects for state transitions. Keys are transition trigger wire names; values are arrays of effects that REPLACE (not merge with) defaults.",
+      "propertyNames": { "$ref": "#/$defs/transitionTrigger" },
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/effectEntry" }
+      }
+    },
+
+    "transitionTrigger": {
+      "type": "string",
+      "description": "State transition trigger.",
+      "enum": [
+        "mode:online",
+        "mode:paused",
+        "mode:offline",
+        "job:start",
+        "job:completed",
+        "task:start",
+        "task:arrived",
+        "task:completed",
+        "resume:from_pause"
+      ]
+    },
+
+    "nodePredicate": {
+      "description": "Predicate operating on a single UiNode. Object with exactly one key (the predicate type).",
+      "type": "object",
+      "oneOf": [
+        {
+          "required": ["hasIdSuffix"],
+          "properties": { "hasIdSuffix": { "type": "string", "description": "viewIdResourceName ends with (case-insensitive)." } }
+        },
+        {
+          "required": ["hasIdExact"],
+          "properties": { "hasIdExact": { "type": "string", "description": "Exact viewIdResourceName match." } }
+        },
+        {
+          "required": ["hasIdContaining"],
+          "properties": { "hasIdContaining": { "type": "string", "description": "viewIdResourceName contains substring." } }
+        },
+        {
+          "required": ["hasNoId"],
+          "properties": { "hasNoId": { "type": "boolean", "description": "Node has no viewIdResourceName.", "const": true } }
+        },
+        {
+          "required": ["hasText"],
+          "properties": { "hasText": { "type": "string", "description": "Exact text match (case-insensitive)." } }
+        },
+        {
+          "required": ["hasTextCaseSensitive"],
+          "properties": { "hasTextCaseSensitive": { "type": "string", "description": "Exact text match (case-sensitive)." } }
+        },
+        {
+          "required": ["hasTextContaining"],
+          "properties": { "hasTextContaining": { "type": "string", "description": "Text contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["hasTextStartsWith"],
+          "properties": { "hasTextStartsWith": { "type": "string", "description": "Text starts with prefix (case-insensitive)." } }
+        },
+        {
+          "required": ["hasTextMatchesRegex"],
+          "properties": { "hasTextMatchesRegex": { "type": "string", "description": "Text matches regex (case-insensitive, max 200 chars).", "maxLength": 200 } }
+        },
+        {
+          "required": ["hasDesc"],
+          "properties": { "hasDesc": { "type": "string", "description": "Exact contentDescription match (case-insensitive)." } }
+        },
+        {
+          "required": ["hasDescContaining"],
+          "properties": { "hasDescContaining": { "type": "string", "description": "contentDescription contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["hasStateDescription"],
+          "properties": { "hasStateDescription": { "type": "string", "description": "Exact stateDescription match (case-insensitive)." } }
+        },
+        {
+          "required": ["hasStateDescriptionContaining"],
+          "properties": { "hasStateDescriptionContaining": { "type": "string", "description": "stateDescription contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["hasClassName"],
+          "properties": { "hasClassName": { "type": "string", "description": "Exact className match." } }
+        },
+        {
+          "required": ["hasClassNameEndsWith"],
+          "properties": { "hasClassNameEndsWith": { "type": "string", "description": "className ends with suffix (case-insensitive)." } }
+        },
+        {
+          "required": ["isClickable"],
+          "properties": { "isClickable": { "type": "boolean", "const": true } }
+        },
+        {
+          "required": ["isEnabled"],
+          "properties": { "isEnabled": { "type": "boolean", "const": true } }
+        },
+        {
+          "required": ["isChecked"],
+          "properties": { "isChecked": { "type": "boolean", "const": true } }
+        },
+        {
+          "required": ["hasChildren"],
+          "properties": { "hasChildren": { "type": "boolean", "const": true } }
+        },
+        {
+          "required": ["isLeaf"],
+          "properties": { "isLeaf": { "type": "boolean", "const": true } }
+        },
+        {
+          "required": ["all"],
+          "properties": {
+            "all": {
+              "type": "array",
+              "description": "AND: all predicates must match.",
+              "items": { "$ref": "#/$defs/nodePredicate" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["any"],
+          "properties": {
+            "any": {
+              "type": "array",
+              "description": "OR: at least one predicate must match.",
+              "items": { "$ref": "#/$defs/nodePredicate" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["not"],
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/nodePredicate",
+              "description": "Negation: predicate must NOT match."
+            }
+          }
+        }
+      ]
+    },
+
+    "treePredicate": {
+      "description": "Predicate operating on the full UiNode tree.",
+      "type": "object",
+      "oneOf": [
+        {
+          "required": ["exists"],
+          "properties": {
+            "exists": {
+              "$ref": "#/$defs/nodePredicate",
+              "description": "True if any node in the tree matches the node predicate."
+            }
+          }
+        },
+        {
+          "required": ["notExists"],
+          "properties": {
+            "notExists": {
+              "$ref": "#/$defs/nodePredicate",
+              "description": "True if no node in the tree matches the node predicate."
+            }
+          }
+        },
+        {
+          "required": ["allTextContains"],
+          "properties": {
+            "allTextContains": {
+              "type": "string",
+              "description": "True if any node's text in the tree contains this substring (case-insensitive)."
+            }
+          }
+        },
+        {
+          "required": ["allTextContainsAll"],
+          "properties": {
+            "allTextContainsAll": {
+              "type": "array",
+              "description": "True if the tree's concatenated text contains ALL of these substrings.",
+              "items": { "type": "string" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["allTextContainsAny"],
+          "properties": {
+            "allTextContainsAny": {
+              "type": "array",
+              "description": "True if the tree's concatenated text contains ANY of these substrings.",
+              "items": { "type": "string" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["all"],
+          "properties": {
+            "all": {
+              "type": "array",
+              "description": "AND: all tree predicates must match.",
+              "items": { "$ref": "#/$defs/treePredicate" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["any"],
+          "properties": {
+            "any": {
+              "type": "array",
+              "description": "OR: at least one tree predicate must match.",
+              "items": { "$ref": "#/$defs/treePredicate" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["not"],
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/treePredicate",
+              "description": "Negation: tree predicate must NOT match."
+            }
+          }
+        }
+      ]
+    },
+
+    "notificationPredicate": {
+      "description": "Predicate operating on notification data (RawNotificationData).",
+      "type": "object",
+      "oneOf": [
+        {
+          "required": ["titleEquals"],
+          "properties": { "titleEquals": { "type": "string", "description": "Exact title match (case-insensitive)." } }
+        },
+        {
+          "required": ["titleContains"],
+          "properties": { "titleContains": { "type": "string", "description": "Title contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["titleMatchesRegex"],
+          "properties": { "titleMatchesRegex": { "type": "string", "description": "Title matches regex.", "maxLength": 200 } }
+        },
+        {
+          "required": ["textEquals"],
+          "properties": { "textEquals": { "type": "string", "description": "Body text exact match (case-insensitive)." } }
+        },
+        {
+          "required": ["textContains"],
+          "properties": { "textContains": { "type": "string", "description": "Body text contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["textMatchesRegex"],
+          "properties": { "textMatchesRegex": { "type": "string", "description": "Body text matches regex.", "maxLength": 200 } }
+        },
+        {
+          "required": ["bigTextContains"],
+          "properties": { "bigTextContains": { "type": "string", "description": "Expanded text contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["bigTextMatchesRegex"],
+          "properties": { "bigTextMatchesRegex": { "type": "string", "description": "Expanded text matches regex.", "maxLength": 200 } }
+        },
+        {
+          "required": ["tickerTextContains"],
+          "properties": { "tickerTextContains": { "type": "string", "description": "Ticker text contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["tickerTextMatchesRegex"],
+          "properties": { "tickerTextMatchesRegex": { "type": "string", "description": "Ticker text matches regex.", "maxLength": 200 } }
+        },
+        {
+          "required": ["isClearable"],
+          "properties": { "isClearable": { "type": "boolean" } }
+        },
+        {
+          "required": ["isOngoing"],
+          "properties": { "isOngoing": { "type": "boolean" } }
+        },
+        {
+          "required": ["channelIdEquals"],
+          "properties": { "channelIdEquals": { "type": "string", "description": "Exact notification channel ID match." } }
+        },
+        {
+          "required": ["channelIdContains"],
+          "properties": { "channelIdContains": { "type": "string", "description": "Channel ID contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["categoryEquals"],
+          "properties": { "categoryEquals": { "type": "string", "description": "Exact notification category match." } }
+        },
+        {
+          "required": ["hasAction"],
+          "properties": { "hasAction": { "type": "string", "description": "Action button with this label is present (case-insensitive)." } }
+        },
+        {
+          "required": ["anyFieldContains"],
+          "properties": { "anyFieldContains": { "type": "string", "description": "Any notification field contains substring (case-insensitive)." } }
+        },
+        {
+          "required": ["anyFieldContainsAll"],
+          "properties": {
+            "anyFieldContainsAll": {
+              "type": "array",
+              "description": "Concatenated notification text contains ALL substrings.",
+              "items": { "type": "string" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["anyFieldContainsAny"],
+          "properties": {
+            "anyFieldContainsAny": {
+              "type": "array",
+              "description": "Concatenated notification text contains ANY substring.",
+              "items": { "type": "string" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["anyFieldMatchesRegex"],
+          "properties": { "anyFieldMatchesRegex": { "type": "string", "description": "Any field matches regex.", "maxLength": 200 } }
+        },
+        {
+          "required": ["all"],
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/notificationPredicate" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["any"],
+          "properties": {
+            "any": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/notificationPredicate" },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["not"],
+          "properties": {
+            "not": { "$ref": "#/$defs/notificationPredicate" }
+          }
+        }
+      ]
+    },
+
+    "shapeEnum": {
+      "type": "string",
+      "description": "Output shape type determining which ParsedFields subtype is produced.",
+      "enum": [
+        "sensitive",
+        "noise",
+        "none",
+        "idle",
+        "task",
+        "post_task",
+        "session_ended",
+        "paused",
+        "timeline",
+        "ratings",
+        "offer",
+        "click",
+        "notification"
+      ]
+    },
+
+    "flowEnum": {
+      "type": "string",
+      "description": "Driver lifecycle flow state.",
+      "enum": [
+        "idle",
+        "offer:presented",
+        "task:pickup:navigation",
+        "task:pickup:arrived",
+        "task:dropoff:navigation",
+        "task:dropoff:arrived",
+        "post:task",
+        "session:ended"
+      ]
+    },
+
+    "modeEnum": {
+      "type": "string",
+      "description": "Driver availability mode.",
+      "enum": [
+        "offline",
+        "online",
+        "paused"
+      ]
+    }
+  }
+}
