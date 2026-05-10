@@ -1,21 +1,9 @@
 {
   "format_version": 2,
-  "engine_version": "1.0.0",
   "platform_id": "doordash.driver",
-  "min_app_version": "0.230.0",
-  "pipelines": {
-    "accessibility.window": 1,
-    "accessibility.click": 1,
-    "notification": 1
-  },
-  "state_machine": {
-    "api_version_major": 1,
-    "api_version_minor": 0
-  },
   "screens": [
     {
       "id": "doordash.screen.sensitive.known",
-      "platform_id": "doordash.driver",
       "priority": 0,
       "overrideable": false,
       "require": {
@@ -37,9 +25,7 @@
     },
     {
       "id": "doordash.screen.timeline",
-      "platform_id": "doordash.driver",
       "priority": 10,
-      "overrideable": true,
       "require": {
         "allTextContainsAll": [
           "dash ends at",
@@ -156,7 +142,7 @@
                 "navigate": "sibling(1)",
                 "read": "text",
                 "transform": {
-                  "extractBefore": " \u00ef\u00bf\u00bd "
+                  "extractBefore": " ï¿½ "
                 }
               },
               "deadlineMillis": {
@@ -177,7 +163,7 @@
                 "read": "text",
                 "transform": [
                   {
-                    "extractBefore": " \u00ef\u00bf\u00bd "
+                    "extractBefore": " ï¿½ "
                   },
                   "parseDeadline"
                 ]
@@ -199,7 +185,7 @@
                 "navigate": "sibling(1)",
                 "read": "text",
                 "transform": {
-                  "extractAfter": " \u00ef\u00bf\u00bd "
+                  "extractAfter": " ï¿½ "
                 }
               },
               "isCurrent": {
@@ -216,405 +202,404 @@
       "shape": "timeline"
     },
     {
-      "id": "doordash.screen.offer",
-      "platform_id": "doordash.driver",
+      "id": "doordash.screen.offer_popup_confirm_decline",
       "priority": 20,
-      "overrideable": true,
       "state": {
         "flow": "offer:presented",
         "modeHint": "online"
       },
-      "branches": [
-        {
-          "target": "OFFER_POPUP_CONFIRM_DECLINE",
-          "require": {
+      "require": {
+        "exists": {
+          "hasTextContaining": "sure you want to decline"
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.offer_popup",
+      "priority": 20,
+      "state": {
+        "flow": "offer:presented",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
             "exists": {
-              "hasTextContaining": "sure you want to decline"
+              "hasText": "Decline"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasText": "Accept"
+                },
+                {
+                  "hasText": "Add to route"
+                }
+              ]
             }
           }
-        },
+        ]
+      },
+      "reject": [
         {
-          "target": "OFFER_POPUP",
-          "reject": [
-            {
-              "exists": {
-                "hasIdSuffix": "progress_bar"
-              }
-            }
-          ],
-          "require": {
-            "all": [
+          "exists": {
+            "hasIdSuffix": "progress_bar"
+          }
+        }
+      ],
+      "parse": {
+        "fields": {
+          "payAmount": {
+            "coalesce": [
               {
-                "exists": {
-                  "hasText": "Decline"
-                }
-              },
-              {
-                "exists": {
-                  "any": [
+                "find": {
+                  "all": [
                     {
-                      "hasText": "Accept"
+                      "hasIdSuffix": "text_field"
                     },
                     {
-                      "hasText": "Add to route"
+                      "hasTextContaining": "$"
                     }
                   ]
-                }
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
+                  "hasTextContaining": "$"
+                },
+                "read": "text",
+                "transform": "parseCurrency"
               }
             ]
           },
-          "parse": {
-            "fields": {
-              "payAmount": {
-                "coalesce": [
-                  {
-                    "find": {
-                      "all": [
-                        {
-                          "hasIdSuffix": "text_field"
-                        },
-                        {
-                          "hasTextContaining": "$"
-                        }
-                      ]
-                    },
-                    "read": "text",
-                    "transform": "parseCurrency"
-                  },
-                  {
-                    "find": {
-                      "hasTextContaining": "$"
-                    },
-                    "read": "text",
-                    "transform": "parseCurrency"
+          "distance": {
+            "find": {
+              "hasTextMatchesRegex": "\\d[\\d.]*\\s*(mi|ft)"
+            },
+            "read": "text",
+            "transform": "parseDistance"
+          },
+          "deliveryTimeText": {
+            "find": {
+              "hasTextStartsWith": "Deliver by"
+            },
+            "read": "text",
+            "transform": {
+              "stripPrefix": "Deliver by "
+            }
+          },
+          "deliveryTime": {
+            "find": {
+              "hasTextStartsWith": "Deliver by"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          },
+          "orders": {
+            "each": {
+              "all": [
+                {
+                  "hasIdSuffix": "display_name"
+                },
+                {
+                  "not": {
+                    "hasText": "Customer dropoff"
                   }
-                ]
-              },
-              "distance": {
-                "find": {
-                  "hasTextMatchesRegex": "\\d[\\d.]*\\s*(mi|ft)"
                 },
-                "read": "text",
-                "transform": "parseDistance"
-              },
-              "deliveryTimeText": {
-                "find": {
-                  "hasTextStartsWith": "Deliver by"
-                },
-                "read": "text",
-                "transform": {
-                  "stripPrefix": "Deliver by "
+                {
+                  "not": {
+                    "hasText": "Business handoff"
+                  }
                 }
-              },
-              "deliveryTime": {
+              ]
+            },
+            "scope": "ancestor(2)",
+            "extract": {
+              "storeName": {
                 "find": {
-                  "hasTextStartsWith": "Deliver by"
+                  "hasIdSuffix": "display_name"
                 },
-                "read": "text",
-                "transform": "parseDeadline"
+                "read": "text"
               },
-              "orders": {
-                "each": {
-                  "all": [
-                    {
-                      "hasIdSuffix": "display_name"
-                    },
-                    {
-                      "not": {
-                        "hasText": "Customer dropoff"
-                      }
-                    },
-                    {
-                      "not": {
-                        "hasText": "Business handoff"
-                      }
-                    }
-                  ]
-                },
-                "scope": "ancestor(2)",
-                "extract": {
-                  "storeName": {
-                    "find": {
-                      "hasIdSuffix": "display_name"
-                    },
-                    "read": "text"
-                  },
-                  "orderType": {
-                    "conditionalEnum": [
-                      {
-                        "if": {
-                          "exists": {
-                            "all": [
-                              {
-                                "hasIdSuffix": "work_unit_type"
-                              },
-                              {
-                                "hasTextContaining": "Shop for items"
-                              }
-                            ]
-                          }
-                        },
-                        "then": "SHOP_FOR_ITEMS"
-                      },
-                      {
-                        "else": "PICKUP"
-                      }
-                    ]
-                  },
-                  "itemCount": {
-                    "find": {
-                      "hasIdSuffix": "display_name_secondary"
-                    },
-                    "read": "text",
-                    "transform": "parseItemCount"
-                  },
-                  "isRedCard": {
-                    "presence": {
+              "orderType": {
+                "conditionalEnum": [
+                  {
+                    "if": {
                       "exists": {
                         "all": [
                           {
-                            "hasIdSuffix": "tag"
+                            "hasIdSuffix": "work_unit_type"
                           },
                           {
-                            "hasTextContaining": "Red Card"
+                            "hasTextContaining": "Shop for items"
                           }
                         ]
                       }
-                    }
+                    },
+                    "then": "SHOP_FOR_ITEMS"
                   },
-                  "isLargeOrder": {
-                    "presence": {
-                      "exists": {
-                        "hasTextContaining": "Large Order"
+                  {
+                    "else": "PICKUP"
+                  }
+                ]
+              },
+              "itemCount": {
+                "find": {
+                  "hasIdSuffix": "display_name_secondary"
+                },
+                "read": "text",
+                "transform": "parseItemCount"
+              },
+              "isRedCard": {
+                "presence": {
+                  "exists": {
+                    "all": [
+                      {
+                        "hasIdSuffix": "tag"
+                      },
+                      {
+                        "hasTextContaining": "Red Card"
                       }
-                    }
-                  },
-                  "hasAlcohol": {
-                    "presence": {
-                      "exists": {
-                        "hasTextContaining": "alcohol"
-                      }
-                    }
+                    ]
+                  }
+                }
+              },
+              "isLargeOrder": {
+                "presence": {
+                  "exists": {
+                    "hasTextContaining": "Large Order"
+                  }
+                }
+              },
+              "hasAlcohol": {
+                "presence": {
+                  "exists": {
+                    "hasTextContaining": "alcohol"
                   }
                 }
               }
             }
+          }
+        }
+      },
+      "shape": "offer",
+      "effects": [
+        {
+          "screenshot": {
+            "prefix": "Offer - {storeName}"
           },
-          "shape": "offer",
-          "effects": [
-            {
-              "screenshot": { "prefix": "Offer - {storeName}" },
-              "dedupeKey": "offer-ss-{offerHash}",
-              "throttleMs": 60000
-            },
-            {
-              "log": { "type": "OFFER_RECEIVED", "payload": "pay={payAmount} dist={distance}" },
-              "dedupeKey": "offer-log-{offerHash}",
-              "throttleMs": 60000
-            }
-          ]
+          "dedupeKey": "offer-ss-{offerHash}",
+          "throttleMs": 60000
+        },
+        {
+          "log": {
+            "type": "OFFER_RECEIVED",
+            "payload": "pay={payAmount} dist={distance}"
+          },
+          "dedupeKey": "offer-log-{offerHash}",
+          "throttleMs": 60000
         }
       ]
     },
     {
-      "id": "doordash.screen.delivery_summary",
-      "platform_id": "doordash.driver",
+      "id": "doordash.screen.delivery_summary_expanded",
       "priority": 30,
-      "overrideable": true,
       "state": {
         "flow": "post:task",
         "modeHint": "online"
       },
-      "branches": [
-        {
-          "target": "DELIVERY_SUMMARY_EXPANDED",
-          "reject": [
-            {
-              "allTextContains": "pause orders"
-            }
-          ],
-          "require": {
-            "all": [
-              {
-                "allTextContainsAny": [
-                  "this offer",
-                  "delivery complete"
-                ]
-              },
-              {
-                "allTextContainsAll": [
-                  "doordash pay",
-                  "customer tips"
-                ]
-              }
-            ]
-          },
-          "parse": {
-            "fields": {
-              "totalPay": {
-                "find": {
-                  "hasIdSuffix": "final_value"
-                },
-                "read": "text",
-                "transform": "parseCurrency"
-              },
-              "appPay": {
-                "find": {
-                  "hasTextContaining": "DoorDash pay"
-                },
-                "navigate": "sibling(1)",
-                "read": "text",
-                "transform": "parseCurrency"
-              },
-              "customerTips": {
-                "find": {
-                  "hasTextContaining": "Customer tips"
-                },
-                "navigate": "sibling(1)",
-                "read": "text",
-                "transform": "parseCurrency"
-              },
-              "payLineItems": {
-                "each": {
-                  "hasIdSuffix": "pay_line_item_title"
-                },
-                "scope": "ancestor(1)",
-                "extract": {
-                  "type": {
-                    "find": {
-                      "hasIdSuffix": "pay_line_item_title"
-                    },
-                    "read": "text"
-                  },
-                  "amount": {
-                    "find": {
-                      "hasIdSuffix": "pay_line_item_value"
-                    },
-                    "read": "text",
-                    "transform": "parseCurrency"
-                  }
-                }
-              },
-              "isExpanded": {
-                "literal": true
-              },
-              "sessionEarnings": {
-                "find": {
-                  "hasIdSuffix": "earnings_ticker"
-                },
-                "read": "allText",
-                "transform": "parseCurrency"
-              }
-            }
-          },
-          "validate": [
-            {
-              "assert": "sumApproxEquals",
-              "fields": [
-                "appPay",
-                "customerTips"
-              ],
-              "target": "totalPay",
-              "tolerance": 0.02,
-              "onFail": "skip"
-            }
-          ],
-          "shape": "post_task"
-        },
-        {
-          "target": "DELIVERY_SUMMARY_COLLAPSED",
-          "bind": {
-            "expandButton": {
-              "find": {
-                "any": [
-                  {
-                    "hasIdSuffix": "expandable_view"
-                  },
-                  {
-                    "hasIdSuffix": "expandable_layout"
-                  }
-                ]
-              },
-              "optional": true
-            }
-          },
-          "reject": [
-            {
-              "allTextContains": "pause orders"
-            }
-          ],
-          "require": {
+      "require": {
+        "all": [
+          {
             "allTextContainsAny": [
               "this offer",
               "delivery complete"
             ]
           },
-          "parse": {
-            "fields": {
-              "totalPay": {
+          {
+            "allTextContainsAll": [
+              "doordash pay",
+              "customer tips"
+            ]
+          }
+        ]
+      },
+      "reject": [
+        {
+          "allTextContains": "pause orders"
+        }
+      ],
+      "parse": {
+        "fields": {
+          "totalPay": {
+            "find": {
+              "hasIdSuffix": "final_value"
+            },
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "appPay": {
+            "find": {
+              "hasTextContaining": "DoorDash pay"
+            },
+            "navigate": "sibling(1)",
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "customerTips": {
+            "find": {
+              "hasTextContaining": "Customer tips"
+            },
+            "navigate": "sibling(1)",
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "payLineItems": {
+            "each": {
+              "hasIdSuffix": "pay_line_item_title"
+            },
+            "scope": "ancestor(1)",
+            "extract": {
+              "type": {
                 "find": {
-                  "hasIdSuffix": "final_value"
+                  "hasIdSuffix": "pay_line_item_title"
+                },
+                "read": "text"
+              },
+              "amount": {
+                "find": {
+                  "hasIdSuffix": "pay_line_item_value"
                 },
                 "read": "text",
-                "transform": "parseCurrency"
-              },
-              "isExpanded": {
-                "literal": false
-              },
-              "expandButtonId": {
-                "coalesce": [
-                  {
-                    "find": {
-                      "hasIdSuffix": "expandable_view"
-                    },
-                    "read": "viewIdResourceName"
-                  },
-                  {
-                    "find": {
-                      "hasIdSuffix": "expandable_layout"
-                    },
-                    "read": "viewIdResourceName"
-                  }
-                ]
-              },
-              "sessionEarnings": {
-                "find": {
-                  "hasIdSuffix": "earnings_ticker"
-                },
-                "read": "allText",
                 "transform": "parseCurrency"
               }
             }
           },
-          "effects": [
-            {
-              "click": "$expandButton",
-              "onlyIf": {
-                "fieldEquals": {
-                  "field": "isExpanded",
-                  "value": false
-                }
-              },
-              "dedupeKey": "expand_pay_breakdown",
-              "throttleMs": 1000
-            }
+          "isExpanded": {
+            "literal": true
+          },
+          "sessionEarnings": {
+            "find": {
+              "hasIdSuffix": "earnings_ticker"
+            },
+            "read": "allText",
+            "transform": "parseCurrency"
+          }
+        }
+      },
+      "shape": "post_task",
+      "validate": [
+        {
+          "assert": "sumApproxEquals",
+          "fields": [
+            "appPay",
+            "customerTips"
           ],
-          "shape": "post_task"
+          "target": "totalPay",
+          "tolerance": 0.02,
+          "onFail": "skip"
+        }
+      ]
+    },
+    {
+      "id": "doordash.screen.delivery_summary_collapsed",
+      "priority": 30,
+      "state": {
+        "flow": "post:task",
+        "modeHint": "online"
+      },
+      "require": {
+        "allTextContainsAny": [
+          "this offer",
+          "delivery complete"
+        ]
+      },
+      "reject": [
+        {
+          "allTextContains": "pause orders"
+        }
+      ],
+      "parse": {
+        "fields": {
+          "totalPay": {
+            "find": {
+              "hasIdSuffix": "final_value"
+            },
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "isExpanded": {
+            "literal": false
+          },
+          "expandButtonId": {
+            "coalesce": [
+              {
+                "find": {
+                  "hasIdSuffix": "expandable_view"
+                },
+                "read": "viewIdResourceName"
+              },
+              {
+                "find": {
+                  "hasIdSuffix": "expandable_layout"
+                },
+                "read": "viewIdResourceName"
+              }
+            ]
+          },
+          "sessionEarnings": {
+            "find": {
+              "hasIdSuffix": "earnings_ticker"
+            },
+            "read": "allText",
+            "transform": "parseCurrency"
+          }
+        }
+      },
+      "shape": "post_task",
+      "bind": {
+        "expandButton": {
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "expandable_view"
+              },
+              {
+                "hasIdSuffix": "expandable_layout"
+              }
+            ]
+          },
+          "optional": true
+        }
+      },
+      "effects": [
+        {
+          "click": "$expandButton",
+          "onlyIf": {
+            "fieldEquals": {
+              "field": "isExpanded",
+              "value": false
+            }
+          },
+          "dedupeKey": "expand_pay_breakdown",
+          "throttleMs": 1000
         }
       ]
     },
     {
       "id": "doordash.screen.app_startup",
-      "platform_id": "doordash.driver",
       "priority": 40,
-      "overrideable": true,
       "require": {
         "all": [
           {
             "exists": {
               "all": [
                 {
-                  "hasTextCaseSensitive": "Starting\u00ef\u00bf\u00bd"
+                  "hasTextCaseSensitive": "Startingï¿½"
                 },
                 {
                   "hasClassNameEndsWith": "TextView"
@@ -639,9 +624,7 @@
     },
     {
       "id": "doordash.screen.dash_paused",
-      "platform_id": "doordash.driver",
       "priority": 50,
-      "overrideable": true,
       "state": {
         "modeHint": "paused"
       },
@@ -694,9 +677,7 @@
     },
     {
       "id": "doordash.screen.pickup_navigation",
-      "platform_id": "doordash.driver",
       "priority": 60,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:navigation",
         "modeHint": "online"
@@ -785,9 +766,7 @@
     },
     {
       "id": "doordash.screen.dropoff_navigation",
-      "platform_id": "doordash.driver",
       "priority": 61,
-      "overrideable": true,
       "state": {
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
@@ -796,17 +775,24 @@
         {
           "exists": {
             "any": [
-              { "hasText": "Continue" },
-              { "hasText": "Complete Delivery" },
-              { "hasText": "Mark as delivered" },
-              { "hasIdSuffix": "complete_delivery_steps_button" }
+              {
+                "hasText": "Continue"
+              },
+              {
+                "hasText": "Complete Delivery"
+              },
+              {
+                "hasText": "Mark as delivered"
+              },
+              {
+                "hasIdSuffix": "complete_delivery_steps_button"
+              }
             ]
           }
         }
       ],
       "branches": [
         {
-          "target": "NAVIGATION_VIEW_TO_DROP_OFF",
           "require": {
             "exists": {
               "all": [
@@ -818,65 +804,9 @@
                 }
               ]
             }
-          },
-          "parse": {
-            "fields": {
-              "phase": "DROPOFF",
-              "subFlow": "NAVIGATION",
-              "customerNameHash": {
-                "find": {
-                  "hasIdSuffix": "bottom_sheet_task_title"
-                },
-                "read": "text",
-                "transform": [
-                  {
-                    "stripPrefixes": [
-                      "Deliver to ",
-                      "Heading to "
-                    ]
-                  },
-                  "trim",
-                  "sha256"
-                ]
-              },
-              "customerAddressHash": {
-                "join": [
-                  {
-                    "find": {
-                      "hasIdSuffix": "bottom_sheet_address_line_1"
-                    },
-                    "read": "text"
-                  },
-                  {
-                    "find": {
-                      "hasIdSuffix": "bottom_sheet_address_line_2"
-                    },
-                    "read": "text"
-                  }
-                ],
-                "separator": ", ",
-                "transform": "sha256"
-              },
-              "deadlineText": {
-                "find": {
-                  "hasIdSuffix": "bottom_sheet_task_arrive_by"
-                },
-                "read": "text",
-                "transform": "stripDeadlinePrefix"
-              },
-              "deadlineMillis": {
-                "find": {
-                  "hasIdSuffix": "bottom_sheet_task_arrive_by"
-                },
-                "read": "text",
-                "transform": "parseDeadline"
-              }
-            }
-          },
-          "shape": "task"
+          }
         },
         {
-          "target": "NAVIGATION_VIEW_TO_DROP_OFF",
           "require": {
             "all": [
               {
@@ -904,70 +834,68 @@
                 }
               }
             ]
-          },
-          "parse": {
-            "fields": {
-              "phase": "DROPOFF",
-              "subFlow": "NAVIGATION",
-              "customerNameHash": {
-                "find": {
-                  "hasIdSuffix": "bottom_sheet_task_title"
-                },
-                "read": "text",
-                "transform": [
-                  {
-                    "stripPrefixes": [
-                      "Deliver to ",
-                      "Heading to "
-                    ]
-                  },
-                  "trim",
-                  "sha256"
+          }
+        }
+      ],
+      "shape": "task",
+      "parse": {
+        "fields": {
+          "phase": "DROPOFF",
+          "subFlow": "NAVIGATION",
+          "customerNameHash": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_title"
+            },
+            "read": "text",
+            "transform": [
+              {
+                "stripPrefixes": [
+                  "Deliver to ",
+                  "Heading to "
                 ]
               },
-              "customerAddressHash": {
-                "join": [
-                  {
-                    "find": {
-                      "hasIdSuffix": "bottom_sheet_address_line_1"
-                    },
-                    "read": "text"
-                  },
-                  {
-                    "find": {
-                      "hasIdSuffix": "bottom_sheet_address_line_2"
-                    },
-                    "read": "text"
-                  }
-                ],
-                "separator": ", ",
-                "transform": "sha256"
-              },
-              "deadlineText": {
-                "find": {
-                  "hasIdSuffix": "bottom_sheet_task_arrive_by"
-                },
-                "read": "text",
-                "transform": "stripDeadlinePrefix"
-              },
-              "deadlineMillis": {
-                "find": {
-                  "hasIdSuffix": "bottom_sheet_task_arrive_by"
-                },
-                "read": "text",
-                "transform": "parseDeadline"
-              }
-            }
+              "trim",
+              "sha256"
+            ]
           },
-          "shape": "task"
+          "customerAddressHash": {
+            "join": [
+              {
+                "find": {
+                  "hasIdSuffix": "bottom_sheet_address_line_1"
+                },
+                "read": "text"
+              },
+              {
+                "find": {
+                  "hasIdSuffix": "bottom_sheet_address_line_2"
+                },
+                "read": "text"
+              }
+            ],
+            "separator": ", ",
+            "transform": "sha256"
+          },
+          "deadlineText": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_arrive_by"
+            },
+            "read": "text",
+            "transform": "stripDeadlinePrefix"
+          },
+          "deadlineMillis": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_arrive_by"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          }
         }
-      ]
+      }
     },
     {
       "id": "doordash.screen.pickup_arrival",
-      "platform_id": "doordash.driver",
       "priority": 70,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -1074,9 +1002,7 @@
     },
     {
       "id": "doordash.screen.pickup_pre_arrival",
-      "platform_id": "doordash.driver",
       "priority": 71,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:navigation",
         "modeHint": "online"
@@ -1177,9 +1103,7 @@
     },
     {
       "id": "doordash.screen.pickup_shopping",
-      "platform_id": "doordash.driver",
       "priority": 72,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -1231,9 +1155,7 @@
     },
     {
       "id": "doordash.screen.dropoff_pre_arrival",
-      "platform_id": "doordash.driver",
       "priority": 73,
-      "overrideable": true,
       "state": {
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
@@ -1369,9 +1291,7 @@
     },
     {
       "id": "doordash.screen.dropoff_pre_arrival_completion",
-      "platform_id": "doordash.driver",
       "priority": 74,
-      "overrideable": true,
       "state": {
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
@@ -1495,9 +1415,7 @@
     },
     {
       "id": "doordash.screen.schedule",
-      "platform_id": "doordash.driver",
       "priority": 80,
-      "overrideable": true,
       "require": {
         "all": [
           {
@@ -1531,9 +1449,7 @@
     },
     {
       "id": "doordash.screen.ratings",
-      "platform_id": "doordash.driver",
       "priority": 90,
-      "overrideable": true,
       "require": {
         "allTextContainsAll": [
           "ratings",
@@ -1545,7 +1461,7 @@
       "parse": {
         "fields": {
           "acceptanceRate": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1555,12 +1471,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "parsePercent"
           },
           "completionRate": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1570,12 +1484,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "parsePercent"
           },
           "onTimeRate": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1585,12 +1497,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "parsePercent"
           },
           "customerRating": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1600,12 +1510,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "toDouble"
           },
           "deliveriesLast30Days": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1615,12 +1523,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "toInt"
           },
           "lifetimeDeliveries": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1630,12 +1536,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "toInt"
           },
           "originalItemsFoundRate": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1645,12 +1549,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "parsePercent"
           },
           "totalItemsFoundRate": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1660,12 +1562,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "parsePercent"
           },
           "substitutionIssuesRate": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1675,12 +1575,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "parsePercent"
           },
           "itemsWithQualityIssuesRate": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1690,12 +1588,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "parsePercent"
           },
           "itemsWrongOrMissingRate": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1705,12 +1601,10 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "parsePercent"
           },
           "lifetimeShoppingOrders": {
-            "find": {
+            "siblingOf": {
               "all": [
                 {
                   "hasIdSuffix": "textView_title"
@@ -1720,8 +1614,6 @@
                 }
               ]
             },
-            "navigate": "sibling(1)",
-            "read": "text",
             "transform": "toInt"
           }
         }
@@ -1730,9 +1622,7 @@
     },
     {
       "id": "doordash.screen.safety",
-      "platform_id": "doordash.driver",
       "priority": 91,
-      "overrideable": true,
       "require": {
         "allTextContainsAll": [
           "safedash",
@@ -1744,9 +1634,7 @@
     },
     {
       "id": "doordash.screen.chat",
-      "platform_id": "doordash.driver",
       "priority": 92,
-      "overrideable": true,
       "reject": [
         {
           "allTextContains": "folder"
@@ -1761,9 +1649,7 @@
     },
     {
       "id": "doordash.screen.earnings",
-      "platform_id": "doordash.driver",
       "priority": 93,
-      "overrideable": true,
       "require": {
         "all": [
           {
@@ -1784,9 +1670,7 @@
     },
     {
       "id": "doordash.screen.help",
-      "platform_id": "doordash.driver",
       "priority": 94,
-      "overrideable": true,
       "require": {
         "allTextContainsAll": [
           "doordash dasher",
@@ -1799,9 +1683,7 @@
     },
     {
       "id": "doordash.screen.navigation_generic",
-      "platform_id": "doordash.driver",
       "priority": 95,
-      "overrideable": true,
       "reject": [
         {
           "allTextContains": "accept"
@@ -1829,9 +1711,7 @@
     },
     {
       "id": "doordash.screen.notifications_view",
-      "platform_id": "doordash.driver",
       "priority": 96,
-      "overrideable": true,
       "reject": [
         {
           "allTextContains": "battery"
@@ -1843,9 +1723,7 @@
     },
     {
       "id": "doordash.screen.promos",
-      "platform_id": "doordash.driver",
       "priority": 97,
-      "overrideable": true,
       "require": {
         "allTextContainsAll": [
           "navigate up",
@@ -1855,9 +1733,7 @@
     },
     {
       "id": "doordash.screen.pickup_picked_up",
-      "platform_id": "doordash.driver",
       "priority": 98,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -1865,15 +1741,13 @@
       "require": {
         "allTextContainsAll": [
           "confirm pickup",
-          "loading\u00ef\u00bf\u00bd"
+          "loadingï¿½"
         ]
       }
     },
     {
       "id": "doordash.screen.pickup_post_arrival_multi",
-      "platform_id": "doordash.driver",
       "priority": 99,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -1898,9 +1772,7 @@
     },
     {
       "id": "doordash.screen.pickup_pre_arrival_multi",
-      "platform_id": "doordash.driver",
       "priority": 100,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:navigation",
         "modeHint": "online"
@@ -1917,9 +1789,7 @@
     },
     {
       "id": "doordash.screen.pickup_verify",
-      "platform_id": "doordash.driver",
       "priority": 101,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -1940,9 +1810,7 @@
     },
     {
       "id": "doordash.screen.on_dash_map",
-      "platform_id": "doordash.driver",
       "priority": 110,
-      "overrideable": true,
       "state": {
         "flow": "idle",
         "modeHint": "online"
@@ -1974,9 +1842,7 @@
     },
     {
       "id": "doordash.screen.dash_along_the_way",
-      "platform_id": "doordash.driver",
       "priority": 111,
-      "overrideable": true,
       "state": {
         "flow": "idle",
         "modeHint": "online"
@@ -2036,9 +1902,7 @@
     },
     {
       "id": "doordash.screen.waiting_for_offer",
-      "platform_id": "doordash.driver",
       "priority": 120,
-      "overrideable": true,
       "state": {
         "flow": "idle",
         "modeHint": "online"
@@ -2140,9 +2004,7 @@
     },
     {
       "id": "doordash.screen.set_dash_end_time",
-      "platform_id": "doordash.driver",
       "priority": 130,
-      "overrideable": true,
       "state": {
         "flow": "idle"
       },
@@ -2183,9 +2045,7 @@
     },
     {
       "id": "doordash.screen.idle_map",
-      "platform_id": "doordash.driver",
       "priority": 140,
-      "overrideable": true,
       "state": {
         "flow": "idle",
         "modeHint": "offline"
@@ -2258,9 +2118,7 @@
     },
     {
       "id": "doordash.screen.dash_summary",
-      "platform_id": "doordash.driver",
       "priority": 150,
-      "overrideable": true,
       "state": {
         "flow": "session:ended",
         "modeHint": "offline"
@@ -2396,7 +2254,6 @@
     },
     {
       "id": "doordash.screen.sensitive.catchall",
-      "platform_id": "doordash.driver",
       "priority": 999,
       "overrideable": false,
       "require": {
@@ -2417,10 +2274,8 @@
   "clicks": [
     {
       "id": "doordash.click.accept_offer",
-      "platform_id": "doordash.driver",
       "priority": 10,
-      "overrideable": true,
-      "screenIs": "OFFER_POPUP",
+      "screenIs": "offer_popup",
       "intent": "accept_offer",
       "if": {
         "hasIdSuffix": "accept_button"
@@ -2428,10 +2283,8 @@
     },
     {
       "id": "doordash.click.decline_offer",
-      "platform_id": "doordash.driver",
       "priority": 20,
-      "overrideable": true,
-      "screenIs": "OFFER_POPUP_CONFIRM_DECLINE",
+      "screenIs": "offer_popup_confirm_decline",
       "intent": "decline_offer",
       "if": {
         "hasText": "Decline offer"
@@ -2439,9 +2292,7 @@
     },
     {
       "id": "doordash.click.arrived_at_store",
-      "platform_id": "doordash.driver",
       "priority": 30,
-      "overrideable": true,
       "screenIs": "pickup_arrival",
       "intent": "arrived_at_store",
       "if": {
@@ -2464,10 +2315,8 @@
     },
     {
       "id": "doordash.click.initial_decline",
-      "platform_id": "doordash.driver",
       "priority": 15,
-      "overrideable": true,
-      "screenIs": "OFFER_POPUP",
+      "screenIs": "offer_popup",
       "intent": "initial_decline",
       "if": {
         "hasIdSuffix": "secondary_action_button_dash_plus"
@@ -2475,9 +2324,7 @@
     },
     {
       "id": "doordash.click.resume_dash",
-      "platform_id": "doordash.driver",
       "priority": 40,
-      "overrideable": true,
       "screenIs": "dash_paused",
       "intent": "resume_dash",
       "if": {
@@ -2486,37 +2333,41 @@
     },
     {
       "id": "doordash.click.start_navigation",
-      "platform_id": "doordash.driver",
       "priority": 50,
-      "overrideable": true,
       "intent": "start_navigation",
       "if": {
         "any": [
-          { "hasIdSuffix": "directions_button" },
-          { "hasIdSuffix": "navigate_button" }
+          {
+            "hasIdSuffix": "directions_button"
+          },
+          {
+            "hasIdSuffix": "navigate_button"
+          }
         ]
       }
     },
     {
       "id": "doordash.click.complete_delivery",
-      "platform_id": "doordash.driver",
       "priority": 60,
-      "overrideable": true,
       "screenIs": "dropoff_pre_arrival_completion",
       "intent": "complete_delivery",
       "if": {
         "any": [
-          { "hasIdSuffix": "complete_delivery_steps_button" },
-          { "hasText": "Complete Delivery" },
-          { "hasText": "Mark as delivered" }
+          {
+            "hasIdSuffix": "complete_delivery_steps_button"
+          },
+          {
+            "hasText": "Complete Delivery"
+          },
+          {
+            "hasText": "Mark as delivered"
+          }
         ]
       }
     },
     {
       "id": "doordash.click.submit_photo",
-      "platform_id": "doordash.driver",
       "priority": 70,
-      "overrideable": true,
       "screenIs": "dropoff_pre_arrival",
       "intent": "submit_photo",
       "if": {
@@ -2525,9 +2376,7 @@
     },
     {
       "id": "doordash.click.checkout",
-      "platform_id": "doordash.driver",
       "priority": 80,
-      "overrideable": true,
       "screenIs": "pickup_shopping",
       "intent": "checkout",
       "if": {
@@ -2538,9 +2387,7 @@
   "notifications": [
     {
       "id": "doordash.notification.additional_tip",
-      "platform_id": "doordash.driver",
       "priority": 10,
-      "overrideable": true,
       "if": {
         "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
       },
@@ -2561,18 +2408,14 @@
     },
     {
       "id": "doordash.notification.new_order",
-      "platform_id": "doordash.driver",
       "priority": 20,
-      "overrideable": true,
       "if": {
         "titleContains": "new order"
       }
     },
     {
       "id": "doordash.notification.scheduled_dash_expired",
-      "platform_id": "doordash.driver",
       "priority": 30,
-      "overrideable": true,
       "if": {
         "all": [
           {
@@ -2586,9 +2429,7 @@
     },
     {
       "id": "doordash.notification.demand_nudge",
-      "platform_id": "doordash.driver",
       "priority": 50,
-      "overrideable": true,
       "if": {
         "titleContains": "Dash now"
       },
@@ -2597,9 +2438,7 @@
     },
     {
       "id": "doordash.notification.peak_pay_promo",
-      "platform_id": "doordash.driver",
       "priority": 60,
-      "overrideable": true,
       "if": {
         "titleContains": "Incentives Update"
       },

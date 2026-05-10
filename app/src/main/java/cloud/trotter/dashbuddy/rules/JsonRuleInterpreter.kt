@@ -3,9 +3,6 @@ package cloud.trotter.dashbuddy.rules
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -40,13 +37,6 @@ class JsonRuleInterpreter @Inject constructor(
     var loadedFormatVersion: Int? = null
         private set
 
-    /** Per-platform pipeline configs parsed from ruleset headers. Key = platform wire name. */
-    private val _pipelineConfigs = mutableMapOf<String, Map<String, PipelineConfig>>()
-
-    /** Get pipeline config for a specific platform and pipeline. */
-    fun getPipelineConfig(platformWire: String, pipelineId: String): PipelineConfig? =
-        _pipelineConfigs[platformWire]?.get(pipelineId)
-
     /** Load all bundled rule files from `assets/rules/`. */
     fun loadDefaults() {
         try {
@@ -62,7 +52,6 @@ class JsonRuleInterpreter @Inject constructor(
             val allScreens = mutableListOf<CompiledScreenRule>()
             val allClicks = mutableListOf<CompiledClickRule>()
             val allNotifications = mutableListOf<CompiledNotificationRule>()
-            _pipelineConfigs.clear()
 
             for (fileName in files) {
                 val path = "$RULES_DIR/$fileName"
@@ -71,9 +60,6 @@ class JsonRuleInterpreter @Inject constructor(
                 allScreens += result.screens
                 allClicks += result.clicks
                 allNotifications += result.notifications
-                if (result.platformWire != null && result.pipelineConfigs.isNotEmpty()) {
-                    _pipelineConfigs[result.platformWire] = result.pipelineConfigs
-                }
             }
 
             screenRuleset = ScreenRuleset(allScreens)
@@ -124,17 +110,12 @@ class JsonRuleInterpreter @Inject constructor(
 
             loadedFormatVersion = root["format_version"]?.jsonPrimitive?.int
 
-            // Extract platform wire and pipeline configs
-            val platformId = root["platform_id"]?.jsonPrimitive?.content
-            val platformWire = platformId?.substringBefore('.')
-            val pipelineConfigs = parsePipelineConfigs(root["pipelines"]?.jsonObject)
-
             Timber.i(
                 "JsonRuleInterpreter: compiled '$source' " +
                     "(screens=${screens.size}, clicks=${clicks.size}, notifications=${notifications.size})"
             )
 
-            CompiledRuleBundle(screens, clicks, notifications, platformWire, pipelineConfigs)
+            CompiledRuleBundle(screens, clicks, notifications)
         } catch (e: RuleCompileException) {
             Timber.e(e, "JsonRuleInterpreter: compile error in '$source'")
             null
@@ -160,32 +141,7 @@ class JsonRuleInterpreter @Inject constructor(
         val screens: List<CompiledScreenRule>,
         val clicks: List<CompiledClickRule>,
         val notifications: List<CompiledNotificationRule>,
-        val platformWire: String? = null,
-        val pipelineConfigs: Map<String, PipelineConfig> = emptyMap(),
     )
-
-    /** Per-pipeline configuration declared in a ruleset header. */
-    data class PipelineConfig(
-        val version: Int,
-        val allowOngoing: Boolean = false,
-    )
-
-    private fun parsePipelineConfigs(pipelinesObj: JsonObject?): Map<String, PipelineConfig> {
-        if (pipelinesObj == null) return emptyMap()
-        val configs = mutableMapOf<String, PipelineConfig>()
-        for ((pipelineId, elem) in pipelinesObj) {
-            val config = when (elem) {
-                is JsonPrimitive -> PipelineConfig(version = elem.int)
-                is JsonObject -> PipelineConfig(
-                    version = elem["version"]?.jsonPrimitive?.int ?: 0,
-                    allowOngoing = elem["allowOngoing"]?.jsonPrimitive?.booleanOrNull ?: false,
-                )
-                else -> PipelineConfig(version = 0)
-            }
-            configs[pipelineId] = config
-        }
-        return configs
-    }
 
     companion object {
         private const val RULES_DIR = "rules"
