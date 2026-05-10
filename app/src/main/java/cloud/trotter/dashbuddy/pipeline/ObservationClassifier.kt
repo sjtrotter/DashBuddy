@@ -3,7 +3,8 @@ package cloud.trotter.dashbuddy.pipeline
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
-import cloud.trotter.dashbuddy.domain.pipeline.RequestedAction
+import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
+import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -66,8 +67,8 @@ class ObservationClassifier @Inject constructor(
         }
 
         Timber.i("SCREEN: ${result.target}")
-        if (result.actions.isNotEmpty()) {
-            Timber.d("SCREEN: ${result.target} has ${result.actions.size} action(s)")
+        if (result.effects.isNotEmpty()) {
+            Timber.d("SCREEN: ${result.target} has ${result.effects.size} effect(s)")
         }
 
         val obs = makeScreenObservation(
@@ -76,7 +77,8 @@ class ObservationClassifier @Inject constructor(
             modeHint = result.modeHint,
             parsed = result.parsed,
             ruleId = result.ruleId,
-            actions = result.actions,
+            effects = result.effects,
+            transitionOverrides = result.transitionOverrides,
         )
 
         // Cache last non-sensitive screen for click enrichment
@@ -94,7 +96,8 @@ class ObservationClassifier @Inject constructor(
         modeHint: Mode?,
         parsed: ParsedFields,
         ruleId: String?,
-        actions: List<RequestedAction> = emptyList(),
+        effects: List<RequestedEffect> = emptyList(),
+        transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
     ) = Observation.Screen(
         timestamp = System.currentTimeMillis(),
         captureId = null,
@@ -104,7 +107,8 @@ class ObservationClassifier @Inject constructor(
         modeHint = modeHint,
         parsed = parsed,
         target = screenName,
-        actions = actions,
+        effects = effects,
+        transitionOverrides = transitionOverrides,
     )
 
     // ── Click ───────────────────────────────────────────────────────────

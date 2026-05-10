@@ -34,8 +34,10 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         val parsed: ParsedFields
         /** Platform-specific screen/event identity for debugging and bridging. */
         val target: String?
-        /** Rule-originated UI actions to execute (ADR-0006). */
-        val actions: List<RequestedAction>
+        /** Rule-originated side effects to execute. */
+        val effects: List<RequestedEffect>
+        /** Per-trigger overrides that replace built-in transition defaults. */
+        val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>>
     }
 
     /** A screen classification from the accessibility window pipeline. */
@@ -48,7 +50,8 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val modeHint: Mode?,
         override val parsed: ParsedFields,
         override val target: String? = null,
-        override val actions: List<RequestedAction> = emptyList(),
+        override val effects: List<RequestedEffect> = emptyList(),
+        override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
     ) : FlowObservation
 
     /** A click/tap event classified by the click pipeline. */
@@ -61,7 +64,8 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val modeHint: Mode?,
         override val parsed: ParsedFields,
         override val target: String? = null,
-        override val actions: List<RequestedAction> = emptyList(),
+        override val effects: List<RequestedEffect> = emptyList(),
+        override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
         /** The last classified screen target when this click occurred. */
         val screenTarget: String? = null,
     ) : FlowObservation
@@ -76,7 +80,8 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val modeHint: Mode?,
         override val parsed: ParsedFields,
         override val target: String? = null,
-        override val actions: List<RequestedAction> = emptyList(),
+        override val effects: List<RequestedEffect> = emptyList(),
+        override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
     ) : FlowObservation
 
     /** A timeout fired by the state machine's internal timer system. */

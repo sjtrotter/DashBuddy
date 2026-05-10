@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
+import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
@@ -47,7 +48,7 @@ class EffectMap @Inject constructor() {
     private val gson = Gson()
 
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
-        addAll(diffActions(obs))
+        addAll(diffRuleEffects(obs))
         addAll(diffFlowRegion(prev.regions.flow, next.regions.flow, obs))
         val allPlatforms = (prev.regions.platforms.keys + next.regions.platforms.keys).distinct()
         for (p in allPlatforms) {
@@ -78,16 +79,11 @@ class EffectMap @Inject constructor() {
         val nextOffer = next.pendingOffer
 
         // Offer presented
+        // Screenshot + log now handled by rule-declared effects on offer screen rules
+        // (deduped via dedupeKey + throttleMs). Evaluate + speak remain here
+        // because they need rich ParsedOffer objects, not string args.
         if (prevOffer == null && nextOffer != null) {
             val offer = nextOffer.offerFields
-            val merchantName = offer.parsedOffer.orders.joinToString(", ") { it.storeName }
-
-            // Log
-            add(logEffect(null, AppEventType.OFFER_RECEIVED, offer.parsedOffer))
-
-            // Screenshot
-            val safeMerchant = merchantName.replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
-            add(AppEffect.CaptureScreenshot("Offer - $safeMerchant"))
 
             // Evaluate
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
@@ -98,6 +94,8 @@ class EffectMap @Inject constructor() {
         }
 
         // Offer replaced (different hash)
+        // Screenshot + log for new offer handled by rule-declared effects (deduped
+        // per offerHash). Resolution log for old offer stays here.
         if (prevOffer != null && nextOffer != null &&
             prevOffer.offerHash != nextOffer.offerHash
         ) {
@@ -105,15 +103,9 @@ class EffectMap @Inject constructor() {
             val outcome = resolveOfferOutcome(obs, prevOffer)
             add(logEffect(null, outcome, "Replaced by new offer"))
 
-            // Log + evaluate new offer
+            // Evaluate + speak new offer
             val offer = nextOffer.offerFields
-            val merchantName = offer.parsedOffer.orders.joinToString(", ") { it.storeName }
-            add(logEffect(null, AppEventType.OFFER_RECEIVED, offer.parsedOffer))
-            val safeMerchant = merchantName.replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
-            add(AppEffect.CaptureScreenshot("Offer - $safeMerchant"))
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
-
-            // Speak offer aloud
             val platform = next.activePlatform?.name ?: "Unknown"
             add(AppEffect.SpeakOffer(offer.parsedOffer, platform))
         }
@@ -170,13 +162,18 @@ class EffectMap @Inject constructor() {
 
             // Delivery completed: leaving PostTask for a non-PostTask flow
             if (prevFlow.flow == Flow.PostTask && nextFlow.flow != Flow.PostTask) {
-                val sessionId = next.session?.sessionId ?: p.session?.sessionId
-                val completedTask = next.recentTasks.lastOrNull()
-                val payload = mapOf(
-                    "storeName" to (completedTask?.storeName ?: "Unknown"),
-                    "jobId" to (p.activeJob?.jobId),
-                )
-                add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, payload))
+                val taskCompletedOverride = triggerOverrideEffects(obs, TransitionTrigger.TASK_COMPLETED)
+                if (taskCompletedOverride != null) {
+                    addAll(taskCompletedOverride)
+                } else {
+                    val sessionId = next.session?.sessionId ?: p.session?.sessionId
+                    val completedTask = next.recentTasks.lastOrNull()
+                    val payload = mapOf(
+                        "storeName" to (completedTask?.storeName ?: "Unknown"),
+                        "jobId" to (p.activeJob?.jobId),
+                    )
+                    add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, payload))
+                }
             }
         }
     }
@@ -195,7 +192,10 @@ class EffectMap @Inject constructor() {
             when {
                 // Session start: offline/paused → online
                 prev.mode != Mode.Online && next.mode == Mode.Online -> {
-                    if (prevSession == null && nextSession != null) {
+                    val modeOverride = triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_ONLINE)
+                    if (modeOverride != null) {
+                        addAll(modeOverride)
+                    } else if (prevSession == null && nextSession != null) {
                         val payload = mapOf(
                             "source" to if (next.confidence != ModeConfidence.EMPTY) "recovery" else "interaction",
                             "start_screen" to "WaitingForOffer",
@@ -207,13 +207,21 @@ class EffectMap @Inject constructor() {
 
                     // Cancel pause safety timer if resuming from paused
                     if (prev.mode == Mode.Paused) {
-                        add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY))
+                        val resumeOverride = triggerOverrideEffects(obs, TransitionTrigger.RESUME_FROM_PAUSE)
+                        if (resumeOverride != null) {
+                            addAll(resumeOverride)
+                        } else {
+                            add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY))
+                        }
                     }
                 }
 
                 // Session end: online/paused → offline
                 next.mode == Mode.Offline -> {
-                    if (prevSession != null) {
+                    val modeOverride = triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_OFFLINE)
+                    if (modeOverride != null) {
+                        addAll(modeOverride)
+                    } else if (prevSession != null) {
                         // Check if this is a session summary screen
                         val flowObs = obs as? Observation.FlowObservation
                         val parsed = flowObs?.parsed
@@ -238,30 +246,40 @@ class EffectMap @Inject constructor() {
 
                     // Cancel pause safety timer
                     if (prev.mode == Mode.Paused) {
-                        add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY))
+                        val resumeOverride = triggerOverrideEffects(obs, TransitionTrigger.RESUME_FROM_PAUSE)
+                        if (resumeOverride != null) {
+                            addAll(resumeOverride)
+                        } else {
+                            add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY))
+                        }
                     }
                 }
 
                 // Pause: online → paused
                 prev.mode == Mode.Online && next.mode == Mode.Paused -> {
-                    val flowObs = obs as? Observation.FlowObservation
-                    val pausedFields = flowObs?.parsed as? ParsedFields.PausedFields
-                    val durationMs = (pausedFields?.remainingMillis ?: 0L) + PAUSE_TIMEOUT_BUFFER_MS
-                    val remainingText = pausedFields?.remainingText ?: "?"
+                    val modeOverride = triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_PAUSED)
+                    if (modeOverride != null) {
+                        addAll(modeOverride)
+                    } else {
+                        val flowObs = obs as? Observation.FlowObservation
+                        val pausedFields = flowObs?.parsed as? ParsedFields.PausedFields
+                        val durationMs = (pausedFields?.remainingMillis ?: 0L) + PAUSE_TIMEOUT_BUFFER_MS
+                        val remainingText = pausedFields?.remainingText ?: "?"
 
-                    add(
-                        logEffect(
-                            sessionId, AppEventType.DASH_PAUSED,
-                            "Paused. Time left: $remainingText",
+                        add(
+                            logEffect(
+                                sessionId, AppEventType.DASH_PAUSED,
+                                "Paused. Time left: $remainingText",
+                            )
                         )
-                    )
-                    add(
-                        AppEffect.ScheduleTimeout(
-                            durationMs,
-                            TimeoutType.SESSION_PAUSED_SAFETY,
+                        add(
+                            AppEffect.ScheduleTimeout(
+                                durationMs,
+                                TimeoutType.SESSION_PAUSED_SAFETY,
+                            )
                         )
-                    )
-                    add(AppEffect.UpdateBubble("Dash Paused!"))
+                        add(AppEffect.UpdateBubble("Dash Paused!"))
+                    }
                 }
             }
         }
@@ -286,22 +304,27 @@ class EffectMap @Inject constructor() {
             if (prevTask == null && nextTask != null &&
                 nextTask.phase == TaskPhase.PICKUP
             ) {
-                val storeName = nextTask.storeName ?: "Unknown"
-                val payload = mapOf(
-                    "message" to "Pickup Started",
-                    "storeName" to storeName,
-                    "status" to "NAVIGATING",
-                )
-                add(logEffect(sessionId, AppEventType.PICKUP_NAV_STARTED, payload))
-                add(AppEffect.ResumeOdometer)
+                val taskStartOverride = triggerOverrideEffects(obs, TransitionTrigger.TASK_START)
+                if (taskStartOverride != null) {
+                    addAll(taskStartOverride)
+                } else {
+                    val storeName = nextTask.storeName ?: "Unknown"
+                    val payload = mapOf(
+                        "message" to "Pickup Started",
+                        "storeName" to storeName,
+                        "status" to "NAVIGATING",
+                    )
+                    add(logEffect(sessionId, AppEventType.PICKUP_NAV_STARTED, payload))
+                    add(AppEffect.ResumeOdometer)
 
-                val persona = determinePickupPersona(
-                    nextTask.activity,
-                    nextTask.arrivedAt != null,
-                    storeName,
-                    nextTask.customerNameHash,
-                )
-                add(AppEffect.UpdateBubble("Pickup: $storeName", persona))
+                    val persona = determinePickupPersona(
+                        nextTask.activity,
+                        nextTask.arrivedAt != null,
+                        storeName,
+                        nextTask.customerNameHash,
+                    )
+                    add(AppEffect.UpdateBubble("Pickup: $storeName", persona))
+                }
             }
 
             // Task phase changed — pickup → dropoff (pickup confirmed)
@@ -326,21 +349,26 @@ class EffectMap @Inject constructor() {
             if (nextTask != null && nextTask.arrivedAt != null &&
                 (prevTask?.arrivedAt == null)
             ) {
-                add(AppEffect.PauseOdometer)
+                val arrivedOverride = triggerOverrideEffects(obs, TransitionTrigger.TASK_ARRIVED)
+                if (arrivedOverride != null) {
+                    addAll(arrivedOverride)
+                } else {
+                    add(AppEffect.PauseOdometer)
 
-                when (nextTask.phase) {
-                    TaskPhase.PICKUP -> add(
-                        logEffect(
-                            sessionId, AppEventType.PICKUP_ARRIVED,
-                            mapOf("storeName" to (nextTask.storeName ?: "Unknown")),
+                    when (nextTask.phase) {
+                        TaskPhase.PICKUP -> add(
+                            logEffect(
+                                sessionId, AppEventType.PICKUP_ARRIVED,
+                                mapOf("storeName" to (nextTask.storeName ?: "Unknown")),
+                            )
                         )
-                    )
-                    TaskPhase.DROPOFF -> add(
-                        logEffect(
-                            sessionId, AppEventType.DELIVERY_ARRIVED,
-                            mapOf("customerHash" to nextTask.customerNameHash),
+                        TaskPhase.DROPOFF -> add(
+                            logEffect(
+                                sessionId, AppEventType.DELIVERY_ARRIVED,
+                                mapOf("customerHash" to nextTask.customerNameHash),
+                            )
                         )
-                    )
+                    }
                 }
             }
 
@@ -490,20 +518,41 @@ class EffectMap @Inject constructor() {
     }
 
     // =========================================================================
-    // RULE-ORIGINATED ACTIONS (ADR-0006)
+    // TRANSITION OVERRIDE CHECK
     // =========================================================================
 
     /**
-     * Extract actions from the observation and emit [AppEffect.RequestAction]
-     * for each that passes its gate. Runs at top level — NOT inside any
-     * region stepper — honouring ADR-0005 §13 and ADR-0006 §2/§9.
+     * Check if the observation carries a rule-declared override for [trigger].
+     * When present, returns [AppEffect.RequestEffect] for each override effect
+     * (replacing the built-in defaults). Returns null when no override exists
+     * (caller falls through to defaults).
      */
-    private fun diffActions(obs: Observation): List<AppEffect> {
-        val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
-        if (flowObs.actions.isEmpty()) return emptyList()
-        return flowObs.actions
+    private fun triggerOverrideEffects(
+        obs: Observation,
+        trigger: TransitionTrigger,
+    ): List<AppEffect>? {
+        val flowObs = obs as? Observation.FlowObservation ?: return null
+        val overrides = flowObs.transitionOverrides[trigger] ?: return null
+        return overrides
             .filter { evaluateGate(it.onlyIf, flowObs.parsed) }
-            .map { AppEffect.RequestAction(it) }
+            .map { AppEffect.RequestEffect(it) }
+    }
+
+    // =========================================================================
+    // RULE-ORIGINATED EFFECTS
+    // =========================================================================
+
+    /**
+     * Extract rule-declared effects from the observation and emit
+     * [AppEffect.RequestEffect] for each that passes its gate.
+     * Runs at top level — NOT inside any region stepper.
+     */
+    private fun diffRuleEffects(obs: Observation): List<AppEffect> {
+        val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
+        if (flowObs.effects.isEmpty()) return emptyList()
+        return flowObs.effects
+            .filter { evaluateGate(it.onlyIf, flowObs.parsed) }
+            .map { AppEffect.RequestEffect(it) }
     }
 
     private fun evaluateGate(gate: ParsedFieldsGate?, parsed: ParsedFields): Boolean {

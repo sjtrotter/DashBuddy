@@ -5,7 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
-import cloud.trotter.dashbuddy.domain.pipeline.RequestedAction
+import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 
 sealed class AppEffect {
 
@@ -59,10 +59,10 @@ sealed class AppEffect {
         val description: String = "Auto-Click"
     ) : AppEffect()
 
-    /** A rule-originated UI action (ADR-0006). */
-    data class RequestAction(val action: RequestedAction) : AppEffect() {
+    /** A rule-originated side effect. */
+    data class RequestEffect(val effect: RequestedEffect) : AppEffect() {
         override val effectKey: String
-            get() = "action:${action.ruleId}:${action.dedupeKey ?: action.targetRef.pathFingerprint}"
+            get() = "effect:${effect.ruleId}:${effect.dedupeKey ?: effect.targetRef?.pathFingerprint ?: effect.verb.wire}"
     }
 
     data class Delayed(val delayMs: Long, val effect: AppEffect) : AppEffect()

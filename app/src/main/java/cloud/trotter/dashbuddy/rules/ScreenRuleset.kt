@@ -1,8 +1,10 @@
 package cloud.trotter.dashbuddy.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
-import cloud.trotter.dashbuddy.domain.pipeline.RequestedAction
+import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
+import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
 
@@ -102,8 +104,13 @@ class ScreenRuleset(
                 }
                 if (branchSkip) continue
 
-                // Resolve compiled actions against current bindings
-                val resolvedActions = resolveActions(branch.actions, allBindings, rule.id)
+                // Resolve compiled effects against current bindings + parsed fields
+                val resolvedEffects = resolveEffects(branch.effects, allBindings, rule.id, rawFields)
+
+                // Resolve transition overrides (non-target effects only, no binding resolution needed)
+                val resolvedOverrides = resolveTransitionOverrides(
+                    branch.transitionOverrides, rule.id,
+                )
 
                 return ScreenMatchResult(
                     ruleId = rule.id,
@@ -111,7 +118,8 @@ class ScreenRuleset(
                     flow = branch.flow,
                     modeHint = branch.modeHint,
                     parsed = parsed,
-                    actions = resolvedActions,
+                    effects = resolvedEffects,
+                    transitionOverrides = resolvedOverrides,
                 )
             }
         }
@@ -119,28 +127,125 @@ class ScreenRuleset(
     }
 
     /**
-     * Resolve [CompiledAction] bind names against current [bindings] to produce
-     * [RequestedAction] with concrete [NodeRef]. Actions whose target node is
-     * null are silently dropped (rule still matches — ADR-0006 §4).
+     * Resolve [CompiledEffect] bind names against current [bindings] to produce
+     * [RequestedEffect]. For target-bound verbs (e.g. [EffectVerb.CLICK]),
+     * effects whose target node is null are silently dropped. For non-target
+     * verbs, [targetRef] is null and the effect always resolves.
+     *
+     * Template interpolation: `{fieldName}` references in args values and
+     * dedupeKey are resolved against [parsedFields]. Resolution is one-pass
+     * (no recursion) and values are sanitized.
      */
-    private fun resolveActions(
-        actions: List<CompiledAction>,
+    private fun resolveEffects(
+        effects: List<CompiledEffect>,
         bindings: Bindings,
         ruleId: String,
-    ): List<RequestedAction> = actions.mapNotNull { action ->
-        val node = bindings[action.targetBindName]
-        if (node == null) {
-            Timber.v("Action target '${action.targetBindName}' not bound; skipping action")
-            return@mapNotNull null
+        parsedFields: Map<String, Any?> = emptyMap(),
+    ): List<RequestedEffect> = effects.mapNotNull { effect ->
+        val targetRef = if (effect.targetBindName != null) {
+            val node = bindings[effect.targetBindName]
+            if (node == null) {
+                Timber.v("Effect target '${effect.targetBindName}' not bound; skipping effect")
+                return@mapNotNull null
+            }
+            buildNodeRef(node)
+        } else {
+            null
         }
-        RequestedAction(
-            verb = action.verb,
-            targetRef = buildNodeRef(node),
-            onlyIf = action.onlyIf,
-            dedupeKey = action.dedupeKey,
-            throttleMs = action.throttleMs,
+        RequestedEffect(
+            verb = effect.verb,
+            args = resolveTemplateArgs(effect.args, parsedFields),
+            targetRef = targetRef,
+            onlyIf = effect.onlyIf,
+            dedupeKey = effect.dedupeKey?.let { resolveTemplate(it, parsedFields) },
+            throttleMs = effect.throttleMs,
             ruleId = ruleId,
         )
+    }
+
+    /**
+     * Resolve compiled transition overrides (wire-keyed) into
+     * [TransitionTrigger]-keyed [RequestedEffect] lists.
+     *
+     * Transition override effects are non-target verbs (lifecycle / scheduling),
+     * so no binding resolution is needed — just verb + args conversion.
+     */
+    private fun resolveTransitionOverrides(
+        overrides: Map<String, List<CompiledEffect>>,
+        ruleId: String,
+    ): Map<TransitionTrigger, List<RequestedEffect>> {
+        if (overrides.isEmpty()) return emptyMap()
+        val result = mutableMapOf<TransitionTrigger, List<RequestedEffect>>()
+        for ((wireKey, compiledEffects) in overrides) {
+            val trigger = TransitionTrigger.fromWire(wireKey)
+            if (trigger == null) {
+                Timber.w("Unknown transition trigger '%s' in rule '%s'; skipping", wireKey, ruleId)
+                continue
+            }
+            result[trigger] = compiledEffects.map { effect ->
+                RequestedEffect(
+                    verb = effect.verb,
+                    args = effect.args,
+                    targetRef = null, // lifecycle verbs never have targets
+                    onlyIf = effect.onlyIf,
+                    dedupeKey = effect.dedupeKey,
+                    throttleMs = effect.throttleMs,
+                    ruleId = ruleId,
+                )
+            }
+        }
+        return result
+    }
+
+    // =========================================================================
+    // Template interpolation
+    // =========================================================================
+
+    companion object {
+        /** Max length for a resolved template value (prevents oversized strings). */
+        const val MAX_TEMPLATE_VALUE_LENGTH = 256
+
+        /** Matches `{fieldName}` — single-level, no nesting. */
+        private val TEMPLATE_PATTERN = Regex("""\{(\w+)}""")
+    }
+
+    /**
+     * Resolve all `{fieldName}` references in [args] values against [fields].
+     * One-pass, no recursion — if a resolved value itself contains `{x}`, it
+     * stays literal.
+     */
+    private fun resolveTemplateArgs(
+        args: Map<String, String>,
+        fields: Map<String, Any?>,
+    ): Map<String, String> {
+        if (args.isEmpty() || fields.isEmpty()) return args
+        // Fast path: skip if no args contain template references
+        if (args.values.none { it.contains('{') }) return args
+        return args.mapValues { (_, value) -> resolveTemplate(value, fields) }
+    }
+
+    /**
+     * One-pass template resolution. Replaces `{fieldName}` with the
+     * sanitized string value from [fields]. Unknown field references
+     * are left as-is (literal `{unknown}`).
+     */
+    private fun resolveTemplate(template: String, fields: Map<String, Any?>): String {
+        if (!template.contains('{')) return template
+        return TEMPLATE_PATTERN.replace(template) { match ->
+            val fieldName = match.groupValues[1]
+            val value = fields[fieldName]
+            if (value != null) sanitizeTemplateValue(value.toString()) else match.value
+        }
+    }
+
+    /**
+     * Sanitize a resolved template value: strip control/unassigned characters
+     * and cap length.
+     */
+    private fun sanitizeTemplateValue(value: String): String {
+        return value
+            .replace(Regex("[\\p{Cc}\\p{Cn}]"), "") // strip control/unassigned chars
+            .take(MAX_TEMPLATE_VALUE_LENGTH)
     }
 
     private fun buildNodeRef(node: UiNode): NodeRef {
@@ -159,6 +264,7 @@ class ScreenRuleset(
             viewIdSuffix = node.viewIdResourceName,
             text = node.text?.take(50),
             classNameHint = node.className,
+            boundsInScreen = node.boundsInScreen,
             pathFingerprint = pathParts.joinToString("/"),
         )
     }

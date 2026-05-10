@@ -400,7 +400,19 @@
               }
             }
           },
-          "shape": "offer"
+          "shape": "offer",
+          "effects": [
+            {
+              "screenshot": { "prefix": "Offer - {storeName}" },
+              "dedupeKey": "offer-ss-{offerHash}",
+              "throttleMs": 60000
+            },
+            {
+              "log": { "type": "OFFER_RECEIVED", "payload": "pay={payAmount} dist={distance}" },
+              "dedupeKey": "offer-log-{offerHash}",
+              "throttleMs": 60000
+            }
+          ]
         }
       ]
     },
@@ -574,10 +586,9 @@
               }
             }
           },
-          "actions": [
+          "effects": [
             {
-              "command": "click",
-              "target": "$expandButton",
+              "click": "$expandButton",
               "onlyIf": {
                 "fieldEquals": {
                   "field": "isExpanded",

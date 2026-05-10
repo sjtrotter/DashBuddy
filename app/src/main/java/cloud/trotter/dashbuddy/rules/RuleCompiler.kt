@@ -38,6 +38,36 @@ object RuleCompiler {
     private const val MAX_EACH_SIZE = 50
 
     // ==========================================================================
+    //  Permission introspection
+    // ==========================================================================
+
+    /**
+     * Scan compiled screen rules and return the set of [PermissionTier] values
+     * used by any effect verb. Used at rule-load time to determine what
+     * permissions a ruleset requires.
+     */
+    fun enumeratePermissions(
+        screenRules: List<CompiledScreenRule>,
+    ): Set<cloud.trotter.dashbuddy.domain.pipeline.PermissionTier> {
+        val tiers = mutableSetOf<cloud.trotter.dashbuddy.domain.pipeline.PermissionTier>()
+        for (rule in screenRules) {
+            for (branch in rule.branches) {
+                for (effect in branch.effects) {
+                    tiers.add(effect.verb.tier)
+                }
+                for ((_, overrideEffects) in branch.transitionOverrides) {
+                    for (effect in overrideEffects) {
+                        tiers.add(effect.verb.tier)
+                    }
+                }
+            }
+        }
+        // NONE is always implicitly granted — don't include it
+        tiers.remove(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.NONE)
+        return tiers
+    }
+
+    // ==========================================================================
     //  Screen rules
     // ==========================================================================
 
@@ -113,8 +143,14 @@ object RuleCompiler {
             compileValidateEntry(entry.jsonObject)
         } ?: emptyList()
 
-        // --- Actions (Phase 3 of the plan — stub for now) ---
-        val actions = obj["actions"]?.jsonArray?.map { compileActionEntry(it.jsonObject) } ?: emptyList()
+        // --- Effects (accepts both "effects" and legacy "actions" keys) ---
+        val effectsArray = obj["effects"]?.jsonArray ?: obj["actions"]?.jsonArray
+        val effects = effectsArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
+
+        // --- Transition overrides ---
+        val transitionOverrides = obj["transitionOverrides"]?.jsonObject?.let {
+            compileTransitionOverrides(it)
+        } ?: emptyMap()
 
         return CompiledBranch(
             target = targetName,
@@ -124,7 +160,8 @@ object RuleCompiler {
             parser = parser,
             parseShape = parseShape,
             validators = validators,
-            actions = actions,
+            effects = effects,
+            transitionOverrides = transitionOverrides,
             flow = branchFlow ?: ruleFlow,
             modeHint = branchModeHint ?: ruleModeHint,
         )
@@ -488,17 +525,87 @@ object RuleCompiler {
     }
 
     // ==========================================================================
-    //  Action entry compiler (ADR-0006)
+    //  Effect entry compiler (evolved from ADR-0006 actions)
     // ==========================================================================
 
-    private fun compileActionEntry(obj: JsonObject): CompiledAction {
-        return CompiledAction(
-            verb = obj["command"]!!.jsonPrimitive.content,
-            targetBindName = obj["target"]!!.jsonPrimitive.content.removePrefix("$"),
+    /** Allowed arg keys per verb. Unknown keys are rejected at compile time. */
+    private val allowedArgs: Map<cloud.trotter.dashbuddy.domain.pipeline.EffectVerb, Set<String>> = mapOf(
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT to setOf("prefix"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.BUBBLE to setOf("text", "persona"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.LOG to setOf("type", "payload"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SPEAK to setOf("text", "platform"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCHEDULE_TIMEOUT to setOf("type", "durationMs"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CANCEL_TIMEOUT to setOf("type"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SESSION_START to setOf("platformName"),
+        cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SESSION_END to setOf("platformName"),
+    )
+
+    /** Keys that are effect metadata, not verb identifiers. */
+    private val effectMetaKeys = setOf("onlyIf", "dedupeKey", "throttleMs")
+
+    internal fun compileEffectEntry(obj: JsonObject): CompiledEffect {
+        // The verb is the single non-meta key in the object
+        val verbEntries = obj.entries.filter { it.key !in effectMetaKeys }
+        if (verbEntries.isEmpty())
+            throw RuleCompileException("Effect has no verb key")
+        if (verbEntries.size > 1)
+            throw RuleCompileException(
+                "Effect has multiple verb keys: ${verbEntries.map { it.key }}",
+            )
+
+        val (wireVerb, verbValue) = verbEntries.single()
+        val verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.fromWire(wireVerb)
+            ?: throw RuleCompileException("Unknown effect verb: '$wireVerb'")
+
+        // Target-bound verbs (click): value is a string "$bindName"
+        // All others: value is a JSON object of args (may be empty {})
+        val targetBindName: String?
+        val args: Map<String, String>
+        if (verb.requiresTarget) {
+            targetBindName = verbValue.jsonPrimitive.content.removePrefix("$")
+            args = emptyMap()
+        } else {
+            targetBindName = null
+            val argsObj = verbValue.jsonObject
+            val allowed = allowedArgs[verb] ?: emptySet()
+            val argMap = mutableMapOf<String, String>()
+            for ((key, value) in argsObj) {
+                if (key !in allowed) {
+                    throw RuleCompileException(
+                        "Unknown arg '$key' for verb '$wireVerb'. Allowed: $allowed",
+                    )
+                }
+                argMap[key] = value.jsonPrimitive.content
+            }
+            args = argMap.toMap()
+        }
+
+        return CompiledEffect(
+            verb = verb,
+            targetBindName = targetBindName,
+            args = args,
             onlyIf = obj["onlyIf"]?.jsonObject?.let { compileGate(it) },
             dedupeKey = obj["dedupeKey"]?.jsonPrimitive?.content,
             throttleMs = obj["throttleMs"]?.jsonPrimitive?.longOrNull,
         )
+    }
+
+    /**
+     * Compile a `transitionOverrides` JSON block into a map of trigger wire
+     * names to compiled effect lists. Unknown trigger keys are rejected.
+     */
+    internal fun compileTransitionOverrides(
+        obj: JsonObject,
+    ): Map<String, List<CompiledEffect>> {
+        val result = mutableMapOf<String, List<CompiledEffect>>()
+        for ((triggerWire, effectsElement) in obj) {
+            // Validate trigger key against known triggers
+            cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger.fromWire(triggerWire)
+                ?: throw RuleCompileException("Unknown transition trigger: '$triggerWire'")
+            val effects = effectsElement.jsonArray.map { compileEffectEntry(it.jsonObject) }
+            result[triggerWire] = effects
+        }
+        return result
     }
 
     private fun compileGate(obj: JsonObject): cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate {

@@ -9,6 +9,10 @@ import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
+import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
+import cloud.trotter.dashbuddy.domain.pipeline.PermissionTier
+import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
+import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.state.AppEffect
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toAnnotatedString
@@ -110,20 +114,17 @@ class SideEffectEngine @Inject constructor(
                 uiInteractionHandler.performClick(effect.node, effect.description)
             }
 
-            is AppEffect.RequestAction -> {
-                val actionKey = effect.effectKey
+            is AppEffect.RequestEffect -> {
+                val effectKey = effect.effectKey
                 val now = System.currentTimeMillis()
-                val throttle = effect.action.throttleMs ?: DEFAULT_ACTION_THROTTLE_MS
-                val lastFired = actionLastFiredAt[actionKey] ?: 0L
+                val throttle = effect.effect.throttleMs ?: DEFAULT_ACTION_THROTTLE_MS
+                val lastFired = actionLastFiredAt[effectKey] ?: 0L
                 if (lastFired + throttle > now) {
-                    Timber.v("Throttled action: %s", actionKey)
+                    Timber.v("Throttled effect: %s", effectKey)
                     return
                 }
-                actionLastFiredAt[actionKey] = now
-                when (effect.action.verb) {
-                    "click" -> resolveAndClick(effect.action)
-                    else -> Timber.w("Unknown action verb: %s", effect.action.verb)
-                }
+                actionLastFiredAt[effectKey] = now
+                dispatchRuleEffect(effect.effect, scope)
             }
 
             is AppEffect.PlayNotificationSound -> { /* Implementation */
@@ -208,31 +209,150 @@ class SideEffectEngine @Inject constructor(
         }
     }
 
+    // =========================================================================
+    // Rule-driven effect dispatch (all 14 verbs)
+    // =========================================================================
+
     /**
-     * Resolve a [RequestedAction]'s [NodeRef] against the live UI tree and click.
-     *
-     * Builds a template [UiNode] from the [NodeRef] fingerprint and delegates
-     * to [UiInteractionHandler.performClick], which handles live-root lookup
-     * and native-node matching internally.
+     * Dispatch a [RequestedEffect] to the appropriate handler based on its verb.
+     * Permission tier is checked before execution — denied verbs are logged and skipped.
      */
-    private fun resolveAndClick(action: cloud.trotter.dashbuddy.domain.pipeline.RequestedAction) {
-        val ref = action.targetRef
-        // Build a minimal UiNode template for performClick's matching logic
+    private suspend fun dispatchRuleEffect(e: RequestedEffect, scope: CoroutineScope) {
+        if (!isPermissionGranted(e.verb.tier)) {
+            Timber.w("Denied effect %s — permission tier %s not granted", e.verb, e.verb.tier)
+            return
+        }
+        when (e.verb) {
+            // --- Observation-driven verbs ---
+            EffectVerb.CLICK -> resolveAndClick(e)
+            EffectVerb.SCREENSHOT -> screenshotFromArgs(scope, e.args)
+            EffectVerb.BUBBLE -> bubbleFromArgs(e.args)
+            EffectVerb.LOG -> logFromArgs(e.args, scope)
+            EffectVerb.EVALUATE_OFFER -> {
+                Timber.d("Rule-driven evaluate_offer — requires offer context from EffectMap")
+            }
+            EffectVerb.SPEAK -> {
+                Timber.d("Rule-driven speak — requires offer context from EffectMap")
+            }
+
+            // --- Lifecycle verbs ---
+            EffectVerb.SESSION_START -> sessionStartFromArgs(e.args)
+            EffectVerb.SESSION_END -> sessionEndFromArgs(e.args)
+            EffectVerb.ODOMETER_START -> odometerEffectHandler.startUp()
+            EffectVerb.ODOMETER_STOP -> odometerEffectHandler.shutDown()
+            EffectVerb.ODOMETER_PAUSE -> odometerEffectHandler.pause()
+            EffectVerb.ODOMETER_RESUME -> odometerEffectHandler.resume()
+            EffectVerb.SCHEDULE_TIMEOUT -> scheduleTimeoutFromArgs(scope, e.args)
+            EffectVerb.CANCEL_TIMEOUT -> cancelTimeoutFromArgs(e.args)
+        }
+    }
+
+    /**
+     * Resolve a [RequestedEffect]'s [NodeRef] against the live UI tree and click.
+     */
+    private fun resolveAndClick(effect: RequestedEffect) {
+        val ref = effect.targetRef ?: run {
+            Timber.w("CLICK effect missing targetRef: %s", effect.ruleId)
+            return
+        }
         val template = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(
             viewIdResourceName = ref.viewIdSuffix,
             text = ref.text,
             className = ref.classNameHint,
+            boundsInScreen = ref.boundsInScreen,
         )
-        Timber.i("Auto-Click [%s]: target id=%s", action.ruleId, ref.viewIdSuffix)
-        uiInteractionHandler.performClick(template, "Auto-Click [${action.ruleId}]")
+        Timber.i("Auto-Click [%s]: target id=%s", effect.ruleId, ref.viewIdSuffix)
+        uiInteractionHandler.performClick(template, "Auto-Click [${effect.ruleId}]")
     }
+
+    private fun screenshotFromArgs(scope: CoroutineScope, args: Map<String, String>) {
+        val prefix = args["prefix"] ?: "Rule"
+        screenShotHandler.capture(scope, AppEffect.CaptureScreenshot(filenamePrefix = prefix))
+    }
+
+    private fun bubbleFromArgs(args: Map<String, String>) {
+        val text = args["text"] ?: return
+        val persona = resolvePersona(args["persona"])
+        bubbleManager.postMessage(text, persona)
+    }
+
+    private fun logFromArgs(args: Map<String, String>, scope: CoroutineScope) {
+        val type = args["type"] ?: "RULE_EFFECT"
+        val payload = args["payload"]
+        Timber.i("Rule LOG [%s]: %s", type, payload ?: "(no payload)")
+    }
+
+    private fun sessionStartFromArgs(args: Map<String, String>) {
+        val platformName = args["platformName"] ?: "DoorDash"
+        val dashId = "session-${System.currentTimeMillis()}"
+        bubbleManager.startDash(dashId, platformName)
+    }
+
+    private fun sessionEndFromArgs(args: Map<String, String>) {
+        val platformName = args["platformName"]
+        bubbleManager.endDash(platformName)
+    }
+
+    private suspend fun scheduleTimeoutFromArgs(scope: CoroutineScope, args: Map<String, String>) {
+        val typeWire = args["type"] ?: return
+        val type = try {
+            TimeoutType.valueOf(typeWire)
+        } catch (_: IllegalArgumentException) {
+            Timber.w("Unknown timeout type: %s", typeWire)
+            return
+        }
+        val durationMs = args["durationMs"]?.toLongOrNull() ?: return
+
+        activeTimers[type]?.cancel()
+        val job = scope.launch {
+            delay(durationMs)
+            Timber.w("Timer Expired (rule): %s", type)
+            _events.emit(TimeoutEvent(type = type))
+            activeTimers.remove(type)
+        }
+        activeTimers[type] = job
+    }
+
+    private fun cancelTimeoutFromArgs(args: Map<String, String>) {
+        val typeWire = args["type"] ?: return
+        val type = try {
+            TimeoutType.valueOf(typeWire)
+        } catch (_: IllegalArgumentException) {
+            Timber.w("Unknown timeout type: %s", typeWire)
+            return
+        }
+        activeTimers[type]?.cancel()
+        activeTimers.remove(type)
+    }
+
+    private fun resolvePersona(wire: String?): ChatPersona = when (wire?.lowercase()) {
+        "dispatcher" -> ChatPersona.Dispatcher
+        "system" -> ChatPersona.System
+        "earnings" -> ChatPersona.Earnings
+        "inspector" -> ChatPersona.Inspector
+        "navigator" -> ChatPersona.Navigator
+        "shopper" -> ChatPersona.Shopper
+        "good_offer" -> ChatPersona.GoodOffer
+        "bad_offer" -> ChatPersona.BadOffer
+        else -> ChatPersona.Dispatcher
+    }
+
+    /**
+     * Check if the given [PermissionTier] is granted.
+     *
+     * For alpha (single user, all permissions already granted via system settings),
+     * this returns true for all tiers. When multi-user or permission-gated features
+     * are needed, swap in a DataStore-backed implementation.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun isPermissionGranted(tier: PermissionTier): Boolean = true
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
         is AppEffect.UpdateBubble,
         is AppEffect.PlayNotificationSound,
         is AppEffect.CaptureScreenshot,
         is AppEffect.ClickNode,
-        is AppEffect.RequestAction,
+        is AppEffect.RequestEffect,
         is AppEffect.StartOdometer,
         is AppEffect.StopOdometer,
         is AppEffect.PauseOdometer,

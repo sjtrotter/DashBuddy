@@ -40,7 +40,8 @@ data class CompiledBranch(
     val parser: ((UiNode, Bindings) -> Map<String, Any?>) = { _, _ -> emptyMap() },
     val parseShape: String? = null,
     val validators: List<(Map<String, Any?>) -> ValidateOutcome> = emptyList(),
-    val actions: List<CompiledAction> = emptyList(),
+    val effects: List<CompiledEffect> = emptyList(),
+    val transitionOverrides: Map<String, List<CompiledEffect>> = emptyMap(),
     val flow: Flow? = null,
     val modeHint: Mode? = null,
 )
@@ -68,7 +69,8 @@ data class ScreenMatchResult(
     val flow: Flow?,
     val modeHint: Mode?,
     val parsed: ParsedFields,
-    val actions: List<cloud.trotter.dashbuddy.domain.pipeline.RequestedAction> = emptyList(),
+    val effects: List<cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect> = emptyList(),
+    val transitionOverrides: Map<cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger, List<cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect>> = emptyMap(),
 )
 
 /**
@@ -131,14 +133,16 @@ data class NotificationMatchResult(
 )
 
 /**
- * A compiled action from a rule's `actions:` block (ADR-0006).
+ * A compiled effect from a rule's `effects:` (or legacy `actions:`) block.
  *
  * At match time, [targetBindName] is resolved against the current bindings
- * to produce a [NodeRef] on the emitted [RequestedAction].
+ * to produce a [NodeRef] on the emitted [RequestedEffect]. For non-target
+ * verbs (everything except [EffectVerb.CLICK]), [targetBindName] is null.
  */
-data class CompiledAction(
-    val verb: String,
-    val targetBindName: String,
+data class CompiledEffect(
+    val verb: cloud.trotter.dashbuddy.domain.pipeline.EffectVerb,
+    val targetBindName: String? = null,
+    val args: Map<String, String> = emptyMap(),
     val onlyIf: cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate? = null,
     val dedupeKey: String? = null,
     val throttleMs: Long? = null,

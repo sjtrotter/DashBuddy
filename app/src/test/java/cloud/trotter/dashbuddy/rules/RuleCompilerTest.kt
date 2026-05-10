@@ -5,7 +5,10 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -452,5 +455,226 @@ class RuleCompilerTest {
         var json = """{"allTextContains": "x"}"""
         repeat(RuleCompiler.MAX_DEPTH + 2) { json = """{"not": $json}""" }
         RuleCompiler.compileTreePred(Json.parseToJsonElement(json))
+    }
+
+    // =========================================================================
+    // compileEffectEntry — verb validation
+    // =========================================================================
+
+    private val compiler = RuleCompiler
+
+    @Test
+    fun `compileEffectEntry accepts valid click verb with target`() {
+        val effect = compiler.compileEffectEntry(
+            parseJson("""{"click": "${'$'}acceptBtn"}""").jsonObject
+        )
+        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK, effect.verb)
+        assertEquals("acceptBtn", effect.targetBindName)
+    }
+
+    @Test
+    fun `compileEffectEntry accepts screenshot verb`() {
+        val effect = compiler.compileEffectEntry(
+            parseJson("""{"screenshot": {"prefix": "Offer"}}""").jsonObject
+        )
+        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT, effect.verb)
+        assertNull(effect.targetBindName)
+        assertEquals("Offer", effect.args["prefix"])
+    }
+
+    @Test
+    fun `compileEffectEntry accepts bubble verb with args`() {
+        val effect = compiler.compileEffectEntry(
+            parseJson("""{"bubble": {"text": "Hello", "persona": "dispatcher"}}""").jsonObject
+        )
+        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.BUBBLE, effect.verb)
+        assertEquals("Hello", effect.args["text"])
+        assertEquals("dispatcher", effect.args["persona"])
+    }
+
+    @Test
+    fun `compileEffectEntry accepts verb with no args`() {
+        val effect = compiler.compileEffectEntry(
+            parseJson("""{"evaluate_offer": {}}""").jsonObject
+        )
+        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.EVALUATE_OFFER, effect.verb)
+        assertTrue(effect.args.isEmpty())
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects unknown verb`() {
+        compiler.compileEffectEntry(
+            parseJson("""{"explode": {}}""").jsonObject
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects missing verb`() {
+        compiler.compileEffectEntry(
+            parseJson("""{"onlyIf": {"fieldEquals": {"field": "x", "value": "y"}}}""").jsonObject
+        )
+    }
+
+    // =========================================================================
+    // compileEffectEntry — format enforcement
+    // =========================================================================
+
+    @Test(expected = Exception::class)
+    fun `compileEffectEntry rejects click with object value instead of target string`() {
+        // click requires a string target, not an args object
+        compiler.compileEffectEntry(
+            parseJson("""{"click": {"bad": "value"}}""").jsonObject
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects multiple verb keys`() {
+        compiler.compileEffectEntry(
+            parseJson("""{"screenshot": {}, "bubble": {"text": "hi"}}""").jsonObject
+        )
+    }
+
+    // =========================================================================
+    // compileEffectEntry — arg key validation
+    // =========================================================================
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects unknown arg key for screenshot`() {
+        compiler.compileEffectEntry(
+            parseJson("""{"screenshot": {"badKey": "value"}}""").jsonObject
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects unknown arg key for bubble`() {
+        compiler.compileEffectEntry(
+            parseJson("""{"bubble": {"text": "ok", "unknown": "bad"}}""").jsonObject
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects args on verb with no allowed args`() {
+        compiler.compileEffectEntry(
+            parseJson("""{"evaluate_offer": {"surprise": "bad"}}""").jsonObject
+        )
+    }
+
+    @Test
+    fun `compileEffectEntry preserves onlyIf gate`() {
+        val effect = compiler.compileEffectEntry(
+            parseJson("""{"click": "${'$'}btn", "onlyIf": {"fieldEquals": {"field": "intent", "value": "accept"}}}""").jsonObject
+        )
+        assertTrue(effect.onlyIf is cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate.FieldEquals)
+    }
+
+    @Test
+    fun `compileEffectEntry preserves dedupeKey and throttleMs`() {
+        val effect = compiler.compileEffectEntry(
+            parseJson("""{"click": "${'$'}btn", "dedupeKey": "accept-click", "throttleMs": 1000}""").jsonObject
+        )
+        assertEquals("accept-click", effect.dedupeKey)
+        assertEquals(1000L, effect.throttleMs)
+    }
+
+    // =========================================================================
+    // compileTransitionOverrides — trigger validation
+    // =========================================================================
+
+    @Test
+    fun `compileTransitionOverrides accepts known trigger keys`() {
+        val overrides = compiler.compileTransitionOverrides(
+            parseJson("""{
+                "mode:online": [{"session_start": {"platformName": "Uber"}}],
+                "mode:offline": [{"session_end": {}}, {"odometer_stop": {}}]
+            }""").jsonObject
+        )
+        assertEquals(2, overrides.size)
+        assertTrue(overrides.containsKey("mode:online"))
+        assertTrue(overrides.containsKey("mode:offline"))
+        assertEquals(1, overrides["mode:online"]!!.size)
+        assertEquals(2, overrides["mode:offline"]!!.size)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileTransitionOverrides rejects unknown trigger key`() {
+        compiler.compileTransitionOverrides(
+            parseJson("""{"mode:turbo": [{"log": {}}]}""").jsonObject
+        )
+    }
+
+    @Test
+    fun `compileTransitionOverrides validates effect verbs within overrides`() {
+        // Should compile successfully — effects inside overrides go through compileEffectEntry
+        val overrides = compiler.compileTransitionOverrides(
+            parseJson("""{
+                "task:start": [
+                    {"odometer_resume": {}},
+                    {"log": {"type": "TASK_START"}},
+                    {"bubble": {"text": "Task started"}}
+                ]
+            }""").jsonObject
+        )
+        assertEquals(3, overrides["task:start"]!!.size)
+        assertEquals(
+            cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.ODOMETER_RESUME,
+            overrides["task:start"]!![0].verb,
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileTransitionOverrides rejects unknown verb inside override`() {
+        compiler.compileTransitionOverrides(
+            parseJson("""{"mode:online": [{"teleport": {}}]}""").jsonObject
+        )
+    }
+
+    @Test
+    fun `compileTransitionOverrides returns empty map for empty input`() {
+        val overrides = compiler.compileTransitionOverrides(
+            parseJson("""{}""").jsonObject
+        )
+        assertTrue(overrides.isEmpty())
+    }
+
+    // =========================================================================
+    // enumeratePermissions
+    // =========================================================================
+
+    @Test
+    fun `enumeratePermissions returns tiers from effects and overrides`() {
+        val rule = CompiledScreenRule(
+            id = "test.rule", priority = 10, overrideable = true,
+            branches = listOf(
+                CompiledBranch(
+                    target = "OFFER",
+                    requireCheck = { _, _ -> true },
+                    effects = listOf(
+                        CompiledEffect(verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT),
+                        CompiledEffect(verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.LOG),
+                    ),
+                    transitionOverrides = mapOf(
+                        "mode:online" to listOf(
+                            CompiledEffect(verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.ODOMETER_START),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val tiers = compiler.enumeratePermissions(listOf(rule))
+        // SCREENSHOT → ACCESSIBILITY, LOG → NONE (excluded), ODOMETER_START → LOCATION
+        assertTrue(tiers.contains(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.ACCESSIBILITY))
+        assertTrue(tiers.contains(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.LOCATION))
+        assertFalse("NONE should be excluded", tiers.contains(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.NONE))
+    }
+
+    @Test
+    fun `enumeratePermissions returns empty for rules with no effects`() {
+        val rule = CompiledScreenRule(
+            id = "test.rule", priority = 10, overrideable = true,
+            branches = listOf(
+                CompiledBranch(target = "IDLE", requireCheck = { _, _ -> true }),
+            ),
+        )
+        assertTrue(compiler.enumeratePermissions(listOf(rule)).isEmpty())
     }
 }
