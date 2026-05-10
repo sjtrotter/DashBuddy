@@ -79,13 +79,21 @@ object RuleCompiler {
         val priority = obj["priority"]!!.jsonPrimitive.int
         val overrideable = obj["overrideable"]?.jsonPrimitive?.booleanOrNull ?: true
 
-        // Rule-level bindings (shared across branches)
-        val ruleBindings = obj["bind"]?.jsonObject?.let { compileBindBlock(it) } ?: emptyList()
+        // Rule-level bindings (shared across branches, overridden if branch declares its own)
+        val ruleBindObj = obj["bind"]?.jsonObject
+        val ruleBindings = ruleBindObj?.let { compileBindBlock(it) } ?: emptyList()
 
         val (ruleFlow, ruleModeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
 
+        // Rule-level parse/shape (inherited by branches unless branch overrides)
+        val ruleParseObj = obj["parse"]?.jsonObject
+        val ruleShape = obj["shape"]?.jsonPrimitive?.content
+
         val branches: List<CompiledBranch> = if ("branches" in obj) {
-            obj["branches"]!!.jsonArray.map { compileBranch(it.jsonObject, ruleFlow, ruleModeHint) }
+            obj["branches"]!!.jsonArray.map {
+                compileBranch(it.jsonObject, ruleFlow, ruleModeHint, ruleId = id,
+                    ruleParseBlock = ruleParseObj, ruleParseShape = ruleShape, ruleBindObj = ruleBindObj)
+            }
         } else {
             listOf(compileBranch(obj, ruleFlow, ruleModeHint, ruleId = id))
         }
@@ -98,16 +106,19 @@ object RuleCompiler {
         ruleFlow: Flow? = null,
         ruleModeHint: Mode? = null,
         ruleId: String? = null,
+        ruleParseBlock: JsonObject? = null,
+        ruleParseShape: String? = null,
+        ruleBindObj: JsonObject? = null,
     ): CompiledBranch {
-        val targetName = obj["target"]?.jsonPrimitive?.content
-            ?: ruleId?.let { deriveTargetFromId(it) }
-            ?: throw RuleCompileException("Branch has no 'target' field and no rule id to derive from")
+        val targetName = ruleId?.let { deriveTargetFromId(it) }
+            ?: throw RuleCompileException("Branch has no rule id to derive target from")
 
         // Branch-level state overrides rule-level defaults
         val (branchFlow, branchModeHint) = parseStateBlock(obj["state"] as? JsonObject, "$targetName-branch")
 
-        // Branch-level bindings
-        val bindings = obj["bind"]?.jsonObject?.let { compileBindBlock(it) } ?: emptyList()
+        // Branch-level bindings override rule-level (no merging)
+        val effectiveBindObj = obj["bind"]?.jsonObject ?: ruleBindObj
+        val bindings = effectiveBindObj?.let { compileBindBlock(it) } ?: emptyList()
 
         // --- Phase 2: Reject ---
         // v2: "reject:" array of tree preds
@@ -128,10 +139,11 @@ object RuleCompiler {
         val requireCheck: (UiNode, Bindings) -> Boolean = { tree, _ -> requirePred(tree) }
 
         // --- Phase 4: Parse ---
-        // Shape is declared at branch level (preferred) or inside parse block (legacy)
-        val parseBlock = obj["parse"]?.jsonObject
+        // Branch-level parse overrides rule-level (no merging)
+        val parseBlock = obj["parse"]?.jsonObject ?: ruleParseBlock
         val parseShape = obj["shape"]?.jsonPrimitive?.content
             ?: parseBlock?.get("shape")?.jsonPrimitive?.content
+            ?: ruleParseShape
         val parser: (UiNode, Bindings) -> Map<String, Any?> = if (parseBlock != null) {
             compileParseBlock(parseBlock)
         } else {
@@ -254,6 +266,7 @@ object RuleCompiler {
             "each" in obj -> compileEach(obj, fromName)
             "join" in obj -> compileJoin(obj)
             "coalesce" in obj -> compileCoalesce(obj)
+            "siblingOf" in obj -> compileSiblingOf(obj, fromName)
             "read" in obj && fromName != null -> compileReadFromBinding(obj, fromName)
             else -> throw RuleCompileException("Unknown parse expression keys: ${obj.keys}")
         }
@@ -315,6 +328,44 @@ object RuleCompiler {
 
             // Fallback
             transformed ?: fallbackVal?.let { resolveLiteral(it) }
+        }
+    }
+
+    /**
+     * `siblingOf:` — shorthand for find→sibling→read→transform.
+     *
+     * ```json
+     * "fieldName": {
+     *   "siblingOf": { "all": [{"hasIdSuffix": "title"}, {"hasTextContaining": "Label"}] },
+     *   "offset": 1,
+     *   "read": "text",
+     *   "transform": "parsePercent"
+     * }
+     * ```
+     *
+     * Defaults: offset=1, read="text". Equivalent to:
+     * ```json
+     * { "find": <predicate>, "navigate": "sibling(1)", "read": "text", "transform": ... }
+     * ```
+     */
+    private fun compileSiblingOf(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
+        val findPred = compileNodePred(obj["siblingOf"]!!)
+        val offset = obj["offset"]?.jsonPrimitive?.intOrNull ?: 1
+        val readProp = obj["read"]?.jsonPrimitive?.content ?: "text"
+        val transformSpec = obj["transform"]
+
+        return { tree, bindings ->
+            val startNode = if (fromName != null) bindings[fromName] ?: tree else tree
+            val labelNode = startNode.findNode(findPred)
+            val siblingNode = labelNode?.sibling(offset)
+
+            val rawValue = if (siblingNode != null) {
+                readProperty(siblingNode, readProp)
+            } else null
+
+            if (rawValue != null && transformSpec != null) {
+                TransformRegistry.applyAny(transformSpec, rawValue)
+            } else rawValue
         }
     }
 

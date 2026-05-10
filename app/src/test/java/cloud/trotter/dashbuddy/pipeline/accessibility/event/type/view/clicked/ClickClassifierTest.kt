@@ -61,13 +61,13 @@ class ClickClassifierTest {
 
     @Test
     fun `classifies accept_button as AcceptOffer`() {
-        val result = classifyClick(node(viewId = "accept_button"), "OFFER_POPUP")
+        val result = classifyClick(node(viewId = "accept_button"), "offer_popup")
         assertEquals("accept_offer", result.intent())
     }
 
     @Test
     fun `AcceptOffer takes priority over text when both present`() {
-        val result = classifyClick(node(viewId = "accept_button", text = "Decline offer"), "OFFER_POPUP")
+        val result = classifyClick(node(viewId = "accept_button", text = "Decline offer"), "offer_popup")
         assertEquals("accept_offer", result.intent())
     }
 
@@ -77,13 +77,13 @@ class ClickClassifierTest {
 
     @Test
     fun `classifies 'Decline offer' text as DeclineOffer`() {
-        val result = classifyClick(node(text = "Decline offer"), "OFFER_POPUP_CONFIRM_DECLINE")
+        val result = classifyClick(node(text = "Decline offer"), "offer_popup_confirm_decline")
         assertEquals("decline_offer", result.intent())
     }
 
     @Test
     fun `DeclineOffer matches case-insensitively`() {
-        val result = classifyClick(node(text = "decline offer"), "OFFER_POPUP_CONFIRM_DECLINE")
+        val result = classifyClick(node(text = "decline offer"), "offer_popup_confirm_decline")
         assertEquals("decline_offer", result.intent())
     }
 

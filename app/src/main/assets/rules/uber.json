@@ -1,36 +1,38 @@
 {
   "format_version": 2,
-  "engine_version": "1.0.0",
   "platform_id": "uber.driver",
-  "min_app_version": "0.230.0",
-  "pipelines": {
-    "accessibility.window": { "version": 1 },
-    "accessibility.click": { "version": 1 },
-    "notification": { "version": 1, "allowOngoing": true }
-  },
-  "state_machine": {
-    "api_version_major": 1,
-    "api_version_minor": 0
-  },
   "screens": [
     {
       "id": "uber.screen.offer",
-      "platform_id": "uber.driver",
       "priority": 15,
-      "overrideable": true,
       "branches": [
         {
-          "target": "OFFER",
-          "state": { "flow": "offer:presented", "modeHint": "online" },
+          "state": {
+            "flow": "offer:presented",
+            "modeHint": "online"
+          },
           "shape": "offer",
           "require": {
             "all": [
-              { "exists": { "hasIdSuffix": "primary_touch_area" } },
-              { "exists": { "hasTextMatchesRegex": "\\$\\d+\\.\\d{2}" } },
-              { "exists": {
+              {
+                "exists": {
+                  "hasIdSuffix": "primary_touch_area"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextMatchesRegex": "\\$\\d+\\.\\d{2}"
+                }
+              },
+              {
+                "exists": {
                   "any": [
-                    { "hasText": "Accept" },
-                    { "hasText": "Match" }
+                    {
+                      "hasText": "Accept"
+                    },
+                    {
+                      "hasText": "Match"
+                    }
                   ]
                 }
               }
@@ -39,42 +41,82 @@
           "parse": {
             "fields": {
               "payAmount": {
-                "find": { "hasTextMatchesRegex": "\\$\\d" },
+                "find": {
+                  "hasTextMatchesRegex": "\\$\\d"
+                },
                 "read": "text",
                 "transform": "parseCurrency"
               },
               "distance": {
-                "find": { "hasTextMatchesRegex": "\\d[\\d.]*\\s*mi" },
+                "find": {
+                  "hasTextMatchesRegex": "\\d[\\d.]*\\s*mi"
+                },
                 "read": "text",
                 "transform": "parseDistance"
               },
               "timeToCompleteMinutes": {
-                "find": { "hasTextMatchesRegex": "\\d+\\s*min" },
+                "find": {
+                  "hasTextMatchesRegex": "\\d+\\s*min"
+                },
                 "read": "text",
                 "transform": "parseLeadingInt"
               },
               "orders": {
-                "each": { "hasClassNameEndsWith": "CardView" },
+                "each": {
+                  "hasClassNameEndsWith": "CardView"
+                },
                 "extract": {
                   "storeName": {
                     "find": {
                       "all": [
-                        { "hasClassName": "android.widget.TextView" },
-                        { "not": { "any": [
-                          { "hasTextMatchesRegex": "^\\$" },
-                          { "hasTextMatchesRegex": "^\\+" },
-                          { "hasTextContaining": "min" },
-                          { "hasText": "Accept" },
-                          { "hasText": "Match" },
-                          { "hasText": "Delivery" },
-                          { "hasTextContaining": "Exclusive" },
-                          { "hasTextContaining": "Guaranteed" },
-                          { "hasTextContaining": "Includes" },
-                          { "hasTextContaining": "Add a" },
-                          { "hasTextContaining": "Shop &" },
-                          { "hasTextMatchesRegex": "^\\d+ items?" },
-                          { "hasTextContaining": ", " }
-                        ]}}
+                        {
+                          "hasClassName": "android.widget.TextView"
+                        },
+                        {
+                          "not": {
+                            "any": [
+                              {
+                                "hasTextMatchesRegex": "^\\$"
+                              },
+                              {
+                                "hasTextMatchesRegex": "^\\+"
+                              },
+                              {
+                                "hasTextContaining": "min"
+                              },
+                              {
+                                "hasText": "Accept"
+                              },
+                              {
+                                "hasText": "Match"
+                              },
+                              {
+                                "hasText": "Delivery"
+                              },
+                              {
+                                "hasTextContaining": "Exclusive"
+                              },
+                              {
+                                "hasTextContaining": "Guaranteed"
+                              },
+                              {
+                                "hasTextContaining": "Includes"
+                              },
+                              {
+                                "hasTextContaining": "Add a"
+                              },
+                              {
+                                "hasTextContaining": "Shop &"
+                              },
+                              {
+                                "hasTextMatchesRegex": "^\\d+ items?"
+                              },
+                              {
+                                "hasTextContaining": ", "
+                              }
+                            ]
+                          }
+                        }
                       ]
                     },
                     "read": "text"
@@ -88,12 +130,17 @@
           },
           "effects": [
             {
-              "screenshot": { "prefix": "Offer - {storeName}" },
+              "screenshot": {
+                "prefix": "Offer - {storeName}"
+              },
               "dedupeKey": "offer-ss-{offerHash}",
               "throttleMs": 60000
             },
             {
-              "log": { "type": "OFFER_RECEIVED", "payload": "pay={payAmount} dist={distance}" },
+              "log": {
+                "type": "OFFER_RECEIVED",
+                "payload": "pay={payAmount} dist={distance}"
+              },
               "dedupeKey": "offer-log-{offerHash}",
               "throttleMs": 60000
             }
@@ -103,9 +150,7 @@
     },
     {
       "id": "uber.screen.splash",
-      "platform_id": "uber.driver",
       "priority": 40,
-      "overrideable": true,
       "require": {
         "exists": {
           "hasIdSuffix": "rootSplashBackground"
@@ -113,186 +158,260 @@
       }
     },
     {
-      "id": "uber.screen.pickup_verification",
-      "platform_id": "uber.driver",
+      "id": "uber.screen.pickup_verification_info",
       "priority": 50,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
       },
-      "branches": [
-        {
-          "target": "pickup_verification_info",
-          "require": {
-            "all": [
-              { "exists": { "hasIdSuffix": "on_job_view" } },
-              { "exists": { "hasText": "Pickup verification" } }
-            ]
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "Pickup verification"
+            }
           }
-        },
-        {
-          "target": "pickup_verification_pin",
-          "require": {
-            "all": [
-              { "exists": { "hasIdSuffix": "on_job_view" } },
-              { "exists": { "hasTextContaining": "Enter Uber Eats order number" } }
-            ]
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.pickup_verification_pin",
+      "priority": 50,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Enter Uber Eats order number"
+            }
           }
-        },
-        {
-          "target": "pickup_verification_items",
-          "require": {
-            "all": [
-              { "exists": { "hasIdSuffix": "on_job_view" } },
-              { "exists": { "hasText": "Verify order" } },
-              { "exists": {
-                  "any": [
-                    { "hasText": "Order verified" },
-                    { "hasText": "Issue with order" }
-                  ]
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.pickup_verification_items",
+      "priority": 50,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "Verify order"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasText": "Order verified"
+                },
+                {
+                  "hasText": "Issue with order"
                 }
-              }
-            ]
+              ]
+            }
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "id": "uber.screen.customer_chat",
-      "platform_id": "uber.driver",
       "priority": 55,
-      "overrideable": true,
       "state": {
         "modeHint": "online"
       },
       "require": {
         "all": [
-          { "exists": { "hasIdSuffix": "on_job_view" } },
-          { "exists": { "hasIdSuffix": "ub__intercom_coordinator_layout" } }
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "ub__intercom_coordinator_layout"
+            }
+          }
         ]
       }
     },
     {
       "id": "uber.screen.photo_capture",
-      "platform_id": "uber.driver",
       "priority": 60,
-      "overrideable": true,
       "state": {
         "flow": "task:dropoff:arrived",
         "modeHint": "online"
       },
       "require": {
         "all": [
-          { "exists": { "hasIdSuffix": "on_job_view" } },
-          { "exists": { "hasIdSuffix": "ub__carbon_facecamera_root_view" } }
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "ub__carbon_facecamera_root_view"
+            }
+          }
         ]
       }
     },
     {
       "id": "uber.screen.delivery_confirmation",
-      "platform_id": "uber.driver",
       "priority": 65,
-      "overrideable": true,
       "state": {
         "flow": "task:dropoff:arrived",
         "modeHint": "online"
       },
       "require": {
         "all": [
-          { "exists": { "hasIdSuffix": "on_job_view" } },
-          { "exists": { "hasIdSuffix": "earner_trip_image_capture_taskbar_container" } }
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "earner_trip_image_capture_taskbar_container"
+            }
+          }
         ]
       }
     },
     {
-      "id": "uber.screen.shop_and_pay",
-      "platform_id": "uber.driver",
+      "id": "uber.screen.shop_and_pay_list",
       "priority": 68,
-      "overrideable": true,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
       },
-      "branches": [
-        {
-          "target": "shop_and_pay_list",
-          "require": {
-            "all": [
-              { "exists": { "hasIdSuffix": "on_job_view" } },
-              { "exists": { "hasTextContaining": "Shop priority items" } }
-            ]
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Shop priority items"
+            }
           }
-        },
-        {
-          "target": "shop_and_pay_checkout",
-          "require": {
-            "all": [
-              { "exists": { "hasIdSuffix": "on_job_view" } },
-              { "exists": { "hasTextContaining": "shopping bags" } }
-            ]
+        ]
+      }
+    },
+    {
+      "id": "uber.screen.shop_and_pay_checkout",
+      "priority": 68,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "shopping bags"
+            }
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "id": "uber.screen.post_trip",
-      "platform_id": "uber.driver",
       "priority": 75,
-      "overrideable": true,
       "state": {
         "flow": "post:task",
         "modeHint": "online"
       },
       "require": {
         "all": [
-          { "exists": { "hasIdSuffix": "on_job_view" } },
-          { "exists": { "hasTextContaining": "more customers order again" } }
+          {
+            "exists": {
+              "hasIdSuffix": "on_job_view"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "more customers order again"
+            }
+          }
         ]
       }
     },
     {
       "id": "uber.screen.earnings_activity",
-      "platform_id": "uber.driver",
       "priority": 78,
-      "overrideable": true,
       "require": {
         "all": [
-          { "exists": { "hasText": "Earnings Activity" } },
-          { "exists": { "hasIdSuffix": "recycler_view" } }
+          {
+            "exists": {
+              "hasText": "Earnings Activity"
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "recycler_view"
+            }
+          }
         ]
       }
     },
     {
       "id": "uber.screen.session_summary",
-      "platform_id": "uber.driver",
       "priority": 80,
-      "overrideable": true,
       "state": {
         "flow": "session:ended",
         "modeHint": "offline"
       },
       "require": {
-        "exists": { "hasTextContaining": "Session summary" }
+        "exists": {
+          "hasTextContaining": "Session summary"
+        }
       }
     },
     {
       "id": "uber.screen.active_trip",
-      "platform_id": "uber.driver",
       "priority": 100,
-      "overrideable": true,
       "state": {
         "modeHint": "online"
       },
       "require": {
-        "exists": { "hasIdSuffix": "on_job_view" }
+        "exists": {
+          "hasIdSuffix": "on_job_view"
+        }
       }
     },
     {
       "id": "uber.screen.awaiting_offer",
-      "platform_id": "uber.driver",
       "priority": 110,
-      "overrideable": true,
       "state": {
         "flow": "idle",
         "modeHint": "online"
@@ -307,8 +426,12 @@
           {
             "exists": {
               "any": [
-                { "hasTextContaining": "Finding trips" },
-                { "hasText": "You're online" }
+                {
+                  "hasTextContaining": "Finding trips"
+                },
+                {
+                  "hasText": "You're online"
+                }
               ]
             }
           }
@@ -317,9 +440,7 @@
     },
     {
       "id": "uber.screen.idle_map",
-      "platform_id": "uber.driver",
       "priority": 130,
-      "overrideable": true,
       "state": {
         "flow": "idle",
         "modeHint": "offline"
@@ -332,34 +453,53 @@
     },
     {
       "id": "uber.screen.home_dashboard",
-      "platform_id": "uber.driver",
       "priority": 140,
-      "overrideable": true,
       "branches": [
         {
-          "target": "home_dashboard",
-          "state": { "flow": "idle", "modeHint": "offline" },
+          "state": {
+            "flow": "idle",
+            "modeHint": "offline"
+          },
           "require": {
             "all": [
-              { "exists": { "hasIdSuffix": "glide_bottom_nav_home" } },
-              { "exists": { "hasIdSuffix": "go_online_button" } }
+              {
+                "exists": {
+                  "hasIdSuffix": "glide_bottom_nav_home"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "go_online_button"
+                }
+              }
             ]
           }
         },
         {
-          "target": "home_dashboard",
-          "state": { "flow": "idle", "modeHint": "online" },
+          "state": {
+            "flow": "idle",
+            "modeHint": "online"
+          },
           "require": {
             "all": [
-              { "exists": { "hasIdSuffix": "glide_bottom_nav_home" } },
-              { "exists": { "hasIdSuffix": "ub__system_banner_text" } }
+              {
+                "exists": {
+                  "hasIdSuffix": "glide_bottom_nav_home"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "ub__system_banner_text"
+                }
+              }
             ]
           }
         },
         {
-          "target": "home_dashboard",
           "require": {
-            "exists": { "hasIdSuffix": "glide_bottom_nav_home" }
+            "exists": {
+              "hasIdSuffix": "glide_bottom_nav_home"
+            }
           }
         }
       ]
@@ -368,25 +508,30 @@
   "clicks": [
     {
       "id": "uber.click.accept_offer",
-      "platform_id": "uber.driver",
       "priority": 5,
-      "overrideable": true,
-      "screenIs": "OFFER",
-      "state": { "flow": "task:pickup:navigation", "modeHint": "online" },
+      "screenIs": "offer",
+      "state": {
+        "flow": "task:pickup:navigation",
+        "modeHint": "online"
+      },
       "intent": "accept_offer",
       "if": {
         "any": [
-          { "hasText": "Accept" },
-          { "hasText": "Match" }
+          {
+            "hasText": "Accept"
+          },
+          {
+            "hasText": "Match"
+          }
         ]
       }
     },
     {
       "id": "uber.click.go_online",
-      "platform_id": "uber.driver",
       "priority": 10,
-      "overrideable": true,
-      "state": { "modeHint": "online" },
+      "state": {
+        "modeHint": "online"
+      },
       "intent": "go_online",
       "if": {
         "hasIdSuffix": "go_online_button"
@@ -394,11 +539,12 @@
     },
     {
       "id": "uber.click.go_offline",
-      "platform_id": "uber.driver",
       "priority": 20,
-      "overrideable": true,
       "screenIs": "home_dashboard",
-      "state": { "flow": "session:ended", "modeHint": "offline" },
+      "state": {
+        "flow": "session:ended",
+        "modeHint": "offline"
+      },
       "intent": "go_offline",
       "if": {
         "hasIdSuffix": "carbon_action_button"
@@ -406,40 +552,48 @@
     },
     {
       "id": "uber.click.order_verified",
-      "platform_id": "uber.driver",
       "priority": 15,
-      "overrideable": true,
       "screenIs": "pickup_verification_items",
-      "state": { "flow": "task:dropoff:navigation", "modeHint": "online" },
+      "state": {
+        "flow": "task:dropoff:navigation",
+        "modeHint": "online"
+      },
       "intent": "order_verified",
       "if": {
         "all": [
-          { "hasText": "Order verified" },
-          { "hasClassName": "android.widget.Button" }
+          {
+            "hasText": "Order verified"
+          },
+          {
+            "hasClassName": "android.widget.Button"
+          }
         ]
       }
     },
     {
       "id": "uber.click.issue_with_order",
-      "platform_id": "uber.driver",
       "priority": 16,
-      "overrideable": true,
       "screenIs": "pickup_verification_items",
       "intent": "issue_with_order",
       "if": {
         "all": [
-          { "hasText": "Issue with order" },
-          { "hasClassName": "android.widget.Button" }
+          {
+            "hasText": "Issue with order"
+          },
+          {
+            "hasClassName": "android.widget.Button"
+          }
         ]
       }
     },
     {
       "id": "uber.click.delivered",
-      "platform_id": "uber.driver",
       "priority": 20,
-      "overrideable": true,
       "screenIs": "delivery_confirmation",
-      "state": { "flow": "post:task", "modeHint": "online" },
+      "state": {
+        "flow": "post:task",
+        "modeHint": "online"
+      },
       "intent": "delivered",
       "if": {
         "hasIdSuffix": "task_button_button"
@@ -447,9 +601,7 @@
     },
     {
       "id": "uber.click.open_inbox",
-      "platform_id": "uber.driver",
       "priority": 30,
-      "overrideable": true,
       "screenIs": "home_dashboard",
       "intent": "open_inbox",
       "if": {
@@ -460,9 +612,7 @@
   "notifications": [
     {
       "id": "uber.notification.trip_en_route_pickup",
-      "platform_id": "uber.driver",
       "priority": 3,
-      "overrideable": true,
       "if": {
         "titleMatchesRegex": "^Going to (?!\\d)"
       },
@@ -471,9 +621,7 @@
     },
     {
       "id": "uber.notification.trip_arrived_pickup",
-      "platform_id": "uber.driver",
       "priority": 4,
-      "overrideable": true,
       "if": {
         "titleContains": "Arrived at "
       },
@@ -482,9 +630,7 @@
     },
     {
       "id": "uber.notification.trip_en_route_dropoff",
-      "platform_id": "uber.driver",
       "priority": 5,
-      "overrideable": true,
       "if": {
         "titleMatchesRegex": "^Going to \\d"
       },
@@ -493,9 +639,7 @@
     },
     {
       "id": "uber.notification.trip_at_dropoff",
-      "platform_id": "uber.driver",
       "priority": 6,
-      "overrideable": true,
       "if": {
         "titleMatchesRegex": "(Leave the order at|Meet at door for)"
       },
@@ -504,9 +648,7 @@
     },
     {
       "id": "uber.notification.tip_received",
-      "platform_id": "uber.driver",
       "priority": 8,
-      "overrideable": true,
       "if": {
         "titleMatchesRegex": "received a \\$\\d"
       },
@@ -515,9 +657,7 @@
     },
     {
       "id": "uber.notification.online_status",
-      "platform_id": "uber.driver",
       "priority": 10,
-      "overrideable": true,
       "if": {
         "titleContains": "currently online"
       },
@@ -525,9 +665,7 @@
     },
     {
       "id": "uber.notification.quest_promo",
-      "platform_id": "uber.driver",
       "priority": 20,
-      "overrideable": true,
       "if": {
         "titleContains": "Quest awaits"
       },
@@ -536,13 +674,15 @@
     },
     {
       "id": "uber.notification.quest_deadline",
-      "platform_id": "uber.driver",
       "priority": 30,
-      "overrideable": true,
       "if": {
         "all": [
-          { "titleContains": "Last chance" },
-          { "anyFieldContains": "Quest" }
+          {
+            "titleContains": "Last chance"
+          },
+          {
+            "anyFieldContains": "Quest"
+          }
         ]
       },
       "intent": "quest_deadline",

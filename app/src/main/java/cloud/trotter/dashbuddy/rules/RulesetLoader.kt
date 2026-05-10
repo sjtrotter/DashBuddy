@@ -1,16 +1,12 @@
 package cloud.trotter.dashbuddy.rules
 
 import cloud.trotter.dashbuddy.domain.pipeline.RuleEngineConstants
-import cloud.trotter.dashbuddy.domain.pipeline.StateMachineContract
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import timber.log.Timber
 
 /**
- * Seven-step compatibility check per ADR-0003.
+ * Compatibility check per ADR-0003.
  *
  * Validates a parsed ruleset JSON root before it reaches [RuleCompiler].
  * If any check fails, the entire bundle is rejected and the caller falls
@@ -36,38 +32,7 @@ object RulesetLoader {
             return "missing or blank platform_id"
         }
 
-        // Step 3: pipeline version compatibility (if declared)
-        // Supports both bare int ("notification": 1) and object ("notification": {"version": 1, ...})
-        val pipelinesObj = root["pipelines"]?.jsonObject
-        if (pipelinesObj != null) {
-            for ((pipelineId, versionElem) in pipelinesObj) {
-                val declared = when (versionElem) {
-                    is JsonPrimitive -> versionElem.int
-                    is JsonObject -> versionElem["version"]?.jsonPrimitive?.int ?: 0
-                    else -> 0
-                }
-                val supported = cloud.trotter.dashbuddy.domain.pipeline.PipelineRegistry
-                    .pipelines[pipelineId]
-                if (supported == null) {
-                    Timber.w("RulesetLoader: unknown pipeline '$pipelineId' in $source (ignored)")
-                    continue
-                }
-                if (declared > supported) {
-                    return "pipeline '$pipelineId' version $declared exceeds supported $supported"
-                }
-            }
-        }
-
-        // Step 4: state_machine version compatibility (if declared)
-        val smObj = root["state_machine"]?.jsonObject
-        if (smObj != null) {
-            val majorDeclared = smObj["api_version_major"]?.jsonPrimitive?.int ?: 0
-            if (majorDeclared > StateMachineContract.API_VERSION_MAJOR) {
-                return "state_machine major version $majorDeclared exceeds supported ${StateMachineContract.API_VERSION_MAJOR}"
-            }
-        }
-
-        // Steps 5-7: flow/mode vocabulary validation is deferred to
+        // Steps 3+: flow/mode vocabulary validation is deferred to
         // RuleCompiler.parseStateBlock which rejects unknown values at
         // compile time per-rule.
 
