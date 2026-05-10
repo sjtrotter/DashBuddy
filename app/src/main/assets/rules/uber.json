@@ -85,7 +85,21 @@
                 }
               }
             }
-          }
+          },
+          "effects": [
+            {
+              "verb": "screenshot",
+              "args": { "prefix": "Offer - {storeName}" },
+              "dedupeKey": "offer-ss-{offerHash}",
+              "throttleMs": 60000
+            },
+            {
+              "verb": "log",
+              "args": { "type": "OFFER_RECEIVED", "payload": "pay={payAmount} dist={distance}" },
+              "dedupeKey": "offer-log-{offerHash}",
+              "throttleMs": 60000
+            }
+          ]
         }
       ]
     },

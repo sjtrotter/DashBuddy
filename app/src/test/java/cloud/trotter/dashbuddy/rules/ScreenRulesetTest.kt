@@ -1,8 +1,11 @@
 package cloud.trotter.dashbuddy.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -187,5 +190,219 @@ class ScreenRulesetTest {
     @Test
     fun `empty ruleset returns null`() {
         assertNull(ScreenRuleset(emptyList()).matchTarget(node()))
+    }
+
+    // =========================================================================
+    // Template interpolation in effects
+    // =========================================================================
+
+    private fun branchWithEffects(
+        target: String,
+        effects: List<CompiledEffect>,
+        parser: (UiNode, Bindings) -> Map<String, Any?> = { _, _ -> emptyMap() },
+    ) = CompiledBranch(
+        target = target,
+        requireCheck = { _, _ -> true },
+        parser = parser,
+        effects = effects,
+    )
+
+    @Test
+    fun `effect args resolve template references against parsed fields`() {
+        val effect = CompiledEffect(
+            verb = EffectVerb.SCREENSHOT,
+            args = mapOf("prefix" to "Offer - {storeName}"),
+        )
+        val ruleset = ScreenRuleset(
+            listOf(
+                CompiledScreenRule(
+                    id = "test.rule", priority = 10, overrideable = true,
+                    branches = listOf(
+                        branchWithEffects(
+                            "OFFER",
+                            listOf(effect),
+                            parser = { _, _ -> mapOf("storeName" to "Chipotle") },
+                        )
+                    ),
+                )
+            )
+        )
+
+        val result = ruleset.matchFirst(node())!!
+        assertEquals(1, result.effects.size)
+        assertEquals("Offer - Chipotle", result.effects[0].args["prefix"])
+    }
+
+    @Test
+    fun `dedupeKey resolves template references`() {
+        val effect = CompiledEffect(
+            verb = EffectVerb.LOG,
+            args = mapOf("type" to "OFFER_RECEIVED"),
+            dedupeKey = "offer-{offerHash}",
+        )
+        val ruleset = ScreenRuleset(
+            listOf(
+                CompiledScreenRule(
+                    id = "test.rule", priority = 10, overrideable = true,
+                    branches = listOf(
+                        branchWithEffects(
+                            "OFFER",
+                            listOf(effect),
+                            parser = { _, _ -> mapOf("offerHash" to "abc123") },
+                        )
+                    ),
+                )
+            )
+        )
+
+        val result = ruleset.matchFirst(node())!!
+        assertEquals("offer-abc123", result.effects[0].dedupeKey)
+    }
+
+    @Test
+    fun `unknown template fields are left as-is`() {
+        val effect = CompiledEffect(
+            verb = EffectVerb.BUBBLE,
+            args = mapOf("text" to "Value: {unknown}"),
+        )
+        val ruleset = ScreenRuleset(
+            listOf(
+                CompiledScreenRule(
+                    id = "test.rule", priority = 10, overrideable = true,
+                    branches = listOf(
+                        branchWithEffects("X", listOf(effect)),
+                    ),
+                )
+            )
+        )
+
+        val result = ruleset.matchFirst(node())!!
+        assertEquals("Value: {unknown}", result.effects[0].args["text"])
+    }
+
+    @Test
+    fun `template values are sanitized — control chars stripped`() {
+        val effect = CompiledEffect(
+            verb = EffectVerb.BUBBLE,
+            args = mapOf("text" to "Hi {name}"),
+        )
+        val ruleset = ScreenRuleset(
+            listOf(
+                CompiledScreenRule(
+                    id = "test.rule", priority = 10, overrideable = true,
+                    branches = listOf(
+                        branchWithEffects(
+                            "X",
+                            listOf(effect),
+                            parser = { _, _ -> mapOf("name" to "Bob\u0000\u0007") },
+                        )
+                    ),
+                )
+            )
+        )
+
+        val result = ruleset.matchFirst(node())!!
+        assertEquals("Hi Bob", result.effects[0].args["text"])
+    }
+
+    @Test
+    fun `template values are capped at max length`() {
+        val longValue = "X".repeat(500)
+        val effect = CompiledEffect(
+            verb = EffectVerb.LOG,
+            args = mapOf("payload" to "{data}"),
+        )
+        val ruleset = ScreenRuleset(
+            listOf(
+                CompiledScreenRule(
+                    id = "test.rule", priority = 10, overrideable = true,
+                    branches = listOf(
+                        branchWithEffects(
+                            "X",
+                            listOf(effect),
+                            parser = { _, _ -> mapOf("data" to longValue) },
+                        )
+                    ),
+                )
+            )
+        )
+
+        val result = ruleset.matchFirst(node())!!
+        assertEquals(ScreenRuleset.MAX_TEMPLATE_VALUE_LENGTH, result.effects[0].args["payload"]!!.length)
+    }
+
+    @Test
+    fun `args without template references pass through unchanged`() {
+        val effect = CompiledEffect(
+            verb = EffectVerb.SCREENSHOT,
+            args = mapOf("prefix" to "Static Value"),
+        )
+        val ruleset = ScreenRuleset(
+            listOf(
+                CompiledScreenRule(
+                    id = "test.rule", priority = 10, overrideable = true,
+                    branches = listOf(
+                        branchWithEffects(
+                            "X",
+                            listOf(effect),
+                            parser = { _, _ -> mapOf("storeName" to "Ignored") },
+                        )
+                    ),
+                )
+            )
+        )
+
+        val result = ruleset.matchFirst(node())!!
+        assertEquals("Static Value", result.effects[0].args["prefix"])
+    }
+
+    @Test
+    fun `multiple effects resolve independently`() {
+        val effects = listOf(
+            CompiledEffect(
+                verb = EffectVerb.SCREENSHOT,
+                args = mapOf("prefix" to "Offer - {storeName}"),
+                dedupeKey = "ss-{offerHash}",
+                throttleMs = 60000,
+            ),
+            CompiledEffect(
+                verb = EffectVerb.LOG,
+                args = mapOf("type" to "OFFER_RECEIVED", "payload" to "pay={payAmount}"),
+                dedupeKey = "log-{offerHash}",
+                throttleMs = 60000,
+            ),
+        )
+        val ruleset = ScreenRuleset(
+            listOf(
+                CompiledScreenRule(
+                    id = "doordash.screen.offer", priority = 20, overrideable = true,
+                    branches = listOf(
+                        branchWithEffects(
+                            "OFFER_POPUP",
+                            effects,
+                            parser = { _, _ -> mapOf(
+                                "storeName" to "Chipotle",
+                                "offerHash" to "h1",
+                                "payAmount" to 7.5,
+                            ) },
+                        )
+                    ),
+                )
+            )
+        )
+
+        val result = ruleset.matchFirst(node())!!
+        assertEquals(2, result.effects.size)
+
+        val ssEffect = result.effects[0]
+        assertEquals(EffectVerb.SCREENSHOT, ssEffect.verb)
+        assertEquals("Offer - Chipotle", ssEffect.args["prefix"])
+        assertEquals("ss-h1", ssEffect.dedupeKey)
+        assertEquals(60000L, ssEffect.throttleMs)
+
+        val logEffect = result.effects[1]
+        assertEquals(EffectVerb.LOG, logEffect.verb)
+        assertEquals("pay=7.5", logEffect.args["payload"])
+        assertEquals("log-h1", logEffect.dedupeKey)
     }
 }

@@ -145,7 +145,7 @@ class EffectMapTest {
     // =========================================================================
 
     @Test
-    fun `offer presented emits LogEvent, Screenshot, Evaluate, Speak`() {
+    fun `offer presented emits Evaluate and Speak (screenshot and log now via rule effects)`() {
         val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
         val next = AppState(regions = Regions(
             flow = FlowRegion(
@@ -157,11 +157,11 @@ class EffectMapTest {
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented, parsed = testOfferFields))
 
-        assertTrue("Should emit LogEvent", effects.any { it is AppEffect.LogEvent })
-        assertTrue("Should emit CaptureScreenshot", effects.any { it is AppEffect.CaptureScreenshot })
         assertTrue("Should emit EvaluateOffer", effects.any { it is AppEffect.EvaluateOffer })
         assertTrue("Should emit SpeakOffer", effects.any { it is AppEffect.SpeakOffer })
-        assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_RECEIVED))
+        // Screenshot + OFFER_RECEIVED log now handled by rule-declared effects
+        assertTrue("No hardcoded CaptureScreenshot", effects.none { it is AppEffect.CaptureScreenshot })
+        assertTrue("No hardcoded OFFER_RECEIVED log", !effects.logEventTypes().contains(AppEventType.OFFER_RECEIVED))
     }
 
     @Test

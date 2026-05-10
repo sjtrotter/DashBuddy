@@ -104,8 +104,8 @@ class ScreenRuleset(
                 }
                 if (branchSkip) continue
 
-                // Resolve compiled effects against current bindings
-                val resolvedEffects = resolveEffects(branch.effects, allBindings, rule.id)
+                // Resolve compiled effects against current bindings + parsed fields
+                val resolvedEffects = resolveEffects(branch.effects, allBindings, rule.id, rawFields)
 
                 // Resolve transition overrides (non-target effects only, no binding resolution needed)
                 val resolvedOverrides = resolveTransitionOverrides(
@@ -131,11 +131,16 @@ class ScreenRuleset(
      * [RequestedEffect]. For target-bound verbs (e.g. [EffectVerb.CLICK]),
      * effects whose target node is null are silently dropped. For non-target
      * verbs, [targetRef] is null and the effect always resolves.
+     *
+     * Template interpolation: `{fieldName}` references in args values and
+     * dedupeKey are resolved against [parsedFields]. Resolution is one-pass
+     * (no recursion) and values are sanitized.
      */
     private fun resolveEffects(
         effects: List<CompiledEffect>,
         bindings: Bindings,
         ruleId: String,
+        parsedFields: Map<String, Any?> = emptyMap(),
     ): List<RequestedEffect> = effects.mapNotNull { effect ->
         val targetRef = if (effect.targetBindName != null) {
             val node = bindings[effect.targetBindName]
@@ -149,10 +154,10 @@ class ScreenRuleset(
         }
         RequestedEffect(
             verb = effect.verb,
-            args = effect.args,
+            args = resolveTemplateArgs(effect.args, parsedFields),
             targetRef = targetRef,
             onlyIf = effect.onlyIf,
-            dedupeKey = effect.dedupeKey,
+            dedupeKey = effect.dedupeKey?.let { resolveTemplate(it, parsedFields) },
             throttleMs = effect.throttleMs,
             ruleId = ruleId,
         )
@@ -190,6 +195,57 @@ class ScreenRuleset(
             }
         }
         return result
+    }
+
+    // =========================================================================
+    // Template interpolation
+    // =========================================================================
+
+    companion object {
+        /** Max length for a resolved template value (prevents oversized strings). */
+        const val MAX_TEMPLATE_VALUE_LENGTH = 256
+
+        /** Matches `{fieldName}` — single-level, no nesting. */
+        private val TEMPLATE_PATTERN = Regex("""\{(\w+)}""")
+    }
+
+    /**
+     * Resolve all `{fieldName}` references in [args] values against [fields].
+     * One-pass, no recursion — if a resolved value itself contains `{x}`, it
+     * stays literal.
+     */
+    private fun resolveTemplateArgs(
+        args: Map<String, String>,
+        fields: Map<String, Any?>,
+    ): Map<String, String> {
+        if (args.isEmpty() || fields.isEmpty()) return args
+        // Fast path: skip if no args contain template references
+        if (args.values.none { it.contains('{') }) return args
+        return args.mapValues { (_, value) -> resolveTemplate(value, fields) }
+    }
+
+    /**
+     * One-pass template resolution. Replaces `{fieldName}` with the
+     * sanitized string value from [fields]. Unknown field references
+     * are left as-is (literal `{unknown}`).
+     */
+    private fun resolveTemplate(template: String, fields: Map<String, Any?>): String {
+        if (!template.contains('{')) return template
+        return TEMPLATE_PATTERN.replace(template) { match ->
+            val fieldName = match.groupValues[1]
+            val value = fields[fieldName]
+            if (value != null) sanitizeTemplateValue(value.toString()) else match.value
+        }
+    }
+
+    /**
+     * Sanitize a resolved template value: strip control/unassigned characters
+     * and cap length.
+     */
+    private fun sanitizeTemplateValue(value: String): String {
+        return value
+            .replace(Regex("[\\p{Cc}\\p{Cn}]"), "") // strip control/unassigned chars
+            .take(MAX_TEMPLATE_VALUE_LENGTH)
     }
 
     private fun buildNodeRef(node: UiNode): NodeRef {

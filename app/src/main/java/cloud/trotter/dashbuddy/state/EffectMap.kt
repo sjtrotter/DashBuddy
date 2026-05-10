@@ -79,16 +79,11 @@ class EffectMap @Inject constructor() {
         val nextOffer = next.pendingOffer
 
         // Offer presented
+        // Screenshot + log now handled by rule-declared effects on offer screen rules
+        // (deduped via dedupeKey + throttleMs). Evaluate + speak remain here
+        // because they need rich ParsedOffer objects, not string args.
         if (prevOffer == null && nextOffer != null) {
             val offer = nextOffer.offerFields
-            val merchantName = offer.parsedOffer.orders.joinToString(", ") { it.storeName }
-
-            // Log
-            add(logEffect(null, AppEventType.OFFER_RECEIVED, offer.parsedOffer))
-
-            // Screenshot
-            val safeMerchant = merchantName.replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
-            add(AppEffect.CaptureScreenshot("Offer - $safeMerchant"))
 
             // Evaluate
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
@@ -99,6 +94,8 @@ class EffectMap @Inject constructor() {
         }
 
         // Offer replaced (different hash)
+        // Screenshot + log for new offer handled by rule-declared effects (deduped
+        // per offerHash). Resolution log for old offer stays here.
         if (prevOffer != null && nextOffer != null &&
             prevOffer.offerHash != nextOffer.offerHash
         ) {
@@ -106,15 +103,9 @@ class EffectMap @Inject constructor() {
             val outcome = resolveOfferOutcome(obs, prevOffer)
             add(logEffect(null, outcome, "Replaced by new offer"))
 
-            // Log + evaluate new offer
+            // Evaluate + speak new offer
             val offer = nextOffer.offerFields
-            val merchantName = offer.parsedOffer.orders.joinToString(", ") { it.storeName }
-            add(logEffect(null, AppEventType.OFFER_RECEIVED, offer.parsedOffer))
-            val safeMerchant = merchantName.replace(Regex("[^a-zA-Z0-9 ,.()'-]"), "")
-            add(AppEffect.CaptureScreenshot("Offer - $safeMerchant"))
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
-
-            // Speak offer aloud
             val platform = next.activePlatform?.name ?: "Unknown"
             add(AppEffect.SpeakOffer(offer.parsedOffer, platform))
         }
