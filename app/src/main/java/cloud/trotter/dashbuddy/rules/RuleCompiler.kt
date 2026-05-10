@@ -117,6 +117,11 @@ object RuleCompiler {
         val effectsArray = obj["effects"]?.jsonArray ?: obj["actions"]?.jsonArray
         val effects = effectsArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
 
+        // --- Transition overrides ---
+        val transitionOverrides = obj["transitionOverrides"]?.jsonObject?.let {
+            compileTransitionOverrides(it)
+        } ?: emptyMap()
+
         return CompiledBranch(
             target = targetName,
             bindings = bindings,
@@ -126,6 +131,7 @@ object RuleCompiler {
             parseShape = parseShape,
             validators = validators,
             effects = effects,
+            transitionOverrides = transitionOverrides,
             flow = branchFlow ?: ruleFlow,
             modeHint = branchModeHint ?: ruleModeHint,
         )
@@ -544,6 +550,24 @@ object RuleCompiler {
             dedupeKey = obj["dedupeKey"]?.jsonPrimitive?.content,
             throttleMs = obj["throttleMs"]?.jsonPrimitive?.longOrNull,
         )
+    }
+
+    /**
+     * Compile a `transitionOverrides` JSON block into a map of trigger wire
+     * names to compiled effect lists. Unknown trigger keys are rejected.
+     */
+    internal fun compileTransitionOverrides(
+        obj: JsonObject,
+    ): Map<String, List<CompiledEffect>> {
+        val result = mutableMapOf<String, List<CompiledEffect>>()
+        for ((triggerWire, effectsElement) in obj) {
+            // Validate trigger key against known triggers
+            cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger.fromWire(triggerWire)
+                ?: throw RuleCompileException("Unknown transition trigger: '$triggerWire'")
+            val effects = effectsElement.jsonArray.map { compileEffectEntry(it.jsonObject) }
+            result[triggerWire] = effects
+        }
+        return result
     }
 
     private fun compileGate(obj: JsonObject): cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate {

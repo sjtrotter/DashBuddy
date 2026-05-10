@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
+import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -77,6 +78,7 @@ class ObservationClassifier @Inject constructor(
             parsed = result.parsed,
             ruleId = result.ruleId,
             effects = result.effects,
+            transitionOverrides = result.transitionOverrides,
         )
 
         // Cache last non-sensitive screen for click enrichment
@@ -95,6 +97,7 @@ class ObservationClassifier @Inject constructor(
         parsed: ParsedFields,
         ruleId: String?,
         effects: List<RequestedEffect> = emptyList(),
+        transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
     ) = Observation.Screen(
         timestamp = System.currentTimeMillis(),
         captureId = null,
@@ -105,6 +108,7 @@ class ObservationClassifier @Inject constructor(
         parsed = parsed,
         target = screenName,
         effects = effects,
+        transitionOverrides = transitionOverrides,
     )
 
     // ── Click ───────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
+import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
 
@@ -106,6 +107,11 @@ class ScreenRuleset(
                 // Resolve compiled effects against current bindings
                 val resolvedEffects = resolveEffects(branch.effects, allBindings, rule.id)
 
+                // Resolve transition overrides (non-target effects only, no binding resolution needed)
+                val resolvedOverrides = resolveTransitionOverrides(
+                    branch.transitionOverrides, rule.id,
+                )
+
                 return ScreenMatchResult(
                     ruleId = rule.id,
                     target = branch.target,
@@ -113,6 +119,7 @@ class ScreenRuleset(
                     modeHint = branch.modeHint,
                     parsed = parsed,
                     effects = resolvedEffects,
+                    transitionOverrides = resolvedOverrides,
                 )
             }
         }
@@ -149,6 +156,40 @@ class ScreenRuleset(
             throttleMs = effect.throttleMs,
             ruleId = ruleId,
         )
+    }
+
+    /**
+     * Resolve compiled transition overrides (wire-keyed) into
+     * [TransitionTrigger]-keyed [RequestedEffect] lists.
+     *
+     * Transition override effects are non-target verbs (lifecycle / scheduling),
+     * so no binding resolution is needed — just verb + args conversion.
+     */
+    private fun resolveTransitionOverrides(
+        overrides: Map<String, List<CompiledEffect>>,
+        ruleId: String,
+    ): Map<TransitionTrigger, List<RequestedEffect>> {
+        if (overrides.isEmpty()) return emptyMap()
+        val result = mutableMapOf<TransitionTrigger, List<RequestedEffect>>()
+        for ((wireKey, compiledEffects) in overrides) {
+            val trigger = TransitionTrigger.fromWire(wireKey)
+            if (trigger == null) {
+                Timber.w("Unknown transition trigger '%s' in rule '%s'; skipping", wireKey, ruleId)
+                continue
+            }
+            result[trigger] = compiledEffects.map { effect ->
+                RequestedEffect(
+                    verb = effect.verb,
+                    args = effect.args,
+                    targetRef = null, // lifecycle verbs never have targets
+                    onlyIf = effect.onlyIf,
+                    dedupeKey = effect.dedupeKey,
+                    throttleMs = effect.throttleMs,
+                    ruleId = ruleId,
+                )
+            }
+        }
+        return result
     }
 
     private fun buildNodeRef(node: UiNode): NodeRef {

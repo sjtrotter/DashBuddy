@@ -41,6 +41,7 @@ data class CompiledBranch(
     val parseShape: String? = null,
     val validators: List<(Map<String, Any?>) -> ValidateOutcome> = emptyList(),
     val effects: List<CompiledEffect> = emptyList(),
+    val transitionOverrides: Map<String, List<CompiledEffect>> = emptyMap(),
     val flow: Flow? = null,
     val modeHint: Mode? = null,
 )
@@ -69,6 +70,7 @@ data class ScreenMatchResult(
     val modeHint: Mode?,
     val parsed: ParsedFields,
     val effects: List<cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect> = emptyList(),
+    val transitionOverrides: Map<cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger, List<cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect>> = emptyMap(),
 )
 
 /**

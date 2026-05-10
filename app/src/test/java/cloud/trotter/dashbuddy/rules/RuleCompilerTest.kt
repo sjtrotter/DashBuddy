@@ -589,4 +589,64 @@ class RuleCompilerTest {
         assertEquals("accept-click", effect.dedupeKey)
         assertEquals(1000L, effect.throttleMs)
     }
+
+    // =========================================================================
+    // compileTransitionOverrides — trigger validation
+    // =========================================================================
+
+    @Test
+    fun `compileTransitionOverrides accepts known trigger keys`() {
+        val overrides = compiler.compileTransitionOverrides(
+            parseJson("""{
+                "mode:online": [{"verb": "session_start", "args": {"platformName": "Uber"}}],
+                "mode:offline": [{"verb": "session_end"}, {"verb": "odometer_stop"}]
+            }""").jsonObject
+        )
+        assertEquals(2, overrides.size)
+        assertTrue(overrides.containsKey("mode:online"))
+        assertTrue(overrides.containsKey("mode:offline"))
+        assertEquals(1, overrides["mode:online"]!!.size)
+        assertEquals(2, overrides["mode:offline"]!!.size)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileTransitionOverrides rejects unknown trigger key`() {
+        compiler.compileTransitionOverrides(
+            parseJson("""{"mode:turbo": [{"verb": "log"}]}""").jsonObject
+        )
+    }
+
+    @Test
+    fun `compileTransitionOverrides validates effect verbs within overrides`() {
+        // Should compile successfully — effects inside overrides go through compileEffectEntry
+        val overrides = compiler.compileTransitionOverrides(
+            parseJson("""{
+                "task:start": [
+                    {"verb": "odometer_resume"},
+                    {"verb": "log", "args": {"type": "TASK_START"}},
+                    {"verb": "bubble", "args": {"text": "Task started"}}
+                ]
+            }""").jsonObject
+        )
+        assertEquals(3, overrides["task:start"]!!.size)
+        assertEquals(
+            cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.ODOMETER_RESUME,
+            overrides["task:start"]!![0].verb,
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileTransitionOverrides rejects unknown verb inside override`() {
+        compiler.compileTransitionOverrides(
+            parseJson("""{"mode:online": [{"verb": "teleport"}]}""").jsonObject
+        )
+    }
+
+    @Test
+    fun `compileTransitionOverrides returns empty map for empty input`() {
+        val overrides = compiler.compileTransitionOverrides(
+            parseJson("""{}""").jsonObject
+        )
+        assertTrue(overrides.isEmpty())
+    }
 }
