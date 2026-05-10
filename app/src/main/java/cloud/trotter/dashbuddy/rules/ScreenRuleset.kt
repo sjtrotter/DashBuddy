@@ -264,6 +264,7 @@ class ScreenRuleset(
             viewIdSuffix = node.viewIdResourceName,
             text = node.text?.take(50),
             classNameHint = node.className,
+            boundsInScreen = node.boundsInScreen,
             pathFingerprint = pathParts.joinToString("/"),
         )
     }

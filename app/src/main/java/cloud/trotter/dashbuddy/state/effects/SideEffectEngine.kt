@@ -259,6 +259,7 @@ class SideEffectEngine @Inject constructor(
             viewIdResourceName = ref.viewIdSuffix,
             text = ref.text,
             className = ref.classNameHint,
+            boundsInScreen = ref.boundsInScreen,
         )
         Timber.i("Auto-Click [%s]: target id=%s", effect.ruleId, ref.viewIdSuffix)
         uiInteractionHandler.performClick(template, "Auto-Click [${effect.ruleId}]")

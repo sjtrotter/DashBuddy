@@ -47,6 +47,7 @@ class RuleEffectDispatchTest {
             viewIdSuffix = "btn_accept",
             text = "Accept",
             classNameHint = "android.widget.Button",
+            boundsInScreen = cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox(0, 100, 200, 150),
             pathFingerprint = "View[0]/Button[1]",
         )
         val effect = makeEffect(EffectVerb.CLICK, targetRef = ref)
