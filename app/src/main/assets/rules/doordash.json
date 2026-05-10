@@ -2263,7 +2263,7 @@
       "priority": 10,
       "screenIs": "offer_popup",
       "intent": "accept_offer",
-      "if": {
+      "require": {
         "hasIdSuffix": "accept_button"
       }
     },
@@ -2272,7 +2272,7 @@
       "priority": 20,
       "screenIs": "offer_popup_confirm_decline",
       "intent": "decline_offer",
-      "if": {
+      "require": {
         "hasText": "Decline offer"
       }
     },
@@ -2281,7 +2281,7 @@
       "priority": 30,
       "screenIs": "pickup_arrival",
       "intent": "arrived_at_store",
-      "if": {
+      "require": {
         "all": [
           {
             "hasIdSuffix": "primary_action_button"
@@ -2304,7 +2304,7 @@
       "priority": 15,
       "screenIs": "offer_popup",
       "intent": "initial_decline",
-      "if": {
+      "require": {
         "hasIdSuffix": "secondary_action_button_dash_plus"
       }
     },
@@ -2313,7 +2313,7 @@
       "priority": 40,
       "screenIs": "dash_paused",
       "intent": "resume_dash",
-      "if": {
+      "require": {
         "hasIdSuffix": "resumeButton"
       }
     },
@@ -2321,7 +2321,7 @@
       "id": "doordash.click.start_navigation",
       "priority": 50,
       "intent": "start_navigation",
-      "if": {
+      "require": {
         "any": [
           {
             "hasIdSuffix": "directions_button"
@@ -2337,7 +2337,7 @@
       "priority": 60,
       "screenIs": "dropoff_pre_arrival_completion",
       "intent": "complete_delivery",
-      "if": {
+      "require": {
         "any": [
           {
             "hasIdSuffix": "complete_delivery_steps_button"
@@ -2356,7 +2356,7 @@
       "priority": 70,
       "screenIs": "dropoff_pre_arrival",
       "intent": "submit_photo",
-      "if": {
+      "require": {
         "hasIdSuffix": "submit_button"
       }
     },
@@ -2365,7 +2365,7 @@
       "priority": 80,
       "screenIs": "pickup_shopping",
       "intent": "checkout",
-      "if": {
+      "require": {
         "hasIdSuffix": "button_checkout"
       }
     }
@@ -2376,7 +2376,7 @@
       "priority": 10,
       "intent": "additional_tip",
       "shape": "notification",
-      "if": {
+      "require": {
         "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
       },
       "parse": {
@@ -2405,14 +2405,14 @@
     {
       "id": "doordash.notification.new_order",
       "priority": 20,
-      "if": {
+      "require": {
         "titleContains": "new order"
       }
     },
     {
       "id": "doordash.notification.scheduled_dash_expired",
       "priority": 30,
-      "if": {
+      "require": {
         "all": [
           {
             "anyFieldContains": "scheduled"
@@ -2426,7 +2426,7 @@
     {
       "id": "doordash.notification.demand_nudge",
       "priority": 50,
-      "if": {
+      "require": {
         "titleContains": "Dash now"
       },
       "intent": "demand_nudge",
@@ -2435,7 +2435,7 @@
     {
       "id": "doordash.notification.peak_pay_promo",
       "priority": 60,
-      "if": {
+      "require": {
         "titleContains": "Incentives Update"
       },
       "intent": "peak_pay_promo",

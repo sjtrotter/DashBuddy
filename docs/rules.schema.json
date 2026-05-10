@@ -67,18 +67,9 @@
           "description": "Phase 2: Fail-fast negative checks. Any match skips this rule/branch.",
           "items": { "$ref": "#/$defs/treePredicate" }
         },
-        "guards": {
-          "type": "array",
-          "description": "v1 compat alias for 'reject'.",
-          "items": { "$ref": "#/$defs/treePredicate" }
-        },
         "require": {
           "$ref": "#/$defs/treePredicate",
           "description": "Phase 3: Positive match condition. Must pass for the rule to match."
-        },
-        "if": {
-          "$ref": "#/$defs/treePredicate",
-          "description": "v1 compat alias for 'require'."
         },
         "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
@@ -89,11 +80,6 @@
         "effects": {
           "type": "array",
           "description": "Side effects to execute on successful match.",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
-          "type": "array",
-          "description": "Legacy alias for 'effects'.",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
         "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
@@ -108,11 +94,8 @@
 
     "branchObject": {
       "type": "object",
-      "description": "A single branch within a multi-branch screen rule. Must have 'require' or 'if'.",
-      "anyOf": [
-        { "required": ["require"] },
-        { "required": ["if"] }
-      ],
+      "description": "A single branch within a multi-branch screen rule. Must have 'require'.",
+      "required": ["require"],
       "properties": {
         "state": { "$ref": "#/$defs/stateBlock" },
         "shape": { "$ref": "#/$defs/shapeEnum" },
@@ -121,22 +104,13 @@
           "type": "array",
           "items": { "$ref": "#/$defs/treePredicate" }
         },
-        "guards": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/treePredicate" }
-        },
         "require": { "$ref": "#/$defs/treePredicate" },
-        "if": { "$ref": "#/$defs/treePredicate" },
         "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
         },
         "effects": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
           "type": "array",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
@@ -147,12 +121,8 @@
     "clickBranchObject": {
       "type": "object",
       "description": "A single branch within a multi-branch click rule.",
-      "anyOf": [
-        { "required": ["require"] },
-        { "required": ["if"] }
-      ],
+      "required": ["require"],
       "properties": {
-        "state": { "$ref": "#/$defs/stateBlock" },
         "shape": { "$ref": "#/$defs/shapeEnum" },
         "screenIs": {
           "type": "string",
@@ -168,17 +138,12 @@
           "items": { "$ref": "#/$defs/nodePredicate" }
         },
         "require": { "$ref": "#/$defs/nodePredicate" },
-        "if": { "$ref": "#/$defs/nodePredicate" },
         "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
         },
         "effects": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
           "type": "array",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
@@ -189,10 +154,7 @@
     "notificationBranchObject": {
       "type": "object",
       "description": "A single branch within a multi-branch notification rule.",
-      "anyOf": [
-        { "required": ["require"] },
-        { "required": ["if"] }
-      ],
+      "required": ["require"],
       "properties": {
         "state": { "$ref": "#/$defs/stateBlock" },
         "shape": { "$ref": "#/$defs/shapeEnum" },
@@ -205,17 +167,12 @@
           "items": { "$ref": "#/$defs/notificationPredicate" }
         },
         "require": { "$ref": "#/$defs/notificationPredicate" },
-        "if": { "$ref": "#/$defs/notificationPredicate" },
         "parse": { "$ref": "#/$defs/notificationParseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
         },
         "effects": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
           "type": "array",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
@@ -249,11 +206,6 @@
           "type": "string",
           "description": "Output intent string. Auto-derived from rule ID if omitted."
         },
-        "target": {
-          "type": "string",
-          "description": "v1 compat: CamelCase target converted to snake_case intent."
-        },
-        "state": { "$ref": "#/$defs/stateBlock" },
         "shape": { "$ref": "#/$defs/shapeEnum" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "reject": {
@@ -265,10 +217,6 @@
           "$ref": "#/$defs/nodePredicate",
           "description": "Positive match condition. Must pass for the rule to match."
         },
-        "if": {
-          "$ref": "#/$defs/nodePredicate",
-          "description": "Alias for 'require'."
-        },
         "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
@@ -276,11 +224,6 @@
         },
         "effects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
-          "type": "array",
-          "description": "Legacy alias for 'effects'.",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
         "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
@@ -316,10 +259,6 @@
           "type": "string",
           "description": "Output intent string. Auto-derived from rule ID if omitted."
         },
-        "target": {
-          "type": "string",
-          "description": "v1 compat alias for 'intent'."
-        },
         "state": { "$ref": "#/$defs/stateBlock" },
         "reject": {
           "type": "array",
@@ -330,10 +269,6 @@
           "$ref": "#/$defs/notificationPredicate",
           "description": "Positive match condition. Must pass for the rule to match."
         },
-        "if": {
-          "$ref": "#/$defs/notificationPredicate",
-          "description": "Alias for 'require'."
-        },
         "parse": { "$ref": "#/$defs/notificationParseBlock" },
         "validate": {
           "type": "array",
@@ -341,11 +276,6 @@
         },
         "effects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
-          "type": "array",
-          "description": "Legacy alias for 'effects'.",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
         "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },

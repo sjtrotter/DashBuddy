@@ -140,9 +140,7 @@ object RuleCompiler {
         )
 
         // Intent (explicit or derived)
-        val intent = obj["intent"]?.jsonPrimitive?.content
-            ?: obj["target"]?.jsonPrimitive?.content?.let { camelToSnake(it) }
-            ?: targetName
+        val intent = obj["intent"]?.jsonPrimitive?.content ?: targetName
 
         // --- Bindings (screen rules only) ---
         val effectiveBindObj = if (context == RuleContext.SCREEN) {
@@ -151,13 +149,13 @@ object RuleCompiler {
         val bindings = effectiveBindObj?.let { compileBindBlock(it) } ?: emptyList()
 
         // --- Phase 2: Reject ---
-        val rejectJson = obj["reject"] ?: obj["guards"]
+        val rejectJson = obj["reject"]
         val rejectChecks: List<(TInput) -> Boolean> = rejectJson?.jsonArray?.map { rejectEntry ->
             compilePredicate(rejectEntry, context)
         } ?: emptyList()
 
         // --- Phase 3: Require ---
-        val requireJson = obj["require"] ?: obj["if"]
+        val requireJson = obj["require"]
         val predicate: ((TInput) -> Boolean)? = requireJson?.let {
             compilePredicate(it, context)
         }
@@ -203,7 +201,7 @@ object RuleCompiler {
         } ?: emptyList()
 
         // --- Effects ---
-        val effectsArray = obj["effects"]?.jsonArray ?: obj["actions"]?.jsonArray
+        val effectsArray = obj["effects"]?.jsonArray
         val effects = effectsArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
 
         // --- Transition overrides (screen rules) ---
@@ -786,10 +784,6 @@ object RuleCompiler {
     // ==========================================================================
     //  Helpers
     // ==========================================================================
-
-    /** Convert CamelCase to snake_case. "AcceptOffer" → "accept_offer" */
-    private fun camelToSnake(s: String): String =
-        s.replace(Regex("([a-z])([A-Z])"), "$1_$2").lowercase()
 
     /**
      * Derive a classification name from a rule ID by stripping the platform prefix.
