@@ -74,8 +74,21 @@ object RuleCompiler {
      * Compile a JSON array of rule objects into typed [CompiledRule] instances.
      * The [context] determines predicate vocabulary and parse input source.
      */
-    fun <TInput> compileRules(array: JsonArray, context: RuleContext): List<CompiledRule<TInput>> =
-        array.map { compileRule(it.jsonObject, context) }
+    fun <TInput> compileRules(array: JsonArray, context: RuleContext): List<CompiledRule<TInput>> {
+        val rules = array.map { compileRule<TInput>(it.jsonObject, context) }
+        // Enforce unique priorities within the same rule type
+        val seen = mutableMapOf<Int, String>()
+        for (rule in rules) {
+            val existing = seen.put(rule.priority, rule.id)
+            if (existing != null) {
+                throw RuleCompileException(
+                    "Duplicate priority ${rule.priority} in ${context.name.lowercase()} rules: " +
+                        "'$existing' and '${rule.id}'. Priorities must be unique per rule type.",
+                )
+            }
+        }
+        return rules
+    }
 
     @Suppress("UNCHECKED_CAST")
     private fun <TInput> compileRule(obj: JsonObject, context: RuleContext): CompiledRule<TInput> {
@@ -349,6 +362,9 @@ object RuleCompiler {
         val transformSpec = obj["transform"]
         val fallbackVal = obj["fallback"]
 
+        // Validate transform specs at compile time (fail fast on typos)
+        transformSpec?.let { TransformRegistry.validateTransformSpec(it) }
+
         return { raw ->
             val sourceText = readNotificationField(raw, fromField)
 
@@ -396,6 +412,9 @@ object RuleCompiler {
 
         val obj = spec as? JsonObject
             ?: throw RuleCompileException("Parse expression must be an object or string literal")
+
+        // Validate transform specs at compile time (fail fast on typos)
+        obj["transform"]?.let { TransformRegistry.validateTransformSpec(it) }
 
         val fromName = obj["from"]?.jsonPrimitive?.content?.removePrefix("$")
 
@@ -522,7 +541,7 @@ object RuleCompiler {
             "allTextContains" in presenceSpec -> {
                 val text = presenceSpec["allTextContains"]!!.jsonPrimitive.content.lowercase()
                 val fn: (UiNode) -> Boolean = { tree ->
-                    tree.allText.joinToString(" | ").lowercase().contains(text)
+                    tree.allText.joinToString("\u001F").lowercase().contains(text)
                 }
                 fn
             }
@@ -807,14 +826,14 @@ object RuleCompiler {
             "allTextContains" -> {
                 val text = (value as? JsonPrimitive)?.content?.lowercase()
                     ?: throw RuleCompileException("allTextContains requires a string value")
-                ;{ tree -> tree.allText.joinToString(" | ").lowercase().contains(text) }
+                ;{ tree -> tree.allText.joinToString("\u001F").lowercase().contains(text) }
             }
             "allTextContainsAll" -> {
                 val texts = (value as? JsonArray)
                     ?.map { (it as JsonPrimitive).content.lowercase() }
                     ?: throw RuleCompileException("allTextContainsAll requires an array")
                 ;{ tree ->
-                    val joined = tree.allText.joinToString(" | ").lowercase()
+                    val joined = tree.allText.joinToString("\u001F").lowercase()
                     texts.all { joined.contains(it) }
                 }
             }
@@ -823,7 +842,7 @@ object RuleCompiler {
                     ?.map { (it as JsonPrimitive).content.lowercase() }
                     ?: throw RuleCompileException("allTextContainsAny requires an array")
                 ;{ tree ->
-                    val joined = tree.allText.joinToString(" | ").lowercase()
+                    val joined = tree.allText.joinToString("\u001F").lowercase()
                     texts.any { joined.contains(it) }
                 }
             }
@@ -1144,7 +1163,7 @@ object RuleCompiler {
         else -> json.toString()
     }
 
-    private fun compileRegex(pattern: String): Regex {
+    internal fun compileRegex(pattern: String): Regex {
         if (pattern.length > MAX_REGEX_LENGTH)
             throw RuleCompileException(
                 "Regex pattern length ${pattern.length} exceeds MAX_REGEX_LENGTH=$MAX_REGEX_LENGTH",

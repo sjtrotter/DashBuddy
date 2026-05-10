@@ -204,7 +204,7 @@
     },
     {
       "id": "doordash.screen.offer_popup_confirm_decline",
-      "priority": 20,
+      "priority": 19,
       "state": {
         "flow": "offer:presented",
         "modeHint": "online"
@@ -508,7 +508,7 @@
     },
     {
       "id": "doordash.screen.delivery_summary_collapsed",
-      "priority": 30,
+      "priority": 31,
       "state": {
         "flow": "post:task",
         "modeHint": "online"

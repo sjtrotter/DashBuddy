@@ -182,7 +182,7 @@
     },
     {
       "id": "uber.screen.pickup_verification_pin",
-      "priority": 50,
+      "priority": 51,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -204,7 +204,7 @@
     },
     {
       "id": "uber.screen.pickup_verification_items",
-      "priority": 50,
+      "priority": 52,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -325,7 +325,7 @@
     },
     {
       "id": "uber.screen.shop_and_pay_checkout",
-      "priority": 68,
+      "priority": 69,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -540,7 +540,7 @@
     },
     {
       "id": "uber.click.go_offline",
-      "priority": 20,
+      "priority": 21,
       "screenIs": "home_dashboard",
       "state": {
         "flow": "session:ended",
