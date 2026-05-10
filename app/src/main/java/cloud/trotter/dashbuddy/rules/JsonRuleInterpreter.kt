@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.rules
 
 import android.content.Context
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
@@ -28,11 +30,11 @@ class JsonRuleInterpreter @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) {
 
-    var screenRuleset: ScreenRuleset? = null
+    var screenRuleset: Ruleset<UiNode>? = null
         private set
-    var clickRuleset: ClickRuleset? = null
+    var clickRuleset: Ruleset<UiNode>? = null
         private set
-    var notificationRuleset: NotificationRuleset? = null
+    var notificationRuleset: Ruleset<RawNotificationData>? = null
         private set
     var loadedFormatVersion: Int? = null
         private set
@@ -49,9 +51,9 @@ class JsonRuleInterpreter @Inject constructor(
                 return
             }
 
-            val allScreens = mutableListOf<CompiledScreenRule>()
-            val allClicks = mutableListOf<CompiledClickRule>()
-            val allNotifications = mutableListOf<CompiledNotificationRule>()
+            val allScreens = mutableListOf<CompiledRule<UiNode>>()
+            val allClicks = mutableListOf<CompiledRule<UiNode>>()
+            val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
 
             for (fileName in files) {
                 val path = "$RULES_DIR/$fileName"
@@ -62,9 +64,9 @@ class JsonRuleInterpreter @Inject constructor(
                 allNotifications += result.notifications
             }
 
-            screenRuleset = ScreenRuleset(allScreens)
-            clickRuleset = ClickRuleset(allClicks)
-            notificationRuleset = NotificationRuleset(allNotifications)
+            screenRuleset = Ruleset(allScreens)
+            clickRuleset = Ruleset(allClicks)
+            notificationRuleset = Ruleset(allNotifications)
 
             Timber.i(
                 "JsonRuleInterpreter: loaded %d file(s) from %s/ " +
@@ -99,13 +101,13 @@ class JsonRuleInterpreter @Inject constructor(
             }
 
             val screens = root["screens"]?.jsonArray
-                ?.let { RuleCompiler.compileScreenRules(it) }
+                ?.let { RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
                 ?: emptyList()
             val clicks = root["clicks"]?.jsonArray
-                ?.let { RuleCompiler.compileClickRules(it) }
+                ?.let { RuleCompiler.compileRules<UiNode>(it, RuleContext.CLICK) }
                 ?: emptyList()
             val notifications = root["notifications"]?.jsonArray
-                ?.let { RuleCompiler.compileNotificationRules(it) }
+                ?.let { RuleCompiler.compileRules<RawNotificationData>(it, RuleContext.NOTIFICATION) }
                 ?: emptyList()
 
             loadedFormatVersion = root["format_version"]?.jsonPrimitive?.int
@@ -131,16 +133,16 @@ class JsonRuleInterpreter @Inject constructor(
      */
     fun load(jsonString: String, source: String = "unknown") {
         val result = loadSingle(jsonString, source) ?: return
-        screenRuleset = ScreenRuleset(result.screens)
-        clickRuleset = ClickRuleset(result.clicks)
-        notificationRuleset = NotificationRuleset(result.notifications)
+        screenRuleset = Ruleset(result.screens)
+        clickRuleset = Ruleset(result.clicks)
+        notificationRuleset = Ruleset(result.notifications)
     }
 
     /** Result of compiling a single rule file. */
     data class CompiledRuleBundle(
-        val screens: List<CompiledScreenRule>,
-        val clicks: List<CompiledClickRule>,
-        val notifications: List<CompiledNotificationRule>,
+        val screens: List<CompiledRule<UiNode>>,
+        val clicks: List<CompiledRule<UiNode>>,
+        val notifications: List<CompiledRule<RawNotificationData>>,
     )
 
     companion object {

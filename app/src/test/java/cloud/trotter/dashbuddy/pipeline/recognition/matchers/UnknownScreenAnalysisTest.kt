@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.rules.ScreenRuleset
+import cloud.trotter.dashbuddy.rules.Ruleset
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.fail
@@ -18,7 +18,7 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
     companion object {
         private const val FOLDER = "UNKNOWN"
 
-        private val screenRuleset: ScreenRuleset by lazy {
+        private val screenRuleset: Ruleset<UiNode> by lazy {
             TestRulesetFactory.screenRuleset
         }
 
@@ -40,7 +40,7 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
 
         // --- STEP 1: VALIDATION (JSON ruleset) ---
         val result = screenRuleset.matchFirst(myNode)
-        val identifiedScreen = result?.target ?: "UNKNOWN"
+        val identifiedScreen = result?.intent ?: "UNKNOWN"
 
         // If it returns anything OTHER than UNKNOWN, we have a problem.
         if (identifiedScreen != "UNKNOWN") {

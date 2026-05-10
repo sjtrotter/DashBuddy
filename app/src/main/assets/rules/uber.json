@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../docs/rules.schema.json",
   "format_version": 2,
   "platform_id": "uber.driver",
   "screens": [
