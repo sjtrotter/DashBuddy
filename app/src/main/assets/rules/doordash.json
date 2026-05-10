@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../docs/rules.schema.json",
   "format_version": 2,
   "platform_id": "doordash.driver",
   "screens": [
@@ -1189,22 +1190,7 @@
               ]
             }
           }
-        ],
-        "not": {
-          "exists": {
-            "any": [
-              {
-                "hasText": "Continue"
-              },
-              {
-                "hasText": "Complete Delivery"
-              },
-              {
-                "hasText": "Mark as delivered"
-              }
-            ]
-          }
-        }
+        ]
       },
       "parse": {
         "fields": {
@@ -2388,21 +2374,31 @@
     {
       "id": "doordash.notification.additional_tip",
       "priority": 10,
+      "intent": "additional_tip",
+      "shape": "notification",
       "if": {
         "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
       },
-      "extract": {
-        "amount": {
-          "fromGroup": 1,
-          "transform": "parseDouble"
-        },
-        "storeName": {
-          "fromGroup": 2,
-          "transform": "trim"
-        },
-        "deliveredAt": {
-          "fromGroup": 3,
-          "transform": "trim"
+      "parse": {
+        "fields": {
+          "amount": {
+            "from": "fullString",
+            "find": "\\$(\\d+\\.\\d{2})",
+            "group": 1,
+            "transform": "parseCurrency"
+          },
+          "storeName": {
+            "from": "fullString",
+            "find": "past (.+?) order delivered",
+            "group": 1,
+            "transform": "trim"
+          },
+          "deliveredAt": {
+            "from": "fullString",
+            "find": "delivered at (.+)",
+            "group": 1,
+            "transform": "trim"
+          }
         }
       }
     },

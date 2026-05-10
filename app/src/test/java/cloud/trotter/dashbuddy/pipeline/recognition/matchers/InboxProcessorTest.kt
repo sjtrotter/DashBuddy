@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.rules.ScreenRuleset
+import cloud.trotter.dashbuddy.rules.Ruleset
 import cloud.trotter.dashbuddy.test.base.SnapshotTestStats
 import cloud.trotter.dashbuddy.test.util.SnapshotLibrarian
 import cloud.trotter.dashbuddy.test.util.SnapshotScreenDiagnostics
@@ -28,7 +28,7 @@ class InboxProcessorTest(
         private const val INBOX = "INBOX"
         val sharedStats = SnapshotTestStats(INBOX)
 
-        private val screenRuleset: ScreenRuleset by lazy {
+        private val screenRuleset: Ruleset<UiNode> by lazy {
             TestRulesetFactory.screenRuleset
         }
 
@@ -72,7 +72,7 @@ class InboxProcessorTest(
 
         // 1. IDENTIFY via JSON ruleset
         val result = screenRuleset.matchFirst(node)
-        val identifiedScreen = result?.target ?: "UNKNOWN"
+        val identifiedScreen = result?.intent ?: "UNKNOWN"
 
         // 2. SECURITY SCAN
         val securityReport = SnapshotSecurityScanner.scan(node)

@@ -20,8 +20,8 @@ import kotlinx.serialization.json.longOrNull
 /**
  * Compiles a parsed `rules.json` [JsonElement] tree into typed lambda rulesets.
  *
- * Supports both v1 (`if:`/`guards:`) and v2 (`bind:`/`reject:`/`require:`/`parse:`/`validate:`)
- * rule formats. v1 rules compile with no parse phase (produce empty fields).
+ * All rule types (screen, click, notification) compile through [compileRules]
+ * with a [RuleContext] that determines predicate vocabulary and parse input source.
  *
  * The compilation happens once at startup; the resulting lambdas are pure JVM closures
  * with no further JSON parsing on the hot path.
@@ -42,15 +42,15 @@ object RuleCompiler {
     // ==========================================================================
 
     /**
-     * Scan compiled screen rules and return the set of [PermissionTier] values
+     * Scan compiled rules and return the set of [PermissionTier] values
      * used by any effect verb. Used at rule-load time to determine what
      * permissions a ruleset requires.
      */
     fun enumeratePermissions(
-        screenRules: List<CompiledScreenRule>,
+        rules: List<CompiledRule<*>>,
     ): Set<cloud.trotter.dashbuddy.domain.pipeline.PermissionTier> {
         val tiers = mutableSetOf<cloud.trotter.dashbuddy.domain.pipeline.PermissionTier>()
-        for (rule in screenRules) {
+        for (rule in rules) {
             for (branch in rule.branches) {
                 for (effect in branch.effects) {
                     tiers.add(effect.verb.tier)
@@ -62,92 +62,126 @@ object RuleCompiler {
                 }
             }
         }
-        // NONE is always implicitly granted — don't include it
         tiers.remove(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.NONE)
         return tiers
     }
 
     // ==========================================================================
-    //  Screen rules
+    //  Unified rule compilation
     // ==========================================================================
 
-    fun compileScreenRules(array: JsonArray): List<CompiledScreenRule> =
-        array.map { compileScreenRule(it.jsonObject) }
+    /**
+     * Compile a JSON array of rule objects into typed [CompiledRule] instances.
+     * The [context] determines predicate vocabulary and parse input source.
+     */
+    fun <TInput> compileRules(array: JsonArray, context: RuleContext): List<CompiledRule<TInput>> =
+        array.map { compileRule(it.jsonObject, context) }
 
-    private fun compileScreenRule(obj: JsonObject): CompiledScreenRule {
+    @Suppress("UNCHECKED_CAST")
+    private fun <TInput> compileRule(obj: JsonObject, context: RuleContext): CompiledRule<TInput> {
         val id = obj["id"]!!.jsonPrimitive.content
         val priority = obj["priority"]!!.jsonPrimitive.int
         val overrideable = obj["overrideable"]?.jsonPrimitive?.booleanOrNull ?: true
 
-        // Rule-level bindings (shared across branches, overridden if branch declares its own)
+        // Rule-level bindings (screen rules only)
         val ruleBindObj = obj["bind"]?.jsonObject
-        val ruleBindings = ruleBindObj?.let { compileBindBlock(it) } ?: emptyList()
+        val ruleBindings = if (context == RuleContext.SCREEN && ruleBindObj != null) {
+            compileBindBlock(ruleBindObj)
+        } else emptyList()
 
         val (ruleFlow, ruleModeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
 
-        // Rule-level parse/shape (inherited by branches unless branch overrides)
+        // Rule-level parse/shape (inherited by branches unless overridden)
         val ruleParseObj = obj["parse"]?.jsonObject
         val ruleShape = obj["shape"]?.jsonPrimitive?.content
 
-        val branches: List<CompiledBranch> = if ("branches" in obj) {
+        val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
             obj["branches"]!!.jsonArray.map {
-                compileBranch(it.jsonObject, ruleFlow, ruleModeHint, ruleId = id,
+                compileBranch(it.jsonObject, context, ruleFlow, ruleModeHint, ruleId = id,
                     ruleParseBlock = ruleParseObj, ruleParseShape = ruleShape, ruleBindObj = ruleBindObj)
             }
         } else {
-            listOf(compileBranch(obj, ruleFlow, ruleModeHint, ruleId = id))
+            listOf(compileBranch(obj, context, ruleFlow, ruleModeHint, ruleId = id))
         }
 
-        return CompiledScreenRule(id, priority, overrideable, ruleBindings, branches)
+        return CompiledRule(id, priority, overrideable, ruleBindings, branches)
     }
 
-    private fun compileBranch(
+    @Suppress("UNCHECKED_CAST")
+    private fun <TInput> compileBranch(
         obj: JsonObject,
+        context: RuleContext,
         ruleFlow: Flow? = null,
         ruleModeHint: Mode? = null,
         ruleId: String? = null,
         ruleParseBlock: JsonObject? = null,
         ruleParseShape: String? = null,
         ruleBindObj: JsonObject? = null,
-    ): CompiledBranch {
+    ): CompiledBranch<TInput> {
         val targetName = ruleId?.let { deriveTargetFromId(it) }
             ?: throw RuleCompileException("Branch has no rule id to derive target from")
 
         // Branch-level state overrides rule-level defaults
-        val (branchFlow, branchModeHint) = parseStateBlock(obj["state"] as? JsonObject, "$targetName-branch")
+        val (branchFlow, branchModeHint) = parseStateBlock(
+            obj["state"] as? JsonObject, "$targetName-branch",
+        )
 
-        // Branch-level bindings override rule-level (no merging)
-        val effectiveBindObj = obj["bind"]?.jsonObject ?: ruleBindObj
+        // Intent (explicit or derived)
+        val intent = obj["intent"]?.jsonPrimitive?.content
+            ?: obj["target"]?.jsonPrimitive?.content?.let { camelToSnake(it) }
+            ?: targetName
+
+        // --- Bindings (screen rules only) ---
+        val effectiveBindObj = if (context == RuleContext.SCREEN) {
+            obj["bind"]?.jsonObject ?: ruleBindObj
+        } else null
         val bindings = effectiveBindObj?.let { compileBindBlock(it) } ?: emptyList()
 
         // --- Phase 2: Reject ---
-        // v2: "reject:" array of tree preds
-        // v1 compat: "guards:" array of tree preds
         val rejectJson = obj["reject"] ?: obj["guards"]
-        val rejectChecks = rejectJson?.jsonArray?.map { rejectEntry ->
-            val treePred = compileTreePred(rejectEntry)
-            val fn: (UiNode, Bindings) -> Boolean = { tree, _ -> treePred(tree) }
-            fn
+        val rejectChecks: List<(TInput) -> Boolean> = rejectJson?.jsonArray?.map { rejectEntry ->
+            compilePredicate(rejectEntry, context)
         } ?: emptyList()
 
         // --- Phase 3: Require ---
-        // v2: "require:" tree pred (with optional $bound references)
-        // v1 compat: "if:" tree pred
         val requireJson = obj["require"] ?: obj["if"]
-            ?: throw RuleCompileException("Branch for '$targetName' has no 'require' or 'if' block")
-        val requirePred = compileTreePred(requireJson)
-        val requireCheck: (UiNode, Bindings) -> Boolean = { tree, _ -> requirePred(tree) }
+        val predicate: ((TInput) -> Boolean)? = requireJson?.let {
+            compilePredicate(it, context)
+        }
 
         // --- Phase 4: Parse ---
-        // Branch-level parse overrides rule-level (no merging)
         val parseBlock = obj["parse"]?.jsonObject ?: ruleParseBlock
         val parseShape = obj["shape"]?.jsonPrimitive?.content
             ?: parseBlock?.get("shape")?.jsonPrimitive?.content
             ?: ruleParseShape
-        val parser: (UiNode, Bindings) -> Map<String, Any?> = if (parseBlock != null) {
-            compileParseBlock(parseBlock)
-        } else {
-            { _, _ -> emptyMap() }
+
+        val parser: (TInput, Bindings) -> Map<String, Any?> = when (context) {
+            RuleContext.SCREEN -> {
+                if (parseBlock != null) {
+                    val compiled = compileScreenParseBlock(parseBlock)
+                    val fn: (TInput, Bindings) -> Map<String, Any?> = { input, bindings ->
+                        compiled(input as UiNode, bindings)
+                    }
+                    fn
+                } else {
+                    { _, _ -> emptyMap() }
+                }
+            }
+            RuleContext.NOTIFICATION -> {
+                if (parseBlock != null) {
+                    val compiled = compileNotificationParseBlock(parseBlock)
+                    val fn: (TInput, Bindings) -> Map<String, Any?> = { input, _ ->
+                        compiled(input as RawNotificationData)
+                    }
+                    fn
+                } else {
+                    { _, _ -> emptyMap() }
+                }
+            }
+            RuleContext.CLICK -> {
+                // Click rules currently don't have parse blocks
+                { _, _ -> emptyMap() }
+            }
         }
 
         // --- Phase 5: Validate ---
@@ -155,28 +189,59 @@ object RuleCompiler {
             compileValidateEntry(entry.jsonObject)
         } ?: emptyList()
 
-        // --- Effects (accepts both "effects" and legacy "actions" keys) ---
+        // --- Effects ---
         val effectsArray = obj["effects"]?.jsonArray ?: obj["actions"]?.jsonArray
         val effects = effectsArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
 
-        // --- Transition overrides ---
+        // --- Transition overrides (screen rules) ---
         val transitionOverrides = obj["transitionOverrides"]?.jsonObject?.let {
             compileTransitionOverrides(it)
         } ?: emptyMap()
 
+        // --- Click-specific: screenIs ---
+        val screenIs = obj["screenIs"]?.jsonPrimitive?.content
+
         return CompiledBranch(
-            target = targetName,
-            bindings = bindings,
+            predicate = predicate,
             rejectChecks = rejectChecks,
-            requireCheck = requireCheck,
             parser = parser,
-            parseShape = parseShape,
             validators = validators,
             effects = effects,
-            transitionOverrides = transitionOverrides,
+            bindings = bindings,
+            shape = parseShape,
+            intent = intent,
             flow = branchFlow ?: ruleFlow,
             modeHint = branchModeHint ?: ruleModeHint,
+            screenIs = screenIs,
+            transitionOverrides = transitionOverrides,
         )
+    }
+
+    // ==========================================================================
+    //  Context-dispatched predicate compilation
+    // ==========================================================================
+
+    /**
+     * Compile a predicate JSON element into a type-safe lambda.
+     * The [context] determines which predicate vocabulary is used.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun <TInput> compilePredicate(
+        json: JsonElement,
+        context: RuleContext,
+    ): (TInput) -> Boolean = when (context) {
+        RuleContext.SCREEN -> {
+            val pred = compileTreePred(json)
+            pred as (TInput) -> Boolean
+        }
+        RuleContext.CLICK -> {
+            val pred = compileNodePred(json)
+            pred as (TInput) -> Boolean
+        }
+        RuleContext.NOTIFICATION -> {
+            val pred = compileNotifPred(json)
+            pred as (TInput) -> Boolean
+        }
     }
 
     // ==========================================================================
@@ -186,27 +251,21 @@ object RuleCompiler {
     private fun compileBindBlock(obj: JsonObject): List<Binding> = obj.entries.map { (name, spec) ->
         val specObj = spec.jsonObject
         val optional = specObj["optional"]?.jsonPrimitive?.booleanOrNull ?: false
-
-        // The find specification uses node predicates
         val findSpec = specObj["find"] ?: throw RuleCompileException("Binding '$name' has no 'find'")
         val nodePred = compileNodePred(findSpec)
         val find: (UiNode) -> UiNode? = { tree -> tree.findNode(nodePred) }
-
         Binding(name, find, optional)
     }
 
     // ==========================================================================
-    //  Parse block compiler
+    //  Screen parse block compiler
     // ==========================================================================
 
     /**
-     * Compile a `parse:` block into a function that extracts field values from the tree.
-     *
-     * ```json
-     * { "shape": "task", "fields": { "storeName": { ... }, "deadline": { ... } } }
-     * ```
+     * Compile a `parse:` block for screen rules.
+     * Operates on UiNode tree with optional bindings.
      */
-    private fun compileParseBlock(parseObj: JsonObject): (UiNode, Bindings) -> Map<String, Any?> {
+    private fun compileScreenParseBlock(parseObj: JsonObject): (UiNode, Bindings) -> Map<String, Any?> {
         val fieldsObj = parseObj["fields"]?.jsonObject ?: return { _, _ -> emptyMap() }
 
         val compiledFields: List<Pair<String, (UiNode, Bindings) -> Any?>> =
@@ -223,28 +282,114 @@ object RuleCompiler {
         }
     }
 
+    // ==========================================================================
+    //  Notification parse block compiler
+    // ==========================================================================
+
     /**
-     * Compile a single parse expression into a function.
+     * Compile a `parse:` block for notification rules.
+     * Operates on RawNotificationData string fields.
      *
-     * Parse expressions form a mini-language:
-     * - `find:` / `findAll:` — locate node(s) by predicate
-     * - `read:` — read a property from the found node
+     * Supported parse expressions for notifications:
+     * - `from:` — selects a notification field (title, text, bigText, tickerText, subText, fullString)
+     * - `find:` — regex match on the selected field
+     * - `group:` — capture group index (default 0 = whole match)
      * - `transform:` — apply transforms from TransformRegistry
-     * - `textAfterLabel:` — UiNode.textAfterLabel helper
-     * - `navigate:` — parent/ancestor/sibling traversal
-     * - `each:` — iterate over findAll results
-     * - `join:` — concatenate multiple expressions
-     * - `coalesce:` — first non-null expression
-     * - `presence:` — boolean: does predicate match?
-     * - `conditionalEnum:` — if/then/else chain
-     * - `fallback:` — expression with default value
-     * - `rejectIf:` — null out if predicate matches
-     * - `from:` — start from a bound node
      * - `literal:` — constant value
+     * - `fallback:` — default if extraction returns null
+     */
+    private fun compileNotificationParseBlock(
+        parseObj: JsonObject,
+    ): (RawNotificationData) -> Map<String, Any?> {
+        val fieldsObj = parseObj["fields"]?.jsonObject ?: return { emptyMap() }
+
+        data class NotifFieldExtractor(
+            val name: String,
+            val extract: (RawNotificationData) -> Any?,
+        )
+
+        val extractors = fieldsObj.entries.map { (fieldName, fieldSpec) ->
+            NotifFieldExtractor(fieldName, compileNotifParseExpression(fieldSpec))
+        }
+
+        return { raw ->
+            val result = mutableMapOf<String, Any?>()
+            for (extractor in extractors) {
+                result[extractor.name] = extractor.extract(raw)
+            }
+            result
+        }
+    }
+
+    /**
+     * Compile a single notification parse expression.
+     */
+    private fun compileNotifParseExpression(spec: JsonElement): (RawNotificationData) -> Any? {
+        if (spec is JsonPrimitive) {
+            val value = spec.content
+            return { _ -> value }
+        }
+
+        val obj = spec as? JsonObject
+            ?: throw RuleCompileException("Notification parse expression must be an object or string")
+
+        // Literal
+        if ("literal" in obj) {
+            val value = resolveLiteral(obj["literal"]!!)
+            return { _ -> value }
+        }
+
+        // From + find pattern
+        val fromField = obj["from"]?.jsonPrimitive?.content
+            ?: throw RuleCompileException(
+                "Notification parse expression requires 'from' or 'literal'. Keys: ${obj.keys}",
+            )
+        val findPattern = obj["find"]?.jsonPrimitive?.content
+        val group = obj["group"]?.jsonPrimitive?.intOrNull ?: 0
+        val transformSpec = obj["transform"]
+        val fallbackVal = obj["fallback"]
+
+        return { raw ->
+            val sourceText = readNotificationField(raw, fromField)
+
+            val rawValue = if (findPattern != null && sourceText != null) {
+                val regex = compileRegex(findPattern)
+                val match = regex.find(sourceText)
+                match?.groupValues?.getOrNull(group)
+            } else {
+                sourceText
+            }
+
+            val transformed = if (rawValue != null && transformSpec != null) {
+                TransformRegistry.applyAny(transformSpec, rawValue)
+            } else rawValue
+
+            transformed ?: fallbackVal?.let { resolveLiteral(it) }
+        }
+    }
+
+    /**
+     * Read a named field from a notification.
+     */
+    private fun readNotificationField(raw: RawNotificationData, field: String): String? = when (field) {
+        "title" -> raw.title
+        "text" -> raw.text
+        "bigText" -> raw.bigText
+        "tickerText" -> raw.tickerText
+        "subText" -> raw.subText
+        "fullString" -> raw.toFullString()
+        else -> throw RuleCompileException("Unknown notification field: '$field'")
+    }
+
+    // ==========================================================================
+    //  Screen parse expression compiler
+    // ==========================================================================
+
+    /**
+     * Compile a single parse expression for screen rules.
      */
     private fun compileParseExpression(spec: JsonElement): (UiNode, Bindings) -> Any? {
         if (spec is JsonPrimitive) {
-            // Literal string value
             val value = spec.content
             return { _, _ -> value }
         }
@@ -252,10 +397,8 @@ object RuleCompiler {
         val obj = spec as? JsonObject
             ?: throw RuleCompileException("Parse expression must be an object or string literal")
 
-        // Determine the starting node: from a binding or from the tree root
         val fromName = obj["from"]?.jsonPrimitive?.content?.removePrefix("$")
 
-        // Build the core expression
         return when {
             "literal" in obj -> compileLiteral(obj)
             "find" in obj -> compileFind(obj, fromName)
@@ -288,9 +431,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * `find:` — locate a node, optionally read a property, optionally transform.
-     */
     private fun compileFind(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
         val findPred = compileNodePred(obj["find"]!!)
         val readProp = obj["read"]?.jsonPrimitive?.content
@@ -302,52 +442,29 @@ object RuleCompiler {
             val startNode = if (fromName != null) bindings[fromName] ?: tree else tree
             var foundNode = startNode.findNode(findPred)
 
-            // Navigate from found node if specified
             val navSpec = obj["navigate"]
             if (foundNode != null && navSpec != null) {
                 foundNode = applyNavigation(foundNode, navSpec)
             }
 
-            // RejectIf: null out the found node if it matches
             if (foundNode != null && rejectIfSpec != null && rejectIfSpec(foundNode)) {
                 foundNode = null
             }
 
-            // Read property from the node
             val rawValue = if (foundNode != null && readProp != null) {
                 readProperty(foundNode, readProp)
             } else if (foundNode != null && readProp == null) {
-                // No read specified — return the node's text by default
                 foundNode.text
             } else null
 
-            // Apply transform
             val transformed = if (rawValue != null && transformSpec != null) {
                 TransformRegistry.applyAny(transformSpec, rawValue)
             } else rawValue
 
-            // Fallback
             transformed ?: fallbackVal?.let { resolveLiteral(it) }
         }
     }
 
-    /**
-     * `siblingOf:` — shorthand for find→sibling→read→transform.
-     *
-     * ```json
-     * "fieldName": {
-     *   "siblingOf": { "all": [{"hasIdSuffix": "title"}, {"hasTextContaining": "Label"}] },
-     *   "offset": 1,
-     *   "read": "text",
-     *   "transform": "parsePercent"
-     * }
-     * ```
-     *
-     * Defaults: offset=1, read="text". Equivalent to:
-     * ```json
-     * { "find": <predicate>, "navigate": "sibling(1)", "read": "text", "transform": ... }
-     * ```
-     */
     private fun compileSiblingOf(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
         val findPred = compileNodePred(obj["siblingOf"]!!)
         val offset = obj["offset"]?.jsonPrimitive?.intOrNull ?: 1
@@ -369,9 +486,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * `findAll:` — locate all matching nodes.
-     */
     private fun compileFindAll(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
         val findPred = compileNodePred(obj["findAll"]!!)
         val readProp = obj["read"]?.jsonPrimitive?.content ?: "text"
@@ -383,9 +497,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * `textAfterLabel:` — use UiNode.textAfterLabel helper.
-     */
     private fun compileTextAfterLabel(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
         val label = obj["textAfterLabel"]!!.jsonPrimitive.content
         val offset = obj["offset"]?.jsonPrimitive?.intOrNull ?: 1
@@ -400,9 +511,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * `presence:` — boolean: does a tree/node predicate match?
-     */
     private fun compilePresence(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
         val presenceSpec = obj["presence"]!!.jsonObject
         val check = when {
@@ -419,7 +527,6 @@ object RuleCompiler {
                 fn
             }
             else -> {
-                // Generic: compile as tree pred
                 val pred = compileTreePred(JsonObject(presenceSpec))
                 pred
             }
@@ -431,9 +538,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * `conditionalEnum:` — if/then/else chain returning a string.
-     */
     private fun compileConditionalEnum(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
         val cases = obj["conditionalEnum"]!!.jsonArray
         data class Case(val check: (UiNode) -> Boolean, val value: String)
@@ -458,9 +562,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * `each:` — iterate over findAll results, extract per-item fields.
-     */
     private fun compileEach(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
         val findPred = compileNodePred(obj["each"]!!)
         val scopeSpec = obj["scope"]
@@ -477,23 +578,19 @@ object RuleCompiler {
             val startNode = if (fromName != null) bindings[fromName] ?: tree else tree
             val rawNodes = startNode.findNodes(findPred).take(MAX_EACH_SIZE)
 
-            // Optional scope: walk up to ancestor
             val scopedNodes = if (scopeSpec != null) {
                 val ancestorN = scopeSpec.jsonPrimitive.content
                     .removePrefix("ancestor(").removeSuffix(")").toIntOrNull() ?: 1
                 rawNodes.mapNotNull { it.ancestor(ancestorN) }.distinct()
             } else rawNodes
 
-            // Optional exclude
             val filtered = if (excludeSpec != null) {
                 scopedNodes.filter { !excludeSpec(it) }
             } else scopedNodes
 
-            // Extract fields per item
             filtered.map { itemNode ->
                 val itemFields = mutableMapOf<String, Any?>()
                 for ((name, expr) in compiledExtract) {
-                    // For each expressions, the itemNode becomes the "tree" for nested expressions
                     itemFields[name] = expr(itemNode, bindings)
                 }
                 itemFields
@@ -501,9 +598,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * `join:` — concatenate parts with a separator.
-     */
     private fun compileJoin(obj: JsonObject): (UiNode, Bindings) -> Any? {
         val partsArray = obj["join"]!!.jsonArray
         val separator = obj["separator"]?.jsonPrimitive?.content ?: ""
@@ -526,9 +620,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * `coalesce:` — first non-null expression.
-     */
     private fun compileCoalesce(obj: JsonObject): (UiNode, Bindings) -> Any? {
         val exprs = obj["coalesce"]!!.jsonArray.map { compileParseExpression(it) }
 
@@ -537,9 +628,6 @@ object RuleCompiler {
         }
     }
 
-    /**
-     * Read a property from a bound node with optional transform.
-     */
     private fun compileReadFromBinding(obj: JsonObject, fromName: String): (UiNode, Bindings) -> Any? {
         val readProp = obj["read"]!!.jsonPrimitive.content
         val transformSpec = obj["transform"]
@@ -576,10 +664,9 @@ object RuleCompiler {
     }
 
     // ==========================================================================
-    //  Effect entry compiler (evolved from ADR-0006 actions)
+    //  Effect entry compiler
     // ==========================================================================
 
-    /** Allowed arg keys per verb. Unknown keys are rejected at compile time. */
     private val allowedArgs: Map<cloud.trotter.dashbuddy.domain.pipeline.EffectVerb, Set<String>> = mapOf(
         cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT to setOf("prefix"),
         cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.BUBBLE to setOf("text", "persona"),
@@ -591,11 +678,9 @@ object RuleCompiler {
         cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SESSION_END to setOf("platformName"),
     )
 
-    /** Keys that are effect metadata, not verb identifiers. */
     private val effectMetaKeys = setOf("onlyIf", "dedupeKey", "throttleMs")
 
     internal fun compileEffectEntry(obj: JsonObject): CompiledEffect {
-        // The verb is the single non-meta key in the object
         val verbEntries = obj.entries.filter { it.key !in effectMetaKeys }
         if (verbEntries.isEmpty())
             throw RuleCompileException("Effect has no verb key")
@@ -608,8 +693,6 @@ object RuleCompiler {
         val verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.fromWire(wireVerb)
             ?: throw RuleCompileException("Unknown effect verb: '$wireVerb'")
 
-        // Target-bound verbs (click): value is a string "$bindName"
-        // All others: value is a JSON object of args (may be empty {})
         val targetBindName: String?
         val args: Map<String, String>
         if (verb.requiresTarget) {
@@ -641,16 +724,11 @@ object RuleCompiler {
         )
     }
 
-    /**
-     * Compile a `transitionOverrides` JSON block into a map of trigger wire
-     * names to compiled effect lists. Unknown trigger keys are rejected.
-     */
     internal fun compileTransitionOverrides(
         obj: JsonObject,
     ): Map<String, List<CompiledEffect>> {
         val result = mutableMapOf<String, List<CompiledEffect>>()
         for ((triggerWire, effectsElement) in obj) {
-            // Validate trigger key against known triggers
             cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger.fromWire(triggerWire)
                 ?: throw RuleCompileException("Unknown transition trigger: '$triggerWire'")
             val effects = effectsElement.jsonArray.map { compileEffectEntry(it.jsonObject) }
@@ -687,26 +765,8 @@ object RuleCompiler {
     }
 
     // ==========================================================================
-    //  Click rules
+    //  Helpers
     // ==========================================================================
-
-    fun compileClickRules(array: JsonArray): List<CompiledClickRule> =
-        array.map { compileClickRule(it.jsonObject) }
-
-    private fun compileClickRule(obj: JsonObject): CompiledClickRule {
-        val id = obj["id"]!!.jsonPrimitive.content
-        val priority = obj["priority"]!!.jsonPrimitive.int
-        val overrideable = obj["overrideable"]?.jsonPrimitive?.booleanOrNull ?: true
-        val intent = obj["intent"]?.jsonPrimitive?.content
-            ?: obj["target"]?.jsonPrimitive?.content?.let { camelToSnake(it) }
-            ?: deriveTargetFromId(id)
-        val condition = compileNodePred(obj["if"]!!)
-        val (flow, modeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
-        val intentFactory: (UiNode) -> String = { _ -> intent }
-        val screenConstraint = obj["screenIs"]?.jsonPrimitive?.content
-
-        return CompiledClickRule(id, priority, overrideable, condition, intentFactory, flow, modeHint, screenConstraint)
-    }
 
     /** Convert CamelCase to snake_case. "AcceptOffer" → "accept_offer" */
     private fun camelToSnake(s: String): String =
@@ -715,75 +775,10 @@ object RuleCompiler {
     /**
      * Derive a classification name from a rule ID by stripping the platform prefix.
      * "doordash.screen.idle_map" → "idle_map"
-     * "doordash.click.accept_offer" → "accept_offer"
-     * "doordash.notification.additional_tip" → "additional_tip"
      */
-    private fun deriveTargetFromId(id: String): String {
-        // Strip "{platform}.{type}." prefix — take everything after the second dot
+    internal fun deriveTargetFromId(id: String): String {
         val parts = id.split(".", limit = 3)
         return if (parts.size >= 3) parts[2] else id
-    }
-
-    // ==========================================================================
-    //  Notification rules
-    // ==========================================================================
-
-    fun compileNotificationRules(array: JsonArray): List<CompiledNotificationRule> =
-        array.map { compileNotificationRule(it.jsonObject) }
-
-    private fun compileNotificationRule(obj: JsonObject): CompiledNotificationRule {
-        val id = obj["id"]!!.jsonPrimitive.content
-        val priority = obj["priority"]!!.jsonPrimitive.int
-        val overrideable = obj["overrideable"]?.jsonPrimitive?.booleanOrNull ?: true
-        val shape = obj["shape"]?.jsonPrimitive?.content
-        val intent = obj["intent"]?.jsonPrimitive?.content
-            ?: obj["target"]?.jsonPrimitive?.content?.let { camelToSnake(it) }
-            ?: deriveTargetFromId(id)
-        val ifJson = obj["if"]
-        val extract = obj["extract"] as? JsonObject
-        val (flow, modeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
-
-        val classify: (RawNotificationData) -> NotificationClassifyResult? = when {
-            intent == "additional_tip" && extract != null ->
-                compileAdditionalTipRule(ifJson!!, intent)
-
-            else -> {
-                val pred = ifJson?.let { compileNotifPred(it) }
-                ;{ raw ->
-                    if (pred == null || pred(raw)) NotificationClassifyResult(intent)
-                    else null
-                }
-            }
-        }
-
-        return CompiledNotificationRule(id, priority, overrideable, classify, shape, flow, modeHint)
-    }
-
-    private fun compileAdditionalTipRule(
-        ifJson: JsonElement,
-        intent: String,
-    ): (RawNotificationData) -> NotificationClassifyResult? {
-        val ifObj = ifJson.jsonObject
-        val pattern = ifObj["anyFieldMatchesRegex"]?.jsonPrimitive?.content
-            ?: throw RuleCompileException("AdditionalTip rule must use anyFieldMatchesRegex in 'if'")
-        val regex = compileRegex(pattern)
-
-        return { raw ->
-            run {
-                val m = regex.find(raw.toFullString()) ?: return@run null
-                val amount = m.groupValues.getOrNull(1)?.toDoubleOrNull() ?: return@run null
-                val storeName = m.groupValues.getOrNull(2)?.trim() ?: return@run null
-                val deliveredAt = m.groupValues.getOrNull(3)?.trim() ?: return@run null
-                NotificationClassifyResult(
-                    intent = intent,
-                    fields = mapOf(
-                        "amount" to amount,
-                        "storeName" to storeName,
-                        "deliveredAt" to deliveredAt,
-                    ),
-                )
-            }
-        }
     }
 
     // ==========================================================================
@@ -867,7 +862,6 @@ object RuleCompiler {
         val value = obj[key]!!
 
         return when (key) {
-            // --- ID predicates ---
             "hasIdSuffix" -> {
                 val s = (value as JsonPrimitive).content
                 ;{ node -> node.viewIdResourceName?.endsWith(s, ignoreCase = true) == true }
@@ -883,7 +877,6 @@ object RuleCompiler {
             "hasNoId" ->
                 { node -> node.viewIdResourceName.isNullOrBlank() }
 
-            // --- Text predicates ---
             "hasText" -> {
                 val s = (value as JsonPrimitive).content
                 ;{ node -> node.text?.equals(s, ignoreCase = true) == true }
@@ -905,7 +898,6 @@ object RuleCompiler {
                 ;{ node -> node.text?.let { str -> regex.containsMatchIn(str) } == true }
             }
 
-            // --- Content description predicates ---
             "hasDesc" -> {
                 val s = (value as JsonPrimitive).content
                 ;{ node -> node.contentDescription?.equals(s, ignoreCase = true) == true }
@@ -915,7 +907,6 @@ object RuleCompiler {
                 ;{ node -> node.contentDescription?.contains(s, ignoreCase = true) == true }
             }
 
-            // --- State description predicates ---
             "hasStateDescription" -> {
                 val s = (value as JsonPrimitive).content
                 ;{ node -> node.stateDescription?.equals(s, ignoreCase = true) == true }
@@ -925,7 +916,6 @@ object RuleCompiler {
                 ;{ node -> node.stateDescription?.contains(s, ignoreCase = true) == true }
             }
 
-            // --- Class name predicates ---
             "hasClassName" -> {
                 val s = (value as JsonPrimitive).content
                 ;{ node -> node.className == s }
@@ -935,14 +925,12 @@ object RuleCompiler {
                 ;{ node -> node.className?.endsWith(s, ignoreCase = true) == true }
             }
 
-            // --- Boolean flag predicates ---
             "isClickable" -> { node -> node.isClickable }
             "isEnabled" -> { node -> node.isEnabled }
             "isChecked" -> { node -> node.isChecked != 0 }
             "hasChildren" -> { node -> node.children.isNotEmpty() }
             "isLeaf" -> { node -> node.children.isEmpty() }
 
-            // --- Logical combinators ---
             "all" -> {
                 val preds = (value as? JsonArray)
                     ?.map { compileNodePred(it, depth + 1) }
@@ -1111,7 +1099,6 @@ object RuleCompiler {
     //  Helpers
     // ==========================================================================
 
-    /** Read a named property from a UiNode. */
     private fun readProperty(node: UiNode, prop: String): String? = when (prop) {
         "text" -> node.text
         "allText" -> node.allText.joinToString("")
@@ -1122,7 +1109,6 @@ object RuleCompiler {
         else -> throw RuleCompileException("Unknown read property: '$prop'")
     }
 
-    /** Apply a navigation instruction to a node. */
     private fun applyNavigation(node: UiNode, navSpec: JsonElement): UiNode? {
         val nav = navSpec.jsonPrimitive.content
         return when {
@@ -1147,7 +1133,6 @@ object RuleCompiler {
         }
     }
 
-    /** Resolve a JSON literal to a Kotlin value. */
     private fun resolveLiteral(json: JsonElement): Any? = when (json) {
         is JsonPrimitive -> when {
             json.booleanOrNull != null -> json.booleanOrNull
@@ -1162,7 +1147,7 @@ object RuleCompiler {
     private fun compileRegex(pattern: String): Regex {
         if (pattern.length > MAX_REGEX_LENGTH)
             throw RuleCompileException(
-                "Regex pattern length ${pattern.length} exceeds MAX_REGEX_LENGTH=$MAX_REGEX_LENGTH"
+                "Regex pattern length ${pattern.length} exceeds MAX_REGEX_LENGTH=$MAX_REGEX_LENGTH",
             )
         return try {
             Regex(pattern, RegexOption.IGNORE_CASE)

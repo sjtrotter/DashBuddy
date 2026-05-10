@@ -14,42 +14,38 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Integration tests that compile the production [rules.default.json] file and run
+ * Integration tests that compile the production rule JSON files and run
  * the resulting rulesets against known inputs.
  *
- * These tests load the file directly from source (no Android Context needed),
+ * These tests load the files directly from source (no Android Context needed),
  * bypassing [JsonRuleInterpreter] so no dependency injection is required.
  */
 class DefaultRulesIntegrationTest {
 
-    private lateinit var screenRuleset: ScreenRuleset
-    private lateinit var clickRuleset: ClickRuleset
-    private lateinit var notificationRuleset: NotificationRuleset
+    private lateinit var screenRuleset: Ruleset<UiNode>
+    private lateinit var clickRuleset: Ruleset<UiNode>
+    private lateinit var notificationRuleset: Ruleset<RawNotificationData>
 
     @Before
     fun loadRules() {
         val dir = File("src/main/assets/rules")
-        val allScreens = mutableListOf<CompiledScreenRule>()
-        val allClicks = mutableListOf<CompiledClickRule>()
-        val allNotifications = mutableListOf<CompiledNotificationRule>()
+        val allScreens = mutableListOf<CompiledRule<UiNode>>()
+        val allClicks = mutableListOf<CompiledRule<UiNode>>()
+        val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
 
         dir.listFiles { f -> f.extension == "json" }?.forEach { file ->
             val root = Json.parseToJsonElement(file.readText()).jsonObject
             root["screens"]?.jsonArray
-                ?.let { allScreens += RuleCompiler.compileScreenRules(it) }
+                ?.let { allScreens += RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
             root["clicks"]?.jsonArray
-                ?.let { allClicks += RuleCompiler.compileClickRules(it) }
+                ?.let { allClicks += RuleCompiler.compileRules<UiNode>(it, RuleContext.CLICK) }
             root["notifications"]?.jsonArray
-                ?.let { allNotifications += RuleCompiler.compileNotificationRules(it) }
+                ?.let { allNotifications += RuleCompiler.compileRules<RawNotificationData>(it, RuleContext.NOTIFICATION) }
         }
 
-        val screens = allScreens
-        val clicks = allClicks
-        val notifications = allNotifications
-
-        screenRuleset = ScreenRuleset(screens)
-        clickRuleset = ClickRuleset(clicks)
-        notificationRuleset = NotificationRuleset(notifications)
+        screenRuleset = Ruleset(allScreens)
+        clickRuleset = Ruleset(allClicks)
+        notificationRuleset = Ruleset(allNotifications)
     }
 
     // =========================================================================
@@ -78,13 +74,13 @@ class DefaultRulesIntegrationTest {
     @Test
     fun `accept_button id classifies as accept_offer`() {
         val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/accept_button")
-        assertEquals("accept_offer", clickRuleset.classifyFirst(node, screenTarget = "offer_popup")?.intent)
+        assertEquals("accept_offer", clickRuleset.matchFirst(node, screenTarget = "offer_popup")?.intent)
     }
 
     @Test
     fun `'Decline offer' text classifies as decline_offer`() {
         val node = UiNode(text = "Decline offer")
-        assertEquals("decline_offer", clickRuleset.classifyFirst(node, screenTarget = "offer_popup_confirm_decline")?.intent)
+        assertEquals("decline_offer", clickRuleset.matchFirst(node, screenTarget = "offer_popup_confirm_decline")?.intent)
     }
 
     @Test
@@ -93,13 +89,13 @@ class DefaultRulesIntegrationTest {
             viewIdResourceName = "com.doordash.driverapp:id/primary_action_button",
             text = "Arrived at store",
         )
-        assertEquals("arrived_at_store", clickRuleset.classifyFirst(node, screenTarget = "pickup_arrival")?.intent)
+        assertEquals("arrived_at_store", clickRuleset.matchFirst(node, screenTarget = "pickup_arrival")?.intent)
     }
 
     @Test
     fun `unrecognized click node returns null`() {
         val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/some_unknown_btn")
-        assertNull(clickRuleset.classifyFirst(node))
+        assertNull(clickRuleset.matchFirst(node))
     }
 
     // =========================================================================
@@ -109,19 +105,19 @@ class DefaultRulesIntegrationTest {
     @Test
     fun `New Order title classifies as new_order`() {
         val raw = raw(title = "New Order")
-        assertEquals("new_order", notificationRuleset.classifyFirst(raw)?.intent)
+        assertEquals("new_order", notificationRuleset.matchFirst(raw)?.intent)
     }
 
     @Test
     fun `Scheduled dash expired notification classifies correctly`() {
         val raw = raw(text = "Your scheduled dash has expired")
-        assertEquals("scheduled_dash_expired", notificationRuleset.classifyFirst(raw)?.intent)
+        assertEquals("scheduled_dash_expired", notificationRuleset.matchFirst(raw)?.intent)
     }
 
     @Test
     fun `AdditionalTip notification extracts fields correctly`() {
         val raw = raw(bigText = "added \$5.00 tip on a past H-E-B order delivered at 4/26, 3:15 PM")
-        val result = notificationRuleset.classifyFirst(raw)
+        val result = notificationRuleset.matchFirst(raw)
         assertNotNull("Expected AdditionalTip result", result)
         assertEquals("additional_tip", result!!.intent)
         assertEquals(5.00, result.fields["amount"] as Double, 0.001)
@@ -133,7 +129,7 @@ class DefaultRulesIntegrationTest {
     fun `unrecognized notification returns null`() {
         val raw = raw(title = "DoorDash", text = "Something not yet classified")
         // None of the rules should match — Unknown falls back to the caller
-        assertNull(notificationRuleset.classifyFirst(raw))
+        assertNull(notificationRuleset.matchFirst(raw))
     }
 
     // =========================================================================

@@ -9,9 +9,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Unit tests for [ScreenRuleset.matchFirst].
+ * Unit tests for [Ruleset.matchFirst] (screen rules).
  *
- * Rules and branches are constructed directly from [CompiledScreenRule] / [CompiledBranch]
+ * Rules and branches are constructed directly from [CompiledRule] / [CompiledBranch]
  * data classes — no JSON parsing involved.
  */
 class ScreenRulesetTest {
@@ -20,28 +20,28 @@ class ScreenRulesetTest {
         UiNode(text = text, viewIdResourceName = viewId)
 
     private fun branch(
-        target: String,
+        intent: String,
         guards: List<(UiNode) -> Boolean> = emptyList(),
         condition: (UiNode) -> Boolean,
-    ) = CompiledBranch(
-        target = target,
-        rejectChecks = guards.map { guard -> { tree: UiNode, _: Bindings -> guard(tree) } },
-        requireCheck = { tree, _ -> condition(tree) },
+    ) = CompiledBranch<UiNode>(
+        intent = intent,
+        rejectChecks = guards,
+        predicate = condition,
     )
 
     private fun rule(
         id: String,
         priority: Int,
-        vararg branches: CompiledBranch,
-    ) = CompiledScreenRule(
+        vararg branches: CompiledBranch<UiNode>,
+    ) = CompiledRule(
         id = id,
         priority = priority,
         overrideable = true,
         branches = branches.toList(),
     )
 
-    /** Extract target string from ScreenMatchResult for concise assertions. */
-    private fun ScreenRuleset.matchTarget(tree: UiNode): String? = matchFirst(tree)?.target
+    /** Extract intent string from RuleMatchResult for concise assertions. */
+    private fun Ruleset<UiNode>.matchIntent(tree: UiNode): String? = matchFirst(tree)?.intent
 
     // =========================================================================
     // Basic matching
@@ -49,18 +49,18 @@ class ScreenRulesetTest {
 
     @Test
     fun `matchFirst returns null when no rules match`() {
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }))
         )
-        assertNull(ruleset.matchTarget(node(text = "Something else")))
+        assertNull(ruleset.matchIntent(node(text = "Something else")))
     }
 
     @Test
-    fun `matchFirst returns the target of the matching branch`() {
-        val ruleset = ScreenRuleset(
+    fun `matchFirst returns the intent of the matching branch`() {
+        val ruleset = Ruleset(
             listOf(rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }))
         )
-        assertEquals("OFFER_POPUP", ruleset.matchTarget(node(text = "Offer")))
+        assertEquals("OFFER_POPUP", ruleset.matchIntent(node(text = "Offer")))
     }
 
     // =========================================================================
@@ -69,7 +69,7 @@ class ScreenRulesetTest {
 
     @Test
     fun `matchFirst evaluates rules in ascending priority order`() {
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
                 // Priority 20 — would match IDLE_MAP
                 rule("low-priority", 20, branch("MAIN_MAP_IDLE") { true }),
@@ -78,18 +78,18 @@ class ScreenRulesetTest {
             )
         )
         // Priority-10 rule wins even though it was added second
-        assertEquals("OFFER_POPUP", ruleset.matchTarget(node()))
+        assertEquals("OFFER_POPUP", ruleset.matchIntent(node()))
     }
 
     @Test
     fun `matchFirst skips non-matching rules and continues to next`() {
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
                 rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }),
                 rule("r2", 20, branch("MAIN_MAP_IDLE") { it.text == "Map" }),
             )
         )
-        assertEquals("MAIN_MAP_IDLE", ruleset.matchTarget(node(text = "Map")))
+        assertEquals("MAIN_MAP_IDLE", ruleset.matchIntent(node(text = "Map")))
     }
 
     // =========================================================================
@@ -99,7 +99,7 @@ class ScreenRulesetTest {
     @Test
     fun `guard fires — branch is skipped`() {
         val guardFires: (UiNode) -> Boolean = { true }   // always fires
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
                 rule(
                     "r1", 10,
@@ -108,13 +108,13 @@ class ScreenRulesetTest {
             )
         )
         // Guard fires → branch is skipped → no match → null
-        assertNull(ruleset.matchTarget(node()))
+        assertNull(ruleset.matchIntent(node()))
     }
 
     @Test
     fun `guard does not fire — branch is evaluated normally`() {
         val guardSilent: (UiNode) -> Boolean = { false }  // never fires
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
                 rule(
                     "r1", 10,
@@ -122,14 +122,14 @@ class ScreenRulesetTest {
                 )
             )
         )
-        assertEquals("OFFER_POPUP", ruleset.matchTarget(node()))
+        assertEquals("OFFER_POPUP", ruleset.matchIntent(node()))
     }
 
     @Test
     fun `any firing guard skips the branch even if condition is true`() {
         val g1: (UiNode) -> Boolean = { false }
         val g2: (UiNode) -> Boolean = { true }  // this one fires
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
                 rule(
                     "r1", 10,
@@ -137,7 +137,7 @@ class ScreenRulesetTest {
                 )
             )
         )
-        assertNull(ruleset.matchTarget(node()))
+        assertNull(ruleset.matchIntent(node()))
     }
 
     // =========================================================================
@@ -146,7 +146,7 @@ class ScreenRulesetTest {
 
     @Test
     fun `first matching branch in a rule wins`() {
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
                 rule(
                     "branched", 10,
@@ -155,20 +155,20 @@ class ScreenRulesetTest {
                 )
             )
         )
-        assertEquals("DELIVERY_SUMMARY_EXPANDED", ruleset.matchTarget(node(text = "expanded")))
-        assertEquals("DELIVERY_SUMMARY_COLLAPSED", ruleset.matchTarget(node(text = "collapsed")))
+        assertEquals("DELIVERY_SUMMARY_EXPANDED", ruleset.matchIntent(node(text = "expanded")))
+        assertEquals("DELIVERY_SUMMARY_COLLAPSED", ruleset.matchIntent(node(text = "collapsed")))
     }
 
     @Test
     fun `subsequent rule evaluated when earlier rule has no matching branch`() {
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
                 rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }),
                 rule("r2", 20, branch("MAIN_MAP_IDLE") { true }),
             )
         )
         // r1 doesn't match "Map", r2 matches everything
-        assertEquals("MAIN_MAP_IDLE", ruleset.matchTarget(node(text = "Map")))
+        assertEquals("MAIN_MAP_IDLE", ruleset.matchIntent(node(text = "Map")))
     }
 
     // =========================================================================
@@ -177,7 +177,7 @@ class ScreenRulesetTest {
 
     @Test
     fun `ruleCount reflects the number of compiled rules`() {
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
                 rule("r1", 10, branch("OFFER_POPUP") { true }),
                 rule("r2", 20, branch("MAIN_MAP_IDLE") { true }),
@@ -189,7 +189,7 @@ class ScreenRulesetTest {
 
     @Test
     fun `empty ruleset returns null`() {
-        assertNull(ScreenRuleset(emptyList()).matchTarget(node()))
+        assertNull(Ruleset<UiNode>(emptyList()).matchIntent(node()))
     }
 
     // =========================================================================
@@ -197,12 +197,12 @@ class ScreenRulesetTest {
     // =========================================================================
 
     private fun branchWithEffects(
-        target: String,
+        intent: String,
         effects: List<CompiledEffect>,
         parser: (UiNode, Bindings) -> Map<String, Any?> = { _, _ -> emptyMap() },
-    ) = CompiledBranch(
-        target = target,
-        requireCheck = { _, _ -> true },
+    ) = CompiledBranch<UiNode>(
+        intent = intent,
+        predicate = { true },
         parser = parser,
         effects = effects,
     )
@@ -213,9 +213,9 @@ class ScreenRulesetTest {
             verb = EffectVerb.SCREENSHOT,
             args = mapOf("prefix" to "Offer - {storeName}"),
         )
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
-                CompiledScreenRule(
+                CompiledRule<UiNode>(
                     id = "test.rule", priority = 10, overrideable = true,
                     branches = listOf(
                         branchWithEffects(
@@ -240,9 +240,9 @@ class ScreenRulesetTest {
             args = mapOf("type" to "OFFER_RECEIVED"),
             dedupeKey = "offer-{offerHash}",
         )
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
-                CompiledScreenRule(
+                CompiledRule<UiNode>(
                     id = "test.rule", priority = 10, overrideable = true,
                     branches = listOf(
                         branchWithEffects(
@@ -265,9 +265,9 @@ class ScreenRulesetTest {
             verb = EffectVerb.BUBBLE,
             args = mapOf("text" to "Value: {unknown}"),
         )
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
-                CompiledScreenRule(
+                CompiledRule<UiNode>(
                     id = "test.rule", priority = 10, overrideable = true,
                     branches = listOf(
                         branchWithEffects("X", listOf(effect)),
@@ -286,9 +286,9 @@ class ScreenRulesetTest {
             verb = EffectVerb.BUBBLE,
             args = mapOf("text" to "Hi {name}"),
         )
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
-                CompiledScreenRule(
+                CompiledRule<UiNode>(
                     id = "test.rule", priority = 10, overrideable = true,
                     branches = listOf(
                         branchWithEffects(
@@ -312,9 +312,9 @@ class ScreenRulesetTest {
             verb = EffectVerb.LOG,
             args = mapOf("payload" to "{data}"),
         )
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
-                CompiledScreenRule(
+                CompiledRule<UiNode>(
                     id = "test.rule", priority = 10, overrideable = true,
                     branches = listOf(
                         branchWithEffects(
@@ -328,7 +328,7 @@ class ScreenRulesetTest {
         )
 
         val result = ruleset.matchFirst(node())!!
-        assertEquals(ScreenRuleset.MAX_TEMPLATE_VALUE_LENGTH, result.effects[0].args["payload"]!!.length)
+        assertEquals(Ruleset.MAX_TEMPLATE_VALUE_LENGTH, result.effects[0].args["payload"]!!.length)
     }
 
     @Test
@@ -337,9 +337,9 @@ class ScreenRulesetTest {
             verb = EffectVerb.SCREENSHOT,
             args = mapOf("prefix" to "Static Value"),
         )
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
-                CompiledScreenRule(
+                CompiledRule<UiNode>(
                     id = "test.rule", priority = 10, overrideable = true,
                     branches = listOf(
                         branchWithEffects(
@@ -372,9 +372,9 @@ class ScreenRulesetTest {
                 throttleMs = 60000,
             ),
         )
-        val ruleset = ScreenRuleset(
+        val ruleset = Ruleset(
             listOf(
-                CompiledScreenRule(
+                CompiledRule<UiNode>(
                     id = "doordash.screen.offer", priority = 20, overrideable = true,
                     branches = listOf(
                         branchWithEffects(

@@ -1,12 +1,11 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.rules.ClickRuleset
-import cloud.trotter.dashbuddy.rules.CompiledClickRule
-import cloud.trotter.dashbuddy.rules.CompiledNotificationRule
-import cloud.trotter.dashbuddy.rules.CompiledScreenRule
-import cloud.trotter.dashbuddy.rules.NotificationRuleset
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.rules.CompiledRule
 import cloud.trotter.dashbuddy.rules.RuleCompiler
-import cloud.trotter.dashbuddy.rules.ScreenRuleset
+import cloud.trotter.dashbuddy.rules.RuleContext
+import cloud.trotter.dashbuddy.rules.Ruleset
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -25,32 +24,32 @@ object TestRulesetFactory {
 
     private val allRules by lazy {
         val dir = File(RULES_DIR)
-        val allScreens = mutableListOf<CompiledScreenRule>()
-        val allClicks = mutableListOf<CompiledClickRule>()
-        val allNotifications = mutableListOf<CompiledNotificationRule>()
+        val allScreens = mutableListOf<CompiledRule<UiNode>>()
+        val allClicks = mutableListOf<CompiledRule<UiNode>>()
+        val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
 
         dir.listFiles { f -> f.extension == "json" }?.forEach { file ->
             val root = Json.parseToJsonElement(file.readText()).jsonObject
             root["screens"]?.jsonArray
-                ?.let { allScreens += RuleCompiler.compileScreenRules(it) }
+                ?.let { allScreens += RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
             root["clicks"]?.jsonArray
-                ?.let { allClicks += RuleCompiler.compileClickRules(it) }
+                ?.let { allClicks += RuleCompiler.compileRules<UiNode>(it, RuleContext.CLICK) }
             root["notifications"]?.jsonArray
-                ?.let { allNotifications += RuleCompiler.compileNotificationRules(it) }
+                ?.let { allNotifications += RuleCompiler.compileRules<RawNotificationData>(it, RuleContext.NOTIFICATION) }
         }
 
         Triple(allScreens, allClicks, allNotifications)
     }
 
-    val screenRuleset: ScreenRuleset by lazy {
-        ScreenRuleset(allRules.first)
+    val screenRuleset: Ruleset<UiNode> by lazy {
+        Ruleset(allRules.first)
     }
 
-    val clickRuleset: ClickRuleset by lazy {
-        ClickRuleset(allRules.second)
+    val clickRuleset: Ruleset<UiNode> by lazy {
+        Ruleset(allRules.second)
     }
 
-    val notificationRuleset: NotificationRuleset by lazy {
-        NotificationRuleset(allRules.third)
+    val notificationRuleset: Ruleset<RawNotificationData> by lazy {
+        Ruleset(allRules.third)
     }
 }

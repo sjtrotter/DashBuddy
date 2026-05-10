@@ -642,12 +642,12 @@ class RuleCompilerTest {
 
     @Test
     fun `enumeratePermissions returns tiers from effects and overrides`() {
-        val rule = CompiledScreenRule(
+        val rule = CompiledRule<UiNode>(
             id = "test.rule", priority = 10, overrideable = true,
             branches = listOf(
                 CompiledBranch(
-                    target = "OFFER",
-                    requireCheck = { _, _ -> true },
+                    intent = "OFFER",
+                    predicate = { true },
                     effects = listOf(
                         CompiledEffect(verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT),
                         CompiledEffect(verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.LOG),
@@ -669,10 +669,10 @@ class RuleCompilerTest {
 
     @Test
     fun `enumeratePermissions returns empty for rules with no effects`() {
-        val rule = CompiledScreenRule(
+        val rule = CompiledRule<UiNode>(
             id = "test.rule", priority = 10, overrideable = true,
             branches = listOf(
-                CompiledBranch(target = "IDLE", requireCheck = { _, _ -> true }),
+                CompiledBranch(intent = "IDLE", predicate = { true }),
             ),
         )
         assertTrue(compiler.enumeratePermissions(listOf(rule)).isEmpty())

@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.rules.JsonRuleInterpreter
+import cloud.trotter.dashbuddy.rules.ParsedFieldsFactory
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -66,16 +67,17 @@ class ObservationClassifier @Inject constructor(
             return makeScreenObservation("UNKNOWN", null, null, ParsedFields.None, null)
         }
 
-        Timber.i("SCREEN: ${result.target}")
+        Timber.i("SCREEN: ${result.intent}")
         if (result.effects.isNotEmpty()) {
-            Timber.d("SCREEN: ${result.target} has ${result.effects.size} effect(s)")
+            Timber.d("SCREEN: ${result.intent} has ${result.effects.size} effect(s)")
         }
 
+        val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
         val obs = makeScreenObservation(
-            screenName = result.target,
+            screenName = result.intent,
             flow = result.flow,
             modeHint = result.modeHint,
-            parsed = result.parsed,
+            parsed = parsed,
             ruleId = result.ruleId,
             effects = result.effects,
             transitionOverrides = result.transitionOverrides,
@@ -116,7 +118,7 @@ class ObservationClassifier @Inject constructor(
     private fun classifyClick(event: PipelineEvent.Click, platformWire: String?): Observation.Click {
         val ruleset = interpreter.clickRuleset
         if (ruleset != null) {
-            val result = ruleset.classifyFirst(event.node, platformWire, lastScreenTarget)
+            val result = ruleset.matchFirst(event.node, platformWire, lastScreenTarget)
             if (result != null) {
                 return Observation.Click(
                     timestamp = System.currentTimeMillis(),
@@ -127,6 +129,8 @@ class ObservationClassifier @Inject constructor(
                     modeHint = result.modeHint,
                     parsed = ParsedFields.ClickFields(intent = result.intent),
                     target = result.intent,
+                    effects = result.effects,
+                    transitionOverrides = result.transitionOverrides,
                     screenTarget = lastScreenTarget,
                 )
             }
@@ -159,18 +163,11 @@ class ObservationClassifier @Inject constructor(
     private fun classifyNotification(event: PipelineEvent.Notification, platformWire: String?): Observation.Notification {
         val ruleset = interpreter.notificationRuleset
         if (ruleset != null) {
-            val result = ruleset.classifyFirst(event.raw, platformWire)
+            val result = ruleset.matchFirst(event.raw, platformWire)
             if (result != null) {
-                val parsed = when (result.shape) {
-                    "noise" -> ParsedFields.NoiseFields()
-                    "sensitive" -> ParsedFields.SensitiveFields()
-                    else -> ParsedFields.NotificationFields(
-                        intent = result.intent,
-                        amount = result.fields["amount"] as? Double,
-                        storeName = result.fields["storeName"] as? String,
-                        deliveredAt = result.fields["deliveredAt"] as? String,
-                    )
-                }
+                val parsed = ParsedFieldsFactory.create(
+                    result.shape ?: "notification", result.fields,
+                )
                 return Observation.Notification(
                     timestamp = event.raw.postTime,
                     captureId = null,
@@ -180,6 +177,8 @@ class ObservationClassifier @Inject constructor(
                     modeHint = result.modeHint,
                     parsed = parsed,
                     target = result.intent,
+                    effects = result.effects,
+                    transitionOverrides = result.transitionOverrides,
                 )
             }
         }
