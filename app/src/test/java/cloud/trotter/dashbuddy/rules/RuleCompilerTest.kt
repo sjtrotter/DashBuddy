@@ -466,24 +466,16 @@ class RuleCompilerTest {
     @Test
     fun `compileEffectEntry accepts valid click verb with target`() {
         val effect = compiler.compileEffectEntry(
-            parseJson("""{"verb": "click", "target": "${'$'}acceptBtn"}""").jsonObject
+            parseJson("""{"click": "${'$'}acceptBtn"}""").jsonObject
         )
         assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK, effect.verb)
         assertEquals("acceptBtn", effect.targetBindName)
     }
 
     @Test
-    fun `compileEffectEntry accepts legacy command key`() {
+    fun `compileEffectEntry accepts screenshot verb`() {
         val effect = compiler.compileEffectEntry(
-            parseJson("""{"command": "click", "target": "${'$'}btn"}""").jsonObject
-        )
-        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK, effect.verb)
-    }
-
-    @Test
-    fun `compileEffectEntry accepts screenshot verb without target`() {
-        val effect = compiler.compileEffectEntry(
-            parseJson("""{"verb": "screenshot", "args": {"prefix": "Offer"}}""").jsonObject
+            parseJson("""{"screenshot": {"prefix": "Offer"}}""").jsonObject
         )
         assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT, effect.verb)
         assertNull(effect.targetBindName)
@@ -493,7 +485,7 @@ class RuleCompilerTest {
     @Test
     fun `compileEffectEntry accepts bubble verb with args`() {
         val effect = compiler.compileEffectEntry(
-            parseJson("""{"verb": "bubble", "args": {"text": "Hello", "persona": "dispatcher"}}""").jsonObject
+            parseJson("""{"bubble": {"text": "Hello", "persona": "dispatcher"}}""").jsonObject
         )
         assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.BUBBLE, effect.verb)
         assertEquals("Hello", effect.args["text"])
@@ -503,7 +495,7 @@ class RuleCompilerTest {
     @Test
     fun `compileEffectEntry accepts verb with no args`() {
         val effect = compiler.compileEffectEntry(
-            parseJson("""{"verb": "evaluate_offer"}""").jsonObject
+            parseJson("""{"evaluate_offer": {}}""").jsonObject
         )
         assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.EVALUATE_OFFER, effect.verb)
         assertTrue(effect.args.isEmpty())
@@ -512,39 +504,33 @@ class RuleCompilerTest {
     @Test(expected = RuleCompileException::class)
     fun `compileEffectEntry rejects unknown verb`() {
         compiler.compileEffectEntry(
-            parseJson("""{"verb": "explode"}""").jsonObject
+            parseJson("""{"explode": {}}""").jsonObject
         )
     }
 
     @Test(expected = RuleCompileException::class)
     fun `compileEffectEntry rejects missing verb`() {
         compiler.compileEffectEntry(
-            parseJson("""{"target": "${'$'}btn"}""").jsonObject
+            parseJson("""{"onlyIf": {"fieldEquals": {"field": "x", "value": "y"}}}""").jsonObject
         )
     }
 
     // =========================================================================
-    // compileEffectEntry — target enforcement
+    // compileEffectEntry — format enforcement
     // =========================================================================
 
-    @Test(expected = RuleCompileException::class)
-    fun `compileEffectEntry rejects click without target`() {
+    @Test(expected = Exception::class)
+    fun `compileEffectEntry rejects click with object value instead of target string`() {
+        // click requires a string target, not an args object
         compiler.compileEffectEntry(
-            parseJson("""{"verb": "click"}""").jsonObject
+            parseJson("""{"click": {"bad": "value"}}""").jsonObject
         )
     }
 
     @Test(expected = RuleCompileException::class)
-    fun `compileEffectEntry rejects screenshot with target`() {
+    fun `compileEffectEntry rejects multiple verb keys`() {
         compiler.compileEffectEntry(
-            parseJson("""{"verb": "screenshot", "target": "${'$'}node"}""").jsonObject
-        )
-    }
-
-    @Test(expected = RuleCompileException::class)
-    fun `compileEffectEntry rejects bubble with target`() {
-        compiler.compileEffectEntry(
-            parseJson("""{"verb": "bubble", "target": "${'$'}node"}""").jsonObject
+            parseJson("""{"screenshot": {}, "bubble": {"text": "hi"}}""").jsonObject
         )
     }
 
@@ -555,28 +541,28 @@ class RuleCompilerTest {
     @Test(expected = RuleCompileException::class)
     fun `compileEffectEntry rejects unknown arg key for screenshot`() {
         compiler.compileEffectEntry(
-            parseJson("""{"verb": "screenshot", "args": {"badKey": "value"}}""").jsonObject
+            parseJson("""{"screenshot": {"badKey": "value"}}""").jsonObject
         )
     }
 
     @Test(expected = RuleCompileException::class)
     fun `compileEffectEntry rejects unknown arg key for bubble`() {
         compiler.compileEffectEntry(
-            parseJson("""{"verb": "bubble", "args": {"text": "ok", "unknown": "bad"}}""").jsonObject
+            parseJson("""{"bubble": {"text": "ok", "unknown": "bad"}}""").jsonObject
         )
     }
 
     @Test(expected = RuleCompileException::class)
     fun `compileEffectEntry rejects args on verb with no allowed args`() {
         compiler.compileEffectEntry(
-            parseJson("""{"verb": "evaluate_offer", "args": {"surprise": "bad"}}""").jsonObject
+            parseJson("""{"evaluate_offer": {"surprise": "bad"}}""").jsonObject
         )
     }
 
     @Test
     fun `compileEffectEntry preserves onlyIf gate`() {
         val effect = compiler.compileEffectEntry(
-            parseJson("""{"verb": "click", "target": "${'$'}btn", "onlyIf": {"fieldEquals": {"field": "intent", "value": "accept"}}}""").jsonObject
+            parseJson("""{"click": "${'$'}btn", "onlyIf": {"fieldEquals": {"field": "intent", "value": "accept"}}}""").jsonObject
         )
         assertTrue(effect.onlyIf is cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate.FieldEquals)
     }
@@ -584,7 +570,7 @@ class RuleCompilerTest {
     @Test
     fun `compileEffectEntry preserves dedupeKey and throttleMs`() {
         val effect = compiler.compileEffectEntry(
-            parseJson("""{"verb": "click", "target": "${'$'}btn", "dedupeKey": "accept-click", "throttleMs": 1000}""").jsonObject
+            parseJson("""{"click": "${'$'}btn", "dedupeKey": "accept-click", "throttleMs": 1000}""").jsonObject
         )
         assertEquals("accept-click", effect.dedupeKey)
         assertEquals(1000L, effect.throttleMs)
@@ -598,8 +584,8 @@ class RuleCompilerTest {
     fun `compileTransitionOverrides accepts known trigger keys`() {
         val overrides = compiler.compileTransitionOverrides(
             parseJson("""{
-                "mode:online": [{"verb": "session_start", "args": {"platformName": "Uber"}}],
-                "mode:offline": [{"verb": "session_end"}, {"verb": "odometer_stop"}]
+                "mode:online": [{"session_start": {"platformName": "Uber"}}],
+                "mode:offline": [{"session_end": {}}, {"odometer_stop": {}}]
             }""").jsonObject
         )
         assertEquals(2, overrides.size)
@@ -612,7 +598,7 @@ class RuleCompilerTest {
     @Test(expected = RuleCompileException::class)
     fun `compileTransitionOverrides rejects unknown trigger key`() {
         compiler.compileTransitionOverrides(
-            parseJson("""{"mode:turbo": [{"verb": "log"}]}""").jsonObject
+            parseJson("""{"mode:turbo": [{"log": {}}]}""").jsonObject
         )
     }
 
@@ -622,9 +608,9 @@ class RuleCompilerTest {
         val overrides = compiler.compileTransitionOverrides(
             parseJson("""{
                 "task:start": [
-                    {"verb": "odometer_resume"},
-                    {"verb": "log", "args": {"type": "TASK_START"}},
-                    {"verb": "bubble", "args": {"text": "Task started"}}
+                    {"odometer_resume": {}},
+                    {"log": {"type": "TASK_START"}},
+                    {"bubble": {"text": "Task started"}}
                 ]
             }""").jsonObject
         )
@@ -638,7 +624,7 @@ class RuleCompilerTest {
     @Test(expected = RuleCompileException::class)
     fun `compileTransitionOverrides rejects unknown verb inside override`() {
         compiler.compileTransitionOverrides(
-            parseJson("""{"mode:online": [{"verb": "teleport"}]}""").jsonObject
+            parseJson("""{"mode:online": [{"teleport": {}}]}""").jsonObject
         )
     }
 

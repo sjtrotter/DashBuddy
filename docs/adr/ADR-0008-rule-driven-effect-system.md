@@ -84,10 +84,13 @@ for lifecycle transitions that rules can override per-platform.
 ```
 Rule JSON               CompiledEffect          RequestedEffect         AppEffect.RequestEffect
   effects: [{...}]  -->  compileEffectEntry  -->  resolveEffects     -->  diffRuleEffects
-  verb, args, target     verb validated           template resolved       gate evaluated
+  verbKey: params        verb validated           template resolved       gate evaluated
   dedupeKey, throttle    args validated            binding resolved        throttle checked
-                         target enforced                                   dispatched by verb
+                                                                          dispatched by verb
 ```
+
+The verb name is the JSON key; its value holds the parameters directly
+(args object for most verbs, target string for `click`).
 
 ### Template Interpolation
 
@@ -110,8 +113,8 @@ specific triggers on their platform:
 {
   "transitionOverrides": {
     "mode:online": [
-      { "verb": "session_start", "args": { "platformName": "Uber" } },
-      { "verb": "odometer_start" }
+      { "session_start": { "platformName": "Uber" } },
+      { "odometer_start": {} }
     ]
   }
 }

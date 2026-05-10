@@ -540,37 +540,45 @@ object RuleCompiler {
         cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SESSION_END to setOf("platformName"),
     )
 
-    internal fun compileEffectEntry(obj: JsonObject): CompiledEffect {
-        // Accept both "verb" (new) and "command" (legacy) keys
-        val wireVerb = obj["verb"]?.jsonPrimitive?.content
-            ?: obj["command"]?.jsonPrimitive?.content
-            ?: throw RuleCompileException("Effect missing 'verb'")
+    /** Keys that are effect metadata, not verb identifiers. */
+    private val effectMetaKeys = setOf("onlyIf", "dedupeKey", "throttleMs")
 
+    internal fun compileEffectEntry(obj: JsonObject): CompiledEffect {
+        // The verb is the single non-meta key in the object
+        val verbEntries = obj.entries.filter { it.key !in effectMetaKeys }
+        if (verbEntries.isEmpty())
+            throw RuleCompileException("Effect has no verb key")
+        if (verbEntries.size > 1)
+            throw RuleCompileException(
+                "Effect has multiple verb keys: ${verbEntries.map { it.key }}",
+            )
+
+        val (wireVerb, verbValue) = verbEntries.single()
         val verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.fromWire(wireVerb)
             ?: throw RuleCompileException("Unknown effect verb: '$wireVerb'")
 
-        // Target enforcement: require target for CLICK, reject for all others
-        val targetRaw = obj["target"]?.jsonPrimitive?.content
-        if (verb.requiresTarget && targetRaw == null) {
-            throw RuleCompileException("Verb '$wireVerb' requires 'target'")
-        }
-        if (!verb.requiresTarget && targetRaw != null) {
-            throw RuleCompileException("Verb '$wireVerb' does not use 'target'")
-        }
-        val targetBindName = targetRaw?.removePrefix("$")
-
-        // Validate args keys against per-verb allowlist
-        val args = obj["args"]?.jsonObject?.let { argsObj ->
+        // Target-bound verbs (click): value is a string "$bindName"
+        // All others: value is a JSON object of args (may be empty {})
+        val targetBindName: String?
+        val args: Map<String, String>
+        if (verb.requiresTarget) {
+            targetBindName = verbValue.jsonPrimitive.content.removePrefix("$")
+            args = emptyMap()
+        } else {
+            targetBindName = null
+            val argsObj = verbValue.jsonObject
             val allowed = allowedArgs[verb] ?: emptySet()
             val argMap = mutableMapOf<String, String>()
             for ((key, value) in argsObj) {
                 if (key !in allowed) {
-                    throw RuleCompileException("Unknown arg '$key' for verb '$wireVerb'. Allowed: $allowed")
+                    throw RuleCompileException(
+                        "Unknown arg '$key' for verb '$wireVerb'. Allowed: $allowed",
+                    )
                 }
                 argMap[key] = value.jsonPrimitive.content
             }
-            argMap.toMap()
-        } ?: emptyMap()
+            args = argMap.toMap()
+        }
 
         return CompiledEffect(
             verb = verb,

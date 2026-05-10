@@ -13,21 +13,22 @@ Add an `effects` array to any screen rule branch:
   "branches": [{
     "target": "OFFER_POPUP",
     "effects": [
-      { "verb": "screenshot", "args": { "prefix": "Offer - {storeName}" },
+      { "screenshot": { "prefix": "Offer - {storeName}" },
         "dedupeKey": "offer-ss-{offerHash}", "throttleMs": 60000 },
-      { "verb": "log", "args": { "type": "OFFER_RECEIVED" } }
+      { "log": { "type": "OFFER_RECEIVED" } }
     ]
   }]
 }
 ```
 
-## Effect Properties
+## Effect Format
 
-| Property | Required | Description |
+Each effect object has one **verb key** (the verb name) whose value holds
+the verb's parameters. Optional meta keys sit alongside it:
+
+| Key | Required | Description |
 |---|---|---|
-| `verb` | Yes | One of the 14 registered verbs (see below) |
-| `target` | If verb requires it | Bind name (`$name`) for target-bound verbs (only `click`) |
-| `args` | No | Verb-specific arguments (validated at compile time) |
+| *verb name* | Yes | The verb name is the key; value is args object (or target string for `click`) |
 | `onlyIf` | No | Gate: only fire if parsed field matches condition |
 | `dedupeKey` | No | Stable key for throttle deduplication |
 | `throttleMs` | No | Minimum ms between firings of the same dedupeKey (default: 500) |
@@ -55,7 +56,7 @@ Tap a UI node identified by a binding.
 | Allowed args | (none) |
 
 ```json
-{ "verb": "click", "target": "$acceptBtn" }
+{ "click": "$acceptBtn" }
 ```
 
 #### `screenshot`
@@ -68,7 +69,7 @@ Capture the current screen.
 | Allowed args | `prefix` |
 
 ```json
-{ "verb": "screenshot", "args": { "prefix": "Offer - {storeName}" } }
+{ "screenshot": { "prefix": "Offer - {storeName}" } }
 ```
 
 #### `bubble`
@@ -84,7 +85,7 @@ Persona values: `dispatcher`, `system`, `earnings`, `inspector`, `navigator`,
 `shopper`, `good_offer`, `bad_offer`.
 
 ```json
-{ "verb": "bubble", "args": { "text": "Offer Accepted", "persona": "dispatcher" } }
+{ "bubble": { "text": "Offer Accepted", "persona": "dispatcher" } }
 ```
 
 #### `log`
@@ -97,7 +98,7 @@ Write a structured log entry.
 | Allowed args | `type`, `payload` |
 
 ```json
-{ "verb": "log", "args": { "type": "OFFER_RECEIVED", "payload": "pay={payAmount}" } }
+{ "log": { "type": "OFFER_RECEIVED", "payload": "pay={payAmount}" } }
 ```
 
 #### `evaluate_offer`
@@ -161,9 +162,9 @@ a transition trigger:
 {
   "transitionOverrides": {
     "mode:online": [
-      { "verb": "session_start", "args": { "platformName": "Uber" } },
-      { "verb": "odometer_start" },
-      { "verb": "log", "args": { "type": "SESSION_START" } }
+      { "session_start": { "platformName": "Uber" } },
+      { "odometer_start": {} },
+      { "log": { "type": "SESSION_START" } }
     ]
   }
 }
@@ -191,7 +192,7 @@ Gate an effect on a parsed field value:
 
 ```json
 {
-  "verb": "click", "target": "$btn",
+  "click": "$btn",
   "onlyIf": { "fieldEquals": { "field": "intent", "value": "accept" } }
 }
 ```
