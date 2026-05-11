@@ -599,7 +599,15 @@
         "titleMatchesRegex": "^Going to (?!\\d)"
       },
       "intent": "trip_en_route_pickup",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRIP_EN_ROUTE_PICKUP"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.trip_arrived_pickup",
@@ -608,7 +616,15 @@
         "titleContains": "Arrived at "
       },
       "intent": "trip_arrived_pickup",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRIP_ARRIVED_PICKUP"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.trip_en_route_dropoff",
@@ -617,7 +633,15 @@
         "titleMatchesRegex": "^Going to \\d"
       },
       "intent": "trip_en_route_dropoff",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRIP_EN_ROUTE_DROPOFF"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.trip_at_dropoff",
@@ -626,7 +650,15 @@
         "titleMatchesRegex": "(Leave the order at|Meet at door for)"
       },
       "intent": "trip_at_dropoff",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRIP_AT_DROPOFF"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.tip_received",
@@ -635,7 +667,15 @@
         "titleMatchesRegex": "received a \\$\\d"
       },
       "intent": "tip_received",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TIP_RECEIVED: {rawText}"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.online_status",
@@ -652,7 +692,15 @@
         "titleContains": "Quest awaits"
       },
       "intent": "quest_promo",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "QUEST_PROMO"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.quest_deadline",
@@ -668,7 +716,15 @@
         ]
       },
       "intent": "quest_deadline",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "QUEST_DEADLINE"
+          }
+        }
+      ]
     }
   ]
 }

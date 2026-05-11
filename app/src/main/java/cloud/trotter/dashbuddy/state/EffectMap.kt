@@ -158,7 +158,7 @@ class EffectMap @Inject constructor() {
             addAll(diffMode(p, next, obs))
             addAll(diffTask(p, next, prevFlow, nextFlow, obs))
             addAll(diffPostTask(p, next, nextFlow, obs))
-            addAll(diffNotification(obs, next.session?.sessionId))
+            addAll(diffNotification(obs))
 
             // Delivery completed: leaving PostTask for a non-PostTask flow
             if (prevFlow.flow == Flow.PostTask && nextFlow.flow != Flow.PostTask) {
@@ -450,13 +450,17 @@ class EffectMap @Inject constructor() {
      * Handle notification-driven effects. These are global interceptors
      * that apply regardless of state.
      */
-    private fun diffNotification(obs: Observation, sessionId: String?): List<AppEffect> {
+    /**
+     * Intent-specific notification processing that can't be expressed as
+     * a JSON effect. Logging and other simple effects are now declared in
+     * the rule JSON and handled by [diffRuleEffects].
+     */
+    private fun diffNotification(obs: Observation): List<AppEffect> {
         if (obs !is Observation.Notification) return emptyList()
         val fields = obs.parsed as? ParsedFields.NotificationFields ?: return emptyList()
 
         return buildList {
             when (fields.intent) {
-                // DoorDash
                 "additional_tip" -> {
                     val amount = fields.amount
                     val storeName = fields.storeName
@@ -470,48 +474,6 @@ class EffectMap @Inject constructor() {
                             )
                         )
                     }
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TIP_ADDED: \$$amount $storeName"))
-                }
-                "new_order" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "NEW_ORDER"))
-                }
-                "scheduled_dash_expired" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "SCHEDULED_DASH_EXPIRED"))
-                }
-                "demand_nudge" -> {
-                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "DEMAND_NUDGE"))
-                }
-                "peak_pay_promo" -> {
-                    add(logEffect(null, AppEventType.NOTIFICATION_RECEIVED, "PEAK_PAY_PROMO"))
-                }
-
-                // Uber trip leg notifications
-                "trip_en_route_pickup" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TRIP_EN_ROUTE_PICKUP"))
-                }
-                "trip_arrived_pickup" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TRIP_ARRIVED_PICKUP"))
-                }
-                "trip_en_route_dropoff" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TRIP_EN_ROUTE_DROPOFF"))
-                }
-                "trip_at_dropoff" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TRIP_AT_DROPOFF"))
-                }
-                "tip_received" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "TIP_RECEIVED: ${fields.rawText}"))
-                }
-
-                // Uber promo notifications
-                "quest_promo" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "QUEST_PROMO"))
-                }
-                "quest_deadline" -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "QUEST_DEADLINE"))
-                }
-
-                else -> {
-                    add(logEffect(sessionId, AppEventType.NOTIFICATION_RECEIVED, "UNHANDLED: ${fields.intent} — ${fields.rawText}"))
                 }
             }
         }

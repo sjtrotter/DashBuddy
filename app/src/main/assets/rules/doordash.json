@@ -2400,14 +2400,30 @@
             "transform": "trim"
           }
         }
-      }
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TIP_ADDED: ${amount} {storeName}"
+          }
+        }
+      ]
     },
     {
       "id": "doordash.notification.new_order",
       "priority": 20,
       "require": {
         "titleContains": "new order"
-      }
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "NEW_ORDER"
+          }
+        }
+      ]
     },
     {
       "id": "doordash.notification.scheduled_dash_expired",
@@ -2421,7 +2437,15 @@
             "anyFieldContains": "expired"
           }
         ]
-      }
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "SCHEDULED_DASH_EXPIRED"
+          }
+        }
+      ]
     },
     {
       "id": "doordash.notification.demand_nudge",
@@ -2430,7 +2454,15 @@
         "titleContains": "Dash now"
       },
       "intent": "demand_nudge",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "DEMAND_NUDGE"
+          }
+        }
+      ]
     },
     {
       "id": "doordash.notification.peak_pay_promo",
@@ -2439,7 +2471,15 @@
         "titleContains": "Incentives Update"
       },
       "intent": "peak_pay_promo",
-      "shape": "notification"
+      "shape": "notification",
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "PEAK_PAY_PROMO"
+          }
+        }
+      ]
     }
   ]
 }

@@ -478,7 +478,7 @@ class EffectMapTest {
     // =========================================================================
 
     @Test
-    fun `additional_tip notification emits ProcessTipNotification and LogEvent`() {
+    fun `additional_tip notification emits ProcessTipNotification`() {
         val (platform, onlineRegion) = stateWithPlatform()
         val state = AppState(regions = Regions(platforms = mapOf(platform to onlineRegion)))
 
@@ -490,16 +490,18 @@ class EffectMapTest {
         ))
 
         assertTrue("Should emit ProcessTipNotification", effects.any { it is AppEffect.ProcessTipNotification })
-        assertTrue("Should emit NOTIFICATION_RECEIVED", effects.logEventTypes().contains(AppEventType.NOTIFICATION_RECEIVED))
     }
 
     @Test
-    fun `new_order notification emits LogEvent`() {
+    fun `new_order notification does not crash`() {
+        // Log effects are now rule-declared (JSON) and dispatched via diffRuleEffects.
+        // This test verifies the observation is processed without errors.
         val (platform, onlineRegion) = stateWithPlatform()
         val state = AppState(regions = Regions(platforms = mapOf(platform to onlineRegion)))
 
         val effects = effectMap.diff(state, state, notificationObs(intent = "new_order"))
-        assertTrue(effects.logEventTypes().contains(AppEventType.NOTIFICATION_RECEIVED))
+        // No hardcoded log effects — logging comes from rule-declared effects
+        assertTrue("Should produce no hardcoded effects for new_order", effects.isEmpty())
     }
 
     // =========================================================================
