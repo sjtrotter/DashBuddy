@@ -54,11 +54,27 @@ class JsonRuleInterpreter @Inject constructor(
             val allScreens = mutableListOf<CompiledRule<UiNode>>()
             val allClicks = mutableListOf<CompiledRule<UiNode>>()
             val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
+            val seenRuleIds = mutableMapOf<String, String>() // ruleId → first source path
 
             for (fileName in files) {
                 val path = "$RULES_DIR/$fileName"
                 val json = context.assets.open(path).bufferedReader().readText()
                 val result = loadSingle(json, source = path) ?: continue
+
+                // Collision detection (C3): warn if any rule ID appears in multiple files
+                val newIds = result.screens.map { it.id } +
+                    result.clicks.map { it.id } +
+                    result.notifications.map { it.id }
+                for (id in newIds) {
+                    val existingSource = seenRuleIds.put(id, path)
+                    if (existingSource != null) {
+                        Timber.w(
+                            "JsonRuleInterpreter: rule ID '%s' declared in both '%s' and '%s'",
+                            id, existingSource, path,
+                        )
+                    }
+                }
+
                 allScreens += result.screens
                 allClicks += result.clicks
                 allNotifications += result.notifications

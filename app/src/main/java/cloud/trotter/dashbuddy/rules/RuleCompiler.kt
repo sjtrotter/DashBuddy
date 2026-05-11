@@ -166,6 +166,12 @@ object RuleCompiler {
             ?: parseBlock?.get("shape")?.jsonPrimitive?.content
             ?: ruleParseShape
 
+        // --- Shape contract validation (M3) ---
+        if (parseShape != null) {
+            val declaredFields = parseBlock?.get("fields")?.jsonObject?.keys ?: emptySet()
+            ParsedFieldsFactory.validateShapeFields(parseShape, declaredFields, ruleId)
+        }
+
         val parser: (TInput, Bindings) -> Map<String, Any?> = when (context) {
             RuleContext.SCREEN -> {
                 if (parseBlock != null) {

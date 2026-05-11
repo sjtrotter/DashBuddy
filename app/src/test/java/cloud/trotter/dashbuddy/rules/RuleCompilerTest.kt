@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -634,6 +635,74 @@ class RuleCompilerTest {
             parseJson("""{}""").jsonObject
         )
         assertTrue(overrides.isEmpty())
+    }
+
+    // =========================================================================
+    // Shape contract validation (M3)
+    // =========================================================================
+
+    @Test(expected = RuleCompileException::class)
+    fun `offer shape without payAmount throws RuleCompileException`() {
+        ParsedFieldsFactory.validateShapeFields(
+            "offer", setOf("distance", "timeToCompleteMinutes"), "test.rule",
+        )
+    }
+
+    @Test
+    fun `offer shape with payAmount passes validation`() {
+        // Should not throw
+        ParsedFieldsFactory.validateShapeFields(
+            "offer", setOf("payAmount", "distance"), "test.rule",
+        )
+    }
+
+    @Test
+    fun `shape with no required fields passes validation`() {
+        ParsedFieldsFactory.validateShapeFields("idle", setOf("anything"), "test.rule")
+        ParsedFieldsFactory.validateShapeFields("task", emptySet(), "test.rule")
+        ParsedFieldsFactory.validateShapeFields("noise", emptySet(), "test.rule")
+    }
+
+    @Test
+    fun `unknown shape passes validation`() {
+        ParsedFieldsFactory.validateShapeFields("future_shape", emptySet(), "test.rule")
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileRules rejects offer shape rule missing payAmount`() {
+        val ruleJson = """[{
+            "id": "test.screen.bad_offer",
+            "priority": 10,
+            "shape": "offer",
+            "require": { "exists": { "hasText": "Accept" } },
+            "parse": {
+                "fields": {
+                    "distance": { "find": { "hasText": "5 mi" }, "read": "text" }
+                }
+            }
+        }]"""
+        RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
+        )
+    }
+
+    @Test
+    fun `compileRules accepts offer shape rule with payAmount`() {
+        val ruleJson = """[{
+            "id": "test.screen.good_offer",
+            "priority": 10,
+            "shape": "offer",
+            "require": { "exists": { "hasText": "Accept" } },
+            "parse": {
+                "fields": {
+                    "payAmount": { "find": { "hasTextMatchesRegex": "\\$\\d" }, "read": "text" }
+                }
+            }
+        }]"""
+        val rules = RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
+        )
+        assertEquals(1, rules.size)
     }
 
     // =========================================================================

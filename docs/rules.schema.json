@@ -17,7 +17,7 @@
     },
     "platform_id": {
       "type": "string",
-      "description": "Platform identifier (e.g. 'doordash.driver', 'uber.driver').",
+      "description": "Provenance metadata identifying this rule file's source platform (e.g. 'doordash.driver', 'uber.driver'). Runtime filtering uses Platform.wire derived from rule IDs, not this field.",
       "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
     },
     "screens": {
@@ -54,9 +54,13 @@
           "description": "Evaluation order. Lower = evaluated first.",
           "minimum": 0
         },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this rule matches. Ignored by the compiler."
+        },
         "overrideable": {
           "type": "boolean",
-          "description": "Whether this rule can be overridden by platform updates. Default: true.",
+          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
           "default": true
         },
         "state": { "$ref": "#/$defs/stateBlock" },
@@ -194,8 +198,13 @@
           "type": "integer",
           "minimum": 0
         },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this rule matches. Ignored by the compiler."
+        },
         "overrideable": {
           "type": "boolean",
+          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
           "default": true
         },
         "screenIs": {
@@ -250,8 +259,13 @@
           "type": "integer",
           "minimum": 0
         },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this rule matches. Ignored by the compiler."
+        },
         "overrideable": {
           "type": "boolean",
+          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
           "default": true
         },
         "shape": { "$ref": "#/$defs/shapeEnum" },
