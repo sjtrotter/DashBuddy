@@ -355,7 +355,31 @@
           "then": {
             "required": ["fields"],
             "properties": {
-              "fields": { "required": ["payAmount"] }
+              "fields": { "required": ["payAmount", "distance"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "as": { "const": "post_task" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["totalPay"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "as": { "const": "session_ended" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["totalEarnings"] }
             }
           }
         }
@@ -385,7 +409,31 @@
           "then": {
             "required": ["fields"],
             "properties": {
-              "fields": { "required": ["payAmount"] }
+              "fields": { "required": ["payAmount", "distance"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "as": { "const": "post_task" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["totalPay"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "as": { "const": "session_ended" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["totalEarnings"] }
             }
           }
         }

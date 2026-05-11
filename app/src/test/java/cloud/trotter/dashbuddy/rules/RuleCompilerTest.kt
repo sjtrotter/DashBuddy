@@ -642,17 +642,51 @@ class RuleCompilerTest {
     // =========================================================================
 
     @Test(expected = RuleCompileException::class)
-    fun `offer shape without payAmount throws RuleCompileException`() {
+    fun `offer without payAmount throws RuleCompileException`() {
         ParsedFieldsFactory.validateShapeFields(
             "offer", setOf("distance", "timeToCompleteMinutes"), "test.rule",
         )
     }
 
+    @Test(expected = RuleCompileException::class)
+    fun `offer without distance throws RuleCompileException`() {
+        ParsedFieldsFactory.validateShapeFields(
+            "offer", setOf("payAmount", "timeToCompleteMinutes"), "test.rule",
+        )
+    }
+
     @Test
-    fun `offer shape with payAmount passes validation`() {
-        // Should not throw
+    fun `offer with payAmount and distance passes validation`() {
         ParsedFieldsFactory.validateShapeFields(
             "offer", setOf("payAmount", "distance"), "test.rule",
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `post_task without totalPay throws RuleCompileException`() {
+        ParsedFieldsFactory.validateShapeFields(
+            "post_task", setOf("appPay", "customerTips"), "test.rule",
+        )
+    }
+
+    @Test
+    fun `post_task with totalPay passes validation`() {
+        ParsedFieldsFactory.validateShapeFields(
+            "post_task", setOf("totalPay"), "test.rule",
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `session_ended without totalEarnings throws RuleCompileException`() {
+        ParsedFieldsFactory.validateShapeFields(
+            "session_ended", setOf("sessionDurationMillis"), "test.rule",
+        )
+    }
+
+    @Test
+    fun `session_ended with totalEarnings passes validation`() {
+        ParsedFieldsFactory.validateShapeFields(
+            "session_ended", setOf("totalEarnings"), "test.rule",
         )
     }
 
@@ -687,7 +721,7 @@ class RuleCompilerTest {
     }
 
     @Test
-    fun `compileRules accepts offer shape rule with payAmount`() {
+    fun `compileRules accepts offer shape rule with required fields`() {
         val ruleJson = """[{
             "id": "test.screen.good_offer",
             "priority": 10,
@@ -695,7 +729,8 @@ class RuleCompilerTest {
             "parse": {
                 "as": "offer",
                 "fields": {
-                    "payAmount": { "find": { "hasTextMatchesRegex": "\\$\\d" }, "read": "text" }
+                    "payAmount": { "find": { "hasTextMatchesRegex": "\\$\\d" }, "read": "text" },
+                    "distance": { "find": { "hasTextMatchesRegex": "\\d.*mi" }, "read": "text" }
                 }
             }
         }]"""

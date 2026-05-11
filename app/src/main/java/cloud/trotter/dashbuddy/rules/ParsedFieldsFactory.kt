@@ -29,7 +29,9 @@ object ParsedFieldsFactory {
      * Shapes not listed here have no required fields.
      */
     val REQUIRED_FIELDS_BY_SHAPE: Map<String, Set<String>> = mapOf(
-        "offer" to setOf("payAmount"),
+        "offer" to setOf("payAmount", "distance"),
+        "post_task" to setOf("totalPay"),
+        "session_ended" to setOf("totalEarnings"),
     )
 
     /**
