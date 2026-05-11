@@ -1,6 +1,5 @@
-package cloud.trotter.dashbuddy.state
+package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.DashBuddyApplication
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -19,7 +18,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
-import cloud.trotter.dashbuddy.util.UtilityFunctions
+import cloud.trotter.dashbuddy.domain.util.formatCurrency
 import com.google.gson.Gson
 import timber.log.Timber
 import javax.inject.Inject
@@ -34,7 +33,9 @@ import javax.inject.Singleton
  * Cross-platform transitions → aggregate bookkeeping (currently none).
  */
 @Singleton
-class EffectMap @Inject constructor() {
+class EffectMap @Inject constructor(
+    private val metadataProvider: MetadataProvider,
+) {
 
     companion object {
         /**
@@ -227,7 +228,7 @@ class EffectMap @Inject constructor() {
                         val parsed = flowObs?.parsed
                         val platform = prev.platform.name
                         if (parsed is ParsedFields.SessionEndedFields) {
-                            val earnings = UtilityFunctions.formatCurrency(parsed.totalEarnings)
+                            val earnings = formatCurrency(parsed.totalEarnings)
                             add(logEffect(sessionId, AppEventType.DASH_STOP, parsed))
                             add(AppEffect.StopOdometer)
                             add(
@@ -436,9 +437,9 @@ class EffectMap @Inject constructor() {
             // If we got expanded pay data AND it's different from last emission, log it
             if (payData != null && next.lastPostTaskPayHash != prev.lastPostTaskPayHash) {
                 val receiptText = buildString {
-                    append("Saved: ${UtilityFunctions.formatCurrency(payData.total)}")
+                    append("Saved: ${formatCurrency(payData.total)}")
                     payData.customerTips.forEach { item ->
-                        append("\nTip: ${item.type} • ${UtilityFunctions.formatCurrency(item.amount)}")
+                        append("\nTip: ${item.type} • ${formatCurrency(item.amount)}")
                     }
                 }
                 add(AppEffect.UpdateBubble(receiptText, ChatPersona.Earnings))
@@ -591,7 +592,7 @@ class EffectMap @Inject constructor() {
 
     private fun logEffect(dashId: String?, type: AppEventType, payload: Any): AppEffect {
         val payloadStr = payload as? String ?: gson.toJson(payload)
-        val metadataJson = DashBuddyApplication.createMetadata()
+        val metadataJson = metadataProvider.createMetadata()
         return AppEffect.LogEvent(
             AppEventEntity(
                 aggregateId = dashId,

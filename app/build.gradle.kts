@@ -124,6 +124,7 @@ dependencies {
     implementation(project(":core:location"))
     implementation(project(":core:network"))
     implementation(project(":core:pipeline"))
+    implementation(project(":core:state"))
     implementation(project(":domain"))
 
     ksp(libs.androidx.hilt.compiler)

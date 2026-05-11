@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
-import cloud.trotter.dashbuddy.state.AppEffect
+import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

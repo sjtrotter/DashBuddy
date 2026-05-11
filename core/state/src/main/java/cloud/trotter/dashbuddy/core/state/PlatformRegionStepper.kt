@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state
+package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
 import cloud.trotter.dashbuddy.domain.pipeline.Observation

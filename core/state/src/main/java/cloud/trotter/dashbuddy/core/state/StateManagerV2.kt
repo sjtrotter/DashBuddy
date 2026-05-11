@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state
+package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.core.database.observation.ObservationDao
 import cloud.trotter.dashbuddy.core.database.observation.ObservationEntity
@@ -14,7 +14,6 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
-import cloud.trotter.dashbuddy.state.effects.SideEffectEngine
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.CoroutineScope
@@ -33,7 +32,7 @@ import javax.inject.Singleton
 @Singleton
 class StateManagerV2 @Inject constructor(
     private val pipeline: PipelineV2,
-    private val engine: SideEffectEngine,
+    private val engine: EffectExecutor,
     private val stateMachine: StateMachine,
     private val observationDao: ObservationDao,
     private val snapshotDao: AppStateSnapshotDao,

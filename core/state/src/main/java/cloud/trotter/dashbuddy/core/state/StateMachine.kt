@@ -1,11 +1,11 @@
-package cloud.trotter.dashbuddy.state
+package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
-import cloud.trotter.dashbuddy.state.model.Transition
+import cloud.trotter.dashbuddy.core.state.model.Transition
 import javax.inject.Inject
 import javax.inject.Singleton
 

@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state
+package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -33,7 +33,7 @@ import org.junit.Test
  */
 class EffectMapTest {
 
-    private val effectMap = EffectMap()
+    private val effectMap = EffectMap(MetadataProvider { """{ "test_mode": true }""" })
 
     // =========================================================================
     // HELPERS

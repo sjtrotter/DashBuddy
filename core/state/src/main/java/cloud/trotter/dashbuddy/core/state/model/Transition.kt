@@ -1,7 +1,7 @@
-package cloud.trotter.dashbuddy.state.model
+package cloud.trotter.dashbuddy.core.state.model
 
 import cloud.trotter.dashbuddy.domain.state.AppState
-import cloud.trotter.dashbuddy.state.AppEffect
+import cloud.trotter.dashbuddy.core.state.AppEffect
 
 data class Transition(
     val newState: AppState,

@@ -1,7 +1,7 @@
-package cloud.trotter.dashbuddy.state
+package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
-import cloud.trotter.dashbuddy.util.RuntimeTypeAdapterFactory
+import cloud.trotter.dashbuddy.core.state.util.RuntimeTypeAdapterFactory
 
 /**
  * Provides a [RuntimeTypeAdapterFactory] for the [ParsedFields] sealed hierarchy.

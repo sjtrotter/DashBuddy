@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.state
+package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
@@ -38,7 +38,7 @@ class StateMachineTest {
             platformStepper = PlatformRegionStepper(),
             crossPlatformStepper = CrossPlatformRegionStepper(),
             healingPolicy = HealingPolicy(),
-            effectMap = EffectMap(),
+            effectMap = EffectMap(MetadataProvider { """{ "test_mode": true }""" }),
         )
     }
 

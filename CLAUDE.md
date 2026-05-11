@@ -75,7 +75,9 @@ target SDK is 36, Kotlin 2.3.20, JVM 21.
 The project uses modular Clean Architecture with a strict dependency graph:
 
 ```
-:app → :domain, :core:data, :core:database, :core:datastore, :core:location, :core:network
+:app → :domain, :core:data, :core:database, :core:datastore, :core:location, :core:network, :core:pipeline, :core:state
+:core:state → :domain, :core:data, :core:database, :core:pipeline
+:core:pipeline → :domain, :core:data
 :core:data → :domain, :core:database, :core:datastore, :core:location, :core:network
 :core:database → :domain
 :core:network → :domain
@@ -85,21 +87,26 @@ The project uses modular Clean Architecture with a strict dependency graph:
 
 - **`:domain`** — Pure Kotlin library. Domain models, evaluation logic, repository interfaces. No
   Android dependencies.
+- **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
+  (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.
+- **`:core:state`** — Multi-region state machine (StateMachine, FlowRegionStepper,
+  PlatformRegionStepper, CrossPlatformRegionStepper), effect map, healing policy, crash recovery
+  (StateManagerV2). Defines `EffectExecutor` and `MetadataProvider` interfaces.
 - **`:core:database`** — Room entities, DAOs, and database setup.
 - **`:core:data`** — Repository implementations, mappers, data sources. Bridges domain interfaces to
   concrete data layers.
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration.
 - **`:core:location`** — Play Services GPS tracking.
 - **`:core:datastore`** — Proto DataStore for app preferences.
-- **`:app`** — The main module. Contains the accessibility pipeline, screen matchers, state machine,
-  side effects, UI (Compose + overlays), and Hilt DI wiring.
+- **`:app`** — UI (Compose + overlays), side effect handlers (SideEffectEngine, odometer, screenshots,
+  TTS, tips), Hilt DI wiring, and the `DashBuddyApplication` entry point.
 
 ## Architecture: Recognition Pipeline + State Machine
 
 The core architectural challenge is understanding a third-party app's UI without an API. The
 solution is a multi-stage pipeline:
 
-### 1. Accessibility Pipeline (`app/.../pipeline/accessibility/`)
+### 1. Accessibility Pipeline (`core/pipeline/.../accessibility/`)
 
 `AccessibilityListener` captures raw Android `AccessibilityEvent`s. These are normalized into an
 immutable `UiNode` tree. Two sub-pipelines process events:
@@ -108,14 +115,14 @@ immutable `UiNode` tree. Two sub-pipelines process events:
   chain of `ScreenMatcher` implementations.
 - **`ViewPipeline`** — Classifies tap/click events.
 
-### 2. Screen Matchers (`app/.../matchers/`)
+### 2. Screen Matchers (`core/pipeline/.../recognition/matchers/`)
 
 18+ `ScreenMatcher` implementations, each responsible for recognizing one screen type (e.g.,
 `IdleMapMatcher`, `OfferMatcher`, `DashPausedMatcher`). They use a **weighted priority system** to
 resolve conflicts. `SensitiveScreenMatcher` runs first and blocks any further processing of
 banking/personal information screens.
 
-### 3. State Machine (`app/.../state/StateManagerV2.kt`)
+### 3. State Machine (`core/state/.../StateManagerV2.kt`)
 
 A central reducer merges three event streams (pipeline events, engine events, UI clicks) and routes
 them to state-specific handlers. The output is a `StateFlow<AppStateV2>`. There are 9 state classes:

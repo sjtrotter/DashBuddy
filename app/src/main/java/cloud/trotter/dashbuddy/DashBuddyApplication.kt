@@ -16,7 +16,7 @@ import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.log.StateAwareTree
 import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
-import cloud.trotter.dashbuddy.state.StateManagerV2
+import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.worker.DailyGasPriceWorker
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber

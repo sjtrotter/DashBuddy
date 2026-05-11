@@ -4,7 +4,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.PermissionTier
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
-import cloud.trotter.dashbuddy.state.AppEffect
+import cloud.trotter.dashbuddy.core.state.AppEffect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
