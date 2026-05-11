@@ -219,7 +219,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
 
     companion object {
         const val MAX_TEMPLATE_VALUE_LENGTH = 256
-        private val TEMPLATE_PATTERN = Regex("""\{(\w+)}""")
+        private val TEMPLATE_PATTERN = Regex("""\{(\w+)\}""")
 
         /**
          * Derive intent from a rule ID by stripping the platform prefix.
