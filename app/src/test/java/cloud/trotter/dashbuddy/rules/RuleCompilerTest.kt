@@ -673,9 +673,9 @@ class RuleCompilerTest {
         val ruleJson = """[{
             "id": "test.screen.bad_offer",
             "priority": 10,
-            "shape": "offer",
             "require": { "exists": { "hasText": "Accept" } },
             "parse": {
+                "as": "offer",
                 "fields": {
                     "distance": { "find": { "hasText": "5 mi" }, "read": "text" }
                 }
@@ -691,9 +691,9 @@ class RuleCompilerTest {
         val ruleJson = """[{
             "id": "test.screen.good_offer",
             "priority": 10,
-            "shape": "offer",
             "require": { "exists": { "hasText": "Accept" } },
             "parse": {
+                "as": "offer",
                 "fields": {
                     "payAmount": { "find": { "hasTextMatchesRegex": "\\$\\d" }, "read": "text" }
                 }

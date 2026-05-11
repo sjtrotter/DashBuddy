@@ -12,7 +12,6 @@
             "flow": "offer:presented",
             "modeHint": "online"
           },
-          "shape": "offer",
           "require": {
             "all": [
               {
@@ -40,6 +39,7 @@
             ]
           },
           "parse": {
+            "as": "offer",
             "fields": {
               "payAmount": {
                 "find": {
@@ -599,7 +599,7 @@
         "titleMatchesRegex": "^Going to (?!\\d)"
       },
       "intent": "trip_en_route_pickup",
-      "shape": "notification",
+      "parse": { "as": "notification" },
       "effects": [
         {
           "log": {
@@ -616,7 +616,7 @@
         "titleContains": "Arrived at "
       },
       "intent": "trip_arrived_pickup",
-      "shape": "notification",
+      "parse": { "as": "notification" },
       "effects": [
         {
           "log": {
@@ -633,7 +633,7 @@
         "titleMatchesRegex": "^Going to \\d"
       },
       "intent": "trip_en_route_dropoff",
-      "shape": "notification",
+      "parse": { "as": "notification" },
       "effects": [
         {
           "log": {
@@ -650,7 +650,7 @@
         "titleMatchesRegex": "(Leave the order at|Meet at door for)"
       },
       "intent": "trip_at_dropoff",
-      "shape": "notification",
+      "parse": { "as": "notification" },
       "effects": [
         {
           "log": {
@@ -667,7 +667,7 @@
         "titleMatchesRegex": "received a \\$\\d"
       },
       "intent": "tip_received",
-      "shape": "notification",
+      "parse": { "as": "notification" },
       "effects": [
         {
           "log": {
@@ -683,7 +683,7 @@
       "require": {
         "titleContains": "currently online"
       },
-      "shape": "noise"
+      "parse": { "as": "noise" }
     },
     {
       "id": "uber.notification.quest_promo",
@@ -692,7 +692,7 @@
         "titleContains": "Quest awaits"
       },
       "intent": "quest_promo",
-      "shape": "notification",
+      "parse": { "as": "notification" },
       "effects": [
         {
           "log": {
@@ -716,7 +716,7 @@
         ]
       },
       "intent": "quest_deadline",
-      "shape": "notification",
+      "parse": { "as": "notification" },
       "effects": [
         {
           "log": {

@@ -64,7 +64,6 @@
           "default": true
         },
         "state": { "$ref": "#/$defs/stateBlock" },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "reject": {
           "type": "array",
@@ -102,7 +101,6 @@
       "required": ["require"],
       "properties": {
         "state": { "$ref": "#/$defs/stateBlock" },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "reject": {
           "type": "array",
@@ -127,7 +125,6 @@
       "description": "A single branch within a multi-branch click rule.",
       "required": ["require"],
       "properties": {
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "screenIs": {
           "type": "string",
           "description": "Only match when the active screen target equals this value."
@@ -161,7 +158,6 @@
       "required": ["require"],
       "properties": {
         "state": { "$ref": "#/$defs/stateBlock" },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "intent": {
           "type": "string",
           "description": "Output intent string for this branch."
@@ -215,7 +211,6 @@
           "type": "string",
           "description": "Output intent string. Auto-derived from rule ID if omitted."
         },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "reject": {
           "type": "array",
@@ -268,7 +263,6 @@
           "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
           "default": true
         },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "intent": {
           "type": "string",
           "description": "Output intent string. Auto-derived from rule ID if omitted."
@@ -340,28 +334,62 @@
 
     "parseBlock": {
       "type": "object",
-      "description": "Phase 4: Field extraction specification.",
+      "description": "Phase 4: Output type and field extraction specification.",
       "properties": {
-        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "as": {
+          "$ref": "#/$defs/asEnum",
+          "description": "Output type. Determines which ParsedFields subtype is produced from the extracted fields."
+        },
         "fields": {
           "type": "object",
           "description": "Named fields to extract. Each value is a parse expression.",
           "additionalProperties": { "$ref": "#/$defs/parseExpression" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "as": { "const": "offer" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["payAmount"] }
+            }
+          }
+        }
+      ]
     },
 
     "notificationParseBlock": {
       "type": "object",
       "description": "Parse block for notification rules. Extracts fields from notification string properties using regex.",
       "properties": {
-        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "as": {
+          "$ref": "#/$defs/asEnum",
+          "description": "Output type. Determines which ParsedFields subtype is produced from the extracted fields."
+        },
         "fields": {
           "type": "object",
           "description": "Named fields to extract. Each value is a notification parse expression.",
           "additionalProperties": { "$ref": "#/$defs/notificationParseExpression" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "as": { "const": "offer" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["payAmount"] }
+            }
+          }
+        }
+      ]
     },
 
     "notificationParseExpression": {
@@ -1529,9 +1557,9 @@
       ]
     },
 
-    "shapeEnum": {
+    "asEnum": {
       "type": "string",
-      "description": "Output shape type determining which ParsedFields subtype is produced.",
+      "description": "Output type determining which ParsedFields subtype is produced.",
       "enum": [
         "sensitive",
         "noise",

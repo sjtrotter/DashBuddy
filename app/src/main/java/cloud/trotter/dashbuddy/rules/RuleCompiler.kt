@@ -104,14 +104,14 @@ object RuleCompiler {
 
         val (ruleFlow, ruleModeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
 
-        // Rule-level parse/shape (inherited by branches unless overridden)
+        // Rule-level parse (inherited by branches unless overridden)
         val ruleParseObj = obj["parse"]?.jsonObject
-        val ruleShape = obj["shape"]?.jsonPrimitive?.content
+        val ruleParseAs = ruleParseObj?.get("as")?.jsonPrimitive?.content
 
         val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
             obj["branches"]!!.jsonArray.map {
                 compileBranch(it.jsonObject, context, ruleFlow, ruleModeHint, ruleId = id,
-                    ruleParseBlock = ruleParseObj, ruleParseShape = ruleShape, ruleBindObj = ruleBindObj)
+                    ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj)
             }
         } else {
             listOf(compileBranch(obj, context, ruleFlow, ruleModeHint, ruleId = id))
@@ -128,7 +128,7 @@ object RuleCompiler {
         ruleModeHint: Mode? = null,
         ruleId: String? = null,
         ruleParseBlock: JsonObject? = null,
-        ruleParseShape: String? = null,
+        ruleParseAs: String? = null,
         ruleBindObj: JsonObject? = null,
     ): CompiledBranch<TInput> {
         val targetName = ruleId?.let { deriveTargetFromId(it) }
@@ -162,14 +162,12 @@ object RuleCompiler {
 
         // --- Phase 4: Parse ---
         val parseBlock = obj["parse"]?.jsonObject ?: ruleParseBlock
-        val parseShape = obj["shape"]?.jsonPrimitive?.content
-            ?: parseBlock?.get("shape")?.jsonPrimitive?.content
-            ?: ruleParseShape
+        val parseAs = parseBlock?.get("as")?.jsonPrimitive?.content ?: ruleParseAs
 
         // --- Shape contract validation (M3) ---
-        if (parseShape != null) {
+        if (parseAs != null) {
             val declaredFields = parseBlock?.get("fields")?.jsonObject?.keys ?: emptySet()
-            ParsedFieldsFactory.validateShapeFields(parseShape, declaredFields, ruleId)
+            ParsedFieldsFactory.validateShapeFields(parseAs, declaredFields, ruleId)
         }
 
         val parser: (TInput, Bindings) -> Map<String, Any?> = when (context) {
@@ -225,7 +223,7 @@ object RuleCompiler {
             validators = validators,
             effects = effects,
             bindings = bindings,
-            shape = parseShape,
+            shape = parseAs,
             intent = intent,
             flow = branchFlow ?: ruleFlow,
             modeHint = branchModeHint ?: ruleModeHint,

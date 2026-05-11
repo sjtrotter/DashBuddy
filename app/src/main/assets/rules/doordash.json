@@ -22,7 +22,9 @@
           "Emergency contact details"
         ]
       },
-      "shape": "sensitive"
+      "parse": {
+        "as": "sensitive"
+      }
     },
     {
       "id": "doordash.screen.timeline",
@@ -34,6 +36,7 @@
         ]
       },
       "parse": {
+        "as": "timeline",
         "fields": {
           "sessionEarnings": {
             "textAfterLabel": "This dash",
@@ -199,8 +202,7 @@
             }
           }
         }
-      },
-      "shape": "timeline"
+      }
     },
     {
       "id": "doordash.screen.offer_popup_confirm_decline",
@@ -251,6 +253,7 @@
         }
       ],
       "parse": {
+        "as": "offer",
         "fields": {
           "payAmount": {
             "coalesce": [
@@ -387,7 +390,6 @@
           }
         }
       },
-      "shape": "offer",
       "effects": [
         {
           "screenshot": {
@@ -435,6 +437,7 @@
         }
       ],
       "parse": {
+        "as": "post_task",
         "fields": {
           "totalPay": {
             "find": {
@@ -492,7 +495,6 @@
           }
         }
       },
-      "shape": "post_task",
       "validate": [
         {
           "assert": "sumApproxEquals",
@@ -525,6 +527,7 @@
         }
       ],
       "parse": {
+        "as": "post_task",
         "fields": {
           "totalPay": {
             "find": {
@@ -561,7 +564,6 @@
           }
         }
       },
-      "shape": "post_task",
       "bind": {
         "expandButton": {
           "find": {
@@ -656,6 +658,7 @@
         ]
       },
       "parse": {
+        "as": "paused",
         "fields": {
           "remainingText": {
             "find": {
@@ -673,8 +676,7 @@
             "fallback": 2100000
           }
         }
-      },
-      "shape": "paused"
+      }
     },
     {
       "id": "doordash.screen.pickup_navigation",
@@ -715,6 +717,7 @@
         }
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "PICKUP",
           "subFlow": "NAVIGATION",
@@ -762,8 +765,7 @@
             "transform": "parseDeadline"
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.dropoff_navigation",
@@ -838,8 +840,8 @@
           }
         }
       ],
-      "shape": "task",
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "DROPOFF",
           "subFlow": "NAVIGATION",
@@ -940,6 +942,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "PICKUP",
           "subFlow": "ARRIVED",
@@ -998,8 +1001,7 @@
             "literal": true
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.pickup_pre_arrival",
@@ -1044,6 +1046,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "PICKUP",
           "subFlow": "NAVIGATION",
@@ -1099,8 +1102,7 @@
             "transform": "parseLeadingInt"
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.pickup_shopping",
@@ -1133,6 +1135,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "activity": "shopping",
           "phase": "PICKUP",
@@ -1151,8 +1154,7 @@
             }
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.dropoff_pre_arrival",
@@ -1193,6 +1195,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "DROPOFF",
           "subFlow": "NAVIGATION",
@@ -1272,8 +1275,7 @@
             "transform": "parseDeadline"
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.dropoff_pre_arrival_completion",
@@ -1317,6 +1319,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "DROPOFF",
           "subFlow": "NAVIGATION",
@@ -1396,8 +1399,7 @@
             "transform": "parseDeadline"
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.schedule",
@@ -1445,6 +1447,7 @@
         ]
       },
       "parse": {
+        "as": "ratings",
         "fields": {
           "acceptanceRate": {
             "siblingOf": {
@@ -1603,8 +1606,7 @@
             "transform": "toInt"
           }
         }
-      },
-      "shape": "ratings"
+      }
     },
     {
       "id": "doordash.screen.safety",
@@ -1857,6 +1859,7 @@
         ]
       },
       "parse": {
+        "as": "idle",
         "fields": {
           "isHeadingBackToZone": {
             "literal": false
@@ -1883,8 +1886,7 @@
             "transform": "parseDeadline"
           }
         }
-      },
-      "shape": "idle"
+      }
     },
     {
       "id": "doordash.screen.waiting_for_offer",
@@ -1948,6 +1950,7 @@
         ]
       },
       "parse": {
+        "as": "idle",
         "fields": {
           "sessionPay": {
             "find": {
@@ -1985,8 +1988,7 @@
             }
           }
         }
-      },
-      "shape": "idle"
+      }
     },
     {
       "id": "doordash.screen.set_dash_end_time",
@@ -2018,6 +2020,7 @@
         ]
       },
       "parse": {
+        "as": "idle",
         "fields": {
           "zoneName": {
             "find": {
@@ -2026,8 +2029,7 @@
             "read": "text"
           }
         }
-      },
-      "shape": "idle"
+      }
     },
     {
       "id": "doordash.screen.idle_map",
@@ -2077,6 +2079,7 @@
         ]
       },
       "parse": {
+        "as": "idle",
         "fields": {
           "sessionType": {
             "conditionalEnum": [
@@ -2099,8 +2102,7 @@
             ]
           }
         }
-      },
-      "shape": "idle"
+      }
     },
     {
       "id": "doordash.screen.dash_summary",
@@ -2131,6 +2133,7 @@
         ]
       },
       "parse": {
+        "as": "session_ended",
         "fields": {
           "totalEarnings": {
             "coalesce": [
@@ -2235,8 +2238,7 @@
           "tolerance": 0.02,
           "onFail": "dropParsed"
         }
-      ],
-      "shape": "session_ended"
+      ]
     },
     {
       "id": "doordash.screen.sensitive.catchall",
@@ -2254,7 +2256,9 @@
           "t=completed_view"
         ]
       },
-      "shape": "sensitive"
+      "parse": {
+        "as": "sensitive"
+      }
     }
   ],
   "clicks": [
@@ -2375,11 +2379,11 @@
       "id": "doordash.notification.additional_tip",
       "priority": 10,
       "intent": "additional_tip",
-      "shape": "notification",
       "require": {
         "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
       },
       "parse": {
+        "as": "notification",
         "fields": {
           "amount": {
             "from": "fullString",
@@ -2454,7 +2458,9 @@
         "titleContains": "Dash now"
       },
       "intent": "demand_nudge",
-      "shape": "notification",
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {
@@ -2471,7 +2477,9 @@
         "titleContains": "Incentives Update"
       },
       "intent": "peak_pay_promo",
-      "shape": "notification",
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {
