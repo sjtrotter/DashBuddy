@@ -123,7 +123,7 @@ object TransformRegistry {
                 val pattern = obj["pattern"]!!.jsonPrimitive.content
                 val group = obj["group"]?.jsonPrimitive?.intOrNull ?: 0
                 val thenTransform = obj["then"]
-                val regex = Regex(pattern, RegexOption.IGNORE_CASE)
+                val regex = RuleCompiler.compileRegex(pattern)
                 val match = regex.find(value) ?: return null
                 val extracted = match.groupValues.getOrNull(group) ?: return null
                 if (thenTransform != null) {
@@ -173,18 +173,55 @@ object TransformRegistry {
         }
     }
 
+    // ========================================================================
+    //  Compile-time validation
+    // ========================================================================
+
+    private val knownPlainTransforms = setOf(
+        "parseCurrency", "parseDistance", "parseItemCount", "parseDeadline",
+        "parseTime", "parseDuration", "parseHrMin", "parseLeadingInt",
+        "parsePercent", "sha256", "trim", "lower", "upper", "toDouble", "toInt",
+        "stripDeadlinePrefix",
+    )
+
+    private val knownParameterizedTransforms = setOf(
+        "stripPrefix", "stripSuffix", "stripPrefixes",
+        "extractBefore", "extractAfter",
+        "replace", "split", "regex",
+    )
+
     /**
-     * Validate at compile time that all transform and assertion names are known.
+     * Validate at compile time that a plain transform name is known.
      * Call during rule loading to fail fast on typos.
      */
     fun validateTransformName(name: String) {
-        val known = setOf(
-            "parseCurrency", "parseDistance", "parseItemCount", "parseDeadline",
-            "parseTime", "parseDuration", "parseHrMin", "parseLeadingInt",
-            "parsePercent", "sha256", "trim", "lower", "upper", "toDouble", "toInt",
-            "stripDeadlinePrefix",
-        )
-        if (name !in known) throw RuleCompileException("Unknown transform: '$name'")
+        if (name !in knownPlainTransforms)
+            throw RuleCompileException("Unknown transform: '$name'")
+    }
+
+    /**
+     * Validate a transform spec at compile time: plain string, parameterized
+     * object, or chain array. Recursively validates all nested transforms
+     * (e.g. `regex.then`). Throws [RuleCompileException] on unknown names.
+     */
+    fun validateTransformSpec(spec: JsonElement) {
+        when (spec) {
+            is JsonPrimitive -> validateTransformName(spec.content)
+            is JsonObject -> {
+                val key = spec.keys.firstOrNull()
+                    ?: throw RuleCompileException("Empty transform spec")
+                if (key !in knownParameterizedTransforms)
+                    throw RuleCompileException("Unknown parameterized transform: '$key'")
+                // Validate nested 'then' in regex transforms
+                if (key == "regex") {
+                    val regexObj = spec[key]?.jsonObject
+                    val pattern = regexObj?.get("pattern")?.jsonPrimitive?.content
+                    if (pattern != null) RuleCompiler.compileRegex(pattern)
+                    regexObj?.get("then")?.let { validateTransformSpec(it) }
+                }
+            }
+            is JsonArray -> spec.forEach { validateTransformSpec(it) }
+        }
     }
 
     fun validateAssertionName(name: String) {

@@ -23,6 +23,54 @@ import timber.log.Timber
  */
 object ParsedFieldsFactory {
 
+    /**
+     * Required parse fields per shape. The rule compiler verifies at load time
+     * that any parse block declaring a shape includes these field names.
+     * Shapes not listed here have no required fields.
+     */
+    val REQUIRED_FIELDS_BY_SHAPE: Map<String, Set<String>> = mapOf(
+        "offer" to setOf("payAmount", "distance"),
+        "post_task" to setOf("totalPay"),
+        "session_ended" to setOf("totalEarnings"),
+    )
+
+    /**
+     * "At least one of" constraints per shape. Each entry is a set of field names
+     * where at least one must be present. Platforms may use different field names
+     * for the same concept (e.g. DoorDash: deliveryTimeText, Uber: timeToCompleteMinutes).
+     */
+    val REQUIRED_ONE_OF_BY_SHAPE: Map<String, List<Set<String>>> = mapOf(
+        "offer" to listOf(setOf("deliveryTimeText", "timeToCompleteMinutes")),
+    )
+
+    /**
+     * Validate that a parse block declares all required fields for its shape.
+     * @throws RuleCompileException if required fields are missing.
+     */
+    fun validateShapeFields(shape: String, declaredFields: Set<String>, ruleId: String) {
+        val required = REQUIRED_FIELDS_BY_SHAPE[shape]
+        if (required != null) {
+            val missing = required - declaredFields
+            if (missing.isNotEmpty()) {
+                throw RuleCompileException(
+                    "Rule '$ruleId' declares shape '$shape' but parse block is missing required " +
+                        "fields: ${missing.joinToString(", ") { "'$it'" }}",
+                )
+            }
+        }
+        val oneOfGroups = REQUIRED_ONE_OF_BY_SHAPE[shape]
+        if (oneOfGroups != null) {
+            for (group in oneOfGroups) {
+                if (group.none { it in declaredFields }) {
+                    throw RuleCompileException(
+                        "Rule '$ruleId' declares shape '$shape' but parse block must include " +
+                            "at least one of: ${group.joinToString(", ") { "'$it'" }}",
+                    )
+                }
+            }
+        }
+    }
+
     fun create(shape: String?, fields: Map<String, Any?>): ParsedFields {
         if (shape == null) return ParsedFields.None
 
@@ -128,8 +176,8 @@ object ParsedFieldsFactory {
 
     private fun buildPaused(f: Map<String, Any?>) = ParsedFields.PausedFields(
         activity = f.str("activity"),
-        remainingText = f.str("remainingText") ?: "35:00",
-        remainingMillis = f.long("remainingMillis") ?: (35 * 60 * 1000L),
+        remainingText = f.str("remainingText"),
+        remainingMillis = f.long("remainingMillis"),
     )
 
     private fun buildTimeline(f: Map<String, Any?>): ParsedFields.TimelineFields {

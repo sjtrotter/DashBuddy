@@ -12,7 +12,6 @@
             "flow": "offer:presented",
             "modeHint": "online"
           },
-          "shape": "offer",
           "require": {
             "all": [
               {
@@ -40,6 +39,7 @@
             ]
           },
           "parse": {
+            "as": "offer",
             "fields": {
               "payAmount": {
                 "find": {
@@ -182,7 +182,7 @@
     },
     {
       "id": "uber.screen.pickup_verification_pin",
-      "priority": 50,
+      "priority": 51,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -204,7 +204,7 @@
     },
     {
       "id": "uber.screen.pickup_verification_items",
-      "priority": 50,
+      "priority": 52,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -325,7 +325,7 @@
     },
     {
       "id": "uber.screen.shop_and_pay_checkout",
-      "priority": 68,
+      "priority": 69,
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -511,12 +511,8 @@
       "id": "uber.click.accept_offer",
       "priority": 5,
       "screenIs": "offer",
-      "state": {
-        "flow": "task:pickup:navigation",
-        "modeHint": "online"
-      },
       "intent": "accept_offer",
-      "if": {
+      "require": {
         "any": [
           {
             "hasText": "Accept"
@@ -530,24 +526,17 @@
     {
       "id": "uber.click.go_online",
       "priority": 10,
-      "state": {
-        "modeHint": "online"
-      },
       "intent": "go_online",
-      "if": {
+      "require": {
         "hasIdSuffix": "go_online_button"
       }
     },
     {
       "id": "uber.click.go_offline",
-      "priority": 20,
+      "priority": 21,
       "screenIs": "home_dashboard",
-      "state": {
-        "flow": "session:ended",
-        "modeHint": "offline"
-      },
       "intent": "go_offline",
-      "if": {
+      "require": {
         "hasIdSuffix": "carbon_action_button"
       }
     },
@@ -555,12 +544,8 @@
       "id": "uber.click.order_verified",
       "priority": 15,
       "screenIs": "pickup_verification_items",
-      "state": {
-        "flow": "task:dropoff:navigation",
-        "modeHint": "online"
-      },
       "intent": "order_verified",
-      "if": {
+      "require": {
         "all": [
           {
             "hasText": "Order verified"
@@ -576,7 +561,7 @@
       "priority": 16,
       "screenIs": "pickup_verification_items",
       "intent": "issue_with_order",
-      "if": {
+      "require": {
         "all": [
           {
             "hasText": "Issue with order"
@@ -591,12 +576,8 @@
       "id": "uber.click.delivered",
       "priority": 20,
       "screenIs": "delivery_confirmation",
-      "state": {
-        "flow": "post:task",
-        "modeHint": "online"
-      },
       "intent": "delivered",
-      "if": {
+      "require": {
         "hasIdSuffix": "task_button_button"
       }
     },
@@ -605,7 +586,7 @@
       "priority": 30,
       "screenIs": "home_dashboard",
       "intent": "open_inbox",
-      "if": {
+      "require": {
         "hasIdSuffix": "glide_bottom_nav_inbox"
       }
     }
@@ -614,69 +595,117 @@
     {
       "id": "uber.notification.trip_en_route_pickup",
       "priority": 3,
-      "if": {
+      "require": {
         "titleMatchesRegex": "^Going to (?!\\d)"
       },
       "intent": "trip_en_route_pickup",
-      "shape": "notification"
+      "parse": { "as": "notification" },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRIP_EN_ROUTE_PICKUP"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.trip_arrived_pickup",
       "priority": 4,
-      "if": {
+      "require": {
         "titleContains": "Arrived at "
       },
       "intent": "trip_arrived_pickup",
-      "shape": "notification"
+      "parse": { "as": "notification" },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRIP_ARRIVED_PICKUP"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.trip_en_route_dropoff",
       "priority": 5,
-      "if": {
+      "require": {
         "titleMatchesRegex": "^Going to \\d"
       },
       "intent": "trip_en_route_dropoff",
-      "shape": "notification"
+      "parse": { "as": "notification" },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRIP_EN_ROUTE_DROPOFF"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.trip_at_dropoff",
       "priority": 6,
-      "if": {
+      "require": {
         "titleMatchesRegex": "(Leave the order at|Meet at door for)"
       },
       "intent": "trip_at_dropoff",
-      "shape": "notification"
+      "parse": { "as": "notification" },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRIP_AT_DROPOFF"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.tip_received",
       "priority": 8,
-      "if": {
+      "require": {
         "titleMatchesRegex": "received a \\$\\d"
       },
       "intent": "tip_received",
-      "shape": "notification"
+      "parse": { "as": "notification" },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TIP_RECEIVED: {rawText}"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.online_status",
       "priority": 10,
-      "if": {
+      "require": {
         "titleContains": "currently online"
       },
-      "shape": "noise"
+      "parse": { "as": "noise" }
     },
     {
       "id": "uber.notification.quest_promo",
       "priority": 20,
-      "if": {
+      "require": {
         "titleContains": "Quest awaits"
       },
       "intent": "quest_promo",
-      "shape": "notification"
+      "parse": { "as": "notification" },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "QUEST_PROMO"
+          }
+        }
+      ]
     },
     {
       "id": "uber.notification.quest_deadline",
       "priority": 30,
-      "if": {
+      "require": {
         "all": [
           {
             "titleContains": "Last chance"
@@ -687,7 +716,15 @@
         ]
       },
       "intent": "quest_deadline",
-      "shape": "notification"
+      "parse": { "as": "notification" },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "QUEST_DEADLINE"
+          }
+        }
+      ]
     }
   ]
 }

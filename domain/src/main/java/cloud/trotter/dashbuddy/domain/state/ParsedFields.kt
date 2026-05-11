@@ -106,8 +106,8 @@ sealed class ParsedFields {
 
     data class PausedFields(
         override val activity: String? = null,
-        val remainingText: String,
-        val remainingMillis: Long,
+        val remainingText: String? = null,
+        val remainingMillis: Long? = null,
     ) : ParsedFields() {
         // Paused is a single state — identity is just "paused".
         override fun dedupeHash(): Int = "paused".hashCode()

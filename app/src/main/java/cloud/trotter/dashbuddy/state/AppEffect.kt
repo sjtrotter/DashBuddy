@@ -70,8 +70,8 @@ sealed class AppEffect {
         val effects: List<AppEffect>
     ) : AppEffect()
 
-    data class StartDash(val dashId: String, val platformName: String = "DoorDash") : AppEffect() {
-        override val effectKey: String get() = "start_dash:$dashId"
+    data class StartSession(val sessionId: String, val platformName: String) : AppEffect() {
+        override val effectKey: String get() = "start_session:$sessionId"
     }
-    data class EndDash(val platformName: String? = null) : AppEffect()
+    data class EndSession(val platformName: String? = null) : AppEffect()
 }

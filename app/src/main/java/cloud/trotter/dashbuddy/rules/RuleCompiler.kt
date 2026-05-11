@@ -74,8 +74,21 @@ object RuleCompiler {
      * Compile a JSON array of rule objects into typed [CompiledRule] instances.
      * The [context] determines predicate vocabulary and parse input source.
      */
-    fun <TInput> compileRules(array: JsonArray, context: RuleContext): List<CompiledRule<TInput>> =
-        array.map { compileRule(it.jsonObject, context) }
+    fun <TInput> compileRules(array: JsonArray, context: RuleContext): List<CompiledRule<TInput>> {
+        val rules = array.map { compileRule<TInput>(it.jsonObject, context) }
+        // Enforce unique priorities within the same rule type
+        val seen = mutableMapOf<Int, String>()
+        for (rule in rules) {
+            val existing = seen.put(rule.priority, rule.id)
+            if (existing != null) {
+                throw RuleCompileException(
+                    "Duplicate priority ${rule.priority} in ${context.name.lowercase()} rules: " +
+                        "'$existing' and '${rule.id}'. Priorities must be unique per rule type.",
+                )
+            }
+        }
+        return rules
+    }
 
     @Suppress("UNCHECKED_CAST")
     private fun <TInput> compileRule(obj: JsonObject, context: RuleContext): CompiledRule<TInput> {
@@ -91,14 +104,14 @@ object RuleCompiler {
 
         val (ruleFlow, ruleModeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
 
-        // Rule-level parse/shape (inherited by branches unless overridden)
+        // Rule-level parse (inherited by branches unless overridden)
         val ruleParseObj = obj["parse"]?.jsonObject
-        val ruleShape = obj["shape"]?.jsonPrimitive?.content
+        val ruleParseAs = ruleParseObj?.get("as")?.jsonPrimitive?.content
 
         val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
             obj["branches"]!!.jsonArray.map {
                 compileBranch(it.jsonObject, context, ruleFlow, ruleModeHint, ruleId = id,
-                    ruleParseBlock = ruleParseObj, ruleParseShape = ruleShape, ruleBindObj = ruleBindObj)
+                    ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj)
             }
         } else {
             listOf(compileBranch(obj, context, ruleFlow, ruleModeHint, ruleId = id))
@@ -115,7 +128,7 @@ object RuleCompiler {
         ruleModeHint: Mode? = null,
         ruleId: String? = null,
         ruleParseBlock: JsonObject? = null,
-        ruleParseShape: String? = null,
+        ruleParseAs: String? = null,
         ruleBindObj: JsonObject? = null,
     ): CompiledBranch<TInput> {
         val targetName = ruleId?.let { deriveTargetFromId(it) }
@@ -127,9 +140,7 @@ object RuleCompiler {
         )
 
         // Intent (explicit or derived)
-        val intent = obj["intent"]?.jsonPrimitive?.content
-            ?: obj["target"]?.jsonPrimitive?.content?.let { camelToSnake(it) }
-            ?: targetName
+        val intent = obj["intent"]?.jsonPrimitive?.content ?: targetName
 
         // --- Bindings (screen rules only) ---
         val effectiveBindObj = if (context == RuleContext.SCREEN) {
@@ -138,22 +149,26 @@ object RuleCompiler {
         val bindings = effectiveBindObj?.let { compileBindBlock(it) } ?: emptyList()
 
         // --- Phase 2: Reject ---
-        val rejectJson = obj["reject"] ?: obj["guards"]
+        val rejectJson = obj["reject"]
         val rejectChecks: List<(TInput) -> Boolean> = rejectJson?.jsonArray?.map { rejectEntry ->
             compilePredicate(rejectEntry, context)
         } ?: emptyList()
 
         // --- Phase 3: Require ---
-        val requireJson = obj["require"] ?: obj["if"]
+        val requireJson = obj["require"]
         val predicate: ((TInput) -> Boolean)? = requireJson?.let {
             compilePredicate(it, context)
         }
 
         // --- Phase 4: Parse ---
         val parseBlock = obj["parse"]?.jsonObject ?: ruleParseBlock
-        val parseShape = obj["shape"]?.jsonPrimitive?.content
-            ?: parseBlock?.get("shape")?.jsonPrimitive?.content
-            ?: ruleParseShape
+        val parseAs = parseBlock?.get("as")?.jsonPrimitive?.content ?: ruleParseAs
+
+        // --- Shape contract validation (M3) ---
+        if (parseAs != null) {
+            val declaredFields = parseBlock?.get("fields")?.jsonObject?.keys ?: emptySet()
+            ParsedFieldsFactory.validateShapeFields(parseAs, declaredFields, ruleId)
+        }
 
         val parser: (TInput, Bindings) -> Map<String, Any?> = when (context) {
             RuleContext.SCREEN -> {
@@ -190,7 +205,7 @@ object RuleCompiler {
         } ?: emptyList()
 
         // --- Effects ---
-        val effectsArray = obj["effects"]?.jsonArray ?: obj["actions"]?.jsonArray
+        val effectsArray = obj["effects"]?.jsonArray
         val effects = effectsArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
 
         // --- Transition overrides (screen rules) ---
@@ -208,7 +223,7 @@ object RuleCompiler {
             validators = validators,
             effects = effects,
             bindings = bindings,
-            shape = parseShape,
+            shape = parseAs,
             intent = intent,
             flow = branchFlow ?: ruleFlow,
             modeHint = branchModeHint ?: ruleModeHint,
@@ -349,6 +364,9 @@ object RuleCompiler {
         val transformSpec = obj["transform"]
         val fallbackVal = obj["fallback"]
 
+        // Validate transform specs at compile time (fail fast on typos)
+        transformSpec?.let { TransformRegistry.validateTransformSpec(it) }
+
         return { raw ->
             val sourceText = readNotificationField(raw, fromField)
 
@@ -396,6 +414,9 @@ object RuleCompiler {
 
         val obj = spec as? JsonObject
             ?: throw RuleCompileException("Parse expression must be an object or string literal")
+
+        // Validate transform specs at compile time (fail fast on typos)
+        obj["transform"]?.let { TransformRegistry.validateTransformSpec(it) }
 
         val fromName = obj["from"]?.jsonPrimitive?.content?.removePrefix("$")
 
@@ -522,7 +543,7 @@ object RuleCompiler {
             "allTextContains" in presenceSpec -> {
                 val text = presenceSpec["allTextContains"]!!.jsonPrimitive.content.lowercase()
                 val fn: (UiNode) -> Boolean = { tree ->
-                    tree.allText.joinToString(" | ").lowercase().contains(text)
+                    tree.allText.joinToString("\u001F").lowercase().contains(text)
                 }
                 fn
             }
@@ -768,10 +789,6 @@ object RuleCompiler {
     //  Helpers
     // ==========================================================================
 
-    /** Convert CamelCase to snake_case. "AcceptOffer" → "accept_offer" */
-    private fun camelToSnake(s: String): String =
-        s.replace(Regex("([a-z])([A-Z])"), "$1_$2").lowercase()
-
     /**
      * Derive a classification name from a rule ID by stripping the platform prefix.
      * "doordash.screen.idle_map" → "idle_map"
@@ -807,14 +824,14 @@ object RuleCompiler {
             "allTextContains" -> {
                 val text = (value as? JsonPrimitive)?.content?.lowercase()
                     ?: throw RuleCompileException("allTextContains requires a string value")
-                ;{ tree -> tree.allText.joinToString(" | ").lowercase().contains(text) }
+                ;{ tree -> tree.allText.joinToString("\u001F").lowercase().contains(text) }
             }
             "allTextContainsAll" -> {
                 val texts = (value as? JsonArray)
                     ?.map { (it as JsonPrimitive).content.lowercase() }
                     ?: throw RuleCompileException("allTextContainsAll requires an array")
                 ;{ tree ->
-                    val joined = tree.allText.joinToString(" | ").lowercase()
+                    val joined = tree.allText.joinToString("\u001F").lowercase()
                     texts.all { joined.contains(it) }
                 }
             }
@@ -823,7 +840,7 @@ object RuleCompiler {
                     ?.map { (it as JsonPrimitive).content.lowercase() }
                     ?: throw RuleCompileException("allTextContainsAny requires an array")
                 ;{ tree ->
-                    val joined = tree.allText.joinToString(" | ").lowercase()
+                    val joined = tree.allText.joinToString("\u001F").lowercase()
                     texts.any { joined.contains(it) }
                 }
             }
@@ -1144,7 +1161,7 @@ object RuleCompiler {
         else -> json.toString()
     }
 
-    private fun compileRegex(pattern: String): Regex {
+    internal fun compileRegex(pattern: String): Regex {
         if (pattern.length > MAX_REGEX_LENGTH)
             throw RuleCompileException(
                 "Regex pattern length ${pattern.length} exceeds MAX_REGEX_LENGTH=$MAX_REGEX_LENGTH",

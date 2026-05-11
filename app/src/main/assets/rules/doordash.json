@@ -22,7 +22,9 @@
           "Emergency contact details"
         ]
       },
-      "shape": "sensitive"
+      "parse": {
+        "as": "sensitive"
+      }
     },
     {
       "id": "doordash.screen.timeline",
@@ -34,6 +36,7 @@
         ]
       },
       "parse": {
+        "as": "timeline",
         "fields": {
           "sessionEarnings": {
             "textAfterLabel": "This dash",
@@ -199,12 +202,11 @@
             }
           }
         }
-      },
-      "shape": "timeline"
+      }
     },
     {
       "id": "doordash.screen.offer_popup_confirm_decline",
-      "priority": 20,
+      "priority": 19,
       "state": {
         "flow": "offer:presented",
         "modeHint": "online"
@@ -251,6 +253,7 @@
         }
       ],
       "parse": {
+        "as": "offer",
         "fields": {
           "payAmount": {
             "coalesce": [
@@ -387,7 +390,6 @@
           }
         }
       },
-      "shape": "offer",
       "effects": [
         {
           "screenshot": {
@@ -435,6 +437,7 @@
         }
       ],
       "parse": {
+        "as": "post_task",
         "fields": {
           "totalPay": {
             "find": {
@@ -492,7 +495,6 @@
           }
         }
       },
-      "shape": "post_task",
       "validate": [
         {
           "assert": "sumApproxEquals",
@@ -508,7 +510,7 @@
     },
     {
       "id": "doordash.screen.delivery_summary_collapsed",
-      "priority": 30,
+      "priority": 31,
       "state": {
         "flow": "post:task",
         "modeHint": "online"
@@ -525,6 +527,7 @@
         }
       ],
       "parse": {
+        "as": "post_task",
         "fields": {
           "totalPay": {
             "find": {
@@ -561,7 +564,6 @@
           }
         }
       },
-      "shape": "post_task",
       "bind": {
         "expandButton": {
           "find": {
@@ -656,6 +658,7 @@
         ]
       },
       "parse": {
+        "as": "paused",
         "fields": {
           "remainingText": {
             "find": {
@@ -673,8 +676,7 @@
             "fallback": 2100000
           }
         }
-      },
-      "shape": "paused"
+      }
     },
     {
       "id": "doordash.screen.pickup_navigation",
@@ -715,6 +717,7 @@
         }
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "PICKUP",
           "subFlow": "NAVIGATION",
@@ -762,8 +765,7 @@
             "transform": "parseDeadline"
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.dropoff_navigation",
@@ -838,8 +840,8 @@
           }
         }
       ],
-      "shape": "task",
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "DROPOFF",
           "subFlow": "NAVIGATION",
@@ -940,6 +942,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "PICKUP",
           "subFlow": "ARRIVED",
@@ -998,8 +1001,7 @@
             "literal": true
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.pickup_pre_arrival",
@@ -1044,6 +1046,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "PICKUP",
           "subFlow": "NAVIGATION",
@@ -1099,8 +1102,7 @@
             "transform": "parseLeadingInt"
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.pickup_shopping",
@@ -1133,6 +1135,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "activity": "shopping",
           "phase": "PICKUP",
@@ -1151,8 +1154,7 @@
             }
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.dropoff_pre_arrival",
@@ -1193,6 +1195,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "DROPOFF",
           "subFlow": "NAVIGATION",
@@ -1272,8 +1275,7 @@
             "transform": "parseDeadline"
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.dropoff_pre_arrival_completion",
@@ -1317,6 +1319,7 @@
         ]
       },
       "parse": {
+        "as": "task",
         "fields": {
           "phase": "DROPOFF",
           "subFlow": "NAVIGATION",
@@ -1396,8 +1399,7 @@
             "transform": "parseDeadline"
           }
         }
-      },
-      "shape": "task"
+      }
     },
     {
       "id": "doordash.screen.schedule",
@@ -1445,6 +1447,7 @@
         ]
       },
       "parse": {
+        "as": "ratings",
         "fields": {
           "acceptanceRate": {
             "siblingOf": {
@@ -1603,8 +1606,7 @@
             "transform": "toInt"
           }
         }
-      },
-      "shape": "ratings"
+      }
     },
     {
       "id": "doordash.screen.safety",
@@ -1857,6 +1859,7 @@
         ]
       },
       "parse": {
+        "as": "idle",
         "fields": {
           "isHeadingBackToZone": {
             "literal": false
@@ -1883,8 +1886,7 @@
             "transform": "parseDeadline"
           }
         }
-      },
-      "shape": "idle"
+      }
     },
     {
       "id": "doordash.screen.waiting_for_offer",
@@ -1948,6 +1950,7 @@
         ]
       },
       "parse": {
+        "as": "idle",
         "fields": {
           "sessionPay": {
             "find": {
@@ -1985,8 +1988,7 @@
             }
           }
         }
-      },
-      "shape": "idle"
+      }
     },
     {
       "id": "doordash.screen.set_dash_end_time",
@@ -2018,6 +2020,7 @@
         ]
       },
       "parse": {
+        "as": "idle",
         "fields": {
           "zoneName": {
             "find": {
@@ -2026,8 +2029,7 @@
             "read": "text"
           }
         }
-      },
-      "shape": "idle"
+      }
     },
     {
       "id": "doordash.screen.idle_map",
@@ -2077,6 +2079,7 @@
         ]
       },
       "parse": {
+        "as": "idle",
         "fields": {
           "sessionType": {
             "conditionalEnum": [
@@ -2099,8 +2102,7 @@
             ]
           }
         }
-      },
-      "shape": "idle"
+      }
     },
     {
       "id": "doordash.screen.dash_summary",
@@ -2131,6 +2133,7 @@
         ]
       },
       "parse": {
+        "as": "session_ended",
         "fields": {
           "totalEarnings": {
             "coalesce": [
@@ -2235,8 +2238,7 @@
           "tolerance": 0.02,
           "onFail": "dropParsed"
         }
-      ],
-      "shape": "session_ended"
+      ]
     },
     {
       "id": "doordash.screen.sensitive.catchall",
@@ -2254,7 +2256,9 @@
           "t=completed_view"
         ]
       },
-      "shape": "sensitive"
+      "parse": {
+        "as": "sensitive"
+      }
     }
   ],
   "clicks": [
@@ -2263,7 +2267,7 @@
       "priority": 10,
       "screenIs": "offer_popup",
       "intent": "accept_offer",
-      "if": {
+      "require": {
         "hasIdSuffix": "accept_button"
       }
     },
@@ -2272,7 +2276,7 @@
       "priority": 20,
       "screenIs": "offer_popup_confirm_decline",
       "intent": "decline_offer",
-      "if": {
+      "require": {
         "hasText": "Decline offer"
       }
     },
@@ -2281,7 +2285,7 @@
       "priority": 30,
       "screenIs": "pickup_arrival",
       "intent": "arrived_at_store",
-      "if": {
+      "require": {
         "all": [
           {
             "hasIdSuffix": "primary_action_button"
@@ -2304,7 +2308,7 @@
       "priority": 15,
       "screenIs": "offer_popup",
       "intent": "initial_decline",
-      "if": {
+      "require": {
         "hasIdSuffix": "secondary_action_button_dash_plus"
       }
     },
@@ -2313,7 +2317,7 @@
       "priority": 40,
       "screenIs": "dash_paused",
       "intent": "resume_dash",
-      "if": {
+      "require": {
         "hasIdSuffix": "resumeButton"
       }
     },
@@ -2321,7 +2325,7 @@
       "id": "doordash.click.start_navigation",
       "priority": 50,
       "intent": "start_navigation",
-      "if": {
+      "require": {
         "any": [
           {
             "hasIdSuffix": "directions_button"
@@ -2337,7 +2341,7 @@
       "priority": 60,
       "screenIs": "dropoff_pre_arrival_completion",
       "intent": "complete_delivery",
-      "if": {
+      "require": {
         "any": [
           {
             "hasIdSuffix": "complete_delivery_steps_button"
@@ -2356,7 +2360,7 @@
       "priority": 70,
       "screenIs": "dropoff_pre_arrival",
       "intent": "submit_photo",
-      "if": {
+      "require": {
         "hasIdSuffix": "submit_button"
       }
     },
@@ -2365,7 +2369,7 @@
       "priority": 80,
       "screenIs": "pickup_shopping",
       "intent": "checkout",
-      "if": {
+      "require": {
         "hasIdSuffix": "button_checkout"
       }
     }
@@ -2375,11 +2379,11 @@
       "id": "doordash.notification.additional_tip",
       "priority": 10,
       "intent": "additional_tip",
-      "shape": "notification",
-      "if": {
+      "require": {
         "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
       },
       "parse": {
+        "as": "notification",
         "fields": {
           "amount": {
             "from": "fullString",
@@ -2400,19 +2404,35 @@
             "transform": "trim"
           }
         }
-      }
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TIP_ADDED: ${amount} {storeName}"
+          }
+        }
+      ]
     },
     {
       "id": "doordash.notification.new_order",
       "priority": 20,
-      "if": {
+      "require": {
         "titleContains": "new order"
-      }
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "NEW_ORDER"
+          }
+        }
+      ]
     },
     {
       "id": "doordash.notification.scheduled_dash_expired",
       "priority": 30,
-      "if": {
+      "require": {
         "all": [
           {
             "anyFieldContains": "scheduled"
@@ -2421,25 +2441,53 @@
             "anyFieldContains": "expired"
           }
         ]
-      }
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "SCHEDULED_DASH_EXPIRED"
+          }
+        }
+      ]
     },
     {
       "id": "doordash.notification.demand_nudge",
       "priority": 50,
-      "if": {
+      "require": {
         "titleContains": "Dash now"
       },
       "intent": "demand_nudge",
-      "shape": "notification"
+      "parse": {
+        "as": "notification"
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "DEMAND_NUDGE"
+          }
+        }
+      ]
     },
     {
       "id": "doordash.notification.peak_pay_promo",
       "priority": 60,
-      "if": {
+      "require": {
         "titleContains": "Incentives Update"
       },
       "intent": "peak_pay_promo",
-      "shape": "notification"
+      "parse": {
+        "as": "notification"
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "PEAK_PAY_PROMO"
+          }
+        }
+      ]
     }
   ]
 }

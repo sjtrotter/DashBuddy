@@ -132,8 +132,8 @@ class SideEffectEngine @Inject constructor(
 
             is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.parsedOffer, effect.platformName)
 
-            is AppEffect.StartDash -> bubbleManager.startDash(effect.dashId, effect.platformName)
-            is AppEffect.EndDash -> bubbleManager.endDash(effect.platformName)
+            is AppEffect.StartSession -> bubbleManager.startSession(effect.sessionId, effect.platformName)
+            is AppEffect.EndSession -> bubbleManager.endSession(effect.platformName)
             is AppEffect.StartOdometer -> odometerEffectHandler.startUp()
             is AppEffect.StopOdometer -> odometerEffectHandler.shutDown()
             is AppEffect.PauseOdometer -> odometerEffectHandler.pause()
@@ -283,14 +283,14 @@ class SideEffectEngine @Inject constructor(
     }
 
     private fun sessionStartFromArgs(args: Map<String, String>) {
-        val platformName = args["platformName"] ?: "DoorDash"
-        val dashId = "session-${System.currentTimeMillis()}"
-        bubbleManager.startDash(dashId, platformName)
+        val platformName = args["platformName"] ?: "Unknown"
+        val sessionId = "session-${System.currentTimeMillis()}"
+        bubbleManager.startSession(sessionId, platformName)
     }
 
     private fun sessionEndFromArgs(args: Map<String, String>) {
         val platformName = args["platformName"]
-        bubbleManager.endDash(platformName)
+        bubbleManager.endSession(platformName)
     }
 
     private suspend fun scheduleTimeoutFromArgs(scope: CoroutineScope, args: Map<String, String>) {
@@ -357,8 +357,8 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.StopOdometer,
         is AppEffect.PauseOdometer,
         is AppEffect.ResumeOdometer,
-        is AppEffect.StartDash,
-        is AppEffect.EndDash,
+        is AppEffect.StartSession,
+        is AppEffect.EndSession,
         is AppEffect.ProcessTipNotification,
         is AppEffect.SpeakOffer,
         -> true

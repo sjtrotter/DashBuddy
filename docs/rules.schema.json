@@ -17,7 +17,7 @@
     },
     "platform_id": {
       "type": "string",
-      "description": "Platform identifier (e.g. 'doordash.driver', 'uber.driver').",
+      "description": "Provenance metadata identifying this rule file's source platform (e.g. 'doordash.driver', 'uber.driver'). Runtime filtering uses Platform.wire derived from rule IDs, not this field.",
       "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
     },
     "screens": {
@@ -54,31 +54,25 @@
           "description": "Evaluation order. Lower = evaluated first.",
           "minimum": 0
         },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this rule matches. Ignored by the compiler."
+        },
         "overrideable": {
           "type": "boolean",
-          "description": "Whether this rule can be overridden by platform updates. Default: true.",
+          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
           "default": true
         },
         "state": { "$ref": "#/$defs/stateBlock" },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "reject": {
           "type": "array",
           "description": "Phase 2: Fail-fast negative checks. Any match skips this rule/branch.",
           "items": { "$ref": "#/$defs/treePredicate" }
         },
-        "guards": {
-          "type": "array",
-          "description": "v1 compat alias for 'reject'.",
-          "items": { "$ref": "#/$defs/treePredicate" }
-        },
         "require": {
           "$ref": "#/$defs/treePredicate",
           "description": "Phase 3: Positive match condition. Must pass for the rule to match."
-        },
-        "if": {
-          "$ref": "#/$defs/treePredicate",
-          "description": "v1 compat alias for 'require'."
         },
         "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
@@ -89,11 +83,6 @@
         "effects": {
           "type": "array",
           "description": "Side effects to execute on successful match.",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
-          "type": "array",
-          "description": "Legacy alias for 'effects'.",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
         "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
@@ -108,35 +97,22 @@
 
     "branchObject": {
       "type": "object",
-      "description": "A single branch within a multi-branch screen rule. Must have 'require' or 'if'.",
-      "anyOf": [
-        { "required": ["require"] },
-        { "required": ["if"] }
-      ],
+      "description": "A single branch within a multi-branch screen rule. Must have 'require'.",
+      "required": ["require"],
       "properties": {
         "state": { "$ref": "#/$defs/stateBlock" },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "reject": {
           "type": "array",
           "items": { "$ref": "#/$defs/treePredicate" }
         },
-        "guards": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/treePredicate" }
-        },
         "require": { "$ref": "#/$defs/treePredicate" },
-        "if": { "$ref": "#/$defs/treePredicate" },
         "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
         },
         "effects": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
           "type": "array",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
@@ -147,13 +123,8 @@
     "clickBranchObject": {
       "type": "object",
       "description": "A single branch within a multi-branch click rule.",
-      "anyOf": [
-        { "required": ["require"] },
-        { "required": ["if"] }
-      ],
+      "required": ["require"],
       "properties": {
-        "state": { "$ref": "#/$defs/stateBlock" },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "screenIs": {
           "type": "string",
           "description": "Only match when the active screen target equals this value."
@@ -168,17 +139,12 @@
           "items": { "$ref": "#/$defs/nodePredicate" }
         },
         "require": { "$ref": "#/$defs/nodePredicate" },
-        "if": { "$ref": "#/$defs/nodePredicate" },
         "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
         },
         "effects": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
           "type": "array",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
@@ -189,13 +155,9 @@
     "notificationBranchObject": {
       "type": "object",
       "description": "A single branch within a multi-branch notification rule.",
-      "anyOf": [
-        { "required": ["require"] },
-        { "required": ["if"] }
-      ],
+      "required": ["require"],
       "properties": {
         "state": { "$ref": "#/$defs/stateBlock" },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "intent": {
           "type": "string",
           "description": "Output intent string for this branch."
@@ -205,17 +167,12 @@
           "items": { "$ref": "#/$defs/notificationPredicate" }
         },
         "require": { "$ref": "#/$defs/notificationPredicate" },
-        "if": { "$ref": "#/$defs/notificationPredicate" },
         "parse": { "$ref": "#/$defs/notificationParseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
         },
         "effects": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
           "type": "array",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
@@ -237,8 +194,13 @@
           "type": "integer",
           "minimum": 0
         },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this rule matches. Ignored by the compiler."
+        },
         "overrideable": {
           "type": "boolean",
+          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
           "default": true
         },
         "screenIs": {
@@ -249,12 +211,6 @@
           "type": "string",
           "description": "Output intent string. Auto-derived from rule ID if omitted."
         },
-        "target": {
-          "type": "string",
-          "description": "v1 compat: CamelCase target converted to snake_case intent."
-        },
-        "state": { "$ref": "#/$defs/stateBlock" },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "reject": {
           "type": "array",
@@ -265,10 +221,6 @@
           "$ref": "#/$defs/nodePredicate",
           "description": "Positive match condition. Must pass for the rule to match."
         },
-        "if": {
-          "$ref": "#/$defs/nodePredicate",
-          "description": "Alias for 'require'."
-        },
         "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
@@ -276,11 +228,6 @@
         },
         "effects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
-          "type": "array",
-          "description": "Legacy alias for 'effects'.",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
         "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
@@ -307,18 +254,18 @@
           "type": "integer",
           "minimum": 0
         },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this rule matches. Ignored by the compiler."
+        },
         "overrideable": {
           "type": "boolean",
+          "description": "CI/CD gate: when false, the split-repo pipeline requires human review before shipping changes to this rule. Not enforced at runtime. Default: true.",
           "default": true
         },
-        "shape": { "$ref": "#/$defs/shapeEnum" },
         "intent": {
           "type": "string",
           "description": "Output intent string. Auto-derived from rule ID if omitted."
-        },
-        "target": {
-          "type": "string",
-          "description": "v1 compat alias for 'intent'."
         },
         "state": { "$ref": "#/$defs/stateBlock" },
         "reject": {
@@ -330,10 +277,6 @@
           "$ref": "#/$defs/notificationPredicate",
           "description": "Positive match condition. Must pass for the rule to match."
         },
-        "if": {
-          "$ref": "#/$defs/notificationPredicate",
-          "description": "Alias for 'require'."
-        },
         "parse": { "$ref": "#/$defs/notificationParseBlock" },
         "validate": {
           "type": "array",
@@ -341,11 +284,6 @@
         },
         "effects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/effectEntry" }
-        },
-        "actions": {
-          "type": "array",
-          "description": "Legacy alias for 'effects'.",
           "items": { "$ref": "#/$defs/effectEntry" }
         },
         "transitionOverrides": { "$ref": "#/$defs/transitionOverrides" },
@@ -396,28 +334,122 @@
 
     "parseBlock": {
       "type": "object",
-      "description": "Phase 4: Field extraction specification.",
+      "description": "Phase 4: Output type and field extraction specification.",
       "properties": {
-        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "as": {
+          "$ref": "#/$defs/asEnum",
+          "description": "Output type. Determines which ParsedFields subtype is produced from the extracted fields."
+        },
         "fields": {
           "type": "object",
           "description": "Named fields to extract. Each value is a parse expression.",
           "additionalProperties": { "$ref": "#/$defs/parseExpression" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "as": { "const": "offer" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": {
+                "required": ["payAmount", "distance"],
+                "anyOf": [
+                  { "required": ["deliveryTimeText"] },
+                  { "required": ["timeToCompleteMinutes"] }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "as": { "const": "post_task" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["totalPay"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "as": { "const": "session_ended" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["totalEarnings"] }
+            }
+          }
+        }
+      ]
     },
 
     "notificationParseBlock": {
       "type": "object",
       "description": "Parse block for notification rules. Extracts fields from notification string properties using regex.",
       "properties": {
-        "shape": { "$ref": "#/$defs/shapeEnum" },
+        "as": {
+          "$ref": "#/$defs/asEnum",
+          "description": "Output type. Determines which ParsedFields subtype is produced from the extracted fields."
+        },
         "fields": {
           "type": "object",
           "description": "Named fields to extract. Each value is a notification parse expression.",
           "additionalProperties": { "$ref": "#/$defs/notificationParseExpression" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "as": { "const": "offer" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": {
+                "required": ["payAmount", "distance"],
+                "anyOf": [
+                  { "required": ["deliveryTimeText"] },
+                  { "required": ["timeToCompleteMinutes"] }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "as": { "const": "post_task" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["totalPay"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "as": { "const": "session_ended" } },
+            "required": ["as"]
+          },
+          "then": {
+            "required": ["fields"],
+            "properties": {
+              "fields": { "required": ["totalEarnings"] }
+            }
+          }
+        }
+      ]
     },
 
     "notificationParseExpression": {
@@ -1585,9 +1617,9 @@
       ]
     },
 
-    "shapeEnum": {
+    "asEnum": {
       "type": "string",
-      "description": "Output shape type determining which ParsedFields subtype is produced.",
+      "description": "Output type determining which ParsedFields subtype is produced.",
       "enum": [
         "sensitive",
         "noise",
