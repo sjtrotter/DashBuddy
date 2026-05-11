@@ -355,7 +355,13 @@
           "then": {
             "required": ["fields"],
             "properties": {
-              "fields": { "required": ["payAmount", "distance"] }
+              "fields": {
+                "required": ["payAmount", "distance"],
+                "anyOf": [
+                  { "required": ["deliveryTimeText"] },
+                  { "required": ["timeToCompleteMinutes"] }
+                ]
+              }
             }
           }
         },
@@ -409,7 +415,13 @@
           "then": {
             "required": ["fields"],
             "properties": {
-              "fields": { "required": ["payAmount", "distance"] }
+              "fields": {
+                "required": ["payAmount", "distance"],
+                "anyOf": [
+                  { "required": ["deliveryTimeText"] },
+                  { "required": ["timeToCompleteMinutes"] }
+                ]
+              }
             }
           }
         },

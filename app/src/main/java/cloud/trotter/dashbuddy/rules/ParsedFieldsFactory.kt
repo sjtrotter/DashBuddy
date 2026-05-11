@@ -35,17 +35,39 @@ object ParsedFieldsFactory {
     )
 
     /**
+     * "At least one of" constraints per shape. Each entry is a set of field names
+     * where at least one must be present. Platforms may use different field names
+     * for the same concept (e.g. DoorDash: deliveryTimeText, Uber: timeToCompleteMinutes).
+     */
+    val REQUIRED_ONE_OF_BY_SHAPE: Map<String, List<Set<String>>> = mapOf(
+        "offer" to listOf(setOf("deliveryTimeText", "timeToCompleteMinutes")),
+    )
+
+    /**
      * Validate that a parse block declares all required fields for its shape.
      * @throws RuleCompileException if required fields are missing.
      */
     fun validateShapeFields(shape: String, declaredFields: Set<String>, ruleId: String) {
-        val required = REQUIRED_FIELDS_BY_SHAPE[shape] ?: return
-        val missing = required - declaredFields
-        if (missing.isNotEmpty()) {
-            throw RuleCompileException(
-                "Rule '$ruleId' declares shape '$shape' but parse block is missing required " +
-                    "fields: ${missing.joinToString(", ") { "'$it'" }}",
-            )
+        val required = REQUIRED_FIELDS_BY_SHAPE[shape]
+        if (required != null) {
+            val missing = required - declaredFields
+            if (missing.isNotEmpty()) {
+                throw RuleCompileException(
+                    "Rule '$ruleId' declares shape '$shape' but parse block is missing required " +
+                        "fields: ${missing.joinToString(", ") { "'$it'" }}",
+                )
+            }
+        }
+        val oneOfGroups = REQUIRED_ONE_OF_BY_SHAPE[shape]
+        if (oneOfGroups != null) {
+            for (group in oneOfGroups) {
+                if (group.none { it in declaredFields }) {
+                    throw RuleCompileException(
+                        "Rule '$ruleId' declares shape '$shape' but parse block must include " +
+                            "at least one of: ${group.joinToString(", ") { "'$it'" }}",
+                    )
+                }
+            }
         }
     }
 

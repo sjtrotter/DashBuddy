@@ -655,10 +655,24 @@ class RuleCompilerTest {
         )
     }
 
-    @Test
-    fun `offer with payAmount and distance passes validation`() {
+    @Test(expected = RuleCompileException::class)
+    fun `offer without time field throws RuleCompileException`() {
         ParsedFieldsFactory.validateShapeFields(
             "offer", setOf("payAmount", "distance"), "test.rule",
+        )
+    }
+
+    @Test
+    fun `offer with deliveryTimeText passes validation`() {
+        ParsedFieldsFactory.validateShapeFields(
+            "offer", setOf("payAmount", "distance", "deliveryTimeText"), "test.rule",
+        )
+    }
+
+    @Test
+    fun `offer with timeToCompleteMinutes passes validation`() {
+        ParsedFieldsFactory.validateShapeFields(
+            "offer", setOf("payAmount", "distance", "timeToCompleteMinutes"), "test.rule",
         )
     }
 
@@ -730,7 +744,8 @@ class RuleCompilerTest {
                 "as": "offer",
                 "fields": {
                     "payAmount": { "find": { "hasTextMatchesRegex": "\\$\\d" }, "read": "text" },
-                    "distance": { "find": { "hasTextMatchesRegex": "\\d.*mi" }, "read": "text" }
+                    "distance": { "find": { "hasTextMatchesRegex": "\\d.*mi" }, "read": "text" },
+                    "deliveryTimeText": { "find": { "hasTextMatchesRegex": "\\d+:\\d+" }, "read": "text" }
                 }
             }
         }]"""
