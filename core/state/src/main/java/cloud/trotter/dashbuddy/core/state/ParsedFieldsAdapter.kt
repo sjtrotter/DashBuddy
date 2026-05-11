@@ -23,5 +23,6 @@ fun parsedFieldsAdapterFactory(): RuntimeTypeAdapterFactory<ParsedFields> =
         .registerSubtype(ParsedFields.TimelineFields::class.java, "TimelineFields")
         .registerSubtype(ParsedFields.RatingsFields::class.java, "RatingsFields")
         .registerSubtype(ParsedFields.SensitiveFields::class.java, "SensitiveFields")
+        .registerSubtype(ParsedFields.NoiseFields::class.java, "NoiseFields")
         .registerSubtype(ParsedFields.ClickFields::class.java, "ClickFields")
         .registerSubtype(ParsedFields.NotificationFields::class.java, "NotificationFields")

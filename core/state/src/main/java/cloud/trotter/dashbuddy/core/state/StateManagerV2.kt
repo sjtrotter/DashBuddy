@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.concurrent.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -114,7 +115,9 @@ class StateManagerV2 @Inject constructor(
         scope.launch(Dispatchers.IO) {
             try {
                 observationDao.insert(obs.toEntity(state))
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 Timber.e(e, "Failed to persist observation")
             }
         }
@@ -171,7 +174,9 @@ class StateManagerV2 @Inject constructor(
                 )
                 // Prune snapshots older than 24h
                 snapshotDao.pruneOlderThan(System.currentTimeMillis() - SNAPSHOT_RETENTION_MS)
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 Timber.e(e, "Failed to write state snapshot")
             }
         }
