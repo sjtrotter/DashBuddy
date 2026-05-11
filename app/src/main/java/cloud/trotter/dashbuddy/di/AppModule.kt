@@ -7,11 +7,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
+import cloud.trotter.dashbuddy.BuildConfig
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
@@ -19,6 +21,10 @@ import javax.inject.Singleton
 object AppModule {
 
     private const val USER_PREFERENCES_NAME = "dashbuddy_preferences"
+
+    @Provides
+    @Named("appVersionName")
+    fun provideAppVersionName(): String = BuildConfig.VERSION_NAME
 
     @Provides
     @Singleton

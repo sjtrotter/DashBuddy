@@ -2,10 +2,10 @@ package cloud.trotter.dashbuddy.test.util
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
-import cloud.trotter.dashbuddy.rules.CompiledRule
-import cloud.trotter.dashbuddy.rules.RuleCompiler
-import cloud.trotter.dashbuddy.rules.RuleContext
-import cloud.trotter.dashbuddy.rules.Ruleset
+import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRule
+import cloud.trotter.dashbuddy.core.pipeline.rules.RuleCompiler
+import cloud.trotter.dashbuddy.core.pipeline.rules.RuleContext
+import cloud.trotter.dashbuddy.core.pipeline.rules.Ruleset
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -13,17 +13,29 @@ import java.io.File
 
 /**
  * Shared test helper that loads and compiles all production rule files
- * from `src/main/assets/rules/` without requiring an Android Context.
+ * from the `:core:pipeline` module's assets without requiring an Android Context.
  *
  * Replaces the deleted TestMatcherFactory / TestParserFactory — JSON rules
  * are now the single source of truth.
  */
 object TestRulesetFactory {
 
-    private const val RULES_DIR = "src/main/assets/rules"
+    /** Resolved at first access relative to the Gradle working directory. */
+    val rulesDir: String by lazy {
+        val candidates = listOf(
+            "core/pipeline/src/main/assets/rules",       // project root
+            "../core/pipeline/src/main/assets/rules",     // from app/
+            "src/main/assets/rules",                      // from core/pipeline/
+        )
+        candidates.firstOrNull { File(it).isDirectory }
+            ?: error(
+                "Cannot find rules directory. Working dir: ${File(".").absolutePath}\n" +
+                    "Searched: ${candidates.joinToString { File(it).absolutePath }}"
+            )
+    }
 
     private val allRules by lazy {
-        val dir = File(RULES_DIR)
+        val dir = File(rulesDir)
         val allScreens = mutableListOf<CompiledRule<UiNode>>()
         val allClicks = mutableListOf<CompiledRule<UiNode>>()
         val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()

@@ -13,7 +13,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
-import cloud.trotter.dashbuddy.pipeline.PipelineV2
+import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
 import cloud.trotter.dashbuddy.state.effects.SideEffectEngine
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder

@@ -9,8 +9,8 @@ import android.content.pm.PackageManager
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilityListener
-import cloud.trotter.dashbuddy.pipeline.notification.input.NotificationListener
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilityListener
+import cloud.trotter.dashbuddy.core.pipeline.notification.input.NotificationListener
 
 object PermissionUtils {
 
