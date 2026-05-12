@@ -53,19 +53,36 @@ class HealingPolicy @Inject constructor() {
     }
 
     /**
+     * Returns the healing threshold for a given mode transition direction.
+     *
+     * Offline → Online uses a lower threshold (1) because:
+     * - With dedup-by-classification, repeated identical screens don't re-send
+     * - Scheduled dashes may only produce one online signal (waiting_for_offer)
+     * - False positive cost is low (bubble starts early, user dismisses)
+     *
+     * All other transitions use the default threshold (2) because:
+     * - Online → Offline false positives are costly (session ends prematurely)
+     * - Back-gesture flicker can briefly show offline screens
+     * - Normal end-dash flow has abundant signals (end_dash click, session_ended, idle_map)
+     */
+    fun thresholdFor(currentMode: Mode, impliedMode: Mode): Int = when {
+        currentMode == Mode.Offline && impliedMode == Mode.Online -> 1
+        else -> observationThreshold
+    }
+
+    /**
      * Checks whether accrued confidence meets the threshold for healing.
      *
-     * Requires [observationThreshold] supporting observations before healing.
      * Stale confidence (older than [timeWindowMs]) is ignored — the caller
      * should reset confidence when the window expires.
      */
-    fun shouldHeal(confidence: ModeConfidence, now: Long): Boolean {
+    fun shouldHeal(confidence: ModeConfidence, now: Long, threshold: Int): Boolean {
         // Discard stale confidence: if the first observation is older than
         // the time window, the accrued evidence is no longer meaningful.
         val firstSeen = confidence.firstSeenAt ?: return false
         if (now - firstSeen > timeWindowMs) return false
 
-        return confidence.supportingObservations >= observationThreshold
+        return confidence.supportingObservations >= threshold
     }
 
     /**

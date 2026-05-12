@@ -54,10 +54,18 @@ class PlatformRegionStepper @Inject constructor() {
 
         // 2. Apply or accrue
         val afterMode = when (inference.verdict) {
-            Verdict.NoChange -> prev.copy(
-                confidence = ModeConfidence.EMPTY,
-                lastObservedAt = obs.timestamp,
-            )
+            Verdict.NoChange -> {
+                if (inference.impliedMode != null) {
+                    // Explicit confirmation of current mode — reset confidence
+                    prev.copy(
+                        confidence = ModeConfidence.EMPTY,
+                        lastObservedAt = obs.timestamp,
+                    )
+                } else {
+                    // No mode signal — preserve existing confidence
+                    prev.copy(lastObservedAt = obs.timestamp)
+                }
+            }
             Verdict.PlausibleApply -> applyModeTransition(prev, inference.impliedMode!!, obs)
             Verdict.Implausible -> healOrAccrue(prev, inference, obs, healing)
         }
@@ -129,7 +137,8 @@ class PlatformRegionStepper @Inject constructor() {
             )
         }
 
-        return if (healing.shouldHeal(confidence, obs.timestamp)) {
+        val threshold = healing.thresholdFor(prev.mode, inference.impliedMode!!)
+        return if (healing.shouldHeal(confidence, obs.timestamp, threshold)) {
             // Threshold met — apply the healed mode
             val healed = applyModeTransition(prev, inference.impliedMode!!, obs)
             healActiveLifecycle(healed, obs)

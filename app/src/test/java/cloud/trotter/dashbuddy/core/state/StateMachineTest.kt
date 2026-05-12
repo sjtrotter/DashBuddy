@@ -300,10 +300,12 @@ class StateMachineTest {
     // =========================================================================
 
     @Test
-    fun `healing — Offline to Online requires 2 observations`() {
+    fun `healing — Offline to Online heals with 1 observation (threshold 1)`() {
         var state = AppState()
 
-        // First observation implying Online while Offline — should NOT heal yet
+        // Single observation implying Online while Offline — should heal immediately
+        // because offline→online threshold is 1 (dedup-by-classification means
+        // repeated identical screens don't re-send)
         val t1 = tick()
         state = machine.step(state, screenObs(
             flow = Flow.OfferPresented,
@@ -312,20 +314,48 @@ class StateMachineTest {
         )).newState
 
         val dd = state.regions.platforms[Platform.DoorDash]!!
-        assertEquals(Mode.Offline, dd.mode) // still Offline
-        assertEquals(1, dd.confidence.supportingObservations)
-        assertEquals(Mode.Online, dd.confidence.pendingMode)
+        assertEquals(Mode.Online, dd.mode) // healed on first observation!
+        assertEquals(ModeConfidence.EMPTY, dd.confidence) // reset after healing
+    }
 
-        // Second observation within window — should heal
-        val t2 = t1 + 2000 // 2s later
+    @Test
+    fun `healing — Online to Offline requires 2 observations (threshold 2)`() {
+        var state = AppState()
+
+        // Get to Online first (heals at threshold 1)
+        val t1 = tick()
         state = machine.step(state, screenObs(
             flow = Flow.OfferPresented,
             parsed = offerFields(),
+            timestamp = t1,
+        )).newState
+        assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
+
+        // First offline signal — should NOT transition yet (threshold 2)
+        val t2 = t1 + 1000
+        state = machine.step(state, screenObs(
+            modeHint = Mode.Offline,
+            flow = Flow.Idle,
+            parsed = ParsedFields.IdleFields(),
             timestamp = t2,
         )).newState
 
+        val dd = state.regions.platforms[Platform.DoorDash]!!
+        assertEquals(Mode.Online, dd.mode) // still Online
+        assertEquals(1, dd.confidence.supportingObservations)
+        assertEquals(Mode.Offline, dd.confidence.pendingMode)
+
+        // Second offline signal within window — should heal to Offline
+        val t3 = t2 + 2000
+        state = machine.step(state, screenObs(
+            modeHint = Mode.Offline,
+            flow = Flow.Idle,
+            parsed = ParsedFields.IdleFields(),
+            timestamp = t3,
+        )).newState
+
         val dd2 = state.regions.platforms[Platform.DoorDash]!!
-        assertEquals(Mode.Online, dd2.mode) // healed!
+        assertEquals(Mode.Offline, dd2.mode) // healed to Offline
         assertEquals(ModeConfidence.EMPTY, dd2.confidence) // reset after healing
     }
 
@@ -333,26 +363,37 @@ class StateMachineTest {
     fun `healing — stale confidence resets accrual`() {
         var state = AppState()
 
-        // First observation
-        val t1 = tick()
+        // Get to Online first
+        val t0 = tick()
         state = machine.step(state, screenObs(
             flow = Flow.OfferPresented,
             parsed = offerFields(),
+            timestamp = t0,
+        )).newState
+        assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
+
+        // First offline observation (Online→Offline uses threshold 2)
+        val t1 = t0 + 1000
+        state = machine.step(state, screenObs(
+            modeHint = Mode.Offline,
+            flow = Flow.Idle,
+            parsed = ParsedFields.IdleFields(),
             timestamp = t1,
         )).newState
 
-        assertEquals(Mode.Offline, state.regions.platforms[Platform.DoorDash]!!.mode)
+        assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
 
         // Second observation OUTSIDE 10s window — should reset, not heal
         val t2 = t1 + 15_000L
         state = machine.step(state, screenObs(
-            flow = Flow.OfferPresented,
-            parsed = offerFields(),
+            modeHint = Mode.Offline,
+            flow = Flow.Idle,
+            parsed = ParsedFields.IdleFields(),
             timestamp = t2,
         )).newState
 
         val dd = state.regions.platforms[Platform.DoorDash]!!
-        assertEquals(Mode.Offline, dd.mode) // still Offline — reset, not healed
+        assertEquals(Mode.Online, dd.mode) // still Online — reset, not healed
         assertEquals(1, dd.confidence.supportingObservations) // reset to 1
         assertEquals(t2, dd.confidence.firstSeenAt) // new window started
     }
@@ -383,12 +424,10 @@ class StateMachineTest {
     fun `session created when transitioning to Online`() {
         var state = AppState()
 
-        // Heal to Online
+        // Heal to Online (threshold 1 — heals on first observation)
         val t1 = tick()
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1)).newState
-        assertNull(state.regions.platforms[Platform.DoorDash]!!.session)
 
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1 + 1000)).newState
         val session = state.regions.platforms[Platform.DoorDash]!!.session
         assertNotNull(session)
         assertTrue(session!!.sessionId.isNotEmpty())

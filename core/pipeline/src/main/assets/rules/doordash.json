@@ -29,6 +29,10 @@
     {
       "id": "doordash.screen.timeline",
       "priority": 10,
+      "state": {
+        "flow": "idle",
+        "modeHint": "online"
+      },
       "require": {
         "allTextContainsAll": [
           "dash ends at",
@@ -1994,7 +1998,8 @@
       "id": "doordash.screen.set_dash_end_time",
       "priority": 130,
       "state": {
-        "flow": "idle"
+        "flow": "idle",
+        "modeHint": "offline"
       },
       "require": {
         "all": [
@@ -2263,12 +2268,51 @@
   ],
   "clicks": [
     {
+      "id": "doordash.click.start_dash_set_end_time",
+      "priority": 5,
+      "screenIs": "set_dash_end_time",
+      "intent": "start_dash_set_end_time",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "hasIdSuffix": "end_time_container"
+      }
+    },
+    {
+      "id": "doordash.click.end_dash",
+      "priority": 6,
+      "screenIs": "timeline",
+      "intent": "end_dash",
+      "state": {
+        "modeHint": "offline"
+      },
+      "require": {
+        "hasText": "End dash"
+      }
+    },
+    {
       "id": "doordash.click.accept_offer",
       "priority": 10,
       "screenIs": "offer_popup",
       "intent": "accept_offer",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "hasIdSuffix": "accept_button"
+      }
+    },
+    {
+      "id": "doordash.click.initial_decline",
+      "priority": 15,
+      "screenIs": "offer_popup",
+      "intent": "initial_decline",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "hasIdSuffix": "secondary_action_button_dash_plus"
       }
     },
     {
@@ -2276,6 +2320,9 @@
       "priority": 20,
       "screenIs": "offer_popup_confirm_decline",
       "intent": "decline_offer",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "hasText": "Decline offer"
       }
@@ -2285,6 +2332,9 @@
       "priority": 30,
       "screenIs": "pickup_arrival",
       "intent": "arrived_at_store",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "all": [
           {
@@ -2304,19 +2354,13 @@
       }
     },
     {
-      "id": "doordash.click.initial_decline",
-      "priority": 15,
-      "screenIs": "offer_popup",
-      "intent": "initial_decline",
-      "require": {
-        "hasIdSuffix": "secondary_action_button_dash_plus"
-      }
-    },
-    {
       "id": "doordash.click.resume_dash",
       "priority": 40,
       "screenIs": "dash_paused",
       "intent": "resume_dash",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "hasIdSuffix": "resumeButton"
       }
@@ -2325,6 +2369,9 @@
       "id": "doordash.click.start_navigation",
       "priority": 50,
       "intent": "start_navigation",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "any": [
           {
@@ -2341,6 +2388,9 @@
       "priority": 60,
       "screenIs": "dropoff_pre_arrival_completion",
       "intent": "complete_delivery",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "any": [
           {
@@ -2360,6 +2410,9 @@
       "priority": 70,
       "screenIs": "dropoff_pre_arrival",
       "intent": "submit_photo",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "hasIdSuffix": "submit_button"
       }
@@ -2369,6 +2422,9 @@
       "priority": 80,
       "screenIs": "pickup_shopping",
       "intent": "checkout",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "hasIdSuffix": "button_checkout"
       }

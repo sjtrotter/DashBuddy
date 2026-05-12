@@ -18,6 +18,7 @@
             <option value="$PROJECT_DIR$/core/location" />
             <option value="$PROJECT_DIR$/core/network" />
             <option value="$PROJECT_DIR$/core/pipeline" />
+            <option value="$PROJECT_DIR$/core/state" />
             <option value="$PROJECT_DIR$/domain" />
           </set>
         </option>

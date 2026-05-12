@@ -139,7 +139,7 @@ class HealingPolicyTest {
             supportingObservations = 5,
             firstSeenAt = null,
         )
-        assertFalse(policy.shouldHeal(confidence, now = 1000L))
+        assertFalse(policy.shouldHeal(confidence, now = 1000L, policy.observationThreshold))
     }
 
     @Test
@@ -150,7 +150,7 @@ class HealingPolicyTest {
             supportingObservations = 1,
             firstSeenAt = now,
         )
-        assertFalse(policy.shouldHeal(confidence, now))
+        assertFalse(policy.shouldHeal(confidence, now, policy.observationThreshold))
     }
 
     @Test
@@ -162,7 +162,7 @@ class HealingPolicyTest {
             supportingObservations = 2,
             firstSeenAt = firstSeen,
         )
-        assertTrue(policy.shouldHeal(confidence, now))
+        assertTrue(policy.shouldHeal(confidence, now, policy.observationThreshold))
     }
 
     @Test
@@ -174,7 +174,7 @@ class HealingPolicyTest {
             supportingObservations = ModeConfidence.DEFAULT_OBSERVATION_THRESHOLD,
             firstSeenAt = firstSeen,
         )
-        assertTrue(policy.shouldHeal(confidence, now))
+        assertTrue(policy.shouldHeal(confidence, now, policy.observationThreshold))
     }
 
     @Test
@@ -186,7 +186,7 @@ class HealingPolicyTest {
             supportingObservations = 5, // plenty of observations but stale
             firstSeenAt = firstSeen,
         )
-        assertFalse(policy.shouldHeal(confidence, now))
+        assertFalse(policy.shouldHeal(confidence, now, policy.observationThreshold))
     }
 
     @Test
@@ -198,7 +198,7 @@ class HealingPolicyTest {
             supportingObservations = 10,
             firstSeenAt = firstSeen,
         )
-        assertFalse(policy.shouldHeal(confidence, now))
+        assertFalse(policy.shouldHeal(confidence, now, policy.observationThreshold))
     }
 
     @Test
@@ -210,6 +210,6 @@ class HealingPolicyTest {
             supportingObservations = 2,
             firstSeenAt = firstSeen,
         )
-        assertTrue(policy.shouldHeal(confidence, now))
+        assertTrue(policy.shouldHeal(confidence, now, policy.observationThreshold))
     }
 }
