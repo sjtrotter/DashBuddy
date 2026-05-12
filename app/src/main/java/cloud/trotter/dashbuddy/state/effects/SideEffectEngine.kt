@@ -13,7 +13,8 @@ import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.PermissionTier
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
-import cloud.trotter.dashbuddy.state.AppEffect
+import cloud.trotter.dashbuddy.core.state.AppEffect
+import cloud.trotter.dashbuddy.core.state.EffectExecutor
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toAnnotatedString
 import kotlinx.coroutines.CoroutineScope
@@ -43,14 +44,14 @@ class SideEffectEngine @Inject constructor(
     private val uiInteractionHandler: UiInteractionHandler,
     private val effectsFiredDao: EffectsFiredDao,
     private val ttsEffectHandler: TtsEffectHandler,
-) {
+) : EffectExecutor {
 
     // 1. OUTPUT STREAM: Events going BACK to the StateMachine (The Loopback)
     private val _events = MutableSharedFlow<StateEvent>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val events: SharedFlow<StateEvent> = _events.asSharedFlow()
+    override val events: SharedFlow<StateEvent> = _events.asSharedFlow()
 
     // Internal tracker for Timers (Replaces TimeoutHandler)
     private val activeTimers = ConcurrentHashMap<Any, Job>()
@@ -72,7 +73,7 @@ class SideEffectEngine @Inject constructor(
      *   - Keyed effects are checked against `effects_fired` for idempotency.
      *   - Loopback effects (timers, evaluations) replay deterministically.
      */
-    fun process(effect: AppEffect, scope: CoroutineScope, recovering: Boolean = false) {
+    override fun process(effect: AppEffect, scope: CoroutineScope, recovering: Boolean) {
         scope.launch(Dispatchers.Default) {
             execute(effect, scope, recovering)
         }

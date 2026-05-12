@@ -4,8 +4,8 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.pipeline.accessibility.input.AccessibilitySource
-import cloud.trotter.dashbuddy.pipeline.accessibility.mapper.toBoundingBox
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toBoundingBox
 import cloud.trotter.dashbuddy.util.AccNodeUtils
 import timber.log.Timber
 import javax.inject.Inject

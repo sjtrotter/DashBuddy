@@ -10,7 +10,7 @@
 /.idea/deploymentTargetSelector.xml
 /.idea/androidTestResultsUserPreferences.xml
 .DS_Store
-/build
+**/build
 /captures
 .externalNativeBuild
 .cxx

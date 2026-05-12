@@ -8,7 +8,7 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
-import cloud.trotter.dashbuddy.state.StateManagerV2
+import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
