@@ -6,7 +6,7 @@ import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
  * Region 2+ — per-platform durable state.
  *
  * Mode lives HERE, not globally. Each platform has its own session lifecycle,
- * active job/task, and healing confidence tracker.
+ * active job/task, and transition tracking.
  *
  * A platform region only steps when an observation's [Platform] matches.
  */
@@ -17,7 +17,8 @@ data class PlatformRegion(
     val activeJob: Job? = null,
     val activeTask: Task? = null,
     val recentTasks: List<Task> = emptyList(),
-    val confidence: ModeConfidence = ModeConfidence.EMPTY,
+    val sessionGraceDeadline: Long? = null,
+    val lastTransitionKind: TransitionKind? = null,
     val zoneName: String? = null,
     val sessionType: SessionType? = null,
     val ratings: RatingsSnapshot? = null,
@@ -27,24 +28,21 @@ data class PlatformRegion(
 )
 
 /**
- * Tracks confidence for implausible mode transitions. When the pipeline
- * observes a flow that implies a mode change that doesn't make sense given
- * the current state (e.g., observe pickup while mode is Offline), the
- * stepper accrues confidence instead of immediately transitioning.
+ * Classification of a mode transition for logging and lifecycle decisions.
+ * Stored on [PlatformRegion.lastTransitionKind] so downstream (EffectMap)
+ * can distinguish recovery starts from normal starts.
  *
- * Default threshold: 2 supporting observations within 10s, OR 1 high-weight
- * signal (like an explicit mode-defining screen).
+ * This type lives in :domain so PlatformRegion can reference it without
+ * depending on :core:state. The policy logic that produces these values
+ * lives in TransitionPolicy (:core:state).
  */
-data class ModeConfidence(
-    val pendingMode: Mode? = null,
-    val pendingFlow: Flow? = null,
-    val supportingObservations: Int = 0,
-    val firstSeenAt: Long? = null,
-) {
-    companion object {
-        val EMPTY = ModeConfidence()
-
-        const val DEFAULT_OBSERVATION_THRESHOLD = 2
-        const val DEFAULT_TIME_WINDOW_MS = 10_000L
-    }
+enum class TransitionKind {
+    /** Observation carries no mode signal. */
+    NoSignal,
+    /** Observation confirms the current mode — no change. */
+    Confirmed,
+    /** Mode change to a flow that was in the declared outcomes (or no outcomes). */
+    Expected,
+    /** Mode change to a flow NOT in the declared outcomes. */
+    Unexpected,
 }

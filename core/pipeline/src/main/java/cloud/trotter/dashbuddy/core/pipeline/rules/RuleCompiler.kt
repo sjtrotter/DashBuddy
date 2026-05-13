@@ -102,7 +102,7 @@ object RuleCompiler {
             compileBindBlock(ruleBindObj)
         } else emptyList()
 
-        val (ruleFlow, ruleModeHint) = parseStateBlock(obj["state"] as? JsonObject, id)
+        val ruleState = parseStateBlock(obj["state"] as? JsonObject, id)
 
         // Rule-level parse (inherited by branches unless overridden)
         val ruleParseObj = obj["parse"]?.jsonObject
@@ -110,11 +110,13 @@ object RuleCompiler {
 
         val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
             obj["branches"]!!.jsonArray.map {
-                compileBranch(it.jsonObject, context, ruleFlow, ruleModeHint, ruleId = id,
+                compileBranch(it.jsonObject, context, ruleState.flow, ruleState.modeHint,
+                    ruleOutcomes = ruleState.outcomes, ruleId = id,
                     ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj)
             }
         } else {
-            listOf(compileBranch(obj, context, ruleFlow, ruleModeHint, ruleId = id))
+            listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint,
+                ruleOutcomes = ruleState.outcomes, ruleId = id))
         }
 
         return CompiledRule(id, priority, overrideable, ruleBindings, branches)
@@ -126,6 +128,7 @@ object RuleCompiler {
         context: RuleContext,
         ruleFlow: Flow? = null,
         ruleModeHint: Mode? = null,
+        ruleOutcomes: Set<Flow>? = null,
         ruleId: String? = null,
         ruleParseBlock: JsonObject? = null,
         ruleParseAs: String? = null,
@@ -135,7 +138,7 @@ object RuleCompiler {
             ?: throw RuleCompileException("Branch has no rule id to derive target from")
 
         // Branch-level state overrides rule-level defaults
-        val (branchFlow, branchModeHint) = parseStateBlock(
+        val branchState = parseStateBlock(
             obj["state"] as? JsonObject, "$targetName-branch",
         )
 
@@ -225,8 +228,9 @@ object RuleCompiler {
             bindings = bindings,
             shape = parseAs,
             intent = intent,
-            flow = branchFlow ?: ruleFlow,
-            modeHint = branchModeHint ?: ruleModeHint,
+            flow = branchState.flow ?: ruleFlow,
+            modeHint = branchState.modeHint ?: ruleModeHint,
+            outcomes = branchState.outcomes ?: ruleOutcomes,
             screenIs = screenIs,
             transitionOverrides = transitionOverrides,
         )
@@ -1094,8 +1098,14 @@ object RuleCompiler {
     //  State block parser (ADR-0005)
     // ==========================================================================
 
-    fun parseStateBlock(stateObj: JsonObject?, ruleId: String): Pair<Flow?, Mode?> {
-        if (stateObj == null) return null to null
+    data class ParsedStateBlock(
+        val flow: Flow? = null,
+        val modeHint: Mode? = null,
+        val outcomes: Set<Flow>? = null,
+    )
+
+    fun parseStateBlock(stateObj: JsonObject?, ruleId: String): ParsedStateBlock {
+        if (stateObj == null) return ParsedStateBlock()
 
         val flowStr = stateObj["flow"]?.jsonPrimitive?.content
         val modeStr = stateObj["modeHint"]?.jsonPrimitive?.content
@@ -1109,7 +1119,13 @@ object RuleCompiler {
             Mode.fromWire(it)
                 ?: throw RuleCompileException("Rule '$ruleId': unknown mode value '$it'")
         }
-        return flow to modeHint
+        val outcomes = stateObj["outcomes"]?.jsonArray?.map { elem ->
+            val wire = elem.jsonPrimitive.content
+            Flow.fromWire(wire)
+                ?: throw RuleCompileException("Rule '$ruleId': unknown outcome flow '$wire'")
+        }?.toSet()
+
+        return ParsedStateBlock(flow, modeHint, outcomes)
     }
 
     // ==========================================================================

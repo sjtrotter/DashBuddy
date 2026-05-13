@@ -11,7 +11,7 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
-import cloud.trotter.dashbuddy.domain.state.ModeConfidence
+import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -196,14 +196,18 @@ class EffectMap @Inject constructor(
                     val modeOverride = triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_ONLINE)
                     if (modeOverride != null) {
                         addAll(modeOverride)
-                    } else if (prevSession == null && nextSession != null) {
+                    } else if (nextSession != null && prevSession?.sessionId != nextSession.sessionId) {
                         val payload = mapOf(
-                            "source" to if (next.confidence != ModeConfidence.EMPTY) "recovery" else "interaction",
+                            "source" to if (next.lastTransitionKind == TransitionKind.Unexpected) "recovery" else "interaction",
                             "start_screen" to "WaitingForOffer",
                         )
                         add(logEffect(nextSession.sessionId, AppEventType.DASH_START, payload))
                         add(AppEffect.StartOdometer)
                         add(AppEffect.StartSession(nextSession.sessionId, next.platform.name))
+                    } else if (nextSession != null && prevSession?.sessionId == nextSession.sessionId) {
+                        // Grace resume — same session, no start effects needed
+                        Timber.d("Session grace resume: ${nextSession.sessionId}")
+                        add(AppEffect.UpdateBubble("Session resumed (grace)"))
                     }
 
                     // Cancel pause safety timer if resuming from paused

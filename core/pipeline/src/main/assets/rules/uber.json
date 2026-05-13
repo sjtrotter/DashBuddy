@@ -447,9 +447,23 @@
         "modeHint": "offline"
       },
       "require": {
-        "exists": {
-          "hasIdSuffix": "home_screen_overlay_container"
-        }
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "home_screen_overlay_container"
+            }
+          },
+          {
+            "notExists": {
+              "hasText": "You're online"
+            }
+          },
+          {
+            "notExists": {
+              "hasTextContaining": "Finding trips"
+            }
+          }
+        ]
       }
     },
     {
@@ -490,17 +504,30 @@
               },
               {
                 "exists": {
-                  "hasIdSuffix": "ub__system_banner_text"
+                  "hasText": "You're online"
                 }
               }
             ]
           }
         },
         {
+          "state": {
+            "flow": "idle",
+            "modeHint": "offline"
+          },
           "require": {
-            "exists": {
-              "hasIdSuffix": "glide_bottom_nav_home"
-            }
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "glide_bottom_nav_home"
+                }
+              },
+              {
+                "notExists": {
+                  "hasText": "You're online"
+                }
+              }
+            ]
           }
         }
       ]
@@ -527,6 +554,9 @@
       "id": "uber.click.go_online",
       "priority": 10,
       "intent": "go_online",
+      "state": {
+        "modeHint": "online"
+      },
       "require": {
         "hasIdSuffix": "go_online_button"
       }
@@ -534,8 +564,10 @@
     {
       "id": "uber.click.go_offline",
       "priority": 21,
-      "screenIs": "home_dashboard",
       "intent": "go_offline",
+      "state": {
+        "modeHint": "offline"
+      },
       "require": {
         "hasIdSuffix": "carbon_action_button"
       }

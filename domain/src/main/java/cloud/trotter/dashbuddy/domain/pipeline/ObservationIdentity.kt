@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.pipeline
 
+import cloud.trotter.dashbuddy.domain.state.Mode
+
 /**
  * Semantic identity of an observation for post-classification dedup.
  *
@@ -11,19 +13,22 @@ data class ObservationIdentity(
     val type: String,
     val target: String?,
     val fieldsHash: Int,
+    val modeHint: Mode? = null,
 )
 
 /**
  * Compute the semantic identity of this observation.
  *
  * The identity is based on the observation type, classification target,
- * and a hash of the stable parsed fields (excluding transient values
- * like deadlines and timestamps).
+ * a hash of the stable parsed fields (excluding transient values
+ * like deadlines and timestamps), and the mode hint. Including modeHint
+ * ensures that a screen whose UI changes between online/offline states
+ * is not suppressed as a duplicate.
  */
 fun Observation.identity(): ObservationIdentity = when (this) {
-    is Observation.Screen -> ObservationIdentity("screen", target, parsed.dedupeHash())
-    is Observation.Click -> ObservationIdentity("click", target, parsed.dedupeHash())
-    is Observation.Notification -> ObservationIdentity("notification", target, parsed.dedupeHash())
+    is Observation.Screen -> ObservationIdentity("screen", target, parsed.dedupeHash(), modeHint)
+    is Observation.Click -> ObservationIdentity("click", target, parsed.dedupeHash(), modeHint)
+    is Observation.Notification -> ObservationIdentity("notification", target, parsed.dedupeHash(), modeHint)
     is Observation.Timeout -> ObservationIdentity("timeout", type.name, 0)
     is Observation.UiInput -> ObservationIdentity("ui_input", action, payload.hashCode())
     is Observation.Loopback -> ObservationIdentity("loopback", effect, payload.hashCode())

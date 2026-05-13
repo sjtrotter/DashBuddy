@@ -305,6 +305,12 @@
         "mode": {
           "$ref": "#/$defs/modeEnum",
           "description": "v1 compat alias for 'modeHint'."
+        },
+        "outcomes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/flowEnum" },
+          "uniqueItems": true,
+          "description": "Plausible next flows from this screen. Used for transition classification (expected vs. unexpected)."
         }
       }
     },

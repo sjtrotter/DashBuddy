@@ -82,7 +82,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // 1. Setup Logging
         val stateProvider = Provider {
             try {
-                stateManagerV2.state.value.javaClass.simpleName
+                val platforms = stateManagerV2.state.value.regions.platforms
+                if (platforms.isEmpty()) "Idle"
+                else platforms.values.joinToString("|") { "${it.platform.name}:${it.mode.name}" }
             } catch (_: Exception) {
                 "Uninitialized"
             }

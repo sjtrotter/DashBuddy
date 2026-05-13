@@ -7,7 +7,6 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
-import cloud.trotter.dashbuddy.domain.state.ModeConfidence
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
@@ -15,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
+import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,12 +22,18 @@ import javax.inject.Singleton
 /**
  * Region 2+ stepper — per-platform durable state.
  *
- * Manages mode inference with healing, session lifecycle, job lifecycle
- * (offer → tasks → completion), and task lifecycle (navigation → arrival → completion).
+ * Manages **screen-authoritative** mode transitions, session lifecycle with
+ * grace periods, job lifecycle (offer → tasks → completion), and task lifecycle
+ * (navigation → arrival → completion).
  *
- * Each platform has its own PlatformRegion and steps independently.
- * A generic stepper handles all platforms; platform-specific overrides
- * are bound via Hilt only when a platform has unique inference rules.
+ * Key principles:
+ * - **Screens are authoritative.** A screen observation that implies a mode
+ *   change applies it immediately — no threshold counting.
+ * - **Clicks record user intent.** They participate in flow/lifecycle updates
+ *   but do NOT drive mode transitions.
+ * - **Session grace.** When transitioning to Offline (except via SessionEnded),
+ *   the session is preserved with a grace deadline. If mode returns to Online
+ *   within the grace window, the same session resumes.
  */
 @Singleton
 class PlatformRegionStepper @Inject constructor() {
@@ -42,35 +48,58 @@ class PlatformRegionStepper @Inject constructor() {
         prevFlow: FlowRegion,
         nextFlow: FlowRegion,
         obs: Observation,
-        healing: HealingPolicy,
+        policy: TransitionPolicy,
     ): PlatformRegion {
         // Handle timeout-driven transitions
-        if (obs is Observation.Timeout) return handleTimeout(prev, obs)
+        if (obs is Observation.Timeout) return handleTimeout(prev, obs, policy)
 
-        val flowObs = obs as? Observation.FlowObservation ?: return prev
-
-        // 1. Infer mode from observation
-        val inference = healing.inferAndCheck(prev.mode, flowObs.flow, flowObs.modeHint)
-
-        // 2. Apply or accrue
-        val afterMode = when (inference.verdict) {
-            Verdict.NoChange -> {
-                if (inference.impliedMode != null) {
-                    // Explicit confirmation of current mode — reset confidence
-                    prev.copy(
-                        confidence = ModeConfidence.EMPTY,
-                        lastObservedAt = obs.timestamp,
-                    )
-                } else {
-                    // No mode signal — preserve existing confidence
-                    prev.copy(lastObservedAt = obs.timestamp)
-                }
-            }
-            Verdict.PlausibleApply -> applyModeTransition(prev, inference.impliedMode!!, obs)
-            Verdict.Implausible -> healOrAccrue(prev, inference, obs, healing)
+        // Lazy grace expiration: if grace deadline has passed, end session now
+        var current = prev
+        if (current.sessionGraceDeadline != null && obs.timestamp > current.sessionGraceDeadline!!) {
+            current = endSession(
+                current.copy(sessionGraceDeadline = null),
+                current.sessionGraceDeadline!!,
+            )
         }
 
-        // 3. Update session/job/task lifecycle based on flow changes
+        val flowObs = obs as? Observation.FlowObservation ?: return current
+
+        // Resolve what mode this observation implies
+        val impliedMode = policy.resolveMode(flowObs.flow, flowObs.modeHint)
+
+        val afterMode = when {
+            // No mode signal
+            impliedMode == null -> current.copy(lastObservedAt = obs.timestamp)
+
+            // Same mode — confirmed
+            impliedMode == current.mode -> current.copy(
+                lastObservedAt = obs.timestamp,
+                lastTransitionKind = TransitionKind.Confirmed,
+            )
+
+            // Click — records user intent, does NOT drive mode
+            flowObs is Observation.Click -> current.copy(lastObservedAt = obs.timestamp)
+
+            // Screen or Notification — authoritative, apply immediately
+            else -> {
+                val kind = policy.classify(
+                    current.mode, impliedMode, flowObs.expectedOutcomes, flowObs,
+                )
+                val transitioned = applyModeTransition(current, impliedMode, obs, kind, policy)
+                // Heal lifecycle when coming Online from Offline (app restart
+                // mid-task) or on any Unexpected transition. healActiveLifecycle
+                // self-guards: only acts if the flow is a task flow with no
+                // active job, so it's safe to call broadly.
+                if (kind == TransitionKind.Unexpected ||
+                    (current.mode == Mode.Offline && impliedMode == Mode.Online)) {
+                    healActiveLifecycle(transitioned, obs)
+                } else {
+                    transitioned
+                }
+            }
+        }
+
+        // Update session/job/task lifecycle based on flow changes
         return updateLifecycle(afterMode, prevFlow, nextFlow, flowObs)
     }
 
@@ -82,18 +111,23 @@ class PlatformRegionStepper @Inject constructor() {
         prev: PlatformRegion,
         newMode: Mode,
         obs: Observation,
+        kind: TransitionKind,
+        policy: TransitionPolicy,
     ): PlatformRegion {
         var region = prev.copy(
             mode = newMode,
-            confidence = ModeConfidence.EMPTY,
             lastObservedAt = obs.timestamp,
+            lastTransitionKind = kind,
         )
 
         // Session lifecycle on mode transitions
         when {
             prev.mode != Mode.Online && newMode == Mode.Online -> {
-                // Starting a session
-                if (region.session == null) {
+                if (region.sessionGraceDeadline != null && region.session != null) {
+                    // Grace active — resume the existing session (clear deadline, keep sessionId)
+                    region = region.copy(sessionGraceDeadline = null)
+                } else if (region.session == null) {
+                    // No grace or no session — create new session
                     region = region.copy(
                         session = Session(
                             sessionId = UUID.randomUUID().toString(),
@@ -103,56 +137,25 @@ class PlatformRegionStepper @Inject constructor() {
                 }
             }
             prev.mode != Mode.Offline && newMode == Mode.Offline -> {
-                // Ending a session — move active task/job to recent, clear active
-                region = endSession(region, obs.timestamp)
+                val flow = (obs as? Observation.FlowObservation)?.flow
+                if (flow == Flow.SessionEnded) {
+                    // Authoritative end signal — end immediately, no grace
+                    region = endSession(region, obs.timestamp)
+                } else if (region.session != null) {
+                    // Non-authoritative offline — grace period, preserve session
+                    region = region.copy(
+                        sessionGraceDeadline = obs.timestamp + policy.gracePeriodMs,
+                    )
+                }
             }
         }
 
         return region
     }
 
-    private fun healOrAccrue(
-        prev: PlatformRegion,
-        inference: ModeInference,
-        obs: Observation,
-        healing: HealingPolicy,
-    ): PlatformRegion {
-        val prevConf = prev.confidence
-        val samePending = prevConf.pendingMode == inference.impliedMode
-        val stale = prevConf.firstSeenAt != null &&
-            (obs.timestamp - prevConf.firstSeenAt!!) > healing.timeWindowMs
-
-        val confidence = if (samePending && !stale) {
-            // Same pending mode, within window — accrue
-            prevConf.copy(
-                supportingObservations = prevConf.supportingObservations + 1,
-            )
-        } else {
-            // Different pending mode or stale window — reset
-            ModeConfidence(
-                pendingMode = inference.impliedMode,
-                pendingFlow = (obs as? Observation.FlowObservation)?.flow,
-                supportingObservations = 1,
-                firstSeenAt = obs.timestamp,
-            )
-        }
-
-        val threshold = healing.thresholdFor(prev.mode, inference.impliedMode!!)
-        return if (healing.shouldHeal(confidence, obs.timestamp, threshold)) {
-            // Threshold met — apply the healed mode
-            val healed = applyModeTransition(prev, inference.impliedMode!!, obs)
-            healActiveLifecycle(healed, obs)
-        } else {
-            prev.copy(
-                confidence = confidence,
-                lastObservedAt = obs.timestamp,
-            )
-        }
-    }
-
     /**
-     * When healing fires (e.g., app launched mid-pickup), synthesize
-     * missing lifecycle entities so the state is consistent.
+     * When an unexpected transition fires (e.g., app launched mid-pickup),
+     * synthesize missing lifecycle entities so the state is consistent.
      */
     private fun healActiveLifecycle(region: PlatformRegion, obs: Observation): PlatformRegion {
         val flowObs = obs as? Observation.FlowObservation ?: return region
@@ -193,12 +196,19 @@ class PlatformRegionStepper @Inject constructor() {
     // TIMEOUT HANDLING
     // =========================================================================
 
-    private fun handleTimeout(prev: PlatformRegion, obs: Observation.Timeout): PlatformRegion {
+    private fun handleTimeout(
+        prev: PlatformRegion,
+        obs: Observation.Timeout,
+        policy: TransitionPolicy,
+    ): PlatformRegion {
         return when (obs.type) {
             TimeoutType.SESSION_PAUSED_SAFETY -> {
-                // Pause timer expired — transition to offline
+                // Pause timer expired — transition to offline via applyModeTransition
+                // so it gets grace treatment
                 if (prev.mode == Mode.Paused) {
-                    endSession(prev.copy(mode = Mode.Offline, lastObservedAt = obs.timestamp), obs.timestamp)
+                    applyModeTransition(
+                        prev, Mode.Offline, obs, TransitionKind.Expected, policy,
+                    )
                 } else prev
             }
             else -> prev // Automation timeouts handled by EffectMap
@@ -462,7 +472,7 @@ class PlatformRegionStepper @Inject constructor() {
             activeJob = null,
             activeTask = null,
             recentTasks = recentTasks,
-            confidence = ModeConfidence.EMPTY,
+            sessionGraceDeadline = null,
         )
     }
 
@@ -471,7 +481,6 @@ class PlatformRegionStepper @Inject constructor() {
         return region.copy(
             activeJob = null,
             lastPostTaskPayHash = null,
-            // Keep recent tasks — they reference the job by ID
         )
     }
 }

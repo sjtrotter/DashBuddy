@@ -81,6 +81,7 @@ class ObservationClassifier @Inject constructor(
             ruleId = result.ruleId,
             effects = result.effects,
             transitionOverrides = result.transitionOverrides,
+            expectedOutcomes = result.outcomes,
         )
 
         // Cache last non-sensitive screen for click enrichment
@@ -100,6 +101,7 @@ class ObservationClassifier @Inject constructor(
         ruleId: String?,
         effects: List<RequestedEffect> = emptyList(),
         transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
+        expectedOutcomes: Set<Flow>? = null,
     ) = Observation.Screen(
         timestamp = System.currentTimeMillis(),
         captureId = null,
@@ -111,6 +113,7 @@ class ObservationClassifier @Inject constructor(
         target = screenName,
         effects = effects,
         transitionOverrides = transitionOverrides,
+        expectedOutcomes = expectedOutcomes,
     )
 
     // ── Click ───────────────────────────────────────────────────────────
@@ -131,6 +134,7 @@ class ObservationClassifier @Inject constructor(
                     target = result.intent,
                     effects = result.effects,
                     transitionOverrides = result.transitionOverrides,
+                    expectedOutcomes = result.outcomes,
                     screenTarget = lastScreenTarget,
                 )
             }
@@ -179,6 +183,7 @@ class ObservationClassifier @Inject constructor(
                     target = result.intent,
                     effects = result.effects,
                     transitionOverrides = result.transitionOverrides,
+                    expectedOutcomes = result.outcomes,
                 )
             }
         }

@@ -11,11 +11,11 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
-import cloud.trotter.dashbuddy.domain.state.ModeConfidence
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
+import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -37,7 +37,7 @@ class StateMachineTest {
             flowStepper = FlowRegionStepper(),
             platformStepper = PlatformRegionStepper(),
             crossPlatformStepper = CrossPlatformRegionStepper(),
-            healingPolicy = HealingPolicy(),
+            transitionPolicy = TransitionPolicy(),
             effectMap = EffectMap(MetadataProvider { """{ "test_mode": true }""" }),
         )
     }
@@ -59,6 +59,7 @@ class StateMachineTest {
         parsed: ParsedFields = ParsedFields.None,
         ruleId: String = "doordash.screen.test",
         timestamp: Long = tick(),
+        expectedOutcomes: Set<Flow>? = null,
     ) = Observation.Screen(
         timestamp = timestamp,
         captureId = "cap-$timestamp",
@@ -67,10 +68,12 @@ class StateMachineTest {
         flow = flow,
         modeHint = modeHint,
         parsed = parsed,
+        expectedOutcomes = expectedOutcomes,
     )
 
     private fun clickObs(
         flow: Flow? = null,
+        modeHint: Mode? = null,
         intent: String = "unknown",
         ruleId: String = "doordash.click.test",
         timestamp: Long = tick(),
@@ -80,7 +83,7 @@ class StateMachineTest {
         ruleId = ruleId,
         metadata = ReplayMetadata.EMPTY,
         flow = flow,
-        modeHint = null,
+        modeHint = modeHint,
         parsed = ParsedFields.ClickFields(intent = intent),
     )
 
@@ -296,119 +299,55 @@ class StateMachineTest {
     }
 
     // =========================================================================
-    // HEALING — MODE TRANSITIONS
+    // SCREEN-AUTHORITATIVE MODE TRANSITIONS
     // =========================================================================
 
     @Test
-    fun `healing — Offline to Online heals with 1 observation (threshold 1)`() {
+    fun `screen authoritative — single screen transitions Offline to Online immediately`() {
         var state = AppState()
 
-        // Single observation implying Online while Offline — should heal immediately
-        // because offline→online threshold is 1 (dedup-by-classification means
-        // repeated identical screens don't re-send)
-        val t1 = tick()
+        // Single screen implying Online — should apply immediately (screen-authoritative)
         state = machine.step(state, screenObs(
             flow = Flow.OfferPresented,
             parsed = offerFields(),
-            timestamp = t1,
         )).newState
 
         val dd = state.regions.platforms[Platform.DoorDash]!!
-        assertEquals(Mode.Online, dd.mode) // healed on first observation!
-        assertEquals(ModeConfidence.EMPTY, dd.confidence) // reset after healing
+        assertEquals(Mode.Online, dd.mode)
     }
 
     @Test
-    fun `healing — Online to Offline requires 2 observations (threshold 2)`() {
+    fun `screen authoritative — single screen transitions Online to Offline immediately`() {
         var state = AppState()
 
-        // Get to Online first (heals at threshold 1)
-        val t1 = tick()
+        // Get Online (one screen)
         state = machine.step(state, screenObs(
             flow = Flow.OfferPresented,
             parsed = offerFields(),
-            timestamp = t1,
         )).newState
         assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
 
-        // First offline signal — should NOT transition yet (threshold 2)
-        val t2 = t1 + 1000
+        // Single offline screen — mode changes immediately (screen-authoritative)
         state = machine.step(state, screenObs(
             modeHint = Mode.Offline,
             flow = Flow.Idle,
             parsed = ParsedFields.IdleFields(),
-            timestamp = t2,
         )).newState
 
-        val dd = state.regions.platforms[Platform.DoorDash]!!
-        assertEquals(Mode.Online, dd.mode) // still Online
-        assertEquals(1, dd.confidence.supportingObservations)
-        assertEquals(Mode.Offline, dd.confidence.pendingMode)
-
-        // Second offline signal within window — should heal to Offline
-        val t3 = t2 + 2000
-        state = machine.step(state, screenObs(
-            modeHint = Mode.Offline,
-            flow = Flow.Idle,
-            parsed = ParsedFields.IdleFields(),
-            timestamp = t3,
-        )).newState
-
-        val dd2 = state.regions.platforms[Platform.DoorDash]!!
-        assertEquals(Mode.Offline, dd2.mode) // healed to Offline
-        assertEquals(ModeConfidence.EMPTY, dd2.confidence) // reset after healing
+        assertEquals(Mode.Offline, state.regions.platforms[Platform.DoorDash]!!.mode)
     }
 
     @Test
-    fun `healing — stale confidence resets accrual`() {
+    fun `screen authoritative — Online to Paused applies immediately`() {
         var state = AppState()
 
-        // Get to Online first
-        val t0 = tick()
+        // Get Online
         state = machine.step(state, screenObs(
-            flow = Flow.OfferPresented,
-            parsed = offerFields(),
-            timestamp = t0,
+            flow = Flow.OfferPresented, parsed = offerFields(),
         )).newState
         assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
 
-        // First offline observation (Online→Offline uses threshold 2)
-        val t1 = t0 + 1000
-        state = machine.step(state, screenObs(
-            modeHint = Mode.Offline,
-            flow = Flow.Idle,
-            parsed = ParsedFields.IdleFields(),
-            timestamp = t1,
-        )).newState
-
-        assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
-
-        // Second observation OUTSIDE 10s window — should reset, not heal
-        val t2 = t1 + 15_000L
-        state = machine.step(state, screenObs(
-            modeHint = Mode.Offline,
-            flow = Flow.Idle,
-            parsed = ParsedFields.IdleFields(),
-            timestamp = t2,
-        )).newState
-
-        val dd = state.regions.platforms[Platform.DoorDash]!!
-        assertEquals(Mode.Online, dd.mode) // still Online — reset, not healed
-        assertEquals(1, dd.confidence.supportingObservations) // reset to 1
-        assertEquals(t2, dd.confidence.firstSeenAt) // new window started
-    }
-
-    @Test
-    fun `plausible transition — Online to Paused applies immediately`() {
-        var state = AppState()
-
-        // Get to Online first (need healing from Offline)
-        val t1 = tick()
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1)).newState
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1 + 1000)).newState
-        assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
-
-        // Now Online → Paused should apply immediately (plausible)
+        // Pause screen → mode=Paused immediately
         state = machine.step(state, screenObs(
             modeHint = Mode.Paused,
             parsed = ParsedFields.PausedFields(remainingText = "5:00", remainingMillis = 300_000),
@@ -416,17 +355,80 @@ class StateMachineTest {
         assertEquals(Mode.Paused, state.regions.platforms[Platform.DoorDash]!!.mode)
     }
 
+    @Test
+    fun `click does NOT change mode — click is intent not authoritative`() {
+        var state = AppState()
+
+        // Get Online
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented,
+            parsed = offerFields(),
+            ruleId = "uber.screen.offer",
+        )).newState
+        assertEquals(Mode.Online, state.regions.platforms[Platform.Uber]!!.mode)
+
+        // go_offline click — mode should stay Online
+        state = machine.step(state, clickObs(
+            modeHint = Mode.Offline,
+            intent = "go_offline",
+            ruleId = "uber.click.go_offline",
+        )).newState
+
+        val uber = state.regions.platforms[Platform.Uber]!!
+        assertEquals(Mode.Online, uber.mode) // NOT Offline — click is just intent
+    }
+
+    @Test
+    fun `click followed by confirming screen transitions mode`() {
+        var state = AppState()
+
+        // Get Online
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented,
+            parsed = offerFields(),
+            ruleId = "uber.screen.offer",
+        )).newState
+        assertEquals(Mode.Online, state.regions.platforms[Platform.Uber]!!.mode)
+
+        // go_offline click — mode stays Online (click is intent only)
+        state = machine.step(state, clickObs(
+            modeHint = Mode.Offline,
+            intent = "go_offline",
+            ruleId = "uber.click.go_offline",
+        )).newState
+        assertEquals(Mode.Online, state.regions.platforms[Platform.Uber]!!.mode)
+
+        // Stale awaiting_offer screen (still visible 0.3s after click) — Online confirmed
+        state = machine.step(state, screenObs(
+            flow = Flow.Idle,
+            modeHint = Mode.Online,
+            ruleId = "uber.screen.awaiting_offer",
+        )).newState
+        assertEquals(Mode.Online, state.regions.platforms[Platform.Uber]!!.mode)
+
+        // idle_map screen (authoritative offline signal)
+        state = machine.step(state, screenObs(
+            flow = Flow.Idle,
+            modeHint = Mode.Offline,
+            ruleId = "uber.screen.idle_map",
+        )).newState
+
+        // Screen-authoritative: one offline screen = Offline immediately
+        assertEquals(Mode.Offline, state.regions.platforms[Platform.Uber]!!.mode)
+    }
+
     // =========================================================================
-    // SESSION LIFECYCLE
+    // SESSION GRACE PERIOD
     // =========================================================================
 
     @Test
     fun `session created when transitioning to Online`() {
         var state = AppState()
 
-        // Heal to Online (threshold 1 — heals on first observation)
-        val t1 = tick()
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1)).newState
+        // Single screen → Online (screen-authoritative)
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
 
         val session = state.regions.platforms[Platform.DoorDash]!!.session
         assertNotNull(session)
@@ -434,37 +436,109 @@ class StateMachineTest {
     }
 
     @Test
-    fun `session cleared on transition to Offline`() {
+    fun `SessionEnded bypasses grace — session ends immediately`() {
         var state = AppState()
 
         // Get Online
-        val t1 = tick()
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1)).newState
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1 + 1000)).newState
-        assertNotNull(state.regions.platforms[Platform.DoorDash]!!.session)
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
+        val sessionId = state.regions.platforms[Platform.DoorDash]!!.session!!.sessionId
+        assertNotNull(sessionId)
 
-        // End session (Online → Offline via SessionEnded is plausible)
+        // SessionEnded → Offline, session ends immediately (no grace)
         state = machine.step(state, screenObs(
             flow = Flow.SessionEnded,
             parsed = ParsedFields.SessionEndedFields(totalEarnings = 25.0),
         )).newState
-        assertEquals(Mode.Offline, state.regions.platforms[Platform.DoorDash]!!.mode)
-        assertNull(state.regions.platforms[Platform.DoorDash]!!.session)
+
+        val dd = state.regions.platforms[Platform.DoorDash]!!
+        assertEquals(Mode.Offline, dd.mode)
+        assertNull(dd.session) // ended immediately — no grace
+        assertNull(dd.sessionGraceDeadline) // no grace set
     }
 
-    /**
-     * Timeout applied directly to a paused platform region transitions to
-     * Offline and ends the session.
-     *
-     * Note: tested at the stepper level because [Observation.Timeout] has no
-     * ruleId, so [StateMachine] routes it to [Platform.Unknown]. In production
-     * this works because [SideEffectEngine] fires the timeout and the
-     * platform-level effect handles the state change.
-     */
     @Test
-    fun `pause timeout transitions paused platform region to Offline`() {
+    fun `session grace — offline then online within grace resumes same session`() {
+        var state = AppState()
+
+        // Get Online
+        val t1 = tick()
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1,
+        )).newState
+
+        val originalSessionId = state.regions.platforms[Platform.DoorDash]!!.session!!.sessionId
+
+        // Non-authoritative offline (not SessionEnded) — grace period starts
+        val t2 = t1 + 2000
+        state = machine.step(state, screenObs(
+            modeHint = Mode.Offline,
+            flow = Flow.Idle,
+            parsed = ParsedFields.IdleFields(),
+            timestamp = t2,
+        )).newState
+
+        val afterOffline = state.regions.platforms[Platform.DoorDash]!!
+        assertEquals(Mode.Offline, afterOffline.mode)
+        assertNotNull(afterOffline.session) // session preserved during grace
+        assertNotNull(afterOffline.sessionGraceDeadline)
+
+        // Back to Online within grace window (well within 10s)
+        val t3 = t2 + 3000
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t3,
+        )).newState
+
+        val resumed = state.regions.platforms[Platform.DoorDash]!!
+        assertEquals(Mode.Online, resumed.mode)
+        assertEquals(originalSessionId, resumed.session!!.sessionId) // SAME session
+        assertNull(resumed.sessionGraceDeadline) // grace cleared
+    }
+
+    @Test
+    fun `session grace — offline past grace then online creates new session`() {
+        var state = AppState()
+
+        // Get Online
+        val t1 = tick()
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1,
+        )).newState
+
+        val originalSessionId = state.regions.platforms[Platform.DoorDash]!!.session!!.sessionId
+
+        // Non-authoritative offline — grace starts
+        val t2 = t1 + 2000
+        state = machine.step(state, screenObs(
+            modeHint = Mode.Offline,
+            flow = Flow.Idle,
+            parsed = ParsedFields.IdleFields(),
+            timestamp = t2,
+        )).newState
+
+        // Grace expires lazily: next observation AFTER grace deadline triggers session end.
+        // Grace deadline = t2 + 10_000 = t2 + 10s
+        val t3 = t2 + 15_000 // well past grace
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t3,
+        )).newState
+
+        val afterExpiry = state.regions.platforms[Platform.DoorDash]!!
+        assertEquals(Mode.Online, afterExpiry.mode)
+        assertNotNull(afterExpiry.session)
+        // Must be a NEW session — old one expired
+        assertTrue(
+            "Expected new session ID, but got same as original",
+            afterExpiry.session!!.sessionId != originalSessionId,
+        )
+        assertNull(afterExpiry.sessionGraceDeadline)
+    }
+
+    @Test
+    fun `pause timeout transitions paused platform region to Offline with grace`() {
         val stepper = PlatformRegionStepper()
-        val healing = HealingPolicy()
+        val policy = TransitionPolicy()
 
         val session = cloud.trotter.dashbuddy.domain.state.Session(
             sessionId = "sess-1",
@@ -480,11 +554,56 @@ class StateMachineTest {
         val result = stepper.step(
             pausedRegion, flow, flow,
             timeoutObs(type = TimeoutType.SESSION_PAUSED_SAFETY),
-            healing,
+            policy,
         )
 
         assertEquals(Mode.Offline, result.mode)
-        assertNull(result.session)
+        // Pause timeout goes through applyModeTransition, gets grace
+        assertNotNull(result.session) // session preserved during grace
+        assertNotNull(result.sessionGraceDeadline)
+    }
+
+    // =========================================================================
+    // TRANSITION CLASSIFICATION
+    // =========================================================================
+
+    @Test
+    fun `unexpected transition — app restart mid-task synthesizes lifecycle`() {
+        var state = AppState()
+
+        // Cold start: first screen is a pickup navigation (app launched mid-delivery)
+        // This is Offline→Online which is an unexpected transition when outcomes
+        // don't include the observed flow
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskPickupNavigation,
+            parsed = taskFields(),
+        )).newState
+
+        val dd = state.regions.platforms[Platform.DoorDash]!!
+        assertEquals(Mode.Online, dd.mode)
+        // healActiveLifecycle should have synthesized job + task
+        assertNotNull(dd.activeJob)
+        assertNotNull(dd.activeTask)
+        assertTrue(dd.activeTask!!.recovered)
+    }
+
+    @Test
+    fun `transition kind is Confirmed when mode stays the same`() {
+        var state = AppState()
+
+        // Get Online
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
+
+        // Another Online screen — confirms mode
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
+
+        val dd = state.regions.platforms[Platform.DoorDash]!!
+        assertEquals(Mode.Online, dd.mode)
+        assertEquals(TransitionKind.Confirmed, dd.lastTransitionKind)
     }
 
     // =========================================================================
@@ -495,10 +614,10 @@ class StateMachineTest {
     fun `job created when accepting offer`() {
         var state = AppState()
 
-        // Get Online + present offer
-        val t1 = tick()
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1)).newState
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1 + 1000)).newState
+        // Get Online + present offer (one screen each, screen-authoritative)
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
 
         // Accept: OfferPresented → TaskPickupNavigation
         state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
@@ -545,12 +664,12 @@ class StateMachineTest {
     fun `recentTasks capped at 20`() {
         var state = AppState()
 
-        // Get Online
-        val t1 = tick()
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1)).newState
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1 + 1000)).newState
+        // Get Online (one screen)
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
 
-        // Cycle through 25 deliveries (pickup → dropoff → postTask → next pickup...)
+        // Cycle through 25 deliveries
         for (i in 1..25) {
             state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(hash = "hash-$i"))).newState
             state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
@@ -574,19 +693,16 @@ class StateMachineTest {
         var state = AppState()
 
         // DoorDash observation
-        val t1 = tick()
         state = machine.step(state, screenObs(
             flow = Flow.OfferPresented,
             parsed = offerFields(),
             ruleId = "doordash.screen.offer",
-            timestamp = t1,
         )).newState
 
         // Uber observation
         state = machine.step(state, screenObs(
             flow = Flow.Idle,
             ruleId = "uber.screen.idle",
-            timestamp = t1 + 500,
         )).newState
 
         assertTrue(state.regions.platforms.containsKey(Platform.DoorDash))
@@ -598,10 +714,11 @@ class StateMachineTest {
     fun `mode change on one platform does not affect another`() {
         var state = AppState()
 
-        // Get DoorDash Online (2 observations for healing)
-        val t1 = tick()
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), ruleId = "doordash.screen.offer", timestamp = t1)).newState
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), ruleId = "doordash.screen.offer", timestamp = t1 + 1000)).newState
+        // Get DoorDash Online (single screen — screen-authoritative)
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+            ruleId = "doordash.screen.offer",
+        )).newState
         assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
 
         // Uber observation — should not affect DoorDash
@@ -619,10 +736,11 @@ class StateMachineTest {
     fun `crossPlatform reflects aggregate state`() {
         var state = AppState()
 
-        // Get DoorDash Online
-        val t1 = tick()
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), ruleId = "doordash.screen.offer", timestamp = t1)).newState
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), ruleId = "doordash.screen.offer", timestamp = t1 + 1000)).newState
+        // Get DoorDash Online (single screen)
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+            ruleId = "doordash.screen.offer",
+        )).newState
 
         assertTrue(state.regions.crossPlatform.anyPlatformOnline)
         assertEquals(1, state.regions.crossPlatform.activeSessionCount)
@@ -637,11 +755,11 @@ class StateMachineTest {
      */
     private fun setupOnlineWithPickup(): AppState {
         var state = AppState()
-        val t1 = tick()
 
-        // Heal to Online
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1)).newState
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1 + 1000)).newState
+        // Screen-authoritative: one screen → Online
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
 
         // Accept offer → pickup
         state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState

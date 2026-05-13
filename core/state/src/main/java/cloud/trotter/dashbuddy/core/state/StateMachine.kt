@@ -25,7 +25,7 @@ class StateMachine @Inject constructor(
     private val flowStepper: FlowRegionStepper,
     private val platformStepper: PlatformRegionStepper,
     private val crossPlatformStepper: CrossPlatformRegionStepper,
-    private val healingPolicy: HealingPolicy,
+    private val transitionPolicy: TransitionPolicy,
     private val effectMap: EffectMap,
 ) {
 
@@ -60,7 +60,7 @@ class StateMachine @Inject constructor(
     ): Map<Platform, PlatformRegion> {
         val platform = obs.platform
         val prevRegion = prev[platform] ?: PlatformRegion(platform)
-        val nextRegion = platformStepper.step(prevRegion, prevFlow, nextFlow, obs, healingPolicy)
+        val nextRegion = platformStepper.step(prevRegion, prevFlow, nextFlow, obs, transitionPolicy)
         return prev + (platform to nextRegion)
     }
 }
