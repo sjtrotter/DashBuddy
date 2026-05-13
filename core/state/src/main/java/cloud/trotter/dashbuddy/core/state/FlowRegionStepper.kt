@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
@@ -126,12 +127,15 @@ class FlowRegionStepper @Inject constructor() {
      * Handle loopback events, specifically offer evaluation results.
      */
     private fun handleLoopback(prev: FlowRegion, obs: Observation.Loopback): FlowRegion {
-        if (prev.pendingOffer == null) return prev
+        val offer = prev.pendingOffer ?: return prev
         if (obs.effect != "offer_evaluated") return prev
 
-        // The evaluation result is carried in the loopback payload.
-        // For now, we just mark that evaluation happened — the actual
-        // OfferEvaluation is attached by the SideEffectEngine.
-        return prev.copy(lastObservedAt = obs.timestamp)
+        val evaluation = obs.payload["evaluation"] as? OfferEvaluation
+            ?: return prev.copy(lastObservedAt = obs.timestamp)
+
+        return prev.copy(
+            pendingOffer = offer.copy(evaluation = evaluation),
+            lastObservedAt = obs.timestamp,
+        )
     }
 }

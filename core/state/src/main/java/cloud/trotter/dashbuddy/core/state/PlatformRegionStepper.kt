@@ -228,7 +228,7 @@ class PlatformRegionStepper @Inject constructor() {
         nextFlow: FlowRegion,
         obs: Observation.FlowObservation,
     ): PlatformRegion {
-        if (region.mode == Mode.Offline) return region
+        if (region.mode == Mode.Offline) return region.copy(idleEnteredAt = null)
 
         var r = region
         val prev = prevFlow.flow
@@ -260,6 +260,15 @@ class PlatformRegionStepper @Inject constructor() {
 
         // Task lifecycle
         r = updateTaskLifecycle(r, prev, next, obs)
+
+        // Idle anchor: track when we started waiting for offers
+        r = when {
+            next == Flow.Idle && r.mode == Mode.Online && r.idleEnteredAt == null ->
+                r.copy(idleEnteredAt = obs.timestamp)
+            (next != Flow.Idle || r.mode != Mode.Online) && r.idleEnteredAt != null ->
+                r.copy(idleEnteredAt = null)
+            else -> r
+        }
 
         return r
     }
@@ -473,6 +482,7 @@ class PlatformRegionStepper @Inject constructor() {
             activeTask = null,
             recentTasks = recentTasks,
             sessionGraceDeadline = null,
+            idleEnteredAt = null,
         )
     }
 

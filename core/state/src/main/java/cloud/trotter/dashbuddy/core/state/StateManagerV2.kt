@@ -356,7 +356,10 @@ class StateManagerV2 @Inject constructor(
             is OfferEvaluationEvent -> Observation.Loopback(
                 timestamp = System.currentTimeMillis(),
                 effect = "offer_evaluated",
-                payload = mapOf("action" to event.action.name),
+                payload = mapOf(
+                    "action" to event.action.name,
+                    "evaluation" to event.evaluation,
+                ),
             )
 
             else -> {

@@ -25,6 +25,8 @@ data class PlatformRegion(
     val surgeMultiplier: Double? = null,
     val lastPostTaskPayHash: Int? = null,
     val lastObservedAt: Long = 0,
+    /** Timestamp when Flow entered Idle while mode is Online. Null otherwise. */
+    val idleEnteredAt: Long? = null,
 )
 
 /**
