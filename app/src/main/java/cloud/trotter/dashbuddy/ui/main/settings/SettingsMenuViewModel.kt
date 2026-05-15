@@ -22,6 +22,8 @@ class SettingsMenuViewModel @Inject constructor(
     val evidenceConfig = strategyRepository.evidenceConfig
     val appTheme = appPreferencesRepository.appTheme
     val isProMode = appPreferencesRepository.isProMode
+    /** Surfaced on Settings home so the Personal Economy nav row shows live $/mi. */
+    val userEconomy = appPreferencesRepository.userEconomy
 
     // Re-using the debug flag from repo as the "Unlock" state
     val isDevModeUnlocked = devSettingsRepository.isDevModeUnlocked

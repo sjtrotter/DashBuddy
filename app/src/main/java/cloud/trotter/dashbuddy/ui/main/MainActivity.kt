@@ -25,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
+import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.PlatformSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
@@ -98,6 +99,13 @@ class MainActivity : ComponentActivity() {
                         // 3. Evidence Locker
                         composable(Screen.EvidenceSettings.route) {
                             EvidenceSettingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 3b. Personal Economy (operating costs, #145)
+                        composable(Screen.EconomySettings.route) {
+                            EconomySettingsScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }
