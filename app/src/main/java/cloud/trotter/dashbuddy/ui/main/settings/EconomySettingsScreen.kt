@@ -39,6 +39,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.components.economy.CurrencyInput
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyAccordionRow
 import cloud.trotter.dashbuddy.ui.components.economy.IntegerInput
+import cloud.trotter.dashbuddy.ui.components.economy.NumberInput
 import cloud.trotter.dashbuddy.ui.components.economy.PairedCurrencyAndIntervalInput
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -298,25 +299,39 @@ private fun EconomyAccordions(eco: UserEconomy, viewModel: EconomySettingsViewMo
     }
 
     EconomyAccordionRow(
-        title = "Time estimates",
-        summary = "${"%.1f".format(eco.avgMinutesPerMile)} min/mi",
+        title = "Driving & pickup times",
+        summary = "${"%.1f".format(eco.avgMinutesPerMile)} min/mi · " +
+            "${eco.basePickupMinutes.toInt()} min/pickup",
         isUserSet = EconomyField.AVG_MIN_PER_MILE in userSet ||
             EconomyField.BASE_PICKUP_MIN in userSet,
     ) {
+        Text(
+            text = "How long offers actually take in your market. Drives the \$/hr number.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CurrencyInput(
-                label = "Min per mile",
+            NumberInput(
+                label = "Driving pace",
                 value = eco.avgMinutesPerMile,
                 onValueChange = { viewModel.setTimeConstants(it, eco.basePickupMinutes) },
+                suffix = "min/mi",
                 modifier = Modifier.weight(1f),
             )
-            CurrencyInput(
-                label = "Base pickup min",
+            NumberInput(
+                label = "Pickup wait",
                 value = eco.basePickupMinutes,
                 onValueChange = { viewModel.setTimeConstants(eco.avgMinutesPerMile, it) },
+                suffix = "min",
                 modifier = Modifier.weight(1f),
             )
         }
+        Text(
+            text = "Driving pace: minutes per mile (2.5 = busy urban, 1.5 = highway). " +
+                "Pickup wait: typical minutes at the store before leaving.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 
     EconomyAccordionRow(

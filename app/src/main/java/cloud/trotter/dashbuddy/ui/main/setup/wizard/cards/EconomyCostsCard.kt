@@ -32,6 +32,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.components.economy.CurrencyInput
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyAccordionRow
 import cloud.trotter.dashbuddy.ui.components.economy.IntegerInput
+import cloud.trotter.dashbuddy.ui.components.economy.NumberInput
 import cloud.trotter.dashbuddy.ui.components.economy.PairedCurrencyAndIntervalInput
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
@@ -307,29 +308,40 @@ fun EconomyCostsCard(
                 )
             }
 
-            // -------- Time estimates --------
+            // -------- Driving & pickup times --------
             EconomyAccordionRow(
-                title = "Time estimates",
-                summary = "${"%.1f".format(state.avgMinutesPerMile)} min/mi",
+                title = "Driving & pickup times",
+                summary = "${"%.1f".format(state.avgMinutesPerMile)} min/mi · " +
+                    "${state.basePickupMinutes.toInt()} min/pickup",
                 isUserSet = EconomyField.AVG_MIN_PER_MILE in userSet ||
                     EconomyField.BASE_PICKUP_MIN in userSet,
             ) {
+                Text(
+                    text = "How long offers actually take in your market. Used to estimate " +
+                        "each offer's time, which drives the \$/hr number.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CurrencyInput(
-                        label = "Min per mile",
+                    NumberInput(
+                        label = "Driving pace",
                         value = state.avgMinutesPerMile,
                         onValueChange = { onTimeConstantsChange(it, state.basePickupMinutes) },
+                        suffix = "min/mi",
                         modifier = Modifier.weight(1f),
                     )
-                    CurrencyInput(
-                        label = "Base pickup min",
+                    NumberInput(
+                        label = "Pickup wait",
                         value = state.basePickupMinutes,
                         onValueChange = { onTimeConstantsChange(state.avgMinutesPerMile, it) },
+                        suffix = "min",
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Text(
-                    text = "Per-mile pace and base pickup overhead used to estimate offer time.",
+                    text = "Driving pace: minutes to cover one mile (2.5 = busy urban, " +
+                        "1.5 = highway/rural). Pickup wait: typical minutes spent at the " +
+                        "store — parking, walking in, waiting for the order.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

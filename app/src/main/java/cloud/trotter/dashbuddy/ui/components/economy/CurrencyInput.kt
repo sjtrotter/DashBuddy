@@ -45,6 +45,34 @@ fun CurrencyInput(
 }
 
 /**
+ * A non-currency decimal input field. Same shape as [CurrencyInput] but no
+ * `$` prefix. Use this for any value that isn't money (e.g. minutes, miles).
+ */
+@Composable
+fun NumberInput(
+    label: String,
+    value: Double,
+    onValueChange: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+    suffix: String? = null,
+) {
+    var text by remember(value) { mutableStateOf(formatCurrency(value)) }
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = { input ->
+            text = input
+            input.toDoubleOrNull()?.let(onValueChange)
+        },
+        label = { Text(label) },
+        suffix = suffix?.let { { Text(it) } },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        singleLine = true,
+        modifier = modifier,
+    )
+}
+
+/**
  * An integer-style input field with a custom label. No prefix.
  * Used for: phone plan line count, etc.
  */
