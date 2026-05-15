@@ -32,7 +32,6 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.components.economy.CurrencyInput
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyAccordionRow
 import cloud.trotter.dashbuddy.ui.components.economy.IntegerInput
-import cloud.trotter.dashbuddy.ui.components.economy.NumberInput
 import cloud.trotter.dashbuddy.ui.components.economy.PairedCurrencyAndIntervalInput
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
@@ -42,7 +41,7 @@ import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
  * The ECONOMY_COSTS wizard step. A single scrolling card with:
  * 1. Vehicle class chip picker (drives cost defaults)
  * 2. Accordion of 10 cost sections (collapsed by default; expand to edit)
- * 3. Expected annual dash miles slider (amortizes fixed costs)
+ * 3. Expected annual gig miles slider (amortizes fixed costs)
  * 4. Live "Your true cost: $X.XX/mi" footer comparing to the IRS standard rate
  *
  * Defaults flow from the selected [VehicleClass] for any field not yet user-set;
@@ -232,7 +231,7 @@ fun EconomyCostsCard(
                 isUserSet = EconomyField.INSURANCE_DELTA in userSet,
             ) {
                 CurrencyInput(
-                    label = "Extra for dashing",
+                    label = "Extra for gig work",
                     value = state.insuranceDeltaPerMonth,
                     onValueChange = onInsuranceChange,
                     suffix = "/mo",
@@ -291,7 +290,7 @@ fun EconomyCostsCard(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                Text("% for dashing: ${state.phoneDashPercent.toInt()}%")
+                Text("% for gig work: ${state.phoneDashPercent.toInt()}%")
                 Slider(
                     value = state.phoneDashPercent.toFloat(),
                     onValueChange = {
@@ -302,54 +301,15 @@ fun EconomyCostsCard(
                 Text(
                     text = "Your line: \$${"%.2f".format(state.phonePlanTotal / state.phonePlanLines.coerceAtLeast(1))}/mo" +
                         " × ${state.phoneDashPercent.toInt()}%" +
-                        " = \$${"%.2f".format((state.phonePlanTotal / state.phonePlanLines.coerceAtLeast(1)) * state.phoneDashPercent / 100.0)}/mo dashing",
+                        " = \$${"%.2f".format((state.phonePlanTotal / state.phonePlanLines.coerceAtLeast(1)) * state.phoneDashPercent / 100.0)}/mo for gig work",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            // -------- Driving & pickup times --------
+            // -------- Expected annual gig miles --------
             EconomyAccordionRow(
-                title = "Driving & pickup times",
-                summary = "${"%.1f".format(state.avgMinutesPerMile)} min/mi · " +
-                    "${state.basePickupMinutes.toInt()} min/pickup",
-                isUserSet = EconomyField.AVG_MIN_PER_MILE in userSet ||
-                    EconomyField.BASE_PICKUP_MIN in userSet,
-            ) {
-                Text(
-                    text = "How long offers actually take in your market. Used to estimate " +
-                        "each offer's time, which drives the \$/hr number.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NumberInput(
-                        label = "Driving pace",
-                        value = state.avgMinutesPerMile,
-                        onValueChange = { onTimeConstantsChange(it, state.basePickupMinutes) },
-                        suffix = "min/mi",
-                        modifier = Modifier.weight(1f),
-                    )
-                    NumberInput(
-                        label = "Pickup wait",
-                        value = state.basePickupMinutes,
-                        onValueChange = { onTimeConstantsChange(state.avgMinutesPerMile, it) },
-                        suffix = "min",
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Text(
-                    text = "Driving pace: minutes to cover one mile (2.5 = busy urban, " +
-                        "1.5 = highway/rural). Pickup wait: typical minutes spent at the " +
-                        "store — parking, walking in, waiting for the order.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            // -------- Expected annual dash miles --------
-            EconomyAccordionRow(
-                title = "Expected dash miles / yr",
+                title = "Expected gig miles / yr",
                 summary = "${state.expectedAnnualDashMiles.toInt().formatWithCommas()} mi",
                 isUserSet = EconomyField.EXPECTED_ANNUAL_DASH_MI in userSet,
             ) {
