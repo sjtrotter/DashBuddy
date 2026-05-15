@@ -2,14 +2,14 @@ package cloud.trotter.dashbuddy.ui.main.setup.wizard.model
 
 import cloud.trotter.dashbuddy.domain.config.DashStrategy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 
 /**
  * Represents the volatile UI state of the Setup Wizard before it is committed to DataStore.
  */
 data class WizardState(
     // Economy Variables
-    val vehicleType: VehicleType = VehicleType.CAR,
+    val vehicleClass: VehicleClass = VehicleClass.SEDAN,
     val vehicleYear: String = "",
     val vehicleMake: String = "",
     val vehicleModel: String = "",

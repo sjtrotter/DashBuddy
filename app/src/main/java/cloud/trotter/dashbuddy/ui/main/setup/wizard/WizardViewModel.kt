@@ -12,7 +12,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -88,11 +88,11 @@ class WizardViewModel @Inject constructor(
             val maxItemsRule = rules.filterIsInstance<ScoringRule.MetricRule>()
                 .find { it.metricType == MetricType.ITEM_COUNT }
 
-            val vehicleType = if (currentYear == "E-Bike") VehicleType.E_BIKE else VehicleType.CAR
+            val vehicleClass = if (currentYear == "E-Bike") VehicleClass.E_BIKE else VehicleClass.SEDAN
 
             _state.update { currentState ->
                 currentState.copy(
-                    vehicleType = vehicleType,
+                    vehicleClass = vehicleClass,
                     vehicleYear = currentYear,
                     vehicleMake = currentMake,
                     vehicleModel = currentModel,
@@ -122,8 +122,8 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch { _availableYears.value = vehicleRepository.getYears() }
     }
 
-    fun updateVehicleType(type: VehicleType) {
-        _state.update { it.copy(vehicleType = type) }
+    fun updateVehicleClass(type: VehicleClass) {
+        _state.update { it.copy(vehicleClass = type) }
     }
 
     fun onYearSelected(year: String) {
@@ -317,7 +317,7 @@ class WizardViewModel @Inject constructor(
 
             appPreferencesRepository.updateFuelType(finalState.fuelType)
 
-            if (finalState.vehicleType == VehicleType.E_BIKE) {
+            if (finalState.vehicleClass == VehicleClass.E_BIKE) {
                 appPreferencesRepository.updateEconomySettings(
                     "E-Bike",
                     "E-Bike",

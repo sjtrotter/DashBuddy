@@ -30,7 +30,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.VehicleDropdown
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
@@ -39,7 +39,7 @@ import java.util.Locale
 @Composable
 fun VehicleCard(
     step: WizardStep,
-    vehicleType: VehicleType,
+    vehicleClass: VehicleClass,
     year: String,
     make: String,
     model: String,
@@ -49,7 +49,7 @@ fun VehicleCard(
     availableMakes: List<String>,
     availableModels: List<String>,
     availableTrims: List<String>,
-    onTypeSelected: (VehicleType) -> Unit,
+    onTypeSelected: (VehicleClass) -> Unit,
     onYearSelected: (String) -> Unit,
     onMakeSelected: (String) -> Unit,
     onModelSelected: (String) -> Unit,
@@ -67,20 +67,20 @@ fun VehicleCard(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        WizardCardHeader(step, vehicleType)
+        WizardCardHeader(step, vehicleClass)
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
             FilterChip(
-                selected = vehicleType == VehicleType.CAR,
-                onClick = { onTypeSelected(VehicleType.CAR) },
+                selected = vehicleClass == VehicleClass.SEDAN,
+                onClick = { onTypeSelected(VehicleClass.SEDAN) },
                 label = { Text("🚗 Car") }
             )
             Spacer(modifier = Modifier.padding(8.dp))
             FilterChip(
-                selected = vehicleType == VehicleType.E_BIKE,
-                onClick = { onTypeSelected(VehicleType.E_BIKE) },
+                selected = vehicleClass == VehicleClass.E_BIKE,
+                onClick = { onTypeSelected(VehicleClass.E_BIKE) },
                 label = { Text("🚲 E-Bike") }
             )
         }
@@ -88,7 +88,7 @@ fun VehicleCard(
         Spacer(modifier = Modifier.height(16.dp))
 
         AnimatedVisibility(
-            visible = vehicleType == VehicleType.CAR,
+            visible = vehicleClass == VehicleClass.SEDAN,
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
@@ -141,7 +141,7 @@ fun VehicleCard(
         }
 
         // --- THE ESCAPE HATCH UI ---
-        AnimatedVisibility(visible = vehicleType == VehicleType.CAR && isCustom) {
+        AnimatedVisibility(visible = vehicleClass == VehicleClass.SEDAN && isCustom) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -208,7 +208,7 @@ fun VehicleCard(
             }
         }
 
-        if (vehicleType == VehicleType.E_BIKE) {
+        if (vehicleClass == VehicleClass.E_BIKE) {
             Text(
                 text = "Awesome! We will ignore gas expenses and set your cost-per-mile to $0.",
                 style = MaterialTheme.typography.bodyLarge,

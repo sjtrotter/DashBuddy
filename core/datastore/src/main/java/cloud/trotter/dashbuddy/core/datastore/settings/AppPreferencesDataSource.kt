@@ -46,7 +46,7 @@ class AppPreferencesDataSource @Inject constructor(
     val isProMode: Flow<Boolean> = ds.data.map { it[Keys.IS_PRO_MODE] ?: false }
     val appTheme: Flow<String?> = ds.data.map { it[Keys.APP_THEME] }
     val fuelType: Flow<String?> = ds.data.map { it[Keys.FUEL_TYPE] }
-    val vehicleType: Flow<String?> = ds.data.map { it[Keys.VEHICLE_TYPE] }
+    val vehicleClass: Flow<String?> = ds.data.map { it[Keys.VEHICLE_TYPE] }
 
     // ============================================================================================
     // ENCAPSULATED WRITE ACTIONS
@@ -59,7 +59,7 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit { it[Keys.FUEL_TYPE] = type }
     }
 
-    suspend fun updateVehicleType(type: String) {
+    suspend fun updateVehicleClass(type: String) {
         ds.edit { it[Keys.VEHICLE_TYPE] = type }
     }
 
