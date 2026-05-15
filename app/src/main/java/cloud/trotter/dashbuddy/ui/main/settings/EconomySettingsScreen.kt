@@ -105,24 +105,6 @@ fun EconomySettingsScreen(
 
             EconomyAccordions(eco = eco, viewModel = viewModel)
 
-            // Expected annual dash miles
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Expected dash miles: ${eco.expectedAnnualDashMiles.toInt()} mi/yr",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                text = "Used to amortize fixed costs (insurance, registration, phone) per mile.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Slider(
-                value = eco.expectedAnnualDashMiles.toFloat(),
-                onValueChange = { viewModel.setExpectedAnnualDashMiles(it.toDouble()) },
-                valueRange = 500f..30_000f,
-            )
-
             Spacer(modifier = Modifier.height(16.dp))
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -335,5 +317,27 @@ private fun EconomyAccordions(eco: UserEconomy, viewModel: EconomySettingsViewMo
                 modifier = Modifier.weight(1f),
             )
         }
+    }
+
+    EconomyAccordionRow(
+        title = "Expected dash miles / yr",
+        summary = "${eco.expectedAnnualDashMiles.toInt()} mi",
+        isUserSet = EconomyField.EXPECTED_ANNUAL_DASH_MI in userSet,
+    ) {
+        Text(
+            text = "${eco.expectedAnnualDashMiles.toInt()} miles per year",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+        Slider(
+            value = eco.expectedAnnualDashMiles.toFloat(),
+            onValueChange = { viewModel.setExpectedAnnualDashMiles(it.toDouble()) },
+            valueRange = 500f..30_000f,
+        )
+        Text(
+            text = "Used to amortize fixed costs (insurance, registration, phone) per mile.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,11 +72,16 @@ fun EconomyCostsCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .fillMaxHeight()
             .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             WizardCardHeader(step = WizardStep.ECONOMY_COSTS)
 
             // Vehicle class chip picker
@@ -328,23 +336,29 @@ fun EconomyCostsCard(
             }
 
             // -------- Expected annual dash miles --------
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Expected dash miles: ${state.expectedAnnualDashMiles.toInt().formatWithCommas()} mi/yr",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                text = "Used to amortize fixed costs (insurance, registration, phone) into a per-mile rate.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Slider(
-                value = state.expectedAnnualDashMiles.toFloat(),
-                onValueChange = { onExpectedAnnualDashMilesChange(it.toDouble()) },
-                valueRange = 500f..30_000f,
-                steps = 58, // 500-mile increments
-            )
+            EconomyAccordionRow(
+                title = "Expected dash miles / yr",
+                summary = "${state.expectedAnnualDashMiles.toInt().formatWithCommas()} mi",
+                isUserSet = EconomyField.EXPECTED_ANNUAL_DASH_MI in userSet,
+            ) {
+                Text(
+                    text = "${state.expectedAnnualDashMiles.toInt().formatWithCommas()} miles per year",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Slider(
+                    value = state.expectedAnnualDashMiles.toFloat(),
+                    onValueChange = { onExpectedAnnualDashMilesChange(it.toDouble()) },
+                    valueRange = 500f..30_000f,
+                    steps = 58, // 500-mile increments
+                )
+                Text(
+                    text = "Used to amortize fixed costs (insurance, registration, phone) into " +
+                        "a per-mile rate. Bigger number → smaller per-mile share.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             // -------- Footer: live total cost vs IRS standard --------
             Spacer(modifier = Modifier.height(16.dp))
