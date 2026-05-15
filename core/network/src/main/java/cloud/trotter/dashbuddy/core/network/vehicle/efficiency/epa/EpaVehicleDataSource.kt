@@ -54,9 +54,17 @@ class EpaVehicleDataSource @Inject constructor(
 
     override suspend fun getVehicleDetails(vehicleId: String): VehicleDetails? = try {
         val response = api.getVehicleDetails(vehicleId = vehicleId)
+        val fuel = mapFuelType(response.fuelType1)
+        // EVs are detected via fuel type; otherwise infer class from EPA VClass.
+        val vClass = if (fuel == FuelType.ELECTRICITY) {
+            cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass.EV
+        } else {
+            mapEpaVClass(response.vClass)
+        }
         VehicleDetails(
             combinedMpg = response.combinedMpg,
-            fuelType = mapFuelType(response.fuelType1)
+            fuelType = fuel,
+            vehicleClass = vClass,
         )
     } catch (e: Exception) {
         Timber.e(e, "Failed to fetch vehicle details for ID $vehicleId")
