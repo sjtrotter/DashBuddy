@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.domain.config.DashStrategy
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
@@ -88,11 +89,13 @@ class WizardViewModel @Inject constructor(
             val maxItemsRule = rules.filterIsInstance<ScoringRule.MetricRule>()
                 .find { it.metricType == MetricType.ITEM_COUNT }
 
-            val vehicleClass = if (currentYear == "E-Bike") VehicleClass.E_BIKE else VehicleClass.SEDAN
+            // The currently-stored UserEconomy already merges class-derived defaults
+            // with persisted user-set values, so just snapshot it for the wizard.
+            val storedEconomy = appPreferencesRepository.userEconomy.first()
 
             _state.update { currentState ->
                 currentState.copy(
-                    vehicleClass = vehicleClass,
+                    vehicleClass = storedEconomy.vehicleClass,
                     vehicleYear = currentYear,
                     vehicleMake = currentMake,
                     vehicleModel = currentModel,
@@ -105,14 +108,35 @@ class WizardViewModel @Inject constructor(
 
                     enforceMinPayout = minPayoutRule?.autoDeclineOnFail ?: false,
                     minPayout = minPayoutRule?.targetValue ?: 5.0f,
-
                     enforceTargetHourly = targetHourlyRule?.autoDeclineOnFail ?: false,
                     targetHourly = targetHourlyRule?.targetValue ?: 20.0f,
-
                     enforceMaxDistance = maxDistanceRule?.autoDeclineOnFail ?: false,
                     maxDistance = maxDistanceRule?.targetValue ?: 10.0f,
+                    maxItems = maxItemsRule?.targetValue ?: 15.0f,
 
-                    maxItems = maxItemsRule?.targetValue ?: 15.0f
+                    // Personal Economy v2 (#145)
+                    tireSetCost = storedEconomy.tireSetCost,
+                    tireLifetimeMi = storedEconomy.tireLifetimeMi,
+                    oilCost = storedEconomy.oilCost,
+                    oilIntervalMi = storedEconomy.oilIntervalMi,
+                    brakesCost = storedEconomy.brakesCost,
+                    brakesIntervalMi = storedEconomy.brakesIntervalMi,
+                    fluidsCost = storedEconomy.fluidsCost,
+                    fluidsIntervalMi = storedEconomy.fluidsIntervalMi,
+                    miscYearly = storedEconomy.miscYearly,
+                    miscYearlyMi = storedEconomy.miscYearlyMi,
+                    includeDepreciation = storedEconomy.includeDepreciation,
+                    purchasePrice = storedEconomy.purchasePrice,
+                    totalLifetimeMi = storedEconomy.totalLifetimeMi,
+                    insuranceDeltaPerMonth = storedEconomy.insuranceDeltaPerMonth,
+                    registrationDeltaPerYear = storedEconomy.registrationDeltaPerYear,
+                    expectedAnnualDashMiles = storedEconomy.expectedAnnualDashMiles,
+                    phonePlanTotal = storedEconomy.phonePlanTotal,
+                    phonePlanLines = storedEconomy.phonePlanLines,
+                    phoneDashPercent = storedEconomy.phoneDashPercent,
+                    avgMinutesPerMile = storedEconomy.avgMinutesPerMile,
+                    basePickupMinutes = storedEconomy.basePickupMinutes,
+                    userSetEconomyFields = storedEconomy.userSetFields,
                 )
             }
         }
@@ -122,8 +146,125 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch { _availableYears.value = vehicleRepository.getYears() }
     }
 
+    /**
+     * Sets the vehicle class. Any [EconomyField] still at its default (i.e. NOT in
+     * [WizardState.userSetEconomyFields]) shifts to the new class's preset. User-set
+     * values are preserved.
+     */
     fun updateVehicleClass(type: VehicleClass) {
-        _state.update { it.copy(vehicleClass = type) }
+        _state.update { s ->
+            val unset = EconomyField.entries.toSet() - s.userSetEconomyFields
+            s.copy(
+                vehicleClass = type,
+                tireSetCost = if (EconomyField.TIRE_COST in unset) type.tireSetCost else s.tireSetCost,
+                tireLifetimeMi = if (EconomyField.TIRE_LIFETIME in unset) type.tireLifetimeMi else s.tireLifetimeMi,
+                oilCost = if (EconomyField.OIL_COST in unset) type.oilCost else s.oilCost,
+                oilIntervalMi = if (EconomyField.OIL_INTERVAL in unset) type.oilIntervalMi else s.oilIntervalMi,
+                brakesCost = if (EconomyField.BRAKES_COST in unset) type.brakesCost else s.brakesCost,
+                brakesIntervalMi = if (EconomyField.BRAKES_INTERVAL in unset) type.brakesIntervalMi else s.brakesIntervalMi,
+                fluidsCost = if (EconomyField.FLUIDS_COST in unset) type.fluidsCost else s.fluidsCost,
+                fluidsIntervalMi = if (EconomyField.FLUIDS_INTERVAL in unset) type.fluidsIntervalMi else s.fluidsIntervalMi,
+                miscYearly = if (EconomyField.MISC_YEARLY in unset) type.miscYearly else s.miscYearly,
+                miscYearlyMi = if (EconomyField.MISC_YEARLY_MI in unset) type.miscYearlyMi else s.miscYearlyMi,
+                purchasePrice = if (EconomyField.PURCHASE_PRICE in unset) type.purchasePrice else s.purchasePrice,
+                totalLifetimeMi = if (EconomyField.TOTAL_LIFETIME_MI in unset) type.totalLifetimeMi else s.totalLifetimeMi,
+                userSetEconomyFields = s.userSetEconomyFields + EconomyField.VEHICLE_CLASS,
+            )
+        }
+    }
+
+    // --- Personal Economy v2 setters (#145) ---
+    fun updateTires(setCost: Double, lifetimeMi: Double) = _state.update {
+        it.copy(
+            tireSetCost = setCost, tireLifetimeMi = lifetimeMi,
+            userSetEconomyFields = it.userSetEconomyFields +
+                setOf(EconomyField.TIRE_COST, EconomyField.TIRE_LIFETIME),
+        )
+    }
+
+    fun updateOilChange(cost: Double, intervalMi: Double) = _state.update {
+        it.copy(
+            oilCost = cost, oilIntervalMi = intervalMi,
+            userSetEconomyFields = it.userSetEconomyFields +
+                setOf(EconomyField.OIL_COST, EconomyField.OIL_INTERVAL),
+        )
+    }
+
+    fun updateBrakes(cost: Double, intervalMi: Double) = _state.update {
+        it.copy(
+            brakesCost = cost, brakesIntervalMi = intervalMi,
+            userSetEconomyFields = it.userSetEconomyFields +
+                setOf(EconomyField.BRAKES_COST, EconomyField.BRAKES_INTERVAL),
+        )
+    }
+
+    fun updateFluids(cost: Double, intervalMi: Double) = _state.update {
+        it.copy(
+            fluidsCost = cost, fluidsIntervalMi = intervalMi,
+            userSetEconomyFields = it.userSetEconomyFields +
+                setOf(EconomyField.FLUIDS_COST, EconomyField.FLUIDS_INTERVAL),
+        )
+    }
+
+    fun updateMiscRepairs(yearly: Double, yearlyMi: Double) = _state.update {
+        it.copy(
+            miscYearly = yearly, miscYearlyMi = yearlyMi,
+            userSetEconomyFields = it.userSetEconomyFields +
+                setOf(EconomyField.MISC_YEARLY, EconomyField.MISC_YEARLY_MI),
+        )
+    }
+
+    fun updateDepreciation(include: Boolean, price: Double, lifetimeMi: Double) = _state.update {
+        it.copy(
+            includeDepreciation = include, purchasePrice = price, totalLifetimeMi = lifetimeMi,
+            userSetEconomyFields = it.userSetEconomyFields + setOf(
+                EconomyField.INCLUDE_DEPRECIATION,
+                EconomyField.PURCHASE_PRICE,
+                EconomyField.TOTAL_LIFETIME_MI,
+            ),
+        )
+    }
+
+    fun updateInsuranceDelta(perMonth: Double) = _state.update {
+        it.copy(
+            insuranceDeltaPerMonth = perMonth,
+            userSetEconomyFields = it.userSetEconomyFields + EconomyField.INSURANCE_DELTA,
+        )
+    }
+
+    fun updateRegistrationDelta(perYear: Double) = _state.update {
+        it.copy(
+            registrationDeltaPerYear = perYear,
+            userSetEconomyFields = it.userSetEconomyFields + EconomyField.REGISTRATION_DELTA,
+        )
+    }
+
+    fun updateExpectedAnnualDashMiles(miles: Double) = _state.update {
+        it.copy(
+            expectedAnnualDashMiles = miles,
+            userSetEconomyFields = it.userSetEconomyFields + EconomyField.EXPECTED_ANNUAL_DASH_MI,
+        )
+    }
+
+    fun updatePhonePlan(total: Double, lines: Int, dashPercent: Double) = _state.update {
+        it.copy(
+            phonePlanTotal = total, phonePlanLines = lines, phoneDashPercent = dashPercent,
+            userSetEconomyFields = it.userSetEconomyFields + setOf(
+                EconomyField.PHONE_PLAN_TOTAL,
+                EconomyField.PHONE_PLAN_LINES,
+                EconomyField.PHONE_DASH_PERCENT,
+            ),
+        )
+    }
+
+    fun updateTimeConstants(avgMinutesPerMile: Double, basePickupMinutes: Double) = _state.update {
+        it.copy(
+            avgMinutesPerMile = avgMinutesPerMile, basePickupMinutes = basePickupMinutes,
+            userSetEconomyFields = it.userSetEconomyFields + setOf(
+                EconomyField.AVG_MIN_PER_MILE,
+                EconomyField.BASE_PICKUP_MIN,
+            ),
+        )
     }
 
     fun onYearSelected(year: String) {
@@ -316,6 +457,61 @@ class WizardViewModel @Inject constructor(
             val finalState = _state.value
 
             appPreferencesRepository.updateFuelType(finalState.fuelType)
+            appPreferencesRepository.updateVehicleClass(finalState.vehicleClass)
+
+            // Persist any economy fields the user explicitly set in the ECONOMY_COSTS step.
+            // Each call atomically marks the corresponding EconomyField as user-set.
+            val userSet = finalState.userSetEconomyFields
+            if (EconomyField.TIRE_COST in userSet || EconomyField.TIRE_LIFETIME in userSet) {
+                appPreferencesRepository.updateTireCost(finalState.tireSetCost, finalState.tireLifetimeMi)
+            }
+            if (EconomyField.OIL_COST in userSet || EconomyField.OIL_INTERVAL in userSet) {
+                appPreferencesRepository.updateOilCost(finalState.oilCost, finalState.oilIntervalMi)
+            }
+            if (EconomyField.BRAKES_COST in userSet || EconomyField.BRAKES_INTERVAL in userSet) {
+                appPreferencesRepository.updateBrakesCost(finalState.brakesCost, finalState.brakesIntervalMi)
+            }
+            if (EconomyField.FLUIDS_COST in userSet || EconomyField.FLUIDS_INTERVAL in userSet) {
+                appPreferencesRepository.updateFluidsCost(finalState.fluidsCost, finalState.fluidsIntervalMi)
+            }
+            if (EconomyField.MISC_YEARLY in userSet || EconomyField.MISC_YEARLY_MI in userSet) {
+                appPreferencesRepository.updateMiscMaintenance(finalState.miscYearly, finalState.miscYearlyMi)
+            }
+            if (EconomyField.INCLUDE_DEPRECIATION in userSet ||
+                EconomyField.PURCHASE_PRICE in userSet ||
+                EconomyField.TOTAL_LIFETIME_MI in userSet
+            ) {
+                appPreferencesRepository.updateDepreciation(
+                    finalState.includeDepreciation,
+                    finalState.purchasePrice,
+                    finalState.totalLifetimeMi,
+                )
+            }
+            if (EconomyField.INSURANCE_DELTA in userSet) {
+                appPreferencesRepository.updateInsuranceDelta(finalState.insuranceDeltaPerMonth)
+            }
+            if (EconomyField.REGISTRATION_DELTA in userSet) {
+                appPreferencesRepository.updateRegistrationDelta(finalState.registrationDeltaPerYear)
+            }
+            if (EconomyField.EXPECTED_ANNUAL_DASH_MI in userSet) {
+                appPreferencesRepository.updateExpectedAnnualDashMi(finalState.expectedAnnualDashMiles)
+            }
+            if (EconomyField.PHONE_PLAN_TOTAL in userSet ||
+                EconomyField.PHONE_PLAN_LINES in userSet ||
+                EconomyField.PHONE_DASH_PERCENT in userSet
+            ) {
+                appPreferencesRepository.updatePhonePlan(
+                    finalState.phonePlanTotal,
+                    finalState.phonePlanLines,
+                    finalState.phoneDashPercent,
+                )
+            }
+            if (EconomyField.AVG_MIN_PER_MILE in userSet || EconomyField.BASE_PICKUP_MIN in userSet) {
+                appPreferencesRepository.updateTimeConstants(
+                    finalState.avgMinutesPerMile,
+                    finalState.basePickupMinutes,
+                )
+            }
 
             if (finalState.vehicleClass == VehicleClass.E_BIKE) {
                 appPreferencesRepository.updateEconomySettings(
