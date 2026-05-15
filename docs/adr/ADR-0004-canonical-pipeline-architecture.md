@@ -1,6 +1,6 @@
 # ADR-0004: Canonical Pipeline Architecture
 
-**Status:** Proposed
+**Status:** Accepted (implemented in commit `2b71b5e`, 2026-04-30)
 **Issue:** Pipeline refactor (pre-work for event sourcing, #193; capture infrastructure)
 **Date:** 2026-04-30
 **Builds on:** ADR-0003 (versioning and API contracts)
