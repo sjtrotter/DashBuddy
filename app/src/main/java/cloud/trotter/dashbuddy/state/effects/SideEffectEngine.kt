@@ -150,7 +150,7 @@ class SideEffectEngine @Inject constructor(
                 val result = offerEvaluator.evaluate(effect.parsedOffer, config)
 
                 // 1. Emit the Decision back to State Machine
-                _events.emit(OfferEvaluationEvent(result.action))
+                _events.emit(OfferEvaluationEvent(result.action, result))
 
                 // 2. Show the Bubble (Side Effect)
                 val persona = when (result.action) {

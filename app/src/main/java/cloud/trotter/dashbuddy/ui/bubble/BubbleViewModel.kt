@@ -6,8 +6,10 @@ import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,26 +41,60 @@ class BubbleViewModel @Inject constructor(
     val appState = stateManager.state
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppState())
 
+    // Which platform the bubble is currently showing
+    val focusedPlatform = stateManager.state
+        .map { state ->
+            state.regions.flow.activePlatform
+                ?: state.regions.crossPlatform.mostRecentActivityPlatform
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // The focused platform's region — drives all mode composables
+    val focusedRegion = combine(stateManager.state, focusedPlatform) { state, platform ->
+        platform?.let { state.regions.platforms[it] }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     // Session earnings: carries the last known value forward through states
     // that don't have it. Resets when session changes.
-    val sessionEarnings = stateManager.state
-        .scan(Pair<String?, Double>(null, 0.0)) { (lastSessionId, lastKnown), state ->
-            val dd = state.regions.platforms[Platform.DoorDash]
-            val session = dd?.session
-            val sessionId = session?.sessionId
-            val isNewSession = sessionId != null && sessionId != lastSessionId && lastSessionId != null
-            val earnings = when {
-                isNewSession -> 0.0
-                session != null -> {
-                    val running = session.runningEarnings
-                    if (running > 0) running else lastKnown
-                }
-                else -> lastKnown
+    val sessionEarnings = combine(stateManager.state, focusedPlatform) { state, platform ->
+        platform?.let { state.regions.platforms[it] }
+    }.scan(Pair<String?, Double>(null, 0.0)) { (lastSessionId, lastKnown), region ->
+        val session = region?.session
+        val sessionId = session?.sessionId
+        val isNewSession = sessionId != null && sessionId != lastSessionId && lastSessionId != null
+        val earnings = when {
+            isNewSession -> 0.0
+            session != null -> {
+                val running = session.runningEarnings
+                if (running > 0) running else lastKnown
             }
-            Pair(sessionId ?: lastSessionId, earnings)
+            else -> lastKnown
         }
+        Pair(sessionId ?: lastSessionId, earnings)
+    }
         .map { it.second }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    // Capture the offer pay when an offer transitions to a task flow,
+    // so pickup/delivery composables can compute per-order $/hr.
+    val lastAcceptedOfferPay = stateManager.state
+        .scan(Pair<FlowRegion?, Double?>(null, null)) { (prevFlow, lastPay), state ->
+            val currentFlow = state.regions.flow
+            val prevOffer = prevFlow?.pendingOffer
+            val currentOffer = currentFlow.pendingOffer
+            val flow = currentFlow.flow
+            val pay = when {
+                // Offer just cleared (accepted) while entering a task flow
+                prevOffer != null && currentOffer == null && flow.isTaskFlow() ->
+                    prevOffer.offerFields.parsedOffer.payAmount ?: lastPay
+                // Back to idle → clear
+                flow == Flow.Idle || flow == Flow.SessionEnded -> null
+                else -> lastPay
+            }
+            Pair(currentFlow, pay)
+        }
+        .map { it.second }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Messages scoped to the active dash session
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -76,12 +112,14 @@ class BubbleViewModel @Inject constructor(
 
     // Snapshot of the last completed dash — populated when session ends,
     // persists through idle.
-    val lastSessionSummary = combine(stateManager.state, odometerRepository.sessionMilesFlow) { state, miles ->
-        state to miles
+    val lastSessionSummary = combine(
+        stateManager.state, focusedPlatform, odometerRepository.sessionMilesFlow
+    ) { state, platform, miles ->
+        Triple(state, platform, miles)
     }
-        .scan(null as SessionSummary?) { last, (state, miles) ->
-            val dd = state.regions.platforms[Platform.DoorDash]
-            val session = dd?.session
+        .scan(null as SessionSummary?) { last, (state, platform, miles) ->
+            val region = platform?.let { state.regions.platforms[it] }
+            val session = region?.session
             // Capture summary when flow is SessionEnded
             if (state.regions.flow.flow == Flow.SessionEnded && session != null) {
                 SessionSummary(
@@ -96,3 +134,10 @@ class BubbleViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 }
+
+private fun Flow.isTaskFlow(): Boolean = this in setOf(
+    Flow.TaskPickupNavigation,
+    Flow.TaskPickupArrived,
+    Flow.TaskDropoffNavigation,
+    Flow.TaskDropoffArrived,
+)
