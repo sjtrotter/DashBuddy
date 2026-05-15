@@ -501,11 +501,24 @@ private fun EvalSummary(evaluation: OfferEvaluation) {
         label = "$/hr",
         value = "$${String.format("%.2f", evaluation.dollarsPerHour)}"
     )
-    if (evaluation.fuelCostEstimate > 0) {
+    if (evaluation.totalOperatingCost > 0) {
+        val netSuffix = if (evaluation.isUsingDefaults) " (est.)" else ""
         ModeRow(
             label = "Net",
-            value = "$${String.format("%.2f", evaluation.netPayAmount)} (−$${String.format("%.2f", evaluation.fuelCostEstimate)} fuel)"
+            value = "$${String.format("%.2f", evaluation.netPayAmount)}$netSuffix"
         )
+        val costBreakdown = buildString {
+            if (evaluation.fuelCostEstimate > 0) {
+                append("−$${String.format("%.2f", evaluation.fuelCostEstimate)} fuel")
+            }
+            if (evaluation.nonFuelCostEstimate > 0) {
+                if (isNotEmpty()) append(" · ")
+                append("−$${String.format("%.2f", evaluation.nonFuelCostEstimate)} wear")
+            }
+        }
+        if (costBreakdown.isNotEmpty()) {
+            ModeRow(label = "Cost", value = costBreakdown)
+        }
     }
     ModeRow(
         label = "Est. time",
