@@ -91,6 +91,9 @@
     <string name="wizard_title_gas">Gas Price</string>
     <string name="wizard_desc_gas">What are you currently paying per gallon?</string>
 
+    <string name="wizard_title_economy_costs">Operating Costs</string>
+    <string name="wizard_desc_economy_costs">Tell us your real costs so we can show your true net pay. Tap any section to set your actual numbers — defaults are sensible estimates.</string>
+
     <string name="wizard_title_goal">Primary Goal</string>
     <string name="wizard_desc_goal">Are you cherry-picking for maximum profit, or trying to protect your Platinum/Top Dasher status?</string>
 

@@ -14,7 +14,7 @@ import javax.inject.Singleton
 @Singleton
 class ReplayMetadataProviderImpl @Inject constructor(
     private val interpreter: JsonRuleInterpreter,
-    @Named("appVersionName") private val appVersionName: String,
+    @param:Named("appVersionName") private val appVersionName: String,
 ) : ReplayMetadataProvider {
 
     override fun current(): ReplayMetadata = ReplayMetadata(

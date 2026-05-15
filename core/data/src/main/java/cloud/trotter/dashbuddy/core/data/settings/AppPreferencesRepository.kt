@@ -1,9 +1,10 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -28,7 +29,6 @@ class AppPreferencesRepository @Inject constructor(
     val isProMode = dataSource.isProMode
     val appTheme = dataSource.appTheme
 
-    // Maps the String from the Datastore into your pure Domain Enum
     val fuelType: Flow<FuelType> = dataSource.fuelType.map { savedType ->
         try {
             FuelType.valueOf(savedType ?: FuelType.REGULAR.name)
@@ -37,53 +37,202 @@ class AppPreferencesRepository @Inject constructor(
         }
     }
 
-    val vehicleType: Flow<VehicleType> = dataSource.vehicleType.map { saved ->
+    val vehicleClass: Flow<VehicleClass> = dataSource.vehicleClass.map { saved ->
         try {
-            VehicleType.valueOf(saved ?: VehicleType.CAR.name)
+            VehicleClass.valueOf(saved ?: VehicleClass.SEDAN.name)
         } catch (_: Exception) {
-            VehicleType.CAR
+            VehicleClass.SEDAN
         }
     }
 
-    /** Combines stored prefs into a [UserEconomy] ready for [EvaluationConfig]. */
+    /**
+     * Combines stored prefs into a [UserEconomy] ready for [EvaluationConfig].
+     *
+     * Each cost field falls back to the current [VehicleClass]'s preset value if
+     * the DataStore key is missing — so switching class shifts any field NOT in
+     * [userSetEconomyFields] to the new class's defaults without overwriting
+     * user-set values. The `userSetFields` set on the returned [UserEconomy]
+     * tracks which fields the user has explicitly written.
+     *
+     * Combine fans into 4 sub-tuples (DataStore's `combine` is limited to ~5 args).
+     */
     val userEconomy: Flow<UserEconomy> = combine(
-        vehicleType,
-        dataSource.estimatedMpg,
-        dataSource.gasPrice,
-    ) { vType, mpg, price ->
+        // Identity + fuel + time
+        combine(
+            vehicleClass,
+            dataSource.estimatedMpg,
+            dataSource.gasPrice,
+            dataSource.avgMinPerMile,
+            dataSource.basePickupMin,
+        ) { c, mpg, price, minPerMi, basePickup ->
+            IdentityTuple(c, mpg?.toDouble(), price?.toDouble(), minPerMi, basePickup)
+        },
+        // Maintenance (paired)
+        combine(
+            dataSource.tireSetCost, dataSource.tireLifetimeMi,
+            dataSource.oilCost, dataSource.oilIntervalMi,
+        ) { tireCost, tireLife, oilCost, oilInt ->
+            MaintenanceTupleA(tireCost, tireLife, oilCost, oilInt)
+        },
+        combine(
+            dataSource.brakesCost, dataSource.brakesIntervalMi,
+            dataSource.fluidsCost, dataSource.fluidsIntervalMi,
+            dataSource.miscYearly,
+        ) { brakesCost, brakesInt, fluidsCost, fluidsInt, misc ->
+            MaintenanceTupleB(brakesCost, brakesInt, fluidsCost, fluidsInt, misc)
+        },
+        // Depreciation + fixed-amortized + phone
+        combine(
+            dataSource.miscYearlyMi,
+            dataSource.includeDepreciation,
+            dataSource.purchasePrice,
+            dataSource.totalLifetimeMi,
+        ) { miscMi, includeDepr, price, lifetimeMi ->
+            DepreciationTuple(miscMi, includeDepr, price, lifetimeMi)
+        },
+        combine(
+            dataSource.insuranceDeltaPerMonth,
+            dataSource.registrationDeltaPerYear,
+            dataSource.expectedAnnualDashMi,
+            dataSource.phonePlanTotal,
+            dataSource.phonePlanLines,
+        ) { ins, reg, dashMi, phoneTotal, phoneLines ->
+            FixedAndPhoneTuple(ins, reg, dashMi, phoneTotal, phoneLines)
+        },
+    ) { id, maintA, maintB, depr, fixedPhone ->
+        val cls = id.vehicleClass
         UserEconomy(
-            vehicleType = vType,
-            vehicleMpg = mpg?.toDouble() ?: 30.0,
-            gasPricePerGallon = price?.toDouble() ?: 3.50,
+            vehicleClass = cls,
+            vehicleMpg = id.mpg ?: cls.defaultMpg.coerceAtLeast(1.0),
+            gasPricePerGallon = id.gasPrice ?: 3.50,
+            avgMinutesPerMile = id.avgMinPerMi ?: UserEconomy.DEFAULT_MINUTES_PER_MILE,
+            basePickupMinutes = id.basePickupMin ?: UserEconomy.DEFAULT_BASE_PICKUP_MINUTES,
+            tireSetCost = maintA.tireCost ?: cls.tireSetCost,
+            tireLifetimeMi = maintA.tireLife ?: cls.tireLifetimeMi,
+            oilCost = maintA.oilCost ?: cls.oilCost,
+            oilIntervalMi = maintA.oilInt ?: cls.oilIntervalMi,
+            brakesCost = maintB.brakesCost ?: cls.brakesCost,
+            brakesIntervalMi = maintB.brakesInt ?: cls.brakesIntervalMi,
+            fluidsCost = maintB.fluidsCost ?: cls.fluidsCost,
+            fluidsIntervalMi = maintB.fluidsInt ?: cls.fluidsIntervalMi,
+            miscYearly = maintB.misc ?: cls.miscYearly,
+            miscYearlyMi = depr.miscMi ?: cls.miscYearlyMi,
+            includeDepreciation = depr.includeDepr ?: true,
+            purchasePrice = depr.price ?: cls.purchasePrice,
+            totalLifetimeMi = depr.lifetimeMi ?: cls.totalLifetimeMi,
+            insuranceDeltaPerMonth = fixedPhone.insurance ?: 0.0,
+            registrationDeltaPerYear = fixedPhone.registration ?: 0.0,
+            expectedAnnualDashMiles = fixedPhone.dashMi ?: UserEconomy.DEFAULT_ANNUAL_DASH_MI,
+            phonePlanTotal = fixedPhone.phoneTotal ?: UserEconomy.DEFAULT_PHONE_PLAN_TOTAL,
+            phonePlanLines = fixedPhone.phoneLines ?: UserEconomy.DEFAULT_PHONE_PLAN_LINES,
+            phoneDashPercent = UserEconomy.DEFAULT_PHONE_DASH_PERCENT, // wired below via separate read
+            userSetFields = emptySet(), // populated by mergeUserSetFields below
         )
     }
+    // Wire userSetFields + phoneDashPercent on top — combine has a 5-arg max so we
+    // do it as a final transform.
+    .combine(dataSource.phoneDashPercent) { eco, phoneDashPct ->
+        eco.copy(phoneDashPercent = phoneDashPct ?: UserEconomy.DEFAULT_PHONE_DASH_PERCENT)
+    }
+    .combine(dataSource.userSetEconomyFields) { eco, savedNames ->
+        eco.copy(userSetFields = parseUserSetFields(savedNames))
+    }
+
+    private data class IdentityTuple(
+        val vehicleClass: VehicleClass,
+        val mpg: Double?,
+        val gasPrice: Double?,
+        val avgMinPerMi: Double?,
+        val basePickupMin: Double?,
+    )
+
+    private data class MaintenanceTupleA(
+        val tireCost: Double?, val tireLife: Double?,
+        val oilCost: Double?, val oilInt: Double?,
+    )
+
+    private data class MaintenanceTupleB(
+        val brakesCost: Double?, val brakesInt: Double?,
+        val fluidsCost: Double?, val fluidsInt: Double?,
+        val misc: Double?,
+    )
+
+    private data class DepreciationTuple(
+        val miscMi: Double?,
+        val includeDepr: Boolean?,
+        val price: Double?,
+        val lifetimeMi: Double?,
+    )
+
+    private data class FixedAndPhoneTuple(
+        val insurance: Double?,
+        val registration: Double?,
+        val dashMi: Double?,
+        val phoneTotal: Double?,
+        val phoneLines: Int?,
+    )
+
+    private fun parseUserSetFields(names: Set<String>): Set<EconomyField> =
+        names.mapNotNull { name ->
+            try {
+                EconomyField.valueOf(name)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+        }.toSet()
 
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
     suspend fun updateGasPrice(price: Float) = dataSource.updateGasPrice(price)
-
-    // Passes the Enum as a String to keep the DataSource clean
     suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
-
-    suspend fun updateVehicleType(type: VehicleType) = dataSource.updateVehicleType(type.name)
-
+    suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
     suspend fun setProMode(enabled: Boolean) = dataSource.setProMode(enabled)
-
     suspend fun setTheme(theme: String) = dataSource.setTheme(theme)
 
     suspend fun updateEconomySettings(
-        year: String,
-        make: String,
-        model: String,
-        trim: String,
-        mpg: Float,
-        isGasAuto: Boolean,
-        price: Float
+        year: String, make: String, model: String, trim: String,
+        mpg: Float, isGasAuto: Boolean, price: Float,
     ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
 
     suspend fun saveSimulationState(pay: Double, dist: Double) =
         dataSource.saveSimulationState(pay, dist)
+
+    // --- Personal Economy v2 writes (#145) ---
+    suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) =
+        dataSource.updateTireCost(setCost, lifetimeMi)
+
+    suspend fun updateOilCost(cost: Double, intervalMi: Double) =
+        dataSource.updateOilCost(cost, intervalMi)
+
+    suspend fun updateBrakesCost(cost: Double, intervalMi: Double) =
+        dataSource.updateBrakesCost(cost, intervalMi)
+
+    suspend fun updateFluidsCost(cost: Double, intervalMi: Double) =
+        dataSource.updateFluidsCost(cost, intervalMi)
+
+    suspend fun updateMiscMaintenance(yearly: Double, yearlyMi: Double) =
+        dataSource.updateMiscMaintenance(yearly, yearlyMi)
+
+    suspend fun updateDepreciation(include: Boolean, purchasePrice: Double, totalLifetimeMi: Double) =
+        dataSource.updateDepreciation(include, purchasePrice, totalLifetimeMi)
+
+    suspend fun updateInsuranceDelta(perMonth: Double) =
+        dataSource.updateInsuranceDelta(perMonth)
+
+    suspend fun updateRegistrationDelta(perYear: Double) =
+        dataSource.updateRegistrationDelta(perYear)
+
+    suspend fun updateExpectedAnnualDashMi(miles: Double) =
+        dataSource.updateExpectedAnnualDashMi(miles)
+
+    suspend fun updatePhonePlan(total: Double, lines: Int, dashPercent: Double) =
+        dataSource.updatePhonePlan(total, lines, dashPercent)
+
+    suspend fun updateTimeConstants(avgMinPerMile: Double, basePickupMin: Double) =
+        dataSource.updateTimeConstants(avgMinPerMile, basePickupMin)
+
+    suspend fun resetEconomyDefaults() = dataSource.resetEconomyDefaults()
 
     suspend fun clearPreferences() {
         Timber.Forest.w("Clearing App Preferences")

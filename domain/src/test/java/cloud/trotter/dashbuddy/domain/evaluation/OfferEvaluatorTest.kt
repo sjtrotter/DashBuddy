@@ -3,7 +3,7 @@ package cloud.trotter.dashbuddy.domain.evaluation
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -17,7 +17,7 @@ class OfferEvaluatorTest {
      * Zero-cost economy used by all metric scoring tests so they can assert exact values
      * without fuel cost skewing the numbers. Fuel cost behavior has its own test section.
      */
-    private val noCostEconomy = UserEconomy(vehicleType = VehicleType.E_BIKE)
+    private val noCostEconomy = UserEconomy(vehicleClass = VehicleClass.E_BIKE)
 
     // Default config: single PAYOUT rule, target $7.00, no fuel cost
     private val defaultConfig = EvaluationConfig(
@@ -77,6 +77,25 @@ class OfferEvaluatorTest {
 
     private fun config(vararg rules: ScoringRule) =
         EvaluationConfig(rules = rules.toList(), userEconomy = noCostEconomy)
+
+    /**
+     * Builds a [UserEconomy] where only fuel cost is non-zero. Used by fuel-cost
+     * tests to isolate fuel behavior from the rest of the operating-cost model.
+     */
+    private fun fuelOnlyEconomy(vehicleMpg: Double, gasPricePerGallon: Double) = UserEconomy(
+        vehicleClass = VehicleClass.SEDAN,
+        vehicleMpg = vehicleMpg,
+        gasPricePerGallon = gasPricePerGallon,
+        tireSetCost = 0.0,
+        oilCost = 0.0,
+        brakesCost = 0.0,
+        fluidsCost = 0.0,
+        miscYearly = 0.0,
+        includeDepreciation = false,
+        insuranceDeltaPerMonth = 0.0,
+        registrationDeltaPerYear = 0.0,
+        phonePlanTotal = 0.0,
+    )
 
     // -------------------------------------------------------------------------
     // Protect Stats Mode
@@ -307,7 +326,7 @@ class OfferEvaluatorTest {
 
     @Test
     fun `evaluation output - estimatedTimeMinutes uses UserEconomy constants`() {
-        val economy = UserEconomy(vehicleType = VehicleType.E_BIKE, avgMinutesPerMile = 4.0, basePickupMinutes = 10.0)
+        val economy = UserEconomy(vehicleClass = VehicleClass.E_BIKE, avgMinutesPerMile = 4.0, basePickupMinutes = 10.0)
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 7.0f)), userEconomy = economy)
         // 5 miles * 4 min/mi + 10 = 30 min
         val result = evaluator.evaluate(offer(pay = 7.0, dist = 5.0), cfg)
@@ -539,7 +558,7 @@ class OfferEvaluatorTest {
     @Test
     fun `fuel cost - CAR economy deducts cost from net pay`() {
         // $3.50/gal, 35 mpg → $0.10/mi; 5 miles → $0.50 fuel cost
-        val carEconomy = UserEconomy(vehicleType = VehicleType.CAR, vehicleMpg = 35.0, gasPricePerGallon = 3.50)
+        val carEconomy = fuelOnlyEconomy(vehicleMpg = 35.0, gasPricePerGallon = 3.50)
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = carEconomy)
         val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
         assertEquals(0.50, result.fuelCostEstimate, 0.001)
@@ -559,7 +578,7 @@ class OfferEvaluatorTest {
     fun `fuel cost - metric scoring uses net pay not gross pay`() {
         // $4.00/gal, 20 mpg → $0.20/mi; 5 miles → $1.00 fuel cost
         // grossPay=$8, netPay=$7, target=$7 → PAYOUT score = 7/7 = 100
-        val carEconomy = UserEconomy(vehicleType = VehicleType.CAR, vehicleMpg = 20.0, gasPricePerGallon = 4.00)
+        val carEconomy = fuelOnlyEconomy(vehicleMpg = 20.0, gasPricePerGallon = 4.00)
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 7.0f)), userEconomy = carEconomy)
         val result = evaluator.evaluate(offer(pay = 8.0, dist = 5.0), cfg)
         assertEquals(1.0, result.fuelCostEstimate, 0.001)
@@ -571,7 +590,7 @@ class OfferEvaluatorTest {
     @Test
     fun `fuel cost - high fuel cost can push net pay negative, scores 0`() {
         // $6.00/gal, 10 mpg → $0.60/mi; 10 miles → $6 fuel cost; grossPay=$5 → netPay=-$1
-        val expensiveEconomy = UserEconomy(vehicleType = VehicleType.CAR, vehicleMpg = 10.0, gasPricePerGallon = 6.00)
+        val expensiveEconomy = fuelOnlyEconomy(vehicleMpg = 10.0, gasPricePerGallon = 6.00)
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 5.0f)), userEconomy = expensiveEconomy)
         val result = evaluator.evaluate(offer(pay = 5.0, dist = 10.0), cfg)
         assertEquals(0.0, result.score, 0.001)
@@ -586,7 +605,7 @@ class OfferEvaluatorTest {
     fun `time estimate - custom minutesPerMile affects hourly calculation`() {
         // Rural market: slower pace, 5 min/mile instead of default 2.5
         val ruralEconomy = UserEconomy(
-            vehicleType = VehicleType.E_BIKE, // no fuel cost so we isolate time
+            vehicleClass = VehicleClass.E_BIKE, // no fuel cost so we isolate time
             avgMinutesPerMile = 5.0,
             basePickupMinutes = 7.0,
         )
@@ -606,7 +625,7 @@ class OfferEvaluatorTest {
     fun `time estimate - custom basePickupMinutes affects hourly calculation`() {
         // Long-wait market: 15 min base overhead
         val slowPickupEconomy = UserEconomy(
-            vehicleType = VehicleType.E_BIKE,
+            vehicleClass = VehicleClass.E_BIKE,
             avgMinutesPerMile = UserEconomy.DEFAULT_MINUTES_PER_MILE,
             basePickupMinutes = 15.0,
         )
@@ -678,5 +697,184 @@ class OfferEvaluatorTest {
         )
         val result = evaluator.evaluate(offer(pay = 10.0, dist = 3.0), cfg)
         assertTrue(result.warnings.isEmpty())
+    }
+
+    // -------------------------------------------------------------------------
+    // Operating cost — full breakdown (#145)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `operating cost - subtracts all cost components from gross pay`() {
+        // Construct a fully-populated economy and verify each per-mile component
+        // contributes to net pay. Distance = 10 mi so per-mile values translate
+        // directly to dollar amounts.
+        val economy = UserEconomy(
+            vehicleClass = VehicleClass.SEDAN,
+            vehicleMpg = 35.0, gasPricePerGallon = 3.50,          // fuel: $0.10/mi → $1.00
+            tireSetCost = 800.0, tireLifetimeMi = 40_000.0,       // tires: $0.02/mi → $0.20
+            oilCost = 60.0, oilIntervalMi = 5_000.0,              // oil: $0.012/mi → $0.12
+            brakesCost = 400.0, brakesIntervalMi = 40_000.0,      // brakes: $0.01/mi → $0.10
+            fluidsCost = 150.0, fluidsIntervalMi = 30_000.0,      // fluids: $0.005/mi → $0.05
+            miscYearly = 600.0, miscYearlyMi = 12_000.0,          // misc: $0.05/mi → $0.50
+            includeDepreciation = true,
+            purchasePrice = 28_000.0, totalLifetimeMi = 200_000.0, // depr: $0.14/mi → $1.40
+            insuranceDeltaPerMonth = 30.0,
+            expectedAnnualDashMiles = 10_000.0,                    // insurance: $0.036/mi → $0.36
+            registrationDeltaPerYear = 100.0,                      // reg: $0.01/mi → $0.10
+            phonePlanTotal = 80.0, phonePlanLines = 4, phoneDashPercent = 30.0, // phone: $0.0072/mi → $0.072
+        )
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 10.0), cfg)
+        // Total expected: 1.00 + 0.20 + 0.12 + 0.10 + 0.05 + 0.50 + 1.40 + 0.36 + 0.10 + 0.072 = 3.902
+        assertEquals(1.00, result.fuelCostEstimate, 0.001)
+        assertEquals(2.902, result.nonFuelCostEstimate, 0.01)
+        assertEquals(3.902, result.totalOperatingCost, 0.01)
+        assertEquals(10.0 - 3.902, result.netPayAmount, 0.01)
+    }
+
+    @Test
+    fun `operating cost - depreciation toggle off excludes depreciation`() {
+        val economy = UserEconomy(
+            vehicleClass = VehicleClass.SEDAN,
+            includeDepreciation = false,
+            purchasePrice = 28_000.0, totalLifetimeMi = 200_000.0,
+        )
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 10.0), cfg)
+        // Depreciation would be $0.14/mi × 10 = $1.40; with toggle off it's $0.
+        assertEquals(0.0, result.nonFuelCostEstimate, 0.001)
+    }
+
+    @Test
+    fun `operating cost - amortizes insurance delta correctly`() {
+        // $30/mo × 12 / 10k dash mi = $0.036/mi; 5-mi offer → $0.18 insurance cost
+        val economy = UserEconomy(
+            vehicleClass = VehicleClass.SEDAN,
+            insuranceDeltaPerMonth = 30.0,
+            expectedAnnualDashMiles = 10_000.0,
+        )
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
+        assertEquals(0.18, result.nonFuelCostEstimate, 0.001)
+    }
+
+    @Test
+    fun `operating cost - amortizes registration delta correctly`() {
+        // $100/yr / 10k dash mi = $0.01/mi; 5-mi offer → $0.05 registration cost
+        val economy = UserEconomy(
+            vehicleClass = VehicleClass.SEDAN,
+            registrationDeltaPerYear = 100.0,
+            expectedAnnualDashMiles = 10_000.0,
+        )
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
+        assertEquals(0.05, result.nonFuelCostEstimate, 0.001)
+    }
+
+    @Test
+    fun `operating cost - amortizes phone correctly`() {
+        // $80/mo plan / 4 lines = $20/mo your share × 30% dashing = $6/mo
+        // × 12 = $72/yr / 10k dash mi = $0.0072/mi; 10-mi offer → $0.072
+        val economy = UserEconomy(
+            vehicleClass = VehicleClass.SEDAN,
+            phonePlanTotal = 80.0,
+            phonePlanLines = 4,
+            phoneDashPercent = 30.0,
+            expectedAnnualDashMiles = 10_000.0,
+        )
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 10.0), cfg)
+        assertEquals(0.072, result.nonFuelCostEstimate, 0.001)
+    }
+
+    @Test
+    fun `operating cost - phone not affected by vehicle class change`() {
+        // Same phone setup; only the vehicleClass differs. Phone cost should be identical.
+        val sedanEco = UserEconomy(vehicleClass = VehicleClass.SEDAN, phonePlanTotal = 100.0, phoneDashPercent = 50.0)
+        val truckEco = UserEconomy(vehicleClass = VehicleClass.TRUCK, phonePlanTotal = 100.0, phoneDashPercent = 50.0)
+        assertEquals(sedanEco.phoneCostPerMile, truckEco.phoneCostPerMile, 0.0001)
+    }
+
+    @Test
+    fun `operating cost - zero expected annual dash miles does not divide by zero`() {
+        // expectedAnnualDashMiles = 0 should be coerced; result must be finite.
+        val economy = UserEconomy(
+            vehicleClass = VehicleClass.SEDAN,
+            insuranceDeltaPerMonth = 30.0,
+            registrationDeltaPerYear = 100.0,
+            phonePlanTotal = 80.0,
+            expectedAnnualDashMiles = 0.0,
+        )
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
+        // Should not be NaN/Infinity; finite even if large
+        assertTrue(result.nonFuelCostEstimate.isFinite())
+    }
+
+    @Test
+    fun `operating cost - e-bike preset yields zero operating cost`() {
+        // E_BIKE has all preset cost constants at zero/sentinel. UserEconomy default
+        // construction with E_BIKE class still has zero domain defaults for the
+        // paired fields, so total operating cost should be zero.
+        val economy = UserEconomy(vehicleClass = VehicleClass.E_BIKE)
+        assertEquals(0.0, economy.fuelCostPerMile, 0.0001)
+        assertEquals(0.0, economy.operatingCostPerMile, 0.0001)
+    }
+
+    @Test
+    fun `operating cost - EV has non-fuel costs but zero fuel cost`() {
+        // EV: no fuel, but real tires/brakes/depreciation.
+        val economy = UserEconomy(
+            vehicleClass = VehicleClass.EV,
+            tireSetCost = 1_000.0, tireLifetimeMi = 35_000.0,
+            includeDepreciation = true,
+            purchasePrice = 40_000.0, totalLifetimeMi = 200_000.0,
+        )
+        assertEquals(0.0, economy.fuelCostPerMile, 0.0001)
+        assertTrue("EV non-fuel cost should be positive", economy.nonFuelCostPerMile > 0.0)
+    }
+
+    @Test
+    fun `operating cost - isUsingDefaults true when userSetFields empty`() {
+        val economy = UserEconomy(vehicleClass = VehicleClass.SEDAN)
+        assertTrue(economy.isUsingDefaults)
+    }
+
+    @Test
+    fun `operating cost - isUsingDefaults false when every field is user-set`() {
+        val allFields = EconomyField.entries.toSet()
+        val economy = UserEconomy(vehicleClass = VehicleClass.SEDAN, userSetFields = allFields)
+        assertEquals(false, economy.isUsingDefaults)
+    }
+
+    @Test
+    fun `operating cost - breakdown sums to total`() {
+        // Invariant: fuelCostEstimate + nonFuelCostEstimate == totalOperatingCost
+        val economy = UserEconomy(
+            vehicleClass = VehicleClass.SEDAN,
+            vehicleMpg = 30.0, gasPricePerGallon = 3.50,
+            tireSetCost = 800.0, tireLifetimeMi = 40_000.0,
+            oilCost = 60.0, oilIntervalMi = 5_000.0,
+            includeDepreciation = true,
+            purchasePrice = 28_000.0, totalLifetimeMi = 200_000.0,
+        )
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 7.5), cfg)
+        assertEquals(
+            result.totalOperatingCost,
+            result.fuelCostEstimate + result.nonFuelCostEstimate,
+            0.0001,
+        )
+    }
+
+    @Test
+    fun `operating cost - evaluator carries isUsingDefaults through to result`() {
+        val partial = UserEconomy(
+            vehicleClass = VehicleClass.SEDAN,
+            userSetFields = setOf(EconomyField.VEHICLE_CLASS, EconomyField.GAS_PRICE),
+        )
+        val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = partial)
+        val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
+        assertTrue(result.isUsingDefaults)
     }
 }

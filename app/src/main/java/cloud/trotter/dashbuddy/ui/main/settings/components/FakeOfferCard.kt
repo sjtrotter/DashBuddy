@@ -60,6 +60,8 @@ fun FakeOfferCard(
     val animatedContentColor by animateColorAsState(targetContentColor, label = "content")
 
     val hasFuelCost = evaluation.fuelCostEstimate > 0.0
+    val hasNonFuelCost = evaluation.nonFuelCostEstimate > 0.0
+    val hasAnyCost = hasFuelCost || hasNonFuelCost
 
     Column(modifier = modifier.fillMaxWidth()) {
         Card(
@@ -86,18 +88,28 @@ fun FakeOfferCard(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // --- Pay line ---
-                if (hasFuelCost) {
+                if (hasAnyCost) {
+                    val netSuffix = if (evaluation.isUsingDefaults) " (est.)" else ""
                     Text(
-                        text = "$${fmt(evaluation.payAmount)} gross  →  $${fmt(evaluation.netPayAmount)} net",
+                        text = "$${fmt(evaluation.payAmount)} gross  →  $${fmt(evaluation.netPayAmount)} net$netSuffix",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = animatedContentColor
                     )
-                    Text(
-                        text = "−$${fmt(evaluation.fuelCostEstimate)} est. fuel",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = animatedContentColor.copy(alpha = 0.65f)
-                    )
+                    if (hasFuelCost) {
+                        Text(
+                            text = "−$${fmt(evaluation.fuelCostEstimate)} fuel",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = animatedContentColor.copy(alpha = 0.65f)
+                        )
+                    }
+                    if (hasNonFuelCost) {
+                        Text(
+                            text = "−$${fmt(evaluation.nonFuelCostEstimate)} wear & fixed costs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = animatedContentColor.copy(alpha = 0.65f)
+                        )
+                    }
                 } else {
                     Text(
                         text = "$${fmt(evaluation.payAmount)}",

@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Folder
@@ -47,6 +48,7 @@ fun SettingsHomeScreen(
 ) {
     // Relying strictly on the persisted DataStore state now
     val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsState(initial = false)
+    val userEconomy by viewModel.userEconomy.collectAsState(initial = null)
 
     Scaffold(
         topBar = {
@@ -93,6 +95,22 @@ fun SettingsHomeScreen(
                     title = "Strategy Config",
                     subtitle = "Rules, Pricing, and Simulation",
                     onClick = { onNavigate(Screen.StrategySettings.route) }
+                )
+                val eco = userEconomy
+                val ecoSubtitle = if (eco != null) {
+                    val costPerMi = eco.operatingCostPerMile
+                    val defaultsCount = cloud.trotter.dashbuddy.domain.evaluation.EconomyField.entries.size -
+                        eco.userSetFields.size
+                    "True cost: \$${"%.2f".format(costPerMi)}/mi" +
+                        if (defaultsCount > 0) " · $defaultsCount defaults" else ""
+                } else {
+                    "Tires, oil, depreciation, insurance, phone"
+                }
+                SettingsNavItem(
+                    icon = Icons.Default.AttachMoney,
+                    title = "Personal Economy",
+                    subtitle = ecoSubtitle,
+                    onClick = { onNavigate(Screen.EconomySettings.route) }
                 )
             }
 

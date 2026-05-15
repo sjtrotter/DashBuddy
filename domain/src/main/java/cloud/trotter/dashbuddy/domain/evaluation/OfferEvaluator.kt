@@ -12,9 +12,12 @@ class OfferEvaluator() {
         val dist = offer.distanceMiles ?: 1.0
         val items = offer.itemCount.toDouble()
 
-        // Fuel cost and net pay
+        // Operating cost — full breakdown (fuel + tires + oil + brakes + fluids +
+        // misc + depreciation + amortized fixed costs + phone) and net pay
         val fuelCost = dist * economy.fuelCostPerMile
-        val netPay = grossPay - fuelCost
+        val nonFuelCost = dist * economy.nonFuelCostPerMile
+        val operatingCost = fuelCost + nonFuelCost
+        val netPay = grossPay - operatingCost
 
         // Time estimate using user-configured constants
         val estTimeMinutes = (dist * economy.avgMinutesPerMile) + economy.basePickupMinutes
@@ -39,6 +42,9 @@ class OfferEvaluator() {
                 recommendationText = "Protected: Accept!",
                 payAmount = grossPay,
                 fuelCostEstimate = fuelCost,
+                nonFuelCostEstimate = nonFuelCost,
+                totalOperatingCost = operatingCost,
+                operatingCostPerMile = economy.operatingCostPerMile,
                 netPayAmount = netPay,
                 distanceMiles = dist,
                 dollarsPerMile = dpm,
@@ -46,6 +52,7 @@ class OfferEvaluator() {
                 estimatedTimeMinutes = estTimeMinutes,
                 itemCount = items,
                 merchantName = merchants,
+                isUsingDefaults = economy.isUsingDefaults,
             )
         }
 
@@ -86,13 +93,17 @@ class OfferEvaluator() {
                 recommendationText = "Recommended: DECLINE",
                 payAmount = grossPay,
                 fuelCostEstimate = fuelCost,
+                nonFuelCostEstimate = nonFuelCost,
+                totalOperatingCost = operatingCost,
+                operatingCostPerMile = economy.operatingCostPerMile,
                 netPayAmount = netPay,
                 distanceMiles = dist,
                 dollarsPerMile = dpm,
                 dollarsPerHour = activeHourly,
                 estimatedTimeMinutes = estTimeMinutes,
                 itemCount = items,
-                merchantName = merchants
+                merchantName = merchants,
+                isUsingDefaults = economy.isUsingDefaults,
             )
         }
 
@@ -156,6 +167,9 @@ class OfferEvaluator() {
             recommendationText = recText,
             payAmount = grossPay,
             fuelCostEstimate = fuelCost,
+            nonFuelCostEstimate = nonFuelCost,
+            totalOperatingCost = operatingCost,
+            operatingCostPerMile = economy.operatingCostPerMile,
             netPayAmount = netPay,
             distanceMiles = dist,
             dollarsPerMile = dpm,
@@ -163,6 +177,7 @@ class OfferEvaluator() {
             estimatedTimeMinutes = estTimeMinutes,
             itemCount = items,
             merchantName = merchants,
+            isUsingDefaults = economy.isUsingDefaults,
             warnings = warnings,
         )
     }

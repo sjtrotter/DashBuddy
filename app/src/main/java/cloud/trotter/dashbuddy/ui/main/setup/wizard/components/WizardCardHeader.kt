@@ -20,7 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 
 /**
@@ -30,7 +30,7 @@ import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 @Composable
 fun WizardCardHeader(
     step: WizardStep,
-    vehicleType: VehicleType? = null // Optional: Only provided by the VehicleCard
+    vehicleClass: VehicleClass? = null // Optional: Only provided by the VehicleCard
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -38,7 +38,7 @@ fun WizardCardHeader(
     ) {
 
         // Dynamically swap the icon if they selected an E-Bike
-        val displayIcon = if (step == WizardStep.VEHICLE && vehicleType == VehicleType.E_BIKE) {
+        val displayIcon = if (step == WizardStep.VEHICLE && vehicleClass == VehicleClass.E_BIKE) {
             Icons.Default.PedalBike // Make sure you have material-icons-extended in Gradle!
         } else {
             step.icon

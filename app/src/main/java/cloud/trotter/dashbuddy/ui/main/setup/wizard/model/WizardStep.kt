@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.ui.main.setup.wizard.model
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -29,6 +30,12 @@ enum class WizardStep(
         titleRes = R.string.wizard_title_gas,
         descriptionRes = R.string.wizard_desc_gas,
         icon = Icons.Default.LocalGasStation
+    ),
+    ECONOMY_COSTS(
+        phase = WizardPhase.ECONOMY,
+        titleRes = R.string.wizard_title_economy_costs,
+        descriptionRes = R.string.wizard_desc_economy_costs,
+        icon = Icons.Default.Build
     ),
 
     // --- Phase 2: Strategy ---

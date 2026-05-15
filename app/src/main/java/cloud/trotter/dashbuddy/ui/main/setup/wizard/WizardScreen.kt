@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.domain.config.DashStrategy
+import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.EconomyCostsCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.GasPriceCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.MetricSliderCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.SelectionCard
@@ -108,7 +109,7 @@ fun WizardScreen(
                     WizardStep.VEHICLE -> {
                         VehicleCard(
                             step = currentStep,
-                            vehicleType = state.vehicleType,
+                            vehicleClass = state.vehicleClass,
                             year = state.vehicleYear,
                             make = state.vehicleMake,
                             model = state.vehicleModel,
@@ -118,7 +119,7 @@ fun WizardScreen(
                             availableMakes = availableMakes,
                             availableModels = availableModels,
                             availableTrims = availableTrimNames,
-                            onTypeSelected = viewModel::updateVehicleType,
+                            onTypeSelected = viewModel::updateVehicleClass,
                             onYearSelected = viewModel::onYearSelected,
                             onMakeSelected = viewModel::onMakeSelected,
                             onModelSelected = viewModel::onModelSelected,
@@ -135,6 +136,24 @@ fun WizardScreen(
                             onFuelTypeSelected = viewModel::updateFuelType,
                             onAutoToggle = viewModel::toggleAutoGasPrice,
                             onPriceChange = viewModel::updateGasPrice
+                        )
+                    }
+
+                    WizardStep.ECONOMY_COSTS -> {
+                        EconomyCostsCard(
+                            state = state,
+                            onClassChange = viewModel::updateVehicleClass,
+                            onTiresChange = viewModel::updateTires,
+                            onOilChange = viewModel::updateOilChange,
+                            onBrakesChange = viewModel::updateBrakes,
+                            onFluidsChange = viewModel::updateFluids,
+                            onMiscChange = viewModel::updateMiscRepairs,
+                            onDepreciationChange = viewModel::updateDepreciation,
+                            onInsuranceChange = viewModel::updateInsuranceDelta,
+                            onRegistrationChange = viewModel::updateRegistrationDelta,
+                            onPhoneChange = viewModel::updatePhonePlan,
+                            onExpectedAnnualDashMilesChange = viewModel::updateExpectedAnnualDashMiles,
+                            onTimeConstantsChange = viewModel::updateTimeConstants,
                         )
                     }
 
