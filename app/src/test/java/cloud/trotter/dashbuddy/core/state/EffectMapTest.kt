@@ -197,24 +197,6 @@ class EffectMapTest {
     }
 
     @Test
-    fun `offer with only initial_decline intent still emits OFFER_DECLINED`() {
-        // Confirm-dialog click can be missed when the dialog closes before its
-        // screen is matched; the first tap (initial_decline) is enough signal.
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(lastClickIntent = "initial_decline"),
-            ),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.Idle),
-        ))
-
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
-        assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_DECLINED))
-    }
-
-    @Test
     fun `offer timeout emits OFFER_TIMEOUT log and UpdateBubble`() {
         val prev = AppState(regions = Regions(
             flow = FlowRegion(

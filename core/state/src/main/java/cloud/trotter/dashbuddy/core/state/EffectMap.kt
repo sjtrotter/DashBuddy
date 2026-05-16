@@ -562,13 +562,10 @@ class EffectMap @Inject constructor(
 
     private fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
         // 1. Stored click intent on PendingOffer — covers the common case where
-        //    the click was observed first and the resolving obs is a Screen.
-        //    `initial_decline` is the first tap on the popup; we treat it as a
-        //    decline signal because the confirm-dialog click can be missed when
-        //    the dialog closes before its screen is matched.
+        //    the click was observed first and the resolving obs is a Screen
         when (prevOffer?.lastClickIntent) {
             "accept_offer" -> return AppEventType.OFFER_ACCEPTED
-            "decline_offer", "initial_decline" -> return AppEventType.OFFER_DECLINED
+            "decline_offer" -> return AppEventType.OFFER_DECLINED
         }
         // 2. Direct click observation — covers the edge case where click and
         //    flow change arrive in the same observation
@@ -578,7 +575,7 @@ class EffectMap @Inject constructor(
         }
         return when (clickFields?.intent) {
             "accept_offer" -> AppEventType.OFFER_ACCEPTED
-            "decline_offer", "initial_decline" -> AppEventType.OFFER_DECLINED
+            "decline_offer" -> AppEventType.OFFER_DECLINED
             else -> AppEventType.OFFER_TIMEOUT
         }
     }
