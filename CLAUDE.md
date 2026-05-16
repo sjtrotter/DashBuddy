@@ -248,6 +248,32 @@ At the start of a session or before picking up new work:
    for unresolved blockers before committing to a direction.
 4. **Update `memory/project_state.md`** if the current state has drifted from what's recorded.
 
+## Field Testing Logs
+
+When the developer narrates observations from an active or just-completed dashing session —
+any of: "this is a field testing log", "dashing log", "field log", "on-dash testing notes",
+or just rattling off bugs/UX observations from time spent driving — the right action is to
+**record, not fix**:
+
+1. **Add an entry to `docs/field-testing/README.md`**, newest first, following the format
+   documented at the top of that file (Date / Platform(s) tested / Branch under test / Field
+   conditions / sectioned observations). Item numbers are session-local — reset to #1 each
+   session.
+2. **Don't start implementing — but desk-side exploration is encouraged.** Reading the
+   code, tracing the suspect flow, citing file/line refs, and proposing what the cause
+   *might* be is genuinely useful and welcome inside the log entry. **What's not welcome is
+   framing any of it as a concluded answer or a fix to apply.** Phrase everything as a
+   **hypothesis**: "likely cause", "one possibility", "would need to confirm X by capturing
+   Y", "if this hypothesis holds, one direction might be …". Never write "Proposed fix:"
+   followed by a concrete action and never push code changes. The developer decides what's
+   actually wrong and what to do about it; the log entry exists to feed that decision, not
+   pre-empt it.
+3. **Match the structure of prior entries.** Existing sections include Bugs / Field UX
+   context / Open questions / Meta / architecture / Research / design / Verification TODOs.
+   Omit sections that don't apply for the session.
+4. **Branch under test** — if not stated, infer from the most recent merge commit on `master`
+   and label it (e.g. "`master` at `<sha>` (post-#NNN merge)"); the developer can correct it.
+
 ## GitHub Issues — Labels & Project
 
 **Always** add every new issue to the DashBuddy Roadmap project. See `CLAUDE.local.md` for the
