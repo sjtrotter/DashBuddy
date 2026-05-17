@@ -1,0 +1,142 @@
+package cloud.trotter.dashbuddy.domain.model.event.payload
+
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.state.Flow
+
+/**
+ * Rich payloads written into [cloud.trotter.dashbuddy.core.database.event.AppEventEntity.eventPayload]
+ * at each phase-boundary. Each payload captures the full state of the phase
+ * as it closed so the bubble HUD's flow-card stack can fold the event stream
+ * into per-phase snapshots without joining other entities.
+ *
+ * `AppEventEntity.eventPayload` is a JSON `String`, so adding/removing fields
+ * on these classes does not require a database migration. Old rows simply
+ * deserialize into whatever fields they still have.
+ */
+
+/**
+ * Payload for `OFFER_RECEIVED` — emitted when a new offer first appears on
+ * screen. Lean by design: the offer's evaluation hasn't run yet at this
+ * point (the EvaluateOffer side effect fires async), so only the parsed
+ * offer + identity fields are populated. The closing `OFFER_ACCEPTED` /
+ * `OFFER_DECLINED` / `OFFER_TIMEOUT` event carries the rich evaluation.
+ */
+data class OfferReceivedPayload(
+    val offerHash: String,
+    val parsedOffer: ParsedOffer,
+    val presentedAt: Long,
+    val platform: String,
+    val returnFlow: Flow,
+)
+
+/**
+ * Payload for `OFFER_ACCEPTED` / `OFFER_DECLINED` / `OFFER_TIMEOUT`.
+ *
+ * Carries the full offer context and evaluation. The closing event alone is
+ * sufficient to render the Offer card — no need to read OFFER_RECEIVED.
+ */
+data class OfferPayload(
+    val offerHash: String,
+    val parsedOffer: ParsedOffer,
+    val evaluation: OfferEvaluation? = null,
+    val outcome: AppEventType,
+    val presentedAt: Long,
+    val decidedAt: Long,
+    val returnFlow: Flow,
+    /** Optional context — e.g. "Replaced by new offer". */
+    val description: String? = null,
+)
+
+/**
+ * Payload for `PICKUP_NAV_STARTED`, `PICKUP_ARRIVED`, `PICKUP_CONFIRMED`.
+ *
+ * Each phase-boundary fills in progressively more fields:
+ *   NAV_STARTED → phaseStartedAt + entry odometer + task metadata
+ *   ARRIVED     → adds arrivedAt + arrival odometer
+ *   CONFIRMED   → adds confirmedAt (the moment pickup→dropoff transition)
+ */
+data class PickupPayload(
+    val jobId: String,
+    val taskId: String,
+    val storeName: String,
+    val phaseStartedAt: Long,
+    val arrivedAt: Long? = null,
+    val confirmedAt: Long? = null,
+    val odometerAtEntry: Double? = null,
+    val odometerAtArrival: Double? = null,
+    val deadlineMillis: Long? = null,
+    val itemCount: Int? = null,
+    val redCardTotal: Double? = null,
+    val activity: String? = null,
+)
+
+/**
+ * Payload for `DELIVERY_NAV_STARTED`, `DELIVERY_ARRIVED`, `DELIVERY_COMPLETED`.
+ *
+ * `DELIVERY_COMPLETED` is the only one that carries the per-delivery pay
+ * breakdown — captured from the most recent PostTask observation before
+ * leaving the PostTask flow.
+ */
+data class DeliveryPayload(
+    val jobId: String,
+    val taskId: String,
+    val storeName: String? = null,
+    val customerHash: String? = null,
+    val addressHash: String? = null,
+    val phaseStartedAt: Long,
+    val arrivedAt: Long? = null,
+    val completedAt: Long? = null,
+    val odometerAtEntry: Double? = null,
+    val odometerAtArrival: Double? = null,
+    val deadlineMillis: Long? = null,
+    /** Total pay for this delivery — populated on COMPLETED. */
+    val totalPay: Double? = null,
+    /** Itemized pay breakdown — populated on COMPLETED. */
+    val parsedPay: ParsedPay? = null,
+    /** Session running total at the moment of completion. */
+    val sessionEarningsAtCompletion: Double? = null,
+)
+
+/** Payload for `DASH_START`. */
+data class SessionStartPayload(
+    val sessionId: String,
+    val platform: String,
+    val startedAt: Long,
+    /** "interaction" (normal user start) | "recovery" (crash recovery). */
+    val source: String,
+    val startScreen: String,
+)
+
+/**
+ * Payload for `DASH_PAUSED`. The platform's reported pause countdown is
+ * captured so the card stack can render a frozen "paused for Xm Ys" view.
+ */
+data class SessionPausedPayload(
+    val sessionId: String?,
+    val pausedAt: Long,
+    val remainingText: String? = null,
+    val remainingMillis: Long? = null,
+)
+
+/**
+ * Payload for `DASH_STOP`.
+ *
+ * When the dash ends on a SessionEnded summary screen, the full earnings
+ * picture is populated. When it ends via an early offline transition without
+ * a summary screen, only the `source` field is set — the card UI shows an
+ * "incomplete" badge for that case.
+ */
+data class SessionStopPayload(
+    val sessionId: String?,
+    val endedAt: Long,
+    /** "summary_screen" | "early_offline". */
+    val source: String,
+    val totalEarnings: Double? = null,
+    val sessionDurationMillis: Long? = null,
+    val offersAccepted: Int? = null,
+    val offersTotal: Int? = null,
+    val weeklyEarnings: Double? = null,
+)

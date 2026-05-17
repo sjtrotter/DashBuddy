@@ -145,7 +145,7 @@ class EffectMapTest {
     // =========================================================================
 
     @Test
-    fun `offer presented emits Evaluate and Speak (screenshot and log now via rule effects)`() {
+    fun `offer presented emits Evaluate, Speak, and OFFER_RECEIVED log`() {
         val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
         val next = AppState(regions = Regions(
             flow = FlowRegion(
@@ -159,9 +159,12 @@ class EffectMapTest {
 
         assertTrue("Should emit EvaluateOffer", effects.any { it is AppEffect.EvaluateOffer })
         assertTrue("Should emit SpeakOffer", effects.any { it is AppEffect.SpeakOffer })
-        // Screenshot + OFFER_RECEIVED log now handled by rule-declared effects
+        // OFFER_RECEIVED now emitted from EffectMap with a typed payload
+        // (#257) — moved out of rule-declared `log` effects which never
+        // persisted to the DB.
+        assertTrue("Should emit OFFER_RECEIVED", effects.logEventTypes().contains(AppEventType.OFFER_RECEIVED))
+        // Screenshot still handled by rule-declared effects
         assertTrue("No hardcoded CaptureScreenshot", effects.none { it is AppEffect.CaptureScreenshot })
-        assertTrue("No hardcoded OFFER_RECEIVED log", !effects.logEventTypes().contains(AppEventType.OFFER_RECEIVED))
     }
 
     @Test

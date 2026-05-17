@@ -290,7 +290,7 @@ class PlatformRegionStepper @Inject constructor() {
             }
             is ParsedFields.PostTaskFields -> {
                 val payHash = parsed.parsedPay?.hashCode()
-                r = r.copy(lastPostTaskPayHash = payHash)
+                r = r.copy(lastPostTaskPayHash = payHash, lastPostTaskFields = parsed)
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
                     if (earnings != null) {
@@ -483,6 +483,8 @@ class PlatformRegionStepper @Inject constructor() {
             recentTasks = recentTasks,
             sessionGraceDeadline = null,
             idleEnteredAt = null,
+            lastPostTaskPayHash = null,
+            lastPostTaskFields = null,
         )
     }
 
@@ -491,6 +493,7 @@ class PlatformRegionStepper @Inject constructor() {
         return region.copy(
             activeJob = null,
             lastPostTaskPayHash = null,
+            lastPostTaskFields = null,
         )
     }
 }

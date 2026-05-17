@@ -1,0 +1,453 @@
+package cloud.trotter.dashbuddy.ui.bubble.cards
+
+import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
+import cloud.trotter.dashbuddy.domain.state.Flow
+import com.google.gson.Gson
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class FlowCardMapperTest {
+
+    private val gson = Gson()
+    private var seq = 1L
+
+    private fun event(type: AppEventType, payload: Any, occurredAt: Long): AppEventEntity {
+        val json = payload as? String ?: gson.toJson(payload)
+        return AppEventEntity(
+            sequenceId = seq++,
+            aggregateId = "session-1",
+            eventType = type,
+            eventPayload = json,
+            occurredAt = occurredAt,
+        )
+    }
+
+    private fun parsedOffer(hash: String, pay: Double, miles: Double, store: String = "Wendy's") =
+        ParsedOffer(
+            offerHash = hash,
+            payAmount = pay,
+            distanceMiles = miles,
+            itemCount = 1,
+            orders = listOf(
+                ParsedOrder(
+                    orderIndex = 0,
+                    orderType = OrderType.PICKUP,
+                    storeName = store,
+                    itemCount = 1,
+                    isItemCountEstimated = false,
+                    badges = emptySet(),
+                )
+            ),
+        )
+
+    private fun evaluation(score: Double = 80.0) = OfferEvaluation(
+        action = OfferAction.ACCEPT,
+        score = score,
+        qualityLevel = "Good",
+        recommendationText = "Recommended: ACCEPT",
+        payAmount = 7.50,
+        fuelCostEstimate = 0.5,
+        nonFuelCostEstimate = 0.5,
+        totalOperatingCost = 1.0,
+        operatingCostPerMile = 0.24,
+        netPayAmount = 6.50,
+        distanceMiles = 4.2,
+        dollarsPerMile = 1.55,
+        dollarsPerHour = 22.0,
+        estimatedTimeMinutes = 18.0,
+        itemCount = 1.0,
+        merchantName = "Wendy's",
+    )
+
+    private fun offerPayload(hash: String, outcome: AppEventType, presentedAt: Long, decidedAt: Long) =
+        OfferPayload(
+            offerHash = hash,
+            parsedOffer = parsedOffer(hash, 7.50, 4.2),
+            evaluation = evaluation(),
+            outcome = outcome,
+            presentedAt = presentedAt,
+            decidedAt = decidedAt,
+            returnFlow = Flow.Idle,
+        )
+
+    private fun pickupPayload(taskId: String, jobId: String, store: String, started: Long,
+                              arrived: Long? = null, confirmed: Long? = null) = PickupPayload(
+        jobId = jobId,
+        taskId = taskId,
+        storeName = store,
+        phaseStartedAt = started,
+        arrivedAt = arrived,
+        confirmedAt = confirmed,
+    )
+
+    private fun deliveryPayload(taskId: String, jobId: String, started: Long,
+                                arrived: Long? = null, completed: Long? = null,
+                                totalPay: Double? = null, parsedPay: ParsedPay? = null,
+                                sessionEarnings: Double? = null) = DeliveryPayload(
+        jobId = jobId,
+        taskId = taskId,
+        customerHash = "cust-abc",
+        phaseStartedAt = started,
+        arrivedAt = arrived,
+        completedAt = completed,
+        totalPay = totalPay,
+        parsedPay = parsedPay,
+        sessionEarningsAtCompletion = sessionEarnings,
+    )
+
+    // =========================================================================
+    // Happy path
+    // =========================================================================
+
+    @Test
+    fun `happy path — offer → pickup → delivery → posttask produces five completed cards`() {
+        val parsedPay = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 4.50)),
+            customerTips = listOf(ParsedPayItem("Wendy's", 3.00)),
+        )
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 2000L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("offer-1", AppEventType.OFFER_ACCEPTED, 2000L, 2500L),
+                occurredAt = 2500L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T1", "J1", "Wendy's", 2500L),
+                occurredAt = 2500L),
+            event(AppEventType.PICKUP_ARRIVED,
+                pickupPayload("T1", "J1", "Wendy's", 2500L, arrived = 3000L),
+                occurredAt = 3000L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 2500L, arrived = 3000L, confirmed = 3500L),
+                occurredAt = 3500L),
+            event(AppEventType.DELIVERY_NAV_STARTED,
+                deliveryPayload("T2", "J1", 3500L),
+                occurredAt = 3500L),
+            event(AppEventType.DELIVERY_ARRIVED,
+                deliveryPayload("T2", "J1", 3500L, arrived = 4000L),
+                occurredAt = 4000L),
+            event(AppEventType.DELIVERY_COMPLETED,
+                deliveryPayload("T2", "J1", 3500L, arrived = 4000L, completed = 4500L,
+                    totalPay = 7.50, parsedPay = parsedPay, sessionEarnings = 47.50),
+                occurredAt = 4500L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        assertEquals(5, cards.size)
+
+        val awaiting = cards[0] as FlowCardSnapshot.Awaiting
+        assertEquals("s1", awaiting.sessionId)
+        assertEquals(1000L, awaiting.phaseStartedAt)
+        assertEquals(2000L, awaiting.phaseEndedAt)
+
+        val offer = cards[1] as FlowCardSnapshot.Offer
+        assertEquals("offer-1", offer.offerHash)
+        assertEquals(7.50, offer.payAmount!!, 0.001)
+        assertEquals(80.0, offer.evaluationScore!!, 0.001)
+        assertEquals(AppEventType.OFFER_ACCEPTED, offer.outcome)
+        assertTrue("Wendy's" in offer.storeNames)
+
+        val pickup = cards[2] as FlowCardSnapshot.Pickup
+        assertEquals("T1", pickup.taskId)
+        assertEquals("Wendy's", pickup.storeName)
+        assertEquals(3000L, pickup.arrivedAt)
+        assertEquals(3500L, pickup.confirmedAt)
+        assertEquals(3500L, pickup.phaseEndedAt)
+
+        val delivery = cards[3] as FlowCardSnapshot.Delivery
+        assertEquals("T2", delivery.taskId)
+        assertEquals(4000L, delivery.arrivedAt)
+        assertEquals(4000L, delivery.phaseEndedAt)
+
+        val postTask = cards[4] as FlowCardSnapshot.PostTask
+        assertEquals(7.50, postTask.totalPay, 0.001)
+        assertNotNull(postTask.parsedPay)
+        assertEquals(47.50, postTask.sessionEarningsAtCompletion!!, 0.001)
+        assertEquals(4000L, postTask.phaseStartedAt)
+        assertEquals(4500L, postTask.phaseEndedAt)
+    }
+
+    // =========================================================================
+    // Decline path
+    // =========================================================================
+
+    @Test
+    fun `decline path — Awaiting closes, Offer freezes with DECLINED outcome, no Pickup`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 2000L),
+            event(AppEventType.OFFER_DECLINED,
+                offerPayload("decline-1", AppEventType.OFFER_DECLINED, 2000L, 2300L),
+                occurredAt = 2300L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        assertEquals(2, cards.size)
+        assertTrue(cards[0] is FlowCardSnapshot.Awaiting)
+
+        val offer = cards[1] as FlowCardSnapshot.Offer
+        assertEquals(AppEventType.OFFER_DECLINED, offer.outcome)
+    }
+
+    // =========================================================================
+    // Timeout path
+    // =========================================================================
+
+    @Test
+    fun `timeout path — Offer freezes with TIMEOUT outcome`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 2000L),
+            event(AppEventType.OFFER_TIMEOUT,
+                offerPayload("to-1", AppEventType.OFFER_TIMEOUT, 2000L, 2030L),
+                occurredAt = 2030L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        val offer = cards.filterIsInstance<FlowCardSnapshot.Offer>().single()
+        assertEquals(AppEventType.OFFER_TIMEOUT, offer.outcome)
+    }
+
+    // =========================================================================
+    // Multi-delivery dash
+    // =========================================================================
+
+    @Test
+    fun `back-to-back deliveries produce sequential Offer Pickup Delivery PostTask cards`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            // delivery 1
+            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 1500L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T1a", "J1", "A", 1600L), 1600L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1a", "J1", "A", 1600L, confirmed = 2000L), 2000L),
+            event(AppEventType.DELIVERY_NAV_STARTED,
+                deliveryPayload("T1b", "J1", 2000L), 2000L),
+            event(AppEventType.DELIVERY_ARRIVED,
+                deliveryPayload("T1b", "J1", 2000L, arrived = 2500L), 2500L),
+            event(AppEventType.DELIVERY_COMPLETED,
+                deliveryPayload("T1b", "J1", 2000L, arrived = 2500L, completed = 2700L, totalPay = 5.00), 2700L),
+            // delivery 2
+            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 3000L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("o2", AppEventType.OFFER_ACCEPTED, 3000L, 3100L), 3100L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T2a", "J2", "B", 3100L), 3100L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T2a", "J2", "B", 3100L, confirmed = 3500L), 3500L),
+            event(AppEventType.DELIVERY_NAV_STARTED,
+                deliveryPayload("T2b", "J2", 3500L), 3500L),
+            event(AppEventType.DELIVERY_ARRIVED,
+                deliveryPayload("T2b", "J2", 3500L, arrived = 4000L), 4000L),
+            event(AppEventType.DELIVERY_COMPLETED,
+                deliveryPayload("T2b", "J2", 3500L, arrived = 4000L, completed = 4200L, totalPay = 8.00), 4200L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+
+        // Awaiting + (Offer + Pickup + Delivery + PostTask) × 2 = 9
+        assertEquals(9, cards.size)
+
+        val offers = cards.filterIsInstance<FlowCardSnapshot.Offer>()
+        assertEquals(2, offers.size)
+        assertEquals(listOf("o1", "o2"), offers.map { it.offerHash })
+
+        val pickups = cards.filterIsInstance<FlowCardSnapshot.Pickup>()
+        assertEquals(2, pickups.size)
+        assertEquals(listOf("T1a", "T2a"), pickups.map { it.taskId })
+
+        val postTasks = cards.filterIsInstance<FlowCardSnapshot.PostTask>()
+        assertEquals(listOf(5.00, 8.00), postTasks.map { it.totalPay })
+    }
+
+    // =========================================================================
+    // Session reset
+    // =========================================================================
+
+    @Test
+    fun `DASH_START resets the stack — prior session cards are dropped`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
+            // new dash starts before delivery completes
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s2", "DoorDash", 5000L, "interaction", "WaitingForOffer"), 5000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 5500L),
+            event(AppEventType.OFFER_DECLINED,
+                offerPayload("o2", AppEventType.OFFER_DECLINED, 5500L, 5700L), 5700L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        // Only the second session's cards remain — Awaiting + Offer
+        assertEquals(2, cards.size)
+        assertEquals("s2", (cards[0] as FlowCardSnapshot.Awaiting).sessionId)
+        assertEquals("o2", (cards[1] as FlowCardSnapshot.Offer).offerHash)
+    }
+
+    // =========================================================================
+    // Store-name update (secondary PICKUP_NAV_STARTED for the same taskId)
+    // =========================================================================
+
+    @Test
+    fun `repeated PICKUP_NAV_STARTED for same task updates store name, does not duplicate`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T1", "J1", "Unknown", 1600L), 1600L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T1", "J1", "Wendy's", 1600L), 1700L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 1600L, confirmed = 2000L), 2000L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        val pickups = cards.filterIsInstance<FlowCardSnapshot.Pickup>()
+        assertEquals(1, pickups.size)
+        assertEquals("Wendy's", pickups[0].storeName)
+    }
+
+    // =========================================================================
+    // Half-open card on DASH_STOP
+    // =========================================================================
+
+    @Test
+    fun `DASH_STOP closes any half-open card with the stop timestamp`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+            // Awaiting open, never gets an offer
+            event(AppEventType.DASH_STOP,
+                SessionStopPayload("s1", endedAt = 3000L, source = "early_offline"), 3000L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        assertEquals(1, cards.size)
+        val awaiting = cards[0] as FlowCardSnapshot.Awaiting
+        assertEquals(3000L, awaiting.phaseEndedAt)
+    }
+
+    // =========================================================================
+    // Empty input
+    // =========================================================================
+
+    @Test
+    fun `empty event list produces empty card list`() {
+        val cards = FlowCardMapper.fold(emptyList())
+        assertTrue(cards.isEmpty())
+    }
+
+    @Test
+    fun `Awaiting closes at presentedAt when OFFER_RECEIVED carries typed payload`() {
+        // OFFER_RECEIVED is now emitted by EffectMap with a typed
+        // OfferReceivedPayload that includes presentedAt. The mapper uses
+        // that timestamp (the moment the offer hit the screen) to close
+        // Awaiting — more accurate than the event's own occurredAt.
+        val received = OfferReceivedPayload(
+            offerHash = "o1",
+            parsedOffer = parsedOffer("o1", 7.50, 4.2),
+            presentedAt = 1500L,
+            platform = "DoorDash",
+            returnFlow = Flow.Idle,
+        )
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            // Note: event occurredAt (1505L) deliberately differs from
+            // payload presentedAt (1500L) to prove the mapper prefers the
+            // payload's value.
+            event(AppEventType.OFFER_RECEIVED, received, occurredAt = 1505L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        assertEquals(1, cards.size)
+        val awaiting = cards[0] as FlowCardSnapshot.Awaiting
+        assertEquals(1000L, awaiting.phaseStartedAt)
+        assertEquals(1500L, awaiting.phaseEndedAt)
+    }
+
+    @Test
+    fun `Awaiting closes on OFFER_ACCEPTED even when OFFER_RECEIVED is missing`() {
+        // Regression: the rule-declared OFFER_RECEIVED log effect doesn't
+        // persist to the DB (it only goes to Timber). The mapper must
+        // defensively close the Awaiting card on the next OFFER_* closing
+        // event using OfferPayload.presentedAt as the phaseEndedAt — see
+        // bubble-test session 2026-05-17 where no OFFER_RECEIVED row was
+        // ever written and the Awaiting card hung open until DASH_STOP.
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            // Note: no OFFER_RECEIVED here — straight to ACCEPTED.
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("abc", AppEventType.OFFER_ACCEPTED, presentedAt = 1500L, decidedAt = 1600L),
+                occurredAt = 1600L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        assertEquals(2, cards.size)
+
+        val awaiting = cards[0] as FlowCardSnapshot.Awaiting
+        assertEquals(1000L, awaiting.phaseStartedAt)
+        // Critical: Awaiting closes at the offer's presentedAt (1500L), NOT
+        // at the closing-event occurredAt (1600L) and NOT left open.
+        assertEquals(1500L, awaiting.phaseEndedAt)
+
+        val offer = cards[1] as FlowCardSnapshot.Offer
+        assertEquals("abc", offer.offerHash)
+        assertEquals(AppEventType.OFFER_ACCEPTED, offer.outcome)
+    }
+
+    @Test
+    fun `events before DASH_START are ignored when DASH_START arrives`() {
+        // A real session: prior stale offer events followed by a new DASH_START
+        // should not contaminate the new session's stack.
+        val events = listOf(
+            event(AppEventType.OFFER_RECEIVED, "{}", 500L),
+            event(AppEventType.OFFER_DECLINED,
+                offerPayload("stale", AppEventType.OFFER_DECLINED, 500L, 700L), 700L),
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s-new", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        // Stale Offer card is dropped by the DASH_START reset; the new
+        // Awaiting card is still open (no end-time yet).
+        assertEquals(0, cards.size)
+    }
+}

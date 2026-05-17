@@ -61,6 +61,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -68,7 +69,9 @@ import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.ui.bubble.cards.FlowCardItem
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId
+import androidx.compose.runtime.mutableStateMapOf
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
@@ -84,7 +87,7 @@ fun BubbleScreen(
     val sessionMiles by viewModel.sessionMiles.collectAsState()
     val sessionEarnings by viewModel.sessionEarnings.collectAsState()
     val lastSessionSummary by viewModel.lastSessionSummary.collectAsState()
-    val lastAcceptedOfferPay by viewModel.lastAcceptedOfferPay.collectAsState()
+    val cardStack by viewModel.cardStack.collectAsState()
     var showFullChat by remember { mutableStateOf(false) }
 
     val flow = appState.regions.flow
@@ -133,14 +136,10 @@ fun BubbleScreen(
                 FullChatView(messages)
             } else {
                 DashboardView(
+                    cardStack = cardStack,
                     region = focusedRegion,
-                    flow = flow,
-                    focusedPlatform = focusedPlatform,
                     messages = messages,
                     lastSessionSummary = lastSessionSummary,
-                    sessionEarnings = sessionEarnings,
-                    sessionMiles = sessionMiles,
-                    lastAcceptedOfferPay = lastAcceptedOfferPay,
                     onOpenChat = { showFullChat = true }
                 )
             }
@@ -154,32 +153,83 @@ fun BubbleScreen(
 
 @Composable
 fun DashboardView(
+    cardStack: CardStack,
     region: PlatformRegion?,
-    flow: FlowRegion,
-    focusedPlatform: Platform?,
     messages: List<ChatMessage>,
     lastSessionSummary: SessionSummary?,
-    sessionEarnings: Double,
-    sessionMiles: Double,
-    lastAcceptedOfferPay: Double?,
     onOpenChat: () -> Unit
 ) {
+    val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
+    val listState = rememberLazyListState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ModeCard(
-            region = region,
-            flow = flow,
-            lastSessionSummary = lastSessionSummary,
-            sessionEarnings = sessionEarnings,
-            sessionMiles = sessionMiles,
-            lastAcceptedOfferPay = lastAcceptedOfferPay,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.weight(1f))
+        when {
+            cardStack.isEmpty && (region == null || region.mode == Mode.Offline) -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                ) {
+                    Box(modifier = Modifier.padding(16.dp)) {
+                        ModeIdle(lastSessionSummary)
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+            }
+            cardStack.isEmpty -> {
+                Text(
+                    text = "Waiting for activity…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+            }
+            else -> {
+                // reverseLayout = true pins the active card to the bottom of
+                // the viewport and grows the history upward. Items are
+                // declared in reverse chronological order (active first,
+                // then completed newest→oldest) so that visually:
+                //   top    = oldest completed card
+                //   middle = newer completed cards
+                //   bottom = active (live) card
+                // No autoscroll required — Compose naturally keeps the
+                // first-declared item (the active card) at the bottom.
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    state = listState,
+                    reverseLayout = true,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    cardStack.active?.let { live ->
+                        item(key = "live:${live.id}") {
+                            FlowCardItem(
+                                snapshot = live,
+                                isActive = true,
+                                expanded = true,
+                                onToggleExpand = { /* active always expanded */ },
+                            )
+                        }
+                    }
+                    items(
+                        items = cardStack.completed.asReversed(),
+                        key = { it.id },
+                    ) { snap ->
+                        val expanded = expandedIds[snap.id] == true
+                        FlowCardItem(
+                            snapshot = snap,
+                            isActive = false,
+                            expanded = expanded,
+                            onToggleExpand = { expandedIds[snap.id] = !expanded },
+                        )
+                    }
+                }
+            }
+        }
         LatestMessageTicker(messages = messages, onClick = onOpenChat)
     }
 }
