@@ -60,23 +60,30 @@ cross-referencing within a single session entry, not across sessions.
   - `Delivery` card (`FlowCardItem.kt:312-325`) has the same shape and the same gap for the deliver-by deadline.
 - **Possible direction (sketch, not a recommendation):** add a secondary caption like `"by ${formatTime(deadlineMillis)}"` under the countdown. Cheap to add; would let the dasher cross-check the countdown against the literal time on the DoorDash UI.
 
-#### 3. Frozen Delivery card disappears under (or is visually absorbed by) the PAID card after delivery completes
+#### 3. No mid-dash freeze of the Drop-off card — it only appears at end-of-dash, flushed by DASH_STOP
 
-- **Repro:** Complete a delivery. Watch the flow-card stack transition from the live Delivery card to the live PAID/PostTask card.
-- **Observed (per the log narrative):** "the drop-off block had the section for the drop off. Whenever that got completed, it got replaced by the paid block." The dasher wants the Delivery summary to **persist** in the history above the receipt — not vanish.
-- **Hypothesis (from a desk read, not verified against the captured event stream):**
-  - `FlowCardMapper.kt:201-224` *does* add a frozen Delivery snapshot to `completed` on `DELIVERY_ARRIVED`, so in principle it should appear in the stack just above the live PAID card once the flow advances to PostTask. So the bug isn't "Delivery card never gets stored."
-  - Two candidate explanations worth distinguishing:
-    - (a) `DELIVERY_ARRIVED` isn't actually firing for this style of completion. `EffectMap.kt:402-432` only emits it when `nextTask.arrivedAt != null && prevTask?.arrivedAt == null` — i.e. an explicit arrival sub-state transition. If DoorDash's "no-contact delivery" flow rolls straight from nav → completed without DashBuddy seeing an ARRIVED screen, the Delivery card stays in `openDelivery` and only gets flushed by DASH_STOP at the end of the dash (`FlowCardMapper.kt:247-258`). Net effect: looks "replaced" because there is no frozen Delivery card in the stack at the moment the PAID card appears.
-    - (b) The Delivery card *is* in `completed` but its frozen body is so terse (line 187-195: "customer · delivered HH:MM" + a +/- delta hero) that the dasher reads it as part of the PAID card chrome rather than a separate card. The visual hierarchy in the stack puts the live card at the bottom, expanded, and the just-previous frozen card flush above it with similar styling.
-  - The user-side description ("it had the section for the drop off … got replaced") slightly favors (a): they're describing the section disappearing, not just shrinking. But (a) and (b) are easy to disambiguate from a captured event log.
-- **What would confirm or refute this:**
-  - (a-vs-b): for the same delivery, check whether a `DELIVERY_ARRIVED` event row exists in `app_events` between the last `DELIVERY_NAV_STARTED` and the `DELIVERY_COMPLETED`. If absent → (a). If present → (b).
-  - Either way, worth a check from the bubble-history side: when the PAID card is the live one, is `cardStack.completed` actually carrying a `FlowCardSnapshot.Delivery` for the same `jobId`?
+- **Repro:** Complete a delivery. Watch the flow-card stack transition from the live Drop-off card to the live PAID/PostTask card. Watch through the rest of the dash, then end the dash and look at the stack.
+- **Observed (per the log narrative):** "the drop-off block had the section for the drop off. Whenever that got completed, it got replaced by the paid block." Later follow-up clarification: the frozen Drop-off card **did appear at the end of the dash, after the dash was ended** — not at delivery completion. The dasher wants the Drop-off summary to be frozen and visible in the history at the moment the PAID card appears, not deferred to end-of-session.
+- **The end-of-dash appearance is strong evidence:** of the two candidates the original entry sketched, this confirms (a) over (b). `FlowCardMapper.kt:247-258` is the only path that flushes a still-open `openDelivery` — and that path runs on `DASH_STOP`. So the Drop-off card never reaches `completed` at delivery time; it sits half-open in `openDelivery` until the session ends.
+- **Hypothesis (from a desk read, narrowed by the end-of-dash observation):**
+  - `DELIVERY_ARRIVED` isn't being emitted for this delivery style. `EffectMap.kt:402-432` only emits it when `nextTask.arrivedAt != null && prevTask?.arrivedAt == null` — i.e. an explicit arrival sub-state transition. If DoorDash's "no-contact delivery" rolls from nav → completion without DashBuddy ever observing an arrival screen, `nextTask.arrivedAt` never flips non-null and `DELIVERY_ARRIVED` never fires.
+  - With no `DELIVERY_ARRIVED`, `FlowCardMapper.kt:201-224` is never invoked for this delivery, so the open Delivery stays in `openDelivery` and the `lastDeliveryArrivedAt` accumulator stays null. `DELIVERY_COMPLETED` at `:226-245` adds a PostTask card but **doesn't** flush `openDelivery` — only DASH_STOP does (`:247-258`).
+  - This also leaves `lastDeliveryArrivedAt` null at the moment the PostTask card is built, so the PostTask's `phaseStartedAt` falls back to `payload.phaseStartedAt` (`FlowCardMapper.kt:231`) rather than the actual arrival time. Worth checking whether the PAID card's timing looks off too.
+- **Possible direction (sketch only — defer to desk review):**
+  - Either teach the platform stepper to mark `task.arrivedAt` whenever a Drop-off transitions to PostTask/Completed (so the existing `DELIVERY_ARRIVED` emission fires naturally), or close `openDelivery` from the `DELIVERY_COMPLETED` branch in `FlowCardMapper.kt:226-245` as a fallback. The mapper-side fix is the smaller patch but defers the data-model question (is there ever a Delivery that completes without arriving?).
+- **What would confirm or refute this at the desk:** pull the captures from this session via the Android Studio plugin and check, for any delivery that did **not** see a frozen Drop-off card appear at the moment of completion:
+  - whether the `app_events` table contains a `DELIVERY_ARRIVED` row between `DELIVERY_NAV_STARTED` and `DELIVERY_COMPLETED` for that taskId (expected: absent);
+  - whether the corresponding `Task` row in the DB shows `arrivedAt == null` despite the delivery completing.
+
+#### 4. "DROP" chip on Drop-off card reads as ambiguous — rename to "DROP OFF"
+
+- **Field observation:** The frozen/live Drop-off card uses a chip labeled `DROP`. The dasher's reaction: "drop doesn't really make sense, even as a card. The three extra characters aren't gonna hurt anything." Rename to `DROP OFF`.
+- **Where this lives:** `FlowCardItem.kt:130` — `is FlowCardSnapshot.Delivery -> "DROP" to MaterialTheme.colorScheme.secondary`. Two-line patch (label string + verifying the chip's `Modifier.padding` still fits the wider text).
+- **Polish-shape, not a research item.** Logged here so it doesn't get lost; the desk review can fold it into whatever PR addresses #3.
 
 ### Research / design
 
-#### 4. PAID card receipt is mis-shaped — "made-up" labels and an awkward base/tip split
+#### 5. PAID card receipt is mis-shaped — "made-up" labels and an awkward base/tip split
 
 - **Field observation, verbatim:** "it says base pay twenty seventy five tip bonus boost. That's not true. It says a dollar. And I think you made up bonus boost. It should say the actual name of that pay, because I think that's actually supposed to be peak pay and record the peak pay that I got for that offer." Specifically on an HEB shop-for-items order.
 - **Developer's mental model for the receipt:** read it like an actual receipt.
