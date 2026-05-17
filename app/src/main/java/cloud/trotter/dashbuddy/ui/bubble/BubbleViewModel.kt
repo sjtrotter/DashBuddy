@@ -3,7 +3,9 @@ package cloud.trotter.dashbuddy.ui.bubble
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
@@ -11,6 +13,8 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
+import cloud.trotter.dashbuddy.ui.bubble.cards.FlowCardMapper
+import cloud.trotter.dashbuddy.ui.bubble.cards.LiveCardBuilder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,7 +38,8 @@ class BubbleViewModel @Inject constructor(
     private val bubbleManager: BubbleManager,
     private val chatRepository: ChatRepository,
     odometerRepository: OdometerRepository,
-    stateManager: StateManagerV2
+    stateManager: StateManagerV2,
+    appEventRepo: AppEventRepo,
 ) : ViewModel() {
 
     // Current app state — drives the mode card in the HUD
@@ -105,6 +110,33 @@ class BubbleViewModel @Inject constructor(
             flowOf(emptyList())
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Dash whose event log feeds the card stack — the current active dash
+    // when one is running, otherwise the most-recently-completed one so the
+    // post-dash review stays visible until the next DASH_START.
+    private val displayedDashId = bubbleManager.activeDashId
+        .scan(null as String?) { last, current -> current ?: last }
+
+    /**
+     * Bubble HUD flow-card stack (#257). Completed cards are folded from
+     * the AppEvent log scoped to [displayedDashId]; the live card is built
+     * from current [appState]. A new dash clears the stack via DASH_START's
+     * fold logic, so the user can review the previous dash's cards until
+     * they go Online again.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val cardStack = combine(
+        stateManager.state,
+        displayedDashId.flatMapLatest { dashId ->
+            if (dashId != null) appEventRepo.getEventsForDash(dashId)
+            else flowOf(emptyList())
+        },
+    ) { state, events ->
+        CardStack(
+            completed = FlowCardMapper.fold(events),
+            active = LiveCardBuilder.build(state),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CardStack.Empty)
 
     // Real-time session miles from GPS odometer
     val sessionMiles = odometerRepository.sessionMilesFlow
