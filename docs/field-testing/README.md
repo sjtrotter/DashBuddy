@@ -34,6 +34,73 @@ cross-referencing within a single session entry, not across sessions.
 
 ---
 
+## 2026-05-17 — DoorDash session (first run on the flow-card bubble)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` at `29c9528` (post-#258 bubble-flow-cards merge — first dash on the new flow-card stack HUD)
+- **Field conditions:** developer dashed on DoorDash; included at least one shop-for-items pickup at HEB. Overall reaction to the new bubble: "I really like the new format. It looks good." The notes below are bugs / polish items spotted *within* that overall-positive read.
+
+### Bugs
+
+#### 1. Pickup card hero says "5 min left" while still checking out, but the frozen card claims "+34 min ahead"
+
+- **Repro:** Take a pickup where you arrive at the store with plenty of slack on the pickup-by deadline, but spend a long time inside (e.g. shopping at HEB). Get to the register with the live bubble showing only a few minutes until pickup-by. Complete checkout. Look at the frozen Pickup card after the phase ends.
+- **Observed:** Live Pickup card was showing roughly "5:00 till pickup-by" while the dasher was still at the register and hadn't checked out. After the phase ended, the same card froze with a hero of "+34m ahead". The two numbers can't both be true for the same delivery — they describe wildly different states of urgency.
+- **Hypothesis (from a desk read, not verified against field logs):**
+  - `FlowCardItem.kt:358` computes the frozen-card delta as `arrivalRemaining = deadlineMillis - arrivedAt`. `arrivedAt` is the **store-arrival** timestamp, not the moment the dasher hit "Picked up". So if you arrived 34 min before deadline and then spent 29 min shopping, the frozen card says "+34m ahead" even though the actual checkout happened with 5 min of slack.
+  - `Pickup` snapshot already carries `confirmedAt` (the pickup-confirmation timestamp) — `FlowCardSnapshot.kt:81` and `FlowCardMapper.kt:159-183` set it on PICKUP_CONFIRMED. The frozen delta should plausibly key off `confirmedAt` (urgency at the moment you actually finished pickup), not `arrivedAt` (urgency at the moment you walked in the door).
+  - Open question: which number does the dasher actually want post-hoc? "How close did I come to being late?" → confirmedAt. "How long was my buffer when I got here?" → arrivedAt. The current code picks arrivedAt; the live countdown picks neither (it's `deadlineMillis - now`), so the two views diverge precisely when shopping takes a long time. The post-task summary that the developer references ("plus thirty four minutes ahead") looks like the same value.
+- **What would confirm or refute this:** capture a PICKUP_CONFIRMED event from a shop-for-items pickup and check whether the payload's `confirmedAt` is materially later than `arrivedAt`, and whether the frozen card's hero matches `deadlineMillis - arrivedAt` (current behavior) vs `deadlineMillis - confirmedAt` (proposed).
+
+#### 2. Pickup card never displays the actual pickup-by deadline time
+
+- **Field observation:** Live Pickup card shows the countdown (e.g. "5:00") and the caption "till pickup-by", but the **wall-clock deadline itself** is nowhere on the card. The dasher cannot answer "what time do I need to be checked out by?" — only "how many minutes left" relative to now. That's a problem when the live countdown disagrees with the post-task summary (see #1) and the dasher wants to sanity-check.
+- **Where this lives:**
+  - `FlowCardItem.kt:351-356` — the active-card branch renders `formatCountdown(remaining)` as the hero and `deadlineLabel` ("till pickup-by") as the caption. No use of `formatTime(deadlineMillis)`.
+  - `Delivery` card (`FlowCardItem.kt:312-325`) has the same shape and the same gap for the deliver-by deadline.
+- **Possible direction (sketch, not a recommendation):** add a secondary caption like `"by ${formatTime(deadlineMillis)}"` under the countdown. Cheap to add; would let the dasher cross-check the countdown against the literal time on the DoorDash UI.
+
+#### 3. Frozen Delivery card disappears under (or is visually absorbed by) the PAID card after delivery completes
+
+- **Repro:** Complete a delivery. Watch the flow-card stack transition from the live Delivery card to the live PAID/PostTask card.
+- **Observed (per the log narrative):** "the drop-off block had the section for the drop off. Whenever that got completed, it got replaced by the paid block." The dasher wants the Delivery summary to **persist** in the history above the receipt — not vanish.
+- **Hypothesis (from a desk read, not verified against the captured event stream):**
+  - `FlowCardMapper.kt:201-224` *does* add a frozen Delivery snapshot to `completed` on `DELIVERY_ARRIVED`, so in principle it should appear in the stack just above the live PAID card once the flow advances to PostTask. So the bug isn't "Delivery card never gets stored."
+  - Two candidate explanations worth distinguishing:
+    - (a) `DELIVERY_ARRIVED` isn't actually firing for this style of completion. `EffectMap.kt:402-432` only emits it when `nextTask.arrivedAt != null && prevTask?.arrivedAt == null` — i.e. an explicit arrival sub-state transition. If DoorDash's "no-contact delivery" flow rolls straight from nav → completed without DashBuddy seeing an ARRIVED screen, the Delivery card stays in `openDelivery` and only gets flushed by DASH_STOP at the end of the dash (`FlowCardMapper.kt:247-258`). Net effect: looks "replaced" because there is no frozen Delivery card in the stack at the moment the PAID card appears.
+    - (b) The Delivery card *is* in `completed` but its frozen body is so terse (line 187-195: "customer · delivered HH:MM" + a +/- delta hero) that the dasher reads it as part of the PAID card chrome rather than a separate card. The visual hierarchy in the stack puts the live card at the bottom, expanded, and the just-previous frozen card flush above it with similar styling.
+  - The user-side description ("it had the section for the drop off … got replaced") slightly favors (a): they're describing the section disappearing, not just shrinking. But (a) and (b) are easy to disambiguate from a captured event log.
+- **What would confirm or refute this:**
+  - (a-vs-b): for the same delivery, check whether a `DELIVERY_ARRIVED` event row exists in `app_events` between the last `DELIVERY_NAV_STARTED` and the `DELIVERY_COMPLETED`. If absent → (a). If present → (b).
+  - Either way, worth a check from the bubble-history side: when the PAID card is the live one, is `cardStack.completed` actually carrying a `FlowCardSnapshot.Delivery` for the same `jobId`?
+
+### Research / design
+
+#### 4. PAID card receipt is mis-shaped — "made-up" labels and an awkward base/tip split
+
+- **Field observation, verbatim:** "it says base pay twenty seventy five tip bonus boost. That's not true. It says a dollar. And I think you made up bonus boost. It should say the actual name of that pay, because I think that's actually supposed to be peak pay and record the peak pay that I got for that offer." Specifically on an HEB shop-for-items order.
+- **Developer's mental model for the receipt:** read it like an actual receipt.
+  - **Total** at the top (already present — hero is `$%.2f` totalPay).
+  - **DoorDash pay** as one section, broken down into **Base pay** + **any other app-pay component DoorDash actually names** (peak pay, promo, etc.), using whatever label DoorDash itself uses on that order's screen.
+  - **Customer tips** as a separate section, broken down **per order** in the offer — tip line per store/customer, since one offer can be a stacked multi-tip job.
+- **Where this lives:**
+  - Parse rule `core/pipeline/src/main/assets/rules/doordash.json:469-489` — extracts `payLineItems` as `{type, amount}` pairs from id-suffix `pay_line_item_title` / `pay_line_item_value`. So whatever text DoorDash renders on the receipt is what lands in `type`.
+  - `ParsedFieldsFactory.kt:141-153` then **splits the line-items based on a substring match for "pay"**: items whose `type` contains "pay" (case-insensitive) → `appPayComponents`, everything else → `customerTips`. So:
+    - if the actual DoorDash label is "Peak pay" → routed to `appPay` ✓
+    - if the actual label is "Bonus" / "Boost" / "Bonus Boost" / "Promo" → routed to `customerTips` ✗ (and then rendered as `"tip · Bonus Boost"` by `FlowCardItem.kt:415-416`)
+  - That matches the verbatim observation almost exactly: a $1 line shows up under tips as "tip · Bonus Boost" because the actual DoorDash receipt label doesn't contain the substring "pay". The dasher reads it as wrong twice: wrong category (it's a DoorDash pay, not a tip), wrong label (the dasher expected "Peak pay"; whatever DoorDash literally rendered was different).
+- **Two distinct issues bundled here, worth separating before any fix:**
+  - **Categorization is fragile.** The "contains 'pay'" partition is a heuristic that breaks the moment DoorDash labels a pay component without the word "pay". The robust shape is to drive the split from the receipt's structure (which section the line lives under — "DoorDash pay" vs "Customer tips" subtrees — rather than the line's text) since the rule already locates both sub-totals separately at `:453-468`.
+  - **Display labels are platform-faithful but dasher-unfaithful.** The dasher's mental label for the $1 was "peak pay"; the actual on-screen text was something else. There's a discoverable mismatch between what DoorDash calls things and what dashers call them. Worth keeping the **literal DoorDash label** as the source of truth, since the alternative is a translation table that drifts every time DoorDash renames a program. The actionable miss is the categorization — once a "Bonus Boost" or "Boost" line ends up under **DoorDash pay** rather than under **tips**, the dasher reading "DoorDash pay: Base pay $20.75, Bonus Boost $1.00, total tips $X" can tell at a glance what kind of pay each line is.
+- **Receipt-shape proposal (extracted from the verbatim mental model):**
+  - Header: total
+  - DoorDash pay section (sub-total + per-component lines using DoorDash's labels)
+  - Customer tips section (sub-total + per-order lines using store/customer label)
+  - The current PostTaskBody (`FlowCardItem.kt:399-424`) already has the per-line rendering; what's missing is (a) the section grouping, (b) sub-totals per section, (c) reliable categorization.
+- **What would confirm or refute the hypothesis:** capture the HEB order's PostTask parsed payload (`AppEventEntity` for `DELIVERY_COMPLETED`) and check the literal `type` strings on each `parsedPay` item. If any non-"pay" string sits in `customerTips` despite being on the "DoorDash pay" side of the receipt, the partition heuristic is the cause and (1) above is the fix shape. If categorization is correct and the user is just objecting to the literal label, this is a labels-only conversation.
+
+---
+
 ## 2026-05-16 — DoorDash session (stacked pickups)
 
 - **Platform tested:** DoorDash
