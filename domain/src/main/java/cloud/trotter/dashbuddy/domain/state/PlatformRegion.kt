@@ -24,6 +24,12 @@ data class PlatformRegion(
     val ratings: RatingsSnapshot? = null,
     val surgeMultiplier: Double? = null,
     val lastPostTaskPayHash: Int? = null,
+    /**
+     * Most recent PostTask observation's parsed fields. Captured during
+     * PostTask so the closing `DELIVERY_COMPLETED` event (emitted on
+     * leaving PostTask) can include the full pay breakdown.
+     */
+    val lastPostTaskFields: ParsedFields.PostTaskFields? = null,
     val lastObservedAt: Long = 0,
     /** Timestamp when Flow entered Idle while mode is Online. Null otherwise. */
     val idleEnteredAt: Long? = null,

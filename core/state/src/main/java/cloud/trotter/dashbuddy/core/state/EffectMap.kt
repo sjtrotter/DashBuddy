@@ -3,6 +3,13 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
@@ -16,6 +23,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.domain.util.formatCurrency
@@ -50,7 +58,15 @@ class EffectMap @Inject constructor(
 
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
         addAll(diffRuleEffects(obs))
-        addAll(diffFlowRegion(prev.regions.flow, next.regions.flow, obs))
+        // Offer-resolution events fire in the FlowRegion handler. They need to
+        // be scoped to the active platform's session so AppEventDao queries
+        // by dashId see them — without this, the bubble HUD's card stack
+        // never sees offer events (#257).
+        val activeSessionId = next.regions.flow.activePlatform
+            ?.let { next.regions.platforms[it]?.session?.sessionId }
+            ?: prev.regions.flow.activePlatform
+                ?.let { prev.regions.platforms[it]?.session?.sessionId }
+        addAll(diffFlowRegion(prev.regions.flow, next.regions.flow, obs, activeSessionId))
         val allPlatforms = (prev.regions.platforms.keys + next.regions.platforms.keys).distinct()
         for (p in allPlatforms) {
             addAll(
@@ -74,23 +90,38 @@ class EffectMap @Inject constructor(
         prev: FlowRegion,
         next: FlowRegion,
         obs: Observation,
+        sessionId: String?,
     ): List<AppEffect> = buildList {
         val flowObs = obs as? Observation.FlowObservation
         val prevOffer = prev.pendingOffer
         val nextOffer = next.pendingOffer
 
         // Offer presented
-        // Screenshot + log now handled by rule-declared effects on offer screen rules
-        // (deduped via dedupeKey + throttleMs). Evaluate + speak remain here
-        // because they need rich ParsedOffer objects, not string args.
+        // Screenshot for the offer screen still comes from rule-declared
+        // effects (deduped via dedupeKey + throttleMs). DB-persisted
+        // events flow through here so payloads stay typed and consistent
+        // across platforms (#257 design discussion).
         if (prevOffer == null && nextOffer != null) {
             val offer = nextOffer.offerFields
+            val platform = next.activePlatform?.name ?: "Unknown"
+
+            // Log OFFER_RECEIVED with the full parsed offer. Evaluation
+            // hasn't run yet at this point (it fires async via the
+            // EvaluateOffer side effect); the rich evaluation lands on
+            // the closing OFFER_ACCEPTED / DECLINED / TIMEOUT payload.
+            val receivedPayload = OfferReceivedPayload(
+                offerHash = nextOffer.offerHash,
+                parsedOffer = offer.parsedOffer,
+                presentedAt = nextOffer.presentedAt,
+                platform = platform,
+                returnFlow = nextOffer.returnFlow,
+            )
+            add(logEffect(sessionId, AppEventType.OFFER_RECEIVED, receivedPayload))
 
             // Evaluate
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
 
             // Speak offer aloud
-            val platform = next.activePlatform?.name ?: "Unknown"
             add(AppEffect.SpeakOffer(offer.parsedOffer, platform))
         }
 
@@ -100,9 +131,9 @@ class EffectMap @Inject constructor(
         if (prevOffer != null && nextOffer != null &&
             prevOffer.offerHash != nextOffer.offerHash
         ) {
-            // Log resolution of old offer
+            // Log resolution of old offer with full context.
             val outcome = resolveOfferOutcome(obs, prevOffer)
-            add(logEffect(null, outcome, "Replaced by new offer"))
+            add(logEffect(sessionId, outcome, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
 
             // Evaluate + speak new offer
             val offer = nextOffer.offerFields
@@ -114,12 +145,7 @@ class EffectMap @Inject constructor(
         // Offer resolved (accepted/declined/timeout)
         if (prevOffer != null && nextOffer == null) {
             val outcome = resolveOfferOutcome(obs, prevOffer)
-            val description = when (outcome) {
-                AppEventType.OFFER_ACCEPTED -> "Transitioned to Pickup"
-                AppEventType.OFFER_DECLINED -> "Returned to search"
-                else -> "Offer timed out"
-            }
-            add(logEffect(null, outcome, description))
+            add(logEffect(sessionId, outcome, offerPayload(prevOffer, outcome, obs.timestamp)))
 
             if (outcome == AppEventType.OFFER_TIMEOUT) {
                 add(AppEffect.UpdateBubble("Offer Timed Out!", persona = ChatPersona.Dispatcher))
@@ -169,9 +195,12 @@ class EffectMap @Inject constructor(
                 } else {
                     val sessionId = next.session?.sessionId ?: p.session?.sessionId
                     val completedTask = next.recentTasks.lastOrNull()
-                    val payload = mapOf(
-                        "storeName" to (completedTask?.storeName ?: "Unknown"),
-                        "jobId" to (p.activeJob?.jobId),
+                    val payload = deliveryCompletedPayload(
+                        task = completedTask,
+                        jobId = p.activeJob?.jobId,
+                        completedAt = obs.timestamp,
+                        postTaskFields = p.lastPostTaskFields,
+                        sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                     )
                     add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, payload))
                 }
@@ -197,9 +226,12 @@ class EffectMap @Inject constructor(
                     if (modeOverride != null) {
                         addAll(modeOverride)
                     } else if (nextSession != null && prevSession?.sessionId != nextSession.sessionId) {
-                        val payload = mapOf(
-                            "source" to if (next.lastTransitionKind == TransitionKind.Unexpected) "recovery" else "interaction",
-                            "start_screen" to "WaitingForOffer",
+                        val payload = SessionStartPayload(
+                            sessionId = nextSession.sessionId,
+                            platform = next.platform.name,
+                            startedAt = nextSession.startedAt,
+                            source = if (next.lastTransitionKind == TransitionKind.Unexpected) "recovery" else "interaction",
+                            startScreen = "WaitingForOffer",
                         )
                         add(logEffect(nextSession.sessionId, AppEventType.DASH_START, payload))
                         add(AppEffect.StartOdometer)
@@ -233,7 +265,17 @@ class EffectMap @Inject constructor(
                         val platform = prev.platform.name
                         if (parsed is ParsedFields.SessionEndedFields) {
                             val earnings = formatCurrency(parsed.totalEarnings)
-                            add(logEffect(sessionId, AppEventType.DASH_STOP, parsed))
+                            val payload = SessionStopPayload(
+                                sessionId = sessionId,
+                                endedAt = obs.timestamp,
+                                source = "summary_screen",
+                                totalEarnings = parsed.totalEarnings,
+                                sessionDurationMillis = parsed.sessionDurationMillis,
+                                offersAccepted = parsed.offersAccepted,
+                                offersTotal = parsed.offersTotal,
+                                weeklyEarnings = parsed.weeklyEarnings,
+                            )
+                            add(logEffect(sessionId, AppEventType.DASH_STOP, payload))
                             add(AppEffect.StopOdometer)
                             add(
                                 AppEffect.UpdateBubble(
@@ -243,7 +285,13 @@ class EffectMap @Inject constructor(
                             )
                             add(AppEffect.CaptureScreenshot("DashSummary - ${parsed.totalEarnings}"))
                         } else {
-                            add(logEffect(sessionId, AppEventType.DASH_STOP, "Return to Map"))
+                            val payload = SessionStopPayload(
+                                sessionId = sessionId,
+                                endedAt = obs.timestamp,
+                                source = "early_offline",
+                                totalEarnings = prevSession.runningEarnings,
+                            )
+                            add(logEffect(sessionId, AppEventType.DASH_STOP, payload))
                             add(AppEffect.StopOdometer)
                         }
                         add(AppEffect.EndSession(platform))
@@ -269,14 +317,14 @@ class EffectMap @Inject constructor(
                         val flowObs = obs as? Observation.FlowObservation
                         val pausedFields = flowObs?.parsed as? ParsedFields.PausedFields
                         val durationMs = (pausedFields?.remainingMillis ?: 0L) + PAUSE_TIMEOUT_BUFFER_MS
-                        val remainingText = pausedFields?.remainingText ?: "?"
 
-                        add(
-                            logEffect(
-                                sessionId, AppEventType.DASH_PAUSED,
-                                "Paused. Time left: $remainingText",
-                            )
+                        val pausePayload = SessionPausedPayload(
+                            sessionId = sessionId,
+                            pausedAt = obs.timestamp,
+                            remainingText = pausedFields?.remainingText,
+                            remainingMillis = pausedFields?.remainingMillis,
                         )
+                        add(logEffect(sessionId, AppEventType.DASH_PAUSED, pausePayload))
                         add(
                             AppEffect.ScheduleTimeout(
                                 durationMs,
@@ -314,11 +362,7 @@ class EffectMap @Inject constructor(
                     addAll(taskStartOverride)
                 } else {
                     val storeName = nextTask.storeName ?: "Unknown"
-                    val payload = mapOf(
-                        "message" to "Pickup Started",
-                        "storeName" to storeName,
-                        "status" to "NAVIGATING",
-                    )
+                    val payload = pickupPayload(nextTask, storeName)
                     add(logEffect(sessionId, AppEventType.PICKUP_NAV_STARTED, payload))
                     add(AppEffect.ResumeOdometer)
 
@@ -337,13 +381,17 @@ class EffectMap @Inject constructor(
                 nextTask?.phase == TaskPhase.DROPOFF
             ) {
                 val customerHash = nextTask.customerNameHash
-                val payload = mapOf(
-                    "status" to "DROPOFF_STARTED",
-                    "customerHash" to customerHash,
-                    "addressHash" to nextTask.customerAddressHash,
+                val pickupConfirmed = pickupPayload(
+                    task = prevTask,
+                    storeName = prevTask.storeName ?: "Unknown",
+                    confirmedAt = obs.timestamp,
                 )
-                add(logEffect(sessionId, AppEventType.PICKUP_CONFIRMED, payload))
-                add(logEffect(sessionId, AppEventType.DELIVERY_NAV_STARTED, payload))
+                val deliveryStart = deliveryPhasePayload(
+                    task = nextTask,
+                    phaseStartedAt = obs.timestamp,
+                )
+                add(logEffect(sessionId, AppEventType.PICKUP_CONFIRMED, pickupConfirmed))
+                add(logEffect(sessionId, AppEventType.DELIVERY_NAV_STARTED, deliveryStart))
                 add(AppEffect.ResumeOdometer)
 
                 val customer = customerHash?.take(6) ?: "Customer"
@@ -364,13 +412,19 @@ class EffectMap @Inject constructor(
                         TaskPhase.PICKUP -> add(
                             logEffect(
                                 sessionId, AppEventType.PICKUP_ARRIVED,
-                                mapOf("storeName" to (nextTask.storeName ?: "Unknown")),
+                                pickupPayload(
+                                    task = nextTask,
+                                    storeName = nextTask.storeName ?: "Unknown",
+                                ),
                             )
                         )
                         TaskPhase.DROPOFF -> add(
                             logEffect(
                                 sessionId, AppEventType.DELIVERY_ARRIVED,
-                                mapOf("customerHash" to nextTask.customerNameHash),
+                                deliveryPhasePayload(
+                                    task = nextTask,
+                                    phaseStartedAt = nextTask.startedAt,
+                                ),
                             )
                         )
                     }
@@ -399,16 +453,16 @@ class EffectMap @Inject constructor(
                     add(AppEffect.UpdateBubble("Pickup: $storeName", persona))
                 }
 
-                // Store name resolution logging
+                // Store name resolution — re-emit the pickup payload with the
+                // updated store name. The mapper treats the latest
+                // PICKUP_NAV_STARTED per task as canonical, so this is the
+                // store name the Pickup card will render.
                 if (storeChanged) {
+                    val storeName = nextTask.storeName ?: "Unknown"
                     add(
                         logEffect(
                             sessionId, AppEventType.PICKUP_NAV_STARTED,
-                            mapOf(
-                                "message" to "Store Name Updated",
-                                "previous" to (prevTask.storeName ?: "Unknown"),
-                                "updated" to (nextTask.storeName ?: "Unknown"),
-                            ),
+                            pickupPayload(nextTask, storeName),
                         )
                     )
                 }
@@ -607,5 +661,88 @@ class EffectMap @Inject constructor(
             )
         )
     }
+
+    // =========================================================================
+    // PAYLOAD BUILDERS
+    //
+    // Build rich phase-boundary payloads from in-memory state. Same emit
+    // moments as before — richer payload each one writes. The flow-card
+    // mapper folds these into per-phase snapshots without joining other
+    // entities; see #257.
+    // =========================================================================
+
+    private fun offerPayload(
+        offer: PendingOffer,
+        outcome: AppEventType,
+        decidedAt: Long,
+        description: String? = null,
+    ): OfferPayload = OfferPayload(
+        offerHash = offer.offerHash,
+        parsedOffer = offer.offerFields.parsedOffer,
+        evaluation = offer.evaluation,
+        outcome = outcome,
+        presentedAt = offer.presentedAt,
+        decidedAt = decidedAt,
+        returnFlow = offer.returnFlow,
+        description = description,
+    )
+
+    private fun pickupPayload(
+        task: Task,
+        storeName: String,
+        confirmedAt: Long? = null,
+    ): PickupPayload = PickupPayload(
+        jobId = task.jobId,
+        taskId = task.taskId,
+        storeName = storeName,
+        phaseStartedAt = task.startedAt,
+        arrivedAt = task.arrivedAt,
+        confirmedAt = confirmedAt,
+        odometerAtEntry = task.odometerAtEntry,
+        odometerAtArrival = task.odometerAtArrival,
+        deadlineMillis = task.deadlineMillis,
+        itemCount = task.itemCount,
+        redCardTotal = task.redCardTotal,
+        activity = task.activity,
+    )
+
+    private fun deliveryPhasePayload(
+        task: Task,
+        phaseStartedAt: Long,
+    ): DeliveryPayload = DeliveryPayload(
+        jobId = task.jobId,
+        taskId = task.taskId,
+        storeName = task.storeName,
+        customerHash = task.customerNameHash,
+        addressHash = task.customerAddressHash,
+        phaseStartedAt = phaseStartedAt,
+        arrivedAt = task.arrivedAt,
+        odometerAtEntry = task.odometerAtEntry,
+        odometerAtArrival = task.odometerAtArrival,
+        deadlineMillis = task.deadlineMillis,
+    )
+
+    private fun deliveryCompletedPayload(
+        task: Task?,
+        jobId: String?,
+        completedAt: Long,
+        postTaskFields: ParsedFields.PostTaskFields?,
+        sessionEarnings: Double?,
+    ): DeliveryPayload = DeliveryPayload(
+        jobId = jobId ?: task?.jobId ?: "unknown",
+        taskId = task?.taskId ?: "unknown",
+        storeName = task?.storeName,
+        customerHash = task?.customerNameHash,
+        addressHash = task?.customerAddressHash,
+        phaseStartedAt = task?.startedAt ?: completedAt,
+        arrivedAt = task?.arrivedAt,
+        completedAt = completedAt,
+        odometerAtEntry = task?.odometerAtEntry,
+        odometerAtArrival = task?.odometerAtArrival,
+        deadlineMillis = task?.deadlineMillis,
+        totalPay = postTaskFields?.totalPay,
+        parsedPay = postTaskFields?.parsedPay,
+        sessionEarningsAtCompletion = sessionEarnings,
+    )
 
 }
