@@ -919,6 +919,17 @@ object RuleCompiler {
                 ;{ node -> node.text?.let { str -> regex.containsMatchIn(str) } == true }
             }
 
+            // Matches when *any* text node anywhere in this subtree (including
+            // the node itself and any descendant's text or contentDescription)
+            // equals the value, case-insensitive. Necessary for buttons whose
+            // text lives in a child TextView (e.g. the DoorDash confirm-decline
+            // Button has no text on the outer node; the text is in a nested
+            // textView_prism_button_title child).
+            "hasAnyText" -> {
+                val s = (value as JsonPrimitive).content
+                ;{ node -> node.allText.any { it.equals(s, ignoreCase = true) } }
+            }
+
             "hasDesc" -> {
                 val s = (value as JsonPrimitive).content
                 ;{ node -> node.contentDescription?.equals(s, ignoreCase = true) == true }

@@ -168,6 +168,47 @@ class RuleCompilerTest {
         assertFalse(pred(node(text = null)))
     }
 
+    @Test
+    fun `hasAnyText matches text on the node itself`() {
+        val pred = RuleCompiler.compileNodePred(json("hasAnyText" to "Decline offer"))
+        assertTrue(pred(node(text = "Decline offer")))
+        assertTrue(pred(node(text = "decline offer")))
+        assertFalse(pred(node(text = "Decline")))
+    }
+
+    @Test
+    fun `hasAnyText matches text on a direct child`() {
+        // The DoorDash confirm-decline regression: outer Button has no text,
+        // child TextView carries "Decline offer". hasText fails; hasAnyText must succeed.
+        val pred = RuleCompiler.compileNodePred(json("hasAnyText" to "Decline offer"))
+        val confirmDeclineButton = tree(
+            node(text = "Decline offer", className = "android.widget.TextView"),
+        ).copy(isClickable = true, className = "android.widget.Button")
+        assertTrue(pred(confirmDeclineButton))
+    }
+
+    @Test
+    fun `hasAnyText matches text on a deeper descendant`() {
+        val pred = RuleCompiler.compileNodePred(json("hasAnyText" to "Arrived at store"))
+        val wrapper = tree(tree(node(text = "Arrived at store")))
+        assertTrue(pred(wrapper))
+    }
+
+    @Test
+    fun `hasAnyText matches contentDescription anywhere in the tree`() {
+        val pred = RuleCompiler.compileNodePred(json("hasAnyText" to "Submit"))
+        val root = tree(node(contentDescription = "Submit"))
+        assertTrue(pred(root))
+    }
+
+    @Test
+    fun `hasAnyText returns false when text is absent throughout the tree`() {
+        val pred = RuleCompiler.compileNodePred(json("hasAnyText" to "Decline offer"))
+        val root = tree(node(text = "Accept"), node(text = "Cancel"))
+        assertFalse(pred(root))
+        assertFalse(pred(node(text = null)))
+    }
+
     // =========================================================================
     // compileNodePred — content description & class predicates
     // =========================================================================
