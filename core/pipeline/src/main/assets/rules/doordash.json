@@ -2324,7 +2324,7 @@
         "modeHint": "online"
       },
       "require": {
-        "hasText": "Decline offer"
+        "hasAnyText": "Decline offer"
       }
     },
     {
