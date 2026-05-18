@@ -132,14 +132,17 @@ cross-referencing within a single session entry, not across sessions.
 
 ### Verification TODOs
 
-#### 8. Investigate the decline-button click around 19:18 Central, 2026-05-17
+#### 8. Investigate the decline-button click — 2026-05-17 decline timestamps
 
-- **Field flag:** dasher declined a DoorDash offer at **19:18 local Central time** during the second dash session, specifically to capture ground-truth on the still-open decline question from yesterday's log (#1 in the 2026-05-16 entry — decline reported as `OFFER_TIMEOUT` instead of `OFFER_DECLINED`).
-- **What to check at the desk:** open the captures around 19:18 Central and look for:
+- **Field flags:** dasher declined two DoorDash offers during 2026-05-17 specifically to capture ground-truth on the still-open decline question from yesterday's log (#1 in the 2026-05-16 entry — decline reported as `OFFER_TIMEOUT` instead of `OFFER_DECLINED`):
+  - **19:18 Central**, second dash session.
+  - **~20:29 Central**, third dash session, **Sprouts** offer, declined just before that session ended.
+- **What to check at the desk:** open the captures around each timestamp and look for:
   - whether an "unknown click" appears for the final decline button (the **confirm** tap in the are-you-sure dialog, not the initial decline tap);
   - what `intent` the click was tagged with, if any (`initial_decline` vs `decline_offer` vs unmatched);
   - what `screenIs` value the confirm-decline dialog was classified as at the moment of the click (should be `offer_popup_confirm_decline` for the rule at `core/pipeline/src/main/assets/rules/doordash.json:2319-2328` to match);
   - what `PendingOffer.lastClickIntent` carried at the moment the offer resolved.
+- **Two data points** — if both declines look identical in the captures, the issue is consistent and the 2026-05-16 hypothesis is testable in one direction; if they diverge (one matches `decline_offer`, one falls through to timeout), the cause is sensitive to a condition that varies between the two offers — worth diffing the offer types / screen states.
 - **Why it matters:** this is the data the 2026-05-16 decline hypothesis was specifically waiting on. If the confirm click shows up as `initial_decline` (or unmatched), the hypothesis holds. If it tags as `decline_offer` and the screen matches, the bug is elsewhere (timing race, payload not threaded through, etc.).
 
 ---
