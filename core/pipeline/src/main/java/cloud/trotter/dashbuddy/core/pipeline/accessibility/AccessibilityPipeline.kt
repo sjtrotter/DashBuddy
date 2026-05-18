@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationIdentity
 import cloud.trotter.dashbuddy.domain.pipeline.identity
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
@@ -202,9 +203,10 @@ class AccessibilityPipeline @Inject constructor(
             }
 
             is PipelineEvent.Click -> {
+                val screenTarget = classifier.lastScreenTarget
                 val clickPayload = ClickCapturePayload(
                     node = event.node,
-                    screenTarget = classifier.lastScreenTarget,
+                    screenTarget = screenTarget,
                 )
                 val capture = EnvelopeBuilder.build(
                     pipelineId = CLICK_PIPELINE_ID,
@@ -213,7 +215,7 @@ class AccessibilityPipeline @Inject constructor(
                     ruleId = flowObs.ruleId,
                     classificationName = flowObs.target,
                     payload = clickPayload,
-                    contentHash = event.node.structuralHash,
+                    contentHash = clickDedupHash(event.node, screenTarget),
                     metadata = flowObs.metadata,
                 )
                 val captureId = captureBus.offer(
@@ -235,3 +237,16 @@ class AccessibilityPipeline @Inject constructor(
         }
     }
 }
+
+/**
+ * Dedup hash for a click capture that includes the current screen target.
+ *
+ * Same-shape buttons (e.g. DoorDash's `primary_action_button`) appear on many
+ * screens with different labels and meanings. [UiNode.structuralHash] ignores
+ * text, so without the screen mix all such clicks collide in the per-bucket
+ * dedup set inside [cloud.trotter.dashbuddy.core.data.capture.DiskCaptureBus]
+ * and only the first one in a session survives — silently dropping later
+ * clicks the developer needs to triage screen-specific behavior.
+ */
+internal fun clickDedupHash(node: UiNode, screenTarget: String?): Int =
+    31 * node.structuralHash + (screenTarget?.hashCode() ?: 0)
