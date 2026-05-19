@@ -907,6 +907,12 @@
         "flow": "task:pickup:arrived",
         "modeHint": "online"
       },
+      "bind": {
+        "contactView": {
+          "find": { "hasIdSuffix": "mx_contact_view" },
+          "optional": true
+        }
+      },
       "require": {
         "all": [
           {
@@ -958,20 +964,11 @@
             "transform": "sha256"
           },
           "storeName": {
+            "from": "contactView",
             "find": {
               "hasIdSuffix": "instructions_title"
             },
-            "read": "text",
-            "rejectIf": {
-              "any": [
-                {
-                  "hasTextContaining": "instructions"
-                },
-                {
-                  "hasTextContaining": "notes"
-                }
-              ]
-            }
+            "read": "text"
           },
           "deadlineText": {
             "find": {
