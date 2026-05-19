@@ -365,6 +365,62 @@ class EffectMapTest {
     }
 
     @Test
+    fun `stacked pickup transition fires PICKUP_NAV_STARTED and ResumeOdometer for the new task`() {
+        // Costa Pacifica pickup completed (moved to recentTasks) and a new
+        // Chili's pickup task minted by the stepper. The diff-task gate must
+        // fire even though prevTask is non-null — it now keys on "taskId changed".
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val costaPacifica = Task(
+            taskId = "task-A", jobId = "job-1", phase = TaskPhase.PICKUP,
+            storeName = "Costa Pacifica", startedAt = 800L, arrivedAt = 850L, completedAt = 1_000L,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskPickupArrived),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session, activeTask = costaPacifica,
+            )),
+        ))
+
+        val chilis = Task(
+            taskId = "task-B", jobId = "job-1", phase = TaskPhase.PICKUP,
+            storeName = "Chili's Grill & Bar", startedAt = 1_001L,
+        )
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskPickupNavigation),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session,
+                activeTask = chilis, recentTasks = listOf(costaPacifica),
+            )),
+        ))
+
+        val effects = effectMap.diff(
+            prev, next,
+            screenObs(
+                flow = Flow.TaskPickupNavigation,
+                parsed = ParsedFields.TaskFields(
+                    storeName = "Chili's Grill & Bar",
+                    phase = TaskPhase.PICKUP,
+                    subFlow = TaskSubFlow.NAVIGATION,
+                ),
+            ),
+        )
+
+        assertTrue(
+            "Stacked transition should emit PICKUP_NAV_STARTED for the new task",
+            effects.logEventTypes().contains(AppEventType.PICKUP_NAV_STARTED),
+        )
+        assertTrue(
+            "Stacked transition should emit ResumeOdometer for the inter-store leg",
+            effects.any { it is AppEffect.ResumeOdometer },
+        )
+        assertTrue(
+            "Bubble should announce the new store",
+            effects.any { it is AppEffect.UpdateBubble && it.text.contains("Chili") },
+        )
+    }
+
+    @Test
     fun `pickup to dropoff emits PICKUP_CONFIRMED and DELIVERY_NAV_STARTED`() {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
