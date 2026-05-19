@@ -24,7 +24,8 @@ enum class AppEventType {
     // --- Delivery Phase ---
     DELIVERY_NAV_STARTED,
     DELIVERY_ARRIVED,
-    DELIVERY_COMPLETED,
+    DELIVERY_CONFIRMED, // Dasher finished the drop-off (handoff or POD photo done); analogue of PICKUP_CONFIRMED
+    DELIVERY_COMPLETED, // PostTask exit (receipt dismissed); carries pay breakdown
 
     // --- System / Generic ---
     SCREEN_VIEWED, // For generic screen transitions like "Earnings Screen"

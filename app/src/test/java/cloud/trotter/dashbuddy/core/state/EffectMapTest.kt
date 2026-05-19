@@ -421,6 +421,94 @@ class EffectMapTest {
     }
 
     @Test
+    fun `dropoff to PostTask (activeTask null) emits DELIVERY_CONFIRMED`() {
+        // The platform routed dasher into PostTask; the dropoff is done.
+        // activeTask transitions to null (stepper moved it to recentTasks).
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val dropoffTask = Task(
+            taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            storeName = "Chipotle", startedAt = 900L, arrivedAt = null,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session, activeTask = dropoffTask,
+            )),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.PostTask),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session,
+                activeTask = null, recentTasks = listOf(dropoffTask.copy(completedAt = 1000L)),
+            )),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.PostTask, parsed = ParsedFields.PostTaskFields(totalPay = 7.50)))
+
+        assertTrue(
+            "Should emit DELIVERY_CONFIRMED on activeTask cleared from dropoff",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
+        )
+    }
+
+    @Test
+    fun `dropoff to next-pickup (different taskId) emits DELIVERY_CONFIRMED`() {
+        // Stacked next-offer accepted before PostTask shows: prev dropoff
+        // is no longer active; the next pickup task takes over.
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val prevDropoff = Task(
+            taskId = "task-A", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            storeName = "Chipotle", startedAt = 900L,
+        )
+        val nextPickup = Task(
+            taskId = "task-B", jobId = "job-2", phase = TaskPhase.PICKUP,
+            storeName = "Wendy's", startedAt = 1100L,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffArrived),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session, activeTask = prevDropoff,
+            )),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskPickupNavigation),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session, activeTask = nextPickup,
+            )),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskPickupNavigation, parsed = ParsedFields.TaskFields(storeName = "Wendy's", phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION)))
+
+        assertTrue(
+            "Should emit DELIVERY_CONFIRMED for the leaving dropoff",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
+        )
+    }
+
+    @Test
+    fun `same dropoff task (in-place update) does NOT emit DELIVERY_CONFIRMED`() {
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val task = Task(
+            taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            storeName = "Chipotle", startedAt = 900L,
+        )
+        val prevRegion = PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = task)
+        val nextRegion = PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = task.copy(storeName = "Updated Chipotle"))
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskDropoffNavigation), platforms = mapOf(platform to prevRegion)))
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskDropoffNavigation), platforms = mapOf(platform to nextRegion)))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskDropoffNavigation, parsed = ParsedFields.TaskFields(storeName = "Updated Chipotle", phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION)))
+
+        assertTrue(
+            "Should NOT emit DELIVERY_CONFIRMED for same-task update",
+            !effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
+        )
+    }
+
+    @Test
     fun `pickup to dropoff emits PICKUP_CONFIRMED and DELIVERY_NAV_STARTED`() {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
@@ -441,6 +529,10 @@ class EffectMapTest {
         assertTrue("Should emit PICKUP_CONFIRMED", effects.logEventTypes().contains(AppEventType.PICKUP_CONFIRMED))
         assertTrue("Should emit DELIVERY_NAV_STARTED", effects.logEventTypes().contains(AppEventType.DELIVERY_NAV_STARTED))
         assertTrue("Should emit ResumeOdometer", effects.any { it is AppEffect.ResumeOdometer })
+        assertTrue(
+            "Should NOT emit DELIVERY_CONFIRMED on a pickup-leaving transition",
+            !effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
+        )
     }
 
     @Test

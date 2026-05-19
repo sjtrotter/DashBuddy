@@ -223,6 +223,31 @@ object FlowCardMapper {
                     lastDeliveryArrivedAt = payload.arrivedAt ?: event.occurredAt
                 }
 
+                AppEventType.DELIVERY_CONFIRMED -> {
+                    // Dasher finished the drop-off. Closes the open Delivery
+                    // card. Fires before DELIVERY_COMPLETED (which carries the
+                    // PostTask pay breakdown). Analogue of PICKUP_CONFIRMED.
+                    val payload = decode(event, DeliveryPayload::class.java) ?: continue
+                    val current = openDelivery
+                    val closed = if (current?.taskId == payload.taskId) {
+                        current.copy(phaseEndedAt = event.occurredAt)
+                    } else {
+                        FlowCardSnapshot.Delivery(
+                            phaseStartedAt = payload.phaseStartedAt,
+                            phaseEndedAt = event.occurredAt,
+                            taskId = payload.taskId,
+                            jobId = payload.jobId,
+                            storeName = payload.storeName,
+                            customerHash = payload.customerHash,
+                            arrivedAt = payload.arrivedAt,
+                            deadlineMillis = payload.deadlineMillis,
+                        )
+                    }
+                    completed.add(closed)
+                    openDelivery = null
+                    lastDeliveryArrivedAt = lastDeliveryArrivedAt ?: event.occurredAt
+                }
+
                 AppEventType.DELIVERY_COMPLETED -> {
                     val payload = decode(event, DeliveryPayload::class.java) ?: continue
                     // PostTask card spans from delivery arrival (start of the
