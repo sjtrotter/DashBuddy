@@ -353,9 +353,15 @@ class EffectMap @Inject constructor(
             val prevTask = prev.activeTask
             val nextTask = next.activeTask
 
-            // Task started — pickup navigation
-            if (prevTask == null && nextTask != null &&
-                nextTask.phase == TaskPhase.PICKUP
+            // Task started — pickup navigation.
+            //
+            // Fires whenever a new PICKUP task is the active task — either the
+            // first task of the session (prevTask == null) or a new task minted
+            // for a stacked-pickup transition (prevTask is the now-completed
+            // previous pickup with a different taskId).
+            if (nextTask != null &&
+                nextTask.phase == TaskPhase.PICKUP &&
+                prevTask?.taskId != nextTask.taskId
             ) {
                 val taskStartOverride = triggerOverrideEffects(obs, TransitionTrigger.TASK_START)
                 if (taskStartOverride != null) {

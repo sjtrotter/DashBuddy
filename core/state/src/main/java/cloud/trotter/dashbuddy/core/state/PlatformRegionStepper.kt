@@ -398,9 +398,35 @@ class PlatformRegionStepper @Inject constructor() {
             val currentTask = region.activeTask
             val jobId = region.activeJob?.jobId ?: return region
 
-            // Phase/subflow change → new task or update
-            if (currentTask == null || currentTask.phase != taskPhase) {
-                // New task (different phase or no active task)
+            // Phase/subflow change → new task or update.
+            //
+            // Stacked-pickup transition: same PICKUP phase, but the platform has
+            // routed us from a confirmed-arrived store back to navigation toward
+            // a different store. Treat as a new task so the second pickup gets
+            // its own taskId, its own odometer leg, and its own flow-card.
+            //
+            // Three signals combined for robustness: we must have already
+            // arrived at the previous store; the new screen must be a
+            // navigation/pre-arrival (subflow=NAVIGATION); and the parsed
+            // storeName must be a different, non-Unknown name. Any single
+            // signal alone is vulnerable to parser flakiness (notably the
+            // pickup_arrival storeName parser, which picks the wrong
+            // instructions_title on multi-node screens — see the field-test
+            // 2026-05-17 Chili's capture).
+            val isStackedPickupTransition = currentTask != null &&
+                currentTask.phase == TaskPhase.PICKUP &&
+                taskPhase == TaskPhase.PICKUP &&
+                currentTask.arrivedAt != null &&
+                taskSubFlow == TaskSubFlow.NAVIGATION &&
+                taskFields?.storeName != null &&
+                !taskFields.storeName.equals("Unknown", ignoreCase = true) &&
+                taskFields.storeName != currentTask.storeName
+
+            if (currentTask == null ||
+                currentTask.phase != taskPhase ||
+                isStackedPickupTransition
+            ) {
+                // New task (different phase, no active task, or stacked-pickup transition)
                 val completedTask = currentTask?.copy(completedAt = obs.timestamp)
                 val recentTasks = if (completedTask != null) {
                     (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS)
