@@ -108,4 +108,12 @@ data class CompiledEffect(
     val onlyIf: cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate? = null,
     val dedupeKey: String? = null,
     val throttleMs: Long? = null,
+    /**
+     * Optional delay (ms) before the effect fires. When non-null and > 0,
+     * EffectMap routes the effect through a SETTLE_UI timeout so the delay
+     * is state-machine-visible (cancellable / observable). Capped at 5000ms.
+     * Primarily used to let dynamic UI (e.g. RecyclerView pages) settle
+     * before an auto-click.
+     */
+    val delayMs: Long? = null,
 )

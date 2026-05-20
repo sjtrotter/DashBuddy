@@ -290,7 +290,16 @@ class PlatformRegionStepper @Inject constructor() {
             }
             is ParsedFields.PostTaskFields -> {
                 val payHash = parsed.parsedPay?.hashCode()
-                r = r.copy(lastPostTaskPayHash = payHash, lastPostTaskFields = parsed)
+                // Stamp the per-task announcement gate so EffectMap.diffPostTask
+                // can detect "first time seeing PostTask for this taskId" by
+                // comparing prev region's value to the current taskId. The
+                // currently-completing task is at recentTasks.lastOrNull().
+                val postTaskTaskId = r.recentTasks.lastOrNull()?.taskId
+                r = r.copy(
+                    lastPostTaskPayHash = payHash,
+                    lastPostTaskFields = parsed,
+                    lastAnnouncedPostTaskTaskId = postTaskTaskId ?: r.lastAnnouncedPostTaskTaskId,
+                )
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
                     if (earnings != null) {

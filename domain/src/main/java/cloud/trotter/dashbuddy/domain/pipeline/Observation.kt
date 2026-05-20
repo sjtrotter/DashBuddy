@@ -96,6 +96,12 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val ruleId: String? = null,
         override val metadata: ReplayMetadata = ReplayMetadata.EMPTY,
         val type: TimeoutType,
+        /**
+         * Carries opaque context from the original [AppEffect.ScheduleTimeout]'s
+         * payload back into the state machine. Used for deferred-effect patterns
+         * like click-after-settle where the timer fire needs to know what to do.
+         */
+        val payload: Map<String, Any?> = emptyMap(),
     ) : Observation
 
     /** A UI interaction event from the bubble HUD or overlay. */

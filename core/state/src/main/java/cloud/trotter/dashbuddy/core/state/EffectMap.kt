@@ -10,8 +10,12 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
+import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
+import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
+import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -58,6 +62,7 @@ class EffectMap @Inject constructor(
 
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
         addAll(diffRuleEffects(obs))
+        addAll(diffSettleUiTimeout(obs))
         // Offer-resolution events fire in the FlowRegion handler. They need to
         // be scoped to the active platform's session so AppEventDao queries
         // by dashId see them — without this, the bubble HUD's card stack
@@ -187,7 +192,14 @@ class EffectMap @Inject constructor(
             addAll(diffPostTask(p, next, nextFlow, obs))
             addAll(diffNotification(obs))
 
-            // Delivery completed: leaving PostTask for a non-PostTask flow
+            // Delivery completed: leaving PostTask for a non-PostTask flow.
+            //
+            // `diff` iterates over all platforms, but `nextFlow.flow` is global.
+            // On PostTask exit the condition fires for every platform that has a
+            // PlatformRegion entry; only the one that actually owned the delivery
+            // has `completedTask` non-null. Skip the rest — without this guard,
+            // non-owning platforms emit a degenerate DELIVERY_COMPLETED row via
+            // deliveryCompletedPayload's "unknown" fallback.
             if (prevFlow.flow == Flow.PostTask && nextFlow.flow != Flow.PostTask) {
                 val taskCompletedOverride = triggerOverrideEffects(obs, TransitionTrigger.TASK_COMPLETED)
                 if (taskCompletedOverride != null) {
@@ -195,14 +207,16 @@ class EffectMap @Inject constructor(
                 } else {
                     val sessionId = next.session?.sessionId ?: p.session?.sessionId
                     val completedTask = next.recentTasks.lastOrNull()
-                    val payload = deliveryCompletedPayload(
-                        task = completedTask,
-                        jobId = p.activeJob?.jobId,
-                        completedAt = obs.timestamp,
-                        postTaskFields = p.lastPostTaskFields,
-                        sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
-                    )
-                    add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, payload))
+                    if (completedTask != null) {
+                        val payload = deliveryCompletedPayload(
+                            task = completedTask,
+                            jobId = p.activeJob?.jobId,
+                            completedAt = obs.timestamp,
+                            postTaskFields = p.lastPostTaskFields,
+                            sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
+                        )
+                        add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, payload))
+                    }
                 }
             }
         }
@@ -498,7 +512,22 @@ class EffectMap @Inject constructor(
 
     /**
      * Handle PostTask effects while on the PostTask screen.
-     * DELIVERY_COMPLETED is emitted from [diffPlatformRegion] when leaving PostTask.
+     *
+     * Emits at most ONE "Saved: $X" bubble per delivery, gated by the
+     * per-task idempotency field `lastAnnouncedPostTaskTaskId` (which the
+     * stepper stamps with the current taskId on every PostTaskFields
+     * observation). The bubble uses whatever shape is available on first
+     * sighting:
+     *  - parsedPay present (expanded) → full receipt with line items
+     *  - parsedPay null (collapsed) → minimal "Saved: $X"
+     *
+     * If the breakdown arrives later (e.g. auto-expand succeeds after a
+     * collapsed-first sighting), it's still captured in `lastPostTaskFields`
+     * by the stepper and surfaces via the post-task card in the bubble HUD
+     * + the DELIVERY_COMPLETED payload. But no second bubble fires.
+     *
+     * DELIVERY_COMPLETED itself is emitted from [diffPlatformRegion] when
+     * leaving PostTask (with the full pay breakdown if it was ever captured).
      */
     private fun diffPostTask(
         prev: PlatformRegion,
@@ -510,20 +539,22 @@ class EffectMap @Inject constructor(
         val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
         val parsed = flowObs.parsed as? ParsedFields.PostTaskFields ?: return emptyList()
 
-        return buildList {
-            val payData = parsed.parsedPay
+        val taskId = next.recentTasks.lastOrNull()?.taskId ?: return emptyList()
+        if (prev.lastAnnouncedPostTaskTaskId == taskId) return emptyList()
+        if (parsed.totalPay <= 0) return emptyList()
 
-            // If we got expanded pay data AND it's different from last emission, log it
-            if (payData != null && next.lastPostTaskPayHash != prev.lastPostTaskPayHash) {
-                val receiptText = buildString {
-                    append("Saved: ${formatCurrency(payData.total)}")
-                    payData.customerTips.forEach { item ->
-                        append("\nTip: ${item.type} • ${formatCurrency(item.amount)}")
-                    }
+        val payData = parsed.parsedPay
+        val text = if (payData != null) {
+            buildString {
+                append("Saved: ${formatCurrency(payData.total)}")
+                payData.customerTips.forEach { item ->
+                    append("\nTip: ${item.type} • ${formatCurrency(item.amount)}")
                 }
-                add(AppEffect.UpdateBubble(receiptText, ChatPersona.Earnings))
             }
+        } else {
+            "Saved: ${formatCurrency(parsed.totalPay)}"
         }
+        return listOf(AppEffect.UpdateBubble(text, ChatPersona.Earnings))
     }
 
     /**
@@ -594,7 +625,86 @@ class EffectMap @Inject constructor(
         if (flowObs.effects.isEmpty()) return emptyList()
         return flowObs.effects
             .filter { evaluateGate(it.onlyIf, flowObs.parsed) }
-            .map { AppEffect.RequestEffect(it) }
+            .map { effect ->
+                if (effect.verb == EffectVerb.CLICK && (effect.delayMs ?: 0L) > 0L) {
+                    // Defer the click through the state machine via SETTLE_UI
+                    // timeout — keeps the delay observable + cancellable instead
+                    // of sleeping in a hidden coroutine. Payload carries the
+                    // click context so the timeout handler can reconstruct.
+                    AppEffect.ScheduleTimeout(
+                        durationMs = effect.delayMs!!,
+                        type = TimeoutType.SETTLE_UI,
+                        payload = serializeClickContext(effect),
+                    )
+                } else {
+                    AppEffect.RequestEffect(effect)
+                }
+            }
+    }
+
+    /**
+     * Catch the SETTLE_UI timeout fired by a deferred click (see
+     * [diffRuleEffects]) and re-emit it as an immediate-fire click.
+     */
+    private fun diffSettleUiTimeout(obs: Observation): List<AppEffect> {
+        val timeout = obs as? Observation.Timeout ?: return emptyList()
+        if (timeout.type != TimeoutType.SETTLE_UI) return emptyList()
+        val verb = (timeout.payload["verb"] as? String)
+            ?.let { runCatching { EffectVerb.valueOf(it) }.getOrNull() }
+            ?: return emptyList()
+        if (verb != EffectVerb.CLICK) return emptyList()
+        val ruleId = timeout.payload["ruleId"] as? String ?: return emptyList()
+        val targetRef = deserializeNodeRef(timeout.payload) ?: return emptyList()
+        val effect = RequestedEffect(
+            verb = verb,
+            args = emptyMap(),
+            targetRef = targetRef,
+            onlyIf = null,
+            dedupeKey = timeout.payload["dedupeKey"] as? String,
+            throttleMs = (timeout.payload["throttleMs"] as? Number)?.toLong(),
+            delayMs = null,  // immediate fire this time
+            ruleId = ruleId,
+        )
+        return listOf(AppEffect.RequestEffect(effect))
+    }
+
+    private fun serializeClickContext(effect: RequestedEffect): Map<String, Any?> {
+        val ref = effect.targetRef
+        val map = mutableMapOf<String, Any?>(
+            "verb" to effect.verb.name,
+            "ruleId" to effect.ruleId,
+        )
+        if (effect.dedupeKey != null) map["dedupeKey"] = effect.dedupeKey
+        if (effect.throttleMs != null) map["throttleMs"] = effect.throttleMs
+        if (ref != null) {
+            map["target.viewIdSuffix"] = ref.viewIdSuffix
+            map["target.text"] = ref.text
+            map["target.classNameHint"] = ref.classNameHint
+            map["target.pathFingerprint"] = ref.pathFingerprint
+            map["target.bounds.left"] = ref.boundsInScreen.left
+            map["target.bounds.top"] = ref.boundsInScreen.top
+            map["target.bounds.right"] = ref.boundsInScreen.right
+            map["target.bounds.bottom"] = ref.boundsInScreen.bottom
+        }
+        return map
+    }
+
+    private fun deserializeNodeRef(payload: Map<String, Any?>): NodeRef? {
+        val pathFingerprint = payload["target.pathFingerprint"] as? String ?: return null
+        val viewIdSuffix = payload["target.viewIdSuffix"] as? String
+        val text = payload["target.text"] as? String
+        val classNameHint = payload["target.classNameHint"] as? String
+        val left = (payload["target.bounds.left"] as? Number)?.toInt() ?: 0
+        val top = (payload["target.bounds.top"] as? Number)?.toInt() ?: 0
+        val right = (payload["target.bounds.right"] as? Number)?.toInt() ?: 0
+        val bottom = (payload["target.bounds.bottom"] as? Number)?.toInt() ?: 0
+        return NodeRef(
+            viewIdSuffix = viewIdSuffix,
+            text = text,
+            classNameHint = classNameHint,
+            boundsInScreen = BoundingBox(left, top, right, bottom),
+            pathFingerprint = pathFingerprint,
+        )
     }
 
     private fun evaluateGate(gate: ParsedFieldsGate?, parsed: ParsedFields): Boolean {

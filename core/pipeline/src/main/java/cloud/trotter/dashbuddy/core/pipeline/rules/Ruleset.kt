@@ -179,6 +179,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             onlyIf = effect.onlyIf,
             dedupeKey = effect.dedupeKey?.let { resolveTemplate(it, parsedFields) },
             throttleMs = effect.throttleMs,
+            delayMs = effect.delayMs,
             ruleId = ruleId,
         )
     }
@@ -207,6 +208,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     onlyIf = effect.onlyIf,
                     dedupeKey = effect.dedupeKey,
                     throttleMs = effect.throttleMs,
+                    delayMs = effect.delayMs,
                     ruleId = ruleId,
                 )
             }

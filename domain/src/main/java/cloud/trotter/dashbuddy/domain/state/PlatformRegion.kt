@@ -33,6 +33,15 @@ data class PlatformRegion(
     val lastObservedAt: Long = 0,
     /** Timestamp when Flow entered Idle while mode is Online. Null otherwise. */
     val idleEnteredAt: Long? = null,
+    /**
+     * Per-task idempotency for the post-task announcement bubble. Set to the
+     * dropoff `taskId` the moment EffectMap.diffPostTask emits the "Saved: $X"
+     * bubble for that delivery. Subsequent PostTask observations for the same
+     * taskId no-op — including collapse/re-expand cycles that previously
+     * re-tripped the hash-based gate. Naturally resets when the next delivery
+     * starts (its taskId differs from this stored value).
+     */
+    val lastAnnouncedPostTaskTaskId: String? = null,
 )
 
 /**

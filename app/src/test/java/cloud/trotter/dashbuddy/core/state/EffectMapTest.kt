@@ -624,6 +624,170 @@ class EffectMapTest {
         )
     }
 
+    @Test
+    fun `leaving PostTask with no recent task does NOT emit DELIVERY_COMPLETED (duplicate-skip)`() {
+        // Reproduces the per-platform iteration bug: a platform that didn't own
+        // the delivery still enters this code path on PostTask exit, but has no
+        // recentTasks. The deliveryCompletedPayload "unknown" fallback fires
+        // unless we skip on null. This test asserts the skip works.
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.PostTask),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session,
+                recentTasks = emptyList(), activeJob = null,
+            )),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.Idle),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session,
+                recentTasks = emptyList(), activeJob = null,
+            )),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        assertTrue(
+            "Should NOT emit DELIVERY_COMPLETED when there's no completed task to attribute",
+            !effects.logEventTypes().contains(AppEventType.DELIVERY_COMPLETED),
+        )
+    }
+
+    // =========================================================================
+    // POST-TASK ANNOUNCEMENT (single-bubble, per-task idempotency)
+    // =========================================================================
+
+    @Test
+    fun `collapsed-only PostTask emits single minimal Saved bubble`() {
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val task = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L, completedAt = 1000L)
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.PostTask),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session, recentTasks = listOf(task),
+                lastAnnouncedPostTaskTaskId = null,
+            )),
+        ))
+        val next = prev
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 7.50, parsedPay = null),
+        ))
+        val bubbles = effects.filterIsInstance<AppEffect.UpdateBubble>()
+        assertEquals(1, bubbles.size)
+        assertTrue("Bubble should contain Saved", bubbles[0].text.contains("Saved"))
+        assertTrue("Bubble should contain totalPay value", bubbles[0].text.contains("7.50"))
+    }
+
+    @Test
+    fun `PostTask with same taskId already announced does NOT re-emit bubble`() {
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val task = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L, completedAt = 1000L)
+        // prev region already has lastAnnouncedPostTaskTaskId = task-1
+        val region = PlatformRegion(
+            platform, mode = Mode.Online, session = session, recentTasks = listOf(task),
+            lastAnnouncedPostTaskTaskId = "task-1",
+        )
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.PostTask), platforms = mapOf(platform to region)))
+        val next = prev
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 7.50, parsedPay = null),
+        ))
+        assertTrue(
+            "Should NOT emit a second bubble for the same taskId",
+            effects.filterIsInstance<AppEffect.UpdateBubble>().isEmpty(),
+        )
+    }
+
+    @Test
+    fun `expanded PostTask on first sighting emits single full receipt bubble`() {
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val task = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L, completedAt = 1000L)
+        val region = PlatformRegion(
+            platform, mode = Mode.Online, session = session, recentTasks = listOf(task),
+            lastAnnouncedPostTaskTaskId = null,
+        )
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.PostTask), platforms = mapOf(platform to region)))
+        val next = prev
+        val parsedPay = cloud.trotter.dashbuddy.domain.model.pay.ParsedPay(
+            appPayComponents = listOf(cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem("Base", 4.50)),
+            customerTips = listOf(cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem("Chipotle", 3.00)),
+        )
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 7.50, parsedPay = parsedPay),
+        ))
+        val bubbles = effects.filterIsInstance<AppEffect.UpdateBubble>()
+        assertEquals(1, bubbles.size)
+        assertTrue("Bubble should contain breakdown line", bubbles[0].text.contains("Tip"))
+        assertTrue("Bubble should contain store name", bubbles[0].text.contains("Chipotle"))
+    }
+
+    // =========================================================================
+    // CLICK DELAY VIA SETTLE_UI TIMEOUT (UDF round-trip)
+    // =========================================================================
+
+    @Test
+    fun `click effect with delayMs emits ScheduleTimeout instead of immediate RequestEffect`() {
+        val nodeRef = cloud.trotter.dashbuddy.domain.pipeline.NodeRef(
+            viewIdSuffix = "com.example:id/btn",
+            text = null, classNameHint = "android.widget.Button",
+            boundsInScreen = cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox(0, 0, 100, 50),
+            pathFingerprint = "fp",
+        )
+        val effect = cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect(
+            verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK,
+            targetRef = nodeRef,
+            delayMs = 500L,
+            ruleId = "test.rule",
+        )
+        val obs = screenObs(flow = Flow.PostTask).copy(effects = listOf(effect))
+        val effects = effectMap.diff(AppState(), AppState(), obs)
+        val scheduled = effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+        assertEquals(1, scheduled.size)
+        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.SETTLE_UI, scheduled[0].type)
+        assertEquals(500L, scheduled[0].durationMs)
+        // Payload should carry the click context
+        assertEquals("com.example:id/btn", scheduled[0].payload["target.viewIdSuffix"])
+        assertEquals("test.rule", scheduled[0].payload["ruleId"])
+        // And NOT emit a RequestEffect for the click directly
+        assertTrue(
+            "Click should be deferred, not dispatched directly",
+            effects.filterIsInstance<AppEffect.RequestEffect>().isEmpty(),
+        )
+    }
+
+    @Test
+    fun `SETTLE_UI timeout re-emits the click as immediate RequestEffect`() {
+        val payload = mapOf<String, Any?>(
+            "verb" to "CLICK",
+            "ruleId" to "test.rule",
+            "target.viewIdSuffix" to "com.example:id/btn",
+            "target.classNameHint" to "android.widget.Button",
+            "target.pathFingerprint" to "fp",
+            "target.bounds.left" to 0,
+            "target.bounds.top" to 0,
+            "target.bounds.right" to 100,
+            "target.bounds.bottom" to 50,
+        )
+        val timeoutObs = Observation.Timeout(
+            timestamp = 1000L,
+            type = cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.SETTLE_UI,
+            payload = payload,
+        )
+        val effects = effectMap.diff(AppState(), AppState(), timeoutObs)
+        val requested = effects.filterIsInstance<AppEffect.RequestEffect>()
+        assertEquals(1, requested.size)
+        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK, requested[0].effect.verb)
+        assertEquals("com.example:id/btn", requested[0].effect.targetRef?.viewIdSuffix)
+        assertEquals(null, requested[0].effect.delayMs)  // immediate, not deferred again
+    }
+
     // =========================================================================
     // NOTIFICATION EFFECTS
     // =========================================================================

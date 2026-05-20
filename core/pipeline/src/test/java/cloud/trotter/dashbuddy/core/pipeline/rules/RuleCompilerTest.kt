@@ -837,4 +837,39 @@ class RuleCompilerTest {
         )
         assertTrue(compiler.enumeratePermissions(listOf(rule)).isEmpty())
     }
+
+    // =========================================================================
+    // delayMs on effects
+    // =========================================================================
+
+    @Test
+    fun `compileEffectEntry accepts delayMs within cap`() {
+        val obj = parseJson("""{"click": "${'$'}btn", "delayMs": 500}""").jsonObject
+        val effect = RuleCompiler.compileEffectEntry(obj)
+        assertEquals(500L, effect.delayMs)
+    }
+
+    @Test
+    fun `compileEffectEntry omits delayMs when not specified`() {
+        val obj = parseJson("""{"click": "${'$'}btn"}""").jsonObject
+        val effect = RuleCompiler.compileEffectEntry(obj)
+        assertNull(effect.delayMs)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects delayMs above 5000ms cap`() {
+        val obj = parseJson("""{"click": "${'$'}btn", "delayMs": 6000}""").jsonObject
+        RuleCompiler.compileEffectEntry(obj)
+    }
+
+    @Test
+    fun `compileEffectEntry treats delayMs as meta-key not verb-key`() {
+        // Regression guard: with delayMs alongside a verb, compileEffectEntry
+        // must not flag it as a second verb.
+        val obj = parseJson("""{"click": "${'$'}btn", "delayMs": 500, "throttleMs": 1000, "dedupeKey": "k"}""").jsonObject
+        val effect = RuleCompiler.compileEffectEntry(obj)
+        assertEquals(500L, effect.delayMs)
+        assertEquals(1000L, effect.throttleMs)
+        assertEquals("k", effect.dedupeKey)
+    }
 }

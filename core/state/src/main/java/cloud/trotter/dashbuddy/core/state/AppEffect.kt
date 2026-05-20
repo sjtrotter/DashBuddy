@@ -44,7 +44,16 @@ sealed class AppEffect {
     ) : AppEffect()
 
     // Dash Paused!
-    data class ScheduleTimeout(val durationMs: Long, val type: TimeoutType) : AppEffect()
+    data class ScheduleTimeout(
+        val durationMs: Long,
+        val type: TimeoutType,
+        /**
+         * Opaque payload carried through the timer back into [Observation.Timeout].
+         * Used to thread effect context (e.g. click target NodeRef fields) through
+         * the UDF round-trip when the firing of a downstream effect must be deferred.
+         */
+        val payload: Map<String, Any?> = emptyMap(),
+    ) : AppEffect()
     data class CancelTimeout(val type: TimeoutType) : AppEffect()
 
     data object StartOdometer : AppEffect()
@@ -65,7 +74,6 @@ sealed class AppEffect {
             get() = "effect:${effect.ruleId}:${effect.dedupeKey ?: effect.targetRef?.pathFingerprint ?: effect.verb.wire}"
     }
 
-    data class Delayed(val delayMs: Long, val effect: AppEffect) : AppEffect()
     data class SequentialEffect(
         val effects: List<AppEffect>
     ) : AppEffect()

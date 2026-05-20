@@ -351,6 +351,7 @@ class StateManagerV2 @Inject constructor(
             is TimeoutEvent -> Observation.Timeout(
                 timestamp = event.timestamp,
                 type = event.type,
+                payload = event.payload,
             )
 
             is OfferEvaluationEvent -> Observation.Loopback(

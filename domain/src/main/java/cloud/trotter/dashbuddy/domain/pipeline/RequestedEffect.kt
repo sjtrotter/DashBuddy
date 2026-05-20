@@ -20,6 +20,12 @@ data class RequestedEffect(
     val onlyIf: ParsedFieldsGate? = null,
     val dedupeKey: String? = null,
     val throttleMs: Long? = null,
+    /**
+     * Optional delay (ms) before the effect fires. When non-null and > 0,
+     * EffectMap routes the effect through a SETTLE_UI timeout so the delay
+     * is state-machine-visible. See `CompiledEffect.delayMs`.
+     */
+    val delayMs: Long? = null,
     val ruleId: String,
 )
 
