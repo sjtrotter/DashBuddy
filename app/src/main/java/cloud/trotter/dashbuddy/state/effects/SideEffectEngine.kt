@@ -174,7 +174,7 @@ class SideEffectEngine @Inject constructor(
                     Timber.w("Timer Expired: ${effect.type}")
 
                     // Emit Timeout Event back to State Machine
-                    _events.emit(TimeoutEvent(type = effect.type))
+                    _events.emit(TimeoutEvent(type = effect.type, payload = effect.payload))
 
                     activeTimers.remove(effect.type)
                 }
@@ -184,11 +184,6 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.CancelTimeout -> {
                 activeTimers[effect.type]?.cancel()
                 activeTimers.remove(effect.type)
-            }
-
-            is AppEffect.Delayed -> {
-                delay(effect.delayMs)
-                execute(effect.effect, scope, recovering)
             }
 
             is AppEffect.SequentialEffect -> {

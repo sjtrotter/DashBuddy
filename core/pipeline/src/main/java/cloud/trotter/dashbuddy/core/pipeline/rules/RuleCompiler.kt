@@ -37,6 +37,13 @@ object RuleCompiler {
     const val MAX_REGEX_LENGTH = 200
     private const val MAX_EACH_SIZE = 50
 
+    /**
+     * Hard cap on per-effect `delayMs` (ms). Prevents rules from holding
+     * deferred side effects indefinitely. Tuned for the longest sensible
+     * UI-settling / countdown window (e.g. auto-accept countdowns).
+     */
+    const val MAX_EFFECT_DELAY_MS = 5000L
+
     // ==========================================================================
     //  Permission introspection
     // ==========================================================================
@@ -703,7 +710,7 @@ object RuleCompiler {
         cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SESSION_END to setOf("platformName"),
     )
 
-    private val effectMetaKeys = setOf("onlyIf", "dedupeKey", "throttleMs")
+    private val effectMetaKeys = setOf("onlyIf", "dedupeKey", "throttleMs", "delayMs")
 
     internal fun compileEffectEntry(obj: JsonObject): CompiledEffect {
         val verbEntries = obj.entries.filter { it.key !in effectMetaKeys }
@@ -739,6 +746,13 @@ object RuleCompiler {
             args = argMap.toMap()
         }
 
+        val delayMs = obj["delayMs"]?.jsonPrimitive?.longOrNull
+        if (delayMs != null && delayMs > MAX_EFFECT_DELAY_MS) {
+            throw RuleCompileException(
+                "Effect delayMs=$delayMs exceeds cap of ${MAX_EFFECT_DELAY_MS}ms",
+            )
+        }
+
         return CompiledEffect(
             verb = verb,
             targetBindName = targetBindName,
@@ -746,6 +760,7 @@ object RuleCompiler {
             onlyIf = obj["onlyIf"]?.jsonObject?.let { compileGate(it) },
             dedupeKey = obj["dedupeKey"]?.jsonPrimitive?.content,
             throttleMs = obj["throttleMs"]?.jsonPrimitive?.longOrNull,
+            delayMs = delayMs,
         )
     }
 

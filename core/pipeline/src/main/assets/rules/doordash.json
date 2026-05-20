@@ -510,6 +510,15 @@
           "tolerance": 0.02,
           "onFail": "skip"
         }
+      ],
+      "effects": [
+        {
+          "screenshot": {
+            "prefix": "DeliveryBreakdown - {totalPay}"
+          },
+          "dedupeKey": "delivery-ss-expanded-{totalPay}-{sessionEarnings}",
+          "throttleMs": 60000
+        }
       ]
     },
     {
@@ -593,7 +602,15 @@
             }
           },
           "dedupeKey": "expand_pay_breakdown",
-          "throttleMs": 1000
+          "throttleMs": 1000,
+          "delayMs": 500
+        },
+        {
+          "screenshot": {
+            "prefix": "Delivery - {totalPay}"
+          },
+          "dedupeKey": "delivery-ss-collapsed-{totalPay}-{sessionEarnings}",
+          "throttleMs": 60000
         }
       ]
     },
@@ -2239,6 +2256,15 @@
           "le": "weeklyEarnings",
           "tolerance": 0.02,
           "onFail": "dropParsed"
+        }
+      ],
+      "effects": [
+        {
+          "screenshot": {
+            "prefix": "DashSummary - {totalEarnings}"
+          },
+          "dedupeKey": "dash-summary-ss-{totalEarnings}-{sessionDurationMillis}",
+          "throttleMs": 60000
         }
       ]
     },
