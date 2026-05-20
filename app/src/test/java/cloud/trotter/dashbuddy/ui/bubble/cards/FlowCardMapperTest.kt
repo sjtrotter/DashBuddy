@@ -187,6 +187,61 @@ class FlowCardMapperTest {
         assertEquals(4500L, postTask.phaseEndedAt)
     }
 
+    @Test
+    fun `no-arrival delivery (DELIVERY_CONFIRMED only) closes Delivery card and opens PostTask`() {
+        // DoorDash drop-off doesn't surface a recognized ARRIVED screen. The
+        // stepper emits DELIVERY_CONFIRMED when the active dropoff task transitions
+        // away (PostTask entry, next offer, etc.); that signal closes the Delivery
+        // card. DELIVERY_COMPLETED still fires later with pay breakdown.
+        // Sequence mirrors the happy-path but DELIVERY_ARRIVED is absent.
+        val parsedPay = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 4.50)),
+            customerTips = listOf(ParsedPayItem("Wendy's", 3.00)),
+        )
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 2000L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("offer-1", AppEventType.OFFER_ACCEPTED, 2000L, 2500L),
+                occurredAt = 2500L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T1", "J1", "Wendy's", 2500L),
+                occurredAt = 2500L),
+            event(AppEventType.PICKUP_ARRIVED,
+                pickupPayload("T1", "J1", "Wendy's", 2500L, arrived = 3000L),
+                occurredAt = 3000L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 2500L, arrived = 3000L, confirmed = 3500L),
+                occurredAt = 3500L),
+            event(AppEventType.DELIVERY_NAV_STARTED,
+                deliveryPayload("T2", "J1", 3500L),
+                occurredAt = 3500L),
+            // No DELIVERY_ARRIVED — DoorDash drop-off skips this.
+            event(AppEventType.DELIVERY_CONFIRMED,
+                deliveryPayload("T2", "J1", 3500L),
+                occurredAt = 4200L),
+            event(AppEventType.DELIVERY_COMPLETED,
+                deliveryPayload("T2", "J1", 3500L, completed = 4500L,
+                    totalPay = 7.50, parsedPay = parsedPay, sessionEarnings = 47.50),
+                occurredAt = 4500L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        // Expected: Awaiting, Offer, Pickup, Delivery, PostTask
+        assertEquals(5, cards.size)
+
+        val delivery = cards[3] as FlowCardSnapshot.Delivery
+        assertEquals("T2", delivery.taskId)
+        assertEquals(4200L, delivery.phaseEndedAt)
+        assertNull("arrivedAt stays null for no-arrival deliveries", delivery.arrivedAt)
+
+        val postTask = cards[4] as FlowCardSnapshot.PostTask
+        assertEquals(7.50, postTask.totalPay, 0.001)
+        assertEquals(4500L, postTask.phaseEndedAt)
+    }
+
     // =========================================================================
     // Decline path
     // =========================================================================

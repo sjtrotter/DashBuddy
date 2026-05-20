@@ -382,6 +382,21 @@ class EffectMap @Inject constructor(
                 }
             }
 
+            // Delivery confirmed: the active task is no longer this dropoff,
+            // either because it became null (PostTask / Idle / session end) or
+            // because a new task took over (next pickup, next dropoff leg).
+            // DoorDash drop-off doesn't surface an explicit "arrived" screen
+            // we can rely on, so this transition is the closure signal.
+            if (prevTask?.phase == TaskPhase.DROPOFF &&
+                (nextTask == null || nextTask.taskId != prevTask.taskId)
+            ) {
+                val deliveryConfirmed = deliveryPhasePayload(
+                    task = prevTask,
+                    phaseStartedAt = prevTask.startedAt,
+                )
+                add(logEffect(sessionId, AppEventType.DELIVERY_CONFIRMED, deliveryConfirmed))
+            }
+
             // Task phase changed — pickup → dropoff (pickup confirmed)
             if (prevTask?.phase == TaskPhase.PICKUP &&
                 nextTask?.phase == TaskPhase.DROPOFF
