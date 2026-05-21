@@ -1690,6 +1690,10 @@
     {
       "id": "doordash.screen.navigation_generic",
       "priority": 95,
+      "state": {
+        "flow": "idle",
+        "modeHint": "online"
+      },
       "reject": [
         {
           "allTextContains": "accept"
