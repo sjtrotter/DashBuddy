@@ -35,7 +35,21 @@ object TransformRegistry {
      * past (e.g. dasher arrived a few minutes late for the pickup-by deadline,
      * which should render as "X min late" — not a near-24h countdown).
      */
-    private const val ROLLOVER_THRESHOLD_MS = 12L * 3600L * 1000L
+    internal const val ROLLOVER_THRESHOLD_MS = 12L * 3600L * 1000L
+
+    /**
+     * Apply the rollover rule to a today-anchored target timestamp.
+     * Pure function over millis — extracted so it can be unit-tested without
+     * depending on the wall clock. See [ROLLOVER_THRESHOLD_MS].
+     */
+    internal fun applyRollover(
+        targetMillis: Long,
+        nowMillis: Long,
+        thresholdMs: Long = ROLLOVER_THRESHOLD_MS,
+    ): Long {
+        val pastMillis = nowMillis - targetMillis
+        return if (pastMillis > thresholdMs) targetMillis + 24L * 3600L * 1000L else targetMillis
+    }
 
     // ========================================================================
     //  Plain transforms: (String?) -> Any?
@@ -307,11 +321,7 @@ object TransformRegistry {
         // timestamp so a blown deadline renders as "X min late" instead of
         // jumping ~24h ahead. See field log 2026-05-19 #2 for the bug shape
         // ("1434:38" ghost countdown caused by 37-second-past re-parse).
-        val pastMillis = now.timeInMillis - target.timeInMillis
-        if (pastMillis > ROLLOVER_THRESHOLD_MS) {
-            target.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        return target.timeInMillis
+        return applyRollover(target.timeInMillis, now.timeInMillis)
     }
 
     /**
