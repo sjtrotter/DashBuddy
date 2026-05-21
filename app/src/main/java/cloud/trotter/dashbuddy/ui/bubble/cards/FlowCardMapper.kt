@@ -104,6 +104,18 @@ object FlowCardMapper {
                             outcome = payload.outcome,
                         )
                     )
+                    // Re-open Awaiting if the dasher returned to the
+                    // waiting-for-offer state (declined / timeout). Accept
+                    // skips this — they're going into pickup.
+                    if (payload.outcome == AppEventType.OFFER_DECLINED ||
+                        payload.outcome == AppEventType.OFFER_TIMEOUT
+                    ) {
+                        openAwaiting = FlowCardSnapshot.Awaiting(
+                            id = "awaiting:${event.aggregateId}:${payload.decidedAt}",
+                            phaseStartedAt = payload.decidedAt,
+                            sessionId = event.aggregateId,
+                        )
+                    }
                 }
 
                 AppEventType.PICKUP_NAV_STARTED -> {
@@ -267,6 +279,18 @@ object FlowCardMapper {
                         )
                     )
                     lastDeliveryArrivedAt = null
+                    // Re-open Awaiting — dasher dismissed the receipt and
+                    // is back to waiting for the next offer. (For stacked
+                    // deliveries where the dasher goes straight to the next
+                    // dropoff, this Awaiting would transiently close on the
+                    // next OFFER_RECEIVED — acceptable until stacked-delivery
+                    // intermediate-leg detection lands as a separate fix.)
+                    val awaitingStart = payload.completedAt ?: event.occurredAt
+                    openAwaiting = FlowCardSnapshot.Awaiting(
+                        id = "awaiting:${event.aggregateId}:${awaitingStart}",
+                        phaseStartedAt = awaitingStart,
+                        sessionId = event.aggregateId,
+                    )
                 }
 
                 AppEventType.DASH_STOP -> {
