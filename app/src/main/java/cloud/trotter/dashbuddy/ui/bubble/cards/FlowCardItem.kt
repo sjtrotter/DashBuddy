@@ -127,7 +127,7 @@ private fun PhaseChip(snapshot: FlowCardSnapshot, isActive: Boolean) {
         is FlowCardSnapshot.Awaiting -> "AWAIT" to MaterialTheme.colorScheme.tertiary
         is FlowCardSnapshot.Offer -> "OFFER" to MaterialTheme.colorScheme.primary
         is FlowCardSnapshot.Pickup -> "PICKUP" to MaterialTheme.colorScheme.secondary
-        is FlowCardSnapshot.Delivery -> "DROP OFF" to MaterialTheme.colorScheme.secondary
+        is FlowCardSnapshot.Delivery -> "DROPOFF" to MaterialTheme.colorScheme.secondary
         is FlowCardSnapshot.PostTask -> "PAID" to MaterialTheme.colorScheme.primary
     }
     Surface(
