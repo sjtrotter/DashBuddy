@@ -348,33 +348,47 @@ private fun DeadlineBody(
     ) {
         val now = if (isActive) rememberNow().value else (phaseEndedAt ?: phaseStartedAt)
 
-        if (deadlineMillis != null) {
-            val remaining = deadlineMillis - now
-            val color = deadlineColor(remaining)
-            if (isActive) {
-                HeroBig(text = formatCountdown(remaining), color = color)
+        if (isActive) {
+            if (deadlineMillis != null) {
+                val remaining = deadlineMillis - now
+                HeroBig(text = formatCountdown(remaining), color = deadlineColor(remaining))
                 Caption(deadlineLabel)
             } else {
-                val arrivalRemaining = arrivedAt?.let { deadlineMillis - it }
-                if (arrivalRemaining != null) {
+                // No deadline parsed — fall back to elapsed time
+                HeroBig(formatDuration(now - phaseStartedAt))
+                Caption(if (arrivedAt == null) "en route" else "at stop")
+            }
+        } else {
+            // Frozen card. Three cases:
+            //   (a) arrivedAt + deadlineMillis → delta vs deadline ("+Xm ahead" / "Xm late")
+            //   (b) arrivedAt null but phaseEndedAt set → drop-off completed without
+            //       an observed arrival sub-state (typical DoorDash no-contact flow).
+            //       Show total phase duration with started/completed times in
+            //       the tertiary row instead of the "—" placeholder.
+            //   (c) nothing useful → placeholder
+            val arrivalRemaining = if (deadlineMillis != null && arrivedAt != null)
+                deadlineMillis - arrivedAt else null
+            when {
+                arrivalRemaining != null -> {
                     val deltaLabel = if (arrivalRemaining >= 0)
                         "+${formatCountdown(arrivalRemaining)} ahead"
                     else
                         "${formatCountdown(-arrivalRemaining)} late"
                     HeroBig(text = deltaLabel, color = deadlineColor(arrivalRemaining))
                     Caption("vs $deadlineLabel")
-                } else {
+                }
+                phaseEndedAt != null -> {
+                    HeroBig(formatDuration(phaseEndedAt - phaseStartedAt))
+                    Caption("duration")
+                }
+                else -> {
                     HeroBig("—")
                     Caption(deadlineLabel)
                 }
             }
-        } else if (isActive) {
-            // No deadline parsed — fall back to elapsed time
-            HeroBig(formatDuration(now - phaseStartedAt))
-            Caption(if (arrivedAt == null) "en route" else "at stop")
         }
 
-        // Tertiary row — store/customer + arrival time + items
+        // Tertiary row — store/customer + lifecycle times + items
         val tertiary = buildString {
             append(primary)
             arrivedAt?.let {
@@ -382,6 +396,13 @@ private fun DeadlineBody(
             }
             confirmedAt?.let {
                 append(" · picked up ${formatTime(it)}")
+            }
+            // When we don't have an arrival (no-contact-delivery case),
+            // surface the started/completed wall-clock so the dasher can
+            // read what happened — paralleling Pickup's "arrived · picked up".
+            if (arrivedAt == null && phaseEndedAt != null && !isActive) {
+                append(" · started ${formatTime(phaseStartedAt)}")
+                append(" · completed ${formatTime(phaseEndedAt)}")
             }
             itemCount?.let {
                 if (it > 0) append(" · ${it}i")
