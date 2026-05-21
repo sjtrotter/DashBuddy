@@ -28,6 +28,29 @@ import java.util.Locale
  */
 object TransformRegistry {
 
+    /**
+     * Threshold for rolling a parsed wall-clock time forward to tomorrow.
+     * Past by more than this → assume the deadline is tomorrow (e.g. late-night
+     * offer for "6:00 AM" next morning). Past by less than this → treat as
+     * past (e.g. dasher arrived a few minutes late for the pickup-by deadline,
+     * which should render as "X min late" — not a near-24h countdown).
+     */
+    internal const val ROLLOVER_THRESHOLD_MS = 12L * 3600L * 1000L
+
+    /**
+     * Apply the rollover rule to a today-anchored target timestamp.
+     * Pure function over millis — extracted so it can be unit-tested without
+     * depending on the wall clock. See [ROLLOVER_THRESHOLD_MS].
+     */
+    internal fun applyRollover(
+        targetMillis: Long,
+        nowMillis: Long,
+        thresholdMs: Long = ROLLOVER_THRESHOLD_MS,
+    ): Long {
+        val pastMillis = nowMillis - targetMillis
+        return if (pastMillis > thresholdMs) targetMillis + 24L * 3600L * 1000L else targetMillis
+    }
+
     // ========================================================================
     //  Plain transforms: (String?) -> Any?
     // ========================================================================
@@ -292,8 +315,13 @@ object TransformRegistry {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        if (target.timeInMillis < now.timeInMillis) target.add(Calendar.DAY_OF_YEAR, 1)
-        return target.timeInMillis
+        // Roll forward only when the target is *significantly* in the past —
+        // interpret as "this time tomorrow" (e.g. late-night offer for next
+        // morning pickup). Past by less than the threshold stays as today's
+        // timestamp so a blown deadline renders as "X min late" instead of
+        // jumping ~24h ahead. See field log 2026-05-19 #2 for the bug shape
+        // ("1434:38" ghost countdown caused by 37-second-past re-parse).
+        return applyRollover(target.timeInMillis, now.timeInMillis)
     }
 
     /**
