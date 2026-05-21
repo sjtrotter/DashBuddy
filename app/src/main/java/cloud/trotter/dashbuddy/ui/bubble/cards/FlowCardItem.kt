@@ -127,7 +127,7 @@ private fun PhaseChip(snapshot: FlowCardSnapshot, isActive: Boolean) {
         is FlowCardSnapshot.Awaiting -> "AWAIT" to MaterialTheme.colorScheme.tertiary
         is FlowCardSnapshot.Offer -> "OFFER" to MaterialTheme.colorScheme.primary
         is FlowCardSnapshot.Pickup -> "PICKUP" to MaterialTheme.colorScheme.secondary
-        is FlowCardSnapshot.Delivery -> "DROP" to MaterialTheme.colorScheme.secondary
+        is FlowCardSnapshot.Delivery -> "DROPOFF" to MaterialTheme.colorScheme.secondary
         is FlowCardSnapshot.PostTask -> "PAID" to MaterialTheme.colorScheme.primary
     }
     Surface(
@@ -352,7 +352,10 @@ private fun DeadlineBody(
             if (deadlineMillis != null) {
                 val remaining = deadlineMillis - now
                 HeroBig(text = formatCountdown(remaining), color = deadlineColor(remaining))
-                Caption(deadlineLabel)
+                // Caption is `${deadlineLabel} · by HH:MM` — the wall-clock anchor
+                // lets the dasher cross-check the countdown against what DoorDash
+                // itself is showing on screen (field log 2026-05-19 #1 / 2026-05-17 #2).
+                Caption("$deadlineLabel · by ${formatTime(deadlineMillis)}")
             } else {
                 // No deadline parsed — fall back to elapsed time
                 HeroBig(formatDuration(now - phaseStartedAt))
