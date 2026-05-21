@@ -329,8 +329,9 @@ class FlowCardMapperTest {
 
         val cards = FlowCardMapper.fold(events)
 
-        // Awaiting + (Offer + Pickup + Delivery + PostTask) × 2 = 9
-        assertEquals(9, cards.size)
+        // Awaiting(start) + Offer1 + Pickup1 + Delivery1 + PostTask1 +
+        // Awaiting(between) + Offer2 + Pickup2 + Delivery2 + PostTask2 = 10
+        assertEquals(10, cards.size)
 
         val offers = cards.filterIsInstance<FlowCardSnapshot.Offer>()
         assertEquals(2, offers.size)
@@ -342,6 +343,87 @@ class FlowCardMapperTest {
 
         val postTasks = cards.filterIsInstance<FlowCardSnapshot.PostTask>()
         assertEquals(listOf(5.00, 8.00), postTasks.map { it.totalPay })
+
+        // Two Awaiting cards: one at session start, one between deliveries.
+        val awaitings = cards.filterIsInstance<FlowCardSnapshot.Awaiting>()
+        assertEquals(2, awaitings.size)
+        // Second Awaiting opens at delivery-1 completion (2700L) and closes
+        // when delivery-2's OFFER_RECEIVED fires (3000L).
+        assertEquals(2700L, awaitings[1].phaseStartedAt)
+        assertEquals(3000L, awaitings[1].phaseEndedAt)
+    }
+
+    // =========================================================================
+    // Awaiting re-opens between deliveries / after declined/timed-out offers
+    // =========================================================================
+
+    @Test
+    fun `declined then accepted offer produces two Awaiting cards in stack`() {
+        // Field log 2026-05-19 #7: post-session card stack should include an
+        // Awaiting block for each between-offer / between-delivery gap.
+        // Sequence: start → decline → accept → full delivery → DASH_STOP.
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_DECLINED,
+                offerPayload("decline-1", AppEventType.OFFER_DECLINED, 1500L, 1700L), 1700L),
+            // Dasher returns to awaiting — Awaiting #2 opens at 1700L.
+            event(AppEventType.OFFER_RECEIVED, "{}", 2000L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("o1", AppEventType.OFFER_ACCEPTED, 2000L, 2100L), 2100L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T1", "J1", "A", 2100L), 2100L),
+            event(AppEventType.DELIVERY_NAV_STARTED,
+                deliveryPayload("T2", "J1", 2200L), 2200L),
+            event(AppEventType.DELIVERY_COMPLETED,
+                deliveryPayload("T2", "J1", 2200L, completed = 3000L, totalPay = 7.00), 3000L),
+            event(AppEventType.DASH_STOP, "{}", 3500L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        val awaitings = cards.filterIsInstance<FlowCardSnapshot.Awaiting>()
+        // Three Awaiting cards: start, after decline, after delivery.
+        assertEquals(3, awaitings.size)
+        assertEquals(1000L, awaitings[0].phaseStartedAt)  // session start
+        assertEquals(1700L, awaitings[1].phaseStartedAt)  // after decline
+        assertEquals(3000L, awaitings[2].phaseStartedAt)  // after delivery
+    }
+
+    @Test
+    fun `timeout opens a new Awaiting card`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_TIMEOUT,
+                offerPayload("to-1", AppEventType.OFFER_TIMEOUT, 1500L, 1530L), 1530L),
+            event(AppEventType.DASH_STOP, "{}", 2000L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        val awaitings = cards.filterIsInstance<FlowCardSnapshot.Awaiting>()
+        assertEquals(2, awaitings.size)
+        assertEquals(1530L, awaitings[1].phaseStartedAt)  // opened at timeout decidedAt
+    }
+
+    @Test
+    fun `accepted offer does NOT open Awaiting between Offer and Pickup`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T1", "J1", "A", 1600L), 1600L),
+            event(AppEventType.DASH_STOP, "{}", 2000L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        val awaitings = cards.filterIsInstance<FlowCardSnapshot.Awaiting>()
+        // Only the session-start Awaiting — no spurious one between Offer and Pickup.
+        assertEquals(1, awaitings.size)
     }
 
     // =========================================================================
