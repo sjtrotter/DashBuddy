@@ -45,6 +45,14 @@ For items with multiple sub-concerns at different statuses, use one
 `Partially closed —` line and describe each sub-concern inline.
 
 ---
+human entered logs during claude sub shortfall
+
+- final dash summay issue. hypothesis - idle map offline screen shows before the summary, and (maybe) there is no way to get to the summary actions from the idle offline screen?
+- 
+
+
+
+---
 
 ## 2026-05-19 — DoorDash session (live capture during dash)
 
