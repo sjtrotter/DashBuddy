@@ -279,9 +279,11 @@ The single biggest source of window UNKNOWNs. `pickup_shopping` (pri 72) require
 ```
 
 ### Customer chat conversation  ·  **457 files**  ·  HIGH value
-The open conversation thread (substitution Q&A, gate codes, ETAs). Existing `chat` (pri 92, `allTextContainsAll:[dasher,messages]`) matches the chat **inbox list**, not a thread. The thread is reliably keyed by a single id:
+The open conversation thread (substitution Q&A, gate codes, ETAs). Existing `chat` (pri 92, `allTextContainsAll:[dasher,messages]`) matches the chat **inbox list**, not a thread. The thread is reliably keyed by a single id.
+
+**No flow/state (per developer):** chat is reachable from *any* lifecycle state — not dashing, idle, on a pickup, on a drop-off, even from a different/later task — and the screen carries **no indication** of which. So this rule must **declare no `state`/flow at all**; recognizing it leaves the current flow untouched (asserting a flow would corrupt the state machine). This matches the existing flow-agnostic screen rules (`chat`, `ratings`, `earnings`, `help`, menus). *Same principle applies to any from-anywhere overlay — menus, dialogs, the task list: recognize without asserting flow.*
 ```json
-{ "id": "doordash.screen.chat_conversation", "priority": 92, "state": { "flow": "task:pickup:arrived" },
+{ "id": "doordash.screen.chat_conversation", "priority": 92,
   "require": { "any": [ { "exists": { "hasIdSuffix": "ddchat_holder_base" } },
                         { "exists": { "hasIdSuffix": "inputChannelView" } } ] },
   "parse": { "as": "chat" } }
