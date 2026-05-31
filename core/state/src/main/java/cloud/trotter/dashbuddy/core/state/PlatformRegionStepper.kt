@@ -62,6 +62,13 @@ class PlatformRegionStepper @Inject constructor() {
             )
         }
 
+        // Lazy task-clear grace expiration: a transient idle/offer mid-task armed
+        // a deadline (see updateTaskLifecycle). If it has passed without returning
+        // to a task flow, retire the task now — the session/job survive.
+        if (current.taskClearGraceDeadline != null && obs.timestamp > current.taskClearGraceDeadline!!) {
+            current = retireActiveTask(current, current.taskClearGraceDeadline!!)
+        }
+
         val flowObs = obs as? Observation.FlowObservation ?: return current
 
         // Resolve what mode this observation implies
@@ -228,7 +235,7 @@ class PlatformRegionStepper @Inject constructor() {
         nextFlow: FlowRegion,
         obs: Observation.FlowObservation,
     ): PlatformRegion {
-        if (region.mode == Mode.Offline) return region.copy(idleEnteredAt = null)
+        if (region.mode == Mode.Offline) return region.copy(idleEnteredAt = null, taskClearGraceDeadline = null)
 
         var r = region
         val prev = prevFlow.flow
@@ -431,9 +438,22 @@ class PlatformRegionStepper @Inject constructor() {
                 !taskFields.storeName.equals("Unknown", ignoreCase = true) &&
                 taskFields.storeName != currentTask.storeName
 
+            // Stacked-dropoff transition: symmetric to the pickup case but keyed
+            // on customerAddressHash — arrived at one customer, now navigating to
+            // a different one. Lets back-to-back dropoffs mint distinctly even if
+            // no post:task is observed between them.
+            val isStackedDropoffTransition = currentTask != null &&
+                currentTask.phase == TaskPhase.DROPOFF &&
+                taskPhase == TaskPhase.DROPOFF &&
+                currentTask.arrivedAt != null &&
+                taskSubFlow == TaskSubFlow.NAVIGATION &&
+                taskFields?.customerAddressHash != null &&
+                taskFields.customerAddressHash != currentTask.customerAddressHash
+
             if (currentTask == null ||
                 currentTask.phase != taskPhase ||
-                isStackedPickupTransition
+                isStackedPickupTransition ||
+                isStackedDropoffTransition
             ) {
                 // New task (different phase, no active task, or stacked-pickup transition)
                 val completedTask = currentTask?.copy(completedAt = obs.timestamp)
@@ -446,7 +466,9 @@ class PlatformRegionStepper @Inject constructor() {
                         taskId = UUID.randomUUID().toString(),
                         jobId = jobId,
                         phase = taskPhase,
+                        subPhase = taskSubFlow,
                         storeName = taskFields?.storeName ?: currentTask?.storeName,
+                        storeAddress = taskFields?.storeAddress ?: currentTask?.storeAddress,
                         customerNameHash = taskFields?.customerNameHash,
                         customerAddressHash = taskFields?.customerAddressHash,
                         deadlineMillis = taskFields?.deadline?.time,
@@ -457,6 +479,7 @@ class PlatformRegionStepper @Inject constructor() {
                         arrivedAt = if (taskSubFlow == TaskSubFlow.ARRIVED) obs.timestamp else null,
                     ),
                     recentTasks = recentTasks,
+                    taskClearGraceDeadline = null,
                 )
             }
 
@@ -464,7 +487,9 @@ class PlatformRegionStepper @Inject constructor() {
             val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && currentTask.arrivedAt == null
             return region.copy(
                 activeTask = currentTask.copy(
+                    subPhase = taskSubFlow,
                     storeName = taskFields?.storeName ?: currentTask.storeName,
+                    storeAddress = taskFields?.storeAddress ?: currentTask.storeAddress,
                     customerNameHash = taskFields?.customerNameHash ?: currentTask.customerNameHash,
                     customerAddressHash = taskFields?.customerAddressHash ?: currentTask.customerAddressHash,
                     deadlineMillis = taskFields?.deadline?.time ?: currentTask.deadlineMillis,
@@ -473,27 +498,30 @@ class PlatformRegionStepper @Inject constructor() {
                     redCardTotal = taskFields?.redCardTotal ?: currentTask.redCardTotal,
                     arrivedAt = if (justArrived) obs.timestamp else currentTask.arrivedAt,
                 ),
+                taskClearGraceDeadline = null,
             )
         }
 
-        // PostTask → complete active task
+        // PostTask → complete active task (authoritative; clears any pending grace)
         val postTask = region.activeTask
         if (nextFlowVal == Flow.PostTask && postTask != null) {
             val completedTask = postTask.copy(completedAt = obs.timestamp)
             return region.copy(
                 activeTask = null,
                 recentTasks = (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS),
+                taskClearGraceDeadline = null,
             )
         }
 
-        // Leaving task/post-task flows to idle/awaiting → clear active task
+        // Leaving a task flow to idle/offer while online → do NOT retire the task
+        // immediately. A transient idle (an informational screen, or the idle map
+        // flashing before the delivery summary) must not forget the active task.
+        // Arm a grace deadline; returning to a task flow cancels it (above), and a
+        // sustained idle past the window retires the task lazily in step().
         if (prevFlowVal.isTaskFlow() && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask) {
-            val leavingTask = region.activeTask
-            if (leavingTask != null) {
-                val completedTask = leavingTask.copy(completedAt = obs.timestamp)
+            if (region.activeTask != null && region.taskClearGraceDeadline == null) {
                 return region.copy(
-                    activeTask = null,
-                    recentTasks = (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS),
+                    taskClearGraceDeadline = obs.timestamp + TransitionPolicy.DEFAULT_GRACE_MS,
                 )
             }
         }
@@ -504,6 +532,21 @@ class PlatformRegionStepper @Inject constructor() {
     // =========================================================================
     // HELPERS
     // =========================================================================
+
+    /**
+     * Retire the active task when its clear-grace deadline lazily expires
+     * (a sustained idle/offer mid-task). Completes it into recentTasks. Unlike
+     * [endSession], the session and job live on — only the task is closed.
+     */
+    private fun retireActiveTask(region: PlatformRegion, timestamp: Long): PlatformRegion {
+        val completed = region.activeTask?.copy(completedAt = timestamp)
+            ?: return region.copy(taskClearGraceDeadline = null)
+        return region.copy(
+            activeTask = null,
+            recentTasks = (region.recentTasks + completed).takeLast(MAX_RECENT_TASKS),
+            taskClearGraceDeadline = null,
+        )
+    }
 
     private fun endSession(region: PlatformRegion, timestamp: Long): PlatformRegion {
         val completedTask = region.activeTask?.copy(completedAt = timestamp)
@@ -517,6 +560,7 @@ class PlatformRegionStepper @Inject constructor() {
             activeTask = null,
             recentTasks = recentTasks,
             sessionGraceDeadline = null,
+            taskClearGraceDeadline = null,
             idleEnteredAt = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,

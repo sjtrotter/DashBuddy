@@ -30,7 +30,6 @@
       "id": "doordash.screen.timeline",
       "priority": 10,
       "state": {
-        "flow": "idle",
         "modeHint": "online"
       },
       "require": {
@@ -1822,7 +1821,6 @@
       "id": "doordash.screen.on_dash_map",
       "priority": 110,
       "state": {
-        "flow": "idle",
         "modeHint": "online"
       },
       "reject": [
