@@ -628,30 +628,8 @@
       "priority": 40,
       "require": {
         "all": [
-          {
-            "exists": {
-              "all": [
-                {
-                  "hasTextCaseSensitive": "Startingï¿½"
-                },
-                {
-                  "hasClassNameEndsWith": "TextView"
-                }
-              ]
-            }
-          },
-          {
-            "exists": {
-              "all": [
-                {
-                  "hasText": "Cancel"
-                },
-                {
-                  "hasClassNameEndsWith": "Button"
-                }
-              ]
-            }
-          }
+          { "exists": { "hasIdSuffix": "progress_message" } },
+          { "exists": { "any": [ { "hasIdSuffix": "image_logo" }, { "hasIdSuffix": "cancel_button" } ] } }
         ]
       }
     },
