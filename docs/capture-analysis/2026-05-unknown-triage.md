@@ -161,6 +161,12 @@ A noise example, same log style, captured while not even dashing:
 
 **465 UNKNOWN files, 106 clusters.** Each click payload carries `screenTarget` + the tapped node, so `(screenTarget, idSuffix)` is a near-perfect signature — and the click DSL keys on exactly that (`screenIs` + `require:{hasIdSuffix}}`). Only 11 DoorDash click rules exist today, so almost every real action button on the post-offer screens is UNKNOWN. A recurring root cause: several **completion-flow clicks are UNKNOWN because the *screen* under them is under-recognized** (e.g. `complete_delivery_steps_button` taps land on `screenTarget=dropoff_navigation`, but the existing `complete_delivery` rule is scoped `screenIs=dropoff_pre_arrival_completion`).
 
+> **Do screens before clicks (this whole section is provisional).** Click rules are gated by `screenIs`, which is `lastScreenTarget` — the *recognized* screen at tap time. Since recognizing the missing screens (§3) will change what `lastScreenTarget` is on many of these taps, the `screenIs` scoping for the clicks below will shift. Treat the click catalog as a follow-on to the screen work, not parallel to it.
+>
+> **Stale/dead existing click rules:** only **6 of 11** defined intents ever fired this month (`accept_offer`, `decline_offer`, `initial_decline`, `go_online`, `go_offline`, `start_dash_set_end_time`). In particular **`doordash.click.checkout` is dead** — its anchor `button_checkout` appears **0×** in any capture; the real UI uses an id-less "prism" button and "Checkout" is a non-clickable heading. The end-of-shopping gate should be the **checkout *screen*** (`fragmentContainerView_genericCheckout`, §3.1 `shopping_checkout`), not a click.
+>
+> **Prism buttons *are* text-matchable.** Their clicked node has empty own-`text` (the label sits in a descendant `textView_prism_button_title`), so `hasText`/`hasTextContaining` won't match — but **`hasAnyText`** reads the subtree (`node.allText`) and matches the label (exact, case-insensitive). The existing `decline_offer` rule already uses `hasAnyText:"Decline offer"` this way. So id-less prism actions can be keyed on their label via `hasAnyText`.
+
 ## 2A. Recognizable actions — should classify
 
 ### Delivery completion (currently UNKNOWN)  ·  HIGH value
@@ -281,8 +287,12 @@ The open conversation thread (substitution Q&A, gate codes, ETAs). Existing `cha
   "parse": { "as": "chat" } }
 ```
 
-### Drop-off completion workflow  ·  **275 files**  ·  HIGH value
-`drop_off_workflow_host_fragment` host with step screens: "take photo of drop-off location", "hand it to customer", "collect pin from customer / ask the customer for the unique 4-digit pin", "complete delivery". `dropoff_pre_arrival_completion` (pri 74) needs "Deliver to" + "Complete Delivery" — the deeper photo/PIN steps don't have "Deliver to" so they miss. Propose three steps, all keyed on the host fragment + the distinctive step text:
+### Drop-off completion workflow  ·  **275 files**  ·  HIGH value  ·  **also an "arrived at drop-off" signal**
+`drop_off_workflow_host_fragment` host with step screens: "take photo of drop-off location", "hand it to customer", "collect pin from customer / ask the customer for the unique 4-digit pin", "complete delivery". `dropoff_pre_arrival_completion` (pri 74) needs "Deliver to" + "Complete Delivery" — the deeper photo/PIN steps don't have "Deliver to" so they miss.
+
+**Flow correction (per developer):** these steps only appear *once the dasher has reached the customer's door*, so they mean **arrived at the drop-off location** — they should carry `flow: task:dropoff:arrived`, **not** `task:dropoff:navigation`. Recognizing any of them is therefore itself a reliable "arrived at drop-off" signal (the navigation→arrived transition), mirroring the pickup side's `task:pickup:navigation` → `task:pickup:arrived`.
+
+Propose three steps, all keyed on the host fragment + the distinctive step text:
 
 | Proposed screen | Distinctive text | Value |
 |---|---|---|
@@ -290,7 +300,7 @@ The open conversation thread (substitution Q&A, gate codes, ETAs). Existing `cha
 | `dropoff_pin_entry` | "collect pin from customer" / "ask the customer for the unique" | hand-it-to-customer flow |
 | `dropoff_handoff` | "hand it to customer" / "leave it at the door" + step content | delivery method |
 ```json
-{ "id": "doordash.screen.dropoff_photo", "priority": 73, "state": { "flow": "task:dropoff:navigation" },
+{ "id": "doordash.screen.dropoff_photo", "priority": 73, "state": { "flow": "task:dropoff:arrived" },
   "require": { "all": [ { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
                         { "exists": { "hasTextContaining": "photo of drop-off" } } ] },
   "parse": { "as": "dropoff_step" } }
@@ -376,8 +386,8 @@ Framed as options for you to decide on; this report does not change any rule or 
 1. **Notifications by `channelId`** — ~250 of 301 files, ~12 rules, zero code change. Start with `new_order_v2` (110), `customer_message`, `order_ready`, `earnings_deposit`, `arrived_in_zone`.
 2. **Shop-and-deliver screen family** — ~1,400 files; biggest window win and it collapses the count via dedup.
 3. **Customer chat conversation** (`ddchat_holder_base`) — 457 files.
-4. **Drop-off completion workflow** (photo / PIN / handoff) — 275 files; also unblocks the completion *clicks* that are UNKNOWN because their screen is under-recognized.
-5. **Completion + photo + arrival clicks** — `complete_delivery_nav`, `take_photo`, arrival `primary_action_button`. (`stop_orders_after_delivery` is valid but a single, unconfirmed capture — defer.)
+4. **Drop-off completion workflow** (photo / PIN / handoff) — 275 files; carries `task:dropoff:arrived` (it's also the "arrived at drop-off" signal) and unblocks the completion *clicks* that are UNKNOWN because their screen is under-recognized.
+5. **Completion + photo + arrival clicks** — `complete_delivery_nav`, `take_photo`, arrival `primary_action_button`. **Do these *after* the screen work above** — `screenIs` scoping depends on the new screen rules, so the click defs will shift. (`stop_orders_after_delivery` is valid but a single, unconfirmed capture — defer.)
 6. **`current_dash_tasklist` + `end_dash_confirm`** — small, high-signal, tied to active timeline/dash-end work.
 7. Remaining dialogs/menus/screens in §3.2 and the click table in §2A.
 
