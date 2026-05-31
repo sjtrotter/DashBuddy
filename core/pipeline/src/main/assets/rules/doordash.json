@@ -2352,10 +2352,7 @@
       "require": {
         "all": [
           { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
-          { "exists": { "any": [
-            { "hasTextContaining": "hand it to customer" },
-            { "hasTextContaining": "leave it at the door" }
-          ] } }
+          { "exists": { "hasTextContaining": "hand it to customer" } }
         ]
       }
     },
@@ -2364,10 +2361,7 @@
       "priority": 75,
       "state": { "flow": "task:pickup:arrived" },
       "require": {
-        "exists": { "any": [
-          { "hasIdSuffix": "fragmentContainerView_shopDeliver" },
-          { "hasIdSuffix": "laneGuidanceRecycler" }
-        ] }
+        "exists": { "hasIdSuffix": "fragmentContainerView_shopDeliver" }
       },
       "reject": [
         { "exists": { "hasText": "Shop and Deliver" } }
@@ -2394,7 +2388,7 @@
     },
     {
       "id": "doordash.screen.side_nav_drawer",
-      "priority": 85,
+      "priority": 200,
       "require": {
         "all": [
           { "exists": { "hasIdSuffix": "side_nav_content_container" } },

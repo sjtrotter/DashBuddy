@@ -304,11 +304,6 @@ class TriageRulesTest {
     }
 
     @Test
-    fun `shopping_item — in-store lane-guidance variant`() {
-        assertEquals("shopping_item", screen(tree(node(id = "laneGuidanceRecycler"))))
-    }
-
-    @Test
     fun `dropoff_completed_confirm`() {
         assertEquals("dropoff_completed_confirm", screen(tree(node(text = "Confirm order was completed"), node(text = "Got it"))))
     }
