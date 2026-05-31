@@ -10,8 +10,8 @@
 
 The corpus holds **5,210 `UNKNOWN` capture files** (4,444 window + 465 click + 301 notification). That volume is **not** redundant re-saves of recognized screens (the capture bus already dedups those — validated below). It is two things:
 
-1. **Real, recognizable screens/clicks/notifications that simply have no rule yet** — by far the majority. The entire **shop-and-deliver surface**, **customer chat**, the **drop-off completion workflow**, **side-nav/menu**, and **most notification types** are unclassified. Roughly **~2,930 of 4,444 window UNKNOWNs (~66%)** are identifiable DoorDash screens.
-2. **Genuine noise that should never reach the classifier** — Android **lockscreen / always-on-display**, the **launcher/recents** switcher, **other foreground apps**, **media-player / notification-shade** chrome, and **transient loading / empty-shell frames**. Roughly **~980 window UNKNOWNs (~22%) + most "OTHER" tail** are this.
+1. **Real, recognizable screens/clicks/notifications that simply have no rule yet** — by far the majority. The entire **shop-and-deliver surface**, **customer chat**, the **drop-off completion workflow**, **side-nav/menu**, and **most notification types** are unclassified. Roughly **~2,800 of 4,444 window UNKNOWNs (~63%)** are identifiable DoorDash screens.
+2. **Genuine noise that should never reach the classifier** — Android **lockscreen / always-on-display**, the **launcher/recents** switcher, **other foreground apps**, **media-player / notification-shade** chrome, and **transient loading / empty-shell frames**. Roughly **~1,015 window UNKNOWNs (~23%) + most "OTHER" tail** are this.
 
 **The single most important structural finding** (see mechanism below): *classifying a recurring screen doesn't just add data — it removes data*, because recognized screens are identity-deduped on capture and UNKNOWN screens are not. So writing rules for the big recognizable families is simultaneously the fix for the file-count explosion.
 
@@ -63,7 +63,7 @@ A noise example, same log style, captured while not even dashing:
 
 | Source | Files | Distinct clusters | Headline |
 |---|---:|---:|---|
-| `accessibility.window` | 4,444 | ~1,030 raw → **18 families** | ~66% recognizable DoorDash screens, ~22% system/foreign/transient noise |
+| `accessibility.window` | 4,444 | ~1,030 raw → **18 families** | ~63% recognizable DoorDash screens, ~23% system/foreign/transient noise |
 | `accessibility.click` | 465 | 106 | meaningful action buttons vs. navigation/map chrome |
 | `notification` | 301 | 43 | ~12 recognizable types; existing rules match on title text, but **`channelId` is the reliable key** |
 
@@ -243,7 +243,9 @@ The whole "mark delivered" flow on `dropoff_navigation` is unclassified: `comple
 | Lockscreen / always-on-display | **noise** | 269 | 111 |
 | PRISM bottom-sheet dialogs | **DD** | 269 | 58 |
 | Side-nav drawer / schedule | **DD** | 258 | 11 |
-| Address / safety / self-help panel | **DD** | 182 | 86 |
+| Pickup pre-arrival expanded detail → `pickup_pre_arrival` gap | **DD** | ~29 | |
+| Drop-off geofence "far from customer" warning | **DD** | ~13 | |
+| ~~Address / safety / self-help (mis-bucket, 182)~~ → split: see §3.2 note | mixed | — | ~33 nav sheet→noise · ~104 chrome→other |
 | Navigation full-screen (maneuver) | noise* | 105 | 48 |
 | Launcher / recents | **noise** | 77 | 13 |
 | Off-target foreground apps (non-target packages) | **noise** | 146 | 39 |
@@ -251,8 +253,8 @@ The whole "mark delivered" flow on `dropoff_navigation` is unclassified: `comple
 | Media controls / notif shade | **noise** | 58 | 47 |
 | Near-empty (<=6 nodes) | **noise** | 38 | 8 |
 | Ratings / survey / stats | **DD** | 26 | 6 |
-| **Recognizable DoorDash total** | | **~2,934** | |
-| **System / foreign / transient noise** | | **~983** | |
+| **Recognizable DoorDash total** | | **~2,800** | (approx; address bucket revised — §3.2) |
+| **System / foreign / transient noise** | | **~1,015** | (incl. ~33 nav "avoid tolls" sheet) |
 
 \* navigation is *recognized* most of the time; these are frames that drop to UNKNOWN — see §3.3.
 
@@ -334,7 +336,7 @@ PRISM sheet "End your current dash? / End dash / Go back". Pairs with the `end_d
 |---|---|---:|---|
 | `side_nav_drawer` | `side_nav_content_container` + menu text (schedule/account/ratings/earnings/promos/help) + desc "Side menu" | 258 | Drawer open over home; classify to dedup + know menu state |
 | `dash_schedule` | `side_nav_content_container` + "this week"/"start"/"available"/"scheduled"/"start around N am"/time slots | 24 | Dash scheduling; existing `schedule` rule's anchors are too narrow |
-| `address_detail_panel` | `address_line_1` / `address_instructions_view` / `action_dasher_safety` / `action_self_help` | 182 | Expanded delivery address + instructions + safety/help |
+| `dropoff_geofence_warning` | `prism_sheet` + "far away from the customer" / `geofence_warning_map` + `button_primary_action` "Got it" / `button_secondary_action` "I need help" + delivery address | ~13 | Drop-off "wrong location" dialog — fires when "Arrived" is tapped but you're outside the customer geofence. A **soft** "near drop-off, attempting arrival" signal, **not** concrete arrival (usually bounces back to `dropoff_pre_arrival`). |
 | `camera_capture` | `camera_preview`/`capture_button`/`image_capture_view`/`image_preview`/`education_photo_receipt_screen`/`btn_retake_photo`/`pizza_bag_uploading_*` | 72 | Proof / receipt photo viewfinder + review/retake |
 | `pickup_issue_menu` | "I have an issue"/"select an issue"/"what pickup issues can we help with"/"store related"/"helpful resources" | 76 | Pickup self-help / issue reporting |
 | `send_intro_message` | `prism_sheet` + "introduction texts can help boost your ratings"/"send this intro"/"don't send" | 30 | Pre-shop intro prompt |
@@ -344,6 +346,10 @@ PRISM sheet "End your current dash? / End dash / Go back". Pairs with the `end_d
 | `pickup_confirm` | `confirm_pickup_button` + `drop_off_container` + `collapsingToolbar_navBar` | ~27 | Pickup confirmation/order details |
 | `ratings_detail` | `current_rating_value_text_view` / `chart` (+ "rating") / `btn_submit_survey` | 26 | Ratings stats / survey; extend existing `ratings` |
 | `sign_in` | `progress_message` ("Signing in…") + `image_logo` + `cancel_button` | (in Loading) | Recognizable startup state; existing `app_startup` wants "Starting…" not "Signing in…" |
+
+**Correction — the former "address / safety detail panel (182)" was a mis-bucket.** It keyed partly on `action_dasher_safety`/`action_self_help`, which are **persistent overlay buttons** present on many screens, not a screen signature. It decomposes into: the **nav "avoid tolls" destination sheet** (~33 → navigation chrome, §3.5), the **drop-off geofence warning** (~13 → row above), the **pickup pre-arrival expanded detail** (~29 → below), and a **~104 grab-bag** of unrelated screens that merely show the Safety/Help buttons (idle map, zone-nav, side-nav…). Only the first two/three are real; the grab-bag is not a screen.
+
+**Pickup pre-arrival expanded detail = `pickup_pre_arrival` recognition gap, not a new screen.** The expanded stop-detail sheet (full address+apt, customer, merchant, "N items", `bottom_sheet_container`) is `pickup_pre_arrival` in its expanded/scrolled state. Confirmed by the action button: this sheet shows **"Arrived at store"** (the pre-arrival *trigger*) + "Pickup from {merchant}", whereas recognized `pickup_arrival` shows **"Start pickup" / "Continue with pickup"** + "Order for {customer}". So it is pre-arrival, **not** `pickup_arrival`. It drops to UNKNOWN because **22 of 29 captures have no prism button in the tree** (collapsed/scrolled), so `pickup_pre_arrival`'s `textView_prism_button_title` clause fails — same gap pattern as `timeline`. **Fix = broaden `pickup_pre_arrival`** to also accept its expanded-detail state (e.g. `bottom_sheet_container` + `address_instructions_view` + "Pickup from"), which both recognizes it and unlocks parsing address/apt/customer/merchant/items. (Same applies to the drop-off detail sheet, but `dropoff_pre_arrival`'s looser text anchors already catch it.)
 
 ## 3.3 Navigation frames (recognized → UNKNOWN)  ·  105 files
 
