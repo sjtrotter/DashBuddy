@@ -272,7 +272,7 @@
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "*refund",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/message_self_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -308,7 +308,7 @@
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "Hi Gregory Moreland, your item “H-E-B Ground Chicken Breast, 97% Lean” is out of stock, would you like something else?",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/message_self_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -344,7 +344,7 @@
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "the app suggested this:",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/message_self_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -416,7 +416,7 @@
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "same fat content",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/message_self_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -452,7 +452,7 @@
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "I've got those to replace for now lmk if you wanna do something else or refund it",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/message_self_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -574,7 +574,7 @@
                                                                                                 }
                                                                                             },
                                                                                             {
-                                                                                                "text": "Type Message",
+                                                                                                "text": "[redacted]",
                                                                                                 "id": "com.doordash.driverapp:id/message_input",
                                                                                                 "class": "android.widget.EditText",
                                                                                                 "isClickable": true,

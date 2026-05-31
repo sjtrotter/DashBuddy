@@ -122,7 +122,7 @@
                         }
                     },
                     {
-                        "text": "Deliver to Rachel M",
+                        "text": "Deliver to [redacted]",
                         "class": "android.widget.TextView",
                         "isEnabled": true,
                         "bounds": {

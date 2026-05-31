@@ -205,7 +205,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Torchy's Tacos",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,1679][919,1747]",
@@ -245,14 +245,14 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Torchys tacos",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_1",
                                                   "class": "TextView",
                                                   "bounds": "[125,1839][1044,1883]",
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "18210 Sonterra Pl, San Antonio, TX 78258, USA",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_2",
                                                   "class": "TextView",
                                                   "bounds": "[125,1883][1062,1931]",
@@ -454,7 +454,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Customer",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,2859][767,2347]",

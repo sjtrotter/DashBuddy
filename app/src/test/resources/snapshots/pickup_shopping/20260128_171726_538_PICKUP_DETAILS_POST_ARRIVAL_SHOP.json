@@ -563,7 +563,7 @@
                                                                                                   ]
                                                                                                 },
                                                                                                 {
-                                                                                                  "text": "Clover Valley Chewy Granola Bars Variety Pack (18 ct)",
+                                                                                                  "text": "Clover Valley Chewy Granola Bars Variety Pack ([address])",
                                                                                                   "id": "item_name",
                                                                                                   "class": "TextView",
                                                                                                   "bounds": "[377,1395][1015,1517]",
@@ -677,7 +677,7 @@
                                                                                                   ]
                                                                                                 },
                                                                                                 {
-                                                                                                  "text": "Honey Maid Fresh Stacks Graham Crackers (2.0 oz x 6 ct)",
+                                                                                                  "text": "Honey Maid Fresh Stacks Graham Crackers (2.[address])",
                                                                                                   "id": "item_name",
                                                                                                   "class": "TextView",
                                                                                                   "bounds": "[377,1808][1015,1930]",

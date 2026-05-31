@@ -351,7 +351,7 @@
                                                                                                                                                         }
                                                                                                                                                     },
                                                                                                                                                     {
-                                                                                                                                                        "text": "Gate code #5969",
+                                                                                                                                                        "text": "Gate [redacted] [redacted]",
                                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
@@ -382,7 +382,7 @@
                                                                                                                                                         },
                                                                                                                                                         "children": [
                                                                                                                                                             {
-                                                                                                                                                                "text": "Apt/Suite Unit 27",
+                                                                                                                                                                "text": "Apt/Suite [redacted] 27",
                                                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                                                 "isEnabled": true,
                                                                                                                                                                 "bounds": {
@@ -466,7 +466,7 @@
                                                                                                                                                 }
                                                                                                                                             },
                                                                                                                                             {
-                                                                                                                                                "text": "Take a photo showing where you left the order. This will help customers find the order easily.",
+                                                                                                                                                "text": "[redacted]",
                                                                                                                                                 "id": "com.doordash.driverapp:id/step_description",
                                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                                 "isEnabled": true,

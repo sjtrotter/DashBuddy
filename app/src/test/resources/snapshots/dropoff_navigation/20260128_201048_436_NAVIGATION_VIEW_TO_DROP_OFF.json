@@ -80,7 +80,7 @@
                                       "enabled": true
                                     },
                                     {
-                                      "text": "5002 N Loop 1604 E, San Antonio, TX 78247, USA",
+                                      "text": "[redacted]",
                                       "id": "arriving_at_title",
                                       "class": "TextView",
                                       "bounds": "[53,217][1027,393]",
@@ -429,14 +429,14 @@
                                                           "enabled": true
                                                         },
                                                         {
-                                                          "text": "Deliver to Katelyn H",
+                                                          "text": "Deliver to [redacted]",
                                                           "id": "bottom_sheet_task_title",
                                                           "class": "TextView",
                                                           "bounds": "[36,2449][444,2347]",
                                                           "enabled": true
                                                         },
                                                         {
-                                                          "text": "5002 N Loop 1604 E, San Antonio, TX 78247, USA",
+                                                          "text": "[redacted]",
                                                           "id": "bottom_sheet_address_line_1",
                                                           "class": "TextView",
                                                           "bounds": "[36,2504][1044,2347]",
@@ -479,7 +479,7 @@
                                                           "enabled": true
                                                         },
                                                         {
-                                                          "text": "type in roots at o’connor apartments on maps. Address usually takes dashers to wrong location \n\ngate to left code is *05002\n",
+                                                          "text": "[redacted]",
                                                           "id": "bottom_sheet_instructions",
                                                           "class": "TextView",
                                                           "bounds": "[36,2845][1044,2347]",

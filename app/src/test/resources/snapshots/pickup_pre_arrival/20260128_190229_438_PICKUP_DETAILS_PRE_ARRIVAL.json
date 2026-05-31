@@ -205,7 +205,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Raising Cane's",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,1679][919,1747]",
@@ -261,14 +261,14 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "19110 Stone Oak Pkwy",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_1",
                                                   "class": "TextView",
                                                   "bounds": "[125,1972][1044,2016]",
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "San Antonio, TX 78258, USA",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_2",
                                                   "class": "TextView",
                                                   "bounds": "[125,2016][1062,2064]",
@@ -520,7 +520,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Customer",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,3354][767,2347]",

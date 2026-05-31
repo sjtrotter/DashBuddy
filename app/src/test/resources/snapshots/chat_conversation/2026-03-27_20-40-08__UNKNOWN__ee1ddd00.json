@@ -70,7 +70,7 @@
                 },
                 "children": [
                     {
-                        "text": "okay! one sec",
+                        "text": "[redacted]",
                         "id": "com.doordash.driverapp:id/message_self_message",
                         "class": "android.widget.TextView",
                         "isEnabled": true,
@@ -142,7 +142,7 @@
                 },
                 "children": [
                     {
-                        "text": "this alright?",
+                        "text": "[redacted]",
                         "id": "com.doordash.driverapp:id/message_self_message",
                         "class": "android.widget.TextView",
                         "isEnabled": true,
@@ -178,7 +178,7 @@
                 },
                 "children": [
                     {
-                        "text": "Yes 👍",
+                        "text": "[redacted]",
                         "id": "com.doordash.driverapp:id/message_other_message",
                         "class": "android.widget.TextView",
                         "isEnabled": true,

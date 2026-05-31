@@ -91,7 +91,7 @@
                                                               "enabled": true,
                                                               "children": [
                                                                 {
-                                                                  "text": "Deliver to Robyn J",
+                                                                  "text": "Deliver to [redacted]",
                                                                   "class": "TextView",
                                                                   "bounds": "[36,288][511,354]",
                                                                   "enabled": true
@@ -172,7 +172,7 @@
                                                                   "enabled": true,
                                                                   "children": [
                                                                     {
-                                                                      "text": "304 Sterling Browning Rd",
+                                                                      "text": "[address]",
                                                                       "class": "TextView",
                                                                       "bounds": "[179,608][705,660]",
                                                                       "enabled": true

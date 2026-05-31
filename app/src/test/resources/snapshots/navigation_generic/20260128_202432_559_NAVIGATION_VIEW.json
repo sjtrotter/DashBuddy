@@ -171,7 +171,7 @@
                                                                           "enabled": true
                                                                         },
                                                                         {
-                                                                          "text": "US 281 ",
+                                                                          "text": "[redacted]",
                                                                           "id": "primaryManeuverText",
                                                                           "class": "TextView",
                                                                           "bounds": "[237,219][1062,320]",
@@ -231,7 +231,7 @@
                                                                               "enabled": true
                                                                             },
                                                                             {
-                                                                              "text": "Turn right ",
+                                                                              "text": "[redacted]",
                                                                               "id": "primaryManeuverText",
                                                                               "class": "TextView",
                                                                               "bounds": "[237,905][1062,839]",

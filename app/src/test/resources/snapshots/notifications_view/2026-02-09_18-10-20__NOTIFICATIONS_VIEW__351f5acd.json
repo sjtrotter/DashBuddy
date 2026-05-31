@@ -382,7 +382,7 @@
                                                                                                 "bounds": "[78,342][618,405]",
                                                                                                 "children": [
                                                                                                     {
-                                                                                                        "desc": "1 pending task, All day: , stephen.j.trotter@gmail.com",
+                                                                                                        "desc": "1 pending task, All day: , [email]",
                                                                                                         "id": "com.google.android.calendar:id/widget_row",
                                                                                                         "class": "android.widget.FrameLayout",
                                                                                                         "isEnabled": true,
@@ -471,7 +471,7 @@
                                                                                                 "bounds": "[78,480][618,591]",
                                                                                                 "children": [
                                                                                                     {
-                                                                                                        "desc": "Task: Check Bills, 06:00, stephen.j.trotter@gmail.com",
+                                                                                                        "desc": "Task: Check Bills, 06:00, [email]",
                                                                                                         "id": "com.google.android.calendar:id/widget_row",
                                                                                                         "class": "android.widget.FrameLayout",
                                                                                                         "isEnabled": true,
@@ -560,7 +560,7 @@
                                                                                                 "bounds": "[78,666][618,729]",
                                                                                                 "children": [
                                                                                                     {
-                                                                                                        "desc": "Valentine's Day, All day: , stephen.j.trotter@gmail.com, Holidays in United States",
+                                                                                                        "desc": "Valentine's Day, All day: , [email], Holidays in United States",
                                                                                                         "id": "com.google.android.calendar:id/widget_row",
                                                                                                         "class": "android.widget.FrameLayout",
                                                                                                         "isEnabled": true,
@@ -627,7 +627,7 @@
                                                                                                 "bounds": "[78,804][618,867]",
                                                                                                 "children": [
                                                                                                     {
-                                                                                                        "desc": "Presidents' Day, All day: , stephen.j.trotter@gmail.com, Holidays in United States",
+                                                                                                        "desc": "Presidents' Day, All day: , [email], Holidays in United States",
                                                                                                         "id": "com.google.android.calendar:id/widget_row",
                                                                                                         "class": "android.widget.FrameLayout",
                                                                                                         "isEnabled": true,

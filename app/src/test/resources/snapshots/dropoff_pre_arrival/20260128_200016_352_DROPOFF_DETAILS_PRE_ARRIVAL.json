@@ -91,7 +91,7 @@
                                                               "enabled": true,
                                                               "children": [
                                                                 {
-                                                                  "text": "Deliver to Katelyn H",
+                                                                  "text": "Deliver to [redacted]",
                                                                   "class": "TextView",
                                                                   "bounds": "[36,288][557,354]",
                                                                   "enabled": true
@@ -172,7 +172,7 @@
                                                                   "enabled": true,
                                                                   "children": [
                                                                     {
-                                                                      "text": "5002 N Loop 1604 E",
+                                                                      "text": "[address] 1604 E",
                                                                       "class": "TextView",
                                                                       "bounds": "[179,608][603,660]",
                                                                       "enabled": true
@@ -278,7 +278,7 @@
                                                                   "enabled": true
                                                                 },
                                                                 {
-                                                                  "text": "\"type in roots at o’connor apartments on maps. Address usually takes dashers to wrong location \n\ngate to left code is *05002\n\"",
+                                                                  "text": "\"type in roots at o’connor apartments on maps. Address usually takes dashers to wrong location \n\ngate [redacted] left code is *05002\n\"",
                                                                   "class": "TextView",
                                                                   "bounds": "[178,1612][991,1940]",
                                                                   "enabled": true

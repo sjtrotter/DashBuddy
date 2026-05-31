@@ -390,7 +390,7 @@
                                                                                                 "bounds": "[54,298][622,365]",
                                                                                                 "children": [
                                                                                                     {
-                                                                                                        "desc": "1 pending task, All day: , stephen.j.trotter@gmail.com",
+                                                                                                        "desc": "1 pending task, All day: , [email]",
                                                                                                         "id": "com.google.android.calendar:id/widget_row",
                                                                                                         "class": "android.widget.FrameLayout",
                                                                                                         "isEnabled": true,

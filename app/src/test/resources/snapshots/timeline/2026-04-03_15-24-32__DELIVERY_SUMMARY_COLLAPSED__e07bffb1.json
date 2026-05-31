@@ -214,7 +214,7 @@
                                                                                                 }
                                                                                             },
                                                                                             {
-                                                                                                "text": "Pickup for Kayla M",
+                                                                                                "text": "Pickup for [redacted]",
                                                                                                 "class": "android.widget.TextView",
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
@@ -304,7 +304,7 @@
                                                                                                 }
                                                                                             },
                                                                                             {
-                                                                                                "text": "Deliver to Kayla M",
+                                                                                                "text": "Deliver to [redacted]",
                                                                                                 "class": "android.widget.TextView",
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {

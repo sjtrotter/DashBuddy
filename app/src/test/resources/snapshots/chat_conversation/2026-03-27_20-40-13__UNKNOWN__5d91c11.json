@@ -355,7 +355,7 @@
                                                                                                 }
                                                                                             },
                                                                                             {
-                                                                                                "text": "Type Message",
+                                                                                                "text": "[redacted]",
                                                                                                 "id": "com.doordash.driverapp:id/message_input",
                                                                                                 "class": "android.widget.EditText",
                                                                                                 "isClickable": true,

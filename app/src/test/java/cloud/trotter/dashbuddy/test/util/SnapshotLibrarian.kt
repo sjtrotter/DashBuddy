@@ -1,8 +1,6 @@
 package cloud.trotter.dashbuddy.test.util
 
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 
 object SnapshotLibrarian {
     private const val PROJECT_ROOT = "src/test/resources/snapshots"
@@ -31,7 +29,9 @@ object SnapshotLibrarian {
         if (!destDir.exists()) destDir.mkdirs()
 
         val dest = File(destDir, filename)
-        Files.move(source.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        // Scrub customer PII before the capture becomes a committed fixture.
+        dest.writeText(SnapshotRedactor.redact(source.readText()))
+        source.delete()
 
         return destDir
     }

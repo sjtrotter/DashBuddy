@@ -183,7 +183,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "True Texas BBQ",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,1679][919,1747]",
@@ -223,14 +223,14 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "7330 N Loop 1604 W",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_1",
                                                   "class": "TextView",
                                                   "bounds": "[125,1839][1044,1883]",
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "San Antonio TX 78249-2900, United States",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_2",
                                                   "class": "TextView",
                                                   "bounds": "[125,1883][1062,1931]",
@@ -346,7 +346,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Customer",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,2348][767,2347]",

@@ -91,7 +91,7 @@
                                                               "enabled": true,
                                                               "children": [
                                                                 {
-                                                                  "text": "Deliver to Katelyn H",
+                                                                  "text": "Deliver to [redacted]",
                                                                   "class": "TextView",
                                                                   "bounds": "[-174,288][346,354]",
                                                                   "enabled": true
@@ -172,7 +172,7 @@
                                                                   "enabled": true,
                                                                   "children": [
                                                                     {
-                                                                      "text": "5002 N Loop 1604 E",
+                                                                      "text": "[address] 1604 E",
                                                                       "class": "TextView",
                                                                       "bounds": "[133,608][557,660]",
                                                                       "enabled": true

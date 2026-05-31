@@ -200,7 +200,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Clover Valley Chewy Granola Bars Variety Pack (18 ct)",
+                                                  "text": "Clover Valley Chewy Granola Bars Variety Pack ([address])",
                                                   "id": "title_text_view",
                                                   "class": "TextView",
                                                   "bounds": "[232,354][1044,457]",
@@ -362,7 +362,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Honey Maid Fresh Stacks Graham Crackers (2.0 oz x 6 ct)",
+                                                  "text": "Honey Maid Fresh Stacks Graham Crackers (2.[address])",
                                                   "id": "title_text_view",
                                                   "class": "TextView",
                                                   "bounds": "[232,1066][1044,1169]",
@@ -524,7 +524,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Yoo-Hoo Chocolate Drink Cartons (6.5 fl oz x 3 ct)",
+                                                  "text": "Yoo-Hoo Chocolate Drink Cartons (6.[address])",
                                                   "id": "title_text_view",
                                                   "class": "TextView",
                                                   "bounds": "[232,1704][1044,1807]",

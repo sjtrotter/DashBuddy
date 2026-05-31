@@ -183,7 +183,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Tarka Indian Kitchen",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,1525][919,1593]",
@@ -239,14 +239,14 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "427 N Loop 1604 W Acc Rd #101",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_1",
                                                   "class": "TextView",
                                                   "bounds": "[125,1818][1044,1862]",
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "San Antonio, TX 78258, USA",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_2",
                                                   "class": "TextView",
                                                   "bounds": "[125,1862][1062,1910]",
@@ -369,7 +369,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Customer",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,2305][767,2347]",

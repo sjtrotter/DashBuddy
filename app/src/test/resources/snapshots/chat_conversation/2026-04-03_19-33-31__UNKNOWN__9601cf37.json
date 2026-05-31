@@ -70,7 +70,7 @@
                 },
                 "children": [
                     {
-                        "text": "is that alright? or I can look for a different one or do a refune",
+                        "text": "[redacted]",
                         "id": "com.doordash.driverapp:id/message_self_message",
                         "class": "android.widget.TextView",
                         "isEnabled": true,
@@ -106,7 +106,7 @@
                 },
                 "children": [
                     {
-                        "text": "*refund",
+                        "text": "[redacted]",
                         "id": "com.doordash.driverapp:id/message_self_message",
                         "class": "android.widget.TextView",
                         "isEnabled": true,

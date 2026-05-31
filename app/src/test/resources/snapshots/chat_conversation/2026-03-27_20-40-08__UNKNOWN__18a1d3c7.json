@@ -271,7 +271,7 @@
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "Maybe a smaller size",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/message_other_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -343,7 +343,7 @@
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "okay! one sec",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/message_self_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -415,7 +415,7 @@
                                                                                 },
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "this alright?",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/message_self_message",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -537,7 +537,7 @@
                                                                                                 }
                                                                                             },
                                                                                             {
-                                                                                                "text": "Type Message",
+                                                                                                "text": "[redacted]",
                                                                                                 "id": "com.doordash.driverapp:id/message_input",
                                                                                                 "class": "android.widget.EditText",
                                                                                                 "isClickable": true,

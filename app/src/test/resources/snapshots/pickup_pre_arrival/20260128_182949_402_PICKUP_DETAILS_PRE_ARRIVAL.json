@@ -205,7 +205,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Taco Bell",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,697][919,765]",
@@ -261,14 +261,14 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Taco Bell",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_1",
                                                   "class": "TextView",
                                                   "bounds": "[125,990][1044,1034]",
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "7323 N Loop 1604 W, San Antonio, TX 78249, USA",
+                                                  "text": "[redacted]",
                                                   "id": "address_line_2",
                                                   "class": "TextView",
                                                   "bounds": "[125,1034][1062,1082]",
@@ -470,7 +470,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Customer",
+                                                  "text": "[redacted]",
                                                   "id": "user_name",
                                                   "class": "TextView",
                                                   "bounds": "[125,2047][767,2115]",

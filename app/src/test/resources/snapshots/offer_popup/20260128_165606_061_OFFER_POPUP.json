@@ -146,7 +146,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Clover Valley Chewy Granola Bars Variety Pack (18 ct)",
+                                                  "text": "Clover Valley Chewy Granola Bars Variety Pack ([address])",
                                                   "id": "title_text_view",
                                                   "class": "TextView",
                                                   "bounds": "[232,297][1044,268]",
@@ -308,7 +308,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Honey Maid Fresh Stacks Graham Crackers (2.0 oz x 6 ct)",
+                                                  "text": "Honey Maid Fresh Stacks Graham Crackers (2.[address])",
                                                   "id": "title_text_view",
                                                   "class": "TextView",
                                                   "bounds": "[232,933][1044,1036]",
@@ -470,7 +470,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Yoo-Hoo Chocolate Drink Cartons (6.5 fl oz x 3 ct)",
+                                                  "text": "Yoo-Hoo Chocolate Drink Cartons (6.[address])",
                                                   "id": "title_text_view",
                                                   "class": "TextView",
                                                   "bounds": "[232,1679][1044,1782]",
@@ -524,7 +524,7 @@
                                                   "enabled": true
                                                 },
                                                 {
-                                                  "text": "Yoo-Hoo Strawberry Drink Cartons 3 ct (6.5 fl oz)",
+                                                  "text": "Yoo-Hoo Strawberry Drink Cartons [address] (6.5 fl oz)",
                                                   "id": "title_text_view",
                                                   "class": "TextView",
                                                   "bounds": "[232,1935][1044,2038]",

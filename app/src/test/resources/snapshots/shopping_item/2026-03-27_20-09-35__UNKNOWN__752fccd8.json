@@ -408,7 +408,7 @@
                                                         },
                                                         "children": [
                                                             {
-                                                                "text": "H-E-B Colby & Monterey Jack Sliced Cheese, 10 ct",
+                                                                "text": "H-E-B Colby & Monterey Jack Sliced Cheese, [address]",
                                                                 "class": "android.widget.TextView",
                                                                 "isEnabled": true,
                                                                 "bounds": {

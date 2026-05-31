@@ -164,7 +164,7 @@
                                                                           "enabled": true
                                                                         },
                                                                         {
-                                                                          "text": "US 281 North ",
+                                                                          "text": "[redacted]",
                                                                           "id": "primaryManeuverText",
                                                                           "class": "TextView",
                                                                           "bounds": "[237,182][1062,283]",
@@ -211,7 +211,7 @@
                                                                               "enabled": true
                                                                             },
                                                                             {
-                                                                              "text": "US 281 ",
+                                                                              "text": "[redacted]",
                                                                               "id": "primaryManeuverText",
                                                                               "class": "TextView",
                                                                               "bounds": "[237,455][1062,556]",

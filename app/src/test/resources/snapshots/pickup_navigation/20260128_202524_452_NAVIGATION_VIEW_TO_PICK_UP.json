@@ -171,7 +171,7 @@
                                                                           "enabled": true
                                                                         },
                                                                         {
-                                                                          "text": "US 281 ",
+                                                                          "text": "[redacted]",
                                                                           "id": "primaryManeuverText",
                                                                           "class": "TextView",
                                                                           "bounds": "[237,219][1062,320]",
@@ -532,14 +532,14 @@
                                                               "enabled": true
                                                             },
                                                             {
-                                                              "text": "Heading to CVS",
+                                                              "text": "Heading to [redacted]",
                                                               "id": "bottom_sheet_task_title",
                                                               "class": "TextView",
                                                               "bounds": "[36,2449][362,2347]",
                                                               "enabled": true
                                                             },
                                                             {
-                                                              "text": "20203 Stone Oak Pkwy, San Antonio, TX 78258, USA",
+                                                              "text": "[redacted]",
                                                               "id": "bottom_sheet_address_line_1",
                                                               "class": "TextView",
                                                               "bounds": "[36,2504][1044,2347]",

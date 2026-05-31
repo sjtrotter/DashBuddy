@@ -151,7 +151,7 @@
                                                                                 "bounds": "[-213,261][866,512]",
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "Caitlin",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/tvTitle",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -186,7 +186,7 @@
                                                                                         "bounds": "[702,297][830,362]"
                                                                                     },
                                                                                     {
-                                                                                        "text": "You rock",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/tvLastMessage",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -215,7 +215,7 @@
                                                                                 "bounds": "[-213,514][866,765]",
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "Jocelyn",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/tvTitle",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -249,7 +249,7 @@
                                                                                         "bounds": "[812,550][830,615]"
                                                                                     },
                                                                                     {
-                                                                                        "text": "Start a new Conversation",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/tvLastMessage",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -271,7 +271,7 @@
                                                                                 "bounds": "[-213,767][866,1018]",
                                                                                 "children": [
                                                                                     {
-                                                                                        "text": "Sara",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/tvTitle",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,
@@ -306,7 +306,7 @@
                                                                                         "bounds": "[705,803][830,868]"
                                                                                     },
                                                                                     {
-                                                                                        "text": "Great thank you!",
+                                                                                        "text": "[redacted]",
                                                                                         "id": "com.doordash.driverapp:id/tvLastMessage",
                                                                                         "class": "android.widget.TextView",
                                                                                         "isEnabled": true,

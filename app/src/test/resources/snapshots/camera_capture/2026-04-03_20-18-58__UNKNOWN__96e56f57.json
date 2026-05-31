@@ -327,7 +327,7 @@
                                                                                                                                         ]
                                                                                                                                     },
                                                                                                                                     {
-                                                                                                                                        "text": "Capture the order and\nthe Apt/Suite: Unit 27",
+                                                                                                                                        "text": "Capture the order and\nthe Apt/Suite [redacted] 27",
                                                                                                                                         "id": "com.doordash.driverapp:id/bottom_instruction",
                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                         "isClickable": true,

@@ -376,7 +376,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "1 pending task, All day: , stephen.j.trotter@gmail.com",
+                                                  "desc": "1 pending task, All day: , [email]",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[1106,291][1080,358]",
@@ -465,7 +465,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "SrA McLaurin Going Away, Response: Not responded, 11:00 – 12:00, Willie's Icehouse, 8739 TX-151, stephen.j.trotter@gmail.com",
+                                                  "desc": "SrA McLaurin Going Away, Response: Not responded, 11:00 – 12:00, Willie's Icehouse, 8739 TX-151, [email]",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[1106,437][1080,555]",
@@ -559,7 +559,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "PT follow-up, 11:30 – 12:30, Wilford Hall Ambulatory Surgical Center, 1100 Wilford Hall Loop, Lackland Air Force Base, TX 78236, USA, stephen.j.trotter@gmail.com, Peacock",
+                                                  "desc": "PT follow-up, 11:30 – 12:30, Wilford Hall Ambulatory Surgical Center, [address], Lackland Air Force Base, TX 78236, USA, [email], Peacock",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[1106,634][1080,752]",
@@ -597,7 +597,7 @@
                                                           ]
                                                         },
                                                         {
-                                                          "text": "‎‪11:30 at Wilford Hall Ambulatory Surgical Center, 1100 Wilford Hall Loop, Lackland Air Force Base, TX 78236, USA‬‎",
+                                                          "text": "‎‪11:30 at Wilford Hall Ambulatory Surgical Center, [address], Lackland Air Force Base, TX 78236, USA‬‎",
                                                           "id": "when",
                                                           "class": "TextView",
                                                           "bounds": "[1133,693][1080,746]",
@@ -616,7 +616,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "PRE-CIMB @ Group Staff Mtg, Response: Not responded, 13:00 – 14:00, 67 Wing Bldg other side downstairs, stephen.j.trotter@gmail.com",
+                                                  "desc": "PRE-CIMB @ Group Staff Mtg, Response: Not responded, 13:00 – 14:00, 67 Wing Bldg [redacted] side downstairs, [email]",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[1106,752][1080,870]",
@@ -654,7 +654,7 @@
                                                           ]
                                                         },
                                                         {
-                                                          "text": "‎‪13:00 at 67 Wing Bldg other side downstairs‬‎",
+                                                          "text": "‎‪13:00 at 67 Wing Bldg [redacted] side downstairs‬‎",
                                                           "id": "when",
                                                           "class": "TextView",
                                                           "bounds": "[1133,811][1080,864]",
@@ -697,7 +697,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "Task: Check Bills, 06:00, stephen.j.trotter@gmail.com",
+                                                  "desc": "Task: Check Bills, 06:00, [email]",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[1106,949][1080,1018]",
