@@ -308,12 +308,17 @@ Propose three steps, all keyed on the host fragment + the distinctive step text:
   "parse": { "as": "dropoff_step" } }
 ```
 
-### "Current dash" task list / multi-order overlay  ·  **41 files**  ·  HIGH value
-Text "current dash", "current task", "# of #", "DIST to complete", "by {time}• {store}", "pickup for {name}", "deliver to {name}"; descs close/chat/chevron. The in-app route/task list — directly relevant to the timeline / task-loss work (see memory `project_timeline_fix_and_r0_queue`). Recognizing it gives an authoritative read of the active task set.
+### "Current dash / current task" task list — **this is the `timeline` screen** (recognition gap, not a new screen)  ·  ≥9 frames
+Per developer, the task list *is* the `timeline` screen — confirmed in the data: a recognized `timeline` capture and these UNKNOWN frames share the **identical id-set** (`Artwork Image` / `action_bar_root` / `content` — it's a Compose screen with no distinctive resource-ids) and both contain "Current dash". The UNKNOWN frames are just the **task-list scroll/expansion state**: "Current task", "Pickup for {name}", "by {time} • {store}", "Deliver to {name}", "N min to complete", sometimes "Pause orders after delivery". The existing rule misses them because `allTextContainsAll:["dash ends at","pause orders"]` requires the dash-control header, which that scroll state doesn't show. (My earlier "41 files / `current_dash_tasklist`" was wrong — it came from the over-merged `{action_bar_root,content}` cluster; the real signal is ~9 frames, likely an undercount of timeline scroll-states that miss.)
+
+**Fix = broaden the existing `timeline` rule**, e.g. accept the task-list state as an alternative anchor:
 ```json
-{ "id": "doordash.screen.current_dash_tasklist", "priority": 12,
-  "require": { "allTextContainsAll": ["current dash", "current task"] } }
+{ "id": "doordash.screen.timeline", "priority": 10, "state": { "flow": "idle" },
+  "require": { "any": [
+    { "allTextContainsAll": ["dash ends at", "pause orders"] },
+    { "allTextContainsAll": ["current dash", "current task"] } ] } }
 ```
+**Flag (your area):** these task-list frames appear *mid-task* (active pickup/deliver rows), yet `timeline` is `flow: idle` — so broadening recognition here interacts directly with the "keep active task through a transient idle (timeline round-trip)" fix (#274, memory `project_timeline_fix_and_r0_queue`). Decide the flow treatment with that in mind; I'm not prescribing a flow change.
 
 ### End-dash confirmation dialog  ·  **28 files**  ·  HIGH value
 PRISM sheet "End your current dash? / End dash / Go back". Pairs with the `end_dash` click; recognizing the dialog gives a clean dash-ending signal.
@@ -390,7 +395,7 @@ Framed as options for you to decide on; this report does not change any rule or 
 3. **Customer chat conversation** (`ddchat_holder_base`) — 457 files.
 4. **Drop-off completion workflow** (photo / PIN / handoff) — 275 files; carries `task:dropoff:arrived` (it's also the "arrived at drop-off" signal) and unblocks the completion *clicks* that are UNKNOWN because their screen is under-recognized.
 5. **Completion + photo + arrival clicks** — `complete_delivery_nav`, `take_photo`, arrival `primary_action_button`. **Do these *after* the screen work above** — `screenIs` scoping depends on the new screen rules, so the click defs will shift. (`stop_orders_after_delivery` is valid but a single, unconfirmed capture — defer.)
-6. **`current_dash_tasklist` + `end_dash_confirm`** — small, high-signal, tied to active timeline/dash-end work.
+6. **Broaden `timeline` to catch the task-list scroll state** + add `end_dash_confirm` — small, high-signal, tied to active timeline/dash-end work (the task-list frames are timeline misses, not a new screen).
 7. Remaining dialogs/menus/screens in §3.2 and the click table in §2A.
 
 **B. Pipeline-level (separate from rulesets, would need code — flagged, not proposed as edits):**
