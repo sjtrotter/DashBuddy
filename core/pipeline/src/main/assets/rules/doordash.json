@@ -1708,34 +1708,34 @@
     {
       "id": "doordash.screen.navigation_generic",
       "priority": 95,
-      "state": {
-        "flow": "idle",
-        "modeHint": "online"
-      },
-      "reject": [
+      "branches": [
         {
-          "allTextContains": "accept"
-        },
-        {
-          "allTextContains": "decline"
-        }
-      ],
-      "require": {
-        "all": [
-          {
-            "allTextContainsAll": [
-              "min",
-              "exit"
-            ]
-          },
-          {
-            "allTextContainsAny": [
-              "mi",
-              "ft"
+          "state": { "flow": "idle", "modeHint": "online" },
+          "reject": [
+            { "allTextContains": "accept" },
+            { "allTextContains": "decline" }
+          ],
+          "require": {
+            "all": [
+              { "allTextContainsAll": [ "min", "exit" ] },
+              { "allTextContainsAny": [ "mi", "ft" ] }
             ]
           }
-        ]
-      }
+        },
+        {
+          "state": { "modeHint": "online" },
+          "reject": [
+            { "allTextContains": "accept" },
+            { "allTextContains": "decline" }
+          ],
+          "require": {
+            "exists": { "any": [
+              { "hasIdSuffix": "maneuverView" },
+              { "hasIdSuffix": "mainManeuverLayout" }
+            ] }
+          }
+        }
+      ]
     },
     {
       "id": "doordash.screen.notifications_view",
@@ -2576,18 +2576,6 @@
       },
       "require": {
         "hasIdSuffix": "submit_button"
-      }
-    },
-    {
-      "id": "doordash.click.checkout",
-      "priority": 80,
-      "screenIs": "pickup_shopping",
-      "intent": "checkout",
-      "state": {
-        "modeHint": "online"
-      },
-      "require": {
-        "hasIdSuffix": "button_checkout"
       }
     },
     {

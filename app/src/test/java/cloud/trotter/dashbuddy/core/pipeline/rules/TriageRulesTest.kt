@@ -298,6 +298,25 @@ class TriageRulesTest {
         assertNull("chat is flow-agnostic → must not assert a flow", screenRuleset.matchFirst(t)?.flow)
     }
 
+    @Test
+    fun `navigation_generic — ETA path keeps flow idle (so a declined offer returns to idle)`() {
+        val t = tree(node(text = "5 min"), node(text = "Exit 23"), node(text = "1.2 mi"))
+        assertEquals("navigation_generic", screen(t))
+        assertNotNull("ETA nav must stay idle to exit the offer flow", screenRuleset.matchFirst(t)?.flow)
+    }
+
+    @Test
+    fun `navigation_generic — bare maneuver frame matches with NO flow (ambiguous branch)`() {
+        val t = tree(node(id = "maneuverView"))
+        assertEquals("navigation_generic", screen(t))
+        assertNull("bare maneuver frame can't determine flow → must not assert idle", screenRuleset.matchFirst(t)?.flow)
+    }
+
+    @Test
+    fun `navigation_generic — does not steal an offer popup (offer_popup wins)`() {
+        assertEquals("offer_popup", screen(tree(node(text = "Decline"), node(text = "Accept"), node(id = "maneuverView"))))
+    }
+
     // =========================================================================
     // Clicks — high-value action recognition
     // =========================================================================

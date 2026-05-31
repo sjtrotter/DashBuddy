@@ -2,7 +2,7 @@
 
 **Analysis date:** 2026-05-30  ·  **Branch:** `docs/2026-05-capture-triage`  ·  **Scope:** every session under `/home/betty/dashbuddy/logs/2026/05` (15, 17, 19, 21, 22, 23, 25, 29), all platforms (DoorDash + Uber), all three capture sources (`accessibility.window`, `accessibility.click`, `notification`).
 
-> **This is a triage report, not a change.** No ruleset or code has been edited. Every "proposed rule" below is a sketch in the existing JSON DSL for review — anchors should be confirmed against 1–2 live captures before anything is implemented. Notification *actions* (parse-able buttons) are deliberately out of scope per the request.
+> **Status (updated 2026-05-31):** the **high-value batch** of these proposals is now **implemented** on branch `feature/recognition-rules-from-triage` — notifications-by-channel; the shop-and-deliver / chat / drop-off / side-nav / dialog screens; the `timeline`, `pickup_pre_arrival`, and `navigation_generic` broadenings; and the high-value clicks — with tests in `app/.../core/pipeline/rules/TriageRulesTest.kt`. Items below not in that batch remain **proposals** (sketches in the existing JSON DSL — confirm anchors against 1–2 live captures before implementing). Notification *actions* (parse-able buttons) remain out of scope.
 
 ---
 
@@ -163,7 +163,7 @@ A noise example, same log style, captured while not even dashing:
 
 > **Do screens before clicks (this whole section is provisional).** Click rules are gated by `screenIs`, which is `lastScreenTarget` — the *recognized* screen at tap time. Since recognizing the missing screens (§3) will change what `lastScreenTarget` is on many of these taps, the `screenIs` scoping for the clicks below will shift. Treat the click catalog as a follow-on to the screen work, not parallel to it.
 >
-> **Stale/dead existing click rules:** only **6 of 11** defined intents ever fired this month (`accept_offer`, `decline_offer`, `initial_decline`, `go_online`, `go_offline`, `start_dash_set_end_time`). In particular **`doordash.click.checkout` is dead** — its anchor `button_checkout` appears **0×** in any capture; the real UI uses an id-less "prism" button and "Checkout" is a non-clickable heading. The end-of-shopping gate should be the **checkout *screen*** (`fragmentContainerView_genericCheckout`, §3.1 `shopping_checkout`), not a click.
+> **Stale/dead existing click rules:** only **6 of 11** defined intents ever fired this month (`accept_offer`, `decline_offer`, `initial_decline`, `go_online`, `go_offline`, `start_dash_set_end_time`). In particular **`doordash.click.checkout` was removed** (dead — its anchor `button_checkout` appears **0×** in current captures; the real UI uses an id-less "prism" button and "Checkout" is a non-clickable heading). The end-of-shopping gate is the **checkout *screen*** (`fragmentContainerView_genericCheckout`, §3.1 `shopping_checkout`), not a click.
 >
 > **Prism buttons *are* text-matchable.** Their clicked node has empty own-`text` (the label sits in a descendant `textView_prism_button_title`), so `hasText`/`hasTextContaining` won't match — but **`hasAnyText`** reads the subtree (`node.allText`) and matches the label (exact, case-insensitive). The existing `decline_offer` rule already uses `hasAnyText:"Decline offer"` this way. So id-less prism actions can be keyed on their label via `hasAnyText`.
 
@@ -353,7 +353,7 @@ PRISM sheet "End your current dash? / End dash / Go back". Pairs with the `end_d
 
 ## 3.3 Navigation frames (recognized → UNKNOWN)  ·  105 files
 
-`navigation_generic` (pri 95) requires text **"min" + "exit" + ("mi"|"ft")**. Full-screen nav frames that momentarily lack the ETA/"exit" strip (e.g. just the maneuver banner + map, or a reroute) drop to UNKNOWN. These aren't a *new* screen — recommend **broadening the nav anchors** (e.g. accept `maneuverView`/`mainManeuverLayout` id presence) rather than adding a rule, so they re-join `navigation_generic` and dedup. Borderline noise: low intrinsic value, but cheap to absorb.
+`navigation_generic` (pri 95) originally required text **"min" + "exit" + ("mi"|"ft")**; full-screen nav frames that momentarily lacked the ETA/"exit" strip (just the maneuver banner + map, or a reroute) dropped to UNKNOWN. **Implemented as a two-branch rule:** branch 1 keeps the ETA path with **`flow:idle`** (so a declined offer behind it returns a *true* idle and exits the offer flow); branch 2 matches a bare **`maneuverView`/`mainManeuverLayout`** frame with **no flow** (ambiguous to the state machine — `modeHint:online` only — so it can never mis-assert idle on what may be a task-nav frame). Both branches reject `accept`/`decline` so an offer popup is never absorbed.
 
 ## 3.4 The "OTHER" tail (527 files, 82 sigs) — what's actually in it
 
