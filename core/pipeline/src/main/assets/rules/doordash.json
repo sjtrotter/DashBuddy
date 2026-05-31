@@ -2589,6 +2589,48 @@
       "require": {
         "hasIdSuffix": "button_checkout"
       }
+    },
+    {
+      "id": "doordash.click.take_photo",
+      "priority": 35,
+      "intent": "take_photo",
+      "require": {
+        "hasIdSuffix": "capture_button"
+      }
+    },
+    {
+      "id": "doordash.click.arrived_at_store_pre_arrival",
+      "priority": 36,
+      "screenIs": "pickup_pre_arrival",
+      "intent": "arrived_at_store",
+      "require": {
+        "all": [
+          { "hasIdSuffix": "primary_action_button" },
+          { "hasAnyText": "Arrived at store" }
+        ]
+      }
+    },
+    {
+      "id": "doordash.click.open_chat",
+      "priority": 45,
+      "intent": "open_chat",
+      "require": {
+        "hasIdSuffix": "chat_button_internal"
+      }
+    },
+    {
+      "id": "doordash.click.complete_delivery_nav",
+      "priority": 62,
+      "screenIs": "dropoff_navigation",
+      "intent": "complete_delivery",
+      "require": {
+        "any": [
+          { "hasIdSuffix": "complete_delivery_steps_button" },
+          { "hasIdSuffix": "complete_delivery" },
+          { "hasIdSuffix": "received_order_button" },
+          { "hasAnyText": "Complete delivery" }
+        ]
+      }
     }
   ],
   "notifications": [

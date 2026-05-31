@@ -299,6 +299,44 @@ class TriageRulesTest {
     }
 
     // =========================================================================
+    // Clicks — high-value action recognition
+    // =========================================================================
+
+    @Test
+    fun `take_photo — capture_button (screen-agnostic)`() {
+        assertEquals("take_photo", click(node(id = "capture_button")))
+    }
+
+    @Test
+    fun `arrived_at_store — primary_action_button on pickup_pre_arrival (prism label via hasAnyText)`() {
+        val n = node(id = "primary_action_button", children = listOf(node(text = "Arrived at store")))
+        assertEquals("arrived_at_store", click(n, screenTarget = "pickup_pre_arrival"))
+    }
+
+    @Test
+    fun `open_chat — chat_button_internal (screen-agnostic)`() {
+        assertEquals("open_chat", click(node(id = "chat_button_internal")))
+    }
+
+    @Test
+    fun `complete_delivery — on dropoff_navigation (distinct screenIs from existing rule)`() {
+        assertEquals(
+            "complete_delivery",
+            click(node(id = "complete_delivery_steps_button"), screenTarget = "dropoff_navigation"),
+        )
+    }
+
+    @Test
+    fun `existing accept_offer click still matches (regression)`() {
+        assertEquals("accept_offer", click(node(id = "accept_button"), screenTarget = "offer_popup"))
+    }
+
+    @Test
+    fun `unrecognized click returns null`() {
+        assertNull(click(node(id = "some_random_button")))
+    }
+
+    // =========================================================================
     // Helpers — minimal synthetic fixtures (no captured PII)
     // =========================================================================
 
