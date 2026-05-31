@@ -117,13 +117,14 @@ A noise example, same log style, captured while not even dashing:
   "intent": "earnings_deposit", "parse": { "as": "notification" } }
 ```
 
-### `arrived_destination`  ·  **11 files**  ·  value (state signal)
-- **Signals:** channel `dasher-notification-channel-dash-update`; title `"You have arrived"`; text `"tap here or return to the dasher app to look for more orders"`.
-- **Why it matters:** OS-level "arrived / look for more orders" — corroborates post-delivery / idle transitions.
+### `arrived_in_zone` (Dash Along the Way — entered zone)  ·  **11 files**  ·  value (geo/state signal)
+- **Signals:** channel `dasher-notification-channel-dash-update`; title `"You have arrived"`; body in the captured samples `"tap here or return to the dasher app to look for more orders"`.
+- **What it actually is** (per developer): fires when, while **dashing along the way**, you cross into the dash **zone boundary** — *independent of task state*. It occurs both while idle/navigating to the zone **and** while on-task (en route to a pickup or delivery). It is **not** a delivery-destination or post-delivery signal.
+- **Why it matters:** marks the "along the way → in zone" transition. Key on **title + channel**, not body — the body text likely differs in the on-task case (all 11 captured here were the idle/look-for-orders variant, so the on-task wording is unconfirmed).
 ```json
-{ "id": "doordash.notification.arrived_destination", "priority": 40,
+{ "id": "doordash.notification.arrived_in_zone", "priority": 40,
   "require": { "all": [ { "channelIdContains": "dash-update" }, { "titleEquals": "You have arrived" } ] },
-  "intent": "arrived_destination", "parse": { "as": "notification" } }
+  "intent": "arrived_in_zone", "parse": { "as": "notification" } }
 ```
 
 ### `order_verification_warning`  ·  **1 file**  ·  value (issue signal)
@@ -372,7 +373,7 @@ Framed as options for you to decide on; this report does not change any rule or 
 
 **A. Ruleset additions (the requested deliverable).** Highest value × volume first:
 
-1. **Notifications by `channelId`** — ~250 of 301 files, ~12 rules, zero code change. Start with `new_order_v2` (110), `customer_message`, `order_ready`, `earnings_deposit`, `arrived_destination`.
+1. **Notifications by `channelId`** — ~250 of 301 files, ~12 rules, zero code change. Start with `new_order_v2` (110), `customer_message`, `order_ready`, `earnings_deposit`, `arrived_in_zone`.
 2. **Shop-and-deliver screen family** — ~1,400 files; biggest window win and it collapses the count via dedup.
 3. **Customer chat conversation** (`ddchat_holder_base`) — 457 files.
 4. **Drop-off completion workflow** (photo / PIN / handoff) — 275 files; also unblocks the completion *clicks* that are UNKNOWN because their screen is under-recognized.
