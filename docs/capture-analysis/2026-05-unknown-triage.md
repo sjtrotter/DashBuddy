@@ -182,8 +182,8 @@ The whole "mark delivered" flow on `dropoff_navigation` is unclassified: `comple
 ### Arrival / primary action  ·  **~20 files**  ·  HIGH value
 `primary_action_button` on `pickup_pre_arrival` (13) and `pickup_arrival` (7), `primary_button_right` ("Done"). Existing `arrived_at_store` only covers `pickup_arrival`+text "Arrived"; the `pickup_pre_arrival` primary button ("Directions"/"Arrived at store") is unmatched. Recommend a small rule per screen keyed on `primary_action_button` with text disambiguation.
 
-### "Stop orders after this delivery" (end-dash intent)  ·  HIGH value
-`bottom_sheet_stop_orders_toggle_button` ("Stop orders after this delivery") on `dropoff_navigation` — a clean *intent to end the dash after current order*.
+### "Stop orders after this delivery" (pause / wind-down intent)  ·  value — but **single capture, confirm intent**
+`bottom_sheet_stop_orders_toggle_button` ("Stop orders after this delivery") on `dropoff_navigation`. Per developer this is an intent to **pause** the dash — finish the current delivery, then stop receiving new orders — *not* End Dash (and distinct from the timed Pause). **Provenance:** a real `accessibility.click` event (log `2026-05-29 20:01:57.071`: `UNKNOWN click — id=…bottom_sheet_stop_orders_toggle_button`), captured once, in one session, no repeats — and the developer doesn't recall tapping it, so a deliberate-vs-incidental tap can't be confirmed from this single sample. The rule is valid; just verify intentionality (and whether it's a toggle that also fires an "un-stop" click) before relying on it as a signal.
 ```json
 { "id": "doordash.click.stop_orders_after_delivery", "priority": 62, "screenIs": "dropoff_navigation",
   "intent": "stop_orders_after_delivery", "require": { "hasIdSuffix": "bottom_sheet_stop_orders_toggle_button" } }
@@ -377,7 +377,7 @@ Framed as options for you to decide on; this report does not change any rule or 
 2. **Shop-and-deliver screen family** — ~1,400 files; biggest window win and it collapses the count via dedup.
 3. **Customer chat conversation** (`ddchat_holder_base`) — 457 files.
 4. **Drop-off completion workflow** (photo / PIN / handoff) — 275 files; also unblocks the completion *clicks* that are UNKNOWN because their screen is under-recognized.
-5. **Completion + photo + arrival clicks** — `complete_delivery_nav`, `take_photo`, `stop_orders_after_delivery`, arrival `primary_action_button`.
+5. **Completion + photo + arrival clicks** — `complete_delivery_nav`, `take_photo`, arrival `primary_action_button`. (`stop_orders_after_delivery` is valid but a single, unconfirmed capture — defer.)
 6. **`current_dash_tasklist` + `end_dash_confirm`** — small, high-signal, tied to active timeline/dash-end work.
 7. Remaining dialogs/menus/screens in §3.2 and the click table in §2A.
 
