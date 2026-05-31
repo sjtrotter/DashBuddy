@@ -30,13 +30,22 @@
       "id": "doordash.screen.timeline",
       "priority": 10,
       "state": {
-        "flow": "idle",
         "modeHint": "online"
       },
       "require": {
-        "allTextContainsAll": [
-          "dash ends at",
-          "pause orders"
+        "any": [
+          {
+            "allTextContainsAll": [
+              "dash ends at",
+              "pause orders"
+            ]
+          },
+          {
+            "allTextContainsAll": [
+              "current dash",
+              "current task"
+            ]
+          }
         ]
       },
       "parse": {
@@ -1043,23 +1052,32 @@
             }
           },
           {
-            "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "textView_prism_button_title"
-                },
-                {
-                  "any": [
+            "any": [
+              {
+                "exists": {
+                  "all": [
                     {
-                      "hasText": "Directions"
+                      "hasIdSuffix": "textView_prism_button_title"
                     },
                     {
-                      "hasText": "Arrived at store"
+                      "any": [
+                        {
+                          "hasText": "Directions"
+                        },
+                        {
+                          "hasText": "Arrived at store"
+                        }
+                      ]
                     }
                   ]
                 }
-              ]
-            }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "bottom_sheet_container"
+                }
+              }
+            ]
           }
         ]
       },
@@ -2290,6 +2308,122 @@
       },
       "parse": {
         "as": "sensitive"
+      }
+    },
+    {
+      "id": "doordash.screen.end_dash_confirm",
+      "priority": 52,
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "prism_sheet" } },
+          { "exists": { "hasTextContaining": "End your current dash" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_photo",
+      "priority": 62,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
+          { "exists": { "hasTextContaining": "photo of drop-off" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_pin_entry",
+      "priority": 63,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
+          { "exists": { "any": [
+            { "hasTextContaining": "collect pin from customer" },
+            { "hasTextContaining": "ask the customer for the unique" }
+          ] } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_handoff",
+      "priority": 64,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
+          { "exists": { "any": [
+            { "hasTextContaining": "hand it to customer" },
+            { "hasTextContaining": "leave it at the door" }
+          ] } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_item",
+      "priority": 75,
+      "state": { "flow": "task:pickup:arrived" },
+      "require": {
+        "exists": { "hasIdSuffix": "fragmentContainerView_shopDeliver" }
+      },
+      "reject": [
+        { "exists": { "hasText": "Shop and Deliver" } }
+      ]
+    },
+    {
+      "id": "doordash.screen.shopping_checkout",
+      "priority": 78,
+      "state": { "flow": "task:pickup:arrived" },
+      "require": {
+        "any": [
+          { "exists": { "hasIdSuffix": "fragmentContainerView_genericCheckout" } },
+          { "exists": { "hasTextContaining": "go to any cashier lane" } },
+          { "exists": { "hasTextContaining": "take a receipt photo" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_geofence_warning",
+      "priority": 84,
+      "require": {
+        "exists": { "hasTextContaining": "far away from the customer" }
+      }
+    },
+    {
+      "id": "doordash.screen.side_nav_drawer",
+      "priority": 85,
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "side_nav_content_container" } },
+          { "allTextContainsAll": [ "ratings", "promos", "preferences" ] }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.camera_capture",
+      "priority": 86,
+      "require": {
+        "exists": { "any": [
+          { "hasIdSuffix": "camera_preview" },
+          { "hasIdSuffix": "image_capture_view" }
+        ] }
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_issue_menu",
+      "priority": 87,
+      "require": {
+        "exists": { "hasTextContaining": "what pickup issues can we help with" }
+      }
+    },
+    {
+      "id": "doordash.screen.chat_conversation",
+      "priority": 89,
+      "require": {
+        "exists": { "any": [
+          { "hasIdSuffix": "ddchat_holder_base" },
+          { "hasIdSuffix": "inputChannelView" }
+        ] }
       }
     }
   ],
