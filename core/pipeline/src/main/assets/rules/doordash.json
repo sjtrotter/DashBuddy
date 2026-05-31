@@ -2364,7 +2364,10 @@
       "priority": 75,
       "state": { "flow": "task:pickup:arrived" },
       "require": {
-        "exists": { "hasIdSuffix": "fragmentContainerView_shopDeliver" }
+        "exists": { "any": [
+          { "hasIdSuffix": "fragmentContainerView_shopDeliver" },
+          { "hasIdSuffix": "laneGuidanceRecycler" }
+        ] }
       },
       "reject": [
         { "exists": { "hasText": "Shop and Deliver" } }
@@ -2422,8 +2425,36 @@
       "require": {
         "exists": { "any": [
           { "hasIdSuffix": "ddchat_holder_base" },
-          { "hasIdSuffix": "inputChannelView" }
+          { "hasIdSuffix": "inputChannelView" },
+          { "hasIdSuffix": "message_recycler_view" },
+          { "hasIdSuffix": "message_self_message" }
         ] }
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_completed_confirm",
+      "priority": 65,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "exists": { "hasTextContaining": "Confirm order was completed" }
+      }
+    },
+    {
+      "id": "doordash.screen.dash_time_picker",
+      "priority": 81,
+      "require": {
+        "allTextContainsAny": [ "choose start time", "choose end time" ]
+      }
+    },
+    {
+      "id": "doordash.screen.dash_schedule",
+      "priority": 82,
+      "require": {
+        "allTextContainsAny": [
+          "schedule your dash for later",
+          "this zone's full right now",
+          "you scheduled a dash"
+        ]
       }
     }
   ],

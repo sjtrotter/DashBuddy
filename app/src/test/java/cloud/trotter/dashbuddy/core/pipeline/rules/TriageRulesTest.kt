@@ -299,6 +299,31 @@ class TriageRulesTest {
     }
 
     @Test
+    fun `chat_conversation — message_recycler_view variant`() {
+        assertEquals("chat_conversation", screen(tree(node(id = "message_recycler_view"), node(text = "Sent just now"))))
+    }
+
+    @Test
+    fun `shopping_item — in-store lane-guidance variant`() {
+        assertEquals("shopping_item", screen(tree(node(id = "laneGuidanceRecycler"))))
+    }
+
+    @Test
+    fun `dropoff_completed_confirm`() {
+        assertEquals("dropoff_completed_confirm", screen(tree(node(text = "Confirm order was completed"), node(text = "Got it"))))
+    }
+
+    @Test
+    fun `dash_time_picker`() {
+        assertEquals("dash_time_picker", screen(tree(node(text = "Choose start time"), node(text = "Done"), node(text = "Cancel"))))
+    }
+
+    @Test
+    fun `dash_schedule`() {
+        assertEquals("dash_schedule", screen(tree(node(text = "Schedule your dash for later"), node(text = "This zone's full right now"))))
+    }
+
+    @Test
     fun `navigation_generic — ETA path keeps flow idle (so a declined offer returns to idle)`() {
         val t = tree(node(text = "5 min"), node(text = "Exit 23"), node(text = "1.2 mi"))
         assertEquals("navigation_generic", screen(t))
