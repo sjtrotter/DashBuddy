@@ -18,6 +18,15 @@ data class PlatformRegion(
     val activeTask: Task? = null,
     val recentTasks: List<Task> = emptyList(),
     val sessionGraceDeadline: Long? = null,
+    /**
+     * Deadline after which a transient idle/offer seen mid-task retires the
+     * active task. Armed when leaving a task flow to a non-task flow while
+     * online; cancelled on returning to a task flow; lazily expired in
+     * [PlatformRegionStepper.step]. Keeps a brief informational screen (the
+     * timeline, or the idle map flashing before the delivery summary) from
+     * forgetting the task.
+     */
+    val taskClearGraceDeadline: Long? = null,
     val lastTransitionKind: TransitionKind? = null,
     val zoneName: String? = null,
     val sessionType: SessionType? = null,
