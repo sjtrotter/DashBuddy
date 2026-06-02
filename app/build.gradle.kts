@@ -67,8 +67,23 @@ android {
     }
 
     testOptions {
-        unitTests.all {
-            it.jvmArgs("-XX:+EnableDynamicAgentLoading")
+        unitTests.all { test ->
+            test.jvmArgs("-XX:+EnableDynamicAgentLoading")
+
+            // JUnit @Suite aggregators (e.g. AllMatchersSuite) re-run their member
+            // classes, so during a broad sweep the members would run twice — once
+            // directly, once via the suite. Exclude suites from an unfiltered sweep;
+            // a suite stays runnable explicitly via --tests "*AllMatchersSuite*"
+            // (which sets commandLineIncludePatterns, so the exclude is skipped).
+            // Done in doFirst because --tests is only applied to the filter at
+            // execution time.
+            test.doFirst {
+                val filter = test.filter as
+                    org.gradle.api.internal.tasks.testing.filter.DefaultTestFilter
+                if (filter.commandLineIncludePatterns.isEmpty()) {
+                    filter.excludeTestsMatching("*Suite")
+                }
+            }
         }
     }
 
