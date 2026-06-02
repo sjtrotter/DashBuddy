@@ -55,6 +55,12 @@ object SnapshotRedactor {
     )
     private val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
 
+    /** Masked payout/debit card on cashout screens, e.g. "Visa ••••6222" or "Debit card ....1234". */
+    private val CARD = Regex(
+        """(?i)\b(visa|mastercard|amex|american express|discover|debit card)\b""" +
+            """[\s ]*[•·•*xX.]{2,}[\s ]*\d{2,4}""",
+    )
+
     fun redact(jsonText: String): String {
         val root = try { json.parseToJsonElement(jsonText) } catch (e: Exception) { return jsonText }
         val repl = LinkedHashMap<String, String>() // escaped-original -> escaped-redacted
@@ -114,6 +120,7 @@ object SnapshotRedactor {
         var t = text
         t = EMAIL.replace(t, "[email]")
         t = PHONE.replace(t, "[phone]")
+        t = CARD.replace(t, "[card]")
         t = APT.replace(t) { it.value.substringBefore(it.groupValues[1]) + it.groupValues[1] + " " + MASK }
         t = STREET.replace(t, "[address]")
         return t
