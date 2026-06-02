@@ -7,36 +7,107 @@
       "id": "doordash.screen.sensitive.known",
       "priority": 0,
       "overrideable": false,
-      "require": {
-        "allTextContainsAny": [
-          "Bank Account",
-          "Routing Number",
-          "Social Security",
-          "Verify Identity",
-          "Card status",
-          "Lock card",
-          "Account number",
-          "View card details",
-          "Linked accounts",
-          "Statements & documents",
-          "Emergency contact details"
-        ]
-      },
       "parse": {
         "as": "sensitive"
-      }
+      },
+      "branches": [
+        {
+          "intent": "sensitive.dasher_direct",
+          "require": { "exists": { "any": [
+            { "hasIdSuffix": "dasher_direct_auth" },
+            { "hasIdSuffix": "dasher_direct_payout_config_compose_view" },
+            { "hasTextContaining": "DoorDash Crimson" },
+            { "hasText": "Crimson" }
+          ] } }
+        },
+        {
+          "intent": "sensitive.card_details",
+          "require": { "all": [
+            { "exists": { "hasText": "CVV" } },
+            { "exists": { "hasText": "Expiry" } }
+          ] }
+        },
+        {
+          "intent": "sensitive.balance",
+          "require": { "exists": { "hasText": "Available Balance" } }
+        },
+        {
+          "intent": "sensitive.withdraw",
+          "require": { "all": [
+            { "exists": { "hasText": "Withdraw" } },
+            { "exists": { "hasTextContaining": "available" } }
+          ] }
+        },
+        {
+          "intent": "sensitive.transfer",
+          "require": { "exists": { "hasTextContaining": "transfer was initiated" } }
+        },
+        {
+          "intent": "sensitive.otp",
+          "require": { "exists": { "hasTextContaining": "Enter the code we sent" } }
+        },
+        {
+          "intent": "sensitive.linked_accounts",
+          "require": { "exists": { "hasText": "Linked accounts" } }
+        },
+        {
+          "intent": "sensitive.statements",
+          "require": { "exists": { "hasText": "Statements & documents" } }
+        },
+        {
+          "intent": "sensitive.payout_settings",
+          "require": { "exists": { "any": [
+            { "hasText": "Payout details" },
+            { "hasTextContaining": "Change payout method" },
+            { "hasTextContaining": "Recent payout history" }
+          ] } }
+        },
+        {
+          "intent": "sensitive.biometric",
+          "require": { "exists": { "any": [
+            { "hasTextContaining": "Fingerprint sensor" },
+            { "hasTextContaining": "Touch the fingerprint" },
+            { "hasTextContaining": "to secure your account" },
+            { "hasText": "Use PIN" }
+          ] } }
+        },
+        {
+          "intent": "sensitive.account_pii",
+          "require": { "any": [
+            { "all": [
+              { "exists": { "hasText": "Personal information" } },
+              { "exists": { "hasText": "First name" } }
+            ] },
+            { "all": [
+              { "exists": { "hasTextContaining": "Manage Account" } },
+              { "exists": { "hasTextContaining": "Marketing Choices" } }
+            ] },
+            { "exists": { "hasTextContaining": "Request account data" } },
+            { "exists": { "hasTextContaining": "Request data archive" } }
+          ] }
+        }
+      ]
     },
     {
       "id": "doordash.screen.timeline",
       "priority": 10,
       "state": {
-        "flow": "idle",
         "modeHint": "online"
       },
       "require": {
-        "allTextContainsAll": [
-          "dash ends at",
-          "pause orders"
+        "any": [
+          {
+            "allTextContainsAll": [
+              "dash ends at",
+              "pause orders"
+            ]
+          },
+          {
+            "allTextContainsAll": [
+              "current dash",
+              "current task"
+            ]
+          }
         ]
       },
       "parse": {
@@ -249,13 +320,6 @@
           }
         ]
       },
-      "reject": [
-        {
-          "exists": {
-            "hasIdSuffix": "progress_bar"
-          }
-        }
-      ],
       "parse": {
         "as": "offer",
         "fields": {
@@ -619,30 +683,8 @@
       "priority": 40,
       "require": {
         "all": [
-          {
-            "exists": {
-              "all": [
-                {
-                  "hasTextCaseSensitive": "Startingï¿½"
-                },
-                {
-                  "hasClassNameEndsWith": "TextView"
-                }
-              ]
-            }
-          },
-          {
-            "exists": {
-              "all": [
-                {
-                  "hasText": "Cancel"
-                },
-                {
-                  "hasClassNameEndsWith": "Button"
-                }
-              ]
-            }
-          }
+          { "exists": { "hasIdSuffix": "progress_message" } },
+          { "exists": { "any": [ { "hasIdSuffix": "image_logo" }, { "hasIdSuffix": "cancel_button" } ] } }
         ]
       }
     },
@@ -1043,23 +1085,32 @@
             }
           },
           {
-            "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "textView_prism_button_title"
-                },
-                {
-                  "any": [
+            "any": [
+              {
+                "exists": {
+                  "all": [
                     {
-                      "hasText": "Directions"
+                      "hasIdSuffix": "textView_prism_button_title"
                     },
                     {
-                      "hasText": "Arrived at store"
+                      "any": [
+                        {
+                          "hasText": "Directions"
+                        },
+                        {
+                          "hasText": "Arrived at store"
+                        }
+                      ]
                     }
                   ]
                 }
-              ]
-            }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "bottom_sheet_container"
+                }
+              }
+            ]
           }
         ]
       },
@@ -1690,34 +1741,34 @@
     {
       "id": "doordash.screen.navigation_generic",
       "priority": 95,
-      "state": {
-        "flow": "idle",
-        "modeHint": "online"
-      },
-      "reject": [
+      "branches": [
         {
-          "allTextContains": "accept"
-        },
-        {
-          "allTextContains": "decline"
-        }
-      ],
-      "require": {
-        "all": [
-          {
-            "allTextContainsAll": [
-              "min",
-              "exit"
-            ]
-          },
-          {
-            "allTextContainsAny": [
-              "mi",
-              "ft"
+          "state": { "flow": "idle", "modeHint": "online" },
+          "reject": [
+            { "allTextContains": "accept" },
+            { "allTextContains": "decline" }
+          ],
+          "require": {
+            "all": [
+              { "allTextContainsAll": [ "min", "exit" ] },
+              { "allTextContainsAny": [ "mi", "ft" ] }
             ]
           }
-        ]
-      }
+        },
+        {
+          "state": { "modeHint": "online" },
+          "reject": [
+            { "allTextContains": "accept" },
+            { "allTextContains": "decline" }
+          ],
+          "require": {
+            "exists": { "any": [
+              { "hasIdSuffix": "maneuverView" },
+              { "hasIdSuffix": "mainManeuverLayout" }
+            ] }
+          }
+        }
+      ]
     },
     {
       "id": "doordash.screen.notifications_view",
@@ -2278,18 +2329,173 @@
       "overrideable": false,
       "require": {
         "allTextContainsAny": [
+          "Bank Account",
+          "Routing Number",
+          "Social Security",
+          "Account number",
+          "Verify Identity",
+          "Debit card",
+          "Card status",
+          "Lock card",
+          "View card details",
+          "Linked accounts",
+          "Statements & documents",
+          "Emergency contact details",
           "Crimson",
           "Biometric",
           "Available Balance",
-          "Debit card",
+          "Direct deposit",
           "Withdraw",
           "Expiry",
+          "CVV",
           "Enter the code we sent",
+          "transfer was initiated",
           "t=completed_view"
         ]
       },
       "parse": {
         "as": "sensitive"
+      }
+    },
+    {
+      "id": "doordash.screen.end_dash_confirm",
+      "priority": 52,
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "prism_sheet" } },
+          { "exists": { "hasTextContaining": "End your current dash" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_photo",
+      "priority": 62,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
+          { "exists": { "hasTextContaining": "photo of drop-off" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_pin_entry",
+      "priority": 63,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
+          { "exists": { "any": [
+            { "hasTextContaining": "collect pin from customer" },
+            { "hasTextContaining": "ask the customer for the unique" }
+          ] } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_handoff",
+      "priority": 64,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
+          { "exists": { "hasTextContaining": "hand it to customer" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_item",
+      "priority": 75,
+      "state": { "flow": "task:pickup:arrived" },
+      "require": {
+        "exists": { "hasIdSuffix": "fragmentContainerView_shopDeliver" }
+      },
+      "reject": [
+        { "exists": { "hasText": "Shop and Deliver" } }
+      ]
+    },
+    {
+      "id": "doordash.screen.shopping_checkout",
+      "priority": 78,
+      "state": { "flow": "task:pickup:arrived" },
+      "require": {
+        "any": [
+          { "exists": { "hasIdSuffix": "fragmentContainerView_genericCheckout" } },
+          { "exists": { "hasTextContaining": "go to any cashier lane" } },
+          { "exists": { "hasTextContaining": "take a receipt photo" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_geofence_warning",
+      "priority": 84,
+      "require": {
+        "exists": { "hasTextContaining": "far away from the customer" }
+      }
+    },
+    {
+      "id": "doordash.screen.side_nav_drawer",
+      "priority": 200,
+      "require": {
+        "all": [
+          { "exists": { "hasIdSuffix": "side_nav_content_container" } },
+          { "allTextContainsAll": [ "ratings", "promos", "preferences" ] }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.camera_capture",
+      "priority": 86,
+      "require": {
+        "exists": { "any": [
+          { "hasIdSuffix": "camera_preview" },
+          { "hasIdSuffix": "image_capture_view" }
+        ] }
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_issue_menu",
+      "priority": 87,
+      "require": {
+        "exists": { "hasTextContaining": "what pickup issues can we help with" }
+      }
+    },
+    {
+      "id": "doordash.screen.chat_conversation",
+      "priority": 89,
+      "require": {
+        "exists": { "any": [
+          { "hasIdSuffix": "ddchat_holder_base" },
+          { "hasIdSuffix": "inputChannelView" },
+          { "hasIdSuffix": "message_recycler_view" },
+          { "hasIdSuffix": "message_self_message" }
+        ] }
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_completed_confirm",
+      "priority": 65,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "exists": { "hasTextContaining": "Confirm order was completed" }
+      }
+    },
+    {
+      "id": "doordash.screen.dash_time_picker",
+      "priority": 81,
+      "require": {
+        "allTextContainsAny": [ "choose start time", "choose end time" ]
+      }
+    },
+    {
+      "id": "doordash.screen.dash_schedule",
+      "priority": 82,
+      "require": {
+        "allTextContainsAny": [
+          "schedule your dash for later",
+          "this zone's full right now",
+          "you scheduled a dash"
+        ]
       }
     }
   ],
@@ -2445,15 +2651,45 @@
       }
     },
     {
-      "id": "doordash.click.checkout",
-      "priority": 80,
-      "screenIs": "pickup_shopping",
-      "intent": "checkout",
-      "state": {
-        "modeHint": "online"
-      },
+      "id": "doordash.click.take_photo",
+      "priority": 35,
+      "intent": "take_photo",
       "require": {
-        "hasIdSuffix": "button_checkout"
+        "hasIdSuffix": "capture_button"
+      }
+    },
+    {
+      "id": "doordash.click.arrived_at_store_pre_arrival",
+      "priority": 36,
+      "screenIs": "pickup_pre_arrival",
+      "intent": "arrived_at_store",
+      "require": {
+        "all": [
+          { "hasIdSuffix": "primary_action_button" },
+          { "hasAnyText": "Arrived at store" }
+        ]
+      }
+    },
+    {
+      "id": "doordash.click.open_chat",
+      "priority": 45,
+      "intent": "open_chat",
+      "require": {
+        "hasIdSuffix": "chat_button_internal"
+      }
+    },
+    {
+      "id": "doordash.click.complete_delivery_nav",
+      "priority": 62,
+      "screenIs": "dropoff_navigation",
+      "intent": "complete_delivery",
+      "require": {
+        "any": [
+          { "hasIdSuffix": "complete_delivery_steps_button" },
+          { "hasIdSuffix": "complete_delivery" },
+          { "hasIdSuffix": "received_order_button" },
+          { "hasAnyText": "Complete delivery" }
+        ]
       }
     }
   ],
@@ -2501,7 +2737,10 @@
       "id": "doordash.notification.new_order",
       "priority": 20,
       "require": {
-        "titleContains": "new order"
+        "any": [
+          { "titleContains": "new order" },
+          { "channelIdEquals": "dasher-notification-channel-new-order-v2" }
+        ]
       },
       "effects": [
         {
@@ -2538,7 +2777,15 @@
       "id": "doordash.notification.demand_nudge",
       "priority": 50,
       "require": {
-        "titleContains": "Dash now"
+        "any": [
+          { "titleContains": "Dash now" },
+          {
+            "all": [
+              { "channelIdContains": "dash-update" },
+              { "anyFieldContains": "is busy for" }
+            ]
+          }
+        ]
       },
       "intent": "demand_nudge",
       "parse": {
@@ -2570,6 +2817,173 @@
             "payload": "PEAK_PAY_PROMO"
           }
         }
+      ]
+    },
+    {
+      "id": "doordash.notification.customer_message",
+      "priority": 22,
+      "intent": "customer_message",
+      "require": {
+        "any": [
+          { "channelIdEquals": "dasher-notification-channel-inapp-chat" },
+          { "titleContains": "Message from" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "CUSTOMER_MESSAGE" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.missed_delivery",
+      "priority": 23,
+      "intent": "missed_delivery",
+      "require": {
+        "all": [
+          { "channelIdContains": "delivery-update" },
+          { "titleContains": "Missed Delivery" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "MISSED_DELIVERY" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.order_ready",
+      "priority": 24,
+      "intent": "order_ready_for_pickup",
+      "require": {
+        "all": [
+          { "channelIdContains": "delivery-update" },
+          { "anyFieldContains": "ready for pickup" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "ORDER_READY" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.earnings_deposit",
+      "priority": 26,
+      "intent": "earnings_deposit",
+      "require": {
+        "all": [
+          { "channelIdEquals": "dasher-notification-messages" },
+          { "anyFieldContains": "have been deposited" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "EARNINGS_DEPOSIT" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.crimson_balance",
+      "priority": 27,
+      "intent": "crimson_balance",
+      "require": {
+        "all": [
+          { "channelIdEquals": "dasher-notification-messages" },
+          {
+            "any": [
+              { "anyFieldContains": "savings jar" },
+              { "anyFieldContains": "building momentum" }
+            ]
+          }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "CRIMSON_BALANCE" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.transfer_complete",
+      "priority": 32,
+      "intent": "transfer_complete",
+      "require": {
+        "all": [
+          { "channelIdEquals": "com_appboy_default_notification_channel" },
+          { "anyFieldContains": "transfer complete" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "TRANSFER_COMPLETE" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.severe_weather",
+      "priority": 33,
+      "intent": "severe_weather",
+      "require": {
+        "all": [
+          { "channelIdEquals": "com_appboy_default_notification_channel" },
+          { "anyFieldContains": "severe weather" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "SEVERE_WEATHER" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.arrived_in_zone",
+      "priority": 40,
+      "intent": "arrived_in_zone",
+      "require": {
+        "all": [
+          { "channelIdContains": "dash-update" },
+          { "titleEquals": "You have arrived" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "ARRIVED_IN_ZONE" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.order_verification_warning",
+      "priority": 41,
+      "intent": "order_verification_warning",
+      "require": {
+        "all": [
+          { "channelIdContains": "dash-update" },
+          { "titleContains": "Confirm you have the right order" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "ORDER_VERIFICATION_WARNING" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.dash_status_ongoing",
+      "priority": 45,
+      "intent": "dash_status_ongoing",
+      "require": {
+        "all": [
+          { "channelIdEquals": "dasher-notification-channel-status" },
+          { "anyFieldContains": "still dashing" }
+        ]
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "DASH_STATUS_ONGOING" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.insight_achievement",
+      "priority": 55,
+      "intent": "insight_achievement",
+      "require": {
+        "channelIdEquals": "dasher-notification-channel-new-insight"
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "INSIGHT_ACHIEVEMENT" } }
+      ]
+    },
+    {
+      "id": "doordash.notification.marketing_promo",
+      "priority": 70,
+      "intent": "marketing_promo",
+      "require": {
+        "channelIdEquals": "com_appboy_default_notification_channel"
+      },
+      "effects": [
+        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "MARKETING_PROMO" } }
       ]
     }
   ]

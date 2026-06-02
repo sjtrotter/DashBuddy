@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.database.log.mapper.toDomain
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import java.io.File
 
@@ -55,16 +56,26 @@ object TestResourceLoader {
     private fun parseFlexibleJson(jsonString: String): Pair<UiNode, List<String>> {
         val (rootNode, breadcrumbs) = try {
             val jsonElement = jsonParser.parseToJsonElement(jsonString)
-            val isWrapper = jsonElement.jsonObject.containsKey("root")
+            val rootObj = jsonElement.jsonObject
 
-            if (isWrapper) {
-                val wrapperDto = jsonParser.decodeFromString<SnapshotWrapperLegacy>(jsonString)
-                val domainNode = wrapperDto.root.toDomain()
-                domainNode to wrapperDto.breadcrumbs
-            } else {
-                val nodeDto = jsonParser.decodeFromString<UiNodeDto>(jsonString)
-                val domainNode = nodeDto.toDomain()
-                domainNode to emptyList()
+            when {
+                // Live device capture: CaptureEnvelope — the UiNode tree lives under "payload".
+                // BoundingBoxDto already deserializes the envelope's object bounds, and the
+                // payload node shares UiNodeDto's serial names, so we just decode the payload.
+                rootObj.containsKey("payload") -> {
+                    val nodeDto = jsonParser.decodeFromJsonElement<UiNodeDto>(rootObj.getValue("payload"))
+                    nodeDto.toDomain() to emptyList()
+                }
+                // Legacy wrapper written by the old DiskCaptureBus.
+                rootObj.containsKey("root") -> {
+                    val wrapperDto = jsonParser.decodeFromString<SnapshotWrapperLegacy>(jsonString)
+                    wrapperDto.root.toDomain() to wrapperDto.breadcrumbs
+                }
+                // Bare UiNodeDto fixture (sorted test corpus).
+                else -> {
+                    val nodeDto = jsonParser.decodeFromString<UiNodeDto>(jsonString)
+                    nodeDto.toDomain() to emptyList()
+                }
             }
         } catch (e: Exception) {
             throw IllegalArgumentException("Failed to parse JSON", e)

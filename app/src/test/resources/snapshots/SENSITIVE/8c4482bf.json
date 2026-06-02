@@ -282,7 +282,7 @@
                                                                           "enabled": true
                                                                         },
                                                                         {
-                                                                          "text": "email@email.com",
+                                                                          "text": "[email]",
                                                                           "id": "valueTextView",
                                                                           "class": "TextView",
                                                                           "bounds": "[155,900][1044,948]",
@@ -308,7 +308,7 @@
                                                                           "enabled": true
                                                                         },
                                                                         {
-                                                                          "text": "1234567890",
+                                                                          "text": "[phone]",
                                                                           "id": "valueTextView",
                                                                           "class": "TextView",
                                                                           "bounds": "[321,1047][1044,1095]",
@@ -334,7 +334,7 @@
                                                                           "enabled": true
                                                                         },
                                                                         {
-                                                                          "text": "123 Main St\nAnytown, ST, 01234, US",
+                                                                          "text": "[address]\nAnytown, ST, 01234, US",
                                                                           "id": "valueTextView",
                                                                           "class": "TextView",
                                                                           "bounds": "[201,1176][1044,1279]",

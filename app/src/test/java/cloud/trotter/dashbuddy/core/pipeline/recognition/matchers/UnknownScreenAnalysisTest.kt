@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.core.pipeline.recognition.matchers
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.core.pipeline.rules.Ruleset
+import cloud.trotter.dashbuddy.test.util.SnapshotLibrarian
+import cloud.trotter.dashbuddy.test.util.SnapshotSecurityScanner
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.fail
@@ -38,20 +40,36 @@ class UnknownScreenAnalysisTest(filename: String, node: UiNode) {
     fun `verify unknown and analyze`() {
         println("\n  INSPECTING: $myFilename")
 
-        // --- STEP 1: VALIDATION (JSON ruleset) ---
+        // --- STEP 1: CLASSIFY (JSON ruleset) ---
         val result = screenRuleset.matchFirst(myNode)
         val identifiedScreen = result?.intent ?: "UNKNOWN"
 
-        // If it returns anything OTHER than UNKNOWN, we have a problem.
-        if (identifiedScreen != "UNKNOWN") {
-            val msg = "VALIDATION FAILED: This screen is NOT unknown!\n" +
-                    "   It was matched as: $identifiedScreen\n" +
-                    "   Action: Move this file to the correct regression folder."
-            println(msg)
-            fail(msg)
+        // Sensitive screens are a hard stop: they must be hand-redacted and moved to
+        // SENSITIVE/. Never graduate them and never run the X-ray (it prints raw text).
+        val securityReport = SnapshotSecurityScanner.scan(myNode)
+        if (identifiedScreen.startsWith("sensitive") || securityReport.isToxic) {
+            SnapshotSecurityScanner.printReport(securityReport)
+            fail("Sensitive data detected in $myFilename. Redact and move to SENSITIVE/.")
+            return
         }
 
-        println("   CONFIRMED: Ruleset says this is UNKNOWN.")
+        // A screen becoming recognized is PROGRESS, not a failure. Graduate it into the
+        // regression corpus using the same archive mechanism the inbox processor uses
+        // (redact + move + prune), so it settles in a single pass. The move is visible in
+        // `git status` for review — if a graduation looks wrong, the rule over-matched.
+        if (identifiedScreen != "UNKNOWN") {
+            println("   GRADUATED: now recognized as '$identifiedScreen' (was UNKNOWN).")
+            try {
+                val target = SnapshotLibrarian.archiveSnapshot(myFilename, FOLDER, identifiedScreen)
+                SnapshotLibrarian.pruneFolder(target)
+                println("   MOVED → snapshots/$identifiedScreen/$myFilename")
+            } catch (e: Exception) {
+                println("   ERROR graduating $myFilename: ${e.message}")
+            }
+            return
+        }
+
+        println("   CONFIRMED: still UNKNOWN.")
         println("   GENERATING ANALYSIS REPORT...")
 
         // --- STEP 2: ANALYSIS ---

@@ -18,6 +18,8 @@
 .cxx
 local.properties
 /app/src/test/resources/snapshots/INBOX/
+# UNKNOWN is staging too (unrecognized captures) — never commit; it is the inbox.
+/app/src/test/resources/snapshots/UNKNOWN/
 
 # Release keystore — never commit
 *.jks

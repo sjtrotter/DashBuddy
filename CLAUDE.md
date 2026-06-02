@@ -54,11 +54,12 @@ academic federation RFC #194.
 # Run all unit tests (across all modules)
 ./gradlew testDebugUnitTest
 
-# Run the full regression suite (before any PR)
-./gradlew testDebugUnitTest --tests "*AllMatchersSuite*"
+# Run ONLY the ruleset/recognition regressions (fast pre-PR check — no state
+# machine / DB / UI). Side-effect-free; does NOT sort INBOX or re-triage UNKNOWN.
+./gradlew :app:testDebugUnitTest --tests "*AllMatchersSuite*"
 
-# Run a specific regression test
-./gradlew testDebugUnitTest --tests "*DashPausedRegressionTest*"
+# Run a single recognition test (e.g. just the golden-corpus positive guard)
+./gradlew :app:testDebugUnitTest --tests "*GoldenSnapshotRegressionTest"
 
 # Run instrumented tests (requires connected device/emulator)
 ./gradlew :app:connectedAndroidTest

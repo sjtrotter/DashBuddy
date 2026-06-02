@@ -79,8 +79,8 @@ class InboxProcessorTest(
 
         // --- DECISION MATRIX ---
 
-        // A. TOXIC
-        if (identifiedScreen == "SENSITIVE" || securityReport.isToxic) {
+        // A. TOXIC — a sensitive rule matched (intent `sensitive.*`) or the keyword scanner fired.
+        if (identifiedScreen.startsWith("sensitive") || securityReport.isToxic) {
             handleToxicFile(securityReport)
             return
         }
