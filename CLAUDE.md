@@ -251,6 +251,16 @@ At the start of a session or before picking up new work:
 
 ## Field Testing Logs
 
+**At the START of a field-testing session** — when the developer signals they're about to
+dash or are starting a field test (e.g. "starting a field test", "about to dash", "heading
+out", "field testing now", "what should I look for") — **first read the
+`## Next field test — things to look for` checklist in `docs/field-testing/README.md` and
+report it back concisely**: tell the developer, in plain terms, what to watch for and how to
+tell if each item is working. This is the primary job of a field-testing agent launched on
+the phone before a dash. Keep it short and glanceable — they're about to be driving. When an
+item is later confirmed (or found broken) in the field, move it into that session's log entry
+and delete it from the checklist.
+
 When the developer narrates observations from an active or just-completed dashing session —
 any of: "this is a field testing log", "dashing log", "field log", "on-dash testing notes",
 or just rattling off bugs/UX observations from time spent driving — the right action is to
