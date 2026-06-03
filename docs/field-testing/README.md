@@ -105,7 +105,11 @@ immediately (no second pass needed) so it gets triaged.
   - Also regression-watch the grace refactor: backing out of the app mid-pickup
     and returning still **keeps the active task**; a brief offline blip mid-dash
     still **resumes the same** dash (no spurious new session).
-  - Confirmed: 0/2.
+  - Confirmed: 0/2. **Partial — 2026-06-03 (DoorDash):** the *brief-offline-blip
+    resumes same dash* sub-case was seen — an app-switch return fired
+    "Session resumed (grace)" (same session, no fresh start). Still unconfirmed:
+    that the **active task** survived the blip, and the explicit start-path cases
+    (on-demand / scheduled fresh start). See 2026-06-03 log entry #3.
 
 - **Alcohol delivery ID-verification flow recognized + arrival timing (#149).**
   On an alcohol dropoff, the ID-check flow is now recognized (previously
@@ -121,13 +125,15 @@ immediately (no second pass needed) so it gets triaged.
       recognized — flag it for a redaction + sensitive rule.
   - Confirmed: 0/2.
 
-- **App-switch mid-dash → "recovered" notice → dash continuity (2026-06-03 #3).**
-  Mid-dash, switch to another app and come back to DoorDash. If a "recovered"
-  notice appears, **note which app showed it** (DoorDash vs the DashBuddy bubble —
-  a screenshot is ideal; no DashBuddy string says "recovered", so it's expected to
-  be DoorDash's). Then confirm DashBuddy **kept the same in-progress dash/task**
-  with earnings intact — it must **not** start a fresh dash, double-start, or
-  forget the active task (cross-refs #286/#290 grace and 2026-05-29 #2).
+- **App-switch mid-dash → "Session resumed (grace)" → dash + task continuity
+  (2026-06-03 #3).** The bubble's `"Session resumed (grace)"` message
+  (`EffectMap.kt:319`) fires when a region goes Offline then back Online within
+  ~10s on the **same** session. An app-switch return can trip this (DashBuddy
+  stops seeing DoorDash → reads Offline → resumes on return). When it appears,
+  confirm DashBuddy **kept the same in-progress dash AND the active task** with
+  earnings intact — it must **not** start a fresh dash, double-start, or forget
+  the task (cross-refs #286/#290 grace and 2026-05-29 #2). Also a UX read: is
+  showing this internal-sounding message useful, or should it be reworded/demoted?
   - Confirmed: 0/2.
 
 ---
@@ -230,56 +236,61 @@ immediately (no second pass needed) so it gets triaged.
 
 ### Open questions / investigations
 
-#### 3. Switched apps mid-dash, came back to DoorDash, and "it said it had recovered"
+#### 3. Switched apps mid-dash, came back to DoorDash, bubble showed "Session resumed (grace)"
 
 - **Field observation:** Started another dash, switched to a different app, and
-  on returning to the DoorDash app saw a message that "it had recovered." Unclear
-  *which* app surfaced the message or what exactly was recovered; flagged as a
-  thing to watch.
-- **Status:** Open (needs disambiguation — which app, and whether DashBuddy kept
-  the dash). **Add to the next-field-test checklist** so the next dash captures
-  the missing detail.
-- **First, the disambiguating fact (desk grep, high confidence):** there is **no
-  user-facing "recovered" / "resumed" / "restored" string anywhere in DashBuddy's
-  code.** The only hits are a Timber log line in `StateManagerV2.kt:256`
-  ("Recovery complete …") and a code *comment* in `FlowCardMapper.kt:159`
-  ("probably a recovered session") — neither renders to the user. So if the
-  dasher *read* the word "recovered" on screen, it was almost certainly
-  **DoorDash's own** UI (DoorDash shows a recovery/restore notice when its own
-  process is reaped and relaunched), **not** a DashBuddy message.
-- **Hypotheses (desk read, speculative — two layers, possibly both):**
-  - **(a) The "recovered" text was DoorDash's**, triggered by the OS reaping
-    *DoorDash* while it was backgrounded during the app-switch, then DoorDash
-    restoring on return. This is the platform's own behavior and inert to us —
-    *except* that DoorDash relaunching emits a fresh burst of accessibility
-    events (a cold-start / splash / restored screen) that our pipeline then
-    re-classifies. The real question is what DashBuddy *did* with that burst.
-  - **(b) DashBuddy's own crash-recovery may have run silently.** If the OS
-    reaped *DashBuddy's* process (or its accessibility service) while
-    backgrounded, on return `StateManagerV2.restoreState` (`:214-261`) replays
-    from the latest snapshot + the observation tail with `recovering = true`
-    (external effects suppressed). This posts **no** on-screen message, so it
-    wouldn't be what the dasher *read* — but it could still be running under the
-    hood. The thing to verify is whether that replay **preserved the active
-    dash/task** or quietly reset/duplicated the session.
-- **Why this matters / cross-refs:** this sits right on top of two live concerns —
-  the **#286/#290 grace-vs-fresh-dash** checklist item (a mid-dash app-switch +
-  return should *resume the same* dash, not start fresh or double-start) and the
-  **2026-05-29 bug #2** "forgot I was at HEB" (looking at another screen mustn't
-  mutate active-task state). The "recovered" notice is a new variant of the same
-  app-switch boundary, so the on-dash check is: **after the recovery notice, did
-  the bubble still show the same in-progress dash/task, with earnings intact?**
+  on returning to DoorDash the **DashBuddy bubble** showed a message the dasher
+  recalled as "recovered (grace)." Dasher wasn't sure why it fired.
+- **Status:** Open — but **source now pinned** (see below). The likely-correct
+  read is that this is the grace mechanism *working*; the open part is whether an
+  app-switch *should* trip it and whether surfacing the message is desirable.
+- **Source pinned (desk grep, high confidence):** the bubble string is literally
+  **`"Session resumed (grace)"`** — `EffectMap.kt:319`,
+  `add(AppEffect.UpdateBubble("Session resumed (grace)"))`. (This **corrects** the
+  earlier hypothesis in this entry's first draft that the notice was DoorDash's
+  own UI — it is a DashBuddy bubble message. The earlier grep missed it because it
+  lives in `:core:state`, not `:app`.)
+- **When it fires (`EffectMap.kt:299-320`):** on an **Offline → Online**
+  transition where the resumed region's `session.sessionId` **equals** the prior
+  session's id (`:316`). That branch is reached only when the session was held
+  alive under the **grace window** (`DEFAULT_GRACE_MS = 10_000L`) rather than
+  finalized — i.e. DashBuddy briefly saw the region go Offline, then back Online
+  within ~10s, and resumed the **same** dash (no new `DASH_START`, no odometer
+  restart — `:317` comment: "same session, no start effects needed").
+- **What most likely happened (hypothesis):** while DoorDash was backgrounded
+  during the app-switch, DashBuddy stopped seeing DoorDash's online/idle screen
+  and the region read as **Offline**; returning within the grace window flipped it
+  back **Online** with the same session → the grace-resume branch fired and posted
+  the bubble. By construction (`:316` checks `prevSession?.sessionId ==
+  nextSession.sessionId`) this means it **resumed the same dash**, which is the
+  *desired* outcome for a brief mid-dash blip.
+- **This is a (partial) positive for #286/#290.** That checklist item's
+  regression-watch is exactly "a brief offline blip mid-dash still **resumes the
+  same** dash (no spurious new session)." Seeing "Session resumed (grace)" — and
+  *not* a fresh-session reset — on an app-switch return is one clean sighting of
+  that path holding. Logged as a partial confirmation there.
+- **The genuinely open parts (not defects yet — UX / scope questions):**
+  - **(a) Should a mere app-switch register as Offline at all?** If DashBuddy is
+    just backgrounded (its service alive, simply not receiving DoorDash events),
+    treating "I stopped seeing DoorDash" as "the region went Offline" is the same
+    class of concern as 2026-05-29 bug #2 ("looking at another screen mustn't
+    mutate active-task state"). Here it recovered cleanly via grace, but it's
+    worth confirming the *task* (not just the session) also survived intact.
+  - **(b) Is surfacing "Session resumed (grace)" to the user desirable?** It reads
+    as internal-mechanism jargon (the dasher didn't know what it meant). Even at
+    alpha-single-user, it may be noise — candidate to demote to a debug log, or
+    reword to something a dasher parses ("Picked your dash back up"). Dasher's
+    call; logging as a UX observation, not prescribing.
 - **What would confirm or refute this at the desk:**
-  - Establish **which app** showed "recovered" (DoorDash vs the DashBuddy bubble).
-    Given the grep above, expectation is DoorDash. A screenshot of the notice next
-    time would settle it instantly.
-  - Pull DashBuddy logcat around the app-return: presence of "Replaying N
-    observations after snapshot…" / "Recovery complete" (`StateManagerV2.kt:240,
-    256`) confirms (b) — DashBuddy's own recovery ran. Absence means the service
-    stayed alive and only DoorDash restarted.
-  - Either way, check the session/task continuity: did `activeTask` and the dash
-    session survive, or did a new `DASH_START` / "fresh session" fire? That's the
-    actual pass/fail, independent of who printed the word "recovered."
+  - Pull DashBuddy logcat around the app-return: expect a `"Session grace resume:
+    <id>"` line (`EffectMap.kt:318`) and an Offline→Online region transition
+    within 10s, with the **same** `sessionId` before and after. That confirms the
+    grace path (vs a fresh start, which would log `DASH_START` with
+    `source = "interaction"`/`"recovery"` at `:310-313`).
+  - Confirm the **active task** survived the blip (not just the session): check
+    `activeTask` was non-null across the transition and `pendingDestructive`
+    (the retire-grace) was cancelled on return, per `TaskLifecycleGuardTest`'s
+    "returning to a task cancels the grace" expectation.
 
 ---
 
