@@ -2121,6 +2121,31 @@
       }
     },
     {
+      "id": "doordash.screen.idle_scheduled_dash_ready",
+      "priority": 135,
+      "state": {
+        "flow": "idle",
+        "modeHint": "offline"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Start your scheduled dash"
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "idle",
+        "fields": {
+          "startingDash": {
+            "literal": true
+          }
+        }
+      }
+    },
+    {
       "id": "doordash.screen.idle_map",
       "priority": 140,
       "state": {
