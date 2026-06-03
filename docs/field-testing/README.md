@@ -78,6 +78,13 @@ immediately (no second pass needed) so it gets triaged.
   transfer and confirm the bubble does **nothing** (sensitive → skipped),
   rather than reacting to it.
   - Confirmed: 0/2.
+- **End-of-dash summary attribution (#279).** End a dash and watch the bubble:
+  the **dash summary** (total earnings / duration) should land and attribute to
+  the just-ended dash — whether the summary shows BEFORE or AFTER the
+  idle/offline screen (the after-idle ordering was the bug). It must NOT finalize
+  as a thin "early offline" the instant the idle/offline screen appears; the rich
+  total should reach the HUD.
+  - Confirmed: 0/2.
 
 ---
 
@@ -87,7 +94,9 @@ immediately (no second pass needed) so it gets triaged.
   Hypothesis: the idle-map offline screen shows *before* the dash summary, and
   there may be no way to reach the summary actions once on idle/offline. Needs a
   field repro + capture to confirm.
-  - **Status:** Open (untriaged).
+  - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
+    "summary after the idle screen" ordering was the root cause). Field-validate
+    via the #279 checklist item above.
 
 ---
 

@@ -227,12 +227,73 @@ class EffectMap @Inject constructor(
         next: PlatformRegion,
         obs: Observation,
     ): List<AppEffect> {
-        if (prev.mode == next.mode) return emptyList()
         val prevSession = prev.session
         val nextSession = next.session
         val sessionId = nextSession?.sessionId ?: prevSession?.sessionId
+        // Finalize when the session actually ENDS (goes null, or is replaced by a
+        // different sessionId) — NOT on the bare offline mode-flip. A graced
+        // (maybe-transient) offline keeps the session alive, so a summary that
+        // arrives after the idle/offline screen still attributes to it; a real
+        // end (summary either ordering, grace expiry, or a fresh dash replacing
+        // the old one) flips this true.
+        val prevEnded = prevSession != null &&
+            (nextSession == null || nextSession.sessionId != prevSession.sessionId)
+        if (prev.mode == next.mode && !prevEnded) return emptyList()
 
         return buildList {
+            if (prevEnded) {
+                // A rule-defined MODE_TO_OFFLINE override (only on an actual mode
+                // flip to offline) replaces the default finalize, as before.
+                val offlineOverride =
+                    if (prev.mode != Mode.Offline && next.mode == Mode.Offline) {
+                        triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_OFFLINE)
+                    } else {
+                        null
+                    }
+                if (offlineOverride != null) {
+                    addAll(offlineOverride)
+                } else {
+                    val endParsed = (obs as? Observation.FlowObservation)?.parsed
+                    if (endParsed is ParsedFields.SessionEndedFields) {
+                        val earnings = formatCurrency(endParsed.totalEarnings)
+                        add(
+                            logEffect(
+                                sessionId,
+                                AppEventType.DASH_STOP,
+                                SessionStopPayload(
+                                    sessionId = sessionId,
+                                    endedAt = obs.timestamp,
+                                    source = "summary_screen",
+                                    totalEarnings = endParsed.totalEarnings,
+                                    sessionDurationMillis = endParsed.sessionDurationMillis,
+                                    offersAccepted = endParsed.offersAccepted,
+                                    offersTotal = endParsed.offersTotal,
+                                    weeklyEarnings = endParsed.weeklyEarnings,
+                                ),
+                            ),
+                        )
+                        add(AppEffect.StopOdometer)
+                        add(AppEffect.UpdateBubble("Session Ended. Total: $earnings", ChatPersona.Dispatcher))
+                        add(AppEffect.CaptureScreenshot("DashSummary - ${endParsed.totalEarnings}"))
+                    } else {
+                        add(
+                            logEffect(
+                                sessionId,
+                                AppEventType.DASH_STOP,
+                                SessionStopPayload(
+                                    sessionId = sessionId,
+                                    endedAt = obs.timestamp,
+                                    source = "early_offline",
+                                    totalEarnings = prevSession?.runningEarnings,
+                                ),
+                            ),
+                        )
+                        add(AppEffect.StopOdometer)
+                    }
+                    add(AppEffect.EndSession(prev.platform.name))
+                }
+            }
+
             when {
                 // Session start: offline/paused → online
                 prev.mode != Mode.Online && next.mode == Mode.Online -> {
@@ -267,50 +328,11 @@ class EffectMap @Inject constructor(
                     }
                 }
 
-                // Session end: online/paused → offline
-                next.mode == Mode.Offline -> {
-                    val modeOverride = triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_OFFLINE)
-                    if (modeOverride != null) {
-                        addAll(modeOverride)
-                    } else if (prevSession != null) {
-                        // Check if this is a session summary screen
-                        val flowObs = obs as? Observation.FlowObservation
-                        val parsed = flowObs?.parsed
-                        val platform = prev.platform.name
-                        if (parsed is ParsedFields.SessionEndedFields) {
-                            val earnings = formatCurrency(parsed.totalEarnings)
-                            val payload = SessionStopPayload(
-                                sessionId = sessionId,
-                                endedAt = obs.timestamp,
-                                source = "summary_screen",
-                                totalEarnings = parsed.totalEarnings,
-                                sessionDurationMillis = parsed.sessionDurationMillis,
-                                offersAccepted = parsed.offersAccepted,
-                                offersTotal = parsed.offersTotal,
-                                weeklyEarnings = parsed.weeklyEarnings,
-                            )
-                            add(logEffect(sessionId, AppEventType.DASH_STOP, payload))
-                            add(AppEffect.StopOdometer)
-                            add(
-                                AppEffect.UpdateBubble(
-                                    "Session Ended. Total: $earnings",
-                                    ChatPersona.Dispatcher,
-                                )
-                            )
-                            add(AppEffect.CaptureScreenshot("DashSummary - ${parsed.totalEarnings}"))
-                        } else {
-                            val payload = SessionStopPayload(
-                                sessionId = sessionId,
-                                endedAt = obs.timestamp,
-                                source = "early_offline",
-                                totalEarnings = prevSession.runningEarnings,
-                            )
-                            add(logEffect(sessionId, AppEventType.DASH_STOP, payload))
-                            add(AppEffect.StopOdometer)
-                        }
-                        add(AppEffect.EndSession(platform))
-                    }
-
+                // Going offline. Session finalize (and any MODE_TO_OFFLINE
+                // override) is handled by the `prevEnded` block above, which
+                // defers while a grace window keeps the session alive. Only the
+                // pause-safety-timer cancel remains here.
+                prev.mode != Mode.Offline && next.mode == Mode.Offline -> {
                     // Cancel pause safety timer
                     if (prev.mode == Mode.Paused) {
                         val resumeOverride = triggerOverrideEffects(obs, TransitionTrigger.RESUME_FROM_PAUSE)
