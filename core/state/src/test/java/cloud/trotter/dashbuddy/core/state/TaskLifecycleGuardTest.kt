@@ -249,4 +249,34 @@ class TaskLifecycleGuardTest {
         assertEquals(13, r3.activeTask?.itemsShopped)
         assertEquals(5, r3.activeTask?.itemsRemaining)
     }
+
+    @Test
+    fun `shopping add-on (or same-store stack) bumps the combined counts on the same task`() {
+        // A + B orders at the same store present as one combined shop list, so an
+        // add-on mid-shop just makes "To shop" jump back up while "Done" holds. The
+        // metric needs no special case: it stays on the same task and total
+        // (Done + To-shop) grows. (Matches the 2026-05-31 capture where To-shop
+        // jumped 2 -> 8 mid-session.)
+        val r0 = region(pickupTask("task-A", "H-E-B", arrivedAt = 1_000L))
+        val (r1, f1) = step(
+            r0, FlowRegion(flow = Flow.TaskPickupArrived),
+            taskObs(
+                Flow.TaskPickupArrived, TaskPhase.PICKUP, TaskSubFlow.ARRIVED,
+                storeName = "H-E-B", itemsShopped = 13, itemsRemaining = 5, timestamp = 2_000L,
+            ),
+        )
+        assertEquals(13, r1.activeTask?.itemsShopped) // total so far = 18
+
+        // Add-on B arrives mid-shop: To-shop jumps up, Done unchanged, SAME task.
+        val (r2, _) = step(
+            r1, f1,
+            taskObs(
+                Flow.TaskPickupArrived, TaskPhase.PICKUP, TaskSubFlow.ARRIVED,
+                storeName = "H-E-B", itemsShopped = 13, itemsRemaining = 13, timestamp = 3_000L,
+            ),
+        )
+        assertEquals("task-A", r2.activeTask?.taskId) // not re-minted
+        assertEquals(13, r2.activeTask?.itemsShopped)
+        assertEquals(13, r2.activeTask?.itemsRemaining) // went UP — combined total now 26
+    }
 }
