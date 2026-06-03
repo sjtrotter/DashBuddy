@@ -4,13 +4,20 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 
+/** Known wire values for the open [ParsedFields.activity] tag (rule-emitted). */
+object PickupActivity {
+    const val SHOPPING = "shopping"
+    const val CONFIRMED = "confirmed"
+}
+
 /**
  * Typed parsed data produced by rules and consumed by the state machine.
  * Each subtype corresponds to a [Flow] family — the [FieldsFactory]
  * validates that rule output conforms to the contract at load time.
  *
  * All subtypes carry an optional [activity] tag for platform-specific
- * refinements within a flow (e.g., "shopping", "scanning_card").
+ * refinements within a flow (e.g., "shopping", "scanning_card"). The tag is an
+ * open, rule-emitted string; [PickupActivity] names the values the code keys on.
  */
 sealed class ParsedFields {
     abstract val activity: String?

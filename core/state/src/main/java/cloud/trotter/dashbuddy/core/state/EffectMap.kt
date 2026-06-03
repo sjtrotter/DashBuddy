@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
@@ -24,6 +25,7 @@ import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
@@ -263,7 +265,7 @@ class EffectMap @Inject constructor(
                                 SessionStopPayload(
                                     sessionId = sessionId,
                                     endedAt = obs.timestamp,
-                                    source = "summary_screen",
+                                    source = SessionEndSource.SUMMARY_SCREEN,
                                     totalEarnings = endParsed.totalEarnings,
                                     sessionDurationMillis = endParsed.sessionDurationMillis,
                                     offersAccepted = endParsed.offersAccepted,
@@ -283,7 +285,7 @@ class EffectMap @Inject constructor(
                                 SessionStopPayload(
                                     sessionId = sessionId,
                                     endedAt = obs.timestamp,
-                                    source = "early_offline",
+                                    source = SessionEndSource.EARLY_OFFLINE,
                                     totalEarnings = prevSession?.runningEarnings,
                                 ),
                             ),
@@ -794,8 +796,8 @@ class EffectMap @Inject constructor(
         customerHash: String?,
     ): ChatPersona {
         return when {
-            activity == "shopping" -> ChatPersona.Shopper
-            activity == "confirmed" -> ChatPersona.Customer(customerHash?.take(6) ?: "Customer")
+            activity == PickupActivity.SHOPPING -> ChatPersona.Shopper
+            activity == PickupActivity.CONFIRMED -> ChatPersona.Customer(customerHash?.take(6) ?: "Customer")
             arrived -> ChatPersona.Merchant(storeName)
             else -> ChatPersona.Navigator
         }

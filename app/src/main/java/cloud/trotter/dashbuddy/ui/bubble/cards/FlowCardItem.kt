@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import kotlinx.coroutines.delay
 import java.util.Date
@@ -416,7 +417,7 @@ private fun DeadlineBody(
             // Shop & Deliver: show progress + a live items/min pace (derived off
             // `now`, so it ticks while shopping and freezes with the card). The bare
             // "items left" count alone isn't useful; pace + shopped/total is.
-            if (activity == "shopping") {
+            if (activity == PickupActivity.SHOPPING) {
                 val shopped = itemsShopped ?: 0
                 val total = shopped + (itemsRemaining ?: 0)
                 if (total > 0) {
