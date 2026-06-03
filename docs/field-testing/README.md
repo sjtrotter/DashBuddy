@@ -67,7 +67,12 @@ immediately (no second pass needed) so it gets triaged.
   `total == "Done (x)" + "To shop (y)"`. **Add-on case:** if you accept an
   add-on / second order at the same store mid-shop, confirm "To shop" jumps up,
   the total grows, and the pace keeps counting on the *same* card (no reset).
-  - Confirmed: 0/2.
+  - Confirmed: 1/2. **Partial — 2026-06-03 (DoorDash):** the live pace *did*
+    render and **tick** on the pickup/shop card during the shop. **Not** seen
+    this dash: the finalized/frozen card, the `total == "Done (x)" + "To shop
+    (y)"` cross-check, and the add-on case. Counting this as one clean
+    live-ticking sighting; the next dash should confirm finalization + add-on
+    before retiring the item. (See 2026-06-03 log entry.)
 - **Offers behind a loading overlay (#275, merged 2026-06-02).** When an offer
   briefly shows a spinner (on present, or right as you tap), confirm it stays
   recognized as an offer — the bubble shouldn't flicker out of the offer view
@@ -127,6 +132,92 @@ immediately (no second pass needed) so it gets triaged.
   - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
     "summary after the idle screen" ordering was the root cause). Field-validate
     via the #279 checklist item above.
+
+---
+
+## 2026-06-03 — DoorDash session (live capture during dash)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` at `776b0a8` (post-#272 merge; latest code on
+  `master` is the #271 card-polish + #270 nav-generic-idle merges) — inferred,
+  developer to correct if the build came from elsewhere.
+- **Field conditions:** developer dashing on DoorDash; entry captured live.
+  Includes a Shop & Deliver leg (pacing observed) and an app **crash** at the
+  end of a delivery right around the post-dropoff auto-expand click.
+
+### Bugs
+
+#### 1. App crashed after dropoff, at/just after the automated "expand delivery details" click
+
+- **Field observation:** Right after completing a dropoff, the app crashed —
+  "as soon as the app clicked, or just after the click" — referring to the
+  **automated** click that expands the post-delivery pay breakdown. The dasher
+  did not (yet) provide a stack trace; timing is the main signal we have.
+- **Status:** Open. **Most valuable next artifact: the crash stack trace /
+  logcat** — without it the layer below is a guess between three candidates.
+- **What fires at that exact moment (the post-task collapsed screen):**
+  `doordash.json:659-678` runs **two** effects when the collapsed `post_task`
+  screen matches: (1) `click: $expandButton` (gated `isExpanded == false`,
+  `dedupeKey: expand_pay_breakdown`, `throttleMs: 1000`, **`delayMs: 500`**),
+  then (2) a `screenshot` (`prefix: "Delivery - {totalPay}"`, `throttleMs:
+  60000`). So "at/just after the click" overlaps the click dispatch, the
+  platform's expand animation, **and** the screenshot capture — three places a
+  crash could originate.
+- **Hypotheses (desk read, not verified against a trace — all speculative):**
+  - **(a) The auto-click dispatch itself.** `SideEffectEngine.kt:113-116` →
+    `UiInteractionHandler.performClick` (`UiInteractionHandler.kt:19-64`) →
+    `AccNodeUtils.clickNode`. `performClick` re-resolves the target against the
+    *live* root via `findAccessibilityNodeInfosByViewId` / `…ByText` / a bounds
+    walk (`findNodeByBounds`, `:70-88`). The empty/null paths are guarded
+    (returns with a `Timber.w`), but the recursive `findNodeByBounds` and the
+    raw `AccessibilityNodeInfo` operations aren't wrapped in try/catch — a stale
+    / recycled node mid-expand could throw `IllegalStateException`. Plausible but
+    not obviously the most likely.
+  - **(b) The screenshot effect that fires right after.** `ScreenShotHandler.kt`
+    uses `service.takeScreenshot` → `Bitmap.wrapHardwareBuffer` →
+    MediaStore write, then `result.hardwareBuffer.close()` in `onSuccess`
+    (`:39-45`). The body is `try/catch(Exception)` wrapped and `saveToGallery`
+    catches its own exceptions, so an *app-killing* crash here seems less likely
+    — but the `hardwareBuffer.close()` sits *outside* `saveToGallery`'s guard, so
+    if `saveToGallery` throws unexpectedly the buffer may leak rather than crash.
+    Lower suspicion, but worth ruling out via the trace.
+  - **(c) Processing the *expanded* screen the click produced (favored on
+    timing).** "Just after the click" is also exactly when the breakdown expands
+    and DoorDash emits a burst of accessibility events for the new content, which
+    our pipeline then parses (the expanded `post_task` parse that yields
+    `parsedPay` / `payLineItems`, c.f. `ParsedFieldsFactory` per 2026-05-19 #4).
+    A null/format assumption in that expanded-pay parse would crash *as a result
+    of* the click rather than *in* it — which matches the dasher's "just after"
+    wording better than the click dispatch itself.
+- **Relationship to prior work:** the post-task auto-expand pipeline was last
+  touched in **#266** (2026-05-19 bug #4 — first-click race / re-fire). Note the
+  rule now carries `delayMs: 500` (an initial delay before the first click),
+  which is the #266 timing fix. This crash is a **new** symptom (a hard crash,
+  not the previous "click didn't complete" / "bubble re-fired"), so it's either
+  a regression introduced alongside that flow or a latent path #266 didn't touch.
+- **What would confirm or refute this at the desk:**
+  - **Pull the crash stack trace** (logcat / the on-device crash log). The top
+    frame immediately disambiguates (a) `UiInteractionHandler`/`AccNodeUtils`
+    vs (b) `ScreenShotHandler` vs (c) the expanded-`post_task` parse path.
+  - If a snapshot of the expanded breakdown was captured this dash, run it
+    through the parse path that builds `parsedPay`/`payLineItems` and check for
+    a null/format assumption that the live expanded screen would violate.
+  - Cross-check the screenshot output: a `Pictures/DashBuddy/… Delivery - …png`
+    file existing for that delivery means the screenshot effect ran to
+    completion (pushes suspicion toward (a)/(c), away from (b)).
+
+### Verification TODOs
+
+#### 2. Shop & Deliver live pace ticked during the shop (#276 partial confirmation)
+
+- **Field observation:** On a Shop & Deliver leg, the bubble pickup/shop card
+  showed the live items/min pace and it **ticked** while shopping — the core
+  #276 behavior. The dasher did **not** see the finalization (the frozen card
+  after the leg) this dash, so the `total == "Done (x)" + "To shop (y)"`
+  cross-check and the add-on-mid-shop case remain unconfirmed.
+- **Status:** Partial confirmation logged against the #276 checklist item
+  (Confirmed 1/2 — live ticking only). Needs a second dash to confirm
+  finalization + add-on before the checklist item is retired.
 
 ---
 
