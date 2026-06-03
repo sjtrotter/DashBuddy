@@ -121,6 +121,15 @@ immediately (no second pass needed) so it gets triaged.
       recognized — flag it for a redaction + sensitive rule.
   - Confirmed: 0/2.
 
+- **App-switch mid-dash → "recovered" notice → dash continuity (2026-06-03 #3).**
+  Mid-dash, switch to another app and come back to DoorDash. If a "recovered"
+  notice appears, **note which app showed it** (DoorDash vs the DashBuddy bubble —
+  a screenshot is ideal; no DashBuddy string says "recovered", so it's expected to
+  be DoorDash's). Then confirm DashBuddy **kept the same in-progress dash/task**
+  with earnings intact — it must **not** start a fresh dash, double-start, or
+  forget the active task (cross-refs #286/#290 grace and 2026-05-29 #2).
+  - Confirmed: 0/2.
+
 ---
 
 ## Untriaged — carried over from scratch notes
@@ -218,6 +227,59 @@ immediately (no second pass needed) so it gets triaged.
 - **Status:** Partial confirmation logged against the #276 checklist item
   (Confirmed 1/2 — live ticking only). Needs a second dash to confirm
   finalization + add-on before the checklist item is retired.
+
+### Open questions / investigations
+
+#### 3. Switched apps mid-dash, came back to DoorDash, and "it said it had recovered"
+
+- **Field observation:** Started another dash, switched to a different app, and
+  on returning to the DoorDash app saw a message that "it had recovered." Unclear
+  *which* app surfaced the message or what exactly was recovered; flagged as a
+  thing to watch.
+- **Status:** Open (needs disambiguation — which app, and whether DashBuddy kept
+  the dash). **Add to the next-field-test checklist** so the next dash captures
+  the missing detail.
+- **First, the disambiguating fact (desk grep, high confidence):** there is **no
+  user-facing "recovered" / "resumed" / "restored" string anywhere in DashBuddy's
+  code.** The only hits are a Timber log line in `StateManagerV2.kt:256`
+  ("Recovery complete …") and a code *comment* in `FlowCardMapper.kt:159`
+  ("probably a recovered session") — neither renders to the user. So if the
+  dasher *read* the word "recovered" on screen, it was almost certainly
+  **DoorDash's own** UI (DoorDash shows a recovery/restore notice when its own
+  process is reaped and relaunched), **not** a DashBuddy message.
+- **Hypotheses (desk read, speculative — two layers, possibly both):**
+  - **(a) The "recovered" text was DoorDash's**, triggered by the OS reaping
+    *DoorDash* while it was backgrounded during the app-switch, then DoorDash
+    restoring on return. This is the platform's own behavior and inert to us —
+    *except* that DoorDash relaunching emits a fresh burst of accessibility
+    events (a cold-start / splash / restored screen) that our pipeline then
+    re-classifies. The real question is what DashBuddy *did* with that burst.
+  - **(b) DashBuddy's own crash-recovery may have run silently.** If the OS
+    reaped *DashBuddy's* process (or its accessibility service) while
+    backgrounded, on return `StateManagerV2.restoreState` (`:214-261`) replays
+    from the latest snapshot + the observation tail with `recovering = true`
+    (external effects suppressed). This posts **no** on-screen message, so it
+    wouldn't be what the dasher *read* — but it could still be running under the
+    hood. The thing to verify is whether that replay **preserved the active
+    dash/task** or quietly reset/duplicated the session.
+- **Why this matters / cross-refs:** this sits right on top of two live concerns —
+  the **#286/#290 grace-vs-fresh-dash** checklist item (a mid-dash app-switch +
+  return should *resume the same* dash, not start fresh or double-start) and the
+  **2026-05-29 bug #2** "forgot I was at HEB" (looking at another screen mustn't
+  mutate active-task state). The "recovered" notice is a new variant of the same
+  app-switch boundary, so the on-dash check is: **after the recovery notice, did
+  the bubble still show the same in-progress dash/task, with earnings intact?**
+- **What would confirm or refute this at the desk:**
+  - Establish **which app** showed "recovered" (DoorDash vs the DashBuddy bubble).
+    Given the grep above, expectation is DoorDash. A screenshot of the notice next
+    time would settle it instantly.
+  - Pull DashBuddy logcat around the app-return: presence of "Replaying N
+    observations after snapshot…" / "Recovery complete" (`StateManagerV2.kt:240,
+    256`) confirms (b) — DashBuddy's own recovery ran. Absence means the service
+    stayed alive and only DoorDash restarted.
+  - Either way, check the session/task continuity: did `activeTask` and the dash
+    session survive, or did a new `DASH_START` / "fresh session" fire? That's the
+    actual pass/fail, independent of who printed the word "recovered."
 
 ---
 
