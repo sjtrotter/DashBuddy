@@ -45,6 +45,32 @@ For items with multiple sub-concerns at different statuses, use one
 `Partially closed —` line and describe each sub-concern inline.
 
 ---
+
+## Next field test — things to look for
+
+**Living checklist (not a session entry).** These are recently-merged changes
+that were validated only against captured data and need eyes on a live dash.
+A field-testing agent should read this section at the start of a session and
+report it to the developer; when an item is confirmed (or found broken),
+move it into that session's log entry and delete it here.
+
+- **Shop & Deliver items/min (#276, merged 2026-06-02).** On a real Shop &
+  Deliver, open the bubble pickup card and confirm it shows
+  `shop {shopped}/{total} · {N.N}/min` (not a bare item count), that the pace
+  **ticks** while shopping, and that on the DoorDash screen
+  `total == "Done (x)" + "To shop (y)"`. **Add-on case:** if you accept an
+  add-on / second order at the same store mid-shop, confirm "To shop" jumps up,
+  the total grows, and the pace keeps counting on the *same* card (no reset).
+- **Offers behind a loading overlay (#275, merged 2026-06-02).** When an offer
+  briefly shows a spinner (on present, or right as you tap), confirm it stays
+  recognized as an offer — the bubble shouldn't flicker out of the offer view
+  or drop to a blank/idle state mid-offer.
+- **Cashout / transfer screens blocked (#275, merged 2026-06-02).** Open the
+  DasherDirect/Crimson balance, a card-details screen, or initiate an instant
+  transfer and confirm the bubble does **nothing** (sensitive → skipped),
+  rather than reacting to it.
+
+---
 human entered logs during claude sub shortfall
 
 - final dash summay issue. hypothesis - idle map offline screen shows before the summary, and (maybe) there is no way to get to the summary actions from the idle offline screen?
