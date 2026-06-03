@@ -2113,6 +2113,9 @@
               "hasIdSuffix": "starting_point_name"
             },
             "read": "text"
+          },
+          "startingDash": {
+            "literal": true
           }
         }
       }

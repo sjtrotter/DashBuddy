@@ -17,16 +17,18 @@ data class PlatformRegion(
     val activeJob: Job? = null,
     val activeTask: Task? = null,
     val recentTasks: List<Task> = emptyList(),
-    val sessionGraceDeadline: Long? = null,
     /**
-     * Deadline after which a transient idle/offer seen mid-task retires the
-     * active task. Armed when leaving a task flow to a non-task flow while
-     * online; cancelled on returning to a task flow; lazily expired in
-     * [PlatformRegionStepper.step]. Keeps a brief informational screen (the
-     * timeline, or the idle map flashing before the delivery summary) from
-     * forgetting the task.
+     * A pending "destructive" transition — ending the dash or retiring the
+     * active task — that is **provisional** until confirmed. Armed when leaving
+     * a more-active state (online→offline, or task-flow→non-task) so a transient
+     * screen flash (backing out of the app mid-pickup, or the idle map flashing
+     * before the dash summary) doesn't immediately drop the task/session.
+     * Resolved in [PlatformRegionStepper]: confirmed by an authoritative signal
+     * (session:ended, PostTask, a fresh dash) or deadline expiry → commit;
+     * cancelled when the prior more-active state returns within the window.
+     * Replaces the former separate sessionGraceDeadline / taskClearGraceDeadline.
      */
-    val taskClearGraceDeadline: Long? = null,
+    val pendingDestructive: PendingDestructive? = null,
     val lastTransitionKind: TransitionKind? = null,
     val zoneName: String? = null,
     val sessionType: SessionType? = null,
@@ -52,6 +54,29 @@ data class PlatformRegion(
      */
     val lastAnnouncedPostTaskTaskId: String? = null,
 )
+
+/**
+ * A provisional transition toward a less-active state, pending confirmation.
+ * See [PlatformRegion.pendingDestructive]. Plain data (Gson-serializable) so it
+ * survives crash-recovery replay; resolution is driven by `obs.timestamp`, never
+ * a wall clock, keeping the reducer pure.
+ */
+data class PendingDestructive(
+    val kind: DestructiveKind,
+    /** The obs.timestamp that armed it. */
+    val since: Long,
+    /** Once an observation's timestamp passes this, the transition is committed. */
+    val deadline: Long,
+    val reason: String? = null,
+)
+
+enum class DestructiveKind {
+    /** End the dash/session — online→offline without an authoritative end signal. */
+    SESSION_END,
+
+    /** Retire the active task — a task flow gave way to idle/offer mid-delivery. */
+    TASK_RETIRE,
+}
 
 /**
  * Classification of a mode transition for logging and lifecycle decisions.
