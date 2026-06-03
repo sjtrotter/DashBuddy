@@ -38,14 +38,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,8 +56,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
-import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
@@ -357,64 +352,6 @@ private fun statusBadge(region: PlatformRegion?, flow: Flow): Pair<String, Color
     }
 }
 
-// ---------------------------------------------------------------------------
-// State-aware mode card
-// ---------------------------------------------------------------------------
-
-@Composable
-fun ModeCard(
-    region: PlatformRegion?,
-    flow: FlowRegion,
-    lastSessionSummary: SessionSummary? = null,
-    sessionEarnings: Double = 0.0,
-    sessionMiles: Double = 0.0,
-    lastAcceptedOfferPay: Double? = null,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Box(modifier = Modifier.padding(16.dp)) {
-            when {
-                // Paused
-                region?.mode == Mode.Paused -> ModePaused()
-
-                // Offline
-                region == null || region.mode == Mode.Offline -> {
-                    when (flow.flow) {
-                        Flow.SessionEnded -> ModePostDash(region)
-                        else -> ModeIdle(lastSessionSummary)
-                    }
-                }
-
-                // Online — flow-driven
-                else -> when (flow.flow) {
-                    Flow.Idle -> ModeAwaiting(
-                        region = region,
-                        sessionEarnings = sessionEarnings,
-                        sessionMiles = sessionMiles,
-                    )
-                    Flow.OfferPresented -> ModeOffer(flow)
-                    Flow.TaskPickupNavigation,
-                    Flow.TaskPickupArrived -> ModePickup(
-                        region = region,
-                        lastAcceptedOfferPay = lastAcceptedOfferPay,
-                    )
-                    Flow.TaskDropoffNavigation,
-                    Flow.TaskDropoffArrived -> ModeDelivery(
-                        region = region,
-                        sessionEarnings = sessionEarnings,
-                    )
-                    Flow.PostTask -> ModePostDelivery(region)
-                    Flow.SessionEnded -> ModePostDash(region)
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun ModeIdle(lastSessionSummary: SessionSummary?) {
     if (lastSessionSummary != null) {
@@ -438,279 +375,6 @@ private fun ModeIdle(lastSessionSummary: SessionSummary?) {
         }
     } else {
         ModeRow(label = "Status", value = "Offline")
-    }
-}
-
-@Composable
-private fun ModeAwaiting(
-    region: PlatformRegion,
-    sessionEarnings: Double,
-    sessionMiles: Double,
-) {
-    val now by rememberNow()
-    val session = region.session
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // Idle timer — how long we've been waiting
-        val idleMs = region.idleEnteredAt?.let { now - it }
-        if (idleMs != null && idleMs > 0) {
-            Text(
-                text = formatDuration(idleMs),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "waiting for offers",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
-        } else {
-            ModePrimaryText("Waiting for orders")
-        }
-
-        // Session $/hr — ticking down in real-time while idle
-        if (session != null) {
-            val sessionMs = now - session.startedAt
-            val dollarPerHour = formatDollarsPerHour(sessionEarnings, sessionMs)
-            val hourColor = dollarPerHourColor(sessionEarnings, sessionMs)
-            ModeRow(label = "Session $/hr", value = dollarPerHour, valueColor = hourColor)
-
-            // Compact session totals
-            val orderCount = region.recentTasks.size
-            ModeRow(
-                label = "Session",
-                value = "$${String.format("%.2f", sessionEarnings)} · ${orderCount}x · ${"%.1f".format(sessionMiles)} mi"
-            )
-        }
-    }
-}
-
-@Composable
-private fun ModeOffer(flow: FlowRegion) {
-    val offer = flow.pendingOffer
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (offer != null) {
-            val merchantName = offer.offerFields.parsedOffer.orders.joinToString(", ") { it.storeName }
-            if (merchantName.isNotBlank()) ModePrimaryText(merchantName)
-
-            val evaluation = offer.evaluation
-            if (evaluation != null) {
-                // Evaluation available — show economic analysis
-                EvalSummary(evaluation)
-            } else {
-                // Evaluation not yet available — show raw offer data
-                offer.offerFields.parsedOffer.payAmount?.let { amount ->
-                    Text(
-                        text = "$${String.format("%.2f", amount)}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        } else {
-            ModePrimaryText("Offer incoming...")
-        }
-    }
-}
-
-@Composable
-private fun EvalSummary(evaluation: OfferEvaluation) {
-    val (signalText, signalColor) = evalSignal(evaluation.action)
-
-    // Pay headline with evaluation signal
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = "$${String.format("%.2f", evaluation.payAmount)}",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = signalColor
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Surface(
-            shape = RoundedCornerShape(4.dp),
-            color = signalColor.copy(alpha = 0.15f)
-        ) {
-            Text(
-                text = signalText,
-                style = MaterialTheme.typography.labelSmall,
-                color = signalColor,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-            )
-        }
-    }
-
-    // Economic metrics
-    ModeRow(
-        label = "$/mi",
-        value = "$${String.format("%.2f", evaluation.dollarsPerMile)}"
-    )
-    ModeRow(
-        label = "$/hr",
-        value = "$${String.format("%.2f", evaluation.dollarsPerHour)}"
-    )
-    if (evaluation.totalOperatingCost > 0) {
-        val netSuffix = if (evaluation.isUsingDefaults) " (est.)" else ""
-        ModeRow(
-            label = "Net",
-            value = "$${String.format("%.2f", evaluation.netPayAmount)}$netSuffix"
-        )
-        val costBreakdown = buildString {
-            if (evaluation.fuelCostEstimate > 0) {
-                append("−$${String.format("%.2f", evaluation.fuelCostEstimate)} fuel")
-            }
-            if (evaluation.nonFuelCostEstimate > 0) {
-                if (isNotEmpty()) append(" · ")
-                append("−$${String.format("%.2f", evaluation.nonFuelCostEstimate)} wear")
-            }
-        }
-        if (costBreakdown.isNotEmpty()) {
-            ModeRow(label = "Cost", value = costBreakdown)
-        }
-    }
-    ModeRow(
-        label = "Est. time",
-        value = "${evaluation.estimatedTimeMinutes.toInt()} min · ${"%.1f".format(evaluation.distanceMiles)} mi"
-    )
-}
-
-@Composable
-private fun ModePickup(
-    region: PlatformRegion,
-    lastAcceptedOfferPay: Double?,
-) {
-    val now by rememberNow()
-    val task = region.activeTask
-    val job = region.activeJob
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ModePrimaryText(task?.storeName ?: "Heading to store")
-
-        val arrivedAt = task?.arrivedAt
-        if (arrivedAt != null) {
-            // At store — prominent wait timer
-            val waitMillis = now - arrivedAt
-            val label = if (task.activity == "shopping") "Shopping" else "Waiting"
-            ModeRow(label = label, value = formatDuration(waitMillis))
-        } else {
-            ModeRow(label = "Status", value = "Heading to store")
-        }
-
-        // Order $/hr — dropping in real-time
-        if (lastAcceptedOfferPay != null && job != null) {
-            val orderMs = now - job.startedAt
-            val dollarPerHour = formatDollarsPerHour(lastAcceptedOfferPay, orderMs)
-            val hourColor = dollarPerHourColor(lastAcceptedOfferPay, orderMs)
-            ModeRow(label = "Order $/hr", value = dollarPerHour, valueColor = hourColor)
-        }
-
-        task?.itemsShopped?.let { shopped ->
-            val total = shopped + (task.itemsRemaining ?: 0)
-            ModeRow(label = "Shopped", value = "$shopped/$total")
-        }
-        task?.redCardTotal?.let {
-            ModeRow(label = "Red Card", value = "$${String.format("%.2f", it)}")
-        }
-    }
-}
-
-@Composable
-private fun ModeDelivery(
-    region: PlatformRegion,
-    sessionEarnings: Double,
-) {
-    val now by rememberNow()
-    val task = region.activeTask
-    val job = region.activeJob
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        val storeName = job?.offerStoreHint?.firstOrNull()
-        storeName?.let { ModePrimaryText(it) } ?: ModePrimaryText("Delivering...")
-
-        task?.customerNameHash?.take(6)?.let {
-            ModeRow(label = "Customer", value = "Cust. $it")
-        }
-
-        // Wait timer — only shown once arrived
-        task?.arrivedAt?.let { arrivedAt ->
-            val waitMillis = now - arrivedAt
-            ModeRow(label = "At door", value = formatDuration(waitMillis))
-        }
-
-        // Total time on this order
-        job?.let {
-            val orderMs = now - it.startedAt
-            ModeRow(label = "Order time", value = formatDuration(orderMs))
-        }
-
-        // Session totals
-        val orderCount = region.recentTasks.size
-        ModeRow(
-            label = "Session",
-            value = "$${String.format("%.2f", sessionEarnings)} · ${orderCount} done"
-        )
-    }
-}
-
-@Composable
-private fun ModePostDelivery(region: PlatformRegion) {
-    val session = region.session
-    val lastTask = region.recentTasks.lastOrNull()
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (session != null && session.runningEarnings > 0) {
-            Text(
-                text = "+$${String.format("%.2f", session.runningEarnings)}",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF4CAF50)
-            )
-            // Order duration if available
-            val completedAt = lastTask?.completedAt
-            if (lastTask != null && completedAt != null) {
-                val orderMs = completedAt - lastTask.startedAt
-                ModeRow(label = "Last task", value = formatDuration(orderMs))
-            }
-            ModeRow(label = "Orders", value = "${region.recentTasks.size} completed")
-        } else {
-            ModePrimaryText("Delivery complete")
-        }
-    }
-}
-
-@Composable
-private fun ModePaused() {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ModePrimaryText("Session paused")
-    }
-}
-
-@Composable
-private fun ModePostDash(region: PlatformRegion?) {
-    val now by rememberNow()
-    val session = region?.session
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        val earnings = session?.runningEarnings ?: 0.0
-        Text(
-            text = "$${String.format("%.2f", earnings)}",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        session?.let {
-            val durationMillis = now - it.startedAt
-            ModeRow(label = "Duration", value = formatDuration(durationMillis))
-
-            // Session $/hr
-            val dollarPerHour = formatDollarsPerHour(earnings, durationMillis)
-            ModeRow(label = "$/hr", value = dollarPerHour)
-        }
-        region?.let {
-            if (it.recentTasks.isNotEmpty()) {
-                ModeRow(label = "Orders", value = "${it.recentTasks.size} completed")
-            }
-        }
     }
 }
 
@@ -897,25 +561,6 @@ fun HtmlText(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun rememberNow(tickMs: Long = 1000L): State<Long> =
-    produceState(initialValue = System.currentTimeMillis()) {
-        while (true) {
-            delay(tickMs)
-            value = System.currentTimeMillis()
-        }
-    }
-
-@Composable
-private fun ModePrimaryText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurface
-    )
-}
-
-@Composable
 private fun ModeRow(
     label: String,
     value: String,
@@ -947,46 +592,12 @@ private fun formatDuration(ms: Long): String {
     }
 }
 
-/**
- * Format $/hr from earnings and elapsed time.
- * Returns "--" for the first 60 seconds to avoid misleading spikes.
- */
-private fun formatDollarsPerHour(earnings: Double, elapsedMs: Long): String {
-    if (elapsedMs < 60_000) return "--"
-    val hours = elapsedMs / 3_600_000.0
-    val rate = earnings / hours
-    return "$${String.format("%.2f", rate)}/hr"
-}
-
-/**
- * Color signal for $/hr — green above $20, amber $15-20, red below $15.
- * Returns default text color for the first 60 seconds.
- */
-@Composable
-private fun dollarPerHourColor(earnings: Double, elapsedMs: Long): Color {
-    if (elapsedMs < 60_000) return MaterialTheme.colorScheme.onSurfaceVariant
-    val hours = elapsedMs / 3_600_000.0
-    val rate = earnings / hours
-    return when {
-        rate >= 20.0 -> Color(0xFF4CAF50)
-        rate >= 15.0 -> Color(0xFFFFC107)
-        else -> Color(0xFFF44336)
-    }
-}
-
 private fun platformShortName(platform: Platform): String = when (platform) {
     Platform.DoorDash -> "DD"
     Platform.Uber -> "Uber"
     Platform.Instacart -> "IC"
     Platform.WalmartSpark -> "Spark"
     Platform.Unknown -> ""
-}
-
-private fun evalSignal(action: OfferAction): Pair<String, Color> = when (action) {
-    OfferAction.ACCEPT -> "ACCEPT" to Color(0xFF4CAF50)
-    OfferAction.DECLINE -> "DECLINE" to Color(0xFFF44336)
-    OfferAction.MANUAL_REVIEW -> "REVIEW" to Color(0xFFFFC107)
-    OfferAction.NOTHING -> "EVAL" to Color(0xFF9E9E9E)
 }
 
 fun getPreviewText(html: String): String {
