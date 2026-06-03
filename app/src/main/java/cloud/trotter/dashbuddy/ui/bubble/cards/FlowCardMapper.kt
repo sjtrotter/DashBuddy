@@ -127,7 +127,8 @@ object FlowCardMapper {
                     if (current?.taskId == payload.taskId) {
                         openPickup = current.copy(
                             storeName = payload.storeName,
-                            itemCount = payload.itemCount ?: current.itemCount,
+                            itemsRemaining = payload.itemsRemaining ?: current.itemsRemaining,
+                            itemsShopped = payload.itemsShopped ?: current.itemsShopped,
                             deadlineMillis = payload.deadlineMillis ?: current.deadlineMillis,
                             activity = payload.activity ?: current.activity,
                         )
@@ -139,7 +140,8 @@ object FlowCardMapper {
                             jobId = payload.jobId,
                             storeName = payload.storeName,
                             deadlineMillis = payload.deadlineMillis,
-                            itemCount = payload.itemCount,
+                            itemsRemaining = payload.itemsRemaining,
+                            itemsShopped = payload.itemsShopped,
                             activity = payload.activity,
                         )
                     }
@@ -162,7 +164,8 @@ object FlowCardMapper {
                             storeName = payload.storeName,
                             arrivedAt = payload.arrivedAt ?: event.occurredAt,
                             deadlineMillis = payload.deadlineMillis,
-                            itemCount = payload.itemCount,
+                            itemsRemaining = payload.itemsRemaining,
+                            itemsShopped = payload.itemsShopped,
                             activity = payload.activity,
                         )
                     }
@@ -186,7 +189,8 @@ object FlowCardMapper {
                             arrivedAt = payload.arrivedAt,
                             confirmedAt = payload.confirmedAt ?: event.occurredAt,
                             deadlineMillis = payload.deadlineMillis,
-                            itemCount = payload.itemCount,
+                            itemsRemaining = payload.itemsRemaining,
+                            itemsShopped = payload.itemsShopped,
                             activity = payload.activity,
                         )
                     }

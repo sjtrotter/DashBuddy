@@ -606,7 +606,10 @@ private fun ModePickup(
             ModeRow(label = "Order $/hr", value = dollarPerHour, valueColor = hourColor)
         }
 
-        task?.itemCount?.let { ModeRow(label = "Items", value = it.toString()) }
+        task?.itemsShopped?.let { shopped ->
+            val total = shopped + (task.itemsRemaining ?: 0)
+            ModeRow(label = "Shopped", value = "$shopped/$total")
+        }
         task?.redCardTotal?.let {
             ModeRow(label = "Red Card", value = "$${String.format("%.2f", it)}")
         }

@@ -300,7 +300,9 @@ private fun PickupBody(snap: FlowCardSnapshot.Pickup, isActive: Boolean) {
         isActive = isActive,
         primary = snap.storeName,
         confirmedAt = snap.confirmedAt,
-        itemCount = snap.itemCount,
+        itemsShopped = snap.itemsShopped,
+        itemsRemaining = snap.itemsRemaining,
+        activity = snap.activity,
         deadlineLabel = "till pickup-by",
     )
 }
@@ -319,7 +321,9 @@ private fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
         isActive = isActive,
         primary = snap.customerHash?.take(6) ?: "Customer",
         confirmedAt = null,
-        itemCount = null,
+        itemsShopped = null,
+        itemsRemaining = null,
+        activity = null,
         deadlineLabel = "till deliver-by",
     )
 }
@@ -338,7 +342,9 @@ private fun DeadlineBody(
     isActive: Boolean,
     primary: String,
     confirmedAt: Long?,
-    itemCount: Int?,
+    itemsShopped: Int?,
+    itemsRemaining: Int?,
+    activity: String?,
     deadlineLabel: String,
 ) {
     Column(
@@ -407,8 +413,20 @@ private fun DeadlineBody(
                 append(" · started ${formatTime(phaseStartedAt)}")
                 append(" · completed ${formatTime(phaseEndedAt)}")
             }
-            itemCount?.let {
-                if (it > 0) append(" · ${it}i")
+            // Shop & Deliver: show progress + a live items/min pace (derived off
+            // `now`, so it ticks while shopping and freezes with the card). The bare
+            // "items left" count alone isn't useful; pace + shopped/total is.
+            if (activity == "shopping") {
+                val shopped = itemsShopped ?: 0
+                val total = shopped + (itemsRemaining ?: 0)
+                if (total > 0) {
+                    append(" · shop $shopped/$total")
+                    val elapsedMs = now - (arrivedAt ?: phaseStartedAt)
+                    if (elapsedMs > 0) {
+                        val perMin = shopped / (elapsedMs / 60_000.0)
+                        append(" · %.1f/min".format(perMin))
+                    }
+                }
             }
         }
         Caption(tertiary)

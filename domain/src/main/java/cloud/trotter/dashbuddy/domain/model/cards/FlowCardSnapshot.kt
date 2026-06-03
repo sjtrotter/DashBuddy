@@ -80,7 +80,8 @@ sealed class FlowCardSnapshot {
         val arrivedAt: Long? = null,
         val confirmedAt: Long? = null,
         val deadlineMillis: Long? = null,
-        val itemCount: Int? = null,
+        val itemsRemaining: Int? = null,
+        val itemsShopped: Int? = null,
         val activity: String? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "pickup:$taskId"

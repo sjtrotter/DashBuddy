@@ -832,7 +832,8 @@ class EffectMap @Inject constructor(
         odometerAtEntry = task.odometerAtEntry,
         odometerAtArrival = task.odometerAtArrival,
         deadlineMillis = task.deadlineMillis,
-        itemCount = task.itemCount,
+        itemsRemaining = task.itemsRemaining,
+        itemsShopped = task.itemsShopped,
         redCardTotal = task.redCardTotal,
         activity = task.activity,
     )

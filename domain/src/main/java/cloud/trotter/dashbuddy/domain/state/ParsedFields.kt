@@ -60,7 +60,8 @@ sealed class ParsedFields {
         val customerNameHash: String? = null,
         val customerAddressHash: String? = null,
         val deadline: ParsedTime? = null,
-        val itemCount: Int? = null,
+        val itemsRemaining: Int? = null,
+        val itemsShopped: Int? = null,
         val redCardTotal: Double? = null,
         val arrivalConfirmed: Boolean = false,
     ) : ParsedFields() {

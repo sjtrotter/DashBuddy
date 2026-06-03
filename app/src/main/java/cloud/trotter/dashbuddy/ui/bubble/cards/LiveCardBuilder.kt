@@ -65,7 +65,8 @@ object LiveCardBuilder {
                     storeName = task.storeName ?: "Unknown",
                     arrivedAt = task.arrivedAt,
                     deadlineMillis = task.deadlineMillis,
-                    itemCount = task.itemCount,
+                    itemsRemaining = task.itemsRemaining,
+                    itemsShopped = task.itemsShopped,
                     activity = task.activity,
                 )
             }
