@@ -128,7 +128,15 @@ class PlatformRegionStepper @Inject constructor() {
         )
 
         // Session lifecycle on mode transitions
+        val sessionEndFlow = (obs as? Observation.FlowObservation)?.flow
         when {
+            // Authoritative end when the summary shows BEFORE the idle/offline
+            // screen (a real mode change Online→Offline): end now, no grace. The
+            // AFTER-idle ordering (mode already Offline, no change) doesn't reach
+            // this function and is handled mode-independently in updateLifecycle.
+            sessionEndFlow == Flow.SessionEnded && region.session != null -> {
+                region = endSession(region, obs.timestamp)
+            }
             prev.mode != Mode.Online && newMode == Mode.Online -> {
                 if (region.sessionGraceDeadline != null && region.session != null) {
                     // Grace active — resume the existing session (clear deadline, keep sessionId)
@@ -144,12 +152,9 @@ class PlatformRegionStepper @Inject constructor() {
                 }
             }
             prev.mode != Mode.Offline && newMode == Mode.Offline -> {
-                val flow = (obs as? Observation.FlowObservation)?.flow
-                if (flow == Flow.SessionEnded) {
-                    // Authoritative end signal — end immediately, no grace
-                    region = endSession(region, obs.timestamp)
-                } else if (region.session != null) {
-                    // Non-authoritative offline — grace period, preserve session
+                // Non-authoritative offline — grace period, preserve the session
+                // (SessionEnded is handled by the authoritative arm above).
+                if (region.session != null) {
                     region = region.copy(
                         sessionGraceDeadline = obs.timestamp + policy.gracePeriodMs,
                     )
@@ -235,6 +240,13 @@ class PlatformRegionStepper @Inject constructor() {
         nextFlow: FlowRegion,
         obs: Observation.FlowObservation,
     ): PlatformRegion {
+        // Authoritative session end: a session:ended observation (the dash
+        // summary) ends the session immediately, even when already Offline — the
+        // summary commonly shows AFTER the idle/offline screen, mid-grace. Must
+        // run before the Offline early-return below or that ordering is missed.
+        if (obs.flow == Flow.SessionEnded && region.session != null) {
+            return endSession(region, obs.timestamp)
+        }
         if (region.mode == Mode.Offline) return region.copy(idleEnteredAt = null, taskClearGraceDeadline = null)
 
         var r = region

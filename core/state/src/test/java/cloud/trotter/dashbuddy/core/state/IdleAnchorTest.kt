@@ -117,6 +117,28 @@ class IdleAnchorTest {
     }
 
     @Test
+    fun `session-ended summary while already offline ends the session (summary after idle)`() {
+        // Dash ends: the idle/offline screen comes first → session preserved under grace.
+        val offlineGraced = step(
+            onlineRegion(),
+            screen(flow = Flow.Idle, modeHint = Mode.Offline, timestamp = 1000L),
+            prevFlow = FlowRegion(flow = Flow.Idle),
+        )
+        assertNotNull("session preserved under grace", offlineGraced.session)
+        assertNotNull("grace armed", offlineGraced.sessionGraceDeadline)
+
+        // dash_summary then arrives while STILL offline (mode unchanged). The
+        // authoritative session:ended end must fire anyway, clearing the session so
+        // the summary attributes to the just-ended dash instead of expiring as thin.
+        val ended = step(
+            offlineGraced,
+            screen(flow = Flow.SessionEnded, modeHint = Mode.Offline, timestamp = 2000L),
+            prevFlow = FlowRegion(flow = Flow.Idle),
+        )
+        assertNull("session ended by the summary even though mode stayed offline", ended.session)
+    }
+
+    @Test
     fun `idleEnteredAt reset after leaving and re-entering Idle`() {
         // Start idle at 800
         val prev = onlineRegion(idleEnteredAt = 800L)

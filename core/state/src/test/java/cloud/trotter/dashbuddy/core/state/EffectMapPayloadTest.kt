@@ -556,6 +556,70 @@ class EffectMapPayloadTest {
     }
 
     @Test
+    fun `offline while session is graced does NOT finalize (deferred for the summary)`() {
+        // idle_map offline: the stepper preserves the session under a grace
+        // deadline (next.session still present). EffectMap must NOT finalize here —
+        // the dash summary commonly shows AFTER this idle/offline screen.
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 1000L, runningEarnings = 30.0),
+        )
+        val regionNext = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Offline,
+            session = Session("s1", startedAt = 1000L, runningEarnings = 30.0),
+            sessionGraceDeadline = 15_000L,
+        )
+        val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(platforms = mapOf(Platform.DoorDash to regionNext))
+        val obs = screenObs(flow = Flow.Idle, modeHint = Mode.Offline, timestamp = 5000L)
+
+        val effects = effectMap.diff(prev, next, obs)
+        assertTrue(
+            "no DASH_STOP while graced",
+            effects.none { it is AppEffect.LogEvent && it.event.eventType == AppEventType.DASH_STOP },
+        )
+        assertTrue("no EndSession while graced", effects.none { it is AppEffect.EndSession })
+        assertTrue("no StopOdometer while graced", effects.none { it is AppEffect.StopOdometer })
+    }
+
+    @Test
+    fun `summary AFTER the idle screen (offline to offline) still finalizes with summary_screen`() {
+        // Already Offline under grace; the dash_summary now arrives and the stepper
+        // ends the session (next.session == null). The rich summary must attribute
+        // to the just-ended dash even though the mode didn't change.
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Offline,
+            session = Session("s1", startedAt = 1000L, runningEarnings = 50.0),
+            sessionGraceDeadline = 15_000L,
+        )
+        val regionNext = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
+        val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(platforms = mapOf(Platform.DoorDash to regionNext))
+        val summaryFields = ParsedFields.SessionEndedFields(
+            totalEarnings = 50.0,
+            sessionDurationMillis = 4 * 60 * 60 * 1000L,
+            offersAccepted = 5,
+            offersTotal = 8,
+        )
+        val obs = screenObs(
+            flow = Flow.SessionEnded,
+            modeHint = Mode.Offline,
+            parsed = summaryFields,
+            timestamp = 6000L,
+        )
+
+        val logs = logEvents(prev, next, obs, AppEventType.DASH_STOP)
+        assertEquals(1, logs.size)
+        val payload = gson.fromJson(logs[0].event.eventPayload, SessionStopPayload::class.java)
+        assertEquals("summary_screen", payload.source)
+        assertEquals(50.0, payload.totalEarnings!!, 0.001)
+        assertEquals(5, payload.offersAccepted)
+    }
+
+    @Test
     fun `DASH_PAUSED carries sessionId pausedAt remainingMillis`() {
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,
