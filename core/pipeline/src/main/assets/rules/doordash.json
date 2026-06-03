@@ -1209,9 +1209,22 @@
           "activity": "shopping",
           "phase": "PICKUP",
           "subFlow": "ARRIVED",
-          "itemCount": {
+          "itemsRemaining": {
             "find": {
               "hasTextMatchesRegex": "To shop \\((\\d+)\\)"
+            },
+            "read": "text",
+            "transform": {
+              "regex": {
+                "pattern": "\\((\\d+)\\)",
+                "group": 1,
+                "then": "toInt"
+              }
+            }
+          },
+          "itemsShopped": {
+            "find": {
+              "hasTextMatchesRegex": "Done \\((\\d+)\\)"
             },
             "read": "text",
             "transform": {

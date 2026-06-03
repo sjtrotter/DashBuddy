@@ -68,7 +68,8 @@ data class PickupPayload(
     val odometerAtEntry: Double? = null,
     val odometerAtArrival: Double? = null,
     val deadlineMillis: Long? = null,
-    val itemCount: Int? = null,
+    val itemsRemaining: Int? = null,
+    val itemsShopped: Int? = null,
     val redCardTotal: Double? = null,
     val activity: String? = null,
 )

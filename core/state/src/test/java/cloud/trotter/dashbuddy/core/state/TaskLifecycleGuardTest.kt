@@ -65,6 +65,8 @@ class TaskLifecycleGuardTest {
         storeName: String? = null,
         storeAddress: String? = null,
         customerAddressHash: String? = null,
+        itemsShopped: Int? = null,
+        itemsRemaining: Int? = null,
         timestamp: Long,
     ) = Observation.Screen(
         timestamp = timestamp, captureId = null, ruleId = "doordash.screen.test",
@@ -73,6 +75,7 @@ class TaskLifecycleGuardTest {
             phase = phase, subFlow = subFlow,
             storeName = storeName, storeAddress = storeAddress,
             customerAddressHash = customerAddressHash,
+            itemsShopped = itemsShopped, itemsRemaining = itemsRemaining,
         ),
     )
 
@@ -211,5 +214,69 @@ class TaskLifecycleGuardTest {
         assertEquals("task-A", r1.activeTask?.taskId)
         assertEquals(TaskSubFlow.NAVIGATION, r1.activeTask?.subPhase)
         assertEquals("7330 N Loop 1604 W", r1.activeTask?.storeAddress)
+    }
+
+    @Test
+    fun `shopping item counts thread onto the task and carry forward across item screens`() {
+        val r0 = region(pickupTask("task-A", "H-E-B", arrivedAt = 1_000L))
+        // First shop-list reading: Done(2) / To shop(16) → total 18.
+        val (r1, f1) = step(
+            r0, FlowRegion(flow = Flow.TaskPickupArrived),
+            taskObs(
+                Flow.TaskPickupArrived, TaskPhase.PICKUP, TaskSubFlow.ARRIVED,
+                storeName = "H-E-B", itemsShopped = 2, itemsRemaining = 16, timestamp = 2_000L,
+            ),
+        )
+        assertEquals(2, r1.activeTask?.itemsShopped)
+        assertEquals(16, r1.activeTask?.itemsRemaining)
+
+        // An item-detail screen carries no counts → prior values persist.
+        val (r2, _) = step(
+            r1, f1,
+            taskObs(Flow.TaskPickupArrived, TaskPhase.PICKUP, TaskSubFlow.ARRIVED, storeName = "H-E-B", timestamp = 3_000L),
+        )
+        assertEquals(2, r2.activeTask?.itemsShopped)
+        assertEquals(16, r2.activeTask?.itemsRemaining)
+
+        // Back on the list: progress advances.
+        val (r3, _) = step(
+            r2, f1,
+            taskObs(
+                Flow.TaskPickupArrived, TaskPhase.PICKUP, TaskSubFlow.ARRIVED,
+                storeName = "H-E-B", itemsShopped = 13, itemsRemaining = 5, timestamp = 4_000L,
+            ),
+        )
+        assertEquals(13, r3.activeTask?.itemsShopped)
+        assertEquals(5, r3.activeTask?.itemsRemaining)
+    }
+
+    @Test
+    fun `shopping add-on (or same-store stack) bumps the combined counts on the same task`() {
+        // A + B orders at the same store present as one combined shop list, so an
+        // add-on mid-shop just makes "To shop" jump back up while "Done" holds. The
+        // metric needs no special case: it stays on the same task and total
+        // (Done + To-shop) grows. (Matches the 2026-05-31 capture where To-shop
+        // jumped 2 -> 8 mid-session.)
+        val r0 = region(pickupTask("task-A", "H-E-B", arrivedAt = 1_000L))
+        val (r1, f1) = step(
+            r0, FlowRegion(flow = Flow.TaskPickupArrived),
+            taskObs(
+                Flow.TaskPickupArrived, TaskPhase.PICKUP, TaskSubFlow.ARRIVED,
+                storeName = "H-E-B", itemsShopped = 13, itemsRemaining = 5, timestamp = 2_000L,
+            ),
+        )
+        assertEquals(13, r1.activeTask?.itemsShopped) // total so far = 18
+
+        // Add-on B arrives mid-shop: To-shop jumps up, Done unchanged, SAME task.
+        val (r2, _) = step(
+            r1, f1,
+            taskObs(
+                Flow.TaskPickupArrived, TaskPhase.PICKUP, TaskSubFlow.ARRIVED,
+                storeName = "H-E-B", itemsShopped = 13, itemsRemaining = 13, timestamp = 3_000L,
+            ),
+        )
+        assertEquals("task-A", r2.activeTask?.taskId) // not re-minted
+        assertEquals(13, r2.activeTask?.itemsShopped)
+        assertEquals(13, r2.activeTask?.itemsRemaining) // went UP — combined total now 26
     }
 }

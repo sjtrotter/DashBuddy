@@ -258,6 +258,18 @@ class TriageRulesTest {
     }
 
     @Test
+    fun `pickup_shopping — parses itemsShopped + itemsRemaining for the items-per-min metric`() {
+        // "Done (N)" + "To shop (M)" are the shop-progress counters; total = N + M
+        // (an add-on order just bumps both). These feed the items/min metric (#160).
+        val result = screenRuleset.matchFirst(
+            tree(node(text = "Shop and Deliver"), node(text = "To shop (5)"), node(text = "Done (13)")),
+        )
+        assertEquals("pickup_shopping", result?.intent)
+        assertEquals(5, (result?.fields?.get("itemsRemaining") as Number).toInt())
+        assertEquals(13, (result?.fields?.get("itemsShopped") as Number).toInt())
+    }
+
+    @Test
     fun `dropoff_geofence_warning`() {
         assertEquals(
             "dropoff_geofence_warning",

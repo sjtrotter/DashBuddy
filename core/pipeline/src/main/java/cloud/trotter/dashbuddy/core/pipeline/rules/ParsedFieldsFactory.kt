@@ -129,7 +129,8 @@ object ParsedFieldsFactory {
         customerNameHash = f.str("customerNameHash"),
         customerAddressHash = f.str("customerAddressHash"),
         deadline = f.parsedTime("deadline", "deadlineText", "deadlineMillis"),
-        itemCount = f.int("itemCount"),
+        itemsRemaining = f.int("itemsRemaining"),
+        itemsShopped = f.int("itemsShopped"),
         redCardTotal = f.double("redCardTotal"),
         arrivalConfirmed = f.bool("arrivalConfirmed") ?: false,
     )
