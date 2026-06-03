@@ -48,11 +48,17 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
-**Living checklist (not a session entry).** These are recently-merged changes
-that were validated only against captured data and need eyes on a live dash.
-A field-testing agent should read this section at the start of a session and
-report it to the developer; when an item is confirmed (or found broken),
-move it into that session's log entry and delete it here.
+**Living checklist (not a session entry).** Recently-merged changes (and open
+PRs / closed issues) that were validated only against captured data and need
+eyes on a live dash. A field-testing agent reads this section at the start of a
+session and reports it to the developer.
+
+**Each item needs two independent field confirmations before it's considered
+validated** — one dash can pass by luck or miss the edge case. Track progress
+with a `- Confirmed: N/2` sub-line (note the date/conditions of each sighting).
+On the **second clean** confirmation, move the item into that session's log
+entry and delete it here. If an item is found **broken**, move it to the log
+immediately (no second pass needed) so it gets triaged.
 
 - **Shop & Deliver items/min (#276, merged 2026-06-02).** On a real Shop &
   Deliver, open the bubble pickup card and confirm it shows
@@ -61,14 +67,17 @@ move it into that session's log entry and delete it here.
   `total == "Done (x)" + "To shop (y)"`. **Add-on case:** if you accept an
   add-on / second order at the same store mid-shop, confirm "To shop" jumps up,
   the total grows, and the pace keeps counting on the *same* card (no reset).
+  - Confirmed: 0/2.
 - **Offers behind a loading overlay (#275, merged 2026-06-02).** When an offer
   briefly shows a spinner (on present, or right as you tap), confirm it stays
   recognized as an offer — the bubble shouldn't flicker out of the offer view
   or drop to a blank/idle state mid-offer.
+  - Confirmed: 0/2.
 - **Cashout / transfer screens blocked (#275, merged 2026-06-02).** Open the
   DasherDirect/Crimson balance, a card-details screen, or initiate an instant
   transfer and confirm the bubble does **nothing** (sensitive → skipped),
   rather than reacting to it.
+  - Confirmed: 0/2.
 
 ---
 human entered logs during claude sub shortfall
