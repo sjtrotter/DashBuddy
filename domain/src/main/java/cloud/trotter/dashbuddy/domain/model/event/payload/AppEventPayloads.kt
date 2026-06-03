@@ -122,6 +122,15 @@ data class SessionPausedPayload(
     val remainingMillis: Long? = null,
 )
 
+/** Wire values for [SessionStopPayload.source]. Kept as strings on the payload
+ *  (domain is gson-free); these are the single source of truth on the Kotlin side. */
+object SessionEndSource {
+    /** The dash-summary screen was observed — rich totals populated. */
+    const val SUMMARY_SCREEN = "summary_screen"
+    /** Went offline without a summary (grace expiry / early offline) — thin. */
+    const val EARLY_OFFLINE = "early_offline"
+}
+
 /**
  * Payload for `DASH_STOP`.
  *
@@ -133,7 +142,7 @@ data class SessionPausedPayload(
 data class SessionStopPayload(
     val sessionId: String?,
     val endedAt: Long,
-    /** "summary_screen" | "early_offline". */
+    /** One of [SessionEndSource]. */
     val source: String,
     val totalEarnings: Double? = null,
     val sessionDurationMillis: Long? = null,
