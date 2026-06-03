@@ -237,6 +237,14 @@ GH="/c/Program Files/GitHub CLI/gh.exe"
 "$GH" pr merge <NUMBER> --merge
 ```
 
+**Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
+`build-and-test` job when the **PR description (body)** contains the literal
+string **`[skip ci]`** (`if: ${{ !contains(github.event.pull_request.body, '[skip ci]') }}`).
+So for a PR that touches no compiled code (only Markdown/docs), put `[skip ci]`
+in the PR body to avoid a pointless ~6-minute build. Note the exact token is
+`[skip ci]` in the **body** — not `[no-ci]`, not a comment, not a label. Only use
+it when the diff genuinely has no code; when in doubt, let CI run.
+
 ## Session Orientation
 
 At the start of a session or before picking up new work:

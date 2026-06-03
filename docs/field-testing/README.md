@@ -80,12 +80,14 @@ immediately (no second pass needed) so it gets triaged.
   - Confirmed: 0/2.
 
 ---
-human entered logs during claude sub shortfall
 
-- final dash summay issue. hypothesis - idle map offline screen shows before the summary, and (maybe) there is no way to get to the summary actions from the idle offline screen?
-- 
+## Untriaged — carried over from scratch notes
 
-
+- **Final dash-summary may be unreachable from the idle/offline screen.**
+  Hypothesis: the idle-map offline screen shows *before* the dash summary, and
+  there may be no way to reach the summary actions once on idle/offline. Needs a
+  field repro + capture to confirm.
+  - **Status:** Open (untriaged).
 
 ---
 
