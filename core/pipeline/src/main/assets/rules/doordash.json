@@ -2444,6 +2444,31 @@
       }
     },
     {
+      "id": "doordash.screen.dropoff_alcohol_id_intro",
+      "priority": 68,
+      "state": { "flow": "task:dropoff:navigation" },
+      "require": {
+        "all": [
+          { "exists": { "any": [
+            { "hasTextContaining": "Scan and verify the recipient" },
+            { "hasTextContaining": "Verifying that the recipient is 21" }
+          ] } },
+          { "exists": { "hasTextContaining": "Agree and continue" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_alcohol_id_scan",
+      "priority": 67,
+      "state": { "flow": "task:dropoff:arrived" },
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "ID barcode scan" } },
+          { "exists": { "hasTextContaining": "Start scan" } }
+        ]
+      }
+    },
+    {
       "id": "doordash.screen.shopping_item",
       "priority": 75,
       "state": { "flow": "task:pickup:arrived" },
