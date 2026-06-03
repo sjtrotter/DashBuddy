@@ -85,6 +85,13 @@ immediately (no second pass needed) so it gets triaged.
   as a thin "early offline" the instant the idle/offline screen appears; the rich
   total should reach the HUD.
   - Confirmed: 0/2.
+- **New dash right after ending one starts fresh (#286 / #279-B).** End a dash,
+  then start a new one within ~10s. The bubble should treat it as a **brand-new
+  dash** (fresh session / earnings reset), not "Session resumed (grace)". Also
+  regression-watch the grace refactor: backing out of the app mid-pickup and
+  returning still **keeps the active task**; a brief offline blip mid-dash still
+  **resumes the same** dash (no spurious new session).
+  - Confirmed: 0/2.
 
 ---
 

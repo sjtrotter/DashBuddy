@@ -3,11 +3,13 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.SessionType
@@ -53,20 +55,26 @@ class PlatformRegionStepper @Inject constructor() {
         // Handle timeout-driven transitions
         if (obs is Observation.Timeout) return handleTimeout(prev, obs, policy)
 
-        // Lazy grace expiration: if grace deadline has passed, end session now
         var current = prev
-        if (current.sessionGraceDeadline != null && obs.timestamp > current.sessionGraceDeadline!!) {
-            current = endSession(
-                current.copy(sessionGraceDeadline = null),
-                current.sessionGraceDeadline!!,
-            )
+
+        // Lazy expiry: a pending destructive transition (dash-end / task-retire)
+        // whose deadline has passed is confirmed — committed now. Driven by
+        // obs.timestamp (never a wall clock) so crash-recovery replay matches.
+        current.pendingDestructive?.let { pend ->
+            if (obs.timestamp > pend.deadline) {
+                current = commitDestructive(current, pend.kind, pend.deadline)
+            }
         }
 
-        // Lazy task-clear grace expiration: a transient idle/offer mid-task armed
-        // a deadline (see updateTaskLifecycle). If it has passed without returning
-        // to a task flow, retire the task now — the session/job survive.
-        if (current.taskClearGraceDeadline != null && obs.timestamp > current.taskClearGraceDeadline!!) {
-            current = retireActiveTask(current, current.taskClearGraceDeadline!!)
+        // Authoritative dash-start signal (#279-B): the set-end-time screen while a
+        // dash-end is pending in its grace window means the old dash really ended
+        // and a new one is starting — commit the end now so the next Online mints
+        // a fresh session instead of resuming the old one.
+        if (current.pendingDestructive?.kind == DestructiveKind.SESSION_END) {
+            val startParsed = (obs as? Observation.FlowObservation)?.parsed
+            if ((startParsed as? ParsedFields.IdleFields)?.startingDash == true) {
+                current = endSession(current, obs.timestamp)
+            }
         }
 
         val flowObs = obs as? Observation.FlowObservation ?: return current
@@ -127,22 +135,19 @@ class PlatformRegionStepper @Inject constructor() {
             lastTransitionKind = kind,
         )
 
-        // Session lifecycle on mode transitions
-        val sessionEndFlow = (obs as? Observation.FlowObservation)?.flow
+        // Session lifecycle on mode transitions. An authoritative `session:ended`
+        // is committed mode-independently in updateLifecycle (covers both the
+        // before-idle and after-idle orderings), so it isn't special-cased here.
         when {
-            // Authoritative end when the summary shows BEFORE the idle/offline
-            // screen (a real mode change Online→Offline): end now, no grace. The
-            // AFTER-idle ordering (mode already Offline, no change) doesn't reach
-            // this function and is handled mode-independently in updateLifecycle.
-            sessionEndFlow == Flow.SessionEnded && region.session != null -> {
-                region = endSession(region, obs.timestamp)
-            }
             prev.mode != Mode.Online && newMode == Mode.Online -> {
-                if (region.sessionGraceDeadline != null && region.session != null) {
-                    // Grace active — resume the existing session (clear deadline, keep sessionId)
-                    region = region.copy(sessionGraceDeadline = null)
+                val pend = region.pendingDestructive
+                if (pend?.kind == DestructiveKind.SESSION_END && region.session != null) {
+                    // Grace active + the same session is still present → a genuine
+                    // resume (a transient offline flash). A real new-dash start
+                    // would already have committed the end in step() (startingDash).
+                    region = region.copy(pendingDestructive = null)
                 } else if (region.session == null) {
-                    // No grace or no session — create new session
+                    // No session — start a fresh one.
                     region = region.copy(
                         session = Session(
                             sessionId = UUID.randomUUID().toString(),
@@ -152,11 +157,17 @@ class PlatformRegionStepper @Inject constructor() {
                 }
             }
             prev.mode != Mode.Offline && newMode == Mode.Offline -> {
-                // Non-authoritative offline — grace period, preserve the session
-                // (SessionEnded is handled by the authoritative arm above).
-                if (region.session != null) {
+                // Non-authoritative offline — arm a provisional dash-end, keeping
+                // the session alive until it's confirmed or cancelled.
+                if (region.session != null &&
+                    region.pendingDestructive?.kind != DestructiveKind.SESSION_END
+                ) {
                     region = region.copy(
-                        sessionGraceDeadline = obs.timestamp + policy.gracePeriodMs,
+                        pendingDestructive = PendingDestructive(
+                            kind = DestructiveKind.SESSION_END,
+                            since = obs.timestamp,
+                            deadline = obs.timestamp + policy.gracePeriodMs,
+                        ),
                     )
                 }
             }
@@ -247,7 +258,13 @@ class PlatformRegionStepper @Inject constructor() {
         if (obs.flow == Flow.SessionEnded && region.session != null) {
             return endSession(region, obs.timestamp)
         }
-        if (region.mode == Mode.Offline) return region.copy(idleEnteredAt = null, taskClearGraceDeadline = null)
+        if (region.mode == Mode.Offline) {
+            // Clear the idle anchor and any TASK_RETIRE pending, but PRESERVE a
+            // SESSION_END pending — that IS the graced-offline state.
+            val keptPending = region.pendingDestructive
+                ?.takeIf { it.kind == DestructiveKind.SESSION_END }
+            return region.copy(idleEnteredAt = null, pendingDestructive = keptPending)
+        }
 
         var r = region
         val prev = prevFlow.flow
@@ -492,7 +509,7 @@ class PlatformRegionStepper @Inject constructor() {
                         arrivedAt = if (taskSubFlow == TaskSubFlow.ARRIVED) obs.timestamp else null,
                     ),
                     recentTasks = recentTasks,
-                    taskClearGraceDeadline = null,
+                    pendingDestructive = null,
                 )
             }
 
@@ -512,7 +529,7 @@ class PlatformRegionStepper @Inject constructor() {
                     redCardTotal = taskFields?.redCardTotal ?: currentTask.redCardTotal,
                     arrivedAt = if (justArrived) obs.timestamp else currentTask.arrivedAt,
                 ),
-                taskClearGraceDeadline = null,
+                pendingDestructive = null,
             )
         }
 
@@ -523,7 +540,7 @@ class PlatformRegionStepper @Inject constructor() {
             return region.copy(
                 activeTask = null,
                 recentTasks = (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS),
-                taskClearGraceDeadline = null,
+                pendingDestructive = null,
             )
         }
 
@@ -533,9 +550,13 @@ class PlatformRegionStepper @Inject constructor() {
         // Arm a grace deadline; returning to a task flow cancels it (above), and a
         // sustained idle past the window retires the task lazily in step().
         if (prevFlowVal.isTaskFlow() && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask) {
-            if (region.activeTask != null && region.taskClearGraceDeadline == null) {
+            if (region.activeTask != null && region.pendingDestructive == null) {
                 return region.copy(
-                    taskClearGraceDeadline = obs.timestamp + TransitionPolicy.DEFAULT_GRACE_MS,
+                    pendingDestructive = PendingDestructive(
+                        kind = DestructiveKind.TASK_RETIRE,
+                        since = obs.timestamp,
+                        deadline = obs.timestamp + TransitionPolicy.DEFAULT_GRACE_MS,
+                    ),
                 )
             }
         }
@@ -547,18 +568,29 @@ class PlatformRegionStepper @Inject constructor() {
     // HELPERS
     // =========================================================================
 
+    /** Commit a pending destructive transition — its deadline lapsed, or an
+     *  authoritative signal confirmed it. */
+    private fun commitDestructive(
+        region: PlatformRegion,
+        kind: DestructiveKind,
+        timestamp: Long,
+    ): PlatformRegion = when (kind) {
+        DestructiveKind.SESSION_END -> endSession(region, timestamp)
+        DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp)
+    }
+
     /**
-     * Retire the active task when its clear-grace deadline lazily expires
+     * Retire the active task when its retire-grace deadline lazily expires
      * (a sustained idle/offer mid-task). Completes it into recentTasks. Unlike
      * [endSession], the session and job live on — only the task is closed.
      */
     private fun retireActiveTask(region: PlatformRegion, timestamp: Long): PlatformRegion {
         val completed = region.activeTask?.copy(completedAt = timestamp)
-            ?: return region.copy(taskClearGraceDeadline = null)
+            ?: return region.copy(pendingDestructive = null)
         return region.copy(
             activeTask = null,
             recentTasks = (region.recentTasks + completed).takeLast(MAX_RECENT_TASKS),
-            taskClearGraceDeadline = null,
+            pendingDestructive = null,
         )
     }
 
@@ -573,8 +605,7 @@ class PlatformRegionStepper @Inject constructor() {
             activeJob = null,
             activeTask = null,
             recentTasks = recentTasks,
-            sessionGraceDeadline = null,
-            taskClearGraceDeadline = null,
+            pendingDestructive = null,
             idleEnteredAt = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,

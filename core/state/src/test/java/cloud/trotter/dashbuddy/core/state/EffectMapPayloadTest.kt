@@ -17,11 +17,13 @@ import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.CrossPlatformRegion
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
+import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
@@ -569,7 +571,7 @@ class EffectMapPayloadTest {
             platform = Platform.DoorDash,
             mode = Mode.Offline,
             session = Session("s1", startedAt = 1000L, runningEarnings = 30.0),
-            sessionGraceDeadline = 15_000L,
+            pendingDestructive = PendingDestructive(DestructiveKind.SESSION_END, since = 1_000L, deadline = 15_000L),
         )
         val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))
         val next = appState(platforms = mapOf(Platform.DoorDash to regionNext))
@@ -593,7 +595,7 @@ class EffectMapPayloadTest {
             platform = Platform.DoorDash,
             mode = Mode.Offline,
             session = Session("s1", startedAt = 1000L, runningEarnings = 50.0),
-            sessionGraceDeadline = 15_000L,
+            pendingDestructive = PendingDestructive(DestructiveKind.SESSION_END, since = 1_000L, deadline = 15_000L),
         )
         val regionNext = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
         val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))

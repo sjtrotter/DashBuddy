@@ -2,11 +2,13 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
@@ -39,13 +41,13 @@ class TaskLifecycleGuardTest {
 
     // ---- helpers ----
 
-    private fun region(activeTask: Task?, taskClearGraceDeadline: Long? = null) = PlatformRegion(
+    private fun region(activeTask: Task?, pending: PendingDestructive? = null) = PlatformRegion(
         platform = Platform.DoorDash,
         mode = Mode.Online,
         session = Session("sess-1", startedAt = 100L),
         activeJob = Job("job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L),
         activeTask = activeTask,
-        taskClearGraceDeadline = taskClearGraceDeadline,
+        pendingDestructive = pending,
     )
 
     private fun pickupTask(taskId: String, storeName: String, arrivedAt: Long? = null) = Task(
@@ -106,7 +108,8 @@ class TaskLifecycleGuardTest {
 
         assertNotNull("a transient idle must not forget the task", r1.activeTask)
         assertEquals("task-A", r1.activeTask?.taskId)
-        assertEquals("grace deadline armed", 1_000L + graceMs, r1.taskClearGraceDeadline)
+        assertEquals("retire-grace armed", 1_000L + graceMs, r1.pendingDestructive?.deadline)
+        assertEquals(DestructiveKind.TASK_RETIRE, r1.pendingDestructive?.kind)
     }
 
     @Test
@@ -120,7 +123,7 @@ class TaskLifecycleGuardTest {
         )
 
         assertEquals("returning to the task must keep the same taskId", "task-A", r2.activeTask?.taskId)
-        assertNull("returning to a task cancels the grace", r2.taskClearGraceDeadline)
+        assertNull("returning to a task cancels the grace", r2.pendingDestructive)
     }
 
     @Test
@@ -139,11 +142,14 @@ class TaskLifecycleGuardTest {
 
     @Test
     fun `PostTask completes the task and clears a pending grace`() {
-        val r0 = region(pickupTask("task-A", "H-E-B", arrivedAt = 800L), taskClearGraceDeadline = 11_000L)
+        val r0 = region(
+            pickupTask("task-A", "H-E-B", arrivedAt = 800L),
+            pending = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 800L, deadline = 11_000L),
+        )
         val (r1, _) = step(r0, FlowRegion(flow = Flow.Idle), postTaskObs(timestamp = 1_005L))
 
         assertNull("PostTask is authoritative — the task completes", r1.activeTask)
-        assertNull(r1.taskClearGraceDeadline)
+        assertNull(r1.pendingDestructive)
         assertTrue(r1.recentTasks.any { it.taskId == "task-A" && it.completedAt != null })
     }
 

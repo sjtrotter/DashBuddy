@@ -114,6 +114,7 @@ object ParsedFieldsFactory {
         waitTimeEstimate = f.str("waitTimeEstimate"),
         isHeadingBackToZone = f.bool("isHeadingBackToZone") ?: false,
         spotSaveDeadline = f.long("spotSaveDeadline"),
+        startingDash = f.bool("startingDash") ?: false,
     )
 
     private fun buildTask(f: Map<String, Any?>) = ParsedFields.TaskFields(

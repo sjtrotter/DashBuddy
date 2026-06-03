@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -125,7 +126,8 @@ class IdleAnchorTest {
             prevFlow = FlowRegion(flow = Flow.Idle),
         )
         assertNotNull("session preserved under grace", offlineGraced.session)
-        assertNotNull("grace armed", offlineGraced.sessionGraceDeadline)
+        assertNotNull("grace armed", offlineGraced.pendingDestructive)
+        assertEquals(DestructiveKind.SESSION_END, offlineGraced.pendingDestructive?.kind)
 
         // dash_summary then arrives while STILL offline (mode unchanged). The
         // authoritative session:ended end must fire anyway, clearing the session so

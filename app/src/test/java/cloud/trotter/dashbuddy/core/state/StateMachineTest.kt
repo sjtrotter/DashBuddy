@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -455,7 +456,7 @@ class StateMachineTest {
         val dd = state.regions.platforms[Platform.DoorDash]!!
         assertEquals(Mode.Offline, dd.mode)
         assertNull(dd.session) // ended immediately — no grace
-        assertNull(dd.sessionGraceDeadline) // no grace set
+        assertNull(dd.pendingDestructive) // no grace set
     }
 
     @Test
@@ -482,7 +483,8 @@ class StateMachineTest {
         val afterOffline = state.regions.platforms[Platform.DoorDash]!!
         assertEquals(Mode.Offline, afterOffline.mode)
         assertNotNull(afterOffline.session) // session preserved during grace
-        assertNotNull(afterOffline.sessionGraceDeadline)
+        assertNotNull(afterOffline.pendingDestructive)
+        assertEquals(DestructiveKind.SESSION_END, afterOffline.pendingDestructive?.kind)
 
         // Back to Online within grace window (well within 10s)
         val t3 = t2 + 3000
@@ -493,7 +495,49 @@ class StateMachineTest {
         val resumed = state.regions.platforms[Platform.DoorDash]!!
         assertEquals(Mode.Online, resumed.mode)
         assertEquals(originalSessionId, resumed.session!!.sessionId) // SAME session
-        assertNull(resumed.sessionGraceDeadline) // grace cleared
+        assertNull(resumed.pendingDestructive) // grace cleared
+    }
+
+    @Test
+    fun `session grace — starting a new dash within the grace window starts fresh, not a resume`() {
+        var state = AppState()
+
+        // Online
+        val t1 = tick()
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t1,
+        )).newState
+        val originalSessionId = state.regions.platforms[Platform.DoorDash]!!.session!!.sessionId
+
+        // Offline — dash-end is provisional (grace armed)
+        val t2 = t1 + 2000
+        state = machine.step(state, screenObs(
+            modeHint = Mode.Offline, flow = Flow.Idle, parsed = ParsedFields.IdleFields(), timestamp = t2,
+        )).newState
+        assertNotNull(state.regions.platforms[Platform.DoorDash]!!.pendingDestructive)
+
+        // The set-end-time screen (startingDash) arrives WITHIN the grace window —
+        // the old dash really ended; commit it now (#279-B).
+        val t3 = t2 + 1000
+        state = machine.step(state, screenObs(
+            modeHint = Mode.Offline, flow = Flow.Idle,
+            parsed = ParsedFields.IdleFields(startingDash = true), timestamp = t3,
+        )).newState
+        val afterStart = state.regions.platforms[Platform.DoorDash]!!
+        assertNull("the dash-start signal ends the old dash", afterStart.session)
+        assertNull(afterStart.pendingDestructive)
+
+        // Dash Now → Online → a FRESH session, not the resumed old one.
+        val t4 = t3 + 1000
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(), timestamp = t4,
+        )).newState
+        val fresh = state.regions.platforms[Platform.DoorDash]!!
+        assertNotNull(fresh.session)
+        assertTrue(
+            "a genuinely new dash, not a grace-resume of the old session",
+            fresh.session!!.sessionId != originalSessionId,
+        )
     }
 
     @Test
@@ -532,7 +576,7 @@ class StateMachineTest {
             "Expected new session ID, but got same as original",
             afterExpiry.session!!.sessionId != originalSessionId,
         )
-        assertNull(afterExpiry.sessionGraceDeadline)
+        assertNull(afterExpiry.pendingDestructive)
     }
 
     @Test
@@ -560,7 +604,8 @@ class StateMachineTest {
         assertEquals(Mode.Offline, result.mode)
         // Pause timeout goes through applyModeTransition, gets grace
         assertNotNull(result.session) // session preserved during grace
-        assertNotNull(result.sessionGraceDeadline)
+        assertNotNull(result.pendingDestructive)
+        assertEquals(DestructiveKind.SESSION_END, result.pendingDestructive?.kind)
     }
 
     // =========================================================================

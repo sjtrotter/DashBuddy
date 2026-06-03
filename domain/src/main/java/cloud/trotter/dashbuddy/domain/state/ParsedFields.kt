@@ -42,6 +42,13 @@ sealed class ParsedFields {
         val waitTimeEstimate: String? = null,
         val isHeadingBackToZone: Boolean = false,
         val spotSaveDeadline: Long? = null,
+        /**
+         * The dasher is starting/scheduling a new dash (e.g. the set-end-time
+         * screen). Used by the state machine to end a just-finished dash that's
+         * still in its grace window and start a fresh one rather than resuming.
+         * Transient signal — excluded from [dedupeHash].
+         */
+        val startingDash: Boolean = false,
     ) : ParsedFields() {
         override fun dedupeHash(): Int {
             var h = zoneName.hashCode()
