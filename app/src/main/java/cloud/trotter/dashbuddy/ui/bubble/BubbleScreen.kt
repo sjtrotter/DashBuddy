@@ -211,7 +211,12 @@ fun DashboardView(
                         }
                     }
                     items(
-                        items = cardStack.completed.asReversed(),
+                        // distinctBy is a last-line crash guard: a duplicate
+                        // key here is a fatal Compose exception, so never trust
+                        // the upstream list to be unique (FlowCardMapper already
+                        // dedups, but the HUD must not crash if a new source of
+                        // collisions ever slips through).
+                        items = cardStack.completed.distinctBy { it.id }.asReversed(),
                         key = { it.id },
                     ) { snap ->
                         val expanded = expandedIds[snap.id] == true

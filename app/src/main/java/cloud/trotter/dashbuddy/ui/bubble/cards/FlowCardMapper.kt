@@ -317,7 +317,20 @@ object FlowCardMapper {
             }
         }
 
-        return completed
+        // Dedup by card id, keeping the last (most-complete) occurrence.
+        // The card id is the LazyColumn key, which MUST be unique or Compose
+        // throws a fatal IllegalArgumentException ("Key ... was already used").
+        // Several real event orderings emit the same id twice:
+        //   • DELIVERY_ARRIVED *and* DELIVERY_CONFIRMED for one dropoff — the
+        //     mapper once assumed these were mutually exclusive, but
+        //     arrival-bearing dropoffs (photo / PIN / hand-it-to-customer /
+        //     alcohol ID-scan) fire both. Field DB 2026-06-03 (taskId
+        //     c0041f37: ARRIVED 17:59:23 → CONFIRMED 17:59:33 → crash 17:59:34).
+        //   • A dropoff that double-fires DELIVERY_CONFIRMED (same DB, 22:00).
+        //   • The same offerHash decided twice / a job that double-completes.
+        // associateBy keeps each id at its first-seen position with the last
+        // value — chronological order preserved, newest content wins.
+        return completed.associateBy { it.id }.values.toList()
     }
 
     private fun <T> decode(event: AppEventEntity, klass: Class<T>): T? = try {
