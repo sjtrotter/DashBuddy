@@ -116,6 +116,14 @@ immediately (no second pass needed) so it gets triaged.
       recognized — flag it for a redaction + sensitive rule.
   - Confirmed: 0/2.
 
+- **Bubble HUD no longer crashes on arrival-bearing dropoffs (#297).** Complete a
+  dropoff that has an explicit arrival step — a **photo**, **PIN entry**,
+  **hand-it-to-customer**, or **alcohol ID-scan** delivery (these fire both
+  `DELIVERY_ARRIVED` and `DELIVERY_CONFIRMED`). The bubble must **not** crash, and
+  the completed-card stack should show exactly **one** delivery card for that stop
+  (no duplicate). Previously this was a hard `LazyColumn` duplicate-key crash.
+  - Confirmed: 0/2.
+
 ---
 
 ## Untriaged — carried over from scratch notes
@@ -127,6 +135,34 @@ immediately (no second pass needed) so it gets triaged.
   - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
     "summary after the idle screen" ordering was the root cause). Field-validate
     via the #279 checklist item above.
+
+---
+
+## 2026-06-03 — DoorDash session (live capture during dash)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` (post-#149 merge era; build from the dev phone)
+- **Field conditions:** full session with captures + app logs + DB snapshot
+  archived to `logs/2026/06/03/` (`captures/`, `app.log` + rotations, `db/dashbuddy-v2.db`).
+
+### Bugs
+
+1. **Bubble HUD crashes (FATAL) with a `LazyColumn` duplicate-key error.** Two
+   crashes this session: 17:59:34 (`Key "delivery:c0041f37…"`) and 22:00:37
+   (`Key "delivery:4d62f8ea…"`). Also seen in prior sessions as `offer:` (05-25)
+   and `posttask:` (05-22).
+   - **Confirmed root cause (from `db/dashbuddy-v2.db` `app_events`):** the
+     dropoff fired **both** `DELIVERY_ARRIVED` and `DELIVERY_CONFIRMED` for the
+     same taskId (c0041f37: ARRIVED 17:59:23 → CONFIRMED 17:59:33 → crash
+     17:59:34; 4d62f8ea even double-fired CONFIRMED at 22:00:37 and 22:00:41).
+     `FlowCardMapper.fold` added a `delivery:<taskId>` card on each closing
+     event and never deduplicated — and the card `id` is the `LazyColumn` key,
+     which must be unique. The mapper assumed ARRIVED/CONFIRMED were mutually
+     exclusive, but arrival-bearing dropoffs (photo / PIN / hand-it-to-customer,
+     and now the alcohol ID-scan from #149) fire both.
+   - **Status:** Triaged → tracked as #297. Fixed in PR (dedup-by-id in the
+     mapper + a `distinctBy` backstop at the `LazyColumn` + regression tests).
+     Field-validate next dash (see checklist).
 
 ---
 
