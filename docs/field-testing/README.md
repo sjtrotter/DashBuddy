@@ -157,19 +157,52 @@ immediately (no second pass needed) so it gets triaged.
   `master` is the #271 card-polish + #270 nav-generic-idle merges) — inferred,
   developer to correct if the build came from elsewhere.
 - **Field conditions:** developer dashing on DoorDash; entry captured live.
-  Includes a Shop & Deliver leg (pacing observed) and an app **crash** at the
-  end of a delivery right around the post-dropoff auto-expand click.
+  Includes a Shop & Deliver leg (pacing observed), an app-switch grace-resume,
+  and a **reproducible crash in the post-delivery phase on both deliveries**
+  (around the auto-expand click). Multiple short back-to-back dashes.
 
 ### Bugs
 
-#### 1. App crashed after dropoff, at/just after the automated "expand delivery details" click
+#### 1. App crashes in the post-delivery phase, at/around the automated "expand delivery details" click (REPRODUCED — both deliveries this dash)
 
-- **Field observation:** Right after completing a dropoff, the app crashed —
-  "as soon as the app clicked, or just after the click" — referring to the
-  **automated** click that expands the post-delivery pay breakdown. The dasher
-  did not (yet) provide a stack trace; timing is the main signal we have.
-- **Status:** Open. **Most valuable next artifact: the crash stack trace /
-  logcat** — without it the layer below is a guess between three candidates.
+- **Field observation:** Crashed in the post-delivery phase on **both** deliveries
+  this session. First: right after a dropoff, "as soon as the app clicked, or just
+  after the click" — the **automated** click that expands the post-delivery pay
+  breakdown. Second: started a new dash immediately after the first delivery and it
+  crashed again in the same post-delivery phase. Dasher's read: "there is something
+  going on in the post-delivery phase," and it's "probably something to do with"
+  the **recent state-machine / hooks-and-triggers changes.** No stack trace yet —
+  dasher plans to pull captures + logcat.
+- **Status:** Open — **reproducible (2/2 deliveries this dash).** The repeat on
+  both deliveries rules out the earlier "one-off stale-node race" framing: a
+  consistent crash points at a **code path** in the post-delivery phase, not
+  timing luck. **Blocked on the crash stack trace** to pin the layer.
+- **Recent-change surface (the dasher's "hooks and triggers" hunch, corroborated
+  at the desk).** The post-delivery phase has the most recent churn anywhere in
+  the state machine, all in the build under test: `4575441` (post-task
+  best-effort + dup-skip + UDF click delay + safety screenshots, #266) reworked
+  the exact expand/announce flow; `d584060` (DELIVERY_CONFIRMED closes drop-off
+  task on transition away) changed how the task is retired here; `5f44413`
+  (transition override system) is the trigger plumbing — the post-delivery
+  transition fires `triggerOverrideEffects(obs, TASK_COMPLETED)`
+  (`EffectMap.kt:206`).
+- **Sharpened hypothesis — the new SETTLE_UI deferred-click path (now favored).**
+  The #266 work no longer clicks inline; the `delayMs: 500` expand click
+  (`doordash.json:670`) is routed through a brand-new round-trip:
+  `diffRuleEffects` (`EffectMap.kt:653-662`) sees CLICK with `delayMs > 0` and
+  emits `ScheduleTimeout(SETTLE_UI)` carrying a **serialized** click context
+  (`serializeClickContext`, `:695-714`); when it fires, `diffSettleUiTimeout`
+  (`:673-693`) **reconstructs** a `NodeRef` (`deserializeNodeRef`, `:716-732`)
+  and re-dispatches the click against possibly-changed live UI. That serialize →
+  defer ~500ms → reconstruct → re-dispatch chain is new surface sitting exactly
+  in the crashing phase, and the ~500ms delay matches "just after." It then
+  re-enters `UiInteractionHandler.performClick` (see hypothesis (a) below — the
+  unguarded `findNodeByBounds` recursion / raw node ops).
+- **What the desk pass ruled OUT:** the `effect.delayMs!!` at `EffectMap.kt:659`
+  is **guarded** by `(effect.delayMs ?: 0L) > 0L` at `:653` (not the NPE);
+  `serializeClickContext` / `deserializeNodeRef` use null-safe casts throughout;
+  `parsedFieldsToMap`'s reflection (`:753-758`) is `try`-wrapped. No obvious throw
+  site among them — consistent with needing the trace.
 - **What fires at that exact moment (the post-task collapsed screen):**
   `doordash.json:659-678` runs **two** effects when the collapsed `post_task`
   screen matches: (1) `click: $expandButton` (gated `isExpanded == false`,
@@ -212,8 +245,14 @@ immediately (no second pass needed) so it gets triaged.
   a regression introduced alongside that flow or a latent path #266 didn't touch.
 - **What would confirm or refute this at the desk:**
   - **Pull the crash stack trace** (logcat / the on-device crash log). The top
-    frame immediately disambiguates (a) `UiInteractionHandler`/`AccNodeUtils`
-    vs (b) `ScreenShotHandler` vs (c) the expanded-`post_task` parse path.
+    frame immediately disambiguates: `EffectMap.diffSettleUiTimeout` /
+    `deserializeNodeRef` or `UiInteractionHandler` / `AccNodeUtils` → the new
+    deferred-click path; a parse class → the expanded-screen path (c);
+    `ScreenShotHandler` → (b).
+  - Look for a `SETTLE_UI` timeout firing right before the crash — its presence
+    ties the crash to the deferred-click round-trip. And test whether the crash
+    still repros on a delivery where the expand never auto-fires (throttle/dedupe
+    suppressed) — if it doesn't, the deferred-click path is the culprit.
   - If a snapshot of the expanded breakdown was captured this dash, run it
     through the parse path that builds `parsedPay`/`payLineItems` and check for
     a null/format assumption that the live expanded screen would violate.
