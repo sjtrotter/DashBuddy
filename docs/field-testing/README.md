@@ -136,6 +136,15 @@ immediately (no second pass needed) so it gets triaged.
   showing this internal-sounding message useful, or should it be reworded/demoted?
   - Confirmed: 0/2.
 
+- **Bubble HUD no longer crashes on arrival-bearing dropoffs (#297).** Complete a
+  dropoff with an explicit arrival step — a **photo**, **PIN entry**,
+  **hand-it-to-customer**, or **alcohol ID-scan** delivery (these fire both
+  `DELIVERY_ARRIVED` and `DELIVERY_CONFIRMED`). The bubble must **not** crash, and
+  the completed-card stack should show exactly **one** delivery card for that stop
+  (no duplicate). This was the fatal `LazyColumn` duplicate-key crash from the
+  2026-06-03 session (#297).
+  - Confirmed: 0/2.
+
 ---
 
 ## Untriaged — carried over from scratch notes
@@ -259,6 +268,25 @@ immediately (no second pass needed) so it gets triaged.
   - Cross-check the screenshot output: a `Pictures/DashBuddy/… Delivery - …png`
     file existing for that delivery means the screenshot effect ran to
     completion (pushes suspicion toward (a)/(c), away from (b)).
+- **RESOLVED — root cause found 2026-06-04 from the stack trace (≠ the
+  hypotheses above).** The trace is a Compose layout crash, not an effect/parse
+  crash: `java.lang.IllegalArgumentException: Key "delivery:<uuid>" was already
+  used … provide a unique key for each item`, thrown from
+  `LazyListMeasure → SubcomposeLayout` (the bubble card stack), **not** from
+  `EffectMap` / `UiInteractionHandler` / a parse class / `ScreenShotHandler`. So
+  the SETTLE_UI deferred-click and expanded-parse hypotheses (a)/(b)/(c) were
+  red herrings — the auto-expand click only *triggers a recomposition* that
+  re-measures the `LazyColumn`, and the completed-card list already contained a
+  **duplicate `delivery:<taskId>` card**. `FlowCardMapper.fold` added a delivery
+  card on *both* `DELIVERY_ARRIVED` and `DELIVERY_CONFIRMED`, assuming they were
+  mutually exclusive; arrival-bearing dropoffs (photo / PIN / hand-it-to-customer,
+  and the alcohol ID-scan from #149) fire both. Confirmed in this session's
+  `db/dashbuddy-v2.db` (`app_events`): taskId `c0041f37` ARRIVED 17:59:23 →
+  CONFIRMED 17:59:33 → crash 17:59:34; taskId `4d62f8ea` ARRIVED 21:56:44 →
+  CONFIRMED 22:00:37 (×2) → crash 22:00:37. The `offer:` (05-25) and `posttask:`
+  (05-22) crash variants are the same family. **Tracked as #297; fixed** (dedup
+  the card list by id + a `distinctBy` backstop at the `LazyColumn` + regression
+  tests). Field-validate via the #297 checklist item.
 
 ### Verification TODOs
 

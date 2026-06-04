@@ -243,6 +243,93 @@ class FlowCardMapperTest {
     }
 
     // =========================================================================
+    // Duplicate-key crash regressions (field DB 2026-06-03)
+    // =========================================================================
+
+    @Test
+    fun `delivery with BOTH arrival and confirmed produces ONE delivery card (no duplicate key)`() {
+        // Field crash: arrival-bearing dropoffs (photo / PIN / hand-it /
+        // alcohol ID-scan) fire DELIVERY_ARRIVED *and* DELIVERY_CONFIRMED for
+        // the same taskId. The mapper added a `delivery:<taskId>` card for each
+        // → duplicate LazyColumn key → fatal crash (taskId c0041f37,
+        // ARRIVED 17:59:23 → CONFIRMED 17:59:33 → crash 17:59:34).
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload("T1", "J1", "Wendy's", 1600L), 1600L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 1600L, confirmed = 2000L), 2000L),
+            event(AppEventType.DELIVERY_NAV_STARTED,
+                deliveryPayload("T2", "J1", 2000L), 2000L),
+            event(AppEventType.DELIVERY_ARRIVED,
+                deliveryPayload("T2", "J1", 2000L, arrived = 2500L), 2500L),
+            event(AppEventType.DELIVERY_CONFIRMED,
+                deliveryPayload("T2", "J1", 2000L, arrived = 2500L), 2600L),
+            event(AppEventType.DELIVERY_COMPLETED,
+                deliveryPayload("T2", "J1", 2000L, arrived = 2500L, completed = 2700L, totalPay = 7.50), 2700L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+
+        // Exactly one delivery card, and all card ids are unique (the invariant
+        // the LazyColumn key requires).
+        val deliveries = cards.filterIsInstance<FlowCardSnapshot.Delivery>()
+        assertEquals(1, deliveries.size)
+        assertEquals("T2", deliveries[0].taskId)
+        assertEquals(cards.map { it.id }.distinct().size, cards.size)
+    }
+
+    @Test
+    fun `double DELIVERY_CONFIRMED for same task produces ONE delivery card`() {
+        // Same field session, 22:00 crash: taskId 4d62f8ea fired ARRIVED then
+        // DELIVERY_CONFIRMED twice (22:00:37 and 22:00:41).
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+            event(AppEventType.DELIVERY_NAV_STARTED,
+                deliveryPayload("D1", "J1", 2000L), 2000L),
+            event(AppEventType.DELIVERY_ARRIVED,
+                deliveryPayload("D1", "J1", 2000L, arrived = 2500L), 2500L),
+            event(AppEventType.DELIVERY_CONFIRMED,
+                deliveryPayload("D1", "J1", 2000L, arrived = 2500L), 2600L),
+            event(AppEventType.DELIVERY_CONFIRMED,
+                deliveryPayload("D1", "J1", 2000L, arrived = 2500L), 2640L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        assertEquals(1, cards.filterIsInstance<FlowCardSnapshot.Delivery>().size)
+        assertEquals(cards.map { it.id }.distinct().size, cards.size)
+    }
+
+    @Test
+    fun `same offer hash decided twice produces ONE offer card`() {
+        // The offer:<hash> crash family (field 2026-05-25) — the same offer
+        // re-presented and re-decided would add two offer cards with the same
+        // offerHash → duplicate key. Dedup keeps the last decision.
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_DECLINED,
+                offerPayload("dup-hash", AppEventType.OFFER_DECLINED, 1500L, 1700L), 1700L),
+            event(AppEventType.OFFER_RECEIVED, "{}", 2000L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("dup-hash", AppEventType.OFFER_ACCEPTED, 2000L, 2100L), 2100L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        val offers = cards.filterIsInstance<FlowCardSnapshot.Offer>()
+        assertEquals(1, offers.size)
+        // Last decision wins.
+        assertEquals(AppEventType.OFFER_ACCEPTED, offers[0].outcome)
+        assertEquals(cards.map { it.id }.distinct().size, cards.size)
+    }
+
+    // =========================================================================
     // Decline path
     // =========================================================================
 
