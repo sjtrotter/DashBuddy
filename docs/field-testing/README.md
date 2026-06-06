@@ -145,6 +145,14 @@ immediately (no second pass needed) so it gets triaged.
   2026-06-03 session (#297).
   - Confirmed: 0/2.
 
+- **Shop & Deliver items/min reaches `total/total` at the end (#302).** On a
+  Shop & Deliver order, when you finish shopping (add the last item / reach
+  "To shop (0)") the bubble shop card should read **`shop total/total`** — not
+  `total−1/total` — and the items/min pace should reflect the full count. This was
+  the off-by-one from the 2026-06-05 session, caused by the terminal frame being
+  deduped away; the fix makes each shopping count change a distinct observation.
+  - Confirmed: 0/2.
+
 ---
 
 ## Untriaged — carried over from scratch notes
