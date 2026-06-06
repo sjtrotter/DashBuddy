@@ -360,6 +360,19 @@ immediately (no second pass needed) so it gets triaged.
   order"), so the pause/resume cycle was in a weird state.
 - **Status:** Open — needs the logs to reconstruct the session sequence; several
   threads converge here.
+- **Developer clarification (important — corroborates Route A):** the new dash was
+  **"started on the pickup"** — i.e. the fresh dash ID was minted **while on the
+  pickup screen**, not from a normal dash-start flow. This fits the Route A
+  sequence precisely: a transient `idle_map` (`modeHint: offline`) nulls the
+  session **mid-pickup**, then the **very next pickup-screen observation** — a
+  `TaskPickup*` flow, which `resolveMode` maps to `Mode.Online`
+  (`TransitionPolicy.kt:40-45`) — finds `region.session == null`
+  (`PlatformRegionStepper.kt:149-157`), mints a new session, and `EffectMap.kt`
+  fires `DASH_START` **right there on the pickup**. Tell-tale: the emitted
+  `DASH_START` payload hardcodes `startScreen = "WaitingForOffer"`
+  (`EffectMap.kt:311`) even though the dasher was actually on a pickup — so a
+  `DASH_START` logged with `startScreen = WaitingForOffer` whose surrounding
+  observations are pickup screens is the fingerprint of this mid-pickup re-mint.
 - **Desk read (hypotheses, need log confirmation):**
   - **A — same root as Bug #5.** A transient `idle_map`/idle-family frame
     (`modeHint: offline`, `doordash.json:2149-2153`) mid-dash flips the region
