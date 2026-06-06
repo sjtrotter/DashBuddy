@@ -151,7 +151,11 @@ immediately (no second pass needed) so it gets triaged.
   `total−1/total` — and the items/min pace should reflect the full count. This was
   the off-by-one from the 2026-06-05 session, caused by the terminal frame being
   deduped away; the fix makes each shopping count change a distinct observation.
-  - Confirmed: 0/2.
+  - Confirmed: 1/2. **Partial — 2026-06-06 (DoorDash):** developer reported "the
+    item counts are working" (no longer freezing one short). Did not explicitly
+    confirm the terminal `total/total` frame or the add-on case this dash; needs
+    one more clean sighting of the end-of-shop `total/total`. (See 2026-06-06
+    log entry #4.)
 
 ---
 
@@ -164,6 +168,123 @@ immediately (no second pass needed) so it gets triaged.
   - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
     "summary after the idle screen" ordering was the root cause). Field-validate
     via the #279 checklist item above.
+
+---
+
+## 2026-06-06 — DoorDash session (live capture during dash)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` at `504dd63` (post-#304 merge — includes the
+  #302 shopping-itemcount-dedup fix and #297 duplicate-card crash fix).
+- **Field conditions:** developer dashing on DoorDash; entry captured live.
+  Started while **paused** but received an order anyway. Shop & Deliver item
+  counts observed working. No alcohol order this dash (so #149 remains
+  unconfirmed). Observations centered on the pickup/drop-off task card's
+  deadline display.
+
+### Bugs
+
+#### 1. Got an offer while **paused** ("I was paused, but I got an order anyway")
+
+- **Field observation:** developer had the dash **paused**, yet an order/offer
+  still came through. Unclear yet whether DoorDash itself delivered the offer
+  during a pause (platform behavior) or whether DashBuddy mis-read the paused
+  state and surfaced/handled the offer as if active.
+- **Status:** Open — needs capture to disambiguate platform-vs-DashBuddy.
+- **Light desk read (hypothesis, unverified):** two possibilities, and the
+  captures should separate them: **(a)** DoorDash genuinely sent an offer during
+  a pause (some pause flows still float offers) — in which case the question is
+  whether DashBuddy was in `DashPaused`/`PausedOrInterrupted` and correctly
+  transitioned to `OfferPresented`, or **(b)** DashBuddy never actually entered
+  the paused state (the pause screen wasn't recognized / the region stayed
+  `AwaitingOffer`), so from its view nothing unusual happened. To tell them
+  apart at the desk: pull the state-region transitions around the offer — was the
+  region in a paused state when `OFFER_PRESENTED` fired? If the bubble *showed
+  paused* but still took the offer, that's a state-consistency concern; if it
+  never showed paused, the pause-screen recognition is the gap. Cross-refs the
+  `DashPaused` / `DashPausedMatcher` path.
+
+#### 2. Frozen pickup/drop-off cards drop the wall-clock anchor; "+24:18 ahead" looks wrong and "1:34 late" can't be verified
+
+- **Field observation:** on the pickup the card showed **"+24:18 ahead"**, which
+  the developer doubts is accurate ("I think there's something wrong with the
+  calculation"). On the drop-off it showed **"1:34 late"** ("which is fine, but
+  there is no time, so I can't really tell if that's actually true"). Core
+  complaint: the **wall-clock deadline time** the DoorDash/offer screen shows is
+  **not** surfaced on the bubble card, so the countdown/delta can't be
+  cross-checked.
+- **Status:** Open. The "missing wall-clock on the frozen card" half is
+  **desk-confirmable**; the "+24:18 is wrong" half needs captured data.
+- **Desk read — the missing-wall-clock half (high confidence):** the **active**
+  card already carries the anchor — `DeadlineBody` renders
+  `Caption("$deadlineLabel · by ${formatTime(deadlineMillis)}")` at
+  `FlowCardItem.kt:365` (added per 2026-05-19 #1 / #271). But the **frozen**
+  branch's "ahead/late" delta path renders `Caption("vs $deadlineLabel")` at
+  `FlowCardItem.kt:388` — **no `by HH:MM`**. So once a pickup/drop-off card
+  freezes, the wall-clock anchor that the active card had disappears, which is
+  exactly why the developer can't verify "+24:18 ahead" / "1:34 late". The #271
+  wall-clock work covered the active branch only; the frozen delta branch never
+  got it.
+- **Desk read — the "+24:18 looks wrong" half (hypothesis, needs data):** the
+  frozen delta is `arrivalRemaining = deadlineMillis - arrivedAt`
+  (`FlowCardItem.kt:379-380`), formatted as `m:ss` via `formatCountdown`
+  (`:598-603`). So "+24:18 ahead" = arrived **24m18s before** the parsed
+  deadline. This is **not** the old ~1434-minute day-rollover ghost (#267) — the
+  magnitude is small — so it's either roughly correct and just counter to the
+  developer's gut, or `deadlineMillis`/`arrivedAt` is slightly off (e.g. deadline
+  parsed from the wrong on-screen field, or `arrivedAt` stamped at the wrong
+  sub-state). To confirm/refute at the desk: pull this pickup's `deadlineMillis`
+  and `arrivedAt` from the events and compare against the "Pick up by H:MM" text
+  DoorDash actually rendered; the same for the drop-off's "1:34 late".
+
+### Research / design
+
+#### 3. Two-timer task card: split nav-countdown vs dwell, wall-clock as the heading
+
+- **Developer's framing (verbatim intent):** "it would be cooler if we had two
+  clocks / two timers in the task section." Sketch:
+  - **Before arrival**, the whole card is the **nav/deadline timer** — counts
+    **down** toward the pickup/drop-off-by time, and **keeps counting (into
+    negative) until you actually arrive**.
+  - **The heading of that timer is the wall-clock time** — e.g. "Pick up by
+    H:MM" / "Drop off by H:MM" — the actual clock time the delivery app says you
+    need to be there.
+  - **On arrival**, that nav timer **stops/pauses and freezes** at whatever it
+    reached (positive = ahead, negative = late) — it doesn't keep running.
+  - The card then **slides left**, revealing a **second timer on the right: the
+    dwell time** (time spent at the stop). "That way it's more clear."
+- **Status:** Open (research/design — captures the developer's preferred card
+  shape; not a defect to patch). *(Note: the developer's narration cut off
+  mid-sentence at "whether it's positive or negative" — this captures the intent
+  up to that point; may need the rest of the thought.)*
+- **Desk read (how this maps onto today's code, hypothesis):** much of the data
+  for this already exists on `DeadlineBody` — `deadlineMillis` (the wall-clock
+  anchor / heading), `arrivedAt` (the freeze point for the nav timer and the
+  start of dwell), and `phaseEndedAt`. Today the **active** branch shows a single
+  countdown hero (`FlowCardItem.kt:359-365`) and the **frozen** branch shows the
+  arrival-vs-deadline delta (`:382-388`); the tertiary row already prints
+  "arrived H:MM · picked up H:MM" (`:404-409`). The proposal essentially asks to
+  (i) promote the wall-clock from caption to **heading**, (ii) make the nav timer
+  **freeze on arrival** (stop at `deadlineMillis - arrivedAt`) rather than only
+  on phase-end, and (iii) add a **live dwell timer** (`now - arrivedAt`, ticking
+  per the `rememberNow()` 1-Hz helper) revealed by a slide animation once
+  arrived. This stays within the reactive-UI rules (anchor on state, derive in
+  the composable). Connects directly to Bug #2 above — the "wall-clock as
+  heading" idea would also fix the missing-anchor complaint. Defer to desk review
+  for the actual card layout/animation.
+
+### Verification TODOs
+
+#### 4. Shop & Deliver item counts working (#302 partial confirmation)
+
+- **Field observation:** "the item counts are working." Read as a positive on the
+  #302 shop-dedupe fix (item counts no longer freezing one short). The developer
+  didn't explicitly call out the terminal `total/total` frame or the add-on case
+  this report, so logging as a partial confirmation pending an explicit
+  end-of-shop `total/total` sighting.
+- **Status:** Partial confirmation logged against the #302 checklist item
+  (Confirmed 1/2). Needs one more clean dash confirming the final count reaches
+  `total/total`.
 
 ---
 
