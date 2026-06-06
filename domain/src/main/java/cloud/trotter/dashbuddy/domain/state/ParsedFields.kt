@@ -84,6 +84,15 @@ sealed class ParsedFields {
             h = 31 * h + subFlow.hashCode()
             h = 31 * h + storeName.hashCode()
             h = 31 * h + arrivalConfirmed.hashCode()
+            // Shopping progress IS semantic identity for Shop & Deliver. Without
+            // the item counts here, the post-classification dedup
+            // (AccessibilityPipeline: identity == lastIdentity -> drop) collapses
+            // count-only changes — including the decisive "To shop (0)" / Done(total)
+            // frame — so itemsShopped caps at total-1 and items/min finishes one
+            // short. Null for non-shopping tasks, so this is a no-op there.
+            // (field log 2026-06-05)
+            h = 31 * h + itemsRemaining.hashCode()
+            h = 31 * h + itemsShopped.hashCode()
             return h
         }
     }
