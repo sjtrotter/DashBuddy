@@ -373,6 +373,38 @@ immediately (no second pass needed) so it gets triaged.
   (`EffectMap.kt:311`) even though the dasher was actually on a pickup — so a
   `DASH_START` logged with `startScreen = WaitingForOffer` whose surrounding
   observations are pickup screens is the fingerprint of this mid-pickup re-mint.
+- **Developer clarification #2 (the key inconsistency — "resumed but didn't really
+  resume"):** behaviorally it **looked like a grace resume / continuation** — *not*
+  a whole new dash starting from scratch — yet the data ended up with a **new dash
+  ID**. So the "resume" **didn't actually resume the old session**; it presented as
+  picking the same dash back up while really **severing it into a new session**.
+  This is a genuine contradiction in the code, because the two outcomes live on
+  **mutually exclusive** branches of the same Offline→Online transition in
+  `EffectMap.kt`: the **grace-resume bubble** ("Session resumed (grace)") only
+  fires when `prevSession?.sessionId == nextSession.sessionId` (`:316-319`),
+  whereas a **new `DASH_START`** only fires when the ids **differ** (`:305-315`).
+  You cannot get *both* "resumed (grace)" *and* a new id from a single transition
+  — so one of these is true:
+  - **(i)** the grace-resume message fired at **one** Online blip (genuine
+    same-session resume), and the session was nulled + re-minted at a **separate**
+    moment in the same dash (a different idle frame) — two events the dasher
+    experienced as one "it resumed but with a new id"; or
+  - **(ii)** there's an ordering/state bug where the session is nulled
+    (grace/`EndSession`) but the bubble still shows the stale "resumed (grace)"
+    text from a prior transition while a fresh id is minted underneath — i.e. the
+    **message and the actual session state disagree**.
+  The developer's phrasing ("it didn't really resume the old session", "not like a
+  whole new dash starting", "didn't create a new one at the end of that drop off")
+  points at exactly this **mismatch between what the bubble said and what the
+  session store did** — the resume was cosmetic, the continuity was lost.
+- **What this sharpens for the logs:** beyond "which signal nulled the session,"
+  also check the **ordering** — did "Session resumed (grace)" (`EffectMap.kt:319`)
+  and the new-id `DASH_START` (`:313`) come from the **same** Offline→Online
+  transition (which would be the (ii) bug) or **different** ones (the (i)
+  two-event story)? And confirm whether the dash split at a **clean boundary**
+  (end of dropoff) or **mid-flow** — the developer's read is that it did **not**
+  cleanly split at the end of the dropoff, which argues against a normal end-of-
+  dash boundary and for a mid-flow re-mint.
 - **Desk read (hypotheses, need log confirmation):**
   - **A — same root as Bug #5.** A transient `idle_map`/idle-family frame
     (`modeHint: offline`, `doordash.json:2149-2153`) mid-dash flips the region
