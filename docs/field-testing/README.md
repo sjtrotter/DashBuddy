@@ -237,8 +237,6 @@ immediately (no second pass needed) so it gets triaged.
   and `arrivedAt` from the events and compare against the "Pick up by H:MM" text
   DoorDash actually rendered; the same for the drop-off's "1:34 late".
 
-### Research / design
-
 #### 5. App-switch mid-pickup → returned to DoorDash → DashBuddy said "done dashing" while the screen still showed pickup (premature dash-end beyond grace)
 
 - **Field observation (~12:01 PM Central, Sat 2026-06-06):** developer was
@@ -309,6 +307,92 @@ immediately (no second pass needed) so it gets triaged.
   `DASH_STOP(source = EARLY_OFFLINE)`. Confirm `activeTask` (the pickup) was
   non-null throughout — if so, an active task was discarded by a 10s timeout
   triggered by a transient idle frame, which is the bug.
+
+#### 6. Stacked offer item count parsed as 2 instead of 14 (parseItemCount also matches "order", so it grabs the order count on a multi-order line)
+
+- **Field observation:** received a **stacked/double offer to Target** — two
+  orders, both at the same Target store. DashBuddy interpreted the **number of
+  items as 2**, but it was really **14 items**. Suspected offer item-count parse
+  bug on stacked offers.
+- **Status:** Open — **strong desk hypothesis**; needs the captured offer screen
+  to confirm the exact `display_name_secondary` text.
+- **Desk read (high confidence on the mechanism):** the offer popup parses a per
+  `orders` list (`doordash.json:374-428`); each order's **`itemCount`** is read
+  from the `display_name_secondary` node and run through the **`parseItemCount`**
+  transform (`:422-428`). That transform's regex is
+  `\((\d+)\s*(?:item|order|unit)` (`TransformRegistry.kt:280-283`) — it captures
+  the first integer that is **immediately followed by `item`, `order`, *or*
+  `unit`** inside parens. On a **stacked** offer the secondary line almost
+  certainly reads something like **"(2 orders • 14 items)"** (or "(2 orders, 14
+  items)"), so the regex matches **"(2 order…" → 2** and never reaches "14
+  items." The `order` alternative in the regex is the culprit: it's meant to
+  handle "(N units/items)" but on a multi-order string it greedily grabs the
+  **order count** instead of the **item count**. (Note `2` = the number of
+  stacked orders, which lines up exactly with "both offers at Target.")
+- **Why "2" specifically (the tell):** 2 = the stacked-order count, not a random
+  misread. That's what makes the "regex matched the `(2 orders` token" reading
+  fit so cleanly.
+- **Open question on per-order vs total:** the parse is **per order** (inside the
+  `orders.each`), so each Target order should get its own `itemCount`. Whether the
+  HUD then shows the first order's count, sums them, or shows the stacked total is
+  a second thing to check — but the **2** strongly implies the regex is reading
+  "2 orders" off a combined secondary line regardless. Need the capture to see
+  whether the secondary text is per-order or a combined "2 orders • 14 items".
+- **Direction (sketch only, defer to desk):** make `parseItemCount` match
+  **`item`/`unit` only** (drop `order` from the alternation), or prefer the
+  `item`-tagged number when both `order` and `item` counts are present on the same
+  string (e.g. match the *last* `(\d+)\s*items?` rather than the first
+  number-before-keyword). Confirm against a captured stacked-offer
+  `display_name_secondary` first.
+- **What would confirm or refute this at the desk:** pull the captured
+  `offer_popup` snapshot for the Target stack and read the literal
+  `display_name_secondary` text(s). If it contains "2 orders" before "14 items",
+  the regex hypothesis is confirmed. Also a regression candidate: add a snapshot
+  test with a stacked-offer secondary line asserting `itemCount == 14`.
+
+#### 7. Completed dash split into a new dash ID after a grace-resume — second half not correlated to the first (possibly pause-related)
+
+- **Field observation:** after **completing** the dash, it "resumed from grace"
+  but **created a new dash ID**, so the latter portion was **not correlated to the
+  earlier half of the same dash** — the dash got split into two sessions. The
+  developer suspects it **might be pause-related**: they **tried to pause the dash
+  and got an offer anyway** (cross-refs Bug #1 this session, "paused but got an
+  order"), so the pause/resume cycle was in a weird state.
+- **Status:** Open — needs the logs to reconstruct the session sequence; several
+  threads converge here.
+- **Desk read (hypotheses, need log confirmation):**
+  - **A — same root as Bug #5.** A transient `idle_map`/idle-family frame
+    (`modeHint: offline`, `doordash.json:2149-2153`) mid-dash flips the region
+    Offline → grace → expiry → `EndSession` nulls the session. The next Online
+    observation finds `region.session == null` and **mints a fresh session**
+    (`PlatformRegionStepper.kt:149-157`), and `EffectMap.kt:305-315` emits a
+    `DASH_START` (new id) because `prevSession?.sessionId != nextSession.sessionId`.
+    That is exactly "a new dash ID not correlated to the first half." The "resumed
+    from grace" the developer recalls may be from a *different* blip in the same
+    dash (the genuine same-session grace branch, `EffectMap.kt:316-319`), with the
+    **split** happening at a separate idle-frame moment — so both messages can
+    appear in one dash.
+  - **B — pause interaction (the developer's hunch).** Pausing puts the region in
+    `Mode.Paused`. If the `SESSION_PAUSED_SAFETY` timeout fires while still
+    `Paused`, `handleTimeout` forces `Mode.Offline` *with grace*
+    (`PlatformRegionStepper.kt:228-235`) → same end-then-new-session split. And if
+    pausing while an offer arrives left the pause/resume state inconsistent (Bug
+    #1), the timer or mode bookkeeping could be off — e.g. a pause-safety timeout
+    still pending when the offer pulled the region back online, firing later and
+    ending the session mid-dash.
+  - These aren't exclusive — both routes end with **session nulled → new id on
+    next online**. The decisive question is *which signal* nulled the session.
+- **What would confirm or refute this at the desk (for the AS agent + logs):**
+  pull the full session/region timeline for this dash. Look for: (1) the
+  **two `DASH_START` ids** and whether a `DASH_STOP(EARLY_OFFLINE)` sits between
+  them; (2) what triggered the Offline that split it — a `modeHint: offline`
+  screen (Bug #5 route) vs a `SESSION_PAUSED_SAFETY` timeout (pause route); (3)
+  whether a pause (`Mode.Paused`) and the offer-during-pause (Bug #1) preceded the
+  split. If a `DASH_STOP(EARLY_OFFLINE)` split the dash, this is the
+  session-continuity face of Bug #5; if a pause-safety timeout did it, it's a
+  distinct pause-state defect. Either way the fix family is the same as #5: don't
+  end a dash (and don't mint a new id) without an authoritative end signal,
+  especially mid-task/mid-pause.
 
 ### Research / design
 
