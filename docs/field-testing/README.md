@@ -239,39 +239,105 @@ immediately (no second pass needed) so it gets triaged.
 
 ### Research / design
 
-#### 3. Two-timer task card: split nav-countdown vs dwell, wall-clock as the heading
+#### 5. App-switch mid-pickup → returned to DoorDash → DashBuddy said "done dashing" while the screen still showed pickup (premature dash-end beyond grace)
 
-- **Developer's framing (verbatim intent):** "it would be cooler if we had two
-  clocks / two timers in the task section." Sketch:
-  - **Before arrival**, the whole card is the **nav/deadline timer** — counts
-    **down** toward the pickup/drop-off-by time, and **keeps counting (into
-    negative) until you actually arrive**.
-  - **The heading of that timer is the wall-clock time** — e.g. "Pick up by
-    H:MM" / "Drop off by H:MM" — the actual clock time the delivery app says you
-    need to be there.
-  - **On arrival**, that nav timer **stops/pauses and freezes** at whatever it
-    reached (positive = ahead, negative = late) — it doesn't keep running.
-  - The card then **slides left**, revealing a **second timer on the right: the
-    dwell time** (time spent at the stop). "That way it's more clear."
+- **Field observation (~12:01 PM Central, Sat 2026-06-06):** developer was
+  **in the middle of a pickup**, switched to a **different app for a little
+  while**, then switched back to DoorDash. On return, DashBuddy **acted like the
+  dash had ended** — the bubble said (paraphrased) "done dashing" — even though
+  the DoorDash screen **still showed the pickup**. Confusing and clearly wrong:
+  the dash was still active. Developer will have the Android Studio agent pull the
+  logs later to confirm the exact sequence.
+- **Status:** Open — **strong desk hypothesis** (mechanism traced below), pending
+  log confirmation of the timing.
+- **Desk read (high confidence on the mechanism, timing needs the logs):** this
+  looks like an **app-switch that outlasted the 10s grace window**, so the
+  provisional dash-end got **committed** instead of resumed. The chain:
+  - While DoorDash is backgrounded, DashBuddy stops receiving DoorDash events and
+    the region resolves to **Offline**. On the Online→Offline flip,
+    `PlatformRegionStepper.kt:159-169` arms a **provisional** `SESSION_END`
+    (`pendingDestructive`) with `deadline = obs.timestamp + policy.gracePeriodMs`,
+    where `gracePeriodMs = DEFAULT_GRACE_MS = 10_000L` (`TransitionPolicy.kt:23`).
+    The session is kept alive — *so far so good*.
+  - **But** the grace is only **10 seconds.** The next observation whose timestamp
+    is past the deadline hits the **lazy-expiry** at
+    `PlatformRegionStepper.kt:63-67` → `commitDestructive(...)` → the session is
+    ended/nullified. ("a little while" away > 10s ⇒ grace expires.)
+  - With the session now gone, `EffectMap.kt` sees `prevEnded == true`
+    (`:241-242`) and emits a `DASH_STOP` with `source = EARLY_OFFLINE` plus
+    `StopOdometer` / `EndSession` (`:280-296`) — i.e. the dash is **finalized as
+    an early-offline**. That's the "done dashing" the developer saw. Returning
+    mid-pickup can't undo it (the session was already ended), so the bubble reads
+    ended while DoorDash still shows pickup.
+- **Relationship to prior entries — this is the sharper, worse cousin of two
+  known ones:**
+  - **2026-06-03 #3** ("Session resumed (grace)") is the *within-10s* version,
+    where grace resumes the **same** session — the desired outcome. **This** is
+    the *beyond-10s* version where grace **expires** and the dash is wrongly
+    ended.
+  - **2026-05-29 #2** ("navigating to home mid-pickup loses the active task") is
+    the same root concern — *a mere app-switch / look-away mutating active state*
+    — but that one lost only the **task**; this one ends the whole **dash**.
+  - It also **directly violates** the #286/#290 checklist regression-watch:
+    "backing out of the app mid-pickup and returning still **keeps the active
+    task**." Here it kept neither the task nor the dash.
+- **The crux (hypothesis):** a **plain app-switch is being treated as the region
+  going Offline**, and the 10s grace is far too short to cover a normal
+  "switch to another app for a bit" — so a benign backgrounding gets finalized as
+  a real dash-end. Two non-exclusive directions surface (sketches only, defer to
+  desk): **(A)** don't let a backgrounding/no-events condition register as
+  `Offline` at all — distinguish "DashBuddy isn't seeing DoorDash" from "DoorDash
+  shows offline/idle" (the same distinction raised in 2026-06-03 #3 part (a) and
+  2026-05-29 #2); **(B)** if it must register as Offline, the dash-end should
+  require an **authoritative** end signal (a `dash_summary` / `session:ended`
+  screen), never a bare grace-expiry — i.e. grace-expiry on a non-authoritative
+  offline should fall back to "still dashing," not "ended." A is the more robust
+  layer.
+- **What would confirm or refute this at the desk (for the AS agent + logs):**
+  pull the region transitions around 12:01 PM. Expect: an Online→Offline flip
+  when the app was switched away, a `pendingDestructive(SESSION_END)` armed with a
+  ~10s deadline, then a lazy-expiry `commitDestructive` once an observation lands
+  past that deadline, then a `DASH_STOP(source = EARLY_OFFLINE)`. Confirm the
+  `activeTask` (the pickup) was non-null right up to the end — if so, an active
+  in-progress task was discarded by a timeout, which argues for guarding dash-end
+  on an active task (don't finalize a dash while a task is mid-flight without an
+  authoritative signal).
+
+### Research / design
+
+#### 3. Two-timer task card: countdown-to-deadline while navigating, count-up dwell after arrival, wall-clock as the heading
+
+- **Developer's framing (now complete — clarified this report):** the task
+  section should have **two timers**, and this is **task-independent** (same shape
+  for pickup and delivery):
+  - **Left side = the navigation countdown.** While heading to the stop it counts
+    **down** toward the pickup/drop-off-by deadline (and keeps going negative if
+    you blow it) — i.e. "time until I should be there."
+  - **The heading of that timer is the wall-clock time** — "Pick up by H:MM" /
+    "Drop off by H:MM" — the actual time the delivery app says to be there.
+  - **On arrival the navigation timer stops/freezes** at whatever it reached
+    (positive = ahead, negative = late).
+  - **Right side = a count-UP dwell timer.** Once you arrive, the **second** timer
+    counts **up** until you finish the pickup/delivery — "how long I've been at
+    this stop." The card **slides left** on arrival to reveal it.
 - **Status:** Open (research/design — captures the developer's preferred card
-  shape; not a defect to patch). *(Note: the developer's narration cut off
-  mid-sentence at "whether it's positive or negative" — this captures the intent
-  up to that point; may need the rest of the thought.)*
-- **Desk read (how this maps onto today's code, hypothesis):** much of the data
-  for this already exists on `DeadlineBody` — `deadlineMillis` (the wall-clock
-  anchor / heading), `arrivedAt` (the freeze point for the nav timer and the
-  start of dwell), and `phaseEndedAt`. Today the **active** branch shows a single
-  countdown hero (`FlowCardItem.kt:359-365`) and the **frozen** branch shows the
-  arrival-vs-deadline delta (`:382-388`); the tertiary row already prints
-  "arrived H:MM · picked up H:MM" (`:404-409`). The proposal essentially asks to
-  (i) promote the wall-clock from caption to **heading**, (ii) make the nav timer
-  **freeze on arrival** (stop at `deadlineMillis - arrivedAt`) rather than only
-  on phase-end, and (iii) add a **live dwell timer** (`now - arrivedAt`, ticking
-  per the `rememberNow()` 1-Hz helper) revealed by a slide animation once
-  arrived. This stays within the reactive-UI rules (anchor on state, derive in
-  the composable). Connects directly to Bug #2 above — the "wall-clock as
-  heading" idea would also fix the missing-anchor complaint. Defer to desk review
-  for the actual card layout/animation.
+  shape; not a defect to patch). Supersedes the partial capture in the earlier
+  draft of this item — the key clarification is **countdown while navigating →
+  freeze on arrival (left), count-up dwell until finish (right)**.
+- **Desk read (how this maps onto today's code, hypothesis):** the data already
+  exists on `DeadlineBody` — `deadlineMillis` (the wall-clock heading + the
+  countdown target), `arrivedAt` (freezes the nav timer **and** starts the dwell
+  count-up), and `phaseEndedAt`/`confirmedAt` (stops the dwell). Today the
+  **active** branch shows a single countdown hero (`FlowCardItem.kt:359-365`) and
+  the **frozen** branch shows the arrival-vs-deadline delta (`:382-388`); the
+  tertiary already prints "arrived H:MM · picked up H:MM" (`:404-409`). The
+  proposal asks to (i) promote wall-clock from caption to **heading**, (ii) freeze
+  the nav timer at `deadlineMillis - arrivedAt` **on arrival** (not just on
+  phase-end), and (iii) add a **live count-up dwell** = `now - arrivedAt` (ticking
+  via the `rememberNow()` 1-Hz helper) revealed by a slide once arrived. Stays
+  within the reactive-UI rules (anchor on state, derive in the composable). Also
+  resolves Bug #2 (the missing wall-clock anchor). Defer to desk review for the
+  layout/animation.
 
 ### Verification TODOs
 
