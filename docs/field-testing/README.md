@@ -248,60 +248,67 @@ immediately (no second pass needed) so it gets triaged.
   the DoorDash screen **still showed the pickup**. Confusing and clearly wrong:
   the dash was still active. Developer will have the Android Studio agent pull the
   logs later to confirm the exact sequence.
-- **Status:** Open — **strong desk hypothesis** (mechanism traced below), pending
-  log confirmation of the timing.
-- **Desk read (high confidence on the mechanism, timing needs the logs):** this
-  looks like an **app-switch that outlasted the 10s grace window**, so the
-  provisional dash-end got **committed** instead of resumed. The chain:
-  - While DoorDash is backgrounded, DashBuddy stops receiving DoorDash events and
-    the region resolves to **Offline**. On the Online→Offline flip,
-    `PlatformRegionStepper.kt:159-169` arms a **provisional** `SESSION_END`
-    (`pendingDestructive`) with `deadline = obs.timestamp + policy.gracePeriodMs`,
-    where `gracePeriodMs = DEFAULT_GRACE_MS = 10_000L` (`TransitionPolicy.kt:23`).
-    The session is kept alive — *so far so good*.
-  - **But** the grace is only **10 seconds.** The next observation whose timestamp
-    is past the deadline hits the **lazy-expiry** at
-    `PlatformRegionStepper.kt:63-67` → `commitDestructive(...)` → the session is
-    ended/nullified. ("a little while" away > 10s ⇒ grace expires.)
-  - With the session now gone, `EffectMap.kt` sees `prevEnded == true`
-    (`:241-242`) and emits a `DASH_STOP` with `source = EARLY_OFFLINE` plus
-    `StopOdometer` / `EndSession` (`:280-296`) — i.e. the dash is **finalized as
-    an early-offline**. That's the "done dashing" the developer saw. Returning
-    mid-pickup can't undo it (the session was already ended), so the bubble reads
-    ended while DoorDash still shows pickup.
-- **Relationship to prior entries — this is the sharper, worse cousin of two
-  known ones:**
-  - **2026-06-03 #3** ("Session resumed (grace)") is the *within-10s* version,
-    where grace resumes the **same** session — the desired outcome. **This** is
-    the *beyond-10s* version where grace **expires** and the dash is wrongly
-    ended.
-  - **2026-05-29 #2** ("navigating to home mid-pickup loses the active task") is
-    the same root concern — *a mere app-switch / look-away mutating active state*
-    — but that one lost only the **task**; this one ends the whole **dash**.
-  - It also **directly violates** the #286/#290 checklist regression-watch:
-    "backing out of the app mid-pickup and returning still **keeps the active
-    task**." Here it kept neither the task nor the dash.
-- **The crux (hypothesis):** a **plain app-switch is being treated as the region
-  going Offline**, and the 10s grace is far too short to cover a normal
-  "switch to another app for a bit" — so a benign backgrounding gets finalized as
-  a real dash-end. Two non-exclusive directions surface (sketches only, defer to
-  desk): **(A)** don't let a backgrounding/no-events condition register as
-  `Offline` at all — distinguish "DashBuddy isn't seeing DoorDash" from "DoorDash
-  shows offline/idle" (the same distinction raised in 2026-06-03 #3 part (a) and
-  2026-05-29 #2); **(B)** if it must register as Offline, the dash-end should
-  require an **authoritative** end signal (a `dash_summary` / `session:ended`
-  screen), never a bare grace-expiry — i.e. grace-expiry on a non-authoritative
-  offline should fall back to "still dashing," not "ended." A is the more robust
-  layer.
+- **Status:** Open — **mechanism corrected after developer pushback (see below)**;
+  pending log confirmation of which screen carried the offline signal.
+- **⚠️ Correction (developer challenge, desk-verified):** the developer pointed
+  out — correctly — that **no offline screen ever showed**, so "why would the
+  offline grace even arm?" The earlier draft of this item guessed
+  "app backgrounded → region reads Offline," and **that guess was wrong**:
+  `TransitionPolicy.resolveMode` (`TransitionPolicy.kt:34-51`) **never infers
+  Offline from absence of events** — `Idle` resolves to `null` (ambiguous), and a
+  region only goes Offline from **(1)** an observation carrying an explicit
+  `modeHint: offline`, **(2)** a `Flow.SessionEnded` (the dash summary), or
+  **(3)** the `SESSION_PAUSED_SAFETY` timeout *and only while already `Paused`*
+  (`PlatformRegionStepper.kt:228-235`). The developer wasn't paused, and no
+  summary showed — so an **active offline-tagged screen observation** must have
+  flipped it. Absence alone cannot.
+- **Sharpened hypothesis — a transient `idle_map` observation on return flipped
+  the region Offline (now favored):** the DoorDash **`idle_map`** rule carries
+  **`modeHint: offline`** (`doordash.json:2149-2153`, priority 140) — as do
+  `idle_scheduled_dash_ready` (`:2124-2128`) and `set_dash_end_time`
+  (`:2079-2083`). When you switch **back** to DoorDash mid-pickup, the app
+  commonly renders its **home/map screen for a beat before restoring the
+  active-delivery overlay**. If DashBuddy observes that momentary `idle_map`
+  frame, it emits `modeHint: offline` → the region flips Online→Offline →
+  `PlatformRegionStepper.kt:159-169` arms the provisional `SESSION_END` (10s
+  grace) → the next observation past the deadline hits lazy-expiry (`:63-67`) →
+  `DASH_STOP(EARLY_OFFLINE)` (`EffectMap.kt:280-296`) = "done dashing." The
+  developer never consciously "saw an offline screen" because the idle map flashed
+  for a frame under the restoring pickup UI. (A non-DoorDash app's screens
+  classify with `platformWire = null` and would not match a DoorDash offline rule,
+  so the *other* app is unlikely to be the trigger — it's the **DoorDash idle map
+  on the way back** that fits.)
+- **This is the same root as 2026-05-29 #2 — idle-family screens carry
+  offline/idle signals that are valid *while awaiting* but destructive *mid-task*.**
+  There, `navigation_generic` emitting `flow: idle` retired the active **task**;
+  here, `idle_map` emitting `modeHint: offline` ends the whole **dash**. Same
+  broken premise: an idle/home screen seen *during an active task* is treated as
+  "the dasher is offline/idle," when it's just a transient view.
+- **Developer's design principle (record verbatim intent):** *"we should never
+  assume we went offline"* from mere absence or a transient screen. Offline should
+  require either **an explicit, authoritative offline/end screen** (the dash
+  summary / a real "you're offline" state) **or** a **very long** unobserved
+  gap — the developer floated **~30–35 minutes** — before DashBuddy concludes the
+  dash ended. A momentary idle map on app-return is neither.
+- **Directions surfaced (sketches only, defer to desk):** **(A)** don't let
+  `idle_map` (and the other idle-family rules) emit an offline/idle mode signal
+  **while a task is active** — gate the offline mode-flip on there being no
+  in-progress task, mirroring the 2026-05-29 #2 direction. **(B)** make dash-end
+  on a non-authoritative offline require either an authoritative end screen or a
+  much longer grace than 10s (the developer's 30–35 min) — a bare 10s grace-expiry
+  should fall back to "still dashing," not "ended," especially with a live task.
+  **(C)** guard dash-end while `activeTask != null` — never finalize a dash with a
+  task mid-flight absent an authoritative signal. A is the most direct fix for the
+  observed trigger; C is the robust backstop.
 - **What would confirm or refute this at the desk (for the AS agent + logs):**
-  pull the region transitions around 12:01 PM. Expect: an Online→Offline flip
-  when the app was switched away, a `pendingDestructive(SESSION_END)` armed with a
-  ~10s deadline, then a lazy-expiry `commitDestructive` once an observation lands
-  past that deadline, then a `DASH_STOP(source = EARLY_OFFLINE)`. Confirm the
-  `activeTask` (the pickup) was non-null right up to the end — if so, an active
-  in-progress task was discarded by a timeout, which argues for guarding dash-end
-  on an active task (don't finalize a dash while a task is mid-flight without an
-  authoritative signal).
+  pull the observations around 12:01 PM on the **return** to DoorDash. The
+  decisive line is **which screen/ruleId carried `modeHint: offline`** right before
+  the Online→Offline flip — expect `doordash.screen.idle_map` (or another
+  idle-family rule). Then the chain: `pendingDestructive(SESSION_END)` armed with a
+  ~10s deadline → lazy-expiry `commitDestructive` once an obs lands past it →
+  `DASH_STOP(source = EARLY_OFFLINE)`. Confirm `activeTask` (the pickup) was
+  non-null throughout — if so, an active task was discarded by a 10s timeout
+  triggered by a transient idle frame, which is the bug.
 
 ### Research / design
 
