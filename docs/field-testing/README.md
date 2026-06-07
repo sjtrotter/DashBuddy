@@ -345,6 +345,37 @@ immediately (no second pass needed) so it gets triaged.
   `DASH_STOP(source = EARLY_OFFLINE)`. Confirm `activeTask` (the pickup) was
   non-null throughout — if so, an active task was discarded by a 10s timeout
   triggered by a transient idle frame, which is the bug.
+- **✅ CONFIRMED from the 06-06 data (2026-06-07 desk investigation) — culprit is
+  `idle_scheduled_dash_ready`, NOT `idle_map`.** Exact sequence from
+  `logs/2026/06/06/db/dashbuddy-v2.db` + `app_log_rotated_20260606_130507.log`:
+  - 11:50:13 `OFFER_ACCEPTED` → 11:50:15 `pickup_navigation` (Online, **active pickup task**).
+  - **11:50:23 `SCREEN: idle_scheduled_dash_ready`** (`flow=Idle, modeHint=Offline`,
+    captured `…__idle_scheduled_dash_ready__96f95d.json`) — a transient
+    "Start your scheduled dash" frame **8 s into an active pickup** (the dasher had a
+    *next* scheduled dash queued). This flips the region Online→Offline and arms
+    `pendingDestructive(SESSION_END)` (deadline ≈ 11:50:33).
+  - Dasher app-switches → **8.9-min observation gap** (no DoorDash events).
+  - **12:00:56** return → first obs `pickup_navigation/Online` lands far past the
+    deadline → lazy-expiry commits **`DASH_STOP(early_offline)`** (seq 18) and, being
+    Online with no session, a fresh **`DASH_START(interaction)`** (seq 19) — same second.
+  - Bubble: `[Dispatch] Done Dashing!` → `[Navigator] Pickup: H-E-B` →
+    `Resetting Session Odometer` → `[Dispatch] Started Dashing!`.
+  - **Impact:** not a "resume" — the dash **ended and re-started a new session,
+    wiping the session odometer (miles/earnings)** mid-pickup. The pickup itself
+    survived into the new session (`PICKUP_ARRIVED` 12:09, `CONFIRMED` 12:53), so the
+    delivery completed but the session stats reset.
+  - **So the real culprit is the #290 rule I added:** `idle_scheduled_dash_ready`
+    carries `modeHint: offline` (correct when *about to start* a dash, wrong when it
+    flashes while a delivery is already active and a *next* dash is scheduled).
+    `idle_map` / `set_dash_end_time` share the same hazard. Confirms the
+    "idle-family screen seen mid-task is destructive" premise — and that a 10s
+    `SESSION_END` grace can discard an **active task** with no authoritative end.
+- **Proposed direction (validated):** Direction **C** — never commit a
+  `SESSION_END` (DASH_STOP) while `activeTask != null` without an authoritative end
+  (summary). Robust backstop covering every idle-family offline flip mid-task, and
+  matches the developer's "never assume offline from a transient screen" principle.
+  Direction A (gate idle-family offline mode-flip while a task is active) is the
+  narrower companion. Tracked as a follow-up; not yet fixed.
 
 #### 6. Stacked offer item count parsed as 2 instead of 14 (parseItemCount also matches "order", so it grabs the order count on a multi-order line)
 
