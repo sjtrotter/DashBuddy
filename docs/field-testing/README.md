@@ -223,8 +223,19 @@ immediately (no second pass needed) so it gets triaged.
 - **Field observation (original):** the pickup showed **"+24:18 ahead"** (doubted
   accurate), the drop-off **"1:34 late"** (plausible but unverifiable with no time
   shown). Core complaint: after arrival the wall-clock anchor is gone.
-- **Status:** Open. Sub-issue (a) and the after-arrival missing-anchor are both
-  **desk-confirmable**; the "+24:18 is wrong" magnitude needs captured data.
+- **Update (2026-06-06, later in the same session) — (b) could not reproduce; the
+  wall-clock IS showing.** On a subsequent pickup the developer observed the
+  "pick up by H:MM" time **present** on the card after all ("it's working now…
+  maybe I didn't see it earlier"). So the after-arrival missing-anchor is
+  **intermittent or was a misread** — not a confirmed repro. The developer is
+  **deliberately not conjecturing** and will let the Android-Studio Claude agent
+  inspect the captures at home to settle whether (b) ever actually dropped the
+  anchor. Treat (b) as **unconfirmed / pending capture review**; sub-issue (a)
+  (the redundant "by") is a separate, still-valid wording nit.
+- **Status:** Open. Sub-issue (a) (redundant "by") is **desk-confirmable**;
+  sub-issue (b) (wall-clock gone after arrival) is now **unconfirmed — could not
+  reproduce**, deferred to capture review. The "+24:18 is wrong" magnitude needs
+  captured data.
 - **Desk read — (a) redundant "by" (high confidence):** the active caption is
   `Caption("$deadlineLabel · by ${formatTime(deadlineMillis)}")`
   (`FlowCardItem.kt:365`) and `deadlineLabel` is **"till pickup-by"** (`:307`) /
