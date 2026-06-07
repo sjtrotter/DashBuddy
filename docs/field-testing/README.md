@@ -204,38 +204,65 @@ immediately (no second pass needed) so it gets triaged.
   never showed paused, the pause-screen recognition is the gap. Cross-refs the
   `DashPaused` / `DashPausedMatcher` path.
 
-#### 2. Frozen pickup/drop-off cards drop the wall-clock anchor; "+24:18 ahead" looks wrong and "1:34 late" can't be verified
+#### 2. Pickup/drop-off deadline display: redundant "by" while navigating, and the wall-clock disappears *after arrival* ("+24:18 ahead" / "1:34 late" can't be verified)
 
-- **Field observation:** on the pickup the card showed **"+24:18 ahead"**, which
-  the developer doubts is accurate ("I think there's something wrong with the
-  calculation"). On the drop-off it showed **"1:34 late"** ("which is fine, but
-  there is no time, so I can't really tell if that's actually true"). Core
-  complaint: the **wall-clock deadline time** the DoorDash/offer screen shows is
-  **not** surfaced on the bubble card, so the countdown/delta can't be
-  cross-checked.
-- **Status:** Open. The "missing wall-clock on the frozen card" half is
-  **desk-confirmable**; the "+24:18 is wrong" half needs captured data.
-- **Desk read — the missing-wall-clock half (high confidence):** the **active**
-  card already carries the anchor — `DeadlineBody` renders
-  `Caption("$deadlineLabel · by ${formatTime(deadlineMillis)}")` at
-  `FlowCardItem.kt:365` (added per 2026-05-19 #1 / #271). But the **frozen**
-  branch's "ahead/late" delta path renders `Caption("vs $deadlineLabel")` at
-  `FlowCardItem.kt:388` — **no `by HH:MM`**. So once a pickup/drop-off card
-  freezes, the wall-clock anchor that the active card had disappears, which is
-  exactly why the developer can't verify "+24:18 ahead" / "1:34 late". The #271
-  wall-clock work covered the active branch only; the frozen delta branch never
-  got it.
-- **Desk read — the "+24:18 looks wrong" half (hypothesis, needs data):** the
-  frozen delta is `arrivalRemaining = deadlineMillis - arrivedAt`
-  (`FlowCardItem.kt:379-380`), formatted as `m:ss` via `formatCountdown`
-  (`:598-603`). So "+24:18 ahead" = arrived **24m18s before** the parsed
-  deadline. This is **not** the old ~1434-minute day-rollover ghost (#267) — the
-  magnitude is small — so it's either roughly correct and just counter to the
-  developer's gut, or `deadlineMillis`/`arrivedAt` is slightly off (e.g. deadline
-  parsed from the wrong on-screen field, or `arrivedAt` stamped at the wrong
-  sub-state). To confirm/refute at the desk: pull this pickup's `deadlineMillis`
-  and `arrivedAt` from the events and compare against the "Pick up by H:MM" text
-  DoorDash actually rendered; the same for the drop-off's "1:34 late".
+- **Developer modification (2026-06-06, refining the original report):** two
+  distinct sub-issues, scoped by phase:
+  - **(a) Navigating (pre-arrival) — redundant "by".** While en route to a pickup
+    the card caption reads **"till pickup-by · by H:MM"** — it says **"by"
+    twice**. It should read the deadline label **and the time once**, e.g.
+    "till pickup-by H:MM" (drop the second "by"). The wall-clock **is** present in
+    this phase (good) — it's just doubled-up wording.
+  - **(b) After arrival — the wall-clock disappears.** The actual bug the
+    developer is reporting is for **after arriving at a pickup or drop-off**: once
+    arrived, the wall-clock deadline time **vanishes** from the card, so the
+    "+24:18 ahead" / "1:34 late" delta can't be cross-checked against the time
+    DoorDash showed. The developer notes this **will likely go away once the
+    timers are separated** (Research/design #3) but wanted it on record as the
+    current defect.
+- **Field observation (original):** the pickup showed **"+24:18 ahead"** (doubted
+  accurate), the drop-off **"1:34 late"** (plausible but unverifiable with no time
+  shown). Core complaint: after arrival the wall-clock anchor is gone.
+- **Status:** Open. Sub-issue (a) and the after-arrival missing-anchor are both
+  **desk-confirmable**; the "+24:18 is wrong" magnitude needs captured data.
+- **Desk read — (a) redundant "by" (high confidence):** the active caption is
+  `Caption("$deadlineLabel · by ${formatTime(deadlineMillis)}")`
+  (`FlowCardItem.kt:365`) and `deadlineLabel` is **"till pickup-by"** (`:307`) /
+  **"till deliver-by"** (`:328`). So the rendered string is literally
+  "till pickup-by · by H:MM" — the label already ends in "-by" and the caption
+  adds another "by". Fix is a one-liner: drop the "by " in the caption (→
+  "$deadlineLabel · H:MM") or reword the label. The Delivery side has the same
+  shape.
+- **Desk read — (b) wall-clock gone after arrival (high confidence on the two
+  post-arrival states, exact null-path needs data):** after arrival the card is in
+  one of two states that **lack** the `by H:MM` caption the navigating card has:
+  - **Live "at stop":** the active branch only shows the countdown + wall-clock
+    *when `deadlineMillis != null`* (`FlowCardItem.kt:358-365`); the **else** path
+    (`:366-369`) renders elapsed time + `Caption("at stop")` with **no
+    wall-clock**. So if `deadlineMillis` goes null once arrived (e.g. the "Pick up
+    by H:MM" text leaves the screen at the store and the field isn't carried
+    forward), the card drops into "at stop" and the anchor is gone. *(Worth
+    confirming against data — `PlatformRegionStepper.kt:461` uses `?:` to preserve
+    a prior deadline, so whether it actually goes null after arrival needs a
+    capture.)*
+  - **Frozen card:** the "ahead/late" delta branch renders `Caption("vs
+    $deadlineLabel")` (`FlowCardItem.kt:388`) — also **no `by H:MM`**. This is the
+    "+24:18 ahead" / "1:34 late" with no time to verify against.
+  The #271 wall-clock work only covered the **navigating** active branch; both
+  **post-arrival** states (live "at stop" and frozen) never got the anchor. The
+  two-timer redesign (#3) would resolve this by making the wall-clock the heading
+  and adding the count-up dwell — matching the developer's note that separating
+  the timers should make this go away.
+- **Desk read — "+24:18 looks wrong" (hypothesis, needs data):** the frozen delta
+  is `arrivalRemaining = deadlineMillis - arrivedAt` (`FlowCardItem.kt:379-380`),
+  formatted `m:ss` via `formatCountdown` (`:598-603`). "+24:18 ahead" = arrived
+  24m18s before the parsed deadline. **Not** the old ~1434-min day-rollover ghost
+  (#267) — magnitude is small — so it's either roughly correct or
+  `deadlineMillis`/`arrivedAt` is slightly off (deadline parsed from the wrong
+  field, or `arrivedAt` stamped at the wrong sub-state). Confirm/refute: pull this
+  pickup's `deadlineMillis` + `arrivedAt` vs the "Pick up by H:MM" text DoorDash
+  rendered; same for the drop-off's "1:34 late".
+
 
 #### 5. App-switch mid-pickup → returned to DoorDash → DashBuddy said "done dashing" while the screen still showed pickup (premature dash-end beyond grace)
 
