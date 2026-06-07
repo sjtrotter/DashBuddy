@@ -552,17 +552,35 @@ immediately (no second pass needed) so it gets triaged.
     belongs **here**, not in the ratio metrics.
 - **Recommendation (hypothesis, defer to desk):** keep the ratio metrics as-is;
   make **only `PAYOUT` stack-aware** by scaling the target sub-linearly with the
-  order count: `effectiveTarget = target × (1 + k·(orders − 1))`, k ≈ 0.5–0.75 →
-  double = 1.5–1.75×, triple = 2.0–2.5×. **Sub-linear (not strict 2×) is the
-  correct shape** because a stack shares overhead (one trip, overlapping route,
-  shared dead miles), so the marginal order is worth taking at less than a full
-  single's pay — a strict 2× would decline efficient stacks that the $/hr metric
-  would accept. Count by **deliveries = `offer.orders.size`** (the revenue-unit
-  count, available at `OfferEvaluator.kt:30` / `ParsedOffer.orders`); the
-  developer's `max(pickups, drop-offs)` proxy converges to the same value for
-  typical stacks (a double at one store = 1 pickup / 2 drop-offs → max 2).
-  Effort/pickups need not enter the payout floor — distance/time already price
-  effort into the ratio metrics, so adding it here would double-count.
+  order count. **Refined model (developer follow-up): derive the multiplier from
+  the order count via a power law — `effectiveTarget = target × n^p`** — where
+  `n = offer.orders.size` and `p` is a single "stacking efficiency" exponent in
+  `[0,1]`. This is preferred over the earlier fixed-`k` linear form
+  `target × (1 + k·(n−1))` because the developer wants it to (i) **derive from the
+  order count with one knob** and (ii) **diminish per added order** — a big
+  DashLink-style batch (the developer has seen 3; others get many more) shares more
+  overhead, so the marginal order should demand *less*, which a power law does and
+  a linear form does not.
+  - `p = 1` → strict linear (each order demands a full single bar: 2×, 3×, …,
+    n×); `p = 0` → no scaling (any stack clears the single bar); the developer's
+    "≈1.5× at a double" pins **`p ≈ 0.585`** (`2^0.585 ≈ 1.5`); "≈1.75×" → `p ≈
+    0.81`. `f(1) = 1` falls out for free.
+  - At `p ≈ 0.585` against a $7 single bar: n=2 → 1.50× ($10.50, $5.25/order);
+    n=3 → 1.93× ($13.50, $4.50/order); n=5 → 2.65× ($18.55, $3.71/order); n=10 →
+    3.84× ($26.90, $2.69/order). The **per-order floor decays** as the batch grows
+    — the batch-efficiency intuition, built in.
+  - Count by **deliveries = `offer.orders.size`** (`OfferEvaluator.kt:30` /
+    `ParsedOffer.orders`); the developer's `max(pickups, drop-offs)` proxy
+    converges to the same value for typical stacks. Effort/pickups need not enter
+    the payout floor — distance/time already price effort into the ratio metrics,
+    so adding it here would double-count.
+  - **Big-batch cautions (developer raised DashLink / many-order batches):**
+    (1) keep **`ACTIVE_HOURLY` as the hard backstop** — power-law payout alone
+    could wave through a large batch that's actually a time sink; `$/hr` already
+    evaluates stacks correctly and should be allowed to veto. (2) Consider a
+    **per-order floor** (e.g. don't let the implied per-order bar decay below ~$2)
+    so an enormous `n` can't shrink the threshold to nothing. Expose `p` (and the
+    optional floor) as the tunables; default `p ≈ 0.585–0.65`.
 - **Hard dependency — Bug #6.** A per-order payout rule needs `offer.orders`
   populated reliably and the per-order item/count parse correct. Bug #6 (the
   `parseItemCount` regex grabbing "2 orders" off a stacked secondary line) is
