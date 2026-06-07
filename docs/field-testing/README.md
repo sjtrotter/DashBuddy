@@ -526,6 +526,53 @@ immediately (no second pass needed) so it gets triaged.
   (Confirmed 1/2). Needs one more clean dash confirming the final count reaches
   `total/total`.
 
+### Research / design
+
+#### 8. Stacked-offer evaluation: make the flat "Min Payout" metric stack-aware (sub-linear multiplier on order count)
+
+- **Developer's question (not a bug — desk-think request):** wonders whether
+  stacked offers are evaluated too leniently. Reasoning: if the single-order bar is
+  ~$7, a double-stacked order arguably shouldn't pass unless it's meaningfully more
+  — not necessarily a strict 2× ($14), but maybe **~1.5–1.75× the single bar per
+  added order**, counted by **deliveries / pickups (max of pickups vs drop-offs)**.
+  Asked for a viability read, explicitly *not* a fix to apply.
+- **Status:** Open (research/design — note for the AS agent / desk).
+- **Desk read (how it maps onto the current evaluator):** `OfferEvaluator.evaluate`
+  computes all metrics on the **combined stack totals** — `grossPay`, `dist`,
+  `items` are the offer aggregate (`OfferEvaluator.kt:11-13`), and it scores each
+  enabled `MetricRule` against the user's targets.
+  - **The ratio metrics already handle stacking correctly.** `DOLLAR_PER_MILE`
+    (`netPay/dist`) and `ACTIVE_HOURLY` (`netPay/estTimeHours`) are scale-invariant
+    (`:27-28`, `:199-200`): a $14 double over 2× distance has the *same* $/mi and
+    $/hr as a $7 single over 1× — so stacks are evaluated fairly by these with no
+    per-order adjustment. These are the real "True Net Profitability" north star.
+  - **The flat `PAYOUT` ("Min Payout") metric is the stack-blind one.** It scores
+    `netPay / target` (`:198`), so a $10 double clears a $7 floor (10/7 → capped at
+    1.0) despite being ~$5/order — the leniency the developer noticed. The fix
+    belongs **here**, not in the ratio metrics.
+- **Recommendation (hypothesis, defer to desk):** keep the ratio metrics as-is;
+  make **only `PAYOUT` stack-aware** by scaling the target sub-linearly with the
+  order count: `effectiveTarget = target × (1 + k·(orders − 1))`, k ≈ 0.5–0.75 →
+  double = 1.5–1.75×, triple = 2.0–2.5×. **Sub-linear (not strict 2×) is the
+  correct shape** because a stack shares overhead (one trip, overlapping route,
+  shared dead miles), so the marginal order is worth taking at less than a full
+  single's pay — a strict 2× would decline efficient stacks that the $/hr metric
+  would accept. Count by **deliveries = `offer.orders.size`** (the revenue-unit
+  count, available at `OfferEvaluator.kt:30` / `ParsedOffer.orders`); the
+  developer's `max(pickups, drop-offs)` proxy converges to the same value for
+  typical stacks (a double at one store = 1 pickup / 2 drop-offs → max 2).
+  Effort/pickups need not enter the payout floor — distance/time already price
+  effort into the ratio metrics, so adding it here would double-count.
+- **Hard dependency — Bug #6.** A per-order payout rule needs `offer.orders`
+  populated reliably and the per-order item/count parse correct. Bug #6 (the
+  `parseItemCount` regex grabbing "2 orders" off a stacked secondary line) is
+  prerequisite work; confirm stacked offers parse their `orders` list correctly
+  before building stack-aware scoring on top.
+- **What would help decide at the desk:** pull a few captured stacked-offer
+  evaluations from the DB and look at how `PAYOUT` scored vs how `$/hr`/`$/mi`
+  scored — confirm the payout floor is the loose one in practice, then tune k
+  against the developer's accept/decline history.
+
 ---
 
 ## 2026-06-05 — DoorDash session (Shop & Deliver, items/min off-by-one)
