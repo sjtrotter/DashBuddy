@@ -157,6 +157,22 @@ immediately (no second pass needed) so it gets triaged.
     one more clean sighting of the end-of-shop `total/total`. (See 2026-06-06
     log entry #4.)
 
+- **⚠️ WATCH FOR RECURRENCE — mid-dash "Done Dashing!" + odometer reset (2026-06-06 #5, root cause confirmed, fix NOT yet shipped).** Confirmed once on 06-06: a
+  transient **"Start your scheduled dash"** (`idle_scheduled_dash_ready`,
+  `modeHint:offline`) frame seen **during an active pickup/delivery** armed the 10s
+  `SESSION_END` grace; after an app-switch the dash **ended** (`DASH_STOP early_offline`)
+  and **restarted fresh, resetting the session odometer** mid-dash. **How to tell it
+  recurred:** the bubble flashes **"Done Dashing!"** then **"Started Dashing!"** and
+  the **session miles/earnings reset to 0** while a delivery is still on screen — most
+  likely when you have a **next dash scheduled** *and* you switch apps mid-task.
+  **What to capture if it happens:** note the **time** (so we can pull the
+  `idle_scheduled_dash_ready` / offline frame + the `DASH_STOP(early_offline)`), and
+  whether a **scheduled dash was queued**. Goal: confirm recurrence + see whether any
+  screen *other* than `idle_scheduled_dash_ready` ever triggers it — that decides the
+  fix direction (narrow rule-gate **A** vs. the broad "never end a dash with an active
+  task" guard **C**).
+  - Sightings: 1 (2026-06-06). Gathering more before implementing.
+
 ---
 
 ## Untriaged — carried over from scratch notes
