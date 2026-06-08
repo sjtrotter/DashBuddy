@@ -105,11 +105,16 @@ immediately (no second pass needed) so it gets triaged.
   - Also regression-watch the grace refactor: backing out of the app mid-pickup
     and returning still **keeps the active task**; a brief offline blip mid-dash
     still **resumes the same** dash (no spurious new session).
-  - Confirmed: 0/2. **Partial — 2026-06-03 (DoorDash):** the *brief-offline-blip
+  - Confirmed: 1/2. **Partial — 2026-06-03 (DoorDash):** the *brief-offline-blip
     resumes same dash* sub-case was seen — an app-switch return fired
-    "Session resumed (grace)" (same session, no fresh start). Still unconfirmed:
-    that the **active task** survived the blip, and the explicit start-path cases
-    (on-demand / scheduled fresh start). See 2026-06-03 log entry #3.
+    "Session resumed (grace)" (same session, no fresh start).
+    **2026-06-07 (desk review):** two more sub-cases landed — (a) **resume-same-dash**
+    seen again at 16:30:59 ("Session resumed (grace)", same session `9072f690`); and
+    (b) the **on-demand fresh start** path confirmed at 11:24 — `DASH_STOP(summary_screen)`
+    → 8 s later `DASH_START` with a **new** sessionId (not a grace resume). Still
+    unconfirmed: that the **active task** survived the blip (no event proves task
+    retention either way), and the **scheduled** fresh-start path. See 2026-06-07 log
+    entry #4/#5.
 
 - **Alcohol delivery ID-verification flow recognized + arrival timing (#149).**
   On an alcohol dropoff, the ID-check flow is now recognized (previously
@@ -143,7 +148,11 @@ immediately (no second pass needed) so it gets triaged.
   the completed-card stack should show exactly **one** delivery card for that stop
   (no duplicate). This was the fatal `LazyColumn` duplicate-key crash from the
   2026-06-03 session (#297).
-  - Confirmed: 0/2.
+  - Confirmed: 1/2. **2026-06-07 (desk review):** 3 arrival-bearing dropoffs fired
+    both `DELIVERY_ARRIVED` and `DELIVERY_CONFIRMED` (in fact duplicated — see
+    2026-06-07 log #1) and the app had **zero crashes** all day. The dedup held: no
+    `LazyColumn` duplicate-key crash. Needs one more clean sighting (ideally
+    confirming exactly one card per stop visually in the bubble).
 
 - **Shop & Deliver items/min reaches `total/total` at the end (#302).** On a
   Shop & Deliver order, when you finish shopping (add the last item / reach
@@ -172,6 +181,12 @@ immediately (no second pass needed) so it gets triaged.
   fix direction (narrow rule-gate **A** vs. the broad "never end a dash with an active
   task" guard **C**).
   - Sightings: 1 (2026-06-06). Gathering more before implementing.
+    **2026-06-07 (desk review): did NOT recur** — all 4 `DASH_STOP` were
+    `source:summary_screen` (authoritative); zero `early_offline`. **But the
+    discriminating case never ran:** all 4 `DASH_START` were `source:interaction`
+    from `WaitingForOffer` — no `idle_scheduled_dash_ready` start path this session,
+    so still **no second data point** on whether another screen can trigger it. Fix
+    stays held; keep watching (esp. dashes with a scheduled block queued).
 
 ---
 
@@ -184,6 +199,139 @@ immediately (no second pass needed) so it gets triaged.
   - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
     "summary after the idle screen" ordering was the root cause). Field-validate
     via the #279 checklist item above.
+
+---
+
+## 2026-06-07 — DoorDash session (desk review of captured data)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` at `6649f4f` (post-#307 merge — includes #302
+  shopping-itemcount-dedup, #297 duplicate-card crash fix, #286/#290 grace
+  refactor).
+- **Field conditions:** developer dashed a **full day** (4 dashes: 08:29–11:24,
+  11:24–13:51, 15:32–16:49, 19:02–20:12; 7 completed deliveries, $211.53 total
+  across the four summaries). This entry is a **desk review** of the Jun 7
+  captures + event DB + app logs, not live narration. Six log rotations =
+  long session. No crashes all day (`FATAL`/`AndroidRuntime`/recovery markers:
+  zero). All findings below are **hypotheses from captured data**, framed for
+  the developer to triage — not concluded fixes.
+
+### Bugs
+
+#### 1. Duplicate `DELIVERY_CONFIRMED` / `DELIVERY_ARRIVED` recurred — and it is NOT crash-recovery (refines #300)
+
+- **Data observation (authoritative, from the event DB):** 3 of the 7
+  deliveries fired `DELIVERY_CONFIRMED` more than once:
+  - job `6f3a4a45` — **3×** confirms (11:14:11, 11:21:56, 11:24:11) **and 2×**
+    `DELIVERY_ARRIVED` (11:21:55, 11:21:56)
+  - job `879f03b7` — **2×** confirms (13:38:44, 13:50:47)
+  - job `365eb1dc` — **2×** confirms (20:03:43, 20:12:25)
+  The other 4 deliveries confirmed **exactly once**. `DELIVERY_COMPLETED` fired
+  **exactly once per job** (clean) — so completion is fine; the intermediate
+  `CONFIRMED`/`ARRIVED` lifecycle events are what duplicate.
+- **This rules out the original #300 hypothesis.** #300 was filed as
+  "crash-recovery re-emits events on replay." But this session had **zero
+  crashes and zero recovery markers** in the logs, and the duplicates are
+  **minutes apart** (e.g. 11:14 → 11:21 → 11:24), not the near-instant
+  back-to-back a replay would produce. So whatever causes this is happening
+  during **normal operation**, not recovery.
+- **New, strong correlation (the lead):** the 3 duplicating jobs are **exactly**
+  the 3 whose `DELIVERY_NAV_STARTED` payload carried an anomalous **`arrivedAt`
+  timestamp**; the 4 clean jobs carried `addressHash` and **no** `arrivedAt`.
+  3/3 vs 0/4 — a perfect split. A `DELIVERY_NAV_STARTED` event that already
+  knows an arrival time is itself odd (nav-started shouldn't have arrived yet),
+  and the first spurious `CONFIRMED` fires only **2–6 s after**
+  `DELIVERY_NAV_STARTED` — i.e. **before** the real arrival (which is minutes
+  later).
+- **Hypothesis (unverified):** these deliveries entered the delivery/dropoff
+  region via a state-construction path that **already carried prior arrival
+  data** (the `arrivedAt` in the nav-started payload is the tell), and that path
+  re-fires the confirm effect on subsequent dropoff-screen window events.
+  Would need to confirm by tracing, for one of the three jobs, which observation
+  built the `DELIVERY_NAV_STARTED`-with-`arrivedAt` state and what re-triggers
+  the confirm effect on the repeat frames. The honest read is that **#300's
+  title/root-cause should be rewritten** from "recovery re-emit" to "dropoff
+  lifecycle event re-fires on repeated window events (correlates with
+  nav-started carrying arrivedAt)."
+- **No user-visible crash:** the #297 FlowCard dedup held — duplicate delivery
+  cards collapsed by `id`, no `LazyColumn` duplicate-key crash. So this is an
+  **event-log-integrity** defect (and a potential double-count risk for anything
+  that sums lifecycle events), not a visible bubble break this session.
+- **Status:** Open. Recurrence of #300 with new evidence; the recovery-replay
+  framing is desk-refuted for this session.
+
+#### 2. In-app "Transfer in / balance" screen captured as UNKNOWN, not blocked as SENSITIVE (privacy gap)
+
+- **Data observation:** a DoorDash in-app DasherDirect **"Transfer in"** screen
+  showing **"$310.08 available"** + transfer amounts ($10/$25/$50) + "Continue"
+  was captured as `classificationName: UNKNOWN` (file
+  `2026-06-08_07-26-29-578…window__UNKNOWN`, captured the next morning but in the
+  Jun 7 rotated folder). It landed in the capture corpus **unredacted** rather
+  than being short-circuited to SENSITIVE.
+- **Hypothesis (unverified):** `SensitiveScreenMatcher` runs first and is
+  supposed to block banking/balance/transfer screens, but this **transfer-screen
+  variant isn't matched**, so it falls through to UNKNOWN and gets captured. A
+  balance figure reaching disk is exactly what the edge-PII / sensitive-blocking
+  pledge is meant to prevent. Cross-refs the standing "Cashout / transfer screens
+  blocked (#275)" checklist item — this is **evidence that item is not fully
+  satisfied** for the DasherDirect transfer screen.
+- **Status:** Open — would need to confirm which sensitive predicates fire (or
+  don't) on this screen's node text.
+
+### Verification TODOs (checklist outcomes this session)
+
+#### 3. Grace-STOP bug (06-06 #5) — did NOT recur, but no scheduled-start path occurred
+
+- **Data observation:** all **4** `DASH_STOP` events this session carried
+  `source: "summary_screen"` (authoritative dash-summary end). **Zero**
+  `early_offline` stops; no mid-task `SESSION_END` / `pendingDestructive`
+  firings in the logs. So the mid-dash premature-end did **not** happen Jun 7.
+- **But the discriminating case still didn't occur.** All **4** `DASH_START`
+  events were `source: "interaction"` from `WaitingForOffer` — **no
+  scheduled-dash start** (`idle_scheduled_dash_ready`) path ran this session. The
+  06-06 grace-STOP was traced to an `idle_scheduled_dash_ready` offline-flip; we
+  still have **no second data point** on whether any *other* idle-family screen
+  can trigger it. **The held fix stays held** (direction A vs C still
+  undecided), and the watch-for-recurrence checklist item stays.
+
+#### 4. Grace-RESUME worked mid-dash (2nd confirmation of #286/#290 resume sub-case)
+
+- **Data observation:** at **16:30:59** the log shows `EffectMap: Session grace
+  resume: 9072f690…` → `Chat: Session resumed (grace)`, for the 15:32→16:49 dash.
+  An app-switch / brief-offline blip mid-dash correctly **resumed the same
+  session** (no fresh start, no new sessionId). This is the **second** clean
+  sighting of the resume sub-case (first was 06-03).
+
+#### 5. End-and-fresh-start worked on the on-demand path (#286/#290)
+
+- **Data observation:** at **11:24:22** `DASH_STOP` (summary_screen) was followed
+  **8 s later** at 11:24:30 by a `DASH_START` with a **new** sessionId
+  (`c1894851…`, `source: interaction`, `startScreen: WaitingForOffer`) — a true
+  fresh dash, **not** a grace resume. Confirms the "new dash right after ending
+  one starts fresh" **on-demand** sub-case. (The **scheduled** start sub-case
+  remains unconfirmed — see #3.)
+
+### Field UX context / corpus
+
+#### 6. Unassign / "Unassign with no pay" flow captured live — still UNKNOWN (good #301 corpus)
+
+- The 16:36–16:37 UNKNOWN window cluster (~12 frames) is the pickup-issue →
+  unassign flow: "Select an issue" / "Order has long wait time" / "Red Card
+  issues" / "Resolution options" / **"Unassign with no pay"** / **"Your
+  Completion Rate will drop to 99%"** / "Continue with the current order" /
+  "Unassign order" / "Contact support". This is exactly the flow **#301** is
+  about, and it's **still UNKNOWN** (unrecognized) — so these frames are clean
+  corpus for building the unassign matchers when #301 is picked up.
+
+#### 7. UNKNOWN window volume + two recognizable one-offs
+
+- ~180 UNKNOWN window frames captured this session — expected (UNKNOWN screens
+  don't dedup the way recognized ones do; mostly transient/loading frames).
+  Two recognizable one-offs worth noting if a matcher is ever wanted: a
+  **"Continue dashing"** post-summary prompt (around the 11:24 stop/restart), and
+  a screen reading **"Dasher detected this screenshot."** — **open question:** is
+  DoorDash surfacing detection of DashBuddy's own screenshot side-effect? Worth a
+  closer look at that capture before assuming anything.
 
 ---
 
