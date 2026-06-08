@@ -257,8 +257,46 @@ immediately (no second pass needed) so it gets triaged.
   cards collapsed by `id`, no `LazyColumn` duplicate-key crash. So this is an
   **event-log-integrity** defect (and a potential double-count risk for anything
   that sums lifecycle events), not a visible bubble break this session.
-- **Status:** Open. Recurrence of #300 with new evidence; the recovery-replay
-  framing is desk-refuted for this session.
+- **ROOT CAUSE FOUND (deeper capture dive — high confidence).** Cross-referencing
+  the duplicate-confirm timestamps against the window captures: **all 3 duplicating
+  deliveries used the `dropoff_handoff` ("hand it to customer") screen; all 4 clean
+  ones used `dropoff_photo`.** And the `dropoff_handoff` rule
+  (`doordash.json:2436`) classifies **`flow: task:dropoff:arrived`** on nothing more
+  than the drop-off workflow fragment + the **instruction text** "hand it to
+  customer" — which DoorDash *also shows as a preview before you've arrived*. The
+  premature `dropoff:arrived` (→ premature `DELIVERY_ARRIVED`/`CONFIRMED`) fires on
+  that preview, then fires **again** at the real arrival.
+  - **The reliable discriminator is the completion CTA "Mark as delivered."**
+    Diffing the false vs real handoff capture for each of the 3 jobs:
+    - `6f3a4a45`: 11:14:09 (no CTA, premature) → 11:21:55 (**"Mark as delivered"**)
+    - `879f03b7`: 13:38:40 (no CTA) → 13:46:32 (**"Mark as delivered"**)
+    - `365eb1dc`: 20:03:37 (no CTA) → 20:10:07 (**"Mark as delivered"**)
+    3/3 clean: the early/false handoff lacks `Mark as delivered`; the real arrival
+    has it. (`dropoff_photo` doesn't duplicate because the "photo of drop-off"
+    screen is only shown at arrival, never as a nav preview.)
+  - **Why this matters beyond noise (re: "is it even a bug?"):** the duplicate
+    *events* are largely harmless today (display deduped by #297, `COMPLETED`
+    clean). The real defect is the **premature/false arrival**: `arrivedAt` gets
+    stamped ~7 min early (at the preview), which corrupts every arrival-anchored
+    metric — dwell-time-at-customer and the "ahead/late" deadline delta from
+    2026-06-06 #2 both read off `arrivedAt`. So this is a low-severity *correctness*
+    issue, not purely cosmetic.
+  - **This is the same root as the "better arrival indicator" question.** A
+    hypothesis worth confirming: gate the handoff (and pin) `dropoff:arrived`
+    classification on the **completion CTA** ("Mark as delivered" / "Complete
+    Delivery" / `complete_delivery_steps_button`) rather than the instruction text,
+    so arrival only fires inside the geofence. That would kill both the premature
+    confirm and the duplicate at the source. (`dropoff_geofence_warning`, "far away
+    from the customer", is the existing *negative* signal — the CTA is the positive
+    one.)
+- **Two distinct duplicate-event causes now exist, don't conflate them:**
+  (a) #300's crash-recovery replay (real but crash-only, rare post-#297 — keep
+  #300 as written); (b) this **non-crash handoff-preview false-arrival** (common on
+  every hand-it-to-customer delivery). (b) is better tracked as an arrival-signal
+  fix than as a dedup.
+- **Status:** Open. Root cause identified (handoff instruction-preview vs
+  `Mark as delivered` CTA); #300's recovery framing is for cause (a) only — cause
+  (b) is separate and the more frequent one.
 
 #### 2. In-app "Transfer in / balance" screen captured as UNKNOWN, not blocked as SENSITIVE (privacy gap)
 
@@ -275,8 +313,14 @@ immediately (no second pass needed) so it gets triaged.
   pledge is meant to prevent. Cross-refs the standing "Cashout / transfer screens
   blocked (#275)" checklist item — this is **evidence that item is not fully
   satisfied** for the DasherDirect transfer screen.
+- **Second instance, same gap (reinforces it):** a weekly-earnings screen —
+  "Earnings · This week · **$575.23** · Paid to your DoorDash Crimson account ·
+  Payout details" — was also captured (16:49:54 click capture, `UNKNOWN`) when the
+  dash ended. So at least two distinct earnings/banking surfaces (DasherDirect
+  transfer + weekly-earnings/Crimson) are slipping past the sensitive block into
+  the corpus, both with dollar figures.
 - **Status:** Open — would need to confirm which sensitive predicates fire (or
-  don't) on this screen's node text.
+  don't) on these screens' node text.
 
 ### Verification TODOs (checklist outcomes this session)
 
