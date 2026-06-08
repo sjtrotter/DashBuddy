@@ -297,6 +297,14 @@ immediately (no second pass needed) so it gets triaged.
 - **Status:** Open. Root cause identified (handoff instruction-preview vs
   `Mark as delivered` CTA); #300's recovery framing is for cause (a) only — cause
   (b) is separate and the more frequent one.
+- **Full month-wide analysis (per delivery type):** see
+  [`docs/capture-analysis/2026-06-dropoff-arrival-signals.md`](../capture-analysis/2026-06-dropoff-arrival-signals.md)
+  — 5-day fan-out over all 23 June drop-offs. Confirms hand-to-customer is **6/6**
+  premature+duplicated while leave-at-door is **14/14** clean; gives the reliable
+  arrival signal per type (photo screen / "Mark as delivered" CTA / PIN screen /
+  ID-scan screen), the structural fixes (CTA-gate handoff, per-leg idempotent
+  confirm, monotonic arrival latch), and the recognition gaps (cant-reach-customer,
+  cash-on-delivery, signature, staff-handoff).
 
 #### 2. In-app "Transfer in / balance" screen captured as UNKNOWN, not blocked as SENSITIVE (privacy gap)
 
