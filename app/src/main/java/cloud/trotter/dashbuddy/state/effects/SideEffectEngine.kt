@@ -62,6 +62,12 @@ class SideEffectEngine @Inject constructor(
     companion object {
         /** Default throttle between repeated firings of the same action. */
         const val DEFAULT_ACTION_THROTTLE_MS = 500L
+
+        /**
+         * Delay before auto-expanding the offer bubble, so it lands AFTER the offer
+         * screenshot's settle + capture and never covers the captured frame.
+         */
+        const val OFFER_BUBBLE_EXPAND_DELAY_MS = ScreenShotHandler.SETTLE_MS + 250L
     }
 
     /**
@@ -103,7 +109,7 @@ class SideEffectEngine @Inject constructor(
             }
 
             is AppEffect.UpdateBubble -> {
-                bubbleManager.postMessage(effect.text, effect.persona)
+                bubbleManager.postMessage(effect.text, effect.persona, effect.expand)
             }
 
             is AppEffect.CaptureScreenshot -> {
@@ -152,14 +158,20 @@ class SideEffectEngine @Inject constructor(
                 // 1. Emit the Decision back to State Machine
                 _events.emit(OfferEvaluationEvent(result.action, result))
 
-                // 2. Show the Bubble (Side Effect)
+                // 2. Show the Bubble (Side Effect) — auto-expand so the dasher sees the
+                // evaluation. Launched on a short delay so it lands AFTER the offer
+                // screenshot's settle+capture (clean frame) without blocking the pipeline.
                 val persona = when (result.action) {
                     OfferAction.ACCEPT -> ChatPersona.GoodOffer
                     OfferAction.DECLINE -> ChatPersona.BadOffer
                     OfferAction.MANUAL_REVIEW -> ChatPersona.Inspector
                     OfferAction.NOTHING -> ChatPersona.Inspector
                 }
-                bubbleManager.postMessage(result.toAnnotatedString(), persona)
+                val message = result.toAnnotatedString()
+                scope.launch {
+                    delay(OFFER_BUBBLE_EXPAND_DELAY_MS)
+                    bubbleManager.postMessage(message, persona, expand = true)
+                }
             }
 
             // --- TIMING LOGIC (Pure Coroutines) ---
