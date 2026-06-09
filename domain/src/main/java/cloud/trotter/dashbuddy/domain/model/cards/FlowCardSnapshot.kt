@@ -60,6 +60,16 @@ sealed class FlowCardSnapshot {
         val netPayAmount: Double? = null,
         val dollarsPerMile: Double? = null,
         val dollarsPerHour: Double? = null,
+        /** Evaluator quality level ("Great offer", "Bad offer", …) for the verdict chip. */
+        val qualityLevel: String? = null,
+        /** One-line reason from the evaluator, shown under the verdict action word. */
+        val recommendationText: String? = null,
+        /** Offer + order badge enum names (e.g. HIGH_PAYING, RED_CARD, ALCOHOL) for the pill row. */
+        val badges: List<String> = emptyList(),
+        /** When the DoorDash offer countdown expires (presentedAt + initialCountdown). Null if unparsed. */
+        val expiresAt: Long? = null,
+        /** Initial offer countdown in seconds — the denominator for the live expiry progress bar. */
+        val countdownSeconds: Int? = null,
         val outcome: AppEventType? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "offer:$offerHash"

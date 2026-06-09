@@ -31,6 +31,18 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.ui.draw.clip
+import cloud.trotter.dashbuddy.core.designsystem.component.DashChip
+import cloud.trotter.dashbuddy.core.designsystem.component.DashGaugeRing
+import cloud.trotter.dashbuddy.core.designsystem.theme.DashColors
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -109,7 +121,14 @@ private fun CardHeader(
         // Trailing status chip — shown in the header so collapsed cards
         // surface the outcome at a glance.
         if (snapshot is FlowCardSnapshot.Offer) {
-            snapshot.outcome?.let { OutcomeChip(it) }
+            val outcome = snapshot.outcome
+            val expiresAt = snapshot.expiresAt
+            val countdownSeconds = snapshot.countdownSeconds
+            if (outcome != null) {
+                OutcomeChip(outcome)
+            } else if (isActive && expiresAt != null && countdownSeconds != null) {
+                OfferCountdownText(expiresAt, countdownSeconds)
+            }
         }
         if (!isActive) {
             Icon(
@@ -234,56 +253,182 @@ private fun AwaitingBody(snap: FlowCardSnapshot.Awaiting, isActive: Boolean) {
 }
 
 /**
- * Offer body: hero is **Net $/hr** (the "is this worth my time" number).
- * Subtitle = net pay · miles. Third row = store · score chip.
+ * Offer body (redesign): a live expiry bar, a score ring beside the net $/hr
+ * hero, a verdict banner (action + reason + quality), and badge pills. The
+ * DoorDash expiry countdown also ticks in the header. (The Accept/Decline
+ * action row + auto-action countdown land in Stage 2/3 of #110.)
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
+    val c = DashTheme.colors
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        val hourly = snap.dollarsPerHour
-        if (hourly != null) {
-            HeroBig("$%.2f/hr".format(hourly))
-        } else if (snap.payAmount != null) {
-            HeroBig("$%.2f".format(snap.payAmount))
-        }
-        val net = snap.netPayAmount ?: snap.payAmount
-        val miles = snap.distanceMiles
-        val secondary = buildString {
-            if (net != null) append("Net $%.2f".format(net))
-            if (miles != null) {
-                if (isNotEmpty()) append(" · ")
-                append("%.1f mi".format(miles))
+        // Live expiry progress bar (DoorDash's own offer countdown), active only.
+        val expiresAt = snap.expiresAt
+        val countdownSeconds = snap.countdownSeconds
+        if (isActive && expiresAt != null && countdownSeconds != null && countdownSeconds > 0) {
+            val now by rememberNow()
+            val secsLeft = ((expiresAt - now) / 1000f).coerceAtLeast(0f)
+            val frac = (secsLeft / countdownSeconds).coerceIn(0f, 1f)
+            val barColor = when {
+                frac > 0.45f -> c.good
+                frac > 0.2f -> c.warn
+                else -> c.bad
             }
-            snap.dollarsPerMile?.let {
-                if (isNotEmpty()) append(" · ")
-                append("$%.2f/mi".format(it))
+            Box(
+                Modifier.fillMaxWidth().height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)).background(c.line),
+            ) {
+                Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(barColor))
             }
         }
-        if (secondary.isNotBlank()) Caption(secondary)
+
+        // Score ring + net $/hr hero.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            snap.evaluationScore?.let { score ->
+                val sc = when {
+                    score >= 70 -> c.good
+                    score <= 30 -> c.bad
+                    else -> c.warn
+                }
+                DashGaugeRing(
+                    progress = (score / 100.0).toFloat(),
+                    value = score.toInt().toString(),
+                    label = "Score",
+                    color = sc,
+                    diameter = 60.dp,
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                val hourly = snap.dollarsPerHour
+                when {
+                    hourly != null -> Text("$%.0f/hr".format(hourly), style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
+                    snap.payAmount != null -> Text("$%.2f".format(snap.payAmount), style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
+                }
+                val net = snap.netPayAmount ?: snap.payAmount
+                val secondary = buildString {
+                    if (net != null) append("Net $%.2f".format(net))
+                    snap.distanceMiles?.let {
+                        if (isNotEmpty()) append(" · ")
+                        append("%.1f mi".format(it))
+                    }
+                    snap.dollarsPerMile?.let {
+                        if (isNotEmpty()) append(" · ")
+                        append("$%.2f/mi".format(it))
+                    }
+                }
+                if (secondary.isNotBlank()) {
+                    Text(secondary, style = DashTheme.num.smNum, color = c.text2, maxLines = 1)
+                }
+            }
+        }
+
+        // Verdict banner — action word + reason + quality chip, tinted by the action.
+        snap.evaluationAction?.let { action ->
+            val vColor = when (action) {
+                "ACCEPT" -> c.good
+                "DECLINE" -> c.bad
+                else -> c.warn
+            }
+            val vBg = when (action) {
+                "ACCEPT" -> c.goodBg
+                "DECLINE" -> c.badBg
+                else -> c.warnBg
+            }
+            val vIcon = when (action) {
+                "ACCEPT" -> Icons.Default.Check
+                "DECLINE" -> Icons.Default.Close
+                else -> Icons.Default.Info
+            }
+            Surface(shape = MaterialTheme.shapes.small, color = vBg) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(vIcon, contentDescription = null, tint = vColor, modifier = Modifier.size(18.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            action.replace('_', ' '),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = vColor,
+                        )
+                        snap.recommendationText?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = c.text2, maxLines = 2)
+                        }
+                    }
+                    snap.qualityLevel?.let { DashChip(it, color = c.text3, container = c.surface3) }
+                }
+            }
+        }
+
+        // Badge pills.
+        if (snap.badges.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                snap.badges.forEach { b ->
+                    val (label, col) = badgeMeta(b, c)
+                    DashChip(label, color = col, container = c.surface3)
+                }
+            }
+        }
+
+        // Footer: stores · items.
         val storeText = snap.storeNames.joinToString(" & ").ifBlank { null }
-        val tertiary = buildString {
+        val footer = buildString {
             storeText?.let { append(it) }
             if (snap.itemCount > 1) {
                 if (isNotEmpty()) append(" · ")
                 append("${snap.itemCount} items")
             }
         }
-        if (tertiary.isNotBlank()) Caption(tertiary)
-
-        // Score chip — outcome chip lives in the header so collapsed
-        // cards surface accept/decline at a glance.
-        val score = snap.evaluationScore
-        val action = snap.evaluationAction
-        score?.let {
-            Row(modifier = Modifier.padding(top = 4.dp)) {
-                ScoreChip(it.toInt(), action)
-            }
-        }
+        if (footer.isNotBlank()) Caption(footer)
     }
+}
+
+/** Live m:ss offer-expiry countdown for the active offer card header. */
+@Composable
+private fun OfferCountdownText(expiresAt: Long, countdownSeconds: Int) {
+    val c = DashTheme.colors
+    val now by rememberNow()
+    val secsLeft = ((expiresAt - now) / 1000.0).coerceAtLeast(0.0)
+    val frac = if (countdownSeconds > 0) (secsLeft / countdownSeconds).coerceIn(0.0, 1.0) else 0.0
+    val col = when {
+        frac > 0.45 -> c.good
+        frac > 0.2 -> c.warn
+        else -> c.bad
+    }
+    val total = secsLeft.toInt()
+    Text(
+        text = "%d:%02d".format(total / 60, total % 60),
+        style = DashTheme.num.smNum,
+        color = col,
+        fontWeight = FontWeight.Bold,
+    )
+}
+
+/** Maps a badge enum name to a short label + brand color for the pill row. */
+private fun badgeMeta(name: String, c: DashColors): Pair<String, Color> = when (name) {
+    "HIGH_PAYING" -> "High pay" to c.good
+    "PRIORITY_ACCESS" -> "Priority" to c.stOffer
+    "RED_CARD" -> "Red Card" to c.bad
+    "ALCOHOL" -> "Alcohol" to c.warn
+    "LARGE_ORDER" -> "Large order" to c.neutral
+    "PIZZA_BAG" -> "Pizza bag" to c.neutral
+    "ALL_ORDERS_SAME_STORE" -> "Same store" to c.neutral
+    "BOTH_ORDERS_SAME_CUSTOMER" -> "Same customer" to c.neutral
+    "ITEMS_CAN_BE_ADDED" -> "Add-ons OK" to c.neutral
+    else -> name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() } to c.neutral
 }
 
 /**
@@ -500,28 +645,6 @@ private fun BreakdownRow(label: String, value: String) {
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-@Composable
-private fun ScoreChip(score: Int, action: String?) {
-    val c = DashTheme.colors
-    val color = when {
-        score >= 70 -> c.good
-        score <= 30 -> c.bad
-        else -> c.warn
-    }
-    Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = color.copy(alpha = 0.16f),
-    ) {
-        Text(
-            text = if (action != null) "$score · $action" else score.toString(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = color,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
     }
 }
 
