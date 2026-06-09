@@ -197,6 +197,10 @@ arrival would fire once, at the real arrival. **Consistent with existing design:
 `dropoff_navigation` (priority 61) *already rejects* on "Mark as delivered"
 (`doordash.json:851-854`) — this is the symmetric require. *Field-test:* re-drive a
 hand-to-customer; expect ARRIVED/CONFIRMED once, at real arrival.
+**Complement:** the [nav-exit arrival model](2026-06-task-arrival-navexit-model.md)
+catches this same premature card by an independent tell (it precedes any nav
+session). The recommended design **layers** nav-exit (primary) + this CTA-gate
+(confirming discriminator + external-nav fallback).
 
 **P2 — Per-leg idempotent `DELIVERY_CONFIRMED` latch.** Track confirmed leg ids
 (a `Set` of `customerAddressHash`, falling back to `taskId` for no-address legs)

@@ -305,6 +305,14 @@ immediately (no second pass needed) so it gets triaged.
   ID-scan screen), the structural fixes (CTA-gate handoff, per-leg idempotent
   confirm, monotonic arrival latch), and the recognition gaps (cant-reach-customer,
   cash-on-delivery, signature, staff-handoff).
+- **Unified nav-exit arrival model (50 tasks, pickup + dropoff):** see
+  [`docs/capture-analysis/2026-06-task-arrival-navexit-model.md`](../capture-analysis/2026-06-task-arrival-navexit-model.md)
+  — tests the conjecture "arrived = exit of an active nav session." Verdict:
+  **viable + unifies pickup/dropoff** and dodges the handoff premature bug 5/5;
+  "Arriving at \<addr\>" is real but sparse (enrichment); the literal Exit button
+  is unused (0 taps). Recommends layering nav-exit (primary) + the CTA-gate
+  (discriminator/fallback), starting with a shadow `navExitGated` instrument
+  (no behavior change) + 2 field confirmations before flipping.
 
 #### 2. In-app "Transfer in / balance" screen captured as UNKNOWN, not blocked as SENSITIVE (privacy gap)
 
