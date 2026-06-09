@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
@@ -169,6 +170,21 @@ class EffectMap @Inject constructor(
                 "decline_offer" -> add(
                     AppEffect.UpdateBubble("Offer Declined", persona = ChatPersona.Dispatcher)
                 )
+            }
+        }
+
+        // HUD-initiated accept/decline (bubble buttons) → perform the platform's offer
+        // click, while an offer is on screen. Decline taps the initial decline button;
+        // in Native mode the user confirms in DoorDash's own dialog (auto-confirm = 2c).
+        if (obs is Observation.UiInput &&
+            (next.flow == Flow.OfferPresented || prev.flow == Flow.OfferPresented)
+        ) {
+            val platform = next.activePlatform ?: prev.activePlatform
+            if (platform != null) {
+                when (obs.action) {
+                    "accept_offer" -> add(AppEffect.PerformOfferAction(OfferAction.ACCEPT, platform))
+                    "decline_offer" -> add(AppEffect.PerformOfferAction(OfferAction.DECLINE, platform))
+                }
             }
         }
     }

@@ -1,7 +1,9 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
@@ -66,6 +68,15 @@ sealed class AppEffect {
     data class ClickNode(
         val node: UiNode,
         val description: String = "Auto-Click"
+    ) : AppEffect()
+
+    /**
+     * HUD-initiated offer action (bubble Accept/Decline) → perform the platform's offer
+     * click. Platform-agnostic; the app layer resolves the concrete node (see #85 GigPlatform).
+     */
+    data class PerformOfferAction(
+        val action: OfferAction,
+        val platform: Platform,
     ) : AppEffect()
 
     /** A rule-originated side effect. */

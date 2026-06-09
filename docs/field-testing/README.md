@@ -60,6 +60,15 @@ On the **second clean** confirmation, move the item into that session's log
 entry and delete it here. If an item is found **broken**, move it to the log
 immediately (no second pass needed) so it gets triaged.
 
+- **Manual Accept/Decline buttons (#110 Stage 2b, PR pending).** With the offer bubble open, the
+  card now has **Decline** (left, red outline) + **Accept** (right, green) buttons. Confirm: tapping
+  **Accept** makes DashBuddy tap DoorDash's Accept (offer accepted); tapping **Decline** taps the
+  initial Decline so DoorDash's **native confirm dialog** appears (you confirm there — auto-confirm
+  is Stage 2c). **KEY THINGS TO CONFIRM:** (1) the *correct* button fires (Accept accepts; Decline
+  opens the confirm — never the wrong one); (2) on either tap the bubble **collapses to its head**
+  (not dismissed/closed) — note exactly which on your phone; (3) if the click misses (wrong/no node),
+  note it (esp. Decline's `secondary_action_button_dash_plus`). Real orders — watch carefully.
+  - Confirmed: 0/2.
 - **Offer bubble auto-expands (#110 Stage 2a, PR pending).** When an offer arrives while you're in
   the DoorDash app (DashBuddy backgrounded), the bubble should **auto-expand on its own** to show the
   evaluation — and pop up **after** the clean offer screenshot (it must not cover the captured frame).
