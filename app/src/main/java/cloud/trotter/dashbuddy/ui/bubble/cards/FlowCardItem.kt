@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -504,10 +505,11 @@ private fun BreakdownRow(label: String, value: String) {
 
 @Composable
 private fun ScoreChip(score: Int, action: String?) {
+    val c = DashTheme.colors
     val color = when {
-        score >= 70 -> Color(0xFF2E7D32)
-        score <= 30 -> Color(0xFFC62828)
-        else -> Color(0xFFF9A825)
+        score >= 70 -> c.good
+        score <= 30 -> c.bad
+        else -> c.warn
     }
     Surface(
         shape = RoundedCornerShape(4.dp),
@@ -525,10 +527,11 @@ private fun ScoreChip(score: Int, action: String?) {
 
 @Composable
 private fun OutcomeChip(outcome: AppEventType) {
+    val c = DashTheme.colors
     val (text, color) = when (outcome) {
-        AppEventType.OFFER_ACCEPTED -> "Accepted" to Color(0xFF2E7D32)
-        AppEventType.OFFER_DECLINED -> "Declined" to Color(0xFFC62828)
-        AppEventType.OFFER_TIMEOUT -> "Timed out" to Color(0xFF6D6D6D)
+        AppEventType.OFFER_ACCEPTED -> "Accepted" to c.good
+        AppEventType.OFFER_DECLINED -> "Declined" to c.bad
+        AppEventType.OFFER_TIMEOUT -> "Timed out" to c.neutral
         else -> outcome.name to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(
@@ -548,11 +551,12 @@ private fun OutcomeChip(outcome: AppEventType) {
 @Composable
 private fun deadlineColor(remainingMs: Long): Color {
     val mins = remainingMs / 60_000L
+    val c = DashTheme.colors
     return when {
-        remainingMs < 0 -> Color(0xFFC62828)              // past — red
-        mins < 5 -> Color(0xFFC62828)                     // <5m — red
-        mins < 10 -> Color(0xFFF9A825)                    // 5-10m — amber
-        else -> Color(0xFF2E7D32)                          // >10m — green
+        remainingMs < 0 -> c.bad              // past — red
+        mins < 5 -> c.bad                     // <5m — red
+        mins < 10 -> c.warn                   // 5-10m — amber
+        else -> c.good                        // >10m — green
     }
 }
 

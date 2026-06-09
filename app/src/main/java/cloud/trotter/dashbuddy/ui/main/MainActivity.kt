@@ -31,7 +31,7 @@ import cloud.trotter.dashbuddy.ui.main.settings.PlatformSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.ui.main.settings.StrategySettingsScreen
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardScreen
-import cloud.trotter.dashbuddy.ui.theme.DashBuddyTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

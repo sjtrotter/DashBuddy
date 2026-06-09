@@ -5,6 +5,7 @@ import android.text.format.DateFormat
 import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -330,10 +331,11 @@ private fun SessionMetricsActions(
 
 @Composable
 private fun statusBadge(region: PlatformRegion?, flow: Flow): Pair<String, Color> {
-    val green = Color(0xFF4CAF50)
-    val amber = Color(0xFFFFC107)
-    val blue = Color(0xFF2196F3)
-    val grey = MaterialTheme.colorScheme.outline
+    val c = DashTheme.colors
+    val green = c.good
+    val amber = c.warn
+    val blue = c.stOffer
+    val grey = c.neutral
 
     // Mode-driven badges
     if (region?.mode == Mode.Paused) return "PAUSED" to amber

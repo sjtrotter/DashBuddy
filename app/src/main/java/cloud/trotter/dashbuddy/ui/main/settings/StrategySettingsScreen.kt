@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -180,7 +181,7 @@ fun StrategySettingsScreen(
                 Text(
                     "Drag to reorder. Top rules matter most.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = DashTheme.colors.text3
                 )
                 Spacer(Modifier.height(16.dp))
             }
@@ -230,7 +231,7 @@ fun SwitchRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = DashTheme.colors.text3)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
