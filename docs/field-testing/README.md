@@ -188,6 +188,27 @@ immediately (no second pass needed) so it gets triaged.
     so still **no second data point** on whether another screen can trigger it. Fix
     stays held; keep watching (esp. dashes with a scheduled block queued).
 
+- **`nav_arriving` screen now recognized — confirm it fires + gauge frequency
+  (PR #312).** The in-app nav "Arriving at \<destination\>" / "Arriving soon"
+  overlay was UNKNOWN; it now classifies as `nav_arriving` (neutral — no behavior
+  change yet). On a dash, glance at whether this screen actually appears as you
+  reach a stop, for **both pickups and dropoffs**, and roughly how often (the
+  capture corpus only caught it ~5/50 times — we need to know if that's
+  capture-cadence or it genuinely doesn't show every approach). This decides
+  whether "Arriving" can be the **arming** signal for the nav-exit arrival model
+  ([design](../capture-analysis/2026-06-task-arrival-navexit-model.md)). What to
+  watch: does "Arriving at …"/"Arriving soon" reliably show on final approach?
+  - Confirmed: 0/2.
+- **Try EXITING the map with the Exit button (not the back gesture) — capture the
+  click.** The dev currently exits nav with the system **back gesture**, so no
+  `exit_button` tap is ever captured (0 in all June). The nav screen *does* have an
+  explicit **Exit** button (`id=exit_button`). On a dash, deliberately tap that
+  **Exit** button a few times (pickup and dropoff) so we capture the click — it may
+  give a cleaner, explicit "left navigation" signal than inferring it from the
+  window transition. What to watch/capture: that tapping Exit produces a click
+  capture (and note whether back-gesture vs button changes what DoorDash shows next).
+  - Confirmed: 0/2.
+
 ---
 
 ## Untriaged — carried over from scratch notes
