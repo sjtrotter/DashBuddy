@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilityLi
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.IOException
@@ -24,8 +25,17 @@ import javax.inject.Singleton
 @Singleton
 class ScreenShotHandler @Inject constructor() {
 
+    companion object {
+        /** UI-settle delay before every capture — mirrors the click settle (500ms). */
+        const val SETTLE_MS = 500L
+    }
+
     fun capture(scope: CoroutineScope, effect: AppEffect.CaptureScreenshot) {
         scope.launch(Dispatchers.IO) {
+            // Let the third-party UI settle before grabbing the frame, so captures
+            // aren't taken mid-transition. This is the only screenshot path, so the
+            // delay applies to all screenshots everywhere.
+            delay(SETTLE_MS)
             val service = AccessibilityListener.instance ?: return@launch
 
             val mainExecutor =
