@@ -2499,6 +2499,20 @@
       }
     },
     {
+      "id": "doordash.screen.nav_arriving",
+      "priority": 69,
+      "require": {
+        "any": [
+          { "exists": { "hasIdSuffix": "arriving_at_subtitle" } },
+          { "exists": { "hasIdSuffix": "arriving_at_title" } },
+          { "exists": { "hasIdSuffix": "bottom_sheet_arrived_header_v2" } }
+        ]
+      },
+      "reject": [
+        { "exists": { "hasIdSuffix": "bottom_sheet_task_title" } }
+      ]
+    },
+    {
       "id": "doordash.screen.side_nav_drawer",
       "priority": 200,
       "require": {

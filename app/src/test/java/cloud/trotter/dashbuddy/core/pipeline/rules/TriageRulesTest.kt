@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Before
@@ -202,6 +203,40 @@ class TriageRulesTest {
         assertEquals(
             "pickup_pre_arrival",
             screen(tree(node(id = "user_name_label", text = "Pickup from"), node(id = "bottom_sheet_container"))),
+        )
+    }
+
+    @Test
+    fun `nav_arriving — bare 'Arriving at' overlay (final approach, was UNKNOWN)`() {
+        assertEquals(
+            "nav_arriving",
+            screen(tree(
+                node(id = "arriving_at_subtitle", text = "Arriving at"),
+                node(id = "arriving_at_title", text = "Wing Daddy's Sauce House (Jackson Keller Rd)"),
+            )),
+        )
+    }
+
+    @Test
+    fun `nav_arriving — 'Arriving soon' header variant`() {
+        assertEquals(
+            "nav_arriving",
+            screen(tree(node(id = "bottom_sheet_arrived_header_v2", text = "Arriving soon"))),
+        )
+    }
+
+    @Test
+    fun `nav_arriving — rejects the full-nav variant (task_title present stays navigation)`() {
+        // The full 'Arriving soon' nav frame carries bottom_sheet_task_title; the
+        // reject keeps it out of nav_arriving so pickup/dropoff_navigation (which
+        // own the task context + flow) win and arrival logic is undisturbed.
+        assertNotEquals(
+            "nav_arriving",
+            screen(tree(
+                node(id = "arriving_at_subtitle", text = "Arriving at"),
+                node(id = "bottom_sheet_arrived_header_v2", text = "Arriving soon"),
+                node(id = "bottom_sheet_task_title", text = "Deliver to Diane B"),
+            )),
         )
     }
 
