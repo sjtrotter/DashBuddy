@@ -302,7 +302,7 @@ class EffectMap @Inject constructor(
                                     sessionId = sessionId,
                                     endedAt = obs.timestamp,
                                     source = SessionEndSource.EARLY_OFFLINE,
-                                    totalEarnings = prevSession?.runningEarnings,
+                                    totalEarnings = prevSession.runningEarnings,
                                 ),
                             ),
                         )
