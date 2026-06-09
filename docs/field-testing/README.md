@@ -60,6 +60,14 @@ On the **second clean** confirmation, move the item into that session's log
 entry and delete it here. If an item is found **broken**, move it to the log
 immediately (no second pass needed) so it gets triaged.
 
+- **Offer bubble auto-expands (#110 Stage 2a, PR pending).** When an offer arrives while you're in
+  the DoorDash app (DashBuddy backgrounded), the bubble should **auto-expand on its own** to show the
+  evaluation — and pop up **after** the clean offer screenshot (it must not cover the captured frame).
+  **KEY UNKNOWN to confirm:** does it actually auto-expand *from the background*? Android may restrict
+  background auto-expand — if it only appears as a **collapsed bubble / heads-up notification** (you
+  have to tap it), note that exactly; it decides whether Stage 2/3 keep auto-expand or pivot to a
+  tap-to-review notification. Also confirm the ~0.75s delay before it pops feels right.
+  - Confirmed: 0/2.
 - **Screenshots settle before capture (PR #325).** Captures saved to `Pictures/DashBuddy` should
   be **clean / fully-rendered** (UI settled), not grabbed mid-transition or half-drawn — there's now
   a 500ms settle before every screenshot. Spot-check the offer + post-task captures after a dash.
