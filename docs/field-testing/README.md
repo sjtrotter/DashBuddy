@@ -60,23 +60,9 @@ On the **second clean** confirmation, move the item into that session's log
 entry and delete it here. If an item is found **broken**, move it to the log
 immediately (no second pass needed) so it gets triaged.
 
-- **Manual Accept/Decline buttons (#110 Stage 2b, PR pending).** With the offer bubble open, the
-  card now has **Decline** (left, red outline) + **Accept** (right, green) buttons. Confirm: tapping
-  **Accept** makes DashBuddy tap DoorDash's Accept (offer accepted); tapping **Decline** taps the
-  initial Decline so DoorDash's **native confirm dialog** appears (you confirm there — auto-confirm
-  is Stage 2c). **KEY THINGS TO CONFIRM:** (1) the *correct* button fires (Accept accepts; Decline
-  opens the confirm — never the wrong one); (2) on either tap the bubble **collapses to its head**
-  (not dismissed/closed) — note exactly which on your phone; (3) if the click misses (wrong/no node),
-  note it (esp. Decline's `secondary_action_button_dash_plus`). Real orders — watch carefully.
-  - Confirmed: 0/2.
-- **Offer bubble auto-expands (#110 Stage 2a, PR pending).** When an offer arrives while you're in
-  the DoorDash app (DashBuddy backgrounded), the bubble should **auto-expand on its own** to show the
-  evaluation — and pop up **after** the clean offer screenshot (it must not cover the captured frame).
-  **KEY UNKNOWN to confirm:** does it actually auto-expand *from the background*? Android may restrict
-  background auto-expand — if it only appears as a **collapsed bubble / heads-up notification** (you
-  have to tap it), note that exactly; it decides whether Stage 2/3 keep auto-expand or pivot to a
-  tap-to-review notification. Also confirm the ~0.75s delay before it pops feels right.
-  - Confirmed: 0/2.
+_(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
+2026-06-09 dash — moved to that session's log entry below for triage.)_
+
 - **Screenshots settle before capture (PR #325).** Captures saved to `Pictures/DashBuddy` should
   be **clean / fully-rendered** (UI settled), not grabbed mid-transition or half-drawn — there's now
   a 500ms settle before every screenshot. Spot-check the offer + post-task captures after a dash.
@@ -258,6 +244,89 @@ immediately (no second pass needed) so it gets triaged.
   - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
     "summary after the idle screen" ordering was the root cause). Field-validate
     via the #279 checklist item above.
+
+---
+
+## 2026-06-09 — DoorDash session (Stage 2 offer-copilot live test)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` after **#327** (Stage 2b: manual Accept/Decline + collapse) — the
+  offer-copilot build. Also includes #324 offer-card redesign, #326 auto-expand, #325 screenshot
+  settle, #321–#323 brand system / components / job economics.
+- **Field conditions:** one **$28 / 12.9 mi H-E-B** offer (looks **stacked** — see #4) at ~12:00:44;
+  the dasher tapped the bubble's **Decline**, nothing happened on DoorDash, so they **declined
+  manually**. Findings are grounded in the saved `app.log` + `captures/` + event DB at
+  `/home/betty/dashbuddy/logs/2026/06/09`. All below are **hypotheses to triage — not concluded fixes.**
+
+### Bugs
+
+#### 1. In-bubble Accept/Decline can't click DoorDash — `performClick` searches the wrong window
+The whole chain fired correctly — bubble Decline tap → `UiInput("decline_offer")` → EffectMap
+`PerformOfferAction(DECLINE)` → `SideEffectEngine` → `performClick` — and failed only at the click:
+```
+12:01:16.910 SideEffectEngine: Performing offer action: DECLINE on doordash
+12:01:16.912 UiInteractionHandler: Attempting click (Bubble DECLINE)
+12:01:17.081 WARN  Could not find any live node for: Bubble DECLINE
+             (id=com.doordash.driverapp:id/secondary_action_button_dash_plus, text=null, bounds=(0,0,0,0))
+```
+The viewId is **correct** — `…:id/secondary_action_button_dash_plus` is exactly what's in the captured
+offer tree (`captures/…/offer_popup/…7f6048.json`), so the id mapping isn't the problem.
+- **Likely cause:** `UiInteractionHandler` clicks against `AccessibilitySource.getLiveNativeRoot()`,
+  which returns `service.rootInActiveWindow` (`AccessibilitySource.kt:34-36`). When the dasher taps
+  the **bubble**, the *active* window is the bubble overlay (DashBuddy), **not** DoorDash's offer
+  window — so the viewId search runs against the wrong tree and finds nothing. (The dasher then
+  declined manually: captures `initial_decline` @12:01:19 → `decline_offer` @12:01:20.)
+- **One direction to confirm:** resolve clicks across **all** windows via
+  `AccessibilitySource.getWindows()` (already used by `WindowsChangedPipeline`; the service already
+  requests `flagRetrieveInteractiveWindows`) instead of only `rootInActiveWindow`. Affects **both**
+  Accept and Decline (shared path), so manual actions are fully non-functional until this lands.
+- **Status:** Open. (Regression in #327's click path — found on first field test.)
+
+#### 2. Offer bubble does not auto-expand from the background
+The evaluation **did** post — `OfferEvaluationEvent` @12:00:44.483 → Chat
+`[Good Offer] Recommended: ACCEPT | Score 74 | Net $22.48` @12:00:45.234 (~750ms later, matching
+`OFFER_BUBBLE_EXPAND_DELAY_MS`, so the Stage-2a delay itself behaved) — but the bubble stayed collapsed.
+- **Likely cause:** `setAutoExpandBubble(true)` has no effect when the posting app isn't in the
+  foreground, and DashBuddy is backgrounded while DoorDash is foreground (the documented Android
+  restriction flagged before the build). The heads-up notification posts (`IMPORTANCE_HIGH`);
+  auto-expand is ignored.
+- **Implication:** can't rely on background auto-expand. Options to weigh: (a) heads-up notification +
+  "tap to review"; (b) a full-screen-intent surface; (c) keep the bubble but open it on tap. This
+  **reshapes Stage 2/3** — the auto-action countdown was meant to anchor on "bubble shown"; if the
+  bubble only opens on a tap, the countdown must anchor on the tap (or not auto-fire without an open
+  surface). Worth deciding the surface before building 2c/3.
+- **Status:** Open.
+
+#### 3. Bubble did not collapse after tapping an action
+Tapping Decline did not collapse the bubble to its head.
+- **Likely cause (hypothesis):** the collapse bridge does `(context as? android.app.Activity)?.finish()`
+  in `BubbleScreen`, but Compose's `LocalContext.current` is usually a `ContextThemeWrapper`, not the
+  Activity — so the cast is null and `finish()` never runs. Standard shape: unwrap via
+  `ContextWrapper.baseContext` (`findActivity()`).
+- Note: collapse is dispatched on the **tap** (independent of whether #1's click succeeds), so it's a
+  separate defect from #1 — also unconfirmed is collapse-vs-dismiss behaviour, which we can only test
+  once `finish()` actually fires.
+- **Status:** Open.
+
+### Open questions / investigations
+
+#### 4. Offer "recognized early" and re-evaluated with diverging results (stacked-offer parse?)
+The one offer flip-flopped across three evaluations as the screen settled:
+- 12:00:45 `[Good Offer] ACCEPT Score 74 Net $22.48` (TTS "**12.9 miles**")
+- 12:00:53 `[Bad Offer] DECLINE Score 6 Net **-$9.62**` (TTS "**22.5 miles**")
+- 12:01:01 `[Good Offer] ACCEPT Score 74` (TTS "12.9 miles")
+
+Distance flips **12.9 mi ↔ 22.5 mi**, and there's an `UNKNOWN` window carrying `accept_button` at
+12:00:44.029 → classified `offer_popup` at 12:00:44.344 (~300ms later).
+- **Hypothesis:** a **stacked** offer (multiple orders) whose screen re-parses inconsistently —
+  sometimes a single leg (12.9 mi → good), sometimes the total (22.5 mi → the −$9.62 mis-eval) — as it
+  renders. Recognition + evaluation fire **per frame** and are **not** settle-gated like the screenshot
+  now is, so a transient/partial frame yields a spurious DECLINE-6. Likely the "recognized it early"
+  the dasher noticed.
+- **To dig:** diff the two captured `offer_popup` JSONs (`…7f6048.json` @44.374 vs `…225fd4.json`
+  @52.489) for the one-leg-vs-total parse divergence; consider debouncing/settling offer eval or
+  de-duping re-evals of the same `offerHash`.
+- **Status:** Open.
 
 ---
 
