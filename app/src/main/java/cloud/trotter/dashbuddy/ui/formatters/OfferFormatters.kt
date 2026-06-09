@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.formatters
 
-import android.graphics.Color
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
@@ -11,6 +10,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.core.designsystem.theme.DashColors
+import cloud.trotter.dashbuddy.core.designsystem.theme.darkDashColors
+import androidx.compose.ui.graphics.toArgb
 
 /**
  * For System Overlays, Notifications, and traditional Views (Effect Handlers)
@@ -18,11 +20,12 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 fun OfferEvaluation.toSpannableString(): SpannableString {
     val builder = SpannableStringBuilder()
 
+    val c = darkDashColors()
     val color = when (this.action) {
-        OfferAction.ACCEPT -> Color.GREEN
-        OfferAction.DECLINE -> Color.RED
-        OfferAction.MANUAL_REVIEW -> Color.YELLOW
-        else -> Color.YELLOW
+        OfferAction.ACCEPT -> c.good.toArgb()
+        OfferAction.DECLINE -> c.bad.toArgb()
+        OfferAction.MANUAL_REVIEW -> c.warn.toArgb()
+        else -> c.warn.toArgb()
     }
 
     val start = builder.length
@@ -44,13 +47,13 @@ fun OfferEvaluation.toSpannableString(): SpannableString {
 /**
  * For Jetpack Compose UIs (FakeOfferCard)
  */
-fun OfferEvaluation.toAnnotatedString(): AnnotatedString {
+fun OfferEvaluation.toAnnotatedString(colors: DashColors = darkDashColors()): AnnotatedString {
     return buildAnnotatedString {
         val composeColor = when (this@toAnnotatedString.action) {
-            OfferAction.ACCEPT -> androidx.compose.ui.graphics.Color.Green
-            OfferAction.DECLINE -> androidx.compose.ui.graphics.Color.Red
-            OfferAction.MANUAL_REVIEW -> androidx.compose.ui.graphics.Color.Yellow
-            else -> androidx.compose.ui.graphics.Color.Yellow
+            OfferAction.ACCEPT -> colors.good
+            OfferAction.DECLINE -> colors.bad
+            OfferAction.MANUAL_REVIEW -> colors.warn
+            else -> colors.warn
         }
 
         withStyle(style = SpanStyle(color = composeColor)) {

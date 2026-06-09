@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -108,7 +109,7 @@ fun AboutScreen(
                 Text(
                     text = "Build ${BuildConfig.VERSION_CODE}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = DashTheme.colors.text3
                 )
             }
 

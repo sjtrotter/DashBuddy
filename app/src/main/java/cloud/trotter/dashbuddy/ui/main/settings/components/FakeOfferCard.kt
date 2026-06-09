@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.ui.main.settings.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -32,28 +32,20 @@ fun FakeOfferCard(
     evaluation: OfferEvaluation,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val c = DashTheme.colors
 
-    val targetContainerColor = if (isDark) {
-        when (evaluation.action) {
-            OfferAction.ACCEPT -> Color(0xFF1B5E20).copy(alpha = 0.3f)
-            OfferAction.DECLINE -> Color(0xFFB71C1C).copy(alpha = 0.3f)
-            else -> MaterialTheme.colorScheme.surfaceVariant
-        }
-    } else {
-        when (evaluation.action) {
-            OfferAction.ACCEPT -> Color(0xFFE8F5E9)
-            OfferAction.DECLINE -> Color(0xFFFFEBEE)
-            else -> MaterialTheme.colorScheme.surfaceVariant
-        }
+    val targetContainerColor = when (evaluation.action) {
+        OfferAction.ACCEPT -> c.goodBg
+        OfferAction.DECLINE -> c.badBg
+        else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
-    val targetContentColor = if (isDark) Color.White else Color.Black
+    val targetContentColor = c.text
 
     val borderColor = when (evaluation.action) {
-        OfferAction.ACCEPT -> if (isDark) Color(0xFF4CAF50) else Color(0xFF2E7D32)
-        OfferAction.DECLINE -> if (isDark) Color(0xFFEF5350) else Color(0xFFC62828)
-        else -> Color.Gray
+        OfferAction.ACCEPT -> c.good
+        OfferAction.DECLINE -> c.bad
+        else -> c.neutral
     }
 
     val animatedContainerColor by animateColorAsState(targetContainerColor, label = "container")
