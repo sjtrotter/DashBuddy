@@ -60,6 +60,10 @@ On the **second clean** confirmation, move the item into that session's log
 entry and delete it here. If an item is found **broken**, move it to the log
 immediately (no second pass needed) so it gets triaged.
 
+- **Screenshots settle before capture (PR #325).** Captures saved to `Pictures/DashBuddy` should
+  be **clean / fully-rendered** (UI settled), not grabbed mid-transition or half-drawn — there's now
+  a 500ms settle before every screenshot. Spot-check the offer + post-task captures after a dash.
+  - Confirmed: 0/2.
 - **Offer card redesign — visuals (#110 Stage 1, PR pending).** When an offer arrives, glance
   at the bubble offer card and confirm the new layout reads at a glance: a **score ring** (green/
   amber/red by score) beside the **net $/hr** hero; a **verdict banner** (ACCEPT / DECLINE /
