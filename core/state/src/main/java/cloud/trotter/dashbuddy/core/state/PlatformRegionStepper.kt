@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -386,19 +387,46 @@ class PlatformRegionStepper @Inject constructor() {
         nextFlow: FlowRegion,
         obs: Observation.FlowObservation,
     ): PlatformRegion {
-        // Job start: offer accepted → pickup begins
-        if (prevFlowVal == Flow.OfferPresented && nextFlowVal.isTaskFlow() && region.activeJob == null) {
-            val offerFields = prevFlow.pendingOffer?.offerFields
-            val storeHints = offerFields?.parsedOffer?.orders?.map { it.storeName } ?: emptyList()
-            val offerHash = prevFlow.pendingOffer?.offerHash
+        // Offer accepted → capture its economics onto the job. A first accept STARTS a new
+        // Job; an add-on accepted while a job is already active APPENDS (so stacked pay,
+        // time, and distance accumulate) rather than being silently dropped. Deduped by
+        // offerHash so a re-entered OfferPresented for the same offer (screen oscillation)
+        // does not double-count.
+        if (prevFlowVal == Flow.OfferPresented && nextFlowVal.isTaskFlow()) {
+            val pending = prevFlow.pendingOffer
+            val parsedOffer = pending?.offerFields?.parsedOffer
+            val eval = pending?.evaluation
+            val economics = AcceptedOfferEconomics(
+                offerHash = pending?.offerHash,
+                payAmount = eval?.payAmount ?: parsedOffer?.payAmount,
+                netPay = eval?.netPayAmount,
+                estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble(),
+                distanceMiles = eval?.distanceMiles ?: parsedOffer?.distanceMiles,
+                acceptedAt = obs.timestamp,
+            )
+            val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
+            val existing = region.activeJob
 
-            val jobId = UUID.randomUUID().toString()
+            if (existing == null) {
+                return region.copy(
+                    activeJob = Job(
+                        jobId = UUID.randomUUID().toString(),
+                        offerStoreHint = storeHints,
+                        parentOfferHash = pending?.offerHash,
+                        acceptedOffers = listOf(economics),
+                        startedAt = obs.timestamp,
+                    ),
+                )
+            }
+
+            // Add-on into the active job — append unless this offer was already counted.
+            val alreadyCounted = economics.offerHash != null &&
+                existing.acceptedOffers.any { it.offerHash == economics.offerHash }
+            if (alreadyCounted) return region
             return region.copy(
-                activeJob = Job(
-                    jobId = jobId,
-                    offerStoreHint = storeHints,
-                    parentOfferHash = offerHash,
-                    startedAt = obs.timestamp,
+                activeJob = existing.copy(
+                    acceptedOffers = existing.acceptedOffers + economics,
+                    offerStoreHint = existing.offerStoreHint + storeHints,
                 ),
             )
         }
