@@ -60,6 +60,14 @@ On the **second clean** confirmation, move the item into that session's log
 entry and delete it here. If an item is found **broken**, move it to the log
 immediately (no second pass needed) so it gets triaged.
 
+- **Offer card redesign — visuals (#110 Stage 1, PR pending).** When an offer arrives, glance
+  at the bubble offer card and confirm the new layout reads at a glance: a **score ring** (green/
+  amber/red by score) beside the **net $/hr** hero; a **verdict banner** (ACCEPT / DECLINE /
+  MANUAL REVIEW + one-line reason + quality chip, tinted to match); **badge pills** when present
+  (e.g. High pay / Red Card / Alcohol); and a **live expiry countdown** ticking in the header with
+  a depleting progress bar. (No Accept/Decline buttons yet — Stage 2.) Watch for: missing/garbled
+  values, countdown not ticking or width-jittering, ring color not matching the verdict.
+  - Confirmed: 0/2.
 - **Brand theme — HUD legibility & numerals (#94 / #313, PR pending).** With the
   new fixed brand palette + Hanken/Space Grotesk fonts, glance at the bubble HUD
   while driving: confirm it's **legible at a glance** in the dark, the phase/status
