@@ -5,7 +5,9 @@ import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
@@ -119,6 +121,16 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.ClickNode -> {
                 Timber.i("Executing Effect: Clicking Node (${effect.description})")
                 uiInteractionHandler.performClick(effect.node, effect.description)
+            }
+
+            is AppEffect.PerformOfferAction -> {
+                val template = offerActionNode(effect.platform, effect.action)
+                if (template != null) {
+                    Timber.i("Performing offer action: ${effect.action} on ${effect.platform.wire}")
+                    uiInteractionHandler.performClick(template, "Bubble ${effect.action}")
+                } else {
+                    Timber.w("No offer-action node for ${effect.platform.wire}/${effect.action}")
+                }
             }
 
             is AppEffect.RequestEffect -> {
@@ -271,6 +283,21 @@ class SideEffectEngine @Inject constructor(
         )
         Timber.i("Auto-Click [%s]: target id=%s", effect.ruleId, ref.viewIdSuffix)
         uiInteractionHandler.performClick(template, "Auto-Click [${effect.ruleId}]")
+    }
+
+    /**
+     * Resolve the platform's offer Accept/Decline button to a click template. DoorDash-only
+     * for now; Decline targets the *initial* decline button (its confirm dialog is left to the
+     * user in Native mode — auto-confirm is #110 Stage 2c). See #85 for the GigPlatform interface.
+     */
+    private fun offerActionNode(platform: Platform, action: OfferAction): UiNode? {
+        if (platform != Platform.DoorDash) return null
+        val pkg = platform.packageName ?: return null
+        return when (action) {
+            OfferAction.ACCEPT -> UiNode(viewIdResourceName = "$pkg:id/accept_button", text = "Accept")
+            OfferAction.DECLINE -> UiNode(viewIdResourceName = "$pkg:id/secondary_action_button_dash_plus")
+            else -> null
+        }
     }
 
     private fun screenshotFromArgs(scope: CoroutineScope, args: Map<String, String>) {

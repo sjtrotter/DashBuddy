@@ -15,8 +15,12 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -67,6 +71,8 @@ fun FlowCardItem(
     expanded: Boolean,
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    onAccept: () -> Unit = {},
+    onDecline: () -> Unit = {},
 ) {
     val effectiveExpanded = isActive || expanded
     Card(
@@ -89,6 +95,9 @@ fun FlowCardItem(
             CardHeader(snapshot = snapshot, isActive = isActive, expanded = effectiveExpanded)
             if (effectiveExpanded) {
                 CardBody(snapshot = snapshot, isActive = isActive)
+                if (snapshot is FlowCardSnapshot.Offer && isActive && snapshot.outcome == null) {
+                    OfferActionRow(onAccept = onAccept, onDecline = onDecline)
+                }
             }
         }
     }
@@ -615,6 +624,28 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
 // ---------------------------------------------------------------------------
 // Primitives
 // ---------------------------------------------------------------------------
+
+/** Manual Accept / Decline buttons on the active offer card (#110 Stage 2b). */
+@Composable
+private fun OfferActionRow(onAccept: () -> Unit, onDecline: () -> Unit) {
+    val c = DashTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OutlinedButton(
+            onClick = onDecline,
+            modifier = Modifier.weight(1f),
+            border = BorderStroke(1.5.dp, c.bad),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = c.bad),
+        ) { Text("Decline", fontWeight = FontWeight.Bold) }
+        Button(
+            onClick = onAccept,
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(containerColor = c.good, contentColor = c.textInv),
+        ) { Text("Accept", fontWeight = FontWeight.Bold) }
+    }
+}
 
 @Composable
 private fun HeroBig(text: String, color: Color = MaterialTheme.colorScheme.onSurface) {

@@ -67,6 +67,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.ui.bubble.cards.FlowCardItem
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -85,6 +86,12 @@ fun BubbleScreen(
     val lastSessionSummary by viewModel.lastSessionSummary.collectAsState()
     val cardStack by viewModel.cardStack.collectAsState()
     var showFullChat by remember { mutableStateOf(false) }
+
+    // Collapse the bubble to its head after the user acts on an offer.
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.collapse.collect { (context as? android.app.Activity)?.finish() }
+    }
 
     val flow = appState.regions.flow
 
@@ -136,7 +143,9 @@ fun BubbleScreen(
                     region = focusedRegion,
                     messages = messages,
                     lastSessionSummary = lastSessionSummary,
-                    onOpenChat = { showFullChat = true }
+                    onOpenChat = { showFullChat = true },
+                    onAccept = { viewModel.acceptOffer() },
+                    onDecline = { viewModel.declineOffer() },
                 )
             }
         }
@@ -153,7 +162,9 @@ fun DashboardView(
     region: PlatformRegion?,
     messages: List<ChatMessage>,
     lastSessionSummary: SessionSummary?,
-    onOpenChat: () -> Unit
+    onOpenChat: () -> Unit,
+    onAccept: () -> Unit = {},
+    onDecline: () -> Unit = {},
 ) {
     val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
     val listState = rememberLazyListState()
@@ -208,6 +219,8 @@ fun DashboardView(
                                 isActive = true,
                                 expanded = true,
                                 onToggleExpand = { /* active always expanded */ },
+                                onAccept = onAccept,
+                                onDecline = onDecline,
                             )
                         }
                     }

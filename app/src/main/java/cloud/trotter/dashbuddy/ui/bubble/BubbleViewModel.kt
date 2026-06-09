@@ -13,11 +13,14 @@ import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.ui.bubble.cards.FlowCardMapper
 import cloud.trotter.dashbuddy.ui.bubble.cards.LiveCardBuilder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -38,7 +41,7 @@ class BubbleViewModel @Inject constructor(
     private val bubbleManager: BubbleManager,
     private val chatRepository: ChatRepository,
     odometerRepository: OdometerRepository,
-    stateManager: StateManagerV2,
+    private val stateManager: StateManagerV2,
     appEventRepo: AppEventRepo,
 ) : ViewModel() {
 
@@ -165,6 +168,25 @@ class BubbleViewModel @Inject constructor(
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // --- Offer actions (bubble Accept/Decline) ---
+
+    // Signals the bubble to collapse to its head after the user acts on an offer.
+    private val _collapse = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val collapse = _collapse.asSharedFlow()
+
+    /** User tapped Accept in the bubble → perform the platform accept + collapse. */
+    fun acceptOffer() = onOfferAction("accept_offer")
+
+    /** User tapped Decline → perform the platform's initial decline + collapse. */
+    fun declineOffer() = onOfferAction("decline_offer")
+
+    private fun onOfferAction(action: String) {
+        stateManager.dispatch(
+            Observation.UiInput(timestamp = System.currentTimeMillis(), action = action)
+        )
+        _collapse.tryEmit(Unit)
+    }
 }
 
 private fun Flow.isTaskFlow(): Boolean = this in setOf(
