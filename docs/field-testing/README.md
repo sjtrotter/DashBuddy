@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Notification text now formatted (verdict bold/colored/larger, headline bold) (#110, PR pending).**
+  The heads-up offer notification's text is now an Android `SpannableString` — verdict word (ACCEPT /
+  DECLINE / REVIEW) bold, ~1.2× size, colored good/warn/bad; the `$X/hr net` headline bold. To check:
+  on an offer, **look at the heads-up notification** and note what actually renders — (a) is the
+  verdict **bold + larger**? (b) is it **colored** (green/amber/red)? `MessagingStyle` on Android 12+
+  may re-theme/strip the **color** even when bold survives — so report specifically whether the color
+  shows. If color is stripped, the line still reads fine; we'd then weigh a `BigTextStyle` variant
+  (more reliable spans, but can't coexist with the bubble's MessagingStyle).
+  - Confirmed: 0/2.
 - **Self-recognition fixed: our own bubble is no longer parsed as a DoorDash offer (#4, PR pending).**
   Root cause of the 2026-06-09 offer flip-flop: when the bubble was the active window over DoorDash,
   our own overlay got snapshotted, mislabeled `doordash`, and matched `offer_popup` → a phantom
