@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -34,18 +35,26 @@ class ContentChangedPipeline @Inject constructor(
         }
         .mapNotNull { event ->
             val types = pendingChangeTypes.getAndSet(0)
-            source.getCurrentRootNode()?.let { tree ->
-                if (BuildConfig.DEBUG) {
-                    val nodeCount = countNodes(tree)
-                    Timber.d("🌳 Tree snapshot: %d nodes, pkg=%s", nodeCount, event.packageName)
-                }
-                TreeSnapshot(
-                    tree = tree,
-                    source = TreeSnapshot.Source.CONTENT_CHANGED,
-                    contentChangeTypes = types,
-                    packageName = event.packageName?.toString(),
+            val snapshot = source.getCurrentRootSnapshot() ?: return@mapNotNull null
+            // Attribute to the window actually on screen, not the triggering event. Drop snapshots
+            // of non-target windows (our own bubble overlay, launcher, etc.) so we never recognize
+            // our own UI as the platform — the #4 self-recognition feedback loop.
+            if (snapshot.packageName !in Platform.watchedPackages()) {
+                Timber.v(
+                    "🚫 Skip active window: non-target pkg=%s (event pkg=%s)",
+                    snapshot.packageName, event.packageName,
                 )
+                return@mapNotNull null
             }
+            if (BuildConfig.DEBUG) {
+                Timber.d("🌳 Tree snapshot: %d nodes, pkg=%s", countNodes(snapshot.tree), snapshot.packageName)
+            }
+            TreeSnapshot(
+                tree = snapshot.tree,
+                source = TreeSnapshot.Source.CONTENT_CHANGED,
+                contentChangeTypes = types,
+                packageName = snapshot.packageName,
+            )
         }
 
     private fun countNodes(node: UiNode): Int =

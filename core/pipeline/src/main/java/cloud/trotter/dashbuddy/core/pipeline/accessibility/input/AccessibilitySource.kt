@@ -59,20 +59,26 @@ class AccessibilitySource @Inject constructor() {
         serviceRef = WeakReference(service)
     }
 
-    /**
-     * Fetches the current Root Node directly from the system.
-     * * SAFE to call from background threads.
-     */
-    fun getCurrentRootNode(): UiNode? {
-        val root = getLiveNativeRoot() ?: return null
+    /** Active-window root snapshot: the converted [UiNode] tree + the **real package** owning it. */
+    data class RootSnapshot(val tree: UiNode, val packageName: String?)
 
-        return try {
+    /**
+     * Snapshots the active window's root as a [UiNode] tree plus the **real package that owns that
+     * window** — read from the native root and captured together. Use this instead of a bare tree so
+     * a snapshot is attributed to the window actually on screen, not to a triggering event from a
+     * different app. Lets callers drop non-target windows (e.g. our own bubble overlay) rather than
+     * mislabeling them as the platform — the #4 self-recognition feedback loop.
+     *
+     * SAFE to call from background threads.
+     */
+    fun getCurrentRootSnapshot(): RootSnapshot? {
+        val root = getLiveNativeRoot() ?: return null
+        val tree = try {
             root.toUiNode()
         } catch (_: Exception) {
             null
-        } finally {
-            // nothing here... do we need it?
-        }
+        } ?: return null
+        return RootSnapshot(tree = tree, packageName = root.packageName?.toString())
     }
 
     // --- 3. Multi-Window Support ---

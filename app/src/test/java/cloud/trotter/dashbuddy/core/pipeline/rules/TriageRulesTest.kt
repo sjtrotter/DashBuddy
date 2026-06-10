@@ -381,7 +381,12 @@ class TriageRulesTest {
 
     @Test
     fun `navigation_generic — does not steal an offer popup (offer_popup wins)`() {
-        assertEquals("offer_popup", screen(tree(node(text = "Decline"), node(text = "Accept"), node(id = "maneuverView"))))
+        // A real offer popup carries the DoorDash accept_button structure (not just the button
+        // labels) — the require demands it so our own overlay can't masquerade as an offer (#4).
+        assertEquals(
+            "offer_popup",
+            screen(tree(node(text = "Decline"), node(text = "Accept"), node(id = "accept_button"), node(id = "maneuverView"))),
+        )
     }
 
     // =========================================================================

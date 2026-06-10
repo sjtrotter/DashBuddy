@@ -63,6 +63,16 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Self-recognition fixed: our own bubble is no longer parsed as a DoorDash offer (#4, PR pending).**
+  Root cause of the 2026-06-09 offer flip-flop: when the bubble was the active window over DoorDash,
+  our own overlay got snapshotted, mislabeled `doordash`, and matched `offer_popup` → a phantom
+  re-eval (the spurious DECLINE-6 / "22.5 mi"). Now active-window snapshots are attributed to the
+  window's real package (our overlay is dropped), and the offer rule demands the `accept_button`
+  structure our overlay lacks. To test: on an offer, **open the bubble** over the DoorDash offer →
+  confirm the verdict / notification / spoken read **stay stable** (no flip to DECLINE, no re-eval)
+  while the bubble is up. Watch the log for `🚫 Skip active window: non-target pkg=cloud.trotter.dashbuddy`
+  (proof our overlay is being dropped) and **no** second `offer_popup` classification. Real orders.
+  - Confirmed: 0/2.
 - **Offer heads-up notification with Accept/Decline (#110 surface pivot, PR pending).** Since the
   bubble can't auto-expand from the background, an offer now fires a **heads-up notification** showing
   the condensed card (`ACCEPT · $22/hr net` / `Net $22 · 12.9 mi · $1.74/mi · Score 74 · H-E-B`) with
@@ -353,7 +363,21 @@ Distance flips **12.9 mi ↔ 22.5 mi**, and there's an `UNKNOWN` window carrying
 - **To dig:** diff the two captured `offer_popup` JSONs (`…7f6048.json` @44.374 vs `…225fd4.json`
   @52.489) for the one-leg-vs-total parse divergence; consider debouncing/settling offer eval or
   de-duping re-evals of the same `offerHash`.
-- **Status:** Open.
+- **Root cause CONFIRMED (desk, 2026-06-09 — diffed the two captures):** **self-recognition, not a
+  stacked-offer parse and not the loading-bar reject.** Frame `225fd4` @52.489 (the "DECLINE-6"
+  frame) is **our own Bubble HUD overlay** — its tree is `…android:id/content →
+  androidx.compose.ui.platform.ComposeView` with our text (`"Recommended: ACCEPT | Score: 74 | Net:
+  $22.48"`, `"H-E-B · 40 items"`, `"AWESOME OFFER"`), yet it was tagged `platform: doordash`.
+  `ContentChanged`/`StateChanged` snapshot `rootInActiveWindow` but labeled it with the **event's**
+  package; while our bubble was the active window over DoorDash, our overlay got mislabeled DoorDash
+  and matched `offer_popup` (whose `require` was just "Decline" + "Accept" — satisfied by the bubble's
+  new #327 Accept/Decline buttons), then parsed to junk ($0.00 / 0.0 mi) → phantom re-eval. (No
+  `progress_bar` in our overlay, so the removed loading-bar reject was a red herring.)
+- **Fixed (PR pending):** (1) attribute active-window snapshots to the window's **real** package and
+  drop non-target windows — our overlay is skipped (`🚫 Skip active window: non-target pkg=…`); (2)
+  `offer_popup.require` now also demands the `accept_button` / `accept_decline_footer_container` id,
+  which our `content`-only overlay lacks. Dropped the settle/dedupe idea — it would have masked this.
+- **Status:** Fixed — needs field re-validation (see checklist).
 
 ---
 

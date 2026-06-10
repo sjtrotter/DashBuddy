@@ -317,6 +317,18 @@
                 }
               ]
             }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "accept_button"
+                },
+                {
+                  "hasIdSuffix": "accept_decline_footer_container"
+                }
+              ]
+            }
           }
         ]
       },
