@@ -4,6 +4,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -58,6 +59,10 @@ class WindowsChangedPipeline @Inject constructor(
                     // Get the package from the native root before converting to UiNode
                     val nativeRoot = w.root ?: return@mapNotNull null
                     val pkg = nativeRoot.packageName?.toString()
+                    // Only snapshot watched-platform windows (e.g. an Uber overlay) — never our own
+                    // bubble overlay or other apps. Prevents recognizing our own UI (#4) and keeps
+                    // non-target windows out of the pipeline.
+                    if (pkg !in Platform.watchedPackages()) return@mapNotNull null
                     val tree = try {
                         source.getRootForWindow(w)
                     } catch (_: Exception) {

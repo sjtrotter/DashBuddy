@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.st
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
@@ -19,13 +20,21 @@ class StateChangedPipeline @Inject constructor(
             Timber.d("⚡ STATE_CHANGED from %s  types=0x%02x", it.className, it.contentChangeTypes)
         }
         .mapNotNull { event ->
-            source.getCurrentRootNode()?.let { tree ->
-                TreeSnapshot(
-                    tree = tree,
-                    source = TreeSnapshot.Source.STATE_CHANGED,
-                    contentChangeTypes = event.contentChangeTypes,
-                    packageName = event.packageName?.toString(),
+            val snapshot = source.getCurrentRootSnapshot() ?: return@mapNotNull null
+            // Attribute to the on-screen window, not the event; drop non-target windows (e.g. our
+            // own bubble overlay) so we don't recognize our own UI as the platform (#4).
+            if (snapshot.packageName !in Platform.watchedPackages()) {
+                Timber.v(
+                    "🚫 Skip active window: non-target pkg=%s (event pkg=%s)",
+                    snapshot.packageName, event.packageName,
                 )
+                return@mapNotNull null
             }
+            TreeSnapshot(
+                tree = snapshot.tree,
+                source = TreeSnapshot.Source.STATE_CHANGED,
+                contentChangeTypes = event.contentChangeTypes,
+                packageName = snapshot.packageName,
+            )
         }
 }
