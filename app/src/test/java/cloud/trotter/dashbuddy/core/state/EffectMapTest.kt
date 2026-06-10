@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
@@ -116,6 +118,22 @@ class EffectMapTest {
         returnFlow = Flow.Idle,
     )
 
+    private val testEvaluation = OfferEvaluation(
+        action = OfferAction.ACCEPT,
+        score = 74.0,
+        qualityLevel = "Good",
+        recommendationText = "Take it",
+        payAmount = 7.50,
+        fuelCostEstimate = 0.50,
+        netPayAmount = 7.00,
+        distanceMiles = 3.2,
+        dollarsPerMile = 2.19,
+        dollarsPerHour = 22.0,
+        estimatedTimeMinutes = 19.0,
+        itemCount = 1.0,
+        merchantName = "Chipotle",
+    )
+
     private fun stateWithPlatform(
         mode: Mode = Mode.Online,
         sessionId: String? = "sess-1",
@@ -165,6 +183,37 @@ class EffectMapTest {
         assertTrue("Should emit OFFER_RECEIVED", effects.logEventTypes().contains(AppEventType.OFFER_RECEIVED))
         // Screenshot still handled by rule-declared effects
         assertTrue("No hardcoded CaptureScreenshot", effects.none { it is AppEffect.CaptureScreenshot })
+        // Notification waits for the evaluation to land — not posted on first sighting.
+        assertTrue("No PostOfferNotification before eval lands", effects.none { it is AppEffect.PostOfferNotification })
+    }
+
+    @Test
+    fun `evaluation landing on the pending offer emits PostOfferNotification`() {
+        // The async eval loopback attaches the evaluation to the SAME pending offer
+        // (eval null → non-null). EffectMap surfaces it as a heads-up notification here,
+        // rather than the EvaluateOffer handler firing the notification inline.
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer, // evaluation == null
+                activePlatform = Platform.DoorDash,
+            ),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(evaluation = testEvaluation),
+                activePlatform = Platform.DoorDash,
+            ),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
+
+        val posts = effects.filterIsInstance<AppEffect.PostOfferNotification>()
+        assertEquals("Exactly one PostOfferNotification", 1, posts.size)
+        assertEquals("Carries the landed evaluation", testEvaluation, posts[0].evaluation)
+        // Offer didn't just appear — only its evaluation landed — so don't re-evaluate.
+        assertTrue("Should not re-evaluate", effects.none { it is AppEffect.EvaluateOffer })
     }
 
     @Test

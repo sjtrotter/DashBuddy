@@ -66,10 +66,10 @@ class SideEffectEngine @Inject constructor(
         const val DEFAULT_ACTION_THROTTLE_MS = 500L
 
         /**
-         * Delay before auto-expanding the offer bubble, so it lands AFTER the offer
-         * screenshot's settle + capture and never covers the captured frame.
+         * Delay before posting the offer notification, so it lands AFTER the offer screenshot's
+         * settle + capture and never covers the captured frame.
          */
-        const val OFFER_BUBBLE_EXPAND_DELAY_MS = ScreenShotHandler.SETTLE_MS + 250L
+        const val OFFER_NOTIFICATION_DELAY_MS = ScreenShotHandler.SETTLE_MS + 250L
     }
 
     /**
@@ -163,25 +163,22 @@ class SideEffectEngine @Inject constructor(
             // --- LOOPBACKS (Produces Events) ---
 
             is AppEffect.EvaluateOffer -> {
+                // Loopback only: evaluate, then emit the decision back to the state machine. The
+                // notification is posted by the PostOfferNotification effect EffectMap emits once
+                // the evaluation lands on the pending offer — keeps this handler thin.
                 val config = strategyRepository.evaluationConfigFlow.first()
-
                 val result = offerEvaluator.evaluate(effect.parsedOffer, config)
-
-                // 1. Emit the Decision back to State Machine
                 _events.emit(OfferEvaluationEvent(result.action, result))
+            }
 
-                // 2. Post the offer as a heads-up notification with Accept/Decline actions — the
-                // bubble can't auto-expand from the background (#110 field test). Launched on a
-                // short delay so the heads-up lands AFTER the offer screenshot's settle+capture.
-                val persona = when (result.action) {
-                    OfferAction.ACCEPT -> ChatPersona.GoodOffer
-                    OfferAction.DECLINE -> ChatPersona.BadOffer
-                    OfferAction.MANUAL_REVIEW -> ChatPersona.Inspector
-                    OfferAction.NOTHING -> ChatPersona.Inspector
-                }
-                val summary = result.toNotificationSummary()
+            is AppEffect.PostOfferNotification -> {
+                // The bubble can't auto-expand from the background (#110 field test), so surface the
+                // evaluation as a heads-up notification with Accept/Decline actions. Delayed so it
+                // lands AFTER the offer screenshot's settle + capture (clean frame).
+                val summary = effect.evaluation.toNotificationSummary()
+                val persona = offerPersona(effect.evaluation.action)
                 scope.launch {
-                    delay(OFFER_BUBBLE_EXPAND_DELAY_MS)
+                    delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(summary, persona)
                 }
             }
@@ -372,6 +369,14 @@ class SideEffectEngine @Inject constructor(
         else -> ChatPersona.Dispatcher
     }
 
+    /** Map an offer verdict to the persona that voices its notification. */
+    private fun offerPersona(action: OfferAction): ChatPersona = when (action) {
+        OfferAction.ACCEPT -> ChatPersona.GoodOffer
+        OfferAction.DECLINE -> ChatPersona.BadOffer
+        OfferAction.MANUAL_REVIEW -> ChatPersona.Inspector
+        OfferAction.NOTHING -> ChatPersona.Inspector
+    }
+
     /**
      * Check if the given [PermissionTier] is granted.
      *
@@ -396,6 +401,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.EndSession,
         is AppEffect.ProcessTipNotification,
         is AppEffect.SpeakOffer,
+        is AppEffect.PostOfferNotification,
         -> true
         else -> false
     }

@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
@@ -176,10 +177,10 @@ class BubbleViewModel @Inject constructor(
     val collapse = _collapse.asSharedFlow()
 
     /** User tapped Accept in the bubble → perform the platform accept + collapse. */
-    fun acceptOffer() = onOfferAction("accept_offer")
+    fun acceptOffer() = onOfferAction(OfferIntent.ACCEPT)
 
     /** User tapped Decline → perform the platform's initial decline + collapse. */
-    fun declineOffer() = onOfferAction("decline_offer")
+    fun declineOffer() = onOfferAction(OfferIntent.DECLINE)
 
     private fun onOfferAction(action: String) {
         stateManager.dispatch(

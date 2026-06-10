@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
@@ -150,6 +151,18 @@ class EffectMap @Inject constructor(
             add(AppEffect.SpeakOffer(offer.parsedOffer, platform))
         }
 
+        // Evaluation landed (async loopback) → post the offer's heads-up notification. Keyed on the
+        // evaluation arriving in state (same offer, eval null → non-null) rather than fired inline
+        // from the EvaluateOffer handler, so the offer's UI effects stay first-class + testable.
+        // (TTS will move here too when it reads the evaluation — #110 step ii.)
+        val landedEval = nextOffer?.evaluation
+        if (prevOffer != null && nextOffer != null && landedEval != null &&
+            prevOffer.offerHash == nextOffer.offerHash &&
+            prevOffer.evaluation == null
+        ) {
+            add(AppEffect.PostOfferNotification(landedEval))
+        }
+
         // Offer resolved (accepted/declined/timeout)
         if (prevOffer != null && nextOffer == null) {
             val outcome = resolveOfferOutcome(obs, prevOffer)
@@ -164,10 +177,10 @@ class EffectMap @Inject constructor(
         if (flowObs is Observation.Click && prev.flow == Flow.OfferPresented) {
             val fields = flowObs.parsed as? ParsedFields.ClickFields
             when (fields?.intent) {
-                "accept_offer" -> add(
+                OfferIntent.ACCEPT -> add(
                     AppEffect.UpdateBubble("Offer Accepted", persona = ChatPersona.Dispatcher)
                 )
-                "decline_offer" -> add(
+                OfferIntent.DECLINE -> add(
                     AppEffect.UpdateBubble("Offer Declined", persona = ChatPersona.Dispatcher)
                 )
             }
@@ -182,8 +195,8 @@ class EffectMap @Inject constructor(
             val platform = next.activePlatform ?: prev.activePlatform
             if (platform != null) {
                 when (obs.action) {
-                    "accept_offer" -> add(AppEffect.PerformOfferAction(OfferAction.ACCEPT, platform))
-                    "decline_offer" -> add(AppEffect.PerformOfferAction(OfferAction.DECLINE, platform))
+                    OfferIntent.ACCEPT -> add(AppEffect.PerformOfferAction(OfferAction.ACCEPT, platform))
+                    OfferIntent.DECLINE -> add(AppEffect.PerformOfferAction(OfferAction.DECLINE, platform))
                 }
             }
         }
@@ -789,8 +802,8 @@ class EffectMap @Inject constructor(
         // 1. Stored click intent on PendingOffer — covers the common case where
         //    the click was observed first and the resolving obs is a Screen
         when (prevOffer?.lastClickIntent) {
-            "accept_offer" -> return AppEventType.OFFER_ACCEPTED
-            "decline_offer" -> return AppEventType.OFFER_DECLINED
+            OfferIntent.ACCEPT -> return AppEventType.OFFER_ACCEPTED
+            OfferIntent.DECLINE -> return AppEventType.OFFER_DECLINED
         }
         // 2. Direct click observation — covers the edge case where click and
         //    flow change arrive in the same observation
@@ -799,8 +812,8 @@ class EffectMap @Inject constructor(
             else -> null
         }
         return when (clickFields?.intent) {
-            "accept_offer" -> AppEventType.OFFER_ACCEPTED
-            "decline_offer" -> AppEventType.OFFER_DECLINED
+            OfferIntent.ACCEPT -> AppEventType.OFFER_ACCEPTED
+            OfferIntent.DECLINE -> AppEventType.OFFER_DECLINED
             else -> AppEventType.OFFER_TIMEOUT
         }
     }
