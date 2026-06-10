@@ -15,6 +15,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.state.effects.OfferActionReceiver
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId // <-- Your new UI Formatter!
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -123,7 +124,12 @@ class BubbleManager @Inject constructor(
         ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
     }
 
-    private fun showNotification(text: CharSequence, persona: ChatPersona, expand: Boolean) {
+    private fun showNotification(
+        text: CharSequence,
+        persona: ChatPersona,
+        expand: Boolean,
+        offerActionable: Boolean = false,
+    ) {
 
         val senderPerson = Person.Builder()
             .setName(persona.displayName)
@@ -161,7 +167,7 @@ class BubbleManager @Inject constructor(
             .setGroupConversation(true)
             .addMessage(text, System.currentTimeMillis(), senderPerson)
 
-        val notification = NotificationCompat.Builder(context, channelId)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.bag_red_idle)
             .setStyle(style)
             .setBubbleMetadata(bubbleMetadata)
@@ -171,8 +177,31 @@ class BubbleManager @Inject constructor(
             .addPerson(senderPerson)
             .setCategory(Notification.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .build()
 
-        notificationManager.notify(1, notification)
+        if (offerActionable) {
+            builder.addAction(offerAction("Decline", OfferActionReceiver.DECLINE, 11))
+            builder.addAction(offerAction("Accept", OfferActionReceiver.ACCEPT, 10))
+        }
+
+        notificationManager.notify(1, builder.build())
+    }
+
+    /** Post the offer evaluation as a heads-up notification with Accept / Decline action buttons. */
+    fun postOfferNotification(summary: CharSequence, persona: ChatPersona) {
+        Timber.tag("Chat").i("[${persona.displayName}]: $summary")
+        scope.launch { chatRepository.saveMessage(_activeDashId.value, summary.toString(), persona) }
+        showNotification(summary, persona, expand = false, offerActionable = true)
+    }
+
+    private fun offerAction(label: String, action: String, requestCode: Int): NotificationCompat.Action {
+        val intent = Intent(context, OfferActionReceiver::class.java).apply {
+            this.action = OfferActionReceiver.ACTION
+            putExtra(OfferActionReceiver.EXTRA_ACTION, action)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return NotificationCompat.Action.Builder(0, label, pi).build()
     }
 }

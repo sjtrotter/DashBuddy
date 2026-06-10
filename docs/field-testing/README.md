@@ -63,6 +63,16 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Offer heads-up notification with Accept/Decline (#110 surface pivot, PR pending).** Since the
+  bubble can't auto-expand from the background, an offer now fires a **heads-up notification** showing
+  the condensed card (`ACCEPT · $22/hr net` / `Net $22 · 12.9 mi · $1.74/mi · Score 74 · H-E-B`) with
+  **Decline** + **Accept** action buttons. Confirm: (1) the notification **pops as a heads-up** while
+  you're in DoorDash (it should, unlike the bubble — it's `IMPORTANCE_HIGH`); (2) the summary numbers
+  are right; (3) tapping **Accept**/**Decline** from the notification actually performs it on DoorDash
+  (same click path as the bubble, now fixed); (4) it lands **after** the offer screenshot (clean
+  frame). The bubble is still there to tap open for the full card. Watch for `OfferActionReceiver: …`
+  then `Performing offer action …` in the log. Real orders — watch carefully.
+  - Confirmed: 0/2.
 - **Bubble Accept/Decline now click DoorDash + collapse (re-test of 2026-06-09 #1 + #3, PR pending).**
   The click was searching the wrong window (`rootInActiveWindow` = the bubble); now it searches **all**
   windows, and the collapse cast was fixed (`findActivity`). To test: open the bubble (tap its head,

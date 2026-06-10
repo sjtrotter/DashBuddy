@@ -18,7 +18,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
-import cloud.trotter.dashbuddy.ui.formatters.toAnnotatedString
+import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -170,19 +170,19 @@ class SideEffectEngine @Inject constructor(
                 // 1. Emit the Decision back to State Machine
                 _events.emit(OfferEvaluationEvent(result.action, result))
 
-                // 2. Show the Bubble (Side Effect) — auto-expand so the dasher sees the
-                // evaluation. Launched on a short delay so it lands AFTER the offer
-                // screenshot's settle+capture (clean frame) without blocking the pipeline.
+                // 2. Post the offer as a heads-up notification with Accept/Decline actions — the
+                // bubble can't auto-expand from the background (#110 field test). Launched on a
+                // short delay so the heads-up lands AFTER the offer screenshot's settle+capture.
                 val persona = when (result.action) {
                     OfferAction.ACCEPT -> ChatPersona.GoodOffer
                     OfferAction.DECLINE -> ChatPersona.BadOffer
                     OfferAction.MANUAL_REVIEW -> ChatPersona.Inspector
                     OfferAction.NOTHING -> ChatPersona.Inspector
                 }
-                val message = result.toAnnotatedString()
+                val summary = result.toNotificationSummary()
                 scope.launch {
                     delay(OFFER_BUBBLE_EXPAND_DELAY_MS)
-                    bubbleManager.postMessage(message, persona, expand = true)
+                    bubbleManager.postOfferNotification(summary, persona)
                 }
             }
 
