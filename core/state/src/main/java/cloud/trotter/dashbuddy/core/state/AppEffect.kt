@@ -64,7 +64,8 @@ sealed class AppEffect {
     data object PauseOdometer : AppEffect()   // pause GPS while stationary; session total preserved
     data object ResumeOdometer : AppEffect()  // resume GPS after stationary pause
     data class EvaluateOffer(val parsedOffer: ParsedOffer) : AppEffect()
-    data class SpeakOffer(val parsedOffer: ParsedOffer, val platformName: String) : AppEffect()
+    /** Speak the offer's evaluation aloud (verdict + headline economics). Fires on eval-landing. */
+    data class SpeakOffer(val evaluation: OfferEvaluation) : AppEffect()
 
     /**
      * Post the offer evaluation as a heads-up notification with Accept/Decline actions. Emitted by

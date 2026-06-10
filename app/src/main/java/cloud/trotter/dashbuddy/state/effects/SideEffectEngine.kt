@@ -149,7 +149,7 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.PlayNotificationSound -> { /* Implementation */
             }
 
-            is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.parsedOffer, effect.platformName)
+            is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.evaluation)
 
             is AppEffect.StartSession -> bubbleManager.startSession(effect.sessionId, effect.platformName)
             is AppEffect.EndSession -> bubbleManager.endSession(effect.platformName)
