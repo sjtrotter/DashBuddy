@@ -40,7 +40,5 @@ class OfferActionReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION = "cloud.trotter.dashbuddy.action.OFFER_ACTION"
         const val EXTRA_ACTION = "offer_action"
-        const val ACCEPT = "accept_offer"
-        const val DECLINE = "decline_offer"
     }
 }

@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
@@ -64,6 +65,14 @@ sealed class AppEffect {
     data object ResumeOdometer : AppEffect()  // resume GPS after stationary pause
     data class EvaluateOffer(val parsedOffer: ParsedOffer) : AppEffect()
     data class SpeakOffer(val parsedOffer: ParsedOffer, val platformName: String) : AppEffect()
+
+    /**
+     * Post the offer evaluation as a heads-up notification with Accept/Decline actions. Emitted by
+     * [EffectMap] when the async evaluation lands on the pending offer (eval null → non-null) — not
+     * fired inline from the [EvaluateOffer] loopback handler — so the offer's UI side-effects stay
+     * first-class and testable. The app layer formats the summary + persona from the evaluation.
+     */
+    data class PostOfferNotification(val evaluation: OfferEvaluation) : AppEffect()
 
     data class ClickNode(
         val node: UiNode,

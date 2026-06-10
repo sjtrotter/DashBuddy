@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.state.effects.OfferActionReceiver
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId // <-- Your new UI Formatter!
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -179,8 +180,8 @@ class BubbleManager @Inject constructor(
             .setPriority(NotificationCompat.PRIORITY_MAX)
 
         if (offerActionable) {
-            builder.addAction(offerAction("Decline", OfferActionReceiver.DECLINE, 11))
-            builder.addAction(offerAction("Accept", OfferActionReceiver.ACCEPT, 10))
+            builder.addAction(offerAction("Decline", OfferIntent.DECLINE, 11))
+            builder.addAction(offerAction("Accept", OfferIntent.ACCEPT, 10))
         }
 
         notificationManager.notify(1, builder.build())
