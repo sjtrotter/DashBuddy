@@ -19,9 +19,9 @@ class UiInteractionHandler @Inject constructor(
     fun performClick(templateNode: UiNode, description: String) {
         Timber.i("UiInteractionHandler: Attempting click ($description)")
 
-        val liveRoot = accessibilitySource.getLiveNativeRoot()
-        if (liveRoot == null) {
-            Timber.w("Failed to click: Live root window is null.")
+        val roots = accessibilitySource.getLiveWindowRoots()
+        if (roots.isEmpty()) {
+            Timber.w("Failed to click: no live windows.")
             return
         }
 
@@ -29,18 +29,21 @@ class UiInteractionHandler @Inject constructor(
         val targetText = templateNode.text
         val targetBounds = templateNode.boundsInScreen
 
-        // Strategy 1: find by view ID
+        // Search across ALL windows, strongest strategy first (so a weak bounds match in one
+        // window can't beat a viewId match in another). The target node may live in a window
+        // other than the active one — e.g. DoorDash's offer while the bubble holds focus.
         val candidates = mutableListOf<AccessibilityNodeInfo>()
+        // Strategy 1: find by view ID
         if (!targetId.isNullOrEmpty()) {
-            candidates.addAll(liveRoot.findAccessibilityNodeInfosByViewId(targetId))
+            for (root in roots) candidates.addAll(root.findAccessibilityNodeInfosByViewId(targetId))
         }
         // Strategy 2: find by text
         if (candidates.isEmpty() && !targetText.isNullOrEmpty()) {
-            candidates.addAll(liveRoot.findAccessibilityNodeInfosByText(targetText))
+            for (root in roots) candidates.addAll(root.findAccessibilityNodeInfosByText(targetText))
         }
-        // Strategy 3: walk the tree matching by bounds + className
+        // Strategy 3: walk each tree matching by bounds + className
         if (candidates.isEmpty()) {
-            findNodeByBounds(liveRoot, targetBounds, templateNode.className, candidates)
+            for (root in roots) findNodeByBounds(root, targetBounds, templateNode.className, candidates)
         }
 
         if (candidates.isEmpty()) {

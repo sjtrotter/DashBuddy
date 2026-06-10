@@ -36,6 +36,21 @@ class AccessibilitySource @Inject constructor() {
         return service.rootInActiveWindow
     }
 
+    /**
+     * All live window roots (native), active window first. Needed for clicks: the node to tap
+     * (e.g. DoorDash's Accept/Decline button) may be in a window other than the active one —
+     * when the user taps the bubble, the *bubble* is the active window, so a search limited to
+     * [getLiveNativeRoot] misses the underlying app's nodes. Requires
+     * `flagRetrieveInteractiveWindows` (set in the service config).
+     */
+    fun getLiveWindowRoots(): List<AccessibilityNodeInfo> {
+        val service = serviceRef?.get() ?: return emptyList()
+        val roots = mutableListOf<AccessibilityNodeInfo>()
+        service.rootInActiveWindow?.let { roots.add(it) }
+        (service.windows ?: emptyList()).forEach { window -> window.root?.let { roots.add(it) } }
+        return roots
+    }
+
     // --- 2. The Service Connection (Pull) ---
     // We use a WeakReference so we don't leak the Service if it restarts
     private var serviceRef: WeakReference<AccessibilityService>? = null

@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.text.Html
 import android.text.format.DateFormat
 import android.widget.TextView
@@ -90,7 +93,7 @@ fun BubbleScreen(
     // Collapse the bubble to its head after the user acts on an offer.
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-        viewModel.collapse.collect { (context as? android.app.Activity)?.finish() }
+        viewModel.collapse.collect { context.findActivity()?.finish() }
     }
 
     val flow = appState.regions.flow
@@ -150,6 +153,16 @@ fun BubbleScreen(
             }
         }
     }
+}
+
+/** Unwrap a Compose [LocalContext] (often a ContextThemeWrapper) to the hosting Activity. */
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
 
 // ---------------------------------------------------------------------------

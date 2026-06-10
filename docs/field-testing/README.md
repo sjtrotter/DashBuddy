@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Bubble Accept/Decline now click DoorDash + collapse (re-test of 2026-06-09 #1 + #3, PR pending).**
+  The click was searching the wrong window (`rootInActiveWindow` = the bubble); now it searches **all**
+  windows, and the collapse cast was fixed (`findActivity`). To test: open the bubble (tap its head,
+  since auto-expand is still off — that's the separate notification work), then on an offer tap
+  **Accept** or **Decline** → confirm DashBuddy actually taps DoorDash's button (Accept accepts;
+  Decline opens DoorDash's confirm), **and** the bubble **collapses to its head** afterward (vs
+  dismiss — note which). Watch the log for `Performing offer action …` *without* a following
+  `Could not find any live node`. Real orders — watch carefully.
+  - Confirmed: 0/2.
 - **Screenshots settle before capture (PR #325).** Captures saved to `Pictures/DashBuddy` should
   be **clean / fully-rendered** (UI settled), not grabbed mid-transition or half-drawn — there's now
   a 500ms settle before every screenshot. Spot-check the offer + post-task captures after a dash.
