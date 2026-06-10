@@ -176,7 +176,8 @@ class EffectMapTest {
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented, parsed = testOfferFields))
 
         assertTrue("Should emit EvaluateOffer", effects.any { it is AppEffect.EvaluateOffer })
-        assertTrue("Should emit SpeakOffer", effects.any { it is AppEffect.SpeakOffer })
+        // SpeakOffer (like the notification) waits for the evaluation to land — not on first sighting.
+        assertTrue("No SpeakOffer before eval lands", effects.none { it is AppEffect.SpeakOffer })
         // OFFER_RECEIVED now emitted from EffectMap with a typed payload
         // (#257) — moved out of rule-declared `log` effects which never
         // persisted to the DB.
@@ -212,6 +213,10 @@ class EffectMapTest {
         val posts = effects.filterIsInstance<AppEffect.PostOfferNotification>()
         assertEquals("Exactly one PostOfferNotification", 1, posts.size)
         assertEquals("Carries the landed evaluation", testEvaluation, posts[0].evaluation)
+        // Spoken read also fires on eval-landing, carrying the same evaluation.
+        val spoken = effects.filterIsInstance<AppEffect.SpeakOffer>()
+        assertEquals("Exactly one SpeakOffer", 1, spoken.size)
+        assertEquals("Speaks the landed evaluation", testEvaluation, spoken[0].evaluation)
         // Offer didn't just appear — only its evaluation landed — so don't re-evaluate.
         assertTrue("Should not re-evaluate", effects.none { it is AppEffect.EvaluateOffer })
     }

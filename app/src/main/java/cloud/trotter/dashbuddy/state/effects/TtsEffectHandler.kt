@@ -6,7 +6,8 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import java.util.Locale
@@ -59,27 +60,34 @@ class TtsEffectHandler @Inject constructor(
         }
     }
 
-    fun speakOffer(offer: ParsedOffer, platformName: String) {
+    /** Speak the offer's evaluation aloud — the verdict, then the card's headline economics. */
+    fun speakOffer(eval: OfferEvaluation) {
         if (!isReady) {
             Timber.w("TTS not ready, skipping offer speech")
             return
         }
-        val text = formatOffer(offer, platformName)
+        val text = formatEvaluation(eval)
         Timber.i("TTS speaking: %s", text)
 
         audioManager.requestAudioFocus(audioFocusRequest)
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "offer_${offer.offerHash}")
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "offer_${eval.merchantName}")
     }
 
-    private fun formatOffer(offer: ParsedOffer, platformName: String): String {
-        val parts = mutableListOf<String>()
-        parts += "$platformName offer"
-        offer.payAmount?.let { parts += "$%.2f".format(it) }
-        offer.orders.firstOrNull()?.let { parts += it.storeName.trim() }
-        offer.distanceMiles?.let { parts += "%.1f miles".format(it) }
-        offer.dueByTimeText?.let { parts += it }
-            ?: offer.timeToCompleteMinutes?.let { parts += "$it minutes" }
-        return parts.joinToString(". ") + "."
+    private fun formatEvaluation(eval: OfferEvaluation): String {
+        val verdict = when (eval.action) {
+            OfferAction.ACCEPT -> "Accept"
+            OfferAction.DECLINE -> "Decline"
+            OfferAction.MANUAL_REVIEW -> "Review"
+            else -> "Offer"
+        }
+        return "%s. %s. %.0f dollars an hour net. Net %.2f, %.1f miles, score %d.".format(
+            verdict,
+            eval.merchantName.trim(),
+            eval.dollarsPerHour,
+            eval.netPayAmount,
+            eval.distanceMiles,
+            eval.score.toInt(),
+        )
     }
 
     fun shutdown() {

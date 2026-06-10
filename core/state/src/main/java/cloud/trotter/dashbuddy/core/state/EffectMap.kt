@@ -127,11 +127,9 @@ class EffectMap @Inject constructor(
             )
             add(logEffect(sessionId, AppEventType.OFFER_RECEIVED, receivedPayload))
 
-            // Evaluate
+            // Evaluate (the heads-up notification + spoken read fire later, once the async
+            // evaluation lands on the pending offer — see the eval-landing block below).
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
-
-            // Speak offer aloud
-            add(AppEffect.SpeakOffer(offer.parsedOffer, platform))
         }
 
         // Offer replaced (different hash)
@@ -144,23 +142,22 @@ class EffectMap @Inject constructor(
             val outcome = resolveOfferOutcome(obs, prevOffer)
             add(logEffect(sessionId, outcome, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
 
-            // Evaluate + speak new offer
+            // Evaluate the new offer (notification + spoken read fire on eval-landing below).
             val offer = nextOffer.offerFields
             add(AppEffect.EvaluateOffer(offer.parsedOffer))
-            val platform = next.activePlatform?.name ?: "Unknown"
-            add(AppEffect.SpeakOffer(offer.parsedOffer, platform))
         }
 
-        // Evaluation landed (async loopback) → post the offer's heads-up notification. Keyed on the
-        // evaluation arriving in state (same offer, eval null → non-null) rather than fired inline
-        // from the EvaluateOffer handler, so the offer's UI effects stay first-class + testable.
-        // (TTS will move here too when it reads the evaluation — #110 step ii.)
+        // Evaluation landed (async loopback) → fire the offer's UI side-effects: the heads-up
+        // notification and the spoken read, both off the evaluation. Keyed on the evaluation
+        // arriving in state (same offer, eval null → non-null) rather than fired inline from the
+        // EvaluateOffer handler, so the offer's UI effects stay first-class + testable.
         val landedEval = nextOffer?.evaluation
         if (prevOffer != null && nextOffer != null && landedEval != null &&
             prevOffer.offerHash == nextOffer.offerHash &&
             prevOffer.evaluation == null
         ) {
             add(AppEffect.PostOfferNotification(landedEval))
+            add(AppEffect.SpeakOffer(landedEval))
         }
 
         // Offer resolved (accepted/declined/timeout)
