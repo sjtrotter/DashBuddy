@@ -84,6 +84,10 @@
             </intent-filter>
         </service>
 
+        <receiver
+            android:name=".state.effects.OfferActionReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>
