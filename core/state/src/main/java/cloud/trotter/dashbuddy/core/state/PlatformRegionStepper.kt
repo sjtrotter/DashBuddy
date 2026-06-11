@@ -18,7 +18,6 @@ import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,6 +44,21 @@ class PlatformRegionStepper @Inject constructor() {
         /** Max completed tasks retained per platform during a session. */
         const val MAX_RECENT_TASKS = 20
     }
+
+    /**
+     * Deterministic entity-id mint (#344): derived only from replay-stable inputs
+     * (platform, obs.timestamp, [PlatformRegion.mintCounter]) so crash-recovery
+     * replay reproduces the live run's IDs. UUID.randomUUID broke effect
+     * idempotency keys ("start_session:$sessionId") and diverged restored state
+     * from already-persisted rows. Every mint MUST bump mintCounter in the same
+     * copy() — use [offset] when minting more than one id per observation.
+     */
+    private fun mintId(
+        kind: String,
+        region: PlatformRegion,
+        obs: Observation,
+        offset: Long = 0,
+    ): String = "$kind-${region.platform.wire}-${obs.timestamp}-${region.mintCounter + offset}"
 
     fun step(
         prev: PlatformRegion,
@@ -154,9 +168,10 @@ class PlatformRegionStepper @Inject constructor() {
                     // No session — start a fresh one.
                     region = region.copy(
                         session = Session(
-                            sessionId = UUID.randomUUID().toString(),
+                            sessionId = mintId("session", region, obs),
                             startedAt = obs.timestamp,
                         ),
+                        mintCounter = region.mintCounter + 1,
                     )
                 }
             }
@@ -195,8 +210,8 @@ class PlatformRegionStepper @Inject constructor() {
             val parsed = flowObs.parsed
             val storeName = (parsed as? ParsedFields.TaskFields)?.storeName
 
-            val jobId = UUID.randomUUID().toString()
-            val taskId = UUID.randomUUID().toString()
+            val jobId = mintId("job", region, obs)
+            val taskId = mintId("task", region, obs, offset = 1)
 
             return region.copy(
                 activeJob = Job(
@@ -213,6 +228,7 @@ class PlatformRegionStepper @Inject constructor() {
                     startedAt = obs.timestamp,
                     recovered = true,
                 ),
+                mintCounter = region.mintCounter + 2,
             )
         }
 
@@ -413,12 +429,13 @@ class PlatformRegionStepper @Inject constructor() {
             if (existing == null) {
                 return region.copy(
                     activeJob = Job(
-                        jobId = UUID.randomUUID().toString(),
+                        jobId = mintId("job", region, obs),
                         offerStoreHint = storeHints,
                         parentOfferHash = pending?.offerHash,
                         acceptedOffers = listOf(economics),
                         startedAt = obs.timestamp,
                     ),
+                    mintCounter = region.mintCounter + 1,
                 )
             }
 
@@ -437,14 +454,14 @@ class PlatformRegionStepper @Inject constructor() {
         // Job start: task flow without active job (recovery or mid-session restart)
         if (nextFlowVal.isTaskFlow() && region.activeJob == null) {
             val parsed = obs.parsed as? ParsedFields.TaskFields
-            val jobId = UUID.randomUUID().toString()
             return region.copy(
                 activeJob = Job(
-                    jobId = jobId,
+                    jobId = mintId("job", region, obs),
                     offerStoreHint = listOfNotNull(parsed?.storeName),
                     parentOfferHash = null,
                     startedAt = obs.timestamp,
                 ),
+                mintCounter = region.mintCounter + 1,
             )
         }
 
@@ -523,7 +540,7 @@ class PlatformRegionStepper @Inject constructor() {
 
                 return region.copy(
                     activeTask = Task(
-                        taskId = UUID.randomUUID().toString(),
+                        taskId = mintId("task", region, obs),
                         jobId = jobId,
                         phase = taskPhase,
                         subPhase = taskSubFlow,
@@ -541,6 +558,7 @@ class PlatformRegionStepper @Inject constructor() {
                     ),
                     recentTasks = recentTasks,
                     pendingDestructive = null,
+                    mintCounter = region.mintCounter + 1,
                 )
             }
 

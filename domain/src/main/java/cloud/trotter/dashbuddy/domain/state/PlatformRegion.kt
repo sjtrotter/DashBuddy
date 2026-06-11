@@ -42,6 +42,13 @@ data class PlatformRegion(
      */
     val lastPostTaskFields: ParsedFields.PostTaskFields? = null,
     val lastObservedAt: Long = 0,
+    /**
+     * Monotonic counter for deterministic entity-id minting (#344). Bumped by the
+     * stepper on every session/job/task mint and persisted with snapshots, so
+     * crash-recovery replay reproduces the live run's IDs — and two mints sharing
+     * an observation timestamp still get distinct IDs.
+     */
+    val mintCounter: Long = 0,
     /** Timestamp when Flow entered Idle while mode is Online. Null otherwise. */
     val idleEnteredAt: Long? = null,
     /**
