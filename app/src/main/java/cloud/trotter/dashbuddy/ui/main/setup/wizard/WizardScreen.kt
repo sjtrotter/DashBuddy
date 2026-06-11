@@ -68,6 +68,9 @@ fun WizardScreen(
     val isCherryPicker = state.strategy == DashStrategy.CHERRY_PICKER
 
     var showCompletionSheet by remember { mutableStateOf(false) }
+    // Skip and Finish share the completion sheet but must NOT share a save path:
+    // Skip writes nothing (#347).
+    var skippedSetup by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(
@@ -75,7 +78,10 @@ fun WizardScreen(
             WizardTopBar(
                 currentStep = pagerState.currentPage,
                 totalSteps = steps.size,
-                onSkip = { showCompletionSheet = true }
+                onSkip = {
+                    skippedSetup = true
+                    showCompletionSheet = true
+                }
             )
         },
         bottomBar = {
@@ -89,6 +95,7 @@ fun WizardScreen(
                     if (pagerState.currentPage < steps.size - 1) {
                         coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
                     } else {
+                        skippedSetup = false
                         showCompletionSheet = true
                     }
                 }
@@ -269,7 +276,11 @@ fun WizardScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Your setup is complete. Remember, you can always tweak these targets, change your vehicle, or adjust your automation strategy later in the Settings menu.",
+                    if (skippedSetup) {
+                        "Setup skipped — nothing was changed. You can run the wizard anytime from the Settings menu."
+                    } else {
+                        "Your setup is complete. Remember, you can always tweak these targets, change your vehicle, or adjust your automation strategy later in the Settings menu."
+                    },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -280,7 +291,11 @@ fun WizardScreen(
                         coroutineScope.launch {
                             sheetState.hide()
                             showCompletionSheet = false
-                            viewModel.saveAndFinish(onComplete)
+                            if (skippedSetup) {
+                                viewModel.skipAndFinish(onComplete)
+                            } else {
+                                viewModel.saveAndFinish(onComplete)
+                            }
                         }
                     },
                     modifier = Modifier

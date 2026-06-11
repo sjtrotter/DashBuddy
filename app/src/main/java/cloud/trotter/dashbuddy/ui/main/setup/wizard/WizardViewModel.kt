@@ -452,6 +452,19 @@ class WizardViewModel @Inject constructor(
         _state.update { it.copy(maxItems = items) }
     }
 
+    /**
+     * Skip = a true skip (#347): mark first-run complete and write NOTHING else.
+     * A later re-run + Skip must never reset tuned strategy/economy settings —
+     * the old path funneled Skip through [saveAndFinish], silently restoring
+     * hardcoded automation defaults.
+     */
+    fun skipAndFinish(onComplete: () -> Unit) {
+        viewModelScope.launch {
+            appStateRepository.setFirstRunComplete()
+            onComplete()
+        }
+    }
+
     fun saveAndFinish(onComplete: () -> Unit) {
         viewModelScope.launch {
             val finalState = _state.value
@@ -534,17 +547,23 @@ class WizardViewModel @Inject constructor(
             val isCherryPicker = finalState.strategy == DashStrategy.CHERRY_PICKER
             val isPlatinum = finalState.strategy == DashStrategy.PROTECT_PLATINUM
 
+            // Only write what the wizard actually collects (#347): the strategy-derived
+            // toggles and the SHOPPING step's preference. The threshold values are NOT
+            // wizard inputs — preserve their current values so a re-run + Finish
+            // round-trips losslessly instead of resetting tuned automation config.
+            val currentAutomation = strategyRepository.automationConfig.first()
             strategyRepository.setProtectStatsMode(isPlatinum)
             strategyRepository.setMasterAutomation(isCherryPicker)
             strategyRepository.updateAutomation(
-                autoAccept = false,
-                acceptMinPay = 0.0,
-                acceptMinRatio = 2.0, // Default $2.00/mi
+                autoAccept = currentAutomation.autoAcceptEnabled,
+                acceptMinPay = currentAutomation.autoAcceptMinPay,
+                acceptMinRatio = currentAutomation.autoAcceptMinRatio,
                 autoDecline = isCherryPicker,
-                declineMaxPay = 3.50, // Default auto-decline anything under $3.50
-                declineMinRatio = 0.50 // Default auto-decline anything under $0.50/mi
-            ) // TODO: Update UI to collect all fields?
-            strategyRepository.setAllowShopping(true)
+                declineMaxPay = currentAutomation.autoDeclineMaxPay,
+                declineMinRatio = currentAutomation.autoDeclineMinRatio,
+            )
+            // allowShopping is NOT collected by any wizard step (SHOPPING collects
+            // maxItems only) — settings own that toggle; the wizard must not touch it.
 
             val currentRules = strategyRepository.scoringRules.first().toMutableList()
             val updatedRules = currentRules.map { rule ->
