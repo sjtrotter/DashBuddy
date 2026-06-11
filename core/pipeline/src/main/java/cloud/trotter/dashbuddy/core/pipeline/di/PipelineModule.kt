@@ -1,7 +1,5 @@
 package cloud.trotter.dashbuddy.core.pipeline.di
 
-import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
-import cloud.trotter.dashbuddy.core.data.capture.DiskCaptureBus
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.core.pipeline.ReplayMetadataProviderImpl
 import dagger.Binds
@@ -14,12 +12,8 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class PipelineModule {
 
-    // =========================================================================
-    // CAPTURE
-    // =========================================================================
-
-    @Binds @Singleton
-    abstract fun bindCaptureBus(impl: DiskCaptureBus): CaptureBus
+    // CaptureBus is bound in :core:data's per-variant CaptureBusModule
+    // (debug → DiskCaptureBus, release → NoOpCaptureBus, #346).
 
     @Binds @Singleton
     abstract fun bindReplayMetadataProvider(impl: ReplayMetadataProviderImpl): ReplayMetadataProvider
