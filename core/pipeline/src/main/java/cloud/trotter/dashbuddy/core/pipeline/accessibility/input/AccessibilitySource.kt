@@ -59,6 +59,13 @@ class AccessibilitySource @Inject constructor() {
         serviceRef = WeakReference(service)
     }
 
+    /**
+     * The live service instance, for service-level capabilities beyond node access
+     * (e.g. `takeScreenshot`). Prefer the narrower accessors when one fits — this exists
+     * so consumers inject this source instead of reaching for service statics (#349).
+     */
+    fun getService(): AccessibilityService? = serviceRef?.get()
+
     /** Active-window root snapshot: the converted [UiNode] tree + the **real package** owning it. */
     data class RootSnapshot(val tree: UiNode, val packageName: String?)
 

@@ -2,16 +2,18 @@ package cloud.trotter.dashbuddy.state.effects
 
 import android.accessibilityservice.AccessibilityService
 import android.content.ContentValues
+import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.MediaStore
 import android.view.Display
-import cloud.trotter.dashbuddy.DashBuddyApplication
-import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilityListener
-//import cloud.trotter.dashbuddy.log.Logger as Log
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.core.state.AppEffect
+import cloud.trotter.dashbuddy.di.IoDispatcher
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -23,7 +25,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ScreenShotHandler @Inject constructor() {
+class ScreenShotHandler @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+    private val accessibilitySource: AccessibilitySource,
+    @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+) {
 
     companion object {
         /** UI-settle delay before every capture — mirrors the click settle (500ms). */
@@ -31,27 +37,28 @@ class ScreenShotHandler @Inject constructor() {
     }
 
     fun capture(scope: CoroutineScope, effect: AppEffect.CaptureScreenshot) {
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             // Let the third-party UI settle before grabbing the frame, so captures
             // aren't taken mid-transition. This is the only screenshot path, so the
             // delay applies to all screenshots everywhere.
             delay(SETTLE_MS)
-            val service = AccessibilityListener.instance ?: return@launch
-
-            val mainExecutor =
-                androidx.core.content.ContextCompat.getMainExecutor(DashBuddyApplication.context)
+            val service = accessibilitySource.getService() ?: return@launch
 
             try {
                 service.takeScreenshot(
                     Display.DEFAULT_DISPLAY,
-                    mainExecutor,
+                    // IO-backed executor: the callback does PNG compression + MediaStore
+                    // writes, which must never run on the main thread (#349).
+                    ioDispatcher.asExecutor(),
                     object : AccessibilityService.TakeScreenshotCallback {
                         override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
-                            // 1. Save using MediaStore (Synchronously on this background thread)
-                            saveToGallery(result, effect.filenamePrefix)
-
-                            // 2. CLEANUP: Critical!
-                            result.hardwareBuffer.close()
+                            try {
+                                saveToGallery(result, effect.filenamePrefix)
+                            } finally {
+                                // The bitmap wraps this buffer, so close only after the
+                                // save completes — but on every path (#349).
+                                result.hardwareBuffer.close()
+                            }
                         }
 
                         override fun onFailure(errorCode: Int) {
@@ -69,13 +76,12 @@ class ScreenShotHandler @Inject constructor() {
 
     /**
      * Saves the screenshot to the public "Pictures/DashBuddy" folder using MediaStore.
-     * This makes it immediately visible in Gallery apps.
+     * This makes it immediately visible in Gallery apps. Runs on the IO executor.
      */
     private fun saveToGallery(
         result: AccessibilityService.ScreenshotResult,
         filenamePrefix: String
     ) {
-        val context = DashBuddyApplication.context
         val resolver = context.contentResolver
 
         try {
