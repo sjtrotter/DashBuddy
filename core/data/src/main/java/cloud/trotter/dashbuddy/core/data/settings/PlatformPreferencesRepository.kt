@@ -2,13 +2,17 @@ package cloud.trotter.dashbuddy.core.data.settings
 
 import android.content.Context
 import android.content.pm.PackageManager
+import cloud.trotter.dashbuddy.core.data.di.ApplicationScope
 import cloud.trotter.dashbuddy.core.datastore.settings.PlatformPreferencesDataSource
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,22 +20,34 @@ import javax.inject.Singleton
 class PlatformPreferencesRepository @Inject constructor(
     private val dataSource: PlatformPreferencesDataSource,
     @param:ApplicationContext private val context: Context,
+    @param:ApplicationScope scope: CoroutineScope,
 ) : PlatformPreferences {
     private val packageManager: PackageManager = context.packageManager
 
-    /** Flow of enabled Platform enum values. Defaults to installed apps if no preference saved. */
-    override val enabledPlatforms: Flow<Set<Platform>> = dataSource.enabledPlatforms.map { saved ->
-        if (saved != null) {
-            saved.mapNotNull { Platform.fromWire(it) }.toSet()
-        } else {
-            detectInstalledPlatforms()
+    /**
+     * THE single materialization of the enabled-platforms preference (#356).
+     * Eagerly shared for the app's lifetime so every consumer — listeners,
+     * filters, pipelines, UI — reads one always-current value instead of
+     * holding a private cache. Defaults to installed apps if nothing saved.
+     */
+    override val enabledPlatforms: StateFlow<Set<Platform>> = dataSource.enabledPlatforms
+        .map { saved ->
+            if (saved != null) {
+                saved.mapNotNull { Platform.fromWire(it) }.toSet()
+            } else {
+                detectInstalledPlatforms()
+            }
         }
-    }
+        .stateIn(scope, SharingStarted.Eagerly, detectInstalledPlatforms())
 
-    /** Flow of enabled package names (for listener filtering). */
-    override val enabledPackages: Flow<Set<String>> = enabledPlatforms.map { platforms ->
-        platforms.mapNotNull { it.packageName }.toSet()
-    }
+    /** Package names of the enabled platforms (listener-level event filtering). */
+    override val enabledPackages: StateFlow<Set<String>> = enabledPlatforms
+        .map { platforms -> platforms.mapNotNull { it.packageName }.toSet() }
+        .stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            enabledPlatforms.value.mapNotNull { it.packageName }.toSet(),
+        )
 
     /** Check which supported platforms are installed on device. */
     fun detectInstalledPlatforms(): Set<Platform> =

@@ -63,6 +63,14 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Platform toggles now take effect live — no app restart (#356, PR pending).**
+  All notification/accessibility gating now reads one shared enabled-platforms state. To check:
+  mid-session, toggle a platform OFF in DashBuddy settings — its notifications should stop
+  reaching the HUD/log immediately (next notification, not next restart); toggle back ON and
+  they resume. If convenient, also note whether gating still works after Android kills/rebinds
+  the notification listener (e.g. after a long screen-off period) — the old code froze gating
+  at the last value when that happened.
+  - Confirmed: 0/2.
 - **Event log reworked: domain AppEvent + transactional insert + obs-derived timestamps (#354/#300/#119, PR #382).**
   The bubble HUD's completed-card stack now renders from payloads decoded at the repository
   (was: Gson inside the mapper), `app_events.occurredAt` is the observation timestamp (was: wall

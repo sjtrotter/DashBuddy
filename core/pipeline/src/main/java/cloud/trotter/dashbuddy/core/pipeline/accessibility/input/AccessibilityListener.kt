@@ -7,11 +7,6 @@ import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -24,11 +19,7 @@ class AccessibilityListener : AccessibilityService() {
     @Inject
     lateinit var platformPreferences: PlatformPreferences
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    /** Cached set of enabled package names — updated reactively from preferences. */
-    @Volatile
-    private var enabledPackages: Set<String> = Platform.watchedPackages()
 
     override fun onCreate() {
         super.onCreate()
@@ -43,7 +34,7 @@ class AccessibilityListener : AccessibilityService() {
         // In debug builds we receive ALL event types from ALL packages.
         // Log unhandled types so we can see what fires, then return.
         if (BuildConfig.DEBUG && event.eventType !in HANDLED_TYPES) {
-            if (pkg in enabledPackages) {
+            if (pkg in platformPreferences.enabledPackages.value) {
                 Timber.d(
                     "🔎 Unhandled event: type=0x%04x (%s) pkg=%s class=%s",
                     event.eventType,
@@ -55,7 +46,7 @@ class AccessibilityListener : AccessibilityService() {
             return
         }
 
-        if (pkg !in enabledPackages) return
+        if (pkg !in platformPreferences.enabledPackages.value) return
 
         accessibilitySource.emit(event)
     }
@@ -67,7 +58,6 @@ class AccessibilityListener : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         _instance = null
-        serviceScope.cancel()
         Timber.d("Accessibility service destroyed")
     }
 
@@ -90,13 +80,6 @@ class AccessibilityListener : AccessibilityService() {
         // Register with the source
         accessibilitySource.registerService(this)
 
-        // Start collecting enabled platforms preference
-        serviceScope.launch {
-            platformPreferences.enabledPackages.collect { packages ->
-                enabledPackages = packages
-                Timber.d("Accessibility filter updated: %s", packages)
-            }
-        }
     }
 
     companion object {

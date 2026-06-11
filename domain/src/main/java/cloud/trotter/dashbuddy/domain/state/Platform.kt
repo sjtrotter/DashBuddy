@@ -36,7 +36,7 @@ enum class Platform(val wire: String, val packageName: String?) {
             byPackage[packageName] ?: Unknown
 
         /** All known package names for OS-level event subscription. */
-        fun watchedPackages(): Set<String> =
+        val watchedPackages: Set<String> =
             entries.mapNotNull { it.packageName }.toSet()
     }
 }

@@ -39,7 +39,7 @@ class ContentChangedPipeline @Inject constructor(
             // Attribute to the window actually on screen, not the triggering event. Drop snapshots
             // of non-target windows (our own bubble overlay, launcher, etc.) so we never recognize
             // our own UI as the platform — the #4 self-recognition feedback loop.
-            if (snapshot.packageName !in Platform.watchedPackages()) {
+            if (snapshot.packageName !in Platform.watchedPackages) {
                 Timber.v(
                     "🚫 Skip active window: non-target pkg=%s (event pkg=%s)",
                     snapshot.packageName, event.packageName,

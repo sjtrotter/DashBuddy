@@ -23,7 +23,7 @@ class StateChangedPipeline @Inject constructor(
             val snapshot = source.getCurrentRootSnapshot() ?: return@mapNotNull null
             // Attribute to the on-screen window, not the event; drop non-target windows (e.g. our
             // own bubble overlay) so we don't recognize our own UI as the platform (#4).
-            if (snapshot.packageName !in Platform.watchedPackages()) {
+            if (snapshot.packageName !in Platform.watchedPackages) {
                 Timber.v(
                     "🚫 Skip active window: non-target pkg=%s (event pkg=%s)",
                     snapshot.packageName, event.packageName,

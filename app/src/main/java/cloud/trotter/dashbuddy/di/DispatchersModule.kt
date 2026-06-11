@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.di
 
+import cloud.trotter.dashbuddy.core.data.di.ApplicationScope
 import cloud.trotter.dashbuddy.core.state.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.core.state.di.IoDispatcher
 import dagger.Module
@@ -7,13 +8,18 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import javax.inject.Singleton
 
 /**
  * Bindings for the injectable dispatchers so coroutine-owning singletons are
- * testable with virtual time (#341/#352). The qualifier annotations live in
- * `:core:state` (`core.state.di`) so state-layer classes can use them too;
- * the data-layer hygiene pass (#364) migrates its hardcoded scopes onto these.
+ * testable with virtual time (#341/#352), plus the app-lifetime scope for
+ * long-lived shared flows (#356). The dispatcher qualifiers live in
+ * `:core:state` (`core.state.di`), the scope qualifier in `:core:data`
+ * (`core.data.di`); the data-layer hygiene pass (#364) migrates the remaining
+ * hardcoded scopes onto these.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -26,4 +32,10 @@ object DispatchersModule {
     @Provides
     @DefaultDispatcher
     fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
+    @Provides
+    @Singleton
+    @ApplicationScope
+    fun provideApplicationScope(): CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
 }

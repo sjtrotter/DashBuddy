@@ -43,20 +43,6 @@ class NotificationPipeline @Inject constructor(
 
     private var lastIdentity: ObservationIdentity? = null
 
-    /** Cached enabled platforms — updated reactively from preferences. */
-    @Volatile
-    private var enabledPlatforms: Set<Platform> = Platform.entries.toSet()
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    init {
-        scope.launch {
-            platformPreferences.enabledPlatforms.collect { platforms ->
-                enabledPlatforms = platforms
-            }
-        }
-    }
-
     fun output(): Flow<Observation.Notification> = source.events
         .mapNotNull { sbn -> sbn.toDomain() }
         .filter { raw -> filter.isRelevant(raw) }
@@ -74,7 +60,8 @@ class NotificationPipeline @Inject constructor(
         // Gate: drop observations from disabled platforms (defense-in-depth)
         .filter { (_, raw) ->
             val platform = Platform.fromPackage(raw.packageName)
-            platform == Platform.Unknown || platform in enabledPlatforms
+            platform == Platform.Unknown ||
+                platform in platformPreferences.enabledPlatforms.value
         }
         // Dedup + Capture
         .mapNotNull { (obs, raw) ->
