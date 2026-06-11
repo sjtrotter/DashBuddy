@@ -104,7 +104,7 @@ class AppPreferencesRepository @Inject constructor(
         UserEconomy(
             vehicleClass = cls,
             vehicleMpg = id.mpg ?: cls.defaultMpg.coerceAtLeast(1.0),
-            gasPricePerGallon = id.gasPrice ?: 3.50,
+            gasPricePerGallon = id.gasPrice ?: UserEconomy.DEFAULT_GAS_PRICE_PER_GALLON,
             avgMinutesPerMile = id.avgMinPerMi ?: UserEconomy.DEFAULT_MINUTES_PER_MILE,
             basePickupMinutes = id.basePickupMin ?: UserEconomy.DEFAULT_BASE_PICKUP_MINUTES,
             tireSetCost = maintA.tireCost ?: cls.tireSetCost,

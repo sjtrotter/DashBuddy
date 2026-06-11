@@ -15,6 +15,8 @@ import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 import timber.log.Timber
+import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
+import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
 
 @Singleton
 class StrategyDataSource @Inject constructor(
@@ -41,20 +43,20 @@ class StrategyDataSource @Inject constructor(
         val ALLOW_SHOPPING = booleanPreferencesKey("allow_shopping")
     }
 
-    val evidenceMaster: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_MASTER] ?: false }
-    val evidenceOffers: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_OFFERS] ?: true }
-    val evidenceDelivery: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DELIVERY] ?: true }
-    val evidenceDash: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DASH] ?: true }
+    val evidenceMaster: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_MASTER] ?: EvidenceConfig.DEFAULT_MASTER }
+    val evidenceOffers: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_OFFERS] ?: EvidenceConfig.DEFAULT_SAVE_OFFERS }
+    val evidenceDelivery: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DELIVERY] ?: EvidenceConfig.DEFAULT_SAVE_DELIVERIES }
+    val evidenceDash: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DASH] ?: EvidenceConfig.DEFAULT_SAVE_DASHES }
 
-    val autoMaster: Flow<Boolean> = ds.data.map { it[Keys.AUTO_MASTER] ?: false }
+    val autoMaster: Flow<Boolean> = ds.data.map { it[Keys.AUTO_MASTER] ?: OfferAutomationConfig.DEFAULT_MASTER }
 
-    val autoAccept: Flow<Boolean> = ds.data.map { it[Keys.AUTO_ACCEPT] ?: false }
-    val autoAcceptMinPay: Flow<Double> = ds.data.map { it[Keys.AUTO_ACCEPT_MIN_PAY] ?: 10.0 }
-    val autoAcceptMinRatio: Flow<Double> = ds.data.map { it[Keys.AUTO_ACCEPT_MIN_RATIO] ?: 2.0 }
+    val autoAccept: Flow<Boolean> = ds.data.map { it[Keys.AUTO_ACCEPT] ?: OfferAutomationConfig.DEFAULT_AUTO_ACCEPT }
+    val autoAcceptMinPay: Flow<Double> = ds.data.map { it[Keys.AUTO_ACCEPT_MIN_PAY] ?: OfferAutomationConfig.DEFAULT_ACCEPT_MIN_PAY }
+    val autoAcceptMinRatio: Flow<Double> = ds.data.map { it[Keys.AUTO_ACCEPT_MIN_RATIO] ?: OfferAutomationConfig.DEFAULT_ACCEPT_MIN_RATIO }
 
-    val autoDecline: Flow<Boolean> = ds.data.map { it[Keys.AUTO_DECLINE] ?: false }
-    val autoDeclineMaxPay: Flow<Double> = ds.data.map { it[Keys.AUTO_DECLINE_MAX_PAY] ?: 3.50 }
-    val autoDeclineMinRatio: Flow<Double> = ds.data.map { it[Keys.AUTO_DECLINE_MIN_RATIO] ?: 0.50 }
+    val autoDecline: Flow<Boolean> = ds.data.map { it[Keys.AUTO_DECLINE] ?: OfferAutomationConfig.DEFAULT_AUTO_DECLINE }
+    val autoDeclineMaxPay: Flow<Double> = ds.data.map { it[Keys.AUTO_DECLINE_MAX_PAY] ?: OfferAutomationConfig.DEFAULT_DECLINE_MAX_PAY }
+    val autoDeclineMinRatio: Flow<Double> = ds.data.map { it[Keys.AUTO_DECLINE_MIN_RATIO] ?: OfferAutomationConfig.DEFAULT_DECLINE_MIN_RATIO }
 
     @OptIn(InternalSerializationApi::class)
     val scoringRules: Flow<List<ScoringRuleDto>> = ds.data.map { prefs ->
