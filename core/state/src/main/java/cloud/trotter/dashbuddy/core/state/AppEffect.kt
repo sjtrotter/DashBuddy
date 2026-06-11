@@ -51,6 +51,12 @@ sealed class AppEffect {
         val durationMs: Long,
         val type: TimeoutType,
         /**
+         * Platform region this timer belongs to — threaded through TimeoutEvent →
+         * Observation.Timeout so the fire routes back to the owning region instead
+         * of Platform.Unknown (#342). Null = not platform-scoped.
+         */
+        val platform: Platform? = null,
+        /**
          * Opaque payload carried through the timer back into [Observation.Timeout].
          * Used to thread effect context (e.g. click target NodeRef fields) through
          * the UDF round-trip when the firing of a downstream effect must be deferred.

@@ -216,7 +216,9 @@ class SideEffectEngine @Inject constructor(
                     Timber.w("Timer Expired: ${effect.type}")
 
                     // Emit Timeout Event back to State Machine
-                    _events.emit(TimeoutEvent(type = effect.type, payload = effect.payload))
+                    _events.emit(
+                        TimeoutEvent(type = effect.type, platform = effect.platform, payload = effect.payload)
+                    )
                 }
                 job.invokeOnCompletion { activeTimers.remove(effect.type, job) }
                 activeTimers[effect.type] = job
@@ -280,7 +282,10 @@ class SideEffectEngine @Inject constructor(
             EffectVerb.ODOMETER_STOP -> odometerEffectHandler.shutDown()
             EffectVerb.ODOMETER_PAUSE -> odometerEffectHandler.pause()
             EffectVerb.ODOMETER_RESUME -> odometerEffectHandler.resume()
-            EffectVerb.SCHEDULE_TIMEOUT -> scheduleTimeoutFromArgs(scope, e.args)
+            EffectVerb.SCHEDULE_TIMEOUT -> scheduleTimeoutFromArgs(
+                scope, e.args,
+                Platform.fromRuleId(e.ruleId).takeIf { it != Platform.Unknown },
+            )
             EffectVerb.CANCEL_TIMEOUT -> cancelTimeoutFromArgs(e.args)
         }
     }
@@ -346,7 +351,11 @@ class SideEffectEngine @Inject constructor(
         bubbleManager.endSession(platformName)
     }
 
-    private suspend fun scheduleTimeoutFromArgs(scope: CoroutineScope, args: Map<String, String>) {
+    private suspend fun scheduleTimeoutFromArgs(
+        scope: CoroutineScope,
+        args: Map<String, String>,
+        platform: Platform?,
+    ) {
         val typeWire = args["type"] ?: return
         val type = try {
             TimeoutType.valueOf(typeWire)
@@ -361,7 +370,7 @@ class SideEffectEngine @Inject constructor(
         val job = scope.launch(effectExceptionHandler, start = CoroutineStart.LAZY) {
             delay(durationMs)
             Timber.w("Timer Expired (rule): %s", type)
-            _events.emit(TimeoutEvent(type = type))
+            _events.emit(TimeoutEvent(type = type, platform = platform))
         }
         job.invokeOnCompletion { activeTimers.remove(type, job) }
         activeTimers[type] = job

@@ -53,19 +53,22 @@ class PlatformRegionStepper @Inject constructor() {
         obs: Observation,
         policy: TransitionPolicy,
     ): PlatformRegion {
-        // Handle timeout-driven transitions
-        if (obs is Observation.Timeout) return handleTimeout(prev, obs, policy)
-
         var current = prev
 
         // Lazy expiry: a pending destructive transition (dash-end / task-retire)
         // whose deadline has passed is confirmed — committed now. Driven by
         // obs.timestamp (never a wall clock) so crash-recovery replay matches.
+        // Runs BEFORE the timeout branch: a routed timeout (#342) is exactly the
+        // kind of non-flow observation that must be able to commit an overdue
+        // provisional transition.
         current.pendingDestructive?.let { pend ->
             if (obs.timestamp > pend.deadline) {
                 current = commitDestructive(current, pend.kind, pend.deadline)
             }
         }
+
+        // Handle timeout-driven transitions
+        if (obs is Observation.Timeout) return handleTimeout(current, obs, policy)
 
         // Authoritative dash-start signal (#279-B): the set-end-time screen while a
         // dash-end is pending in its grace window means the old dash really ended
