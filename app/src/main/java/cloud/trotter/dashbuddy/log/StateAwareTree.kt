@@ -7,7 +7,6 @@ import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.regex.Pattern
 import javax.inject.Provider
 
 /**
@@ -23,15 +22,17 @@ class StateAwareTree(
     private val stateProvider: Provider<String> // Lazy access to state to avoid circular dependencies
 ) : Timber.Tree() {
 
-    private val anonymousClassPattern = Pattern.compile("(\\$\\d+)+$")
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
 
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         // 1. Check Log Level Gate
         if (priority < devSettingsRepository.minLogLevel.value) return
 
-        // 2. Auto-Generate Tag if missing
-        val finalTag = tag ?: createStackElementTag()
+        // 2. Tag (#367): explicit tags pass through; untagged lines get a fixed
+        // marker. The old per-line Throwable().stackTrace walk cost a stack
+        // capture on EVERY log in ALL builds — logcat (DebugTree) still infers
+        // call-site tags in debug; the file log doesn't need them.
+        val finalTag = tag ?: "App"
 
         val timestamp = dateFormat.format(Date())
 
@@ -66,28 +67,4 @@ class StateAwareTree(
         logRepository.appendLog(logLine.toString())
     }
 
-    /**
-     * Inspects the stack trace to figure out which class called Timber.
-     */
-    private fun createStackElementTag(): String {
-        val stackTrace = Throwable().stackTrace
-        if (stackTrace.size <= 5) return "Unknown"
-
-        // We look for the first stack element that isn't Timber itself.
-        // Usually index 5 or 6 in the trace is the caller.
-        for (element in stackTrace) {
-            val className = element.className
-            if (!className.startsWith("timber.log.Timber") &&
-                !className.startsWith("cloud.trotter.dashbuddy.log.StateAwareTree")
-            ) {
-                var tag = className.substringAfterLast('.')
-                val m = anonymousClassPattern.matcher(tag)
-                if (m.find()) {
-                    tag = m.replaceAll("")
-                }
-                return tag
-            }
-        }
-        return "Unknown"
-    }
 }

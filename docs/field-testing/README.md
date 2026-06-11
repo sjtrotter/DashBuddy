@@ -63,7 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **Tree ingestion now bounded — confirm no real screen trips the caps (#363, PR pending).**
+- **Post-dash HUD: frozen summary + consistent chat (#367, PR pending).**
+  Two visible fixes after a dash ends: (a) the "Last session" Duration on the idle bubble is
+  now FROZEN (it used to keep growing while you sat idle — check it shows the real dash length
+  and stays put); (b) the chat ticker and the card stack now both show the finished dash
+  (the ticker used to go empty the moment the dash ended while cards stayed). Also: platform
+  toggles/screens now stop collecting flows while the app is backgrounded — no user-visible
+  change expected, just confirm nothing looks stale when foregrounding.
+  - Confirmed: 0/2.
+- **Tree ingestion now bounded — confirm no real screen trips the caps (#363, PR #391).**
   Accessibility trees deeper than 60 levels or larger than 4,000 nodes truncate with a loud
   log line. The caps carry 2×/10× margin over the corpus, so a normal dash should NEVER hit
   them. Post-dash: grep the log for "Tree ingestion truncated" — any hit means a real DoorDash

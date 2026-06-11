@@ -31,10 +31,12 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 data class SessionSummary(
+    val sessionId: String,
     val earnings: Double,
     val miles: Double,
-    val durationMillis: Long,
-    val acceptanceRate: String
+    /** Anchors (#367): the UI derives duration — the frozen summary can't drift. */
+    val startedAt: Long,
+    val endedAt: Long,
 )
 
 @HiltViewModel
@@ -87,7 +89,13 @@ class BubbleViewModel @Inject constructor(
 
     // Messages scoped to the active dash session
     @OptIn(ExperimentalCoroutinesApi::class)
-    val messages = bubbleManager.activeDashId.flatMapLatest { dashId ->
+    // Chat and cards key off the SAME latched dash id (#367) — the old
+    // split (messages on activeDashId) emptied the ticker post-dash while
+    // the card stack still showed the finished dash.
+    private val displayedDashId = bubbleManager.activeDashId
+        .scan(null as String?) { last, current -> current ?: last }
+
+    val messages = displayedDashId.flatMapLatest { dashId ->
         if (dashId != null) {
             chatRepository.getMessages(dashId)
         } else {
@@ -97,9 +105,6 @@ class BubbleViewModel @Inject constructor(
 
     // Dash whose event log feeds the card stack — the current active dash
     // when one is running, otherwise the most-recently-completed one so the
-    // post-dash review stays visible until the next DASH_START.
-    private val displayedDashId = bubbleManager.activeDashId
-        .scan(null as String?) { last, current -> current ?: last }
 
     /**
      * Bubble HUD flow-card stack (#257). Completed cards are folded from
@@ -137,12 +142,18 @@ class BubbleViewModel @Inject constructor(
             val region = platform?.let { state.regions.platforms[it] }
             val session = region?.session
             // Capture summary when flow is SessionEnded
-            if (state.regions.flow.flow == Flow.SessionEnded && session != null) {
+            if (state.regions.flow.flow == Flow.SessionEnded && session != null &&
+                last?.sessionId != session.sessionId
+            ) {
+                // Captured ONCE per session (#367): the old scan re-stamped a
+                // wall-clock duration on every upstream emission, so the
+                // "frozen" summary grew while idle.
                 SessionSummary(
+                    sessionId = session.sessionId,
                     earnings = session.runningEarnings,
                     miles = miles,
-                    durationMillis = System.currentTimeMillis() - session.startedAt,
-                    acceptanceRate = "" // will populate from SessionEndedFields later
+                    startedAt = session.startedAt,
+                    endedAt = state.timestamp,
                 )
             } else {
                 last

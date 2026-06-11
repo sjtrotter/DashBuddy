@@ -23,7 +23,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -50,13 +50,16 @@ import java.util.Locale
 fun StrategySettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val config by viewModel.evaluationConfig.collectAsState()
+    val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
 
     // Local Sim State
     var simPay by remember { mutableFloatStateOf(6.50f) }
     var simDist by remember { mutableFloatStateOf(3.2f) }
 
-    val simulationResult = viewModel.simulateOffer(simPay.toDouble(), simDist.toDouble())
+    // Memoized (#367): this ran an un-remembered evaluation every recomposition.
+    val simulationResult = remember(simPay, simDist, config) {
+        viewModel.simulateOffer(simPay.toDouble(), simDist.toDouble())
+    }
 
     // --- REORDERABLE STATE ---
     val haptic = LocalHapticFeedback.current

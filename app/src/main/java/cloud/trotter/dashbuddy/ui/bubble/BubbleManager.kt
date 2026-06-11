@@ -36,6 +36,18 @@ class BubbleManager @Inject constructor(
     private val notificationManager: NotificationManager,
     private val chatRepository: ChatRepository
 ) {
+
+    companion object {
+        /** The single bubble/chat notification id. */
+        const val BUBBLE_NOTIFICATION_ID = 1
+
+        /** Bubble expanded-view height (dp). */
+        const val BUBBLE_DESIRED_HEIGHT_DP = 600
+
+        /** PendingIntent request codes for the offer notification actions (#367). */
+        const val REQUEST_CODE_ACCEPT = 10
+        const val REQUEST_CODE_DECLINE = 11
+    }
     // 1. ADDED: CoroutineScope for the suspend database calls
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -151,7 +163,7 @@ class BubbleManager @Inject constructor(
             bubbleIntent,
             IconCompat.createWithResource(context, persona.getIconResId())
         )
-            .setDesiredHeight(600)
+            .setDesiredHeight(BUBBLE_DESIRED_HEIGHT_DP)
             .setAutoExpandBubble(expand)
             .setSuppressNotification(expand)
             .build()
@@ -180,11 +192,11 @@ class BubbleManager @Inject constructor(
             .setPriority(NotificationCompat.PRIORITY_MAX)
 
         if (offerActionable) {
-            builder.addAction(offerAction("Decline", OfferIntent.DECLINE, 11))
-            builder.addAction(offerAction("Accept", OfferIntent.ACCEPT, 10))
+            builder.addAction(offerAction("Decline", OfferIntent.DECLINE, REQUEST_CODE_DECLINE))
+            builder.addAction(offerAction("Accept", OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT))
         }
 
-        notificationManager.notify(1, builder.build())
+        notificationManager.notify(BUBBLE_NOTIFICATION_ID, builder.build())
     }
 
     /** Post the offer evaluation as a heads-up notification with Accept / Decline action buttons. */

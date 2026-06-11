@@ -42,14 +42,6 @@ fun GasPriceCard(
     onAutoToggle: (Boolean) -> Unit,
     onPriceChange: (Float) -> Unit
 ) {
-    // Edge case: If they switch to Electricity and the price is still at "Gas" levels,
-    // snap it down to a sensible $0.30 default for a better user experience.
-    LaunchedEffect(fuelType) {
-        if (fuelType == FuelType.ELECTRICITY && price > 1.0f) {
-            onPriceChange(0.30f)
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()

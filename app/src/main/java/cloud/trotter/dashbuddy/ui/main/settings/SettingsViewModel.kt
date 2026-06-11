@@ -18,6 +18,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val strategyRepository: StrategyRepository,
+    private val offerEvaluator: OfferEvaluator,
 ) : ViewModel() {
 
     // --- STATE ---
@@ -59,7 +60,9 @@ class SettingsViewModel @Inject constructor(
 
     fun simulateOffer(pay: Double, miles: Double): OfferEvaluation {
         val fakeOffer = ParsedOffer(
-            offerHash = "sim_${System.currentTimeMillis()}",
+            // Stable hash (#367): the screen memoizes on (pay, dist, config) —
+            // a wall-clock hash would defeat structural equality.
+            offerHash = "simulated-offer",
             payAmount = pay,
             distanceMiles = miles,
             itemCount = 5, // Default average workload
@@ -67,7 +70,6 @@ class SettingsViewModel @Inject constructor(
         )
 
         val currentConfig = evaluationConfig.value
-        val evaluator = OfferEvaluator()
-        return evaluator.evaluate(fakeOffer, currentConfig)
+        return offerEvaluator.evaluate(fakeOffer, currentConfig)
     }
 }

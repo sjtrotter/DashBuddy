@@ -18,7 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -40,7 +40,7 @@ fun EconomySettingsScreen(
     onBack: () -> Unit,
     viewModel: EconomySettingsViewModel = hiltViewModel(),
 ) {
-    val eco by viewModel.userEconomy.collectAsState()
+    val eco by viewModel.userEconomy.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
