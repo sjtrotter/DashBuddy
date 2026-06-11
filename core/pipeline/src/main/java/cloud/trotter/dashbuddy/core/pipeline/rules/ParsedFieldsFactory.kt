@@ -265,7 +265,11 @@ object ParsedFieldsFactory {
         // Compute offer hash from extracted fields (same as Kotlin parser)
         val storeNames = orders.joinToString(",") { it.storeName }
         val hashInput = "$payAmount|$distance|${deliveryTimeText ?: timeToCompleteMinutes}|$storeNames"
-        val offerHash = f.str("offerHash") ?: generateSha256(hashInput)
+        // Fail-closed hash (#362): on digest failure fall back to a
+        // non-reversible identity — NEVER the plaintext input.
+        val offerHash = f.str("offerHash")
+            ?: sha256OrNull(hashInput)
+            ?: "offer-${hashInput.hashCode()}"
 
         return ParsedFields.OfferFields(
             activity = f.str("activity"),
@@ -280,16 +284,6 @@ object ParsedFieldsFactory {
                 orders = orders,
             ),
         )
-    }
-
-    private fun generateSha256(input: String): String {
-        return try {
-            val bytes = java.security.MessageDigest.getInstance("SHA-256")
-                .digest(input.toByteArray(Charsets.UTF_8))
-            bytes.fold("") { str, it -> str + "%02x".format(it) }
-        } catch (_: Exception) {
-            input
-        }
     }
 
     // ========================================================================

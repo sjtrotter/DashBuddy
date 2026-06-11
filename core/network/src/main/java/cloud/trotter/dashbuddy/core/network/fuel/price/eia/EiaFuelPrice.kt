@@ -80,7 +80,7 @@ class EiaFuelPrice @Inject constructor(
      * R10 = East Coast, R20 = Midwest, R30 = Gulf Coast, R40 = Rocky Mountain, R50 = West Coast
      */
     internal fun mapStateToPaddRegion(stateName: String): String {
-        val upperState = stateName.uppercase(Locale.getDefault())
+        val upperState = stateName.uppercase(Locale.ROOT)
         return when (upperState) {
             // PADD 1: East Coast
             "MAINE", "NEW HAMPSHIRE", "VERMONT", "MASSACHUSETTS", "RHODE ISLAND", "CONNECTICUT",
