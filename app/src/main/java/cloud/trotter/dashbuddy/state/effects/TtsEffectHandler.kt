@@ -94,10 +94,4 @@ class TtsEffectHandler @Inject constructor(
             "score ${eval.score.toInt()}."
     }
 
-    fun shutdown() {
-        tts?.stop()
-        tts?.shutdown()
-        tts = null
-        isReady = false
-    }
 }

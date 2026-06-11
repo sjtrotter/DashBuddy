@@ -8,22 +8,6 @@ object ScoringUtils {
     private const val GREAT = 60.0
     private const val AWESOME = 70.0
 
-    fun calculateNormalizedScore(value: Double, min: Double, max: Double, weight: Float): Double {
-        val normalizedValue = (value - min) / (max - min)
-        val clampedValue = minOf(1.0, maxOf(0.0, normalizedValue))
-        return clampedValue * weight
-    }
-
-    fun calculateInvertedNormalizedScore(
-        value: Double,
-        min: Double,
-        max: Double,
-        weight: Float
-    ): Double {
-        val normalizedValue = (max - value) / (max - min)
-        val clampedValue = minOf(1.0, maxOf(0.0, normalizedValue))
-        return clampedValue * weight
-    }
 
     fun determineOfferQuality(score: Double): String {
         return when {

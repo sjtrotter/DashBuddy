@@ -166,10 +166,6 @@ class StrategyRepository @Inject constructor(
         )
     }
 
-    suspend fun getEvaluationConfig(): EvaluationConfig {
-        // .first() suspends until it reads the most recent emitted value from the flows
-        return evaluationConfigFlow.first()
-    }
 
     suspend fun clearPreferences() {
         Timber.w("Clearing Strategy Preferences")

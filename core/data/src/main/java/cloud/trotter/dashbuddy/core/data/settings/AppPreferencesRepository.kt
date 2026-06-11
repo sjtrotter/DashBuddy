@@ -195,8 +195,6 @@ class AppPreferencesRepository @Inject constructor(
         mpg: Float, isGasAuto: Boolean, price: Float,
     ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
 
-    suspend fun saveSimulationState(pay: Double, dist: Double) =
-        dataSource.saveSimulationState(pay, dist)
 
     // --- Personal Economy v2 writes (#145) ---
     suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) =

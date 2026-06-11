@@ -9,8 +9,6 @@ import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
-import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotDao
-import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotRecord
 import cloud.trotter.dashbuddy.core.database.observation.ObservationDao
 import cloud.trotter.dashbuddy.core.database.observation.ObservationEntity
 import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotDao
@@ -23,9 +21,8 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         ChatMessageEntity::class,
         EffectsFiredEntity::class,
         ObservationEntity::class,
-        SnapshotRecord::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(DataTypeConverters::class)
@@ -37,10 +34,5 @@ abstract class DashBuddyDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
     abstract fun effectsFiredDao(): EffectsFiredDao
     abstract fun observationDao(): ObservationDao
-    abstract fun snapshotDao(): SnapshotDao
 
-    companion object {
-        @Volatile
-        private var INSTANCE: DashBuddyDatabase? = null
-    }
 }

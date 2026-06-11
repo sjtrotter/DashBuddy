@@ -84,26 +84,6 @@ class BubbleViewModel @Inject constructor(
         .map { it.second }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    // Capture the offer pay when an offer transitions to a task flow,
-    // so pickup/delivery composables can compute per-order $/hr.
-    val lastAcceptedOfferPay = stateManager.state
-        .scan(Pair<FlowRegion?, Double?>(null, null)) { (prevFlow, lastPay), state ->
-            val currentFlow = state.regions.flow
-            val prevOffer = prevFlow?.pendingOffer
-            val currentOffer = currentFlow.pendingOffer
-            val flow = currentFlow.flow
-            val pay = when {
-                // Offer just cleared (accepted) while entering a task flow
-                prevOffer != null && currentOffer == null && flow.isTaskFlow() ->
-                    prevOffer.offerFields.parsedOffer.payAmount ?: lastPay
-                // Back to idle → clear
-                flow == Flow.Idle || flow == Flow.SessionEnded -> null
-                else -> lastPay
-            }
-            Pair(currentFlow, pay)
-        }
-        .map { it.second }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Messages scoped to the active dash session
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -189,10 +169,3 @@ class BubbleViewModel @Inject constructor(
         _collapse.tryEmit(Unit)
     }
 }
-
-private fun Flow.isTaskFlow(): Boolean = this in setOf(
-    Flow.TaskPickupNavigation,
-    Flow.TaskPickupArrived,
-    Flow.TaskDropoffNavigation,
-    Flow.TaskDropoffArrived,
-)

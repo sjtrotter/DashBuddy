@@ -11,7 +11,6 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.log.LogRepository
-import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.log.StateAwareTree
@@ -35,9 +34,6 @@ class DashBuddyApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var logRepository: LogRepository
-
-    @Inject
-    lateinit var appPreferencesRepository: AppPreferencesRepository
 
     @Inject
     lateinit var devSettingsRepository: DevSettingsRepository

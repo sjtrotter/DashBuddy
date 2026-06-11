@@ -6,7 +6,6 @@ import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.chat.ChatDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
-import cloud.trotter.dashbuddy.core.database.log.snapshot.SnapshotDao
 import cloud.trotter.dashbuddy.core.database.observation.ObservationDao
 import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotDao
 import dagger.Module
@@ -57,8 +56,4 @@ object DatabaseModule {
         return db.observationDao()
     }
 
-    @Provides
-    fun provideSnapshotDao(db: DashBuddyDatabase): SnapshotDao {
-        return db.snapshotDao()
-    }
 }

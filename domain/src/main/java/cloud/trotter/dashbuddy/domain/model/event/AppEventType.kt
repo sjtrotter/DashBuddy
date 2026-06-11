@@ -7,8 +7,6 @@ enum class AppEventType {
     DASH_STOP,
     ZONE_SWITCH,
     NOTIFICATION_RECEIVED,
-//    APP_FOREGROUND,
-//    APP_BACKGROUND,
 
     // --- Offer Phase ---
     OFFER_RECEIVED,

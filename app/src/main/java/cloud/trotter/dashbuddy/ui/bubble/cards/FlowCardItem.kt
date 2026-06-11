@@ -254,7 +254,7 @@ private fun AwaitingBody(snap: FlowCardSnapshot.Awaiting, isActive: Boolean) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        HeroBig(if (isActive) formatDuration(elapsed) else formatDuration(elapsed))
+        HeroBig(formatDuration(elapsed))
         Caption(
             if (isActive) "since last offer"
             else "before next offer"
