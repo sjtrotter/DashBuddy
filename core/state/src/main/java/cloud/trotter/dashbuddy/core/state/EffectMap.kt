@@ -35,7 +35,6 @@ import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
-import cloud.trotter.dashbuddy.domain.util.formatCurrency
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -805,6 +804,14 @@ class EffectMap @Inject constructor() {
     // =========================================================================
     // HELPERS
     // =========================================================================
+
+    /**
+     * Display formatting inside the state layer is a known wart: UpdateBubble
+     * carries rendered copy, so the formatter lives here until #366 moves the
+     * copy out of state. Locale pinned EXPLICITLY per the #358 policy.
+     */
+    private fun formatCurrency(amount: Double): String =
+        String.format(java.util.Locale.getDefault(), "%.2f", amount)
 
     private fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
         // 1. Stored click intent on PendingOffer — covers the common case where

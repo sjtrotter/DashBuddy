@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.bubble.cards
 
-import android.text.format.DateFormat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,14 +23,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.time.formatCountdown
+import cloud.trotter.dashbuddy.core.designsystem.time.formatDuration
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,9 +51,6 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.DashColors
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
-import kotlinx.coroutines.delay
-import java.util.Date
-import java.util.concurrent.TimeUnit
 
 /**
  * A single flow-phase card in the bubble HUD stack (#257).
@@ -153,16 +151,19 @@ private fun CardHeader(
 
 @Composable
 private fun PhaseChip(snapshot: FlowCardSnapshot, isActive: Boolean) {
-    val (label, color) = when (snapshot) {
-        is FlowCardSnapshot.Awaiting -> "AWAIT" to MaterialTheme.colorScheme.tertiary
-        is FlowCardSnapshot.Offer -> "OFFER" to MaterialTheme.colorScheme.primary
-        is FlowCardSnapshot.Pickup -> "PICKUP" to MaterialTheme.colorScheme.secondary
-        is FlowCardSnapshot.Delivery -> "DROPOFF" to MaterialTheme.colorScheme.secondary
-        is FlowCardSnapshot.PostTask -> "PAID" to MaterialTheme.colorScheme.primary
+    // Semantic brand tokens per DashColors' contract (#358) — the chip now
+    // agrees with statusBadge instead of remapping phases onto M3 roles.
+    val c = DashTheme.colors
+    val (label, color, bg) = when (snapshot) {
+        is FlowCardSnapshot.Awaiting -> Triple("AWAIT", c.neutral, c.neutralBg)
+        is FlowCardSnapshot.Offer -> Triple("OFFER", c.stOffer, c.stOfferBg)
+        is FlowCardSnapshot.Pickup -> Triple("PICKUP", c.stPickup, c.stPickupBg)
+        is FlowCardSnapshot.Delivery -> Triple("DROPOFF", c.stPickup, c.stPickupBg)
+        is FlowCardSnapshot.PostTask -> Triple("PAID", c.good, c.goodBg)
     }
     Surface(
         shape = RoundedCornerShape(4.dp),
-        color = color.copy(alpha = if (isActive) 0.22f else 0.14f),
+        color = if (isActive) bg else bg.copy(alpha = bg.alpha * 0.6f),
     ) {
         Text(
             text = label,
@@ -196,7 +197,7 @@ private fun awaitingSummary(snap: FlowCardSnapshot.Awaiting, isActive: Boolean):
 
 private fun offerSummary(snap: FlowCardSnapshot.Offer): String {
     val store = snap.storeNames.firstOrNull()?.takeIf { it.isNotBlank() } ?: "Offer"
-    val pay = snap.payAmount?.let { " · $%.2f".format(it) } ?: ""
+    val pay = snap.payAmount?.let { " · ${DashFormats.money(it)}" } ?: ""
     // Outcome is rendered as a trailing chip in the header — see
     // CardHeader — so we omit it from the summary text.
     return "$store$pay"
@@ -226,7 +227,7 @@ private fun deliverySummary(snap: FlowCardSnapshot.Delivery, isActive: Boolean):
 
 private fun postTaskSummary(snap: FlowCardSnapshot.PostTask): String {
     val store = snap.storeName?.let { "$it · " } ?: ""
-    return "$store$%.2f".format(snap.totalPay)
+    return store + DashFormats.money(snap.totalPay)
 }
 
 // ---------------------------------------------------------------------------
@@ -318,19 +319,19 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             Column(modifier = Modifier.weight(1f)) {
                 val hourly = snap.dollarsPerHour
                 when {
-                    hourly != null -> Text("$%.0f/hr".format(hourly), style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
-                    snap.payAmount != null -> Text("$%.2f".format(snap.payAmount), style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
+                    hourly != null -> Text("${DashFormats.money0(hourly)}/hr", style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
+                    snap.payAmount != null -> Text(DashFormats.money(snap.payAmount!!), style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
                 }
                 val net = snap.netPayAmount ?: snap.payAmount
                 val secondary = buildString {
-                    if (net != null) append("Net $%.2f".format(net))
+                    if (net != null) append("Net ${DashFormats.money(net)}")
                     snap.distanceMiles?.let {
                         if (isNotEmpty()) append(" · ")
-                        append("%.1f mi".format(it))
+                        append("${DashFormats.decimal(it)} mi")
                     }
                     snap.dollarsPerMile?.let {
                         if (isNotEmpty()) append(" · ")
-                        append("$%.2f/mi".format(it))
+                        append("${DashFormats.money(it)}/mi")
                     }
                 }
                 if (secondary.isNotBlank()) {
@@ -417,9 +418,8 @@ private fun OfferCountdownText(expiresAt: Long, countdownSeconds: Int) {
         frac > 0.2 -> c.warn
         else -> c.bad
     }
-    val total = secsLeft.toInt()
     Text(
-        text = "%d:%02d".format(total / 60, total % 60),
+        text = formatCountdown((secsLeft * 1000).toLong()),
         style = DashTheme.num.smNum,
         color = col,
         fontWeight = FontWeight.Bold,
@@ -580,7 +580,7 @@ private fun DeadlineBody(
                     val elapsedMs = now - (arrivedAt ?: phaseStartedAt)
                     if (elapsedMs > 0) {
                         val perMin = shopped / (elapsedMs / 60_000.0)
-                        append(" · %.1f/min".format(perMin))
+                        append(" · ${DashFormats.decimal(perMin)}/min")
                     }
                 }
             }
@@ -600,7 +600,7 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        HeroBig("$%.2f".format(snap.totalPay))
+        HeroBig(DashFormats.money(snap.totalPay))
         Caption("delivery total")
         snap.parsedPay?.let { pay ->
             Column(
@@ -608,15 +608,15 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 pay.appPayComponents.forEach { item ->
-                    BreakdownRow(item.type, "$%.2f".format(item.amount))
+                    BreakdownRow(item.type, DashFormats.money(item.amount))
                 }
                 pay.customerTips.forEach { tip ->
-                    BreakdownRow("tip · ${tip.type}", "$%.2f".format(tip.amount))
+                    BreakdownRow("tip · ${tip.type}", DashFormats.money(tip.amount))
                 }
             }
         }
         snap.sessionEarningsAtCompletion?.let {
-            Caption("session $%.2f".format(it))
+            Caption("session ${DashFormats.money(it)}")
         }
     }
 }
@@ -651,8 +651,7 @@ private fun OfferActionRow(onAccept: () -> Unit, onDecline: () -> Unit) {
 private fun HeroBig(text: String, color: Color = MaterialTheme.colorScheme.onSurface) {
     Text(
         text = text,
-        fontSize = 30.sp,
-        fontWeight = FontWeight.ExtraBold,
+        style = DashTheme.num.heroNum,
         color = color,
         maxLines = 1,
     )
@@ -715,47 +714,8 @@ private fun deadlineColor(remainingMs: Long): Color {
 }
 
 // ---------------------------------------------------------------------------
-// Time helpers
+// Time helpers — the shared kit lives in :core:designsystem (#358)
 // ---------------------------------------------------------------------------
 
-/** 1Hz tick; scoped to this composable. See CLAUDE.md ▸ Reactive UI Principles. */
 @Composable
-internal fun rememberNow(tickMs: Long = 1000L): State<Long> =
-    produceState(initialValue = System.currentTimeMillis()) {
-        while (true) {
-            delay(tickMs)
-            value = System.currentTimeMillis()
-        }
-    }
-
-@Composable
-internal fun rememberFormattedTime(): (Long) -> String {
-    val ctx = LocalContext.current
-    val use24 = DateFormat.is24HourFormat(ctx)
-    val pattern = if (use24) "HH:mm" else "h:mm a"
-    return { millis -> DateFormat.format(pattern, Date(millis)).toString() }
-}
-
-@Composable
-private fun formatTime(millis: Long): String = rememberFormattedTime().invoke(millis)
-
-internal fun formatDuration(millis: Long): String {
-    val safe = millis.coerceAtLeast(0)
-    val hours = TimeUnit.MILLISECONDS.toHours(safe)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(safe) % 60
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(safe) % 60
-    return when {
-        hours > 0 -> "%dh %dm".format(hours, minutes)
-        minutes > 0 -> "%dm %ds".format(minutes, seconds)
-        else -> "%ds".format(seconds)
-    }
-}
-
-/** "m:ss" style countdown for the deadline hero. Handles negatives by
- *  returning the absolute magnitude — callers add the "ahead/late" label. */
-internal fun formatCountdown(millis: Long): String {
-    val safe = kotlin.math.abs(millis)
-    val totalMinutes = TimeUnit.MILLISECONDS.toMinutes(safe)
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(safe) % 60
-    return "%d:%02d".format(totalMinutes, seconds)
-}
+private fun formatTime(millis: Long): String = rememberTimeFormatter().invoke(millis)

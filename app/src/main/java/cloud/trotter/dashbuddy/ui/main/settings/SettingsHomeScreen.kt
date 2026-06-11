@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
 
 @Composable
 fun SettingsHomeScreen(
@@ -101,7 +102,7 @@ fun SettingsHomeScreen(
                     val costPerMi = eco.operatingCostPerMile
                     val defaultsCount = cloud.trotter.dashbuddy.domain.evaluation.EconomyField.entries.size -
                         eco.userSetFields.size
-                    "True cost: \$${"%.2f".format(costPerMi)}/mi" +
+                    "True cost: ${DashFormats.money(costPerMi)}/mi" +
                         if (defaultsCount > 0) " · $defaultsCount defaults" else ""
                 } else {
                     "Tires, oil, depreciation, insurance, phone"

@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.toArgb
 import cloud.trotter.dashbuddy.core.designsystem.theme.darkDashColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
 
 /**
  * Formatted offer summary for the heads-up notification. Built with **Android** text spans — the
@@ -48,15 +49,17 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
         setSpan(RelativeSizeSpan(1.2f), start, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         append(" · ")
-        append("$%.0f/hr net".format(dollarsPerHour))
+        append("${DashFormats.money0(dollarsPerHour)}/hr net")
         // Whole headline (verdict + rate) bold.
         setSpan(StyleSpan(Typeface.BOLD), start, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         append("\n")
         append(
-            "Net $%.2f · %.1f mi · $%.2f/mi · Score %d · %s".format(
-                netPayAmount, distanceMiles, dollarsPerMile, score.toInt(), merchantName,
-            ),
+            "Net ${DashFormats.money(netPayAmount)} · " +
+                "${DashFormats.decimal(distanceMiles)} mi · " +
+                "${DashFormats.money(dollarsPerMile)}/mi · " +
+                "Score ${score.toInt()} · " +
+                merchantName,
         )
     }
 }

@@ -63,7 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **Platform toggles now take effect live — no app restart (#356, PR pending).**
+- **HUD numbers/timers re-plumbed through one shared format/time kit (#358, PR pending).**
+  All bubble-card money, distance, countdown, and duration strings now come from
+  `:core:designsystem` helpers, and the phase chip switched to brand tokens. On a normal dash,
+  glance-check: (a) card money/mi/min strings look exactly as before (en-US should be visually
+  unchanged); (b) the offer countdown and elapsed timers still tick per second; (c) the phase
+  chip color now MATCHES the card's status colors (OFFER chip = same blue family as the offer
+  status badge, PAID = green) instead of the old purple/teal M3 roles.
+  - Confirmed: 0/2.
+- **Platform toggles now take effect live — no app restart (#356, PR #384).**
   All notification/accessibility gating now reads one shared enabled-platforms state. To check:
   mid-session, toggle a platform OFF in DashBuddy settings — its notifications should stop
   reaching the HUD/log immediately (next notification, not next restart); toggle back ON and
