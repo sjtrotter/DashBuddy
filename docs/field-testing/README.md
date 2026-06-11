@@ -321,6 +321,13 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   Watch for any mismatch between the card's numbers and what's spoken/notified, especially when
   offers arrive back-to-back.
   - Confirmed: 0/2.
+- **Deadline countdowns still correct under the new transform clock (#343).** Time parsing
+  (`parseDeadline`/`parseTime`) is now anchored to the observation's instant instead of the
+  wall clock at evaluation time (replay determinism; the 05-19 "1434:38 ghost countdown" class).
+  Live behavior should be identical — confirm pickup/dropoff "by HH:MM" countdowns on the cards
+  match DoorDash's stated times, and no absurd ~24h countdowns appear (especially around
+  midnight or just-past deadlines).
+  - Confirmed: 0/2.
 
 ---
 

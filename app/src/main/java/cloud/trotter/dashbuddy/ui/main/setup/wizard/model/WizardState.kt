@@ -51,7 +51,6 @@ data class WizardState(
 
     // Strategy Variables
     val strategy: DashStrategy = DashStrategy.MANUAL,
-    val allowShopping: Boolean = true,
 
     // Targets & Enforcement
     val enforceMinPayout: Boolean = false,
