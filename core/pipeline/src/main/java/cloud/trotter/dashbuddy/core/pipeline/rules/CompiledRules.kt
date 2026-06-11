@@ -116,4 +116,12 @@ data class CompiledEffect(
      * before an auto-click.
      */
     val delayMs: Long? = null,
+    /**
+     * Content-pinned consent key (#422) for actuating verbs
+     * ([EffectVerb.consentRequired]); null otherwise. Computed once at compile
+     * from `(ruleId, verb, the binding definition this effect targets)` and
+     * carried onto the emitted `RequestedEffect`, so load-time enumeration and
+     * the runtime consent gate compute the same value by construction.
+     */
+    val capabilityKey: String? = null,
 )

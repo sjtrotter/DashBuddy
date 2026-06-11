@@ -181,6 +181,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             throttleMs = effect.throttleMs,
             delayMs = effect.delayMs,
             ruleId = ruleId,
+            capabilityKey = effect.capabilityKey, // carried unchanged for the consent gate (#422)
         )
     }
 

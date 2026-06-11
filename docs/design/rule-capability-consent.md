@@ -37,30 +37,44 @@ RuleCapability(
 **Grant key = a content hash**, not the rule id alone:
 
 ```
-capabilityHash = sha256("$ruleId|${verb.wire}|${target ?: ""}")
+capabilityKey = sha256( canonicalJson({
+    "rule": ruleId,
+    "verb": verb.wire,
+    "bind": targetBindName,        // the rule's bind name for the target, e.g. "declineButton"
+    "def":  <the binding DEFINITION that bind name resolves to>
+}) )
 ```
 
-This is the load-bearing security property. The grant is pinned to *what the
-action does*. If a remote update to a **trusted rule id** changes its click
-target — or adds a new click — the hash changes, the old grant no longer
-covers it, and it re-enters the pending list for re-approval. Approving a
-benign `auto_decline` today cannot be silently escalated by a malicious CDN
-update to the same id tomorrow.
+This is the load-bearing security property, and the key is pinned to the
+binding **definition** — the matching predicate that *selects* the node the
+rule will act on. Implementation note (this corrects an earlier draft of this
+doc that hashed a resolved `viewId|text` target): click targets are **dynamic**
+— a `click` effect declares a *bind name* (`"$declineButton"`) and the concrete
+`NodeRef` is resolved against the live UI tree only at match time, so the
+resolved node does not exist at load and cannot be the consent key. The binding
+definition *is* known at load (the `bind` block survives compile), so that is
+what we pin to — which is strictly stronger than `viewId|text`: if a remote
+update to a **trusted rule id** keeps the bind name but repoints
+`declineButton`'s predicate at the **Accept** button, the definition changes →
+the key changes → it re-enters consent. Approving a benign `auto_decline` today
+cannot be silently escalated by a malicious update to the same id tomorrow.
 
-### Target signature granularity (a real decision)
+Two robustness details, both load-bearing for a *security* key and both tested:
 
-For `CLICK`, the `RequestedEffect.targetRef: NodeRef` carries `viewIdSuffix`,
-`text`, `classNameHint`, `pathFingerprint`, `bounds`. Two options:
+- **Structurally-unambiguous input.** The key input is a *canonical JSON object*
+  (recursively sorted keys), not delimiter-joined fields. Rule ids and bind
+  names are arbitrary JSON strings with no charset constraint, so any in-band
+  delimiter could let distinct tuples collide; JSON string escaping makes the
+  field boundaries exact.
+- **Canonical (sorted-key) serialization.** Reordering a binding's JSON keys
+  must NOT change the key — otherwise an innocuous reformat re-prompts the user,
+  training click-through (a security anti-pattern). `canonicalJson` sorts keys
+  recursively so semantically-identical definitions hash identically.
 
-- **Semantic (recommended):** `target = "${viewIdSuffix}|${text}"` (or a
-  normalized subset). Stable across third-party UI reflows; re-prompts only when
-  the rule genuinely retargets. Slightly coarser — "tap the Accept button"
-  rather than "tap the button at this exact tree path."
-- **Structural:** include `pathFingerprint`. Maximally precise but re-prompts on
-  any third-party redesign (annoying, and trains users to click-through
-  consent — a security anti-pattern).
-
-Recommend semantic; document that bounds are never part of the key (they shift
+The key is computed **once at compile** (`RuleCompiler.assignCapabilityKeys`)
+and carried unchanged onto `RequestedEffect.capabilityKey`, so load-time
+enumeration and the runtime consent gate compute the same value by construction.
+Bounds and other live-node attributes are never part of the key (they shift
 constantly).
 
 ## Lifecycle

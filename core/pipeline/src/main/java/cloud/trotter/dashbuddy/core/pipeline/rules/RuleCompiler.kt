@@ -8,6 +8,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.int
@@ -71,6 +74,86 @@ object RuleCompiler {
         }
         tiers.remove(cloud.trotter.dashbuddy.domain.pipeline.PermissionTier.NONE)
         return tiers
+    }
+
+    /**
+     * Enumerate the per-rule actuating capabilities a compiled ruleset declares
+     * (#422) — one [RuleCapability] per consent-requiring effect, the unit of
+     * user consent. Deduped by [RuleCapability.key] (a rule declaring the same
+     * click in several branches is one capability). [source] is recorded for
+     * provenance only — consent is uniform regardless of where the rule came
+     * from.
+     */
+    fun enumerateCapabilities(
+        rules: List<CompiledRule<*>>,
+        source: String,
+    ): List<cloud.trotter.dashbuddy.domain.capability.RuleCapability> {
+        val byKey = LinkedHashMap<String, cloud.trotter.dashbuddy.domain.capability.RuleCapability>()
+        fun consider(ruleId: String, effects: List<CompiledEffect>) {
+            for (effect in effects) {
+                if (!effect.verb.consentRequired) continue
+                val key = effect.capabilityKey ?: continue
+                byKey.getOrPut(key) {
+                    cloud.trotter.dashbuddy.domain.capability.RuleCapability(
+                        ruleId = ruleId,
+                        verb = effect.verb,
+                        targetBindName = effect.targetBindName,
+                        key = key,
+                        source = source,
+                    )
+                }
+            }
+        }
+        for (rule in rules) {
+            for (branch in rule.branches) {
+                consider(rule.id, branch.effects)
+                for ((_, overrideEffects) in branch.transitionOverrides) consider(rule.id, overrideEffects)
+            }
+        }
+        return byKey.values.toList()
+    }
+
+    /**
+     * Stamp the content-pinned consent key (#422) on each consent-requiring
+     * effect. The key hashes `(ruleId, verb, the CANONICAL binding definition
+     * the effect targets)` — pinned to the predicate that selects the node, so
+     * repointing the binding (even with the same bind name) forces re-consent.
+     * Non-actuating effects are returned untouched.
+     */
+    private fun assignCapabilityKeys(
+        effects: List<CompiledEffect>,
+        ruleId: String?,
+        bindObj: JsonObject?,
+    ): List<CompiledEffect> {
+        if (ruleId == null || effects.none { it.verb.consentRequired }) return effects
+        return effects.map { effect ->
+            if (!effect.verb.consentRequired) return@map effect
+            val bindDef = effect.targetBindName?.let { bindObj?.get(it) }
+            // Structurally-unambiguous key input (#422): a canonical JSON
+            // object, NOT delimiter-joined fields. Rule ids and bind names are
+            // arbitrary JSON strings (no charset constraint), so JSON string
+            // escaping is what makes the field boundaries exact — distinct
+            // tuples can never collide on the same input.
+            val keyInput = canonicalJson(
+                buildJsonObject {
+                    put("rule", ruleId)
+                    put("verb", effect.verb.wire)
+                    put("bind", effect.targetBindName ?: "")
+                    put("def", bindDef ?: JsonNull)
+                },
+            )
+            effect.copy(capabilityKey = sha256OrNull(keyInput))
+        }
+    }
+
+    /** Stable serialization (recursively sorted object keys) so reordering a
+     *  binding's keys doesn't change its consent key (#422). */
+    private fun canonicalJson(element: JsonElement): String = when (element) {
+        is JsonObject -> element.entries
+            .sortedBy { it.key }
+            .joinToString(",", "{", "}") { "${it.key}:${canonicalJson(it.value)}" }
+        is JsonArray -> element.joinToString(",", "[", "]") { canonicalJson(it) }
+        is JsonPrimitive -> element.toString()
     }
 
     // ==========================================================================
@@ -214,14 +297,14 @@ object RuleCompiler {
             compileValidateEntry(entry.jsonObject)
         } ?: emptyList()
 
-        // --- Effects ---
-        val effectsArray = obj["effects"]?.jsonArray
-        val effects = effectsArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
+        // --- Effects (consent keys assigned for actuating verbs, #422) ---
+        val rawEffects = obj["effects"]?.jsonArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
+        val effects = assignCapabilityKeys(rawEffects, ruleId, effectiveBindObj)
 
         // --- Transition overrides (screen rules) ---
-        val transitionOverrides = obj["transitionOverrides"]?.jsonObject?.let {
+        val transitionOverrides = (obj["transitionOverrides"]?.jsonObject?.let {
             compileTransitionOverrides(it)
-        } ?: emptyMap()
+        } ?: emptyMap()).mapValues { (_, list) -> assignCapabilityKeys(list, ruleId, effectiveBindObj) }
 
         // --- Click-specific: screenIs ---
         val screenIs = obj["screenIs"]?.jsonPrimitive?.content
