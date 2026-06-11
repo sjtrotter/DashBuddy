@@ -377,14 +377,15 @@ object RuleCompiler {
 
         // Validate transform specs at compile time (fail fast on typos)
         transformSpec?.let { TransformRegistry.validateTransformSpec(it) }
+        // Compile the find regex ONCE (#362) — it used to recompile per
+        // notification, per field, violating the no-hot-path-parsing contract.
+        val findRegex = findPattern?.let { compileRegex(it) }
 
         return { raw ->
             val sourceText = readNotificationField(raw, fromField)
 
-            val rawValue = if (findPattern != null && sourceText != null) {
-                val regex = compileRegex(findPattern)
-                val match = regex.find(sourceText)
-                match?.groupValues?.getOrNull(group)
+            val rawValue = if (findRegex != null && sourceText != null) {
+                findRegex.find(sourceText)?.groupValues?.getOrNull(group)
             } else {
                 sourceText
             }
@@ -470,13 +471,16 @@ object RuleCompiler {
         val fallbackVal = obj["fallback"]
         val rejectIfSpec = obj["rejectIf"]?.let { compileNodePred(it) }
 
+        // Parse navigation ONCE at compile time (#362) — unknown navigation
+        // verbs now fail rule loading, not the first live match.
+        val navFn = obj["navigate"]?.let { compileNavigation(it) }
+
         return { tree, bindings ->
             val startNode = if (fromName != null) bindings[fromName] ?: tree else tree
             var foundNode = startNode.findNode(findPred)
 
-            val navSpec = obj["navigate"]
-            if (foundNode != null && navSpec != null) {
-                foundNode = applyNavigation(foundNode, navSpec)
+            if (foundNode != null && navFn != null) {
+                foundNode = navFn(foundNode)
             }
 
             if (foundNode != null && rejectIfSpec != null && rejectIfSpec(foundNode)) {
@@ -681,16 +685,16 @@ object RuleCompiler {
         val assertName = obj["assert"]!!.jsonPrimitive.content
         TransformRegistry.validateAssertionName(assertName)
         val onFail = obj["onFail"]?.jsonPrimitive?.content ?: "skip"
+        // A typo'd onFail used to coerce silently to "skip" (#362).
+        if (onFail !in setOf("skip", "dropParsed")) {
+            throw RuleCompileException("Unknown onFail: '$onFail' (expected 'skip' or 'dropParsed')")
+        }
 
         return { parsed ->
             val outcome = TransformRegistry.validate(assertName, obj, parsed)
             when (outcome) {
                 is ValidateOutcome.Pass -> ValidateOutcome.Pass
-                else -> when (onFail) {
-                    "skip" -> ValidateOutcome.Skip
-                    "dropParsed" -> ValidateOutcome.DropParsed
-                    else -> ValidateOutcome.Skip
-                }
+                else -> if (onFail == "dropParsed") ValidateOutcome.DropParsed else ValidateOutcome.Skip
             }
         }
     }
@@ -1168,25 +1172,27 @@ object RuleCompiler {
         else -> throw RuleCompileException("Unknown read property: '$prop'")
     }
 
-    private fun applyNavigation(node: UiNode, navSpec: JsonElement): UiNode? {
+    /** Compile a navigation spec to a node closure — unknown verbs throw HERE,
+     *  at rule-load time, never during a live match (#362). */
+    private fun compileNavigation(navSpec: JsonElement): (UiNode) -> UiNode? {
         val nav = navSpec.jsonPrimitive.content
         return when {
-            nav == "parent" -> node.parent
+            nav == "parent" -> { node -> node.parent }
             nav.startsWith("ancestor(") -> {
                 val n = nav.removePrefix("ancestor(").removeSuffix(")").toIntOrNull() ?: 1
-                node.ancestor(n)
+                ;{ node -> node.ancestor(n) }
             }
             nav.startsWith("sibling(") -> {
                 val offset = nav.removePrefix("sibling(").removeSuffix(")").toIntOrNull() ?: 1
-                node.sibling(offset)
+                ;{ node -> node.sibling(offset) }
             }
             nav.startsWith("findChild(") -> {
                 val idSuffix = nav.removePrefix("findChild(").removeSuffix(")")
-                node.findChildById(idSuffix)
+                ;{ node -> node.findChildById(idSuffix) }
             }
             nav.startsWith("findDescendant(") -> {
                 val idSuffix = nav.removePrefix("findDescendant(").removeSuffix(")")
-                node.findDescendantById(idSuffix)
+                ;{ node -> node.findDescendantById(idSuffix) }
             }
             else -> throw RuleCompileException("Unknown navigation: '$nav'")
         }

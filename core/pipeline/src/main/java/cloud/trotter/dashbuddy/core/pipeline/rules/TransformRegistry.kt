@@ -11,7 +11,6 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
@@ -28,6 +27,10 @@ import java.util.Locale
  * Matches ADR-0001 v2 specification.
  */
 object TransformRegistry {
+
+    /** Compiled-regex cache for the `regex` transform (#362) — the spec is
+     *  re-dispatched per value, so without this every value recompiled. */
+    private val regexCache = java.util.concurrent.ConcurrentHashMap<String, Regex>()
 
     /**
      * Reference clock for time transforms (#343): the OBSERVATION's instant + zone,
@@ -101,10 +104,10 @@ object TransformRegistry {
             "parseHrMin" -> parseHrMin(value)
             "parseLeadingInt" -> parseLeadingInt(value)
             "parsePercent" -> parsePercent(value)
-            "sha256" -> generateSha256(value)
+            "sha256" -> sha256OrNull(value)
             "trim" -> value.trim()
-            "lower" -> value.lowercase()
-            "upper" -> value.uppercase()
+            "lower" -> value.lowercase(Locale.ROOT)
+            "upper" -> value.uppercase(Locale.ROOT)
             "toDouble" -> value.toDoubleOrNull()
             "toInt" -> value.toIntOrNull()
             "stripDeadlinePrefix" -> stripDeadlinePrefix(value)
@@ -118,8 +121,10 @@ object TransformRegistry {
      */
     fun apply(spec: JsonObject, value: String?): Any? {
         if (value == null) return null
-        val key = spec.keys.firstOrNull()
-            ?: throw RuleCompileException("Empty transform spec")
+        val key = spec.keys.singleOrNull()
+            ?: throw RuleCompileException(
+                "Transform spec must have exactly one key, got: ${spec.keys}",
+            )
         val params = spec[key]!!
 
         return when (key) {
@@ -180,7 +185,7 @@ object TransformRegistry {
                 val pattern = obj["pattern"]!!.jsonPrimitive.content
                 val group = obj["group"]?.jsonPrimitive?.intOrNull ?: 0
                 val thenTransform = obj["then"]
-                val regex = RuleCompiler.compileRegex(pattern)
+                val regex = regexCache.getOrPut(pattern) { RuleCompiler.compileRegex(pattern) }
                 val match = regex.find(value) ?: return null
                 val extracted = match.groupValues.getOrNull(group) ?: return null
                 if (thenTransform != null) {
@@ -265,19 +270,52 @@ object TransformRegistry {
         when (spec) {
             is JsonPrimitive -> validateTransformName(spec.content)
             is JsonObject -> {
-                val key = spec.keys.firstOrNull()
-                    ?: throw RuleCompileException("Empty transform spec")
+                val key = spec.keys.singleOrNull()
+                    ?: throw RuleCompileException(
+                        "Transform spec must have exactly one key, got: ${spec.keys}",
+                    )
                 if (key !in knownParameterizedTransforms)
                     throw RuleCompileException("Unknown parameterized transform: '$key'")
-                // Validate nested 'then' in regex transforms
-                if (key == "regex") {
-                    val regexObj = spec[key]?.jsonObject
-                    val pattern = regexObj?.get("pattern")?.jsonPrimitive?.content
-                    if (pattern != null) RuleCompiler.compileRegex(pattern)
-                    regexObj?.get("then")?.let { validateTransformSpec(it) }
-                }
+                validateTransformParams(key, spec[key]!!)
             }
             is JsonArray -> spec.forEach { validateTransformSpec(it) }
+        }
+    }
+
+    /**
+     * Required-parameter checks at COMPILE time (#362): a malformed spec like
+     * `{"split":{"separator":","}}` (missing `index`) used to pass validation
+     * and NPE at match time. Every parameterized transform's required shape is
+     * asserted here, so match-time access can assume it.
+     */
+    private fun validateTransformParams(key: String, params: JsonElement) {
+        fun fail(msg: String): Nothing =
+            throw RuleCompileException("Transform '$key': $msg")
+
+        when (key) {
+            "stripPrefix", "stripSuffix", "extractBefore", "extractAfter" -> {
+                if (params !is JsonPrimitive || !params.isString) fail("requires a string parameter")
+            }
+            "stripPrefixes" -> {
+                if (params !is JsonArray || params.isEmpty()) fail("requires a non-empty array")
+                if (params.any { it !is JsonPrimitive }) fail("array entries must be strings")
+            }
+            "replace" -> {
+                val obj = params as? JsonObject ?: fail("requires an object with 'pattern'")
+                if (obj["pattern"]?.jsonPrimitive?.isString != true) fail("missing required 'pattern'")
+            }
+            "split" -> {
+                val obj = params as? JsonObject ?: fail("requires an object with 'separator' and 'index'")
+                if (obj["separator"]?.jsonPrimitive?.isString != true) fail("missing required 'separator'")
+                if (obj["index"]?.jsonPrimitive?.intOrNull == null) fail("missing required integer 'index'")
+            }
+            "regex" -> {
+                val obj = params as? JsonObject ?: fail("requires an object with 'pattern'")
+                val pattern = obj["pattern"]?.jsonPrimitive?.content
+                    ?: fail("missing required 'pattern'")
+                RuleCompiler.compileRegex(pattern)
+                obj["then"]?.let { validateTransformSpec(it) }
+            }
         }
     }
 
@@ -403,16 +441,6 @@ object TransformRegistry {
      */
     private fun parsePercent(text: String): Double? {
         return text.removeSuffix("%").trim().toDoubleOrNull()
-    }
-
-    /** SHA-256 hash. Returns input on failure. */
-    private fun generateSha256(input: String): String {
-        return try {
-            val bytes = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
-            bytes.fold("") { str, it -> str + "%02x".format(it) }
-        } catch (_: Exception) {
-            input
-        }
     }
 
     /**
