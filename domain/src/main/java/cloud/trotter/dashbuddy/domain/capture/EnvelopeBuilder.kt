@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.core.data.capture
+package cloud.trotter.dashbuddy.domain.capture
 
 import cloud.trotter.dashbuddy.domain.capture.CaptureSchema
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata

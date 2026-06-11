@@ -1,13 +1,13 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility
 
 import android.view.accessibility.AccessibilityEvent
-import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
-import cloud.trotter.dashbuddy.core.data.capture.EnvelopeBuilder
-import cloud.trotter.dashbuddy.core.data.capture.WindowContextDto
-import cloud.trotter.dashbuddy.core.data.capture.schema.ClickCapturePayload
-import cloud.trotter.dashbuddy.core.data.capture.schema.ClickContextSchema
-import cloud.trotter.dashbuddy.core.data.capture.schema.UiNodeSchema
-import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
+import cloud.trotter.dashbuddy.domain.capture.CaptureBus
+import cloud.trotter.dashbuddy.domain.capture.EnvelopeBuilder
+import cloud.trotter.dashbuddy.domain.capture.WindowContextDto
+import cloud.trotter.dashbuddy.domain.capture.schema.ClickCapturePayload
+import cloud.trotter.dashbuddy.domain.capture.schema.ClickContextSchema
+import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationIdentity
 import cloud.trotter.dashbuddy.domain.pipeline.identity
@@ -50,7 +50,7 @@ class AccessibilityPipeline @Inject constructor(
     private val source: AccessibilitySource,
     private val classifier: ObservationClassifier,
     private val captureBus: CaptureBus,
-    private val platformPreferences: PlatformPreferencesRepository,
+    private val platformPreferences: PlatformPreferences,
 ) {
     companion object {
         const val SCREEN_PIPELINE_ID = "accessibility.window"
@@ -244,7 +244,7 @@ class AccessibilityPipeline @Inject constructor(
  * Same-shape buttons (e.g. DoorDash's `primary_action_button`) appear on many
  * screens with different labels and meanings. [UiNode.structuralHash] ignores
  * text, so without the screen mix all such clicks collide in the per-bucket
- * dedup set inside [cloud.trotter.dashbuddy.core.data.capture.DiskCaptureBus]
+ * dedup set inside the disk capture bus (`DiskCaptureBus` in `:core:data`)
  * and only the first one in a session survives — silently dropping later
  * clicks the developer needs to triage screen-specific behavior.
  */

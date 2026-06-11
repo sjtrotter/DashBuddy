@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.capture
 
+import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope

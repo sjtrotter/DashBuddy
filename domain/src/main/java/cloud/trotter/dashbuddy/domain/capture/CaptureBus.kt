@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.core.data.capture
+package cloud.trotter.dashbuddy.domain.capture
 
 /**
  * Pipeline-side capture interface. Pipelines build a [CaptureEnvelope]

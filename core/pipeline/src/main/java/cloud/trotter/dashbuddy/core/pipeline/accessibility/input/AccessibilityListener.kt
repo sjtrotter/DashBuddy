@@ -4,7 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.core.pipeline.BuildConfig
-import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +22,7 @@ class AccessibilityListener : AccessibilityService() {
     lateinit var accessibilitySource: AccessibilitySource
 
     @Inject
-    lateinit var platformPreferences: PlatformPreferencesRepository
+    lateinit var platformPreferences: PlatformPreferences
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 

@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.test.util
 
-import cloud.trotter.dashbuddy.core.database.log.dto.UiNodeDto
-import cloud.trotter.dashbuddy.core.database.log.mapper.toDomain
+import cloud.trotter.dashbuddy.domain.capture.dto.UiNodeDto
+import cloud.trotter.dashbuddy.domain.capture.toDomain
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json

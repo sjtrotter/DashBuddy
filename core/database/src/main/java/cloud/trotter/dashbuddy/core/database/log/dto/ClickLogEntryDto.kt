@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.database.log.dto
 
+import cloud.trotter.dashbuddy.domain.capture.dto.UiNodeDto
 import kotlinx.serialization.Serializable
 
 @Serializable

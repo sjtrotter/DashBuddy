@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.core.data.capture.schema
+package cloud.trotter.dashbuddy.domain.capture.schema
 
 import cloud.trotter.dashbuddy.domain.capture.CaptureSchema
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData

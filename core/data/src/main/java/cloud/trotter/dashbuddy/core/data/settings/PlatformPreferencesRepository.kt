@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.data.settings
 import android.content.Context
 import android.content.pm.PackageManager
 import cloud.trotter.dashbuddy.core.datastore.settings.PlatformPreferencesDataSource
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -15,11 +16,11 @@ import javax.inject.Singleton
 class PlatformPreferencesRepository @Inject constructor(
     private val dataSource: PlatformPreferencesDataSource,
     @param:ApplicationContext private val context: Context,
-) {
+) : PlatformPreferences {
     private val packageManager: PackageManager = context.packageManager
 
     /** Flow of enabled Platform enum values. Defaults to installed apps if no preference saved. */
-    val enabledPlatforms: Flow<Set<Platform>> = dataSource.enabledPlatforms.map { saved ->
+    override val enabledPlatforms: Flow<Set<Platform>> = dataSource.enabledPlatforms.map { saved ->
         if (saved != null) {
             saved.mapNotNull { Platform.fromWire(it) }.toSet()
         } else {
@@ -28,7 +29,7 @@ class PlatformPreferencesRepository @Inject constructor(
     }
 
     /** Flow of enabled package names (for listener filtering). */
-    val enabledPackages: Flow<Set<String>> = enabledPlatforms.map { platforms ->
+    override val enabledPackages: Flow<Set<String>> = enabledPlatforms.map { platforms ->
         platforms.mapNotNull { it.packageName }.toSet()
     }
 

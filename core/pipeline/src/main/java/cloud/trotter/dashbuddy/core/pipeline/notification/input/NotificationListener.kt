@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.notification.input
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +20,7 @@ class NotificationListener : NotificationListenerService() {
     lateinit var notificationSource: NotificationSource
 
     @Inject
-    lateinit var platformPreferences: PlatformPreferencesRepository
+    lateinit var platformPreferences: PlatformPreferences
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 

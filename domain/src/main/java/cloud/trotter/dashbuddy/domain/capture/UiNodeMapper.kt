@@ -1,7 +1,7 @@
-package cloud.trotter.dashbuddy.core.database.log.mapper
+package cloud.trotter.dashbuddy.domain.capture
 
-import cloud.trotter.dashbuddy.core.database.log.dto.BoundingBoxDto
-import cloud.trotter.dashbuddy.core.database.log.dto.UiNodeDto
+import cloud.trotter.dashbuddy.domain.capture.dto.BoundingBoxDto
+import cloud.trotter.dashbuddy.domain.capture.dto.UiNodeDto
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 

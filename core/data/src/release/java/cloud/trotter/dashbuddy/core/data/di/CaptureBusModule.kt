@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.di
 
-import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
+import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import cloud.trotter.dashbuddy.core.data.capture.NoOpCaptureBus
 import dagger.Binds
 import dagger.Module
