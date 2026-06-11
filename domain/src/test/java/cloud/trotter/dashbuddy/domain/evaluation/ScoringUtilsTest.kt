@@ -49,4 +49,16 @@ class ScoringUtilsTest {
         assertTrue(ScoringUtils.determineOfferQuality(60.0) != OfferQuality.GOOD)
         assertTrue(ScoringUtils.determineOfferQuality(70.0) != OfferQuality.GREAT)
     }
+
+    // ── #400: the AWESOME tier and the ACCEPT decision share one boundary ──
+
+    @Test
+    fun `a score at the accept threshold is both ACCEPT-able and AWESOME`() {
+        assertEquals(OfferQuality.AWESOME, ScoringUtils.determineOfferQuality(OfferEvaluator.ACCEPT_THRESHOLD))
+    }
+
+    @Test
+    fun `a score just under the accept threshold is neither`() {
+        assertEquals(OfferQuality.GREAT, ScoringUtils.determineOfferQuality(OfferEvaluator.ACCEPT_THRESHOLD - 0.1))
+    }
 }

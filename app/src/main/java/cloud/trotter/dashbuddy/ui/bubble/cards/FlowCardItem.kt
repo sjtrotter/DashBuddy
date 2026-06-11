@@ -52,6 +52,7 @@ import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.ui.formatters.displayLabel
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 
 /**
  * A single flow-phase card in the bubble HUD stack (#257).
@@ -304,9 +305,10 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             snap.evaluationScore?.let { score ->
+                // Ring colors track the evaluator's REAL decision boundaries (#400).
                 val sc = when {
-                    score >= 70 -> c.good
-                    score <= 30 -> c.bad
+                    score >= OfferEvaluator.ACCEPT_THRESHOLD -> c.good
+                    score <= OfferEvaluator.DECLINE_THRESHOLD -> c.bad
                     else -> c.warn
                 }
                 DashGaugeRing(
