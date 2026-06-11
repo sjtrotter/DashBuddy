@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.network.di
 
+import cloud.trotter.dashbuddy.core.network.BuildConfig
 import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.EpaApi
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
@@ -39,7 +40,8 @@ object VehicleNetworkModule {
         }
 
         val client = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
+            // Debug builds only — release gets no HTTP logging at all (#348).
+            .apply { if (BuildConfig.DEBUG) addInterceptor(loggingInterceptor) }
             .build()
 
         // Configure JSON parsing to be highly forgiving since we don't control the government's API schemas
