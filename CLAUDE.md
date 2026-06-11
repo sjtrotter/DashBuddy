@@ -192,6 +192,28 @@ Every new feature or refactor holds to these — they are forefront design input
    had already drifted (#357). When two surfaces need the same thing, extract one definition
    and point both at it; when a value can be computed from an owned anchor, compute it —
    don't store it twice.
+6. **Security & privacy first.** The non-negotiable Pledges above (on-device computation,
+   sensitive screens blocked at the matcher layer, opt-in network, edge PII scrub) are design
+   inputs, not afterthoughts — every feature is measured against them before it ships. Working
+   rules:
+   - **Treat third-party UI and (eventually) downloaded rules as untrusted input.** The
+     accessibility tree comes from another app; once the matchers split (#192) lands, rule JSON
+     comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps), fail-closed
+     validation, and — for any remote rule source — **signature/integrity verification before
+     compile**, which does not exist yet and is a hard prerequisite for that path.
+   - **Sensitive screens are blocked, never parsed or stored** (banking/identity/payment), at the
+     matcher layer, in both sensor pipelines (#399). A recognition change must not be able to
+     downgrade that.
+   - **PII is hashed at the edge before it is persisted or could be uploaded** (`sha256`,
+     fail-closed — never echo plaintext on failure, #362). Captures are debug-only (release binds
+     `NoOpCaptureBus`, #346).
+   - **Secrets never reach logs** (EIA api_key redaction, #348); network logging is debug-gated.
+   - **Capability gates fail closed.** An effect whose permission tier isn't granted does not
+     fire; an auto-click or any state-changing effect a rule could request must be gated, not
+     assumed safe. (The current single-user build stubs the grant check to always-true — that
+     stub is the first thing the matchers/multi-user work must replace.)
+   When a change touches recognition, capture, network, or effects, state its security/privacy
+   posture in the PR — what's trusted, what's gated, what's scrubbed.
 
 If a change genuinely can't satisfy one of these, say so explicitly in the PR description instead
 of silently violating it.
