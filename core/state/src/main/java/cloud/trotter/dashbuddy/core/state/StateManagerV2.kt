@@ -361,6 +361,7 @@ class StateManagerV2 @Inject constructor(
                 payload = mapOf(
                     "action" to event.action.name,
                     "evaluation" to event.evaluation,
+                    "offerHash" to event.offerHash,
                 ),
             )
 

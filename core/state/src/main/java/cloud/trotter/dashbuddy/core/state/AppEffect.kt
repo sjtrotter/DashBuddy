@@ -69,7 +69,12 @@ sealed class AppEffect {
     data object StopOdometer : AppEffect()
     data object PauseOdometer : AppEffect()   // pause GPS while stationary; session total preserved
     data object ResumeOdometer : AppEffect()  // resume GPS after stationary pause
-    data class EvaluateOffer(val parsedOffer: ParsedOffer) : AppEffect()
+    /**
+     * Evaluate the pending offer. [offerHash] rides the async round-trip so the result
+     * can be correlated back — a replaced offer must never inherit the previous offer's
+     * evaluation (#345).
+     */
+    data class EvaluateOffer(val parsedOffer: ParsedOffer, val offerHash: String) : AppEffect()
     /** Speak the offer's evaluation aloud (verdict + headline economics). Fires on eval-landing. */
     data class SpeakOffer(val evaluation: OfferEvaluation) : AppEffect()
 

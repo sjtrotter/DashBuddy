@@ -308,6 +308,19 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   `Pictures/DashBuddy`; (b) no visible stutter the moment an offer arrives (should be same or
   smoother than before).
   - Confirmed: 0/2.
+- **Paused dash auto-expires when the pause clock runs out (#342).** The pause-safety timer
+  used to fire into a void (routed to no platform region) — now it reaches the paused region.
+  If you pause mid-dash and deliberately DON'T resume: once the pause duration lapses, the HUD
+  should flip out of PAUSED on its own (offline with grace) without needing a DoorDash screen
+  change. Also regression-watch the normal path: resuming before expiry must NOT flash offline
+  (the timer is cancelled on resume).
+  - Confirmed: 0/2.
+- **Offer evaluation always matches the offer on screen (#345).** Evaluations are now
+  hash-correlated, so a rapidly replaced offer can't inherit the previous offer's verdict —
+  the heads-up notification + spoken read should always describe the CURRENT offer's economics.
+  Watch for any mismatch between the card's numbers and what's spoken/notified, especially when
+  offers arrive back-to-back.
+  - Confirmed: 0/2.
 
 ---
 
