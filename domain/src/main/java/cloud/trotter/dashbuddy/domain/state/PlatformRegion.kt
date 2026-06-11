@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import kotlinx.serialization.Serializable
+
 import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
 
 /**
@@ -10,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
  *
  * A platform region only steps when an observation's [Platform] matches.
  */
+@Serializable
 data class PlatformRegion(
     val platform: Platform,
     val mode: Mode = Mode.Offline,
@@ -68,6 +71,7 @@ data class PlatformRegion(
  * survives crash-recovery replay; resolution is driven by `obs.timestamp`, never
  * a wall clock, keeping the reducer pure.
  */
+@Serializable
 data class PendingDestructive(
     val kind: DestructiveKind,
     /** The obs.timestamp that armed it. */

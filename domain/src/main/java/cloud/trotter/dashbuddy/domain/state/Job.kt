@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import kotlinx.serialization.Serializable
+
 /**
  * Economics captured from one accepted offer, at accept time. A [Job] accumulates one of
  * these per accepted offer, so an **add-on** accepted mid-delivery adds to (not replaces) the
@@ -9,6 +11,7 @@ package cloud.trotter.dashbuddy.domain.state
  * may not have completed by the moment of accept; we capture the richest available source
  * (evaluation first, then the parsed offer).
  */
+@Serializable
 data class AcceptedOfferEconomics(
     val offerHash: String?,
     /** Gross pay shown on the offer screen. */
@@ -32,6 +35,7 @@ data class AcceptedOfferEconomics(
  * authoritative store name comes from Task observations when the driver
  * enters `task:pickup:navigation`.
  */
+@Serializable
 data class Job(
     val jobId: String,
     val offerStoreHint: List<String>,

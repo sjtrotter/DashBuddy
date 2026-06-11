@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import kotlinx.serialization.Serializable
+
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
@@ -19,6 +21,7 @@ object PickupActivity {
  * refinements within a flow (e.g., "shopping", "scanning_card"). The tag is an
  * open, rule-emitted string; [PickupActivity] names the values the code keys on.
  */
+@Serializable
 sealed class ParsedFields {
     abstract val activity: String?
 
@@ -30,9 +33,13 @@ sealed class ParsedFields {
      */
     open fun dedupeHash(): Int = 0
 
+    @Serializable
+
     data object None : ParsedFields() {
         override val activity: String? = null
     }
+
+    @Serializable
 
     data class IdleFields(
         override val activity: String? = null,
@@ -58,12 +65,16 @@ sealed class ParsedFields {
         }
     }
 
+    @Serializable
+
     data class OfferFields(
         override val activity: String? = null,
         val parsedOffer: ParsedOffer,
     ) : ParsedFields() {
         override fun dedupeHash(): Int = parsedOffer.offerHash.hashCode()
     }
+
+    @Serializable
 
     data class TaskFields(
         override val activity: String? = null,
@@ -97,6 +108,8 @@ sealed class ParsedFields {
         }
     }
 
+    @Serializable
+
     data class PostTaskFields(
         override val activity: String? = null,
         val totalPay: Double,
@@ -117,6 +130,8 @@ sealed class ParsedFields {
         }
     }
 
+    @Serializable
+
     data class SessionEndedFields(
         override val activity: String? = null,
         val totalEarnings: Double,
@@ -128,6 +143,8 @@ sealed class ParsedFields {
         override fun dedupeHash(): Int = totalEarnings.hashCode()
     }
 
+    @Serializable
+
     data class PausedFields(
         override val activity: String? = null,
         val remainingText: String? = null,
@@ -136,6 +153,8 @@ sealed class ParsedFields {
         // Paused is a single state — identity is just "paused".
         override fun dedupeHash(): Int = "paused".hashCode()
     }
+
+    @Serializable
 
     data class TimelineFields(
         override val activity: String? = null,
@@ -151,6 +170,8 @@ sealed class ParsedFields {
             return h
         }
     }
+
+    @Serializable
 
     data class RatingsFields(
         override val activity: String? = null,
@@ -174,13 +195,19 @@ sealed class ParsedFields {
         }
     }
 
+    @Serializable
+
     data class SensitiveFields(
         override val activity: String? = null,
     ) : ParsedFields()
 
+    @Serializable
+
     data class NoiseFields(
         override val activity: String? = null,
     ) : ParsedFields()
+
+    @Serializable
 
     data class ClickFields(
         override val activity: String? = null,
@@ -191,6 +218,8 @@ sealed class ParsedFields {
         // Every click is unique — always passes dedup.
         override fun dedupeHash(): Int = System.nanoTime().hashCode()
     }
+
+    @Serializable
 
     data class NotificationFields(
         override val activity: String? = null,
@@ -213,6 +242,7 @@ sealed class ParsedFields {
  * A single entry in a timeline task chain, extracted from the
  * dash-controls overlay.
  */
+@Serializable
 data class TimelineTaskEntry(
     val taskType: String,
     val nameHash: String?,

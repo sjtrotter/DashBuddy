@@ -1,9 +1,12 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import kotlinx.serialization.Serializable
+
 /**
  * A single segment: one location, either navigation or arrival activity.
  * A pickup is one Task; a dropoff is one Task.
  */
+@Serializable
 data class Task(
     val taskId: String,
     val jobId: String,

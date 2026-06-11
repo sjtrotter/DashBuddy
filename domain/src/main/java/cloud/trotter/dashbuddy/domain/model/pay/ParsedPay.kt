@@ -1,9 +1,12 @@
 package cloud.trotter.dashbuddy.domain.model.pay
 
+import kotlinx.serialization.Serializable
+
 /**
  * A container for the entire parsed pay breakdown from a delivery completion screen.
  * It separates the app-level pay components from the store/customer-specific tips.
  */
+@Serializable
 data class ParsedPay(
     val appPayComponents: List<ParsedPayItem>, // For "Base Pay", "Peak Pay", etc.
     val customerTips: List<ParsedPayItem>      // For tips, where .type is the store name

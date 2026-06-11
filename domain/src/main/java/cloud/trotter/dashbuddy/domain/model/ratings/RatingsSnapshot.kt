@@ -1,10 +1,13 @@
 package cloud.trotter.dashbuddy.domain.model.ratings
 
+import kotlinx.serialization.Serializable
+
 /**
  * A point-in-time snapshot of the dasher's performance metrics, captured when the Ratings
  * screen is observed. Stored on [AppStateV2.IdleOffline] so the bubble HUD can display it
  * on the idle card without re-observing the ratings screen.
  */
+@Serializable
 data class RatingsSnapshot(
     val capturedAt: Long = System.currentTimeMillis(),
     val acceptanceRate: Double? = null,
