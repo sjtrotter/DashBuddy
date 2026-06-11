@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.CaptureWriter
 import cloud.trotter.dashbuddy.core.pipeline.FrameGate
+import cloud.trotter.dashbuddy.core.pipeline.passesContentGates
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
@@ -88,15 +89,9 @@ class AccessibilityPipeline @Inject constructor(
         // Classify through the unified rule engine (typed: FlowObservation, #361)
         .map { event -> classifier.classify(event) to event }
 
-        // Gate: drop sensitive/noise observations (pledge: never store or forward)
-        .filter { (obs, _) ->
-            val parsed = obs.parsed
-            val isSensitive = parsed is ParsedFields.SensitiveFields
-            val isNoise = parsed is ParsedFields.NoiseFields
-            if (isSensitive) Timber.d("Sensitive gate: dropped %s", obs.target)
-            if (isNoise) Timber.v("Noise gate: dropped %s", obs.target)
-            !isSensitive && !isNoise
-        }
+        // Gate: drop sensitive/noise observations (pledge: never store or
+        // forward) — the shared content gate (#399).
+        .filter { (obs, _) -> passesContentGates(obs) }
 
         // Gate: drop observations from disabled platforms (defense-in-depth)
         .filter { (_, event) ->

@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.core.pipeline.CaptureWriter
 import cloud.trotter.dashbuddy.core.pipeline.FrameGate
+import cloud.trotter.dashbuddy.core.pipeline.passesContentGates
 import cloud.trotter.dashbuddy.core.pipeline.notification.input.NotificationSource
 import cloud.trotter.dashbuddy.core.pipeline.notification.mapper.toDomain
 import kotlinx.coroutines.CoroutineScope
@@ -49,12 +50,10 @@ class NotificationPipeline @Inject constructor(
             val event = PipelineEvent.Notification(raw.postTime, raw)
             classifier.classify(event) to raw
         }
-        // Gate: drop noise observations (known-irrelevant, never capture or forward)
-        .filter { (obs, _) ->
-            val isNoise = obs.parsed is ParsedFields.NoiseFields
-            if (isNoise) Timber.v("Noise gate: dropped notification %s", obs.target)
-            !isNoise
-        }
+        // Gate: drop sensitive/noise observations (pledge: never store or
+        // forward) — the shared content gate, symmetric with the
+        // accessibility pipeline (#399).
+        .filter { (obs, _) -> passesContentGates(obs) }
         // Gate: drop observations from disabled platforms (defense-in-depth)
         .filter { (_, raw) ->
             val platform = Platform.fromPackage(raw.packageName)
