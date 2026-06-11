@@ -133,6 +133,14 @@ class FlowRegionStepper @Inject constructor() {
         val evaluation = obs.payload["evaluation"] as? OfferEvaluation
             ?: return prev.copy(lastObservedAt = obs.timestamp)
 
+        // Correlate by hash: an evaluation computed for a since-replaced offer must not
+        // land on the current one (the notification/TTS would speak the wrong economics,
+        // #345). A null hash (legacy replayed stubs) is accepted as-before.
+        val evalHash = obs.payload["offerHash"] as? String
+        if (evalHash != null && evalHash != offer.offerHash) {
+            return prev.copy(lastObservedAt = obs.timestamp)
+        }
+
         return prev.copy(
             pendingOffer = offer.copy(evaluation = evaluation),
             lastObservedAt = obs.timestamp,

@@ -129,7 +129,7 @@ class EffectMap @Inject constructor(
 
             // Evaluate (the heads-up notification + spoken read fire later, once the async
             // evaluation lands on the pending offer — see the eval-landing block below).
-            add(AppEffect.EvaluateOffer(offer.parsedOffer))
+            add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash))
         }
 
         // Offer replaced (different hash)
@@ -144,7 +144,7 @@ class EffectMap @Inject constructor(
 
             // Evaluate the new offer (notification + spoken read fire on eval-landing below).
             val offer = nextOffer.offerFields
-            add(AppEffect.EvaluateOffer(offer.parsedOffer))
+            add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash))
         }
 
         // Evaluation landed (async loopback) → fire the offer's UI side-effects: the heads-up
@@ -412,9 +412,11 @@ class EffectMap @Inject constructor(
         nextFlow: FlowRegion,
         obs: Observation,
     ): List<AppEffect> {
-        val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
+        // Diffs are computed from prev/next region state for EVERY observation type:
+        // lazy expiry can retire a task on a non-flow observation (a routed timeout,
+        // #342), and that closure must still emit DELIVERY_CONFIRMED (#345).
         val nextFlowVal = nextFlow.flow
-        val sessionId = next.session?.sessionId
+        val sessionId = next.session?.sessionId ?: prev.session?.sessionId
 
         return buildList {
             val prevTask = prev.activeTask
@@ -763,10 +765,15 @@ class EffectMap @Inject constructor(
 
     private fun evaluateGate(gate: ParsedFieldsGate?, parsed: ParsedFields): Boolean {
         if (gate == null) return true
-        val fieldsMap = parsedFieldsToMap(parsed)
+        // Fail CLOSED: if fields can't be extracted we can't prove the condition,
+        // and a gated action (potentially an auto-click) must not fire (#345).
+        val fieldsMap = parsedFieldsToMap(parsed) ?: return false
         return when (gate) {
             is ParsedFieldsGate.FieldEquals -> fieldsMap[gate.field] == gate.value
-            is ParsedFieldsGate.FieldNotEquals -> fieldsMap[gate.field] != gate.value
+            // An ABSENT field (wrong name, or ParsedFields.None) proves nothing —
+            // only a present-but-different value satisfies "not equals".
+            is ParsedFieldsGate.FieldNotEquals ->
+                gate.field in fieldsMap && fieldsMap[gate.field] != gate.value
             is ParsedFieldsGate.FieldNotNull -> fieldsMap[gate.field] != null
         }
     }
@@ -777,10 +784,11 @@ class EffectMap @Inject constructor(
      *
      * `activity` is excluded because it is a classification tag inherited
      * from the sealed parent — rules gate on structural fields, not the
-     * activity discriminator. If gate evaluation fails, the gate rejects
-     * (safe default — the action simply won't fire).
+     * activity discriminator. Returns null on extraction failure so the
+     * caller rejects (fail closed) instead of evaluating against an empty
+     * map, where FieldNotEquals would spuriously fire (#345).
      */
-    private fun parsedFieldsToMap(parsed: ParsedFields): Map<String, Any?> {
+    private fun parsedFieldsToMap(parsed: ParsedFields): Map<String, Any?>? {
         if (parsed is ParsedFields.None) return emptyMap()
         return try {
             parsed::class.java.declaredFields
@@ -791,7 +799,7 @@ class EffectMap @Inject constructor(
                 }
         } catch (e: Exception) {
             Timber.w(e, "Gate field extraction failed for %s", parsed::class.simpleName)
-            emptyMap()
+            null
         }
     }
 

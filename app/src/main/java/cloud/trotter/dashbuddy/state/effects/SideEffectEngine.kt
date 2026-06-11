@@ -187,7 +187,7 @@ class SideEffectEngine @Inject constructor(
                 // the evaluation lands on the pending offer — keeps this handler thin.
                 val config = strategyRepository.evaluationConfigFlow.first()
                 val result = offerEvaluator.evaluate(effect.parsedOffer, config)
-                _events.emit(OfferEvaluationEvent(result.action, result))
+                _events.emit(OfferEvaluationEvent(result.action, result, offerHash = effect.offerHash))
             }
 
             is AppEffect.PostOfferNotification -> {
