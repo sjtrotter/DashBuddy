@@ -86,8 +86,9 @@ The project uses modular Clean Architecture with a strict dependency graph:
 :core:datastore → :domain
 ```
 
-- **`:domain`** — Pure Kotlin library. Domain models, evaluation logic, repository interfaces. No
-  Android dependencies.
+- **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic, and
+  pipeline/provider contracts. No Android dependencies. (Repository *implementations* live in
+  `:core:data`; only a few provider/data-source interfaces are inverted into `:domain` today.)
 - **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
   (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.
 - **`:core:state`** — Multi-region state machine (StateMachine, FlowRegionStepper,
@@ -98,7 +99,8 @@ The project uses modular Clean Architecture with a strict dependency graph:
   concrete data layers.
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration.
 - **`:core:location`** — Play Services GPS tracking.
-- **`:core:datastore`** — Proto DataStore for app preferences.
+- **`:core:datastore`** — Preferences DataStore (six single-concern stores behind Hilt
+  qualifiers — app prefs, strategy, dev settings, odometer, app state, platforms).
 - **`:core:designsystem`** — Brand system (no project deps): fixed dark/light palette (`DashColors`),
   Hanken Grotesk + Space Grotesk fonts (tabular numerals), `DashTheme` + `LocalGlance`, and the
   shared component library (`DashCard`, `DashChip`, `DashStatTile`, `DashGaugeRing`, `DashSegmented`,
@@ -286,6 +288,18 @@ gh pr merge <NUMBER> --merge
 
 (The `gh` binary path and all project/field IDs are workstation-specific — they live in
 `CLAUDE.local.md`, which is gitignored. Never hardcode workstation paths in this file.)
+
+**Every PR ships with context updates — no exceptions.** As part of preparing/merging ANY PR:
+
+1. **Memories** — update the persistent memory (see *Claude Memory Upkeep*) to record what the
+   PR changed and what it means for project status. Every merged PR changes status by
+   definition, so this step always applies.
+2. **CLAUDE.md** — re-check the sections the change touches (architecture, modules, workflows,
+   commands, labels, principles); if the PR makes any statement in this file stale, fix it
+   **in the same PR**.
+
+A PR that skips these is incomplete — future agents inherit their entire context from these
+two places.
 
 **Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
 `build-and-test` job when the **PR description (body)** contains the literal
