@@ -530,6 +530,8 @@ fun ChatBubble(message: ChatMessage) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // Deliberate 12dp chat-bubble radius — between the small/medium
+                // shape tokens; revisit if DashShapes grows a chat variant (#406).
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .padding(12.dp)
@@ -558,9 +560,10 @@ fun ChatBubble(message: ChatMessage) {
 
                 Text(
                     text = timeString,
+                    // labelSmall already maps to the micro (10sp) token —
+                    // the explicit override duplicated it invisibly (#406).
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    fontSize = 10.sp
                 )
             }
 

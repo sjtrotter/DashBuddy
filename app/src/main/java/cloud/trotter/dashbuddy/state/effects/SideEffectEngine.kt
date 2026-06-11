@@ -264,32 +264,8 @@ class SideEffectEngine @Inject constructor(
 
             // --- TIMING LOGIC (Pure Coroutines) ---
 
-            is AppEffect.ScheduleTimeout -> {
-                // Cancel existing timer of this type
-                activeTimers[effect.type]?.cancel()
-
-                // LAZY start so the map entry exists before the body can run; the completion
-                // handler removes only ITSELF (two-arg remove), so an expiring timer can never
-                // untrack a replacement scheduled for the same type (#341). Detached onto the
-                // engine scope — never blocks the queue (#351).
-                val job = engineScope.launch(start = CoroutineStart.LAZY) {
-                    delay(effect.durationMs)
-                    Timber.w("Timer Expired: ${effect.type}")
-
-                    // Emit Timeout Event back to State Machine
-                    _events.emit(
-                        TimeoutEvent(
-                            timestamp = System.currentTimeMillis(),
-                            type = effect.type,
-                            platform = effect.platform,
-                            payload = effect.payload,
-                        )
-                    )
-                }
-                job.invokeOnCompletion { activeTimers.remove(effect.type, job) }
-                activeTimers[effect.type] = job
-                job.start()
-            }
+            is AppEffect.ScheduleTimeout ->
+                scheduleTimer(effect.type, effect.durationMs, effect.platform, effect.payload)
 
             is AppEffect.CancelTimeout -> {
                 // Untracking happens via the job's self-removing completion handler.
@@ -428,17 +404,32 @@ class SideEffectEngine @Inject constructor(
             return
         }
         val durationMs = args["durationMs"]?.toLongOrNull() ?: return
+        scheduleTimer(type, durationMs, platform, payload = null)
+    }
 
+    /**
+     * THE timer pattern (#406): LAZY start so the map entry exists before the
+     * body can run; the completion handler removes only ITSELF (two-arg
+     * remove), so an expiring timer can never untrack a replacement of the
+     * same type (#341). Detached onto the engine scope — never blocks the
+     * queue (#351). Previously hand-rolled twice in this file.
+     */
+    private fun scheduleTimer(
+        type: TimeoutType,
+        durationMs: Long,
+        platform: Platform?,
+        payload: ObservationPayload?,
+    ) {
         activeTimers[type]?.cancel()
-        // Same LAZY + self-removing pattern as AppEffect.ScheduleTimeout (#341).
         val job = engineScope.launch(start = CoroutineStart.LAZY) {
             delay(durationMs)
-            Timber.w("Timer Expired (rule): %s", type)
+            Timber.w("Timer Expired: %s", type)
             _events.emit(
                 TimeoutEvent(
                     timestamp = System.currentTimeMillis(),
                     type = type,
                     platform = platform,
+                    payload = payload,
                 )
             )
         }

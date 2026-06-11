@@ -3,12 +3,12 @@ package cloud.trotter.dashbuddy.core.data.log
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,7 +54,10 @@ class LogRepository @Inject constructor(
     private val rotationPrefix = "app_log_rotated_"
 
     // Format for log rotation: app_log_rotated_20260127_143000.log
-    private val logRotationFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+    // DateTimeFormatter (#406): thread-safe, consistent with DiskCaptureBus.
+    private val logRotationFormat = DateTimeFormatter
+        .ofPattern("yyyyMMdd_HHmmss", Locale.US)
+        .withZone(ZoneId.systemDefault())
 
     /**
      * Appends a pre-formatted line to the main log file.
@@ -69,7 +72,7 @@ class LogRepository @Inject constructor(
      */
     private fun rotateLogFile() {
         try {
-            val timestamp = logRotationFormat.format(Date())
+            val timestamp = logRotationFormat.format(Instant.now())
             val rotatedName = "${rotationPrefix}${timestamp}.log"
             val rotatedFile = File(logDir, rotatedName)
 
