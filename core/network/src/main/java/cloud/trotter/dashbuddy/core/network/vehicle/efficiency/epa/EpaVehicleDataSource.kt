@@ -58,7 +58,9 @@ class EpaVehicleDataSource @Inject constructor(
 
     private fun mapFuelType(epaString: String?): FuelType {
         if (epaString == null) return FuelType.REGULAR
-        val lower = epaString.lowercase(Locale.getDefault())
+        // Locale.ROOT (#405): EPA wire strings must not pass through the
+        // device locale (Turkish-I breaks every match).
+        val lower = epaString.lowercase(Locale.ROOT)
         return when {
             lower.contains("electricity") -> FuelType.ELECTRICITY
             lower.contains("premium") -> FuelType.PREMIUM

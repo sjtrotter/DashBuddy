@@ -19,6 +19,8 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object GasPriceApiModule {
+
+    private const val BASE_URL = "https://api.eia.gov/"
     @Provides
     @Singleton
     fun provideEiaApi(): EiaApi {
@@ -47,7 +49,7 @@ object GasPriceApiModule {
             .build()
 
         return Retrofit.Builder()
-            .baseUrl("https://api.eia.gov/")
+            .baseUrl(BASE_URL)
             .client(client)
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()

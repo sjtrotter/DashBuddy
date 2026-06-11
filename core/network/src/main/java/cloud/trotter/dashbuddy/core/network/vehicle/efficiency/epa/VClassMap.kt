@@ -22,7 +22,8 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
  */
 fun mapEpaVClass(raw: String?): VehicleClass? {
     if (raw.isNullOrBlank()) return null
-    val s = raw.lowercase()
+    // Locale.ROOT (#405): EPA wire string — same Turkish-I class.
+    val s = raw.lowercase(java.util.Locale.ROOT)
 
     return when {
         // Pickups before SUVs because some "pickup utility" strings contain both
