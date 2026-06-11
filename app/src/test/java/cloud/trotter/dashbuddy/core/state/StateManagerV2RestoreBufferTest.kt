@@ -81,7 +81,7 @@ class StateManagerV2RestoreBufferTest {
             stateMachine = StateMachine(
                 FlowRegionStepper(), PlatformRegionStepper(),
                 CrossPlatformRegionStepper(), TransitionPolicy(),
-                EffectMap(MetadataProvider { "{}" }),
+                EffectMap(),
             ),
             journal = ObservationJournal(FakeObservationDao()),
             snapshots = SnapshotStore(SlowSnapshotDao(delayMs = 100)),

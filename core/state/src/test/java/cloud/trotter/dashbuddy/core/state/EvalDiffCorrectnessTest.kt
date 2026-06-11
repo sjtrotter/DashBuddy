@@ -42,7 +42,7 @@ import org.junit.Test
 class EvalDiffCorrectnessTest {
 
     private val flowStepper = FlowRegionStepper()
-    private val effectMap = EffectMap(MetadataProvider { "{}" })
+    private val effectMap = EffectMap()
 
     private val machine = StateMachine(
         flowStepper = FlowRegionStepper(),
@@ -151,7 +151,7 @@ class EvalDiffCorrectnessTest {
         assertNull(transition.newState.regions.platforms.getValue(Platform.DoorDash).activeTask)
         val confirmed = transition.effects
             .filterIsInstance<AppEffect.LogEvent>()
-            .any { it.event.eventType == AppEventType.DELIVERY_CONFIRMED }
+            .any { it.event.type == AppEventType.DELIVERY_CONFIRMED }
         assertTrue("DELIVERY_CONFIRMED must be emitted for a timeout-committed retire", confirmed)
     }
 

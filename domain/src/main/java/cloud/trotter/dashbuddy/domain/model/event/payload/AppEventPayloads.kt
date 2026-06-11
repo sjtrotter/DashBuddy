@@ -20,6 +20,13 @@ import cloud.trotter.dashbuddy.domain.state.Flow
  */
 
 /**
+ * Marker for every typed app-event payload (#354). Lets the domain [
+ * cloud.trotter.dashbuddy.domain.model.event.AppEvent] carry its payload as a
+ * sealed type, and lets the codec dispatch exhaustively.
+ */
+sealed interface AppEventPayload
+
+/**
  * Payload for `OFFER_RECEIVED` — emitted when a new offer first appears on
  * screen. Lean by design: the offer's evaluation hasn't run yet at this
  * point (the EvaluateOffer side effect fires async), so only the parsed
@@ -33,7 +40,7 @@ data class OfferReceivedPayload(
     val presentedAt: Long,
     val platform: String,
     val returnFlow: Flow,
-)
+) : AppEventPayload
 
 /**
  * Payload for `OFFER_ACCEPTED` / `OFFER_DECLINED` / `OFFER_TIMEOUT`.
@@ -52,7 +59,7 @@ data class OfferPayload(
     val returnFlow: Flow,
     /** Optional context — e.g. "Replaced by new offer". */
     val description: String? = null,
-)
+) : AppEventPayload
 
 /**
  * Payload for `PICKUP_NAV_STARTED`, `PICKUP_ARRIVED`, `PICKUP_CONFIRMED`.
@@ -77,7 +84,7 @@ data class PickupPayload(
     val itemsShopped: Int? = null,
     val redCardTotal: Double? = null,
     val activity: String? = null,
-)
+) : AppEventPayload
 
 /**
  * Payload for `DELIVERY_NAV_STARTED`, `DELIVERY_ARRIVED`, `DELIVERY_COMPLETED`.
@@ -105,7 +112,7 @@ data class DeliveryPayload(
     val parsedPay: ParsedPay? = null,
     /** Session running total at the moment of completion. */
     val sessionEarningsAtCompletion: Double? = null,
-)
+) : AppEventPayload
 
 /** Payload for `DASH_START`. */
 @Serializable
@@ -116,7 +123,7 @@ data class SessionStartPayload(
     /** "interaction" (normal user start) | "recovery" (crash recovery). */
     val source: String,
     val startScreen: String,
-)
+) : AppEventPayload
 
 /**
  * Payload for `DASH_PAUSED`. The platform's reported pause countdown is
@@ -128,7 +135,7 @@ data class SessionPausedPayload(
     val pausedAt: Long,
     val remainingText: String? = null,
     val remainingMillis: Long? = null,
-)
+) : AppEventPayload
 
 /** Wire values for [SessionStopPayload.source]. Kept as strings on the payload
  *  (domain is gson-free); these are the single source of truth on the Kotlin side. */
@@ -158,4 +165,4 @@ data class SessionStopPayload(
     val offersAccepted: Int? = null,
     val offersTotal: Int? = null,
     val weeklyEarnings: Double? = null,
-)
+) : AppEventPayload

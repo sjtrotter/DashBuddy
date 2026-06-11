@@ -30,7 +30,7 @@ class TimeoutRoutingTest {
         platformStepper = PlatformRegionStepper(),
         crossPlatformStepper = CrossPlatformRegionStepper(),
         transitionPolicy = TransitionPolicy(),
-        effectMap = EffectMap(MetadataProvider { "{}" }),
+        effectMap = EffectMap(),
     )
 
     private fun pausedRegion() = PlatformRegion(

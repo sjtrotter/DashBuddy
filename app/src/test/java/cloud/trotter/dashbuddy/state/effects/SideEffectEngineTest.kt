@@ -4,11 +4,12 @@ import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
-import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.core.state.AppEffect
+import cloud.trotter.dashbuddy.core.state.MetadataProvider
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
@@ -71,15 +72,15 @@ class SideEffectEngineTest {
         uiInteractionHandler = uiInteractionHandler,
         effectsFiredDao = effectsFiredDao,
         ttsEffectHandler = ttsEffectHandler,
+        metadataProvider = MetadataProvider { "{}" },
         defaultDispatcher = defaultDispatcher,
     )
 
     private fun logEvent(type: AppEventType, occurredAt: Long) = AppEffect.LogEvent(
-        AppEventEntity(
-            aggregateId = "sess-1",
-            eventType = type,
-            eventPayload = "{}",
+        AppEvent(
+            type = type,
             occurredAt = occurredAt,
+            sessionId = "sess-1",
         )
     )
 
@@ -141,22 +142,37 @@ class SideEffectEngineTest {
     }
 
     @Test
-    fun `a keyed effect completes its durable work before markFired, with the real cv`() = runTest {
+    fun `LogEvent inserts and marks atomically through the repo with the real cv`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         val effect = logEvent(AppEventType.OFFER_RECEIVED, occurredAt = 1_000L)
 
         engine.process(effect, correlationVersion = 42L)
         runCurrent()
 
-        val ordered = inOrder(appEventRepo, effectsFiredDao)
-        runBlocking {
-            ordered.verify(appEventRepo).insert(effect.event)
-            ordered.verify(effectsFiredDao).markFired(any())
+        // Entity assembly + idempotency mark are the repo transaction's job (#354) —
+        // the engine passes the domain event, edge metadata, key, and the real cv.
+        verifyBlocking(appEventRepo) {
+            insertAndMark(eq(effect.event), eq("{}"), eq(effect.effectKey), eq(42L))
         }
+        // The generic markFired tail must NOT double-mark a LogEvent.
+        verifyBlocking(effectsFiredDao, never()) { markFired(any()) }
+    }
+
+    @Test
+    fun `a keyed non-LogEvent effect completes its durable work before markFired, with the real cv`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val effect = AppEffect.StartSession("sess-9", "DoorDash")
+
+        engine.process(effect, correlationVersion = 7L)
+        runCurrent()
+
+        val ordered = inOrder(bubbleManager, effectsFiredDao)
+        ordered.verify(bubbleManager).startSession("sess-9", "DoorDash")
+        runBlocking { ordered.verify(effectsFiredDao).markFired(any()) }
         val captor = argumentCaptor<EffectsFiredEntity>()
         verifyBlocking(effectsFiredDao) { markFired(captor.capture()) }
         assertEquals(effect.effectKey, captor.firstValue.effectKey)
-        assertEquals(42L, captor.firstValue.correlationVersion)
+        assertEquals(7L, captor.firstValue.correlationVersion)
     }
 
     @Test

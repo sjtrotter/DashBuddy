@@ -1,8 +1,9 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
@@ -35,7 +36,6 @@ import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.domain.util.formatCurrency
-import kotlinx.serialization.encodeToString
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,9 +49,7 @@ import javax.inject.Singleton
  * Cross-platform transitions → aggregate bookkeeping (currently none).
  */
 @Singleton
-class EffectMap @Inject constructor(
-    private val metadataProvider: MetadataProvider,
-) {
+class EffectMap @Inject constructor() {
 
     companion object {
         /**
@@ -124,7 +122,7 @@ class EffectMap @Inject constructor(
                 platform = platform,
                 returnFlow = nextOffer.returnFlow,
             )
-            add(logEffect(sessionId, AppEventType.OFFER_RECEIVED, receivedPayload))
+            add(logEffect(sessionId, AppEventType.OFFER_RECEIVED, obs.timestamp, receivedPayload))
 
             // Evaluate (the heads-up notification + spoken read fire later, once the async
             // evaluation lands on the pending offer — see the eval-landing block below).
@@ -139,7 +137,7 @@ class EffectMap @Inject constructor(
         ) {
             // Log resolution of old offer with full context.
             val outcome = resolveOfferOutcome(obs, prevOffer)
-            add(logEffect(sessionId, outcome, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
+            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
 
             // Evaluate the new offer (notification + spoken read fire on eval-landing below).
             val offer = nextOffer.offerFields
@@ -162,7 +160,7 @@ class EffectMap @Inject constructor(
         // Offer resolved (accepted/declined/timeout)
         if (prevOffer != null && nextOffer == null) {
             val outcome = resolveOfferOutcome(obs, prevOffer)
-            add(logEffect(sessionId, outcome, offerPayload(prevOffer, outcome, obs.timestamp)))
+            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp)))
 
             if (outcome == AppEventType.OFFER_TIMEOUT) {
                 add(AppEffect.UpdateBubble("Offer Timed Out!", persona = ChatPersona.Dispatcher))
@@ -242,7 +240,7 @@ class EffectMap @Inject constructor(
                             postTaskFields = p.lastPostTaskFields,
                             sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                         )
-                        add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, payload))
+                        add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, obs.timestamp, payload))
                     }
                 }
             }
@@ -287,6 +285,7 @@ class EffectMap @Inject constructor(
                             logEffect(
                                 sessionId,
                                 AppEventType.DASH_STOP,
+                                obs.timestamp,
                                 SessionStopPayload(
                                     sessionId = sessionId,
                                     endedAt = obs.timestamp,
@@ -307,6 +306,7 @@ class EffectMap @Inject constructor(
                             logEffect(
                                 sessionId,
                                 AppEventType.DASH_STOP,
+                                obs.timestamp,
                                 SessionStopPayload(
                                     sessionId = sessionId,
                                     endedAt = obs.timestamp,
@@ -335,7 +335,7 @@ class EffectMap @Inject constructor(
                             source = if (next.lastTransitionKind == TransitionKind.Unexpected) "recovery" else "interaction",
                             startScreen = "WaitingForOffer",
                         )
-                        add(logEffect(nextSession.sessionId, AppEventType.DASH_START, payload))
+                        add(logEffect(nextSession.sessionId, AppEventType.DASH_START, obs.timestamp, payload))
                         add(AppEffect.StartOdometer)
                         add(AppEffect.StartSession(nextSession.sessionId, next.platform.name))
                     } else if (nextSession != null && prevSession?.sessionId == nextSession.sessionId) {
@@ -387,7 +387,7 @@ class EffectMap @Inject constructor(
                             remainingText = pausedFields?.remainingText,
                             remainingMillis = pausedFields?.remainingMillis,
                         )
-                        add(logEffect(sessionId, AppEventType.DASH_PAUSED, pausePayload))
+                        add(logEffect(sessionId, AppEventType.DASH_PAUSED, obs.timestamp, pausePayload))
                         add(
                             AppEffect.ScheduleTimeout(
                                 durationMs,
@@ -437,7 +437,7 @@ class EffectMap @Inject constructor(
                 } else {
                     val storeName = nextTask.storeName ?: "Unknown"
                     val payload = pickupPayload(nextTask, storeName)
-                    add(logEffect(sessionId, AppEventType.PICKUP_NAV_STARTED, payload))
+                    add(logEffect(sessionId, AppEventType.PICKUP_NAV_STARTED, obs.timestamp, payload))
                     add(AppEffect.ResumeOdometer)
 
                     val persona = determinePickupPersona(
@@ -462,7 +462,7 @@ class EffectMap @Inject constructor(
                     task = prevTask,
                     phaseStartedAt = prevTask.startedAt,
                 )
-                add(logEffect(sessionId, AppEventType.DELIVERY_CONFIRMED, deliveryConfirmed))
+                add(logEffect(sessionId, AppEventType.DELIVERY_CONFIRMED, obs.timestamp, deliveryConfirmed))
             }
 
             // Task phase changed — pickup → dropoff (pickup confirmed)
@@ -479,8 +479,8 @@ class EffectMap @Inject constructor(
                     task = nextTask,
                     phaseStartedAt = obs.timestamp,
                 )
-                add(logEffect(sessionId, AppEventType.PICKUP_CONFIRMED, pickupConfirmed))
-                add(logEffect(sessionId, AppEventType.DELIVERY_NAV_STARTED, deliveryStart))
+                add(logEffect(sessionId, AppEventType.PICKUP_CONFIRMED, obs.timestamp, pickupConfirmed))
+                add(logEffect(sessionId, AppEventType.DELIVERY_NAV_STARTED, obs.timestamp, deliveryStart))
                 add(AppEffect.ResumeOdometer)
 
                 val customer = customerHash?.take(6) ?: "Customer"
@@ -500,7 +500,7 @@ class EffectMap @Inject constructor(
                     when (nextTask.phase) {
                         TaskPhase.PICKUP -> add(
                             logEffect(
-                                sessionId, AppEventType.PICKUP_ARRIVED,
+                                sessionId, AppEventType.PICKUP_ARRIVED, obs.timestamp,
                                 pickupPayload(
                                     task = nextTask,
                                     storeName = nextTask.storeName ?: "Unknown",
@@ -509,7 +509,7 @@ class EffectMap @Inject constructor(
                         )
                         TaskPhase.DROPOFF -> add(
                             logEffect(
-                                sessionId, AppEventType.DELIVERY_ARRIVED,
+                                sessionId, AppEventType.DELIVERY_ARRIVED, obs.timestamp,
                                 deliveryPhasePayload(
                                     task = nextTask,
                                     phaseStartedAt = nextTask.startedAt,
@@ -550,7 +550,7 @@ class EffectMap @Inject constructor(
                     val storeName = nextTask.storeName ?: "Unknown"
                     add(
                         logEffect(
-                            sessionId, AppEventType.PICKUP_NAV_STARTED,
+                            sessionId, AppEventType.PICKUP_NAV_STARTED, obs.timestamp,
                             pickupPayload(nextTask, storeName),
                         )
                     )
@@ -840,21 +840,22 @@ class EffectMap @Inject constructor(
         }
     }
 
-    // Inline + reified so kotlinx can resolve each payload's serializer statically (#353);
-    // every call site passes a concrete payload type (or a pre-serialized String).
-    private inline fun <reified T : Any> logEffect(dashId: String?, type: AppEventType, payload: T): AppEffect {
-        val payloadStr = payload as? String ?: StateJson.encodeToString(payload)
-        val metadataJson = metadataProvider.createMetadata()
-        return AppEffect.LogEvent(
-            AppEventEntity(
-                aggregateId = dashId,
-                eventType = type,
-                eventPayload = payloadStr,
-                occurredAt = System.currentTimeMillis(),
-                metadata = metadataJson,
-            )
+    // Pure domain emission (#354): payload encoding + device metadata happen at the
+    // executor edge. occurredAt is the OBSERVATION timestamp, so the LogEvent's
+    // idempotency key is identical between live execution and recovery replay (#300).
+    private fun logEffect(
+        sessionId: String?,
+        type: AppEventType,
+        occurredAt: Long,
+        payload: AppEventPayload?,
+    ): AppEffect = AppEffect.LogEvent(
+        AppEvent(
+            type = type,
+            occurredAt = occurredAt,
+            sessionId = sessionId,
+            payload = payload,
         )
-    }
+    )
 
     // =========================================================================
     // PAYLOAD BUILDERS

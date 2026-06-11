@@ -37,6 +37,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.hilt.android)
     implementation(libs.timber)
+    // Room types surface here because AppEventRepo owns the insert+mark
+    // transaction boundary (withTransaction needs RoomDatabase, #354).
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
 
     implementation(project(":core:database"))
     implementation(project(":core:datastore"))

@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
+import cloud.trotter.dashbuddy.core.state.MetadataProvider
 import cloud.trotter.dashbuddy.core.state.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
@@ -52,6 +53,7 @@ class SideEffectEngine @Inject constructor(
     private val uiInteractionHandler: UiInteractionHandler,
     private val effectsFiredDao: EffectsFiredDao,
     private val ttsEffectHandler: TtsEffectHandler,
+    private val metadataProvider: MetadataProvider,
     @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
 ) : EffectExecutor {
 
@@ -150,10 +152,18 @@ class SideEffectEngine @Inject constructor(
         when (effect) {
             // --- FIRE & FORGET (UI / IO) ---
             is AppEffect.LogEvent -> {
-                // Inline in the worker (#351): the insert completes before the
-                // markFired tail below runs, and before any later effect executes —
-                // event-log rows land in EffectMap emission order.
-                appEventRepo.insert(effect.event)
+                // Inline in the worker (#351) so rows land in EffectMap emission
+                // order. Entity assembly (payload encoding) + the device-state
+                // metadata snapshot happen here at the edge (#354/#119), and the
+                // event insert + its idempotency mark commit in ONE transaction —
+                // the last crash seam between "did" and "recorded as did" closes.
+                appEventRepo.insertAndMark(
+                    event = effect.event,
+                    metadataJson = metadataProvider.createMetadata(),
+                    effectKey = effect.effectKey,
+                    correlationVersion = correlationVersion,
+                )
+                return // marked inside the transaction — skip the markFired tail
             }
 
             is AppEffect.UpdateBubble -> {
@@ -267,7 +277,7 @@ class SideEffectEngine @Inject constructor(
         // "Execute, then mark" (#351): the effect's durable work above completed in this
         // worker before the idempotency record is written, so recovery can neither skip
         // an unfinished effect nor double-run a finished one beyond this single seam.
-        // (Atomic insert+mark in one Room transaction lands with #354's repo rework.)
+        // (LogEvent never reaches here — its insert+mark commit atomically, #354.)
         if (key != null) {
             effectsFiredDao.markFired(
                 EffectsFiredEntity(

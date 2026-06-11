@@ -1,11 +1,11 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
@@ -20,9 +20,14 @@ sealed class AppEffect {
      */
     open val effectKey: String? get() = null
 
-    // 1. Log to Database (The Core of Event Sourcing)
-    data class LogEvent(val event: AppEventEntity) : AppEffect() {
-        override val effectKey: String get() = "log:${event.eventType}:${event.occurredAt}"
+    /**
+     * Log a domain [AppEvent] (the core of event sourcing). Entity assembly —
+     * payload encoding + device metadata — happens at the executor edge (#354/#119);
+     * the state layer emits pure domain data. `occurredAt` is observation-derived,
+     * so this key is identical between live execution and recovery replay (#300).
+     */
+    data class LogEvent(val event: AppEvent) : AppEffect() {
+        override val effectKey: String get() = "log:${event.type}:${event.occurredAt}"
     }
 
     // 2. Update UI (The Bubble)
