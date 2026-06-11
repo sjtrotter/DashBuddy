@@ -35,7 +35,6 @@ import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -286,11 +285,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             val now by rememberNow()
             val secsLeft = ((expiresAt - now) / 1000f).coerceAtLeast(0f)
             val frac = (secsLeft / countdownSeconds).coerceIn(0f, 1f)
-            val barColor = when {
-                frac > 0.45f -> c.good
-                frac > 0.2f -> c.warn
-                else -> c.bad
-            }
+            val barColor = offerExpiryColor(frac.toDouble(), c)
             Box(
                 Modifier.fillMaxWidth().height(4.dp)
                     .clip(RoundedCornerShape(2.dp)).background(c.line),
@@ -414,11 +409,7 @@ private fun OfferCountdownText(expiresAt: Long, countdownSeconds: Int) {
     val now by rememberNow()
     val secsLeft = ((expiresAt - now) / 1000.0).coerceAtLeast(0.0)
     val frac = if (countdownSeconds > 0) (secsLeft / countdownSeconds).coerceIn(0.0, 1.0) else 0.0
-    val col = when {
-        frac > 0.45 -> c.good
-        frac > 0.2 -> c.warn
-        else -> c.bad
-    }
+    val col = offerExpiryColor(frac, c)
     Text(
         text = formatCountdown((secsLeft * 1000).toLong()),
         style = DashTheme.num.smNum,
@@ -717,6 +708,13 @@ private fun deadlineColor(remainingMs: Long): Color {
 // ---------------------------------------------------------------------------
 // Time helpers — the shared kit lives in :core:designsystem (#358)
 // ---------------------------------------------------------------------------
+
+/** THE offer-expiry color tiers (#406) — previously written twice in this file. */
+private fun offerExpiryColor(frac: Double, c: DashColors): Color = when {
+    frac > 0.45 -> c.good
+    frac > 0.2 -> c.warn
+    else -> c.bad
+}
 
 @Composable
 private fun formatTime(millis: Long): String = rememberTimeFormatter().invoke(millis)

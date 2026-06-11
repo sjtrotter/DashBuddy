@@ -134,7 +134,7 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         // Update session/job/task lifecycle based on flow changes
-        return updateLifecycle(afterMode, prevFlow, nextFlow, flowObs)
+        return updateLifecycle(afterMode, prevFlow, nextFlow, flowObs, policy)
     }
 
     // =========================================================================
@@ -271,6 +271,7 @@ class PlatformRegionStepper @Inject constructor() {
         prevFlow: FlowRegion,
         nextFlow: FlowRegion,
         obs: Observation.FlowObservation,
+        policy: TransitionPolicy,
     ): PlatformRegion {
         // Authoritative session end: a session:ended observation (the dash
         // summary) ends the session immediately, even when already Offline — the
@@ -316,7 +317,7 @@ class PlatformRegionStepper @Inject constructor() {
         r = updateJobLifecycle(r, prev, next, prevFlow, nextFlow, obs)
 
         // Task lifecycle
-        r = updateTaskLifecycle(r, prev, next, obs)
+        r = updateTaskLifecycle(r, prev, next, obs, policy)
 
         // Idle anchor: track when we started waiting for offers
         r = when {
@@ -469,7 +470,7 @@ class PlatformRegionStepper @Inject constructor() {
         // Post-task: keep job alive through PostTask for payout capture
         // Job ends when we leave PostTask for non-task flow
         if (prevFlowVal == Flow.PostTask && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask && nextFlowVal != Flow.OfferPresented) {
-            return completeActiveJob(region, obs)
+            return completeActiveJob(region)
         }
 
         return region
@@ -480,6 +481,7 @@ class PlatformRegionStepper @Inject constructor() {
         prevFlowVal: Flow,
         nextFlowVal: Flow,
         obs: Observation.FlowObservation,
+        policy: TransitionPolicy,
     ): PlatformRegion {
         val parsed = obs.parsed
 
@@ -605,7 +607,8 @@ class PlatformRegionStepper @Inject constructor() {
                     pendingDestructive = PendingDestructive(
                         kind = DestructiveKind.TASK_RETIRE,
                         since = obs.timestamp,
-                        deadline = obs.timestamp + TransitionPolicy.DEFAULT_GRACE_MS,
+                        // Through the injected policy (#406): the static constant ignored overrides.
+                        deadline = obs.timestamp + policy.gracePeriodMs,
                     ),
                 )
             }
@@ -662,7 +665,7 @@ class PlatformRegionStepper @Inject constructor() {
         )
     }
 
-    private fun completeActiveJob(region: PlatformRegion, obs: Observation): PlatformRegion {
+    private fun completeActiveJob(region: PlatformRegion): PlatformRegion {
         val job = region.activeJob ?: return region
         return region.copy(
             activeJob = null,

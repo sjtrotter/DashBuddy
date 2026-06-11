@@ -4,7 +4,6 @@ import cloud.trotter.dashbuddy.core.datastore.odometer.OdometerLocalDataSource
 import cloud.trotter.dashbuddy.core.location.LocationDataSource
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
