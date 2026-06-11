@@ -4,12 +4,13 @@ import kotlinx.serialization.Serializable
 
 /**
  * A point-in-time snapshot of the dasher's performance metrics, captured when the Ratings
- * screen is observed. Stored on [AppStateV2.IdleOffline] so the bubble HUD can display it
+ * screen is observed. Carried in app state so the bubble HUD can display it
  * on the idle card without re-observing the ratings screen.
  */
 @Serializable
 data class RatingsSnapshot(
-    val capturedAt: Long = System.currentTimeMillis(),
+    /** Explicit (#366): callers stamp the capture instant at the edge. */
+    val capturedAt: Long,
     val acceptanceRate: Double? = null,
     val completionRate: Double? = null,
     val onTimeRate: Double? = null,

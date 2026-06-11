@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.darkDashColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 
 /**
  * Formatted offer summary for the heads-up notification. Built with **Android** text spans — the
@@ -62,4 +63,25 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
                 merchantName,
         )
     }
+}
+
+
+/** UI label for a typed [OfferQuality] (#366) — display copy stays out of :domain. */
+fun OfferQuality.displayLabel(): String = when (this) {
+    OfferQuality.AWESOME -> "AWESOME OFFER"
+    OfferQuality.GREAT -> "GREAT OFFER"
+    OfferQuality.GOOD -> "GOOD OFFER"
+    OfferQuality.DECENT -> "DECENT OFFER"
+    OfferQuality.BAD -> "BAD OFFER"
+    OfferQuality.PROTECTED -> "Protected!"
+    OfferQuality.BLOCKED -> "Blocked"
+    OfferQuality.UNKNOWN -> "No verdict"
+}
+
+/** UI recommendation line derived from the typed [OfferAction] (#366). */
+fun OfferAction.recommendationLabel(): String = when (this) {
+    OfferAction.ACCEPT -> "Recommended: ACCEPT"
+    OfferAction.DECLINE -> "Recommended: DECLINE"
+    OfferAction.MANUAL_REVIEW -> "Recommended: REVIEW"
+    else -> "Recommended: DECIDE"
 }

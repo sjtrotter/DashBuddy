@@ -7,8 +7,7 @@ import kotlinx.serialization.Serializable
 data class OfferEvaluation(
     val action: OfferAction,
     val score: Double,
-    val qualityLevel: String,
-    val recommendationText: String,
+    val qualityLevel: OfferQuality,
     /** Gross pay as shown on the offer screen. */
     val payAmount: Double,
     /** Estimated fuel cost for this offer's route. Zero for non-fuel vehicle classes. */

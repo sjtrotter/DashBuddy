@@ -29,6 +29,7 @@ import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 
 /**
  * #353 — the Gson→kotlinx.serialization migration's safety net.
@@ -114,8 +115,7 @@ class SerializationRoundTripTest {
     @Test
     fun `a fully-populated AppState snapshot round-trips losslessly`() {
         val evaluation = OfferEvaluation(
-            action = OfferAction.ACCEPT, score = 74.0, qualityLevel = "Good",
-            recommendationText = "Recommended: ACCEPT", payAmount = 7.50,
+            action = OfferAction.ACCEPT, score = 74.0, qualityLevel = OfferQuality.GOOD, payAmount = 7.50,
             fuelCostEstimate = 0.5, netPayAmount = 6.50, distanceMiles = 3.2,
             dollarsPerMile = 2.03, dollarsPerHour = 22.0, estimatedTimeMinutes = 18.0,
             itemCount = 3.0, merchantName = "HEB", warnings = listOf("target high"),

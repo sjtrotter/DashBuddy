@@ -19,40 +19,28 @@ class EpaVehicleDataSource @Inject constructor(
     private val api: EpaApi
 ) : VehicleEfficiencyDataSource {
 
-    override suspend fun getYears(): List<String> = try {
+    override suspend fun getYears(): Result<List<String>> = runCatching {
         api.getYears().menuItem.map { it.text }.sortedDescending()
-    } catch (e: Exception) {
-        Timber.e(e, "Failed to fetch vehicle years")
-        emptyList()
-    }
+    }.onFailure { Timber.e(it, "Failed to fetch vehicle years") }
 
-    override suspend fun getMakes(year: String): List<String> = try {
+    override suspend fun getMakes(year: String): Result<List<String>> = runCatching {
         api.getMakes(year = year).menuItem.map { it.text }.sorted()
-    } catch (e: Exception) {
-        Timber.e(e, "Failed to fetch vehicle makes for year: $year")
-        emptyList()
-    }
+    }.onFailure { Timber.e(it, "Failed to fetch vehicle makes for year: $year") }
 
-    override suspend fun getModels(year: String, make: String): List<String> = try {
+    override suspend fun getModels(year: String, make: String): Result<List<String>> = runCatching {
         api.getModels(year = year, make = make).menuItem.map { it.text }.sorted()
-    } catch (e: Exception) {
-        Timber.e(e, "Failed to fetch vehicle models for $year $make")
-        emptyList()
-    }
+    }.onFailure { Timber.e(it, "Failed to fetch vehicle models for $year $make") }
 
     override suspend fun getVehicleOptions(
         year: String,
         make: String,
         model: String
-    ): List<VehicleOption> = try {
+    ): Result<List<VehicleOption>> = runCatching {
         api.getVehicleOptions(year = year, make = make, model = model).menuItem
             .map { VehicleOption(id = it.value, displayName = it.text) }
-    } catch (e: Exception) {
-        Timber.e(e, "Failed to fetch vehicle options for $year $make $model")
-        emptyList()
-    }
+    }.onFailure { Timber.e(it, "Failed to fetch vehicle options for $year $make $model") }
 
-    override suspend fun getVehicleDetails(vehicleId: String): VehicleDetails? = try {
+    override suspend fun getVehicleDetails(vehicleId: String): Result<VehicleDetails> = runCatching {
         val response = api.getVehicleDetails(vehicleId = vehicleId)
         val fuel = mapFuelType(response.fuelType1)
         // EVs are detected via fuel type; otherwise infer class from EPA VClass.
@@ -66,10 +54,7 @@ class EpaVehicleDataSource @Inject constructor(
             fuelType = fuel,
             vehicleClass = vClass,
         )
-    } catch (e: Exception) {
-        Timber.e(e, "Failed to fetch vehicle details for ID $vehicleId")
-        null
-    }
+    }.onFailure { Timber.e(it, "Failed to fetch vehicle details for ID $vehicleId") }
 
     private fun mapFuelType(epaString: String?): FuelType {
         if (epaString == null) return FuelType.REGULAR

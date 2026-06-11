@@ -14,7 +14,7 @@ object PickupActivity {
 
 /**
  * Typed parsed data produced by rules and consumed by the state machine.
- * Each subtype corresponds to a [Flow] family — the [FieldsFactory]
+ * Each subtype corresponds to a [Flow] family — ParsedFieldsFactory (:core:pipeline)
  * validates that rule output conforms to the contract at load time.
  *
  * All subtypes carry an optional [activity] tag for platform-specific
@@ -215,8 +215,8 @@ sealed class ParsedFields {
         val nodeId: String? = null,
         val nodeText: String? = null,
     ) : ParsedFields() {
-        // Every click is unique — always passes dedup.
-        override fun dedupeHash(): Int = System.nanoTime().hashCode()
+        // Every click is unique — identity() returns null for ClickFields
+        // observations (#366), an explicit never-dedupe signal.
     }
 
     @Serializable

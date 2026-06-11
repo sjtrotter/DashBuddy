@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.domain.pipeline
 
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
 
 /**
  * Semantic identity of an observation for post-classification dedup.
@@ -25,11 +26,17 @@ data class ObservationIdentity(
  * ensures that a screen whose UI changes between online/offline states
  * is not suppressed as a duplicate.
  */
-fun Observation.identity(): ObservationIdentity = when (this) {
+/**
+ * Null = never dedup (#366): clicks with parsed ClickFields are always unique —
+ * previously expressed as a nanoTime-salted hash, now an explicit signal.
+ */
+fun Observation.identity(): ObservationIdentity? = when (this) {
     is Observation.Screen -> ObservationIdentity("screen", target, parsed.dedupeHash(), modeHint)
-    is Observation.Click -> ObservationIdentity("click", target, parsed.dedupeHash(), modeHint)
+    is Observation.Click ->
+        if (parsed is ParsedFields.ClickFields) null
+        else ObservationIdentity("click", target, parsed.dedupeHash(), modeHint)
     is Observation.Notification -> ObservationIdentity("notification", target, parsed.dedupeHash(), modeHint)
     is Observation.Timeout -> ObservationIdentity("timeout", type.name, 0)
-    is Observation.UiInput -> ObservationIdentity("ui_input", action, payload.hashCode())
+    is Observation.UiInput -> ObservationIdentity("ui_input", action, 0)
     is Observation.Loopback -> ObservationIdentity("loopback", effect, payload.hashCode())
 }

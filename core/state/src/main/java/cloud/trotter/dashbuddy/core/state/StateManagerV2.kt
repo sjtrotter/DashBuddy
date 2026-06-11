@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
 @Singleton
 class StateManagerV2 @Inject constructor(
@@ -173,12 +174,12 @@ class StateManagerV2 @Inject constructor(
             )
 
             is OfferEvaluationEvent -> Observation.Loopback(
-                timestamp = System.currentTimeMillis(),
+                timestamp = event.timestamp,
                 effect = "offer_evaluated",
-                payload = mapOf(
-                    "action" to event.action.name,
-                    "evaluation" to event.evaluation,
-                    "offerHash" to event.offerHash,
+                payload = ObservationPayload.EvaluationResult(
+                    action = event.action.name,
+                    offerHash = event.offerHash,
+                    evaluation = event.evaluation,
                 ),
             )
 

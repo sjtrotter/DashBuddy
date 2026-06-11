@@ -51,6 +51,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.DashColors
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.ui.formatters.displayLabel
 
 /**
  * A single flow-phase card in the bubble HUD stack (#257).
@@ -371,11 +372,8 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                             fontWeight = FontWeight.ExtraBold,
                             color = vColor,
                         )
-                        snap.recommendationText?.let {
-                            Text(it, style = MaterialTheme.typography.bodySmall, color = c.text2, maxLines = 2)
-                        }
                     }
-                    snap.qualityLevel?.let { DashChip(it, color = c.text3, container = c.surface3) }
+                    snap.qualityLevel?.let { DashChip(it.displayLabel(), color = c.text3, container = c.surface3) }
                 }
             }
         }

@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
 /**
  * Region 0 stepper — ground-truth screen interpretation.
@@ -130,13 +131,14 @@ class FlowRegionStepper @Inject constructor() {
         val offer = prev.pendingOffer ?: return prev
         if (obs.effect != "offer_evaluated") return prev
 
-        val evaluation = obs.payload["evaluation"] as? OfferEvaluation
+        val result = obs.payload as? ObservationPayload.EvaluationResult
+        val evaluation = result?.evaluation
             ?: return prev.copy(lastObservedAt = obs.timestamp)
 
         // Correlate by hash: an evaluation computed for a since-replaced offer must not
         // land on the current one (the notification/TTS would speak the wrong economics,
         // #345). A null hash (legacy replayed stubs) is accepted as-before.
-        val evalHash = obs.payload["offerHash"] as? String
+        val evalHash = result.offerHash
         if (evalHash != null && evalHash != offer.offerHash) {
             return prev.copy(lastObservedAt = obs.timestamp)
         }

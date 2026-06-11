@@ -97,7 +97,6 @@ object FlowCardMapper {
                             dollarsPerMile = payload.evaluation?.dollarsPerMile,
                             dollarsPerHour = payload.evaluation?.dollarsPerHour,
                             qualityLevel = payload.evaluation?.qualityLevel,
-                            recommendationText = payload.evaluation?.recommendationText,
                             badges = (payload.parsedOffer.badges.map { it.name } +
                                 payload.parsedOffer.orders.flatMap { it.badges }.map { it.name }).distinct(),
                             outcome = payload.outcome,

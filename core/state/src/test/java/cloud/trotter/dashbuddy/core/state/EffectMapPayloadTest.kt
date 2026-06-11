@@ -36,6 +36,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 
 /**
  * Verifies that EffectMap.diff() emits rich JSON payloads at every
@@ -88,8 +89,7 @@ class EffectMapPayloadTest {
     private fun evaluation(score: Double = 75.0, netPay: Double = 6.50) = OfferEvaluation(
         action = OfferAction.ACCEPT,
         score = score,
-        qualityLevel = "Good",
-        recommendationText = "Recommended: ACCEPT",
+        qualityLevel = OfferQuality.GOOD,
         payAmount = 7.50,
         fuelCostEstimate = 0.5,
         nonFuelCostEstimate = 0.5,

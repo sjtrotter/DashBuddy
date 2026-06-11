@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import java.util.Locale
+import cloud.trotter.dashbuddy.ui.formatters.recommendationLabel
 
 @Composable
 fun FakeOfferCard(
@@ -71,7 +72,7 @@ fun FakeOfferCard(
             ) {
                 // --- Recommendation + Score ---
                 Text(
-                    text = "${evaluation.recommendationText}  ·  ${evaluation.score.toInt()}pts",
+                    text = "${evaluation.action.recommendationLabel()}  ·  ${evaluation.score.toInt()}pts",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = borderColor

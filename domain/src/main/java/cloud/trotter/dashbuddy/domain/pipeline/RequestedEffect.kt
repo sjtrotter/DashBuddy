@@ -38,6 +38,7 @@ data class RequestedEffect(
  * class name, structural path) so the executor can reliably find the
  * node even on screens where some identifiers are absent.
  */
+@kotlinx.serialization.Serializable
 data class NodeRef(
     val viewIdSuffix: String?,
     val text: String?,

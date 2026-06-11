@@ -52,7 +52,6 @@ object LiveCardBuilder {
                     dollarsPerMile = pending.evaluation?.dollarsPerMile,
                     dollarsPerHour = pending.evaluation?.dollarsPerHour,
                     qualityLevel = pending.evaluation?.qualityLevel,
-                    recommendationText = pending.evaluation?.recommendationText,
                     badges = (offer.badges.map { it.name } +
                         offer.orders.flatMap { it.badges }.map { it.name }).distinct(),
                     expiresAt = offer.initialCountdownSeconds?.let { pending.presentedAt + it * 1000L },

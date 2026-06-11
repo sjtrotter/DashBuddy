@@ -11,10 +11,9 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
-import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
-import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
@@ -38,6 +37,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
 /**
  * Replaces 9 reducers + 8 factories. Diffs each region before/after
@@ -331,7 +331,11 @@ class EffectMap @Inject constructor() {
                             sessionId = nextSession.sessionId,
                             platform = next.platform.name,
                             startedAt = nextSession.startedAt,
-                            source = if (next.lastTransitionKind == TransitionKind.Unexpected) "recovery" else "interaction",
+                            source = if (next.lastTransitionKind == TransitionKind.Unexpected) {
+                                SessionStartSource.RECOVERY
+                            } else {
+                                SessionStartSource.INTERACTION
+                            },
                             startScreen = "WaitingForOffer",
                         )
                         add(logEffect(nextSession.sessionId, AppEventType.DASH_START, obs.timestamp, payload))
@@ -688,7 +692,7 @@ class EffectMap @Inject constructor() {
                         durationMs = effect.delayMs!!,
                         type = TimeoutType.SETTLE_UI,
                         platform = flowObs.platform.takeIf { it != Platform.Unknown },
-                        payload = serializeClickContext(effect),
+                        payload = deferredClickPayload(effect),
                     )
                 } else {
                     AppEffect.RequestEffect(effect)
@@ -703,63 +707,32 @@ class EffectMap @Inject constructor() {
     private fun diffSettleUiTimeout(obs: Observation): List<AppEffect> {
         val timeout = obs as? Observation.Timeout ?: return emptyList()
         if (timeout.type != TimeoutType.SETTLE_UI) return emptyList()
-        val verb = (timeout.payload["verb"] as? String)
-            ?.let { runCatching { EffectVerb.valueOf(it) }.getOrNull() }
-            ?: return emptyList()
+        // Typed payload (#366) — the old per-key Map round-trip is gone.
+        val click = timeout.payload as? ObservationPayload.DeferredClick ?: return emptyList()
+        val verb = runCatching { EffectVerb.valueOf(click.verb) }.getOrNull() ?: return emptyList()
         if (verb != EffectVerb.CLICK) return emptyList()
-        val ruleId = timeout.payload["ruleId"] as? String ?: return emptyList()
-        val targetRef = deserializeNodeRef(timeout.payload) ?: return emptyList()
+        val targetRef = click.target ?: return emptyList()
         val effect = RequestedEffect(
             verb = verb,
             args = emptyMap(),
             targetRef = targetRef,
             onlyIf = null,
-            dedupeKey = timeout.payload["dedupeKey"] as? String,
-            throttleMs = (timeout.payload["throttleMs"] as? Number)?.toLong(),
+            dedupeKey = click.dedupeKey,
+            throttleMs = click.throttleMs,
             delayMs = null,  // immediate fire this time
-            ruleId = ruleId,
+            ruleId = click.ruleId,
         )
         return listOf(AppEffect.RequestEffect(effect))
     }
 
-    private fun serializeClickContext(effect: RequestedEffect): Map<String, Any?> {
-        val ref = effect.targetRef
-        val map = mutableMapOf<String, Any?>(
-            "verb" to effect.verb.name,
-            "ruleId" to effect.ruleId,
+    private fun deferredClickPayload(effect: RequestedEffect): ObservationPayload.DeferredClick =
+        ObservationPayload.DeferredClick(
+            verb = effect.verb.name,
+            ruleId = effect.ruleId,
+            dedupeKey = effect.dedupeKey,
+            throttleMs = effect.throttleMs,
+            target = effect.targetRef,
         )
-        if (effect.dedupeKey != null) map["dedupeKey"] = effect.dedupeKey
-        if (effect.throttleMs != null) map["throttleMs"] = effect.throttleMs
-        if (ref != null) {
-            map["target.viewIdSuffix"] = ref.viewIdSuffix
-            map["target.text"] = ref.text
-            map["target.classNameHint"] = ref.classNameHint
-            map["target.pathFingerprint"] = ref.pathFingerprint
-            map["target.bounds.left"] = ref.boundsInScreen.left
-            map["target.bounds.top"] = ref.boundsInScreen.top
-            map["target.bounds.right"] = ref.boundsInScreen.right
-            map["target.bounds.bottom"] = ref.boundsInScreen.bottom
-        }
-        return map
-    }
-
-    private fun deserializeNodeRef(payload: Map<String, Any?>): NodeRef? {
-        val pathFingerprint = payload["target.pathFingerprint"] as? String ?: return null
-        val viewIdSuffix = payload["target.viewIdSuffix"] as? String
-        val text = payload["target.text"] as? String
-        val classNameHint = payload["target.classNameHint"] as? String
-        val left = (payload["target.bounds.left"] as? Number)?.toInt() ?: 0
-        val top = (payload["target.bounds.top"] as? Number)?.toInt() ?: 0
-        val right = (payload["target.bounds.right"] as? Number)?.toInt() ?: 0
-        val bottom = (payload["target.bounds.bottom"] as? Number)?.toInt() ?: 0
-        return NodeRef(
-            viewIdSuffix = viewIdSuffix,
-            text = text,
-            classNameHint = classNameHint,
-            boundsInScreen = BoundingBox(left, top, right, bottom),
-            pathFingerprint = pathFingerprint,
-        )
-    }
 
     private fun evaluateGate(gate: ParsedFieldsGate?, parsed: ParsedFields): Boolean {
         if (gate == null) return true
