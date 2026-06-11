@@ -31,7 +31,7 @@ import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
-import com.google.gson.Gson
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -46,7 +46,9 @@ import org.junit.Test
  */
 class EffectMapPayloadTest {
 
-    private val gson = Gson()
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private inline fun <reified T> decode(s: String): T = json.decodeFromString(s)
     private val metadataProvider = MetadataProvider { "{}" }
     private val effectMap = EffectMap(metadataProvider)
 
@@ -175,7 +177,7 @@ class EffectMapPayloadTest {
         // getEventsForDash(dashId) query sees it.
         assertEquals("dash-7", logs[0].event.aggregateId)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, OfferReceivedPayload::class.java)
+        val payload = decode<OfferReceivedPayload>(logs[0].event.eventPayload)
         assertEquals("new-1", payload.offerHash)
         assertEquals(1234L, payload.presentedAt)
         assertEquals("DoorDash", payload.platform)
@@ -217,7 +219,7 @@ class EffectMapPayloadTest {
         // to the bubble HUD's flow-card stack (#257).
         assertEquals("dash-42", logs[0].event.aggregateId)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, OfferPayload::class.java)
+        val payload = decode<OfferPayload>(logs[0].event.eventPayload)
         assertEquals("abc", payload.offerHash)
         assertEquals(7.50, payload.parsedOffer.payAmount!!, 0.001)
         assertEquals(4.2, payload.parsedOffer.distanceMiles!!, 0.001)
@@ -246,7 +248,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, click, AppEventType.OFFER_DECLINED)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, OfferPayload::class.java)
+        val payload = decode<OfferPayload>(logs[0].event.eventPayload)
         assertEquals("xyz", payload.offerHash)
         assertEquals(AppEventType.OFFER_DECLINED, payload.outcome)
     }
@@ -262,7 +264,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.OFFER_TIMEOUT)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, OfferPayload::class.java)
+        val payload = decode<OfferPayload>(logs[0].event.eventPayload)
         assertEquals("to1", payload.offerHash)
         assertEquals(AppEventType.OFFER_TIMEOUT, payload.outcome)
     }
@@ -301,7 +303,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.PICKUP_NAV_STARTED)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, PickupPayload::class.java)
+        val payload = decode<PickupPayload>(logs[0].event.eventPayload)
         assertEquals("T1", payload.taskId)
         assertEquals("J1", payload.jobId)
         assertEquals("Wendy's", payload.storeName)
@@ -335,7 +337,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.PICKUP_ARRIVED)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, PickupPayload::class.java)
+        val payload = decode<PickupPayload>(logs[0].event.eventPayload)
         assertEquals("T2", payload.taskId)
         assertEquals("Wendy's", payload.storeName)
         assertEquals(1800L, payload.arrivedAt)
@@ -381,11 +383,11 @@ class EffectMapPayloadTest {
         assertNotNull("PICKUP_CONFIRMED missing", confirmed)
         assertNotNull("DELIVERY_NAV_STARTED missing", delivery)
 
-        val pickupPayload = gson.fromJson(confirmed!!.event.eventPayload, PickupPayload::class.java)
+        val pickupPayload = decode<PickupPayload>(confirmed!!.event.eventPayload)
         assertEquals("T3", pickupPayload.taskId)
         assertEquals(2000L, pickupPayload.confirmedAt)
 
-        val deliveryPayload = gson.fromJson(delivery!!.event.eventPayload, DeliveryPayload::class.java)
+        val deliveryPayload = decode<DeliveryPayload>(delivery!!.event.eventPayload)
         assertEquals("T4", deliveryPayload.taskId)
         assertEquals("cust-abc", deliveryPayload.customerHash)
         assertEquals(2000L, deliveryPayload.phaseStartedAt)
@@ -424,7 +426,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.DELIVERY_ARRIVED)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, DeliveryPayload::class.java)
+        val payload = decode<DeliveryPayload>(logs[0].event.eventPayload)
         assertEquals("T5", payload.taskId)
         assertEquals("cust-xyz", payload.customerHash)
         assertEquals(2500L, payload.arrivedAt)
@@ -468,7 +470,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.DELIVERY_COMPLETED)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, DeliveryPayload::class.java)
+        val payload = decode<DeliveryPayload>(logs[0].event.eventPayload)
         assertEquals("T6", payload.taskId)
         assertEquals(7.50, payload.totalPay!!, 0.001)
         assertNotNull(payload.parsedPay)
@@ -496,7 +498,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.DASH_START)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, SessionStartPayload::class.java)
+        val payload = decode<SessionStartPayload>(logs[0].event.eventPayload)
         assertEquals("s-new", payload.sessionId)
         assertEquals("DoorDash", payload.platform)
         assertEquals(1000L, payload.startedAt)
@@ -529,7 +531,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.DASH_STOP)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, SessionStopPayload::class.java)
+        val payload = decode<SessionStopPayload>(logs[0].event.eventPayload)
         assertEquals("summary_screen", payload.source)
         assertEquals(50.0, payload.totalEarnings!!, 0.001)
         assertEquals(5, payload.offersAccepted)
@@ -552,7 +554,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.DASH_STOP)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, SessionStopPayload::class.java)
+        val payload = decode<SessionStopPayload>(logs[0].event.eventPayload)
         assertEquals("early_offline", payload.source)
         assertEquals(30.0, payload.totalEarnings!!, 0.001)
     }
@@ -615,7 +617,7 @@ class EffectMapPayloadTest {
 
         val logs = logEvents(prev, next, obs, AppEventType.DASH_STOP)
         assertEquals(1, logs.size)
-        val payload = gson.fromJson(logs[0].event.eventPayload, SessionStopPayload::class.java)
+        val payload = decode<SessionStopPayload>(logs[0].event.eventPayload)
         assertEquals("summary_screen", payload.source)
         assertEquals(50.0, payload.totalEarnings!!, 0.001)
         assertEquals(5, payload.offersAccepted)
@@ -644,7 +646,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, obs, AppEventType.DASH_PAUSED)
         assertEquals(1, logs.size)
 
-        val payload = gson.fromJson(logs[0].event.eventPayload, SessionPausedPayload::class.java)
+        val payload = decode<SessionPausedPayload>(logs[0].event.eventPayload)
         assertEquals("s1", payload.sessionId)
         assertEquals(4000L, payload.pausedAt)
         assertEquals(29 * 60 * 1000L, payload.remainingMillis)

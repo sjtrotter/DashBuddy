@@ -1,11 +1,14 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import kotlinx.serialization.Serializable
+
 /**
  * Region 1 — cross-platform aggregator.
  *
  * Derived, read-only from platform regions. Recomputed after Regions 2+ step.
  * The HUD's aggregate tab reads from this region.
  */
+@Serializable
 data class CrossPlatformRegion(
     val anyPlatformOnline: Boolean = false,
     val activeSessionCount: Int = 0,
@@ -19,6 +22,7 @@ data class CrossPlatformRegion(
 /**
  * Aggregated totals for a time period across all platforms.
  */
+@Serializable
 data class PeriodTotals(
     val earnings: Double = 0.0,
     val miles: Double = 0.0,

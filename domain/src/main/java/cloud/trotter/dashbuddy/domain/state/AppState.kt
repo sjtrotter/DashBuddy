@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import kotlinx.serialization.Serializable
+
 /**
  * The complete state of the application across all regions.
  *
@@ -9,6 +11,7 @@ package cloud.trotter.dashbuddy.domain.state
  *   accepted observation. Used as the join key between observation log
  *   entries and state snapshots.
  */
+@Serializable
 data class AppState(
     val regions: Regions = Regions(),
     val timestamp: Long = System.currentTimeMillis(),
@@ -22,6 +25,7 @@ data class AppState(
  * @param crossPlatform Region 1 — aggregator across all platform regions.
  * @param platforms Region 2+ — one per active platform.
  */
+@Serializable
 data class Regions(
     val flow: FlowRegion = FlowRegion(),
     val crossPlatform: CrossPlatformRegion = CrossPlatformRegion(),

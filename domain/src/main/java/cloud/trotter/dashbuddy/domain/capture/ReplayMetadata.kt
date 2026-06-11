@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.capture
 
+import kotlinx.serialization.Serializable
+
 /**
  * Version stamps and provenance information attached to every observation
  * and capture envelope. Enables deterministic replay of event streams
@@ -7,6 +9,7 @@ package cloud.trotter.dashbuddy.domain.capture
  *
  * See ADR-0003 for the four-layer versioning model.
  */
+@Serializable
 data class ReplayMetadata(
     val engineVersion: Int,
     val rulesetFormatVersion: Int? = null,

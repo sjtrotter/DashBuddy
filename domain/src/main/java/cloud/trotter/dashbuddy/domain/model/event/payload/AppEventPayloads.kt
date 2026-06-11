@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.model.event.payload
 
+import kotlinx.serialization.Serializable
+
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
@@ -24,6 +26,7 @@ import cloud.trotter.dashbuddy.domain.state.Flow
  * offer + identity fields are populated. The closing `OFFER_ACCEPTED` /
  * `OFFER_DECLINED` / `OFFER_TIMEOUT` event carries the rich evaluation.
  */
+@Serializable
 data class OfferReceivedPayload(
     val offerHash: String,
     val parsedOffer: ParsedOffer,
@@ -38,6 +41,7 @@ data class OfferReceivedPayload(
  * Carries the full offer context and evaluation. The closing event alone is
  * sufficient to render the Offer card — no need to read OFFER_RECEIVED.
  */
+@Serializable
 data class OfferPayload(
     val offerHash: String,
     val parsedOffer: ParsedOffer,
@@ -58,6 +62,7 @@ data class OfferPayload(
  *   ARRIVED     → adds arrivedAt + arrival odometer
  *   CONFIRMED   → adds confirmedAt (the moment pickup→dropoff transition)
  */
+@Serializable
 data class PickupPayload(
     val jobId: String,
     val taskId: String,
@@ -81,6 +86,7 @@ data class PickupPayload(
  * breakdown — captured from the most recent PostTask observation before
  * leaving the PostTask flow.
  */
+@Serializable
 data class DeliveryPayload(
     val jobId: String,
     val taskId: String,
@@ -102,6 +108,7 @@ data class DeliveryPayload(
 )
 
 /** Payload for `DASH_START`. */
+@Serializable
 data class SessionStartPayload(
     val sessionId: String,
     val platform: String,
@@ -115,6 +122,7 @@ data class SessionStartPayload(
  * Payload for `DASH_PAUSED`. The platform's reported pause countdown is
  * captured so the card stack can render a frozen "paused for Xm Ys" view.
  */
+@Serializable
 data class SessionPausedPayload(
     val sessionId: String?,
     val pausedAt: Long,
@@ -139,6 +147,7 @@ object SessionEndSource {
  * a summary screen, only the `source` field is set — the card UI shows an
  * "incomplete" badge for that case.
  */
+@Serializable
 data class SessionStopPayload(
     val sessionId: String?,
     val endedAt: Long,

@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import kotlinx.serialization.Serializable
+
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 
 /**
@@ -12,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
  * plausibility gating — whatever rules say we're seeing, we believe.
  * Implausibility is handled at Region 2+.
  */
+@Serializable
 data class FlowRegion(
     val flow: Flow = Flow.Idle,
     val pendingOffer: PendingOffer? = null,
@@ -27,6 +30,7 @@ data class FlowRegion(
  *
  * @param returnFlow The flow to return to on decline/timeout.
  */
+@Serializable
 data class PendingOffer(
     val offerHash: String,
     val offerFields: ParsedFields.OfferFields,

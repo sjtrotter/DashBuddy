@@ -1,6 +1,10 @@
 package cloud.trotter.dashbuddy.domain.model.offer
 
+import kotlinx.serialization.Serializable
+
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
+
+@Serializable
 
 data class ParsedOffer(
     /** A hash generated from core offer details

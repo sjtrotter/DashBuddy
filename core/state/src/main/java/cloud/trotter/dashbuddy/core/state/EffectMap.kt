@@ -35,7 +35,7 @@ import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.domain.util.formatCurrency
-import com.google.gson.Gson
+import kotlinx.serialization.encodeToString
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -62,7 +62,6 @@ class EffectMap @Inject constructor(
         const val PAUSE_TIMEOUT_BUFFER_MS = 1000L
     }
 
-    private val gson = Gson()
 
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
         addAll(diffRuleEffects(obs))
@@ -841,8 +840,10 @@ class EffectMap @Inject constructor(
         }
     }
 
-    private fun logEffect(dashId: String?, type: AppEventType, payload: Any): AppEffect {
-        val payloadStr = payload as? String ?: gson.toJson(payload)
+    // Inline + reified so kotlinx can resolve each payload's serializer statically (#353);
+    // every call site passes a concrete payload type (or a pre-serialized String).
+    private inline fun <reified T : Any> logEffect(dashId: String?, type: AppEventType, payload: T): AppEffect {
+        val payloadStr = payload as? String ?: StateJson.encodeToString(payload)
         val metadataJson = metadataProvider.createMetadata()
         return AppEffect.LogEvent(
             AppEventEntity(

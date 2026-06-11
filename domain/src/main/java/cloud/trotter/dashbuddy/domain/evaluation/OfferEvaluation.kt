@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
+import kotlinx.serialization.Serializable
+
+@Serializable
+
 data class OfferEvaluation(
     val action: OfferAction,
     val score: Double,

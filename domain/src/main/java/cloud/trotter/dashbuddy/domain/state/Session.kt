@@ -1,9 +1,12 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import kotlinx.serialization.Serializable
+
 /**
  * A continuous period of being online on one platform.
  * Replaces the DoorDash-specific "Dash" concept.
  */
+@Serializable
 data class Session(
     val sessionId: String,
     val startedAt: Long,

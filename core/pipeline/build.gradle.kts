@@ -36,7 +36,6 @@ android {
 }
 
 dependencies {
-    implementation(libs.google.code.gson)
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.timber)

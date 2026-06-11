@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.domain.model.order
 
+import kotlinx.serialization.Serializable
+
+@Serializable
+
 data class ParsedOrder(
     /** The index of this order in the offer. */
     val orderIndex: Int,

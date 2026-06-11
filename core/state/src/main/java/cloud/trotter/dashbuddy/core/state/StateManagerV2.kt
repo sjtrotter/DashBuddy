@@ -14,8 +14,7 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
+import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,9 +39,6 @@ class StateManagerV2 @Inject constructor(
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    private val gson: Gson = GsonBuilder()
-        .registerTypeAdapterFactory(parsedFieldsAdapterFactory())
-        .create()
 
     // UI input stream (clicks, debug buttons)
     private val uiInputChannel = Channel<StateEvent>(Channel.UNLIMITED)
@@ -134,9 +130,9 @@ class StateManagerV2 @Inject constructor(
             platform = platform.name,
             flow = flowObs?.flow?.name,
             modeHint = flowObs?.modeHint?.name,
-            parsedJson = if (flowObs != null) gson.toJson(flowObs.parsed, ParsedFields::class.java) else "{}",
+            parsedJson = if (flowObs != null) StateJson.encodeToString<ParsedFields>(flowObs.parsed) else "{}",
             captureId = captureId,
-            metadataJson = gson.toJson(metadata),
+            metadataJson = StateJson.encodeToString(metadata),
             correlationVersion = state.correlationVersion,
             timeoutType = (this as? Observation.Timeout)?.type?.name,
         )
@@ -169,7 +165,7 @@ class StateManagerV2 @Inject constructor(
                         correlationVersion = next.correlationVersion,
                         capturedAt = System.currentTimeMillis(),
                         sessionId = activeSession?.sessionId,
-                        stateJson = gson.toJson(next),
+                        stateJson = StateJson.encodeToString(next),
                     )
                 )
                 // Prune snapshots older than 24h
@@ -220,11 +216,13 @@ class StateManagerV2 @Inject constructor(
                 return
             }
 
-            // Restore from snapshot
+            // Restore from snapshot. Schema drift within kotlinx's tolerance
+            // (unknown/missing-optional fields) decodes with defaults; anything
+            // beyond that fails LOUDLY and falls back to fresh state (#353).
             val restoredState = try {
-                gson.fromJson(snapshot.stateJson, AppState::class.java)
+                StateJson.decodeFromString<AppState>(snapshot.stateJson)
             } catch (e: Exception) {
-                Timber.w(e, "Failed to deserialize snapshot — starting fresh")
+                Timber.e(e, "Failed to deserialize snapshot — starting fresh")
                 _state.value = AppState()
                 return
             }
@@ -334,9 +332,13 @@ class StateManagerV2 @Inject constructor(
     }
 
     private fun deserializeParsed(json: String): ParsedFields {
+        // Non-flow observations persist "{}" — that's a legitimate None, not corruption.
+        if (json.isBlank() || json == "{}") return ParsedFields.None
         return try {
-            gson.fromJson(json, ParsedFields::class.java) ?: ParsedFields.None
-        } catch (_: Exception) {
+            StateJson.decodeFromString<ParsedFields>(json)
+        } catch (e: Exception) {
+            // LOUD (#353): the old silent fallback hid replay corruption entirely.
+            Timber.e(e, "Failed to decode persisted ParsedFields — replaying as None: %s", json.take(120))
             ParsedFields.None
         }
     }
