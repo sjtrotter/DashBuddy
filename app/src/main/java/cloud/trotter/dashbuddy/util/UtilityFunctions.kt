@@ -87,7 +87,7 @@ object UtilityFunctions {
         return try {
             val digest = MessageDigest.getInstance("SHA-256")
             val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
-            hashBytes.fold("") { str, it -> str + "%02x".format(it) }
+            hashBytes.fold("") { str, it -> str + String.format(java.util.Locale.ROOT, "%02x", it) }
         } catch (_: Exception) {
             input
         }

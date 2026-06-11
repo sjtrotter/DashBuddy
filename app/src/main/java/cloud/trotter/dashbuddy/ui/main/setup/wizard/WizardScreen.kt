@@ -47,6 +47,7 @@ import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardTopBar
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import kotlinx.coroutines.launch
 import java.util.Locale
+import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -193,13 +194,7 @@ fun WizardScreen(
                     WizardStep.SHOPPING -> {
                         MetricSliderCard(
                             step = currentStep, value = state.maxItems, valueRange = 1f..100f,
-                            valueFormatter = {
-                                String.format(
-                                    Locale.getDefault(),
-                                    "%.0f items",
-                                    it
-                                )
-                            },
+                            valueFormatter = { "${DashFormats.decimal(it.toDouble(), 0)} items" },
                             onValueChange = viewModel::updateMaxItems,
                             footerText = "We'll use this to score shopping offers on the HUD."
                         )
@@ -208,7 +203,7 @@ fun WizardScreen(
                     WizardStep.MIN_PAYOUT -> {
                         MetricSliderCard(
                             step = currentStep, value = state.minPayout, valueRange = 2f..20f,
-                            valueFormatter = { String.format(Locale.getDefault(), "$%.2f", it) },
+                            valueFormatter = { DashFormats.money(it.toDouble()) },
                             onValueChange = viewModel::updateMinPayout,
                             footerText = if (isCherryPicker) "We will auto-decline offers below this amount." else "We will flag offers below this amount in red."
                         )
@@ -217,13 +212,7 @@ fun WizardScreen(
                     WizardStep.TARGET_HOURLY -> {
                         MetricSliderCard(
                             step = currentStep, value = state.targetHourly, valueRange = 10f..40f,
-                            valueFormatter = {
-                                String.format(
-                                    Locale.getDefault(),
-                                    "$%.0f / hr",
-                                    it
-                                )
-                            },
+                            valueFormatter = { "${DashFormats.money0(it.toDouble())} / hr" },
                             onValueChange = viewModel::updateTargetHourly,
                             footerText = if (isCherryPicker) "We will auto-decline offers below this rate." else "We will flag offers below this rate in red."
                         )

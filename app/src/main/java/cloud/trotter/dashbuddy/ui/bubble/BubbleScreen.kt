@@ -8,6 +8,8 @@ import android.text.format.DateFormat
 import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.core.designsystem.time.formatDuration
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,7 +75,6 @@ import cloud.trotter.dashbuddy.ui.formatters.getIconResId
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import java.util.Date
-import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -337,7 +338,7 @@ private fun SessionMetricsActions(
             MaterialTheme.colorScheme.onSurface
 
         Text(
-            text = "$${String.format("%.2f", displayEarnings)}",
+            text = DashFormats.money(displayEarnings),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = textColor
@@ -348,7 +349,7 @@ private fun SessionMetricsActions(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
         )
         Text(
-            text = "${"%.1f".format(displayMiles)} mi",
+            text = "${DashFormats.decimal(displayMiles)} mi",
             style = MaterialTheme.typography.titleSmall,
             color = textColor
         )
@@ -395,12 +396,12 @@ private fun ModeIdle(lastSessionSummary: SessionSummary?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
             Text(
-                text = "$${String.format("%.2f", lastSessionSummary.earnings)}",
+                text = DashFormats.money(lastSessionSummary.earnings),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
-            ModeRow(label = "Miles", value = "${"%.1f".format(lastSessionSummary.miles)} mi")
+            ModeRow(label = "Miles", value = "${DashFormats.decimal(lastSessionSummary.miles)} mi")
             ModeRow(label = "Duration", value = formatDuration(lastSessionSummary.durationMillis))
             if (lastSessionSummary.acceptanceRate.isNotBlank()) {
                 ModeRow(label = "Acceptance", value = lastSessionSummary.acceptanceRate)
@@ -613,17 +614,7 @@ private fun ModeRow(
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    if (ms <= 0) return "0s"
-    val hours = TimeUnit.MILLISECONDS.toHours(ms)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(ms) % 60
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(ms) % 60
-    return when {
-        hours > 0 -> "${hours}h ${minutes}m"
-        minutes > 0 -> "${minutes}m ${seconds}s"
-        else -> "${seconds}s"
-    }
-}
+
 
 private fun platformShortName(platform: Platform): String = when (platform) {
     Platform.DoorDash -> "DD"
