@@ -108,7 +108,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
 
                 return RuleMatchResult(
                     ruleId = rule.id,
-                    intent = branch.intent ?: deriveIntentFromId(rule.id),
+                    intent = branch.intent ?: RuleCompiler.deriveTargetFromId(rule.id),
                     shape = branch.shape,
                     flow = branch.flow,
                     modeHint = branch.modeHint,
@@ -224,14 +224,6 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         const val MAX_TEMPLATE_VALUE_LENGTH = 256
         private val TEMPLATE_PATTERN = Regex("""\{(\w+)\}""")
 
-        /**
-         * Derive intent from a rule ID by stripping the platform prefix.
-         * "doordash.screen.idle_map" → "idle_map"
-         */
-        private fun deriveIntentFromId(id: String): String {
-            val parts = id.split(".", limit = 3)
-            return if (parts.size >= 3) parts[2] else id
-        }
     }
 
     private fun resolveTemplateArgs(
