@@ -28,6 +28,9 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
+/** Wizard-layer sentinel for vehicle pickers (#364) — moved out of the data layer. */
+const val VEHICLE_NOT_LISTED = "Not Listed"
+
 @HiltViewModel
 class WizardViewModel @Inject constructor(
     private val strategyRepository: StrategyRepository,
@@ -277,7 +280,10 @@ class WizardViewModel @Inject constructor(
         }
         _availableMakes.value = emptyList(); _availableModels.value =
             emptyList(); _availableTrims.value = emptyList(); availableTrimNames.value = emptyList()
-        viewModelScope.launch { _availableMakes.value = vehicleRepository.getMakes(year) }
+        viewModelScope.launch {
+            _availableMakes.value =
+                listOf(VEHICLE_NOT_LISTED) + vehicleRepository.getMakes(year)
+        }
     }
 
     fun onMakeSelected(make: String) {
@@ -288,7 +294,8 @@ class WizardViewModel @Inject constructor(
         // Skip API call if Not Listed
         if (make != "Not Listed") {
             viewModelScope.launch {
-                _availableModels.value = vehicleRepository.getModels(_state.value.vehicleYear, make)
+                _availableModels.value =
+                    listOf(VEHICLE_NOT_LISTED) + vehicleRepository.getModels(_state.value.vehicleYear, make)
             }
         }
     }

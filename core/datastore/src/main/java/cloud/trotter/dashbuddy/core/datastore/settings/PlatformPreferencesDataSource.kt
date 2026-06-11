@@ -28,4 +28,15 @@ class PlatformPreferencesDataSource @Inject constructor(
     suspend fun setEnabledPlatforms(platforms: Set<String>) {
         ds.edit { it[Keys.ENABLED_PLATFORMS] = platforms }
     }
+
+    /**
+     * Atomically transform the enabled set (#364). [transform] receives the
+     * currently-saved set (null = nothing saved yet) INSIDE the DataStore
+     * edit, so concurrent toggles can't interleave a read-modify-write.
+     */
+    suspend fun updateEnabledPlatforms(transform: (Set<String>?) -> Set<String>) {
+        ds.edit { prefs ->
+            prefs[Keys.ENABLED_PLATFORMS] = transform(prefs[Keys.ENABLED_PLATFORMS])
+        }
+    }
 }

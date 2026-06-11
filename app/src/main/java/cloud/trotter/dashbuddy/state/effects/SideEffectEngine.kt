@@ -18,7 +18,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
 import cloud.trotter.dashbuddy.core.state.MetadataProvider
-import cloud.trotter.dashbuddy.core.state.di.DefaultDispatcher
+import cloud.trotter.dashbuddy.domain.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
 import kotlinx.coroutines.CancellationException
@@ -79,6 +79,9 @@ class SideEffectEngine @Inject constructor(
          * settle + capture and never covers the captured frame.
          */
         const val OFFER_NOTIFICATION_DELAY_MS = ScreenShotHandler.SETTLE_MS + 250L
+
+        /** Keep effects_fired idempotency rows for 48h (#364). */
+        private const val EFFECTS_RETENTION_MS = 48 * 60 * 60 * 1000L
     }
 
     /**
@@ -117,6 +120,12 @@ class SideEffectEngine @Inject constructor(
     private val queue = Channel<QueuedEffect>(Channel.UNLIMITED)
 
     init {
+        // Startup prune (#364): effects_fired gained a row per logged event and
+        // grew unbounded — pruneOlderThan had zero callers. 48h retention
+        // comfortably exceeds the 24h snapshot window recovery replays over.
+        engineScope.launch {
+            effectsFiredDao.pruneOlderThan(System.currentTimeMillis() - EFFECTS_RETENTION_MS)
+        }
         engineScope.launch {
             for (item in queue) {
                 try {

@@ -14,6 +14,7 @@ import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
+import timber.log.Timber
 
 @Singleton
 class StrategyDataSource @Inject constructor(
@@ -63,7 +64,8 @@ class StrategyDataSource @Inject constructor(
         } else {
             try {
                 Json.decodeFromString(json)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Timber.w(e, "Corrupt scoring-rules JSON — falling back to defaults: %s", json.take(120))
                 emptyList()
             }
         }

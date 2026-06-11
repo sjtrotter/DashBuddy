@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.di
 
 import cloud.trotter.dashbuddy.domain.di.ApplicationScope
-import cloud.trotter.dashbuddy.core.state.di.DefaultDispatcher
-import cloud.trotter.dashbuddy.core.state.di.IoDispatcher
+import cloud.trotter.dashbuddy.domain.di.DefaultDispatcher
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -12,6 +12,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.BuildConfig
+import javax.inject.Named
 
 /**
  * Bindings for the injectable dispatchers so coroutine-owning singletons are
@@ -38,4 +40,10 @@ object DispatchersModule {
     @ApplicationScope
     fun provideApplicationScope(): CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Build-variant flag for layer modules (#364) — they must not borrow
+     *  another module's BuildConfig for it. */
+    @Provides
+    @Named("isDebug")
+    fun provideIsDebug(): Boolean = BuildConfig.DEBUG
 }

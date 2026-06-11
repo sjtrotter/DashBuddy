@@ -40,6 +40,7 @@ dependencies {
     implementation(libs.androidx.room.paging)
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.timber)
 
     implementation(project(":domain"))
 

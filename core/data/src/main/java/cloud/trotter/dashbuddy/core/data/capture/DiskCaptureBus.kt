@@ -9,12 +9,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.format.DateTimeFormatter
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
 
 /**
  * Disk-based capture bus. Writes pre-serialized [cloud.trotter.dashbuddy.domain.capture.CaptureEnvelope] JSON to
@@ -28,10 +31,16 @@ import javax.inject.Singleton
 @Singleton
 class DiskCaptureBus @Inject constructor(
     @param:ApplicationContext private val context: Context,
+    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) : CaptureBus {
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val timestampFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss-SSS", Locale.US)
+    private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
+
+    // DateTimeFormatter is thread-safe (#364) — the old shared SimpleDateFormat
+    // could garble filenames when capture coroutines overlapped.
+    private val timestampFormat = DateTimeFormatter
+        .ofPattern("yyyy-MM-dd_HH-mm-ss-SSS", Locale.US)
+        .withZone(ZoneId.systemDefault())
 
     /** Structural hash set per bucket. Prevents duplicate writes within a session. */
     private val seenHashes = ConcurrentHashMap<String, MutableSet<Int>>()
@@ -63,7 +72,7 @@ class DiskCaptureBus @Inject constructor(
                 dir.mkdirs()
 
                 val hashHex = (contentHash ?: envelopeJson.hashCode()).toString(16).takeLast(6)
-                val ts = timestampFormat.format(Date())
+                val ts = timestampFormat.format(Instant.now())
                 val fileName = "${ts}__${platform}__${source}__${sub}__$hashHex.json"
 
                 File(dir, fileName).writeText(envelopeJson)

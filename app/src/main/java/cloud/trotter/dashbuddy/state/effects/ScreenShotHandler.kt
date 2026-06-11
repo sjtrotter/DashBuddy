@@ -9,7 +9,7 @@ import android.provider.MediaStore
 import android.view.Display
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.core.state.AppEffect
-import cloud.trotter.dashbuddy.core.state.di.IoDispatcher
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
