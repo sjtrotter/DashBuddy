@@ -26,25 +26,19 @@ fun UiNode.toDto(): UiNodeDto {
 }
 
 // --- JSON DTO -> Domain (Reading from disk) ---
-fun UiNodeDto.toDomain(parentUiNode: UiNode? = null): UiNode {
-    val domainNode = UiNode(
-        text = this.text,
-        contentDescription = this.contentDescription,
-        stateDescription = this.stateDescription,
-        viewIdResourceName = this.viewIdResourceName,
-        className = this.className,
-        isClickable = this.isClickable,
-        isEnabled = this.isEnabled,
-        isChecked = this.isChecked,
-        boundsInScreen = this.boundsInScreen.toDomain(),
-        parent = parentUiNode,
-        children = mutableListOf()
-    )
+// Bottom-up construction into the immutable tree (#363); parents are wired
+// once at the root via restoreParents().
+fun UiNodeDto.toDomain(): UiNode = toDomainNode().restoreParents()
 
-    // Recursively build children, passing the current node as the new parent
-    domainNode.children.addAll(
-        this.children.map { childDto -> childDto.toDomain(parentUiNode = domainNode) }
-    )
-
-    return domainNode
-}
+private fun UiNodeDto.toDomainNode(): UiNode = UiNode(
+    text = this.text,
+    contentDescription = this.contentDescription,
+    stateDescription = this.stateDescription,
+    viewIdResourceName = this.viewIdResourceName,
+    className = this.className,
+    isClickable = this.isClickable,
+    isEnabled = this.isEnabled,
+    isChecked = this.isChecked,
+    boundsInScreen = this.boundsInScreen.toDomain(),
+    children = this.children.map { it.toDomainNode() },
+)

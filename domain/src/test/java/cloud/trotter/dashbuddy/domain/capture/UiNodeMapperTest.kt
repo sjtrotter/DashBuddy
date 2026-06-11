@@ -111,8 +111,8 @@ class UiNodeMapperTest {
     }
 
     @Test
-    fun `toDomain with no parent sets parent to null`() {
-        val node = sampleDto().toDomain(parentUiNode = null)
+    fun `toDomain root has null parent`() {
+        val node = sampleDto().toDomain()
         assertNull(node.parent)
     }
 
@@ -168,12 +168,15 @@ class UiNodeMapperTest {
     }
 
     @Test
-    fun `toDomain with explicit parent wires correctly`() {
-        val parentNode = sampleNode(text = "parent")
-        val childDto = sampleDto(text = "child")
-        val childNode = childDto.toDomain(parentUiNode = parentNode)
+    fun `toDomain wires every level of a nested tree`() {
+        val dto = sampleDto(
+            children = listOf(sampleDto(text = "child", children = listOf(sampleDto(text = "grandchild"))))
+        )
+        val root = dto.toDomain()
+        val child = root.children.single()
+        val grandchild = child.children.single()
 
-        assertNotNull(childNode.parent)
-        assertSame(parentNode, childNode.parent)
+        assertSame(root, child.parent)
+        assertSame(child, grandchild.parent)
     }
 }

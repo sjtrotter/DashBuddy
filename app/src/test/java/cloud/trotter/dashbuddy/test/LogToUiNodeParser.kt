@@ -1,22 +1,23 @@
 package cloud.trotter.dashbuddy.test
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import java.lang.reflect.Field
 
 object LogToUiNodeParser {
 
     private val nodeRegex = Regex("""^(\s*)UiNode\((.*)\)$""")
 
+    /** Mutable scaffolding while parsing; materialized into the immutable tree at the end (#363). */
+    private class Scaffold(val proto: UiNode, val kids: MutableList<Scaffold> = mutableListOf())
+
     fun parseLog(logContent: String): UiNode? {
         val lines = logContent.lines().filter { it.isNotBlank() }
         if (lines.isEmpty()) return null
 
-        val rootLine = lines.first()
-        val rootNode = parseLine(rootLine) ?: return null
+        val root = parseLine(lines.first())?.let(::Scaffold) ?: return null
 
-        // Stack: Pair(IndentLevel, Node)
-        val stack = ArrayDeque<Pair<Int, UiNode>>()
-        stack.addFirst(0 to rootNode)
+        // Stack: Pair(IndentLevel, Scaffold)
+        val stack = ArrayDeque<Pair<Int, Scaffold>>()
+        stack.addFirst(0 to root)
 
         for (i in 1 until lines.size) {
             val line = lines[i]
@@ -24,39 +25,24 @@ object LogToUiNodeParser {
 
             val indentSpaces = match.groupValues[1].length
             val indentLevel = indentSpaces / 2
-            val node = parseLine(line) ?: continue
+            val node = parseLine(line)?.let(::Scaffold) ?: continue
 
             // 1. Pop stack until we find the parent
             while (stack.isNotEmpty() && stack.first().first >= indentLevel) {
                 stack.removeFirst()
             }
 
-            // 2. Link Parent <-> Child
-            val parent = stack.firstOrNull()?.second
-            if (parent != null) {
-                parent.children.add(node)
-
-                // --- CRITICAL FIX: Set the parent reference using Reflection ---
-                setParent(node, parent)
-            }
+            // 2. Link parent <- child in the scaffolding
+            stack.firstOrNull()?.second?.kids?.add(node)
 
             stack.addFirst(indentLevel to node)
         }
 
-        return rootNode
+        return materialize(root).restoreParents()
     }
 
-    // Helper to set immutable 'val parent' using reflection
-    private fun setParent(child: UiNode, parent: UiNode) {
-        try {
-            val parentField: Field = UiNode::class.java.getDeclaredField("parent")
-            parentField.isAccessible = true
-            parentField.set(child, parent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            // Fallback: If reflection fails, tests relying on .parent will fail.
-        }
-    }
+    private fun materialize(s: Scaffold): UiNode =
+        s.proto.copy(children = s.kids.map(::materialize))
 
     private fun parseLine(line: String): UiNode? {
         val match = nodeRegex.find(line) ?: return null

@@ -5,6 +5,11 @@ package cloud.trotter.dashbuddy.domain.model.accessibility
  * Optimized for both efficient recursive searching (Clicks) and full-text collection (Screen Analysis).
  * Essentially a pared-down serialization for AccessibilityNode in Android.
  *
+ * IMMUTABLE after construction (#363): [children] is a read-only List built
+ * bottom-up by the mappers, so the lazy hash/text caches can never go stale.
+ * `equals`/`hashCode` deliberately compare THIS node's identity fields only —
+ * never the recursive tree (that's what the hash properties are for).
+ *
  * If properties are edited, ensure you update the following to match:
  *  In this file
  *    - the equals function
@@ -31,20 +36,31 @@ data class UiNode(
 
     val boundsInScreen: BoundingBox = BoundingBox(0, 0, 0, 0),
 
-    var parent: UiNode? = null,
-
-    val children: MutableList<UiNode> = mutableListOf(),
+    val children: List<UiNode> = emptyList(),
 ) {
 
     /**
-     * Call this immediately after deserializing from JSON to re-populate
-     * the 'parent' fields for the entire tree.
+     * Back-reference up the tree. Read-only to consumers (#363): the ONLY
+     * writer is [restoreParents], which can never wire anything but the true
+     * containing node. Excluded from equals/hashCode/copy by living outside
+     * the primary constructor.
      */
-    fun restoreParents() {
+    var parent: UiNode? = null
+        private set
+
+    /**
+     * Wire the parent back-references for the whole tree (#363). The single
+     * mutation point on an otherwise-immutable tree — called once by the
+     * construction/deserialization factories before the tree is shared.
+     * Idempotent; returns this for chaining. The lazy hash/text caches are
+     * safe because they never include [parent].
+     */
+    fun restoreParents(): UiNode {
         for (child in children) {
             child.parent = this
             child.restoreParents() // Recurse down
         }
+        return this
     }
 
     override fun equals(other: Any?): Boolean {
