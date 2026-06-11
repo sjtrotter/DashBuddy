@@ -103,9 +103,9 @@ class StateManagerV2 @Inject constructor(
         // Periodic + major-transition snapshots
         maybeSnapshot(transition.newState, currentState)
 
-        // Emit effects
+        // Emit effects — the engine serializes execution in this order (#351).
         transition.effects.forEach { effect ->
-            engine.process(effect, scope)
+            engine.process(effect, correlationVersion = transition.newState.correlationVersion)
         }
     }
 
@@ -247,7 +247,11 @@ class StateManagerV2 @Inject constructor(
                 val transition = stateMachine.step(acc, obs)
                 // Process effects in recovery mode (external suppressed, keyed deduped)
                 transition.effects.forEach { effect ->
-                    engine.process(effect, scope, recovering = true)
+                    engine.process(
+                        effect,
+                        recovering = true,
+                        correlationVersion = transition.newState.correlationVersion,
+                    )
                 }
                 transition.newState
             }
