@@ -70,7 +70,13 @@ class TtsEffectHandler @Inject constructor(
         Timber.i("TTS speaking: %s", text)
 
         audioManager.requestAudioFocus(audioFocusRequest)
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "offer_${eval.merchantName}")
+        val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "offer_${eval.merchantName}")
+        if (result != TextToSpeech.SUCCESS) {
+            // A failed speak() never fires an utterance callback — release focus here or
+            // other apps stay ducked (#341).
+            Timber.w("TTS speak returned %s — abandoning audio focus", result)
+            audioManager.abandonAudioFocusRequest(audioFocusRequest)
+        }
     }
 
     private fun formatEvaluation(eval: OfferEvaluation): String {
