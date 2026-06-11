@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
+import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
 /**
  * Constructs the live (active) flow card from the current [AppState].
@@ -67,7 +68,7 @@ object LiveCardBuilder {
                     phaseStartedAt = task.startedAt,
                     taskId = task.taskId,
                     jobId = task.jobId,
-                    storeName = task.storeName ?: "Unknown",
+                    storeName = task.storeName ?: UNKNOWN_STORE,
                     arrivedAt = task.arrivedAt,
                     deadlineMillis = task.deadlineMillis,
                     itemsRemaining = task.itemsRemaining,
