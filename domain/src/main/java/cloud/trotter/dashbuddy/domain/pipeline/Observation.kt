@@ -131,7 +131,12 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         val effect: String,
         /** Typed loopback context (#366) — e.g. the landed offer evaluation. */
         val payload: ObservationPayload? = null,
-    ) : Observation
+    ) : Observation {
+        companion object {
+            /** Effect token for the async offer-evaluation loopback (#402). */
+            const val EFFECT_OFFER_EVALUATED = "offer_evaluated"
+        }
+    }
 }
 
 /**

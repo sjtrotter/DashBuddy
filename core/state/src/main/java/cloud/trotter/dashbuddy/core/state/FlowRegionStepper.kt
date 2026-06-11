@@ -129,7 +129,7 @@ class FlowRegionStepper @Inject constructor() {
      */
     private fun handleLoopback(prev: FlowRegion, obs: Observation.Loopback): FlowRegion {
         val offer = prev.pendingOffer ?: return prev
-        if (obs.effect != "offer_evaluated") return prev
+        if (obs.effect != Observation.Loopback.EFFECT_OFFER_EVALUATED) return prev
 
         val result = obs.payload as? ObservationPayload.EvaluationResult
         val evaluation = result?.evaluation

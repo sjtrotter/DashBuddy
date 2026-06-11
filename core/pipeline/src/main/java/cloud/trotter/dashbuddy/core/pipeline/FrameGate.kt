@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationIdentity
 import cloud.trotter.dashbuddy.domain.pipeline.identity
 import timber.log.Timber
+import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 
 /**
  * Per-pipeline frame admission (#360). Combines the existing identity dedup
@@ -41,7 +42,7 @@ internal class FrameGate(
         if (identity != null && identity == lastIdentity) return false
 
         val target = (obs as? Observation.FlowObservation)?.target
-        if (target != "UNKNOWN") {
+        if (target != UNKNOWN_TARGET) {
             lastIdentity = identity
             return true
         }

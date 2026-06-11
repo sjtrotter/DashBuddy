@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 
 /**
  * Unified accessibility pipeline: merges screen and click event sources,
@@ -133,7 +134,7 @@ class AccessibilityPipeline @Inject constructor(
 
         // Gate: don't forward UNKNOWN observations to state machine
         .filter { obs ->
-            val isUnknown = obs.target == "UNKNOWN"
+            val isUnknown = obs.target == UNKNOWN_TARGET
             if (isUnknown) Timber.v("Unknown gate: captured but not forwarding %s", obs.target)
             !isUnknown
         }
