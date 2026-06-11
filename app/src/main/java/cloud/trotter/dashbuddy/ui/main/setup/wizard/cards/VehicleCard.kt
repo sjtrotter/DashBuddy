@@ -36,6 +36,7 @@ import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import java.util.Locale
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.VEHICLE_NOT_LISTED
+import android.net.Uri
 
 @Composable
 fun VehicleCard(
@@ -151,14 +152,15 @@ fun VehicleCard(
             ) {
                 OutlinedButton(
                     onClick = {
-                        val queryParts = listOfNotNull(
+                        val query = listOfNotNull(
                             year.takeIf { it.isNotBlank() },
                             make.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() },
-                            model.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() }
-                        ).joinToString("+")
+                            model.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() },
+                            "mpg",
+                        ).joinToString(" ")
 
-                        val searchUrl = "https://www.google.com/search?q=$queryParts+mpg"
-                        uriHandler.openUri(searchUrl)
+                        // Uri.encode (#367): unencoded spaces/specials broke the URL.
+                        uriHandler.openUri("https://www.google.com/search?q=${Uri.encode(query)}")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(

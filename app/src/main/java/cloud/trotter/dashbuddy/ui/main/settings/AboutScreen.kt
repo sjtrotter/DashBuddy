@@ -19,7 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,8 +41,8 @@ fun AboutScreen(
     onBack: () -> Unit,
     viewModel: SettingsMenuViewModel = hiltViewModel()
 ) {
-    val clicks by viewModel.versionClickCount.collectAsState()
-    val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsState(initial = false)
+    val clicks by viewModel.versionClickCount.collectAsStateWithLifecycle()
+    val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsStateWithLifecycle(initialValue = false)
     val context = LocalContext.current
 
     // Hold a reference to the toast so we can cancel it instantly on rapid clicks

@@ -55,7 +55,8 @@ class WizardViewModel @Inject constructor(
     val availableModels = _availableModels.asStateFlow()
 
     private val _availableTrims = MutableStateFlow<List<VehicleOption>>(emptyList())
-    val availableTrimNames = MutableStateFlow<List<String>>(emptyList())
+    private val _availableTrimNames = MutableStateFlow<List<String>>(emptyList())
+    val availableTrimNames = _availableTrimNames.asStateFlow()
 
     init {
         Timber.v("Initializing WizardViewModel")
@@ -279,7 +280,7 @@ class WizardViewModel @Inject constructor(
             )
         }
         _availableMakes.value = emptyList(); _availableModels.value =
-            emptyList(); _availableTrims.value = emptyList(); availableTrimNames.value = emptyList()
+            emptyList(); _availableTrims.value = emptyList(); _availableTrimNames.value = emptyList()
         viewModelScope.launch {
             _availableMakes.value =
                 listOf(VEHICLE_NOT_LISTED) + vehicleRepository.getMakes(year)
@@ -289,7 +290,7 @@ class WizardViewModel @Inject constructor(
     fun onMakeSelected(make: String) {
         _state.update { it.copy(vehicleMake = make, vehicleModel = "", vehicleTrim = "") }
         _availableModels.value = emptyList(); _availableTrims.value =
-            emptyList(); availableTrimNames.value = emptyList()
+            emptyList(); _availableTrimNames.value = emptyList()
 
         // Skip API call if Not Listed
         if (make != VEHICLE_NOT_LISTED) {
@@ -302,7 +303,7 @@ class WizardViewModel @Inject constructor(
 
     fun onModelSelected(model: String) {
         _state.update { it.copy(vehicleModel = model, vehicleTrim = "") }
-        _availableTrims.value = emptyList(); availableTrimNames.value = emptyList()
+        _availableTrims.value = emptyList(); _availableTrimNames.value = emptyList()
 
         // Skip API call if Not Listed
         if (model != VEHICLE_NOT_LISTED) {
@@ -314,7 +315,7 @@ class WizardViewModel @Inject constructor(
                     _state.value.vehicleMake,
                     model,
                 )
-                _availableTrims.value = trims; availableTrimNames.value =
+                _availableTrims.value = trims; _availableTrimNames.value =
                 trims.map { it.displayName }
             }
         }
@@ -359,6 +360,10 @@ class WizardViewModel @Inject constructor(
             // If we have the price, swap instantly!
             if (currentState.isGasPriceAuto && cachedPrice != null) {
                 currentState.copy(fuelType = type, gasPrice = cachedPrice)
+            } else if (type == FuelType.ELECTRICITY && currentState.gasPrice > 1.0f) {
+                // EV snap (#367, moved from GasPriceCard's LaunchedEffect): a
+                // gas-level $/gal makes no sense as $/kWh — drop to a sane default.
+                currentState.copy(fuelType = type, gasPrice = 0.30f)
             } else {
                 // If we DON'T have the price, just update the fuel type for now.
                 currentState.copy(fuelType = type)
@@ -371,8 +376,9 @@ class WizardViewModel @Inject constructor(
                 _state.update { it.copy(isFetchingGasPrice = true) }
                 val result = gasPriceRepository.fetchGasPriceOnly(type)
 
-                if (result.isSuccess) {
-                    val newPrice = result.getOrNull()!!
+                val fetched = result.getOrNull()
+                if (fetched != null) {
+                    val newPrice = fetched
                     _state.update { currentState ->
                         // Update the map AND the current price
                         val newMap = currentState.fetchedGasPrices.toMutableMap()
@@ -405,19 +411,14 @@ class WizardViewModel @Inject constructor(
 
         viewModelScope.launch {
             _state.update { it.copy(isFetchingGasPrice = true) }
-            val pricesMap = mutableMapOf<FuelType, Float>()
-
-            coroutineScope {
+            // awaitAll + associate (#367): the old code mutated a shared map
+            // from parallel async blocks.
+            val pricesMap = coroutineScope {
                 FuelType.entries.map { fuel ->
-                    async {
-                        val result = gasPriceRepository.fetchGasPriceOnly(fuel)
-                        if (result.isSuccess) {
-                            pricesMap[fuel] = result.getOrNull()!!
-                        }
-                    }
+                    async { fuel to gasPriceRepository.fetchGasPriceOnly(fuel).getOrNull() }
                 }.awaitAll()
-                Timber.i("Fetched gas prices: $pricesMap")
-            }
+            }.mapNotNull { (fuel, price) -> price?.let { fuel to it } }.toMap()
+            Timber.i("Fetched gas prices: %s", pricesMap)
 
             _state.update { currentState ->
                 currentState.copy(

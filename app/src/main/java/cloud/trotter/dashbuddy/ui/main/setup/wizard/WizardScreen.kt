@@ -24,7 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,13 +55,13 @@ fun WizardScreen(
     viewModel: WizardViewModel = hiltViewModel(),
     onComplete: () -> Unit
 ) {
-    val steps by viewModel.steps.collectAsState()
-    val state by viewModel.state.collectAsState()
+    val steps by viewModel.steps.collectAsStateWithLifecycle()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
-    val availableYears by viewModel.availableYears.collectAsState()
-    val availableMakes by viewModel.availableMakes.collectAsState()
-    val availableModels by viewModel.availableModels.collectAsState()
-    val availableTrimNames by viewModel.availableTrimNames.collectAsState()
+    val availableYears by viewModel.availableYears.collectAsStateWithLifecycle()
+    val availableMakes by viewModel.availableMakes.collectAsStateWithLifecycle()
+    val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
+    val availableTrimNames by viewModel.availableTrimNames.collectAsStateWithLifecycle()
 
     val pagerState = rememberPagerState(pageCount = { steps.size })
     val coroutineScope = rememberCoroutineScope()

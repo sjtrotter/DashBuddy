@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun SettingsHomeScreen(
@@ -48,8 +49,8 @@ fun SettingsHomeScreen(
     viewModel: SettingsMenuViewModel = hiltViewModel()
 ) {
     // Relying strictly on the persisted DataStore state now
-    val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsState(initial = false)
-    val userEconomy by viewModel.userEconomy.collectAsState(initial = null)
+    val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsStateWithLifecycle(initialValue = false)
+    val userEconomy by viewModel.userEconomy.collectAsStateWithLifecycle(initialValue = null)
 
     Scaffold(
         topBar = {

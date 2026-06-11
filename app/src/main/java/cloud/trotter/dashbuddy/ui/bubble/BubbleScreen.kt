@@ -44,7 +44,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,20 +75,22 @@ import cloud.trotter.dashbuddy.ui.formatters.getIconResId
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import java.util.Date
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BubbleScreen(
     viewModel: BubbleViewModel = hiltViewModel()
 ) {
-    val messages by viewModel.messages.collectAsState()
-    val appState by viewModel.appState.collectAsState()
-    val focusedPlatform by viewModel.focusedPlatform.collectAsState()
-    val focusedRegion by viewModel.focusedRegion.collectAsState()
-    val sessionMiles by viewModel.sessionMiles.collectAsState()
-    val sessionEarnings by viewModel.sessionEarnings.collectAsState()
-    val lastSessionSummary by viewModel.lastSessionSummary.collectAsState()
-    val cardStack by viewModel.cardStack.collectAsState()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val appState by viewModel.appState.collectAsStateWithLifecycle()
+    val focusedPlatform by viewModel.focusedPlatform.collectAsStateWithLifecycle()
+    val focusedRegion by viewModel.focusedRegion.collectAsStateWithLifecycle()
+    val sessionMiles by viewModel.sessionMiles.collectAsStateWithLifecycle()
+    val sessionEarnings by viewModel.sessionEarnings.collectAsStateWithLifecycle()
+    val lastSessionSummary by viewModel.lastSessionSummary.collectAsStateWithLifecycle()
+    val cardStack by viewModel.cardStack.collectAsStateWithLifecycle()
     var showFullChat by remember { mutableStateOf(false) }
 
     // Collapse the bubble to its head after the user acts on an offer.
@@ -180,7 +182,13 @@ fun DashboardView(
     onAccept: () -> Unit = {},
     onDecline: () -> Unit = {},
 ) {
-    val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
+    // rememberSaveable (#367): expansion state survives rotation/process-restore.
+    val expandedIds = rememberSaveable(
+        saver = listSaver(
+            save = { map -> map.filterValues { it }.keys.toList() },
+            restore = { saved -> mutableStateMapOf<String, Boolean>().apply { saved.forEach { put(it, true) } } },
+        ),
+    ) { mutableStateMapOf<String, Boolean>() }
     val listState = rememberLazyListState()
 
     Column(
@@ -402,10 +410,10 @@ private fun ModeIdle(lastSessionSummary: SessionSummary?) {
                 color = MaterialTheme.colorScheme.primary
             )
             ModeRow(label = "Miles", value = "${DashFormats.decimal(lastSessionSummary.miles)} mi")
-            ModeRow(label = "Duration", value = formatDuration(lastSessionSummary.durationMillis))
-            if (lastSessionSummary.acceptanceRate.isNotBlank()) {
-                ModeRow(label = "Acceptance", value = lastSessionSummary.acceptanceRate)
-            }
+            ModeRow(
+                label = "Duration",
+                value = formatDuration(lastSessionSummary.endedAt - lastSessionSummary.startedAt),
+            )
         }
     } else {
         ModeRow(label = "Status", value = "Offline")
@@ -491,7 +499,7 @@ fun FullChatView(messages: List<ChatMessage>) {
         verticalArrangement = Arrangement.Bottom,
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        items(messages) { msg ->
+        items(messages, key = { it.id }) { msg ->
             ChatBubble(msg)
             Spacer(modifier = Modifier.height(8.dp))
         }
