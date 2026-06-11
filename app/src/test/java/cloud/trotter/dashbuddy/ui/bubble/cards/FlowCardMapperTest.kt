@@ -1,10 +1,11 @@
 package cloud.trotter.dashbuddy.ui.bubble.cards
 
-import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
@@ -17,7 +18,6 @@ import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.state.Flow
-import com.google.gson.Gson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -26,19 +26,12 @@ import org.junit.Test
 
 class FlowCardMapperTest {
 
-    private val gson = Gson()
-    private var seq = 1L
-
-    private fun event(type: AppEventType, payload: Any, occurredAt: Long): AppEventEntity {
-        val json = payload as? String ?: gson.toJson(payload)
-        return AppEventEntity(
-            sequenceId = seq++,
-            aggregateId = "session-1",
-            eventType = type,
-            eventPayload = json,
-            occurredAt = occurredAt,
-        )
-    }
+    private fun event(type: AppEventType, payload: AppEventPayload?, occurredAt: Long) = AppEvent(
+        type = type,
+        occurredAt = occurredAt,
+        sessionId = "session-1",
+        payload = payload,
+    )
 
     private fun parsedOffer(hash: String, pay: Double, miles: Double, store: String = "Wendy's") =
         ParsedOffer(
@@ -127,7 +120,7 @@ class FlowCardMapperTest {
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
                 occurredAt = 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 2000L),
+            event(AppEventType.OFFER_RECEIVED, null, occurredAt = 2000L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("offer-1", AppEventType.OFFER_ACCEPTED, 2000L, 2500L),
                 occurredAt = 2500L),
@@ -202,7 +195,7 @@ class FlowCardMapperTest {
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
                 occurredAt = 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 2000L),
+            event(AppEventType.OFFER_RECEIVED, null, occurredAt = 2000L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("offer-1", AppEventType.OFFER_ACCEPTED, 2000L, 2500L),
                 occurredAt = 2500L),
@@ -256,7 +249,7 @@ class FlowCardMapperTest {
         val events = listOf(
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_RECEIVED, null, 1500L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
             event(AppEventType.PICKUP_NAV_STARTED,
@@ -313,10 +306,10 @@ class FlowCardMapperTest {
         val events = listOf(
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_RECEIVED, null, 1500L),
             event(AppEventType.OFFER_DECLINED,
                 offerPayload("dup-hash", AppEventType.OFFER_DECLINED, 1500L, 1700L), 1700L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 2000L),
+            event(AppEventType.OFFER_RECEIVED, null, 2000L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("dup-hash", AppEventType.OFFER_ACCEPTED, 2000L, 2100L), 2100L),
         )
@@ -339,7 +332,7 @@ class FlowCardMapperTest {
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
                 occurredAt = 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 2000L),
+            event(AppEventType.OFFER_RECEIVED, null, occurredAt = 2000L),
             event(AppEventType.OFFER_DECLINED,
                 offerPayload("decline-1", AppEventType.OFFER_DECLINED, 2000L, 2300L),
                 occurredAt = 2300L),
@@ -363,7 +356,7 @@ class FlowCardMapperTest {
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
                 occurredAt = 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 2000L),
+            event(AppEventType.OFFER_RECEIVED, null, occurredAt = 2000L),
             event(AppEventType.OFFER_TIMEOUT,
                 offerPayload("to-1", AppEventType.OFFER_TIMEOUT, 2000L, 2030L),
                 occurredAt = 2030L),
@@ -385,7 +378,7 @@ class FlowCardMapperTest {
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
                 occurredAt = 1000L),
             // delivery 1
-            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 1500L),
+            event(AppEventType.OFFER_RECEIVED, null, occurredAt = 1500L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
             event(AppEventType.PICKUP_NAV_STARTED,
@@ -399,7 +392,7 @@ class FlowCardMapperTest {
             event(AppEventType.DELIVERY_COMPLETED,
                 deliveryPayload("T1b", "J1", 2000L, arrived = 2500L, completed = 2700L, totalPay = 5.00), 2700L),
             // delivery 2
-            event(AppEventType.OFFER_RECEIVED, "{}", occurredAt = 3000L),
+            event(AppEventType.OFFER_RECEIVED, null, occurredAt = 3000L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("o2", AppEventType.OFFER_ACCEPTED, 3000L, 3100L), 3100L),
             event(AppEventType.PICKUP_NAV_STARTED,
@@ -453,11 +446,11 @@ class FlowCardMapperTest {
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
                 occurredAt = 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_RECEIVED, null, 1500L),
             event(AppEventType.OFFER_DECLINED,
                 offerPayload("decline-1", AppEventType.OFFER_DECLINED, 1500L, 1700L), 1700L),
             // Dasher returns to awaiting — Awaiting #2 opens at 1700L.
-            event(AppEventType.OFFER_RECEIVED, "{}", 2000L),
+            event(AppEventType.OFFER_RECEIVED, null, 2000L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("o1", AppEventType.OFFER_ACCEPTED, 2000L, 2100L), 2100L),
             event(AppEventType.PICKUP_NAV_STARTED,
@@ -466,7 +459,7 @@ class FlowCardMapperTest {
                 deliveryPayload("T2", "J1", 2200L), 2200L),
             event(AppEventType.DELIVERY_COMPLETED,
                 deliveryPayload("T2", "J1", 2200L, completed = 3000L, totalPay = 7.00), 3000L),
-            event(AppEventType.DASH_STOP, "{}", 3500L),
+            event(AppEventType.DASH_STOP, null, 3500L),
         )
         val cards = FlowCardMapper.fold(events)
         val awaitings = cards.filterIsInstance<FlowCardSnapshot.Awaiting>()
@@ -483,10 +476,10 @@ class FlowCardMapperTest {
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
                 occurredAt = 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_RECEIVED, null, 1500L),
             event(AppEventType.OFFER_TIMEOUT,
                 offerPayload("to-1", AppEventType.OFFER_TIMEOUT, 1500L, 1530L), 1530L),
-            event(AppEventType.DASH_STOP, "{}", 2000L),
+            event(AppEventType.DASH_STOP, null, 2000L),
         )
         val cards = FlowCardMapper.fold(events)
         val awaitings = cards.filterIsInstance<FlowCardSnapshot.Awaiting>()
@@ -500,12 +493,12 @@ class FlowCardMapperTest {
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
                 occurredAt = 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_RECEIVED, null, 1500L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
             event(AppEventType.PICKUP_NAV_STARTED,
                 pickupPayload("T1", "J1", "A", 1600L), 1600L),
-            event(AppEventType.DASH_STOP, "{}", 2000L),
+            event(AppEventType.DASH_STOP, null, 2000L),
         )
         val cards = FlowCardMapper.fold(events)
         val awaitings = cards.filterIsInstance<FlowCardSnapshot.Awaiting>()
@@ -522,13 +515,13 @@ class FlowCardMapperTest {
         val events = listOf(
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_RECEIVED, null, 1500L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
             // new dash starts before delivery completes
             event(AppEventType.DASH_START,
                 SessionStartPayload("s2", "DoorDash", 5000L, "interaction", "WaitingForOffer"), 5000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 5500L),
+            event(AppEventType.OFFER_RECEIVED, null, 5500L),
             event(AppEventType.OFFER_DECLINED,
                 offerPayload("o2", AppEventType.OFFER_DECLINED, 5500L, 5700L), 5700L),
         )
@@ -549,7 +542,7 @@ class FlowCardMapperTest {
         val events = listOf(
             event(AppEventType.DASH_START,
                 SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
-            event(AppEventType.OFFER_RECEIVED, "{}", 1500L),
+            event(AppEventType.OFFER_RECEIVED, null, 1500L),
             event(AppEventType.OFFER_ACCEPTED,
                 offerPayload("o1", AppEventType.OFFER_ACCEPTED, 1500L, 1600L), 1600L),
             event(AppEventType.PICKUP_NAV_STARTED,
@@ -663,7 +656,7 @@ class FlowCardMapperTest {
         // A real session: prior stale offer events followed by a new DASH_START
         // should not contaminate the new session's stack.
         val events = listOf(
-            event(AppEventType.OFFER_RECEIVED, "{}", 500L),
+            event(AppEventType.OFFER_RECEIVED, null, 500L),
             event(AppEventType.OFFER_DECLINED,
                 offerPayload("stale", AppEventType.OFFER_DECLINED, 500L, 700L), 700L),
             event(AppEventType.DASH_START,

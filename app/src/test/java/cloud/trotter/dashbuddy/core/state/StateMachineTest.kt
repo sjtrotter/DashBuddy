@@ -39,7 +39,7 @@ class StateMachineTest {
             platformStepper = PlatformRegionStepper(),
             crossPlatformStepper = CrossPlatformRegionStepper(),
             transitionPolicy = TransitionPolicy(),
-            effectMap = EffectMap(MetadataProvider { """{ "test_mode": true }""" }),
+            effectMap = EffectMap(),
         )
     }
 

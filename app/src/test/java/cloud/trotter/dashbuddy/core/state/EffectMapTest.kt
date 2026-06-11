@@ -35,7 +35,7 @@ import org.junit.Test
  */
 class EffectMapTest {
 
-    private val effectMap = EffectMap(MetadataProvider { """{ "test_mode": true }""" })
+    private val effectMap = EffectMap()
 
     // =========================================================================
     // HELPERS
@@ -156,7 +156,7 @@ class EffectMapTest {
     private fun List<AppEffect>.logEvents(): List<AppEffect.LogEvent> = effectsOfType()
 
     private fun List<AppEffect>.logEventTypes(): List<AppEventType> =
-        logEvents().map { it.event.eventType }
+        logEvents().map { it.event.type }
 
     // =========================================================================
     // OFFER EFFECTS

@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.ui.bubble.cards
 
-import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
@@ -9,9 +9,6 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
-import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
-import timber.log.Timber
 
 /**
  * Pure fold from the AppEvent log to the completed-card list for the bubble
@@ -26,9 +23,7 @@ import timber.log.Timber
  */
 object FlowCardMapper {
 
-    private val gson = Gson()
-
-    fun fold(events: List<AppEventEntity>): List<FlowCardSnapshot> {
+    fun fold(events: List<AppEvent>): List<FlowCardSnapshot> {
         val completed = mutableListOf<FlowCardSnapshot>()
 
         // Open card accumulators — one slot per kind. For v1 we assume a
@@ -40,7 +35,7 @@ object FlowCardMapper {
         var lastDeliveryArrivedAt: Long? = null
 
         for (event in events) {
-            when (event.eventType) {
+            when (event.type) {
                 AppEventType.DASH_START -> {
                     // Reset stack — flush any half-open cards, start fresh
                     completed.clear()
@@ -49,11 +44,11 @@ object FlowCardMapper {
                     openDelivery = null
                     lastDeliveryArrivedAt = null
 
-                    val payload = decode(event, SessionStartPayload::class.java)
+                    val payload = event.payload as? SessionStartPayload
                     openAwaiting = FlowCardSnapshot.Awaiting(
-                        id = "awaiting:${payload?.sessionId ?: event.aggregateId}:${event.occurredAt}",
+                        id = "awaiting:${payload?.sessionId ?: event.sessionId}:${event.occurredAt}",
                         phaseStartedAt = payload?.startedAt ?: event.occurredAt,
-                        sessionId = payload?.sessionId ?: event.aggregateId,
+                        sessionId = payload?.sessionId ?: event.sessionId,
                     )
                 }
 
@@ -64,7 +59,7 @@ object FlowCardMapper {
                     // that's where the rich evaluation lands. Prefer the
                     // payload's presentedAt; fall back to event occurredAt
                     // for legacy rows where the payload is empty/missing.
-                    val payload = decode(event, OfferReceivedPayload::class.java)
+                    val payload = event.payload as? OfferReceivedPayload
                     val endedAt = payload?.presentedAt?.takeIf { it > 0 } ?: event.occurredAt
                     openAwaiting?.let {
                         completed.add(it.copy(phaseEndedAt = endedAt))
@@ -75,7 +70,7 @@ object FlowCardMapper {
                 AppEventType.OFFER_ACCEPTED,
                 AppEventType.OFFER_DECLINED,
                 AppEventType.OFFER_TIMEOUT -> {
-                    val payload = decode(event, OfferPayload::class.java) ?: continue
+                    val payload = event.payload as? OfferPayload ?: continue
                     // Defensive close of Awaiting using the offer's presentedAt.
                     // The rule-declared OFFER_RECEIVED log effect currently
                     // doesn't persist to the DB (it only goes to Timber), so
@@ -115,15 +110,15 @@ object FlowCardMapper {
                         payload.outcome == AppEventType.OFFER_TIMEOUT
                     ) {
                         openAwaiting = FlowCardSnapshot.Awaiting(
-                            id = "awaiting:${event.aggregateId}:${payload.decidedAt}",
+                            id = "awaiting:${event.sessionId}:${payload.decidedAt}",
                             phaseStartedAt = payload.decidedAt,
-                            sessionId = event.aggregateId,
+                            sessionId = event.sessionId,
                         )
                     }
                 }
 
                 AppEventType.PICKUP_NAV_STARTED -> {
-                    val payload = decode(event, PickupPayload::class.java) ?: continue
+                    val payload = event.payload as? PickupPayload ?: continue
                     // If a pickup is already open and matches this taskId, this
                     // is a follow-up (e.g. store-name resolution) — update.
                     // Otherwise close any stale one and open a new card.
@@ -152,7 +147,7 @@ object FlowCardMapper {
                 }
 
                 AppEventType.PICKUP_ARRIVED -> {
-                    val payload = decode(event, PickupPayload::class.java) ?: continue
+                    val payload = event.payload as? PickupPayload ?: continue
                     val current = openPickup
                     openPickup = if (current?.taskId == payload.taskId) {
                         current.copy(
@@ -176,7 +171,7 @@ object FlowCardMapper {
                 }
 
                 AppEventType.PICKUP_CONFIRMED -> {
-                    val payload = decode(event, PickupPayload::class.java) ?: continue
+                    val payload = event.payload as? PickupPayload ?: continue
                     val current = openPickup
                     val closed = if (current?.taskId == payload.taskId) {
                         current.copy(
@@ -203,7 +198,7 @@ object FlowCardMapper {
                 }
 
                 AppEventType.DELIVERY_NAV_STARTED -> {
-                    val payload = decode(event, DeliveryPayload::class.java) ?: continue
+                    val payload = event.payload as? DeliveryPayload ?: continue
                     // Idempotent — if already open with same taskId, leave it
                     if (openDelivery?.taskId != payload.taskId) {
                         openDelivery?.let { completed.add(it.copy(phaseEndedAt = event.occurredAt)) }
@@ -219,7 +214,7 @@ object FlowCardMapper {
                 }
 
                 AppEventType.DELIVERY_ARRIVED -> {
-                    val payload = decode(event, DeliveryPayload::class.java) ?: continue
+                    val payload = event.payload as? DeliveryPayload ?: continue
                     val current = openDelivery
                     val closed = if (current?.taskId == payload.taskId) {
                         current.copy(
@@ -247,7 +242,7 @@ object FlowCardMapper {
                     // Dasher finished the drop-off. Closes the open Delivery
                     // card. Fires before DELIVERY_COMPLETED (which carries the
                     // PostTask pay breakdown). Analogue of PICKUP_CONFIRMED.
-                    val payload = decode(event, DeliveryPayload::class.java) ?: continue
+                    val payload = event.payload as? DeliveryPayload ?: continue
                     val current = openDelivery
                     val closed = if (current?.taskId == payload.taskId) {
                         current.copy(phaseEndedAt = event.occurredAt)
@@ -269,7 +264,7 @@ object FlowCardMapper {
                 }
 
                 AppEventType.DELIVERY_COMPLETED -> {
-                    val payload = decode(event, DeliveryPayload::class.java) ?: continue
+                    val payload = event.payload as? DeliveryPayload ?: continue
                     // PostTask card spans from delivery arrival (start of the
                     // receipt screen) to the dismiss-receipt moment that
                     // fired DELIVERY_COMPLETED.
@@ -295,14 +290,14 @@ object FlowCardMapper {
                     // intermediate-leg detection lands as a separate fix.)
                     val awaitingStart = payload.completedAt ?: event.occurredAt
                     openAwaiting = FlowCardSnapshot.Awaiting(
-                        id = "awaiting:${event.aggregateId}:${awaitingStart}",
+                        id = "awaiting:${event.sessionId}:${awaitingStart}",
                         phaseStartedAt = awaitingStart,
-                        sessionId = event.aggregateId,
+                        sessionId = event.sessionId,
                     )
                 }
 
                 AppEventType.DASH_STOP -> {
-                    val payload = decode(event, SessionStopPayload::class.java)
+                    val payload = event.payload as? SessionStopPayload
                     val endedAt = payload?.endedAt ?: event.occurredAt
                     // Flush any half-open cards
                     openAwaiting?.let { completed.add(it.copy(phaseEndedAt = endedAt)) }
@@ -335,12 +330,5 @@ object FlowCardMapper {
         // associateBy keeps each id at its first-seen position with the last
         // value — chronological order preserved, newest content wins.
         return completed.associateBy { it.id }.values.toList()
-    }
-
-    private fun <T> decode(event: AppEventEntity, klass: Class<T>): T? = try {
-        gson.fromJson(event.eventPayload, klass)
-    } catch (e: JsonSyntaxException) {
-        Timber.w(e, "FlowCardMapper: failed to decode %s for %s", klass.simpleName, event.eventType)
-        null
     }
 }
