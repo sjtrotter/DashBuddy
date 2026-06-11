@@ -21,8 +21,10 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
  */
 data class UserEconomy(
     val vehicleClass: VehicleClass = VehicleClass.SEDAN,
-    val vehicleMpg: Double = 30.0,
-    val gasPricePerGallon: Double = 3.50,
+    /** Derives from the class (#401) — the old 30.0 literal silently
+     *  duplicated SEDAN.defaultMpg. */
+    val vehicleMpg: Double = vehicleClass.defaultMpg,
+    val gasPricePerGallon: Double = DEFAULT_GAS_PRICE_PER_GALLON,
 
     /** Minutes per mile of driving — default 2.5 (urban average). */
     val avgMinutesPerMile: Double = DEFAULT_MINUTES_PER_MILE,
@@ -97,6 +99,9 @@ data class UserEconomy(
     val isUsingDefaults: Boolean get() = userSetFields.size < EconomyField.entries.size
 
     companion object {
+        /** Fallback price-per-gallon when no fetched price exists (#401). */
+        const val DEFAULT_GAS_PRICE_PER_GALLON = 3.50
+
         const val DEFAULT_MINUTES_PER_MILE = 2.5
         const val DEFAULT_BASE_PICKUP_MINUTES = 7.0
         const val DEFAULT_ANNUAL_DASH_MI = 10_000.0
