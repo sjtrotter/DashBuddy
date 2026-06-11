@@ -27,6 +27,13 @@ data class RequestedEffect(
      */
     val delayMs: Long? = null,
     val ruleId: String,
+    /**
+     * Content-pinned consent key for actuating verbs (#422), computed at compile
+     * and carried unchanged so the execution gate matches what the user granted.
+     * Null for verbs that don't require consent ([EffectVerb.consentRequired] ==
+     * false).
+     */
+    val capabilityKey: String? = null,
 )
 
 /**
