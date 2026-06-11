@@ -30,15 +30,15 @@ class UiNodeTest {
 
     @Test
     fun `equals does NOT cause StackOverflowError on circular references`() {
-        val parent1 = createBaseNode().copy(viewIdResourceName = "parent")
         val child1 = createBaseNode().copy(viewIdResourceName = "child")
-        parent1.children.add(child1)
-        child1.parent = parent1 // Circular Reference!
+        val parent1 = createBaseNode()
+            .copy(viewIdResourceName = "parent", children = listOf(child1))
+            .restoreParents() // wires the circular parent reference
 
-        val parent2 = createBaseNode().copy(viewIdResourceName = "parent")
         val child2 = createBaseNode().copy(viewIdResourceName = "child")
-        parent2.children.add(child2)
-        child2.parent = parent2 // Circular Reference!
+        val parent2 = createBaseNode()
+            .copy(viewIdResourceName = "parent", children = listOf(child2))
+            .restoreParents()
 
         // THE TEST: If the bug exists, this will crash with StackOverflowError
         val areEqual = parent1 == parent2

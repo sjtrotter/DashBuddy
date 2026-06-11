@@ -63,7 +63,13 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **UNKNOWN capture volume should drop materially (#360, PR pending).**
+- **Tree ingestion now bounded — confirm no real screen trips the caps (#363, PR pending).**
+  Accessibility trees deeper than 60 levels or larger than 4,000 nodes truncate with a loud
+  log line. The caps carry 2×/10× margin over the corpus, so a normal dash should NEVER hit
+  them. Post-dash: grep the log for "Tree ingestion truncated" — any hit means a real DoorDash
+  screen is bigger than the corpus suggested and the caps need raising (file it).
+  - Confirmed: 0/2.
+- **UNKNOWN capture volume should drop materially (#360, PR #388).**
   UNKNOWN frames now dedup by content hash in a rolling seen-set (animations/list churn
   capture once instead of per frame), with a 200-per-process cap (logged loudly when hit).
   Post-dash check: count files in the capture INBOX vs a May session of similar length —
