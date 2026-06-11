@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharedFlow
 
 /**
@@ -17,10 +16,21 @@ interface EffectExecutor {
     val events: SharedFlow<StateEvent>
 
     /**
-     * Execute an [AppEffect].
+     * Enqueue an [AppEffect] for execution.
+     *
+     * ORDERING CONTRACT (#351): effects execute strictly in the order they are
+     * processed — within a transition's effect list and across transitions (one
+     * serialized worker). A keyed effect's durable work completes before its
+     * idempotency record is written ("execute, then mark"), so crash recovery can
+     * neither skip an unfinished effect nor double-run a finished one beyond that
+     * single seam. Long-running waits (timers, delayed notifications) are detached
+     * internally and never block the queue — for those, ordering covers the
+     * *arming*, not the eventual firing.
      *
      * @param recovering When true (crash-recovery replay), external effects are
      *   suppressed and keyed effects are checked for idempotency.
+     * @param correlationVersion The emitting transition's correlation version —
+     *   stamped on idempotency records for replay forensics.
      */
-    fun process(effect: AppEffect, scope: CoroutineScope, recovering: Boolean = false)
+    fun process(effect: AppEffect, recovering: Boolean = false, correlationVersion: Long = 0L)
 }

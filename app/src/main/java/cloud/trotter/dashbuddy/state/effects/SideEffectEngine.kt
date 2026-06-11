@@ -17,7 +17,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
-import cloud.trotter.dashbuddy.di.IoDispatcher
+import cloud.trotter.dashbuddy.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
 import kotlinx.coroutines.CancellationException
@@ -26,7 +26,9 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -50,7 +52,7 @@ class SideEffectEngine @Inject constructor(
     private val uiInteractionHandler: UiInteractionHandler,
     private val effectsFiredDao: EffectsFiredDao,
     private val ttsEffectHandler: TtsEffectHandler,
-    @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
 ) : EffectExecutor {
 
     // 1. OUTPUT STREAM: Events going BACK to the StateMachine (The Loopback)
@@ -87,26 +89,50 @@ class SideEffectEngine @Inject constructor(
      *   - Loopback effects (timers, evaluations) replay deterministically.
      */
     /**
-     * Backstop for the effect coroutines this engine spawns (timers, IO writes): an uncaught
-     * failure must never reach the default handler and kill the process (#341).
+     * Backstop for the effect coroutines this engine spawns (timers, delayed posts): an
+     * uncaught failure must never reach the default handler and kill the process (#341).
      */
     private val effectExceptionHandler = CoroutineExceptionHandler { _, t ->
         Timber.e(t, "SideEffectEngine: effect coroutine crashed (isolated)")
     }
 
-    override fun process(effect: AppEffect, scope: CoroutineScope, recovering: Boolean) {
-        scope.launch(effectExceptionHandler) {
-            try {
-                execute(effect, scope, recovering)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.e(e, "Effect failed (isolated): %s", effect::class.simpleName)
+    /**
+     * Engine-owned execution context (#351). One serialized worker drains [queue], so
+     * effects run strictly in [process] order — within a transition's effect list and
+     * across transitions — and "execute, then markFired" holds (see [execute]'s tail).
+     * Long-running waits (timers, delayed notifications) detach onto this scope and
+     * never block the queue.
+     */
+    private val engineScope =
+        CoroutineScope(defaultDispatcher + SupervisorJob() + effectExceptionHandler)
+
+    private data class QueuedEffect(
+        val effect: AppEffect,
+        val recovering: Boolean,
+        val correlationVersion: Long,
+    )
+
+    private val queue = Channel<QueuedEffect>(Channel.UNLIMITED)
+
+    init {
+        engineScope.launch {
+            for (item in queue) {
+                try {
+                    execute(item.effect, item.recovering, item.correlationVersion)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.e(e, "Effect failed (isolated): %s", item.effect::class.simpleName)
+                }
             }
         }
     }
 
-    private suspend fun execute(effect: AppEffect, scope: CoroutineScope, recovering: Boolean) {
+    override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
+        queue.trySend(QueuedEffect(effect, recovering, correlationVersion))
+    }
+
+    private suspend fun execute(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
         // Idempotency: skip keyed effects already fired
         val key = effect.effectKey
         if (key != null && recovering) {
@@ -124,9 +150,10 @@ class SideEffectEngine @Inject constructor(
         when (effect) {
             // --- FIRE & FORGET (UI / IO) ---
             is AppEffect.LogEvent -> {
-                scope.launch(ioDispatcher + effectExceptionHandler) {
-                    appEventRepo.insert(effect.event)
-                }
+                // Inline in the worker (#351): the insert completes before the
+                // markFired tail below runs, and before any later effect executes —
+                // event-log rows land in EffectMap emission order.
+                appEventRepo.insert(effect.event)
             }
 
             is AppEffect.UpdateBubble -> {
@@ -134,7 +161,7 @@ class SideEffectEngine @Inject constructor(
             }
 
             is AppEffect.CaptureScreenshot -> {
-                screenShotHandler.capture(scope, effect)
+                screenShotHandler.capture(engineScope, effect)
             }
 
             is AppEffect.ClickNode -> {
@@ -162,7 +189,7 @@ class SideEffectEngine @Inject constructor(
                     return
                 }
                 actionLastFiredAt[effectKey] = now
-                dispatchRuleEffect(effect.effect, scope)
+                dispatchRuleEffect(effect.effect)
             }
 
             is AppEffect.PlayNotificationSound -> { /* Implementation */
@@ -177,7 +204,7 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.PauseOdometer -> odometerEffectHandler.pause()
             is AppEffect.ResumeOdometer -> odometerEffectHandler.resume()
 
-            is AppEffect.ProcessTipNotification -> tipEffectHandler.process(scope, effect)
+            is AppEffect.ProcessTipNotification -> tipEffectHandler.process(engineScope, effect)
 
             // --- LOOPBACKS (Produces Events) ---
 
@@ -196,7 +223,8 @@ class SideEffectEngine @Inject constructor(
                 // lands AFTER the offer screenshot's settle + capture (clean frame).
                 val summary = effect.evaluation.toNotificationSummary()
                 val persona = offerPersona(effect.evaluation.action)
-                scope.launch(effectExceptionHandler) {
+                // Detached: the delay must not block the queue (#351).
+                engineScope.launch {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(summary, persona)
                 }
@@ -210,8 +238,9 @@ class SideEffectEngine @Inject constructor(
 
                 // LAZY start so the map entry exists before the body can run; the completion
                 // handler removes only ITSELF (two-arg remove), so an expiring timer can never
-                // untrack a replacement scheduled for the same type (#341).
-                val job = scope.launch(effectExceptionHandler, start = CoroutineStart.LAZY) {
+                // untrack a replacement scheduled for the same type (#341). Detached onto the
+                // engine scope — never blocks the queue (#351).
+                val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(effect.durationMs)
                     Timber.w("Timer Expired: ${effect.type}")
 
@@ -231,21 +260,22 @@ class SideEffectEngine @Inject constructor(
             }
 
             is AppEffect.SequentialEffect -> {
-                effect.effects.forEach { child -> execute(child, scope, recovering) }
+                effect.effects.forEach { child -> execute(child, recovering, correlationVersion) }
             }
         }
 
-        // Record keyed effect as fired for idempotency
+        // "Execute, then mark" (#351): the effect's durable work above completed in this
+        // worker before the idempotency record is written, so recovery can neither skip
+        // an unfinished effect nor double-run a finished one beyond this single seam.
+        // (Atomic insert+mark in one Room transaction lands with #354's repo rework.)
         if (key != null) {
-            scope.launch(ioDispatcher + effectExceptionHandler) {
-                effectsFiredDao.markFired(
-                    EffectsFiredEntity(
-                        effectKey = key,
-                        firedAt = System.currentTimeMillis(),
-                        correlationVersion = 0, // caller can set if needed
-                    )
+            effectsFiredDao.markFired(
+                EffectsFiredEntity(
+                    effectKey = key,
+                    firedAt = System.currentTimeMillis(),
+                    correlationVersion = correlationVersion,
                 )
-            }
+            )
         }
     }
 
@@ -257,7 +287,7 @@ class SideEffectEngine @Inject constructor(
      * Dispatch a [RequestedEffect] to the appropriate handler based on its verb.
      * Permission tier is checked before execution — denied verbs are logged and skipped.
      */
-    private suspend fun dispatchRuleEffect(e: RequestedEffect, scope: CoroutineScope) {
+    private suspend fun dispatchRuleEffect(e: RequestedEffect) {
         if (!isPermissionGranted(e.verb.tier)) {
             Timber.w("Denied effect %s — permission tier %s not granted", e.verb, e.verb.tier)
             return
@@ -265,9 +295,9 @@ class SideEffectEngine @Inject constructor(
         when (e.verb) {
             // --- Observation-driven verbs ---
             EffectVerb.CLICK -> resolveAndClick(e)
-            EffectVerb.SCREENSHOT -> screenshotFromArgs(scope, e.args)
+            EffectVerb.SCREENSHOT -> screenshotFromArgs(e.args)
             EffectVerb.BUBBLE -> bubbleFromArgs(e.args)
-            EffectVerb.LOG -> logFromArgs(e.args, scope)
+            EffectVerb.LOG -> logFromArgs(e.args)
             EffectVerb.EVALUATE_OFFER -> {
                 Timber.d("Rule-driven evaluate_offer — requires offer context from EffectMap")
             }
@@ -283,7 +313,7 @@ class SideEffectEngine @Inject constructor(
             EffectVerb.ODOMETER_PAUSE -> odometerEffectHandler.pause()
             EffectVerb.ODOMETER_RESUME -> odometerEffectHandler.resume()
             EffectVerb.SCHEDULE_TIMEOUT -> scheduleTimeoutFromArgs(
-                scope, e.args,
+                e.args,
                 Platform.fromRuleId(e.ruleId).takeIf { it != Platform.Unknown },
             )
             EffectVerb.CANCEL_TIMEOUT -> cancelTimeoutFromArgs(e.args)
@@ -323,9 +353,9 @@ class SideEffectEngine @Inject constructor(
         }
     }
 
-    private fun screenshotFromArgs(scope: CoroutineScope, args: Map<String, String>) {
+    private fun screenshotFromArgs(args: Map<String, String>) {
         val prefix = args["prefix"] ?: "Rule"
-        screenShotHandler.capture(scope, AppEffect.CaptureScreenshot(filenamePrefix = prefix))
+        screenShotHandler.capture(engineScope, AppEffect.CaptureScreenshot(filenamePrefix = prefix))
     }
 
     private fun bubbleFromArgs(args: Map<String, String>) {
@@ -334,7 +364,7 @@ class SideEffectEngine @Inject constructor(
         bubbleManager.postMessage(text, persona)
     }
 
-    private fun logFromArgs(args: Map<String, String>, scope: CoroutineScope) {
+    private fun logFromArgs(args: Map<String, String>) {
         val type = args["type"] ?: "RULE_EFFECT"
         val payload = args["payload"]
         Timber.i("Rule LOG [%s]: %s", type, payload ?: "(no payload)")
@@ -351,8 +381,7 @@ class SideEffectEngine @Inject constructor(
         bubbleManager.endSession(platformName)
     }
 
-    private suspend fun scheduleTimeoutFromArgs(
-        scope: CoroutineScope,
+    private fun scheduleTimeoutFromArgs(
         args: Map<String, String>,
         platform: Platform?,
     ) {
@@ -367,7 +396,7 @@ class SideEffectEngine @Inject constructor(
 
         activeTimers[type]?.cancel()
         // Same LAZY + self-removing pattern as AppEffect.ScheduleTimeout (#341).
-        val job = scope.launch(effectExceptionHandler, start = CoroutineStart.LAZY) {
+        val job = engineScope.launch(start = CoroutineStart.LAZY) {
             delay(durationMs)
             Timber.w("Timer Expired (rule): %s", type)
             _events.emit(TimeoutEvent(type = type, platform = platform))
