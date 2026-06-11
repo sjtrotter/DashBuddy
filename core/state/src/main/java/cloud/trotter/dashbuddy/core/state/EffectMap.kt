@@ -393,6 +393,9 @@ class EffectMap @Inject constructor(
                             AppEffect.ScheduleTimeout(
                                 durationMs,
                                 TimeoutType.SESSION_PAUSED_SAFETY,
+                                // Route the fire back to THIS region — without it the timeout
+                                // steps Platform.Unknown and the pause never expires (#342).
+                                platform = next.platform,
                             )
                         )
                         add(AppEffect.UpdateBubble("Dash Paused!"))
@@ -684,6 +687,7 @@ class EffectMap @Inject constructor(
                     AppEffect.ScheduleTimeout(
                         durationMs = effect.delayMs!!,
                         type = TimeoutType.SETTLE_UI,
+                        platform = flowObs.platform.takeIf { it != Platform.Unknown },
                         payload = serializeClickContext(effect),
                     )
                 } else {

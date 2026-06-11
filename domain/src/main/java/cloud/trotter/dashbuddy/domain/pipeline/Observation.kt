@@ -97,12 +97,21 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val metadata: ReplayMetadata = ReplayMetadata.EMPTY,
         val type: TimeoutType,
         /**
+         * The platform region this timer belongs to. Timeouts carry no ruleId, so
+         * without an explicit target they derive [Platform.Unknown] and the owning
+         * region never sees the fire — the pause-safety timer was dead (#342).
+         * Null = not platform-scoped.
+         */
+        val targetPlatform: Platform? = null,
+        /**
          * Carries opaque context from the original [AppEffect.ScheduleTimeout]'s
          * payload back into the state machine. Used for deferred-effect patterns
          * like click-after-settle where the timer fire needs to know what to do.
          */
         val payload: Map<String, Any?> = emptyMap(),
-    ) : Observation
+    ) : Observation {
+        override val platform: Platform get() = targetPlatform ?: Platform.fromRuleId(ruleId)
+    }
 
     /** A UI interaction event from the bubble HUD or overlay. */
     data class UiInput(
