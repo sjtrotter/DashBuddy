@@ -255,7 +255,29 @@ At the start of a session or before picking up new work:
    starting B, C, or D.
 3. **Determine logical next steps** from the milestone/phase ordering, then check those candidates
    for unresolved blockers before committing to a direction.
-4. **Update `memory/project_state.md`** if the current state has drifted from what's recorded.
+4. **Update the project-state memory** (`project_state_<date>.md` in the memory directory —
+   see *Claude Memory Upkeep* below) if the current state has drifted from what's recorded.
+
+## Claude Memory Upkeep
+
+The persistent memory directory (path in `CLAUDE.local.md` § Local workstation) is shared state
+for **every** Claude agent and session that works on this repo — orientation quality next session
+depends on what got written down this session. **Keeping memories current is part of finishing
+any piece of work, not an optional extra.** Whenever your work changes project status — merging
+a PR, closing / re-scoping / filing issues, completing a milestone phase, locking a design
+decision, running an audit, or discovering that something a memory records is no longer true —
+update the relevant memory file(s) **in the same session**, and keep the `MEMORY.md` index in
+sync (one pointer line per memory).
+
+Rules of thumb:
+
+- **A stale memory is worse than no memory** — it actively misleads the next agent. Correct or
+  delete wrong memories on sight; deleting a wrong memory is as valuable as writing a new one.
+- The dated `project_state_<date>.md` snapshot is **replaced** when a newer full audit
+  supersedes it (delete the old file, update the `MEMORY.md` pointer) — don't accumulate
+  stale snapshots.
+- Don't duplicate what the repo already records (code, git history, issues, ADRs, this file) —
+  memories hold status, decisions, and context that are *not* derivable from the repo.
 
 ## Field Testing Logs
 
