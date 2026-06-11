@@ -302,6 +302,12 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   recurrence. If it shows two pickups again, grab the `offer_popup` capture + a screenshot pair so
   parse vs render can be split.
   - Confirmed: 0/2.
+- **Screenshots still save + no offer-time jank (#349).** Screenshot saving moved fully off the
+  main thread (the PNG compress + MediaStore write used to run on main, right when the offer
+  card/notification renders). Confirm: (a) offer + dash-summary screenshots still land in
+  `Pictures/DashBuddy`; (b) no visible stutter the moment an offer arrives (should be same or
+  smoother than before).
+  - Confirmed: 0/2.
 
 ---
 
