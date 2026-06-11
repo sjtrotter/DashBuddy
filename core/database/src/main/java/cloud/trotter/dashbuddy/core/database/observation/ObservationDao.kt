@@ -10,8 +10,12 @@ interface ObservationDao {
     @Insert
     suspend fun insert(entity: ObservationEntity): Long
 
-    /** All observations after a given correlationVersion, ordered for replay. */
-    @Query("SELECT * FROM observations WHERE correlationVersion > :afterVersion ORDER BY sequenceId ASC")
+    /**
+     * All observations after a given correlationVersion, in PROCESSING order for
+     * replay (#352). correlationVersion is assigned by the reducer; sequenceId is
+     * insert-landing order, which concurrent writers could scramble.
+     */
+    @Query("SELECT * FROM observations WHERE correlationVersion > :afterVersion ORDER BY correlationVersion ASC")
     suspend fun since(afterVersion: Long): List<ObservationEntity>
 
     /** Latest observation by correlationVersion. */

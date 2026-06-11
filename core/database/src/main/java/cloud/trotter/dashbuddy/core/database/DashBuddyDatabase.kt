@@ -25,7 +25,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         ObservationEntity::class,
         SnapshotRecord::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(DataTypeConverters::class)

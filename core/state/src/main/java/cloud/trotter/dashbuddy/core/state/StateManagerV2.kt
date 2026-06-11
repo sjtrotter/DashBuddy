@@ -1,22 +1,15 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.core.database.observation.ObservationDao
-import cloud.trotter.dashbuddy.core.database.observation.ObservationEntity
-import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotDao
-import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
-import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.core.state.di.DefaultDispatcher
+import cloud.trotter.dashbuddy.core.state.di.IoDispatcher
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
-import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
-import cloud.trotter.dashbuddy.domain.state.Flow
-import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
-import kotlinx.serialization.encodeToString
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +18,6 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import java.util.concurrent.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,11 +26,13 @@ class StateManagerV2 @Inject constructor(
     private val pipeline: PipelineV2,
     private val engine: EffectExecutor,
     private val stateMachine: StateMachine,
-    private val observationDao: ObservationDao,
-    private val snapshotDao: AppStateSnapshotDao,
+    private val journal: ObservationJournal,
+    private val snapshots: SnapshotStore,
+    @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
+    @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) {
 
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val scope = CoroutineScope(defaultDispatcher + SupervisorJob())
 
     // UI input stream (clicks, debug buttons)
     private val uiInputChannel = Channel<StateEvent>(Channel.UNLIMITED)
@@ -46,40 +40,33 @@ class StateManagerV2 @Inject constructor(
     private val _state = MutableStateFlow(AppState())
     val state = _state.asStateFlow()
 
-    companion object {
-        /** Write a state snapshot every N accepted observations. */
-        const val SNAPSHOT_INTERVAL = 5
-
-        /** Prune state snapshots older than this (24 hours). */
-        const val SNAPSHOT_RETENTION_MS = 24 * 60 * 60 * 1000L
-    }
-
     fun initialize() {
         Timber.i("Initializing V2 State Machine (multi-region)...")
+        journal.start(scope, ioDispatcher)
         scope.launch {
+            // Collect BEFORE restoring (#352): the pipeline flows are hot and don't
+            // replay, so events arriving during recovery used to be silently lost.
+            // They buffer here and process — in arrival order — once restore is done.
+            val buffer = Channel<StateEvent>(Channel.UNLIMITED)
+            scope.launch {
+                merge(
+                    pipeline.events,
+                    engine.events,
+                    uiInputChannel.receiveAsFlow(),
+                ).collect { buffer.send(it) }
+            }
+
             restoreState()
-            startProcessor()
+
+            for (stateEvent in buffer) {
+                Timber.d("PROCESSING: ${stateEvent::class.simpleName}")
+                processEvent(stateEvent)
+            }
         }
     }
 
     fun dispatch(stateEvent: StateEvent) {
         uiInputChannel.trySend(stateEvent)
-    }
-
-    private fun startProcessor() {
-        scope.launch {
-            Timber.d("Connecting all event streams...")
-
-            merge(
-                pipeline.events,
-                engine.events,
-                uiInputChannel.receiveAsFlow()
-            )
-                .collect { stateEvent ->
-                    Timber.d("PROCESSING: ${stateEvent::class.simpleName}")
-                    processEvent(stateEvent)
-                }
-        }
     }
 
     private fun processEvent(stateEvent: StateEvent) {
@@ -93,11 +80,11 @@ class StateManagerV2 @Inject constructor(
             _state.value = transition.newState
         }
 
-        // Persist observation to append-only log
-        persistObservation(obs, transition.newState)
+        // Persist observation to the append-only log (ordered single writer, #352)
+        journal.append(obs, transition.newState)
 
         // Periodic + major-transition snapshots
-        maybeSnapshot(transition.newState, currentState)
+        snapshots.maybeSnapshot(scope, ioDispatcher, currentState, transition.newState)
 
         // Emit effects — the engine serializes execution in this order (#351).
         transition.effects.forEach { effect ->
@@ -105,143 +92,31 @@ class StateManagerV2 @Inject constructor(
         }
     }
 
-    // ── Observation Persistence ─────────────────────────────────────────
-
-    private fun persistObservation(obs: Observation, state: AppState) {
-        scope.launch(Dispatchers.IO) {
-            try {
-                observationDao.insert(obs.toEntity(state))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                Timber.e(e, "Failed to persist observation")
-            }
-        }
-    }
-
-    private fun Observation.toEntity(state: AppState): ObservationEntity {
-        val flowObs = this as? Observation.FlowObservation
-        val session = state.regions.platforms[platform]?.session
-        return ObservationEntity(
-            occurredAt = timestamp,
-            sessionId = session?.sessionId,
-            pipelineId = pipelineIdOf(this),
-            ruleId = ruleId,
-            platform = platform.name,
-            flow = flowObs?.flow?.name,
-            modeHint = flowObs?.modeHint?.name,
-            parsedJson = if (flowObs != null) StateJson.encodeToString<ParsedFields>(flowObs.parsed) else "{}",
-            captureId = captureId,
-            metadataJson = StateJson.encodeToString(metadata),
-            correlationVersion = state.correlationVersion,
-            timeoutType = (this as? Observation.Timeout)?.type?.name,
-        )
-    }
-
-    private fun pipelineIdOf(obs: Observation): String = when (obs) {
-        is Observation.Screen -> "accessibility.window"
-        is Observation.Click -> "accessibility.click"
-        is Observation.Notification -> "notification"
-        is Observation.Timeout -> "internal.timeout"
-        is Observation.UiInput -> "internal.ui"
-        is Observation.Loopback -> "internal.loopback"
-    }
-
-    // ── Snapshots ───────────────────────────────────────────────────────
-
-    private fun maybeSnapshot(next: AppState, prev: AppState) {
-        val shouldSnapshot =
-            next.correlationVersion % SNAPSHOT_INTERVAL == 0L ||
-                    isMajorTransition(prev, next)
-
-        if (!shouldSnapshot) return
-
-        scope.launch(Dispatchers.IO) {
-            try {
-                val activeSession = next.regions.platforms.values
-                    .maxByOrNull { it.lastObservedAt }?.session
-                snapshotDao.insert(
-                    AppStateSnapshotEntity(
-                        correlationVersion = next.correlationVersion,
-                        capturedAt = System.currentTimeMillis(),
-                        sessionId = activeSession?.sessionId,
-                        stateJson = StateJson.encodeToString(next),
-                    )
-                )
-                // Prune snapshots older than 24h
-                snapshotDao.pruneOlderThan(System.currentTimeMillis() - SNAPSHOT_RETENTION_MS)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                Timber.e(e, "Failed to write state snapshot")
-            }
-        }
-    }
-
-    private fun isMajorTransition(prev: AppState, next: AppState): Boolean {
-        val allPlatforms = (prev.regions.platforms.keys + next.regions.platforms.keys)
-        for (p in allPlatforms) {
-            val prevRegion = prev.regions.platforms[p]
-            val nextRegion = next.regions.platforms[p]
-
-            // Session start/end
-            if (prevRegion?.session?.sessionId != nextRegion?.session?.sessionId) return true
-
-            // Job start/end
-            if (prevRegion?.activeJob?.jobId != nextRegion?.activeJob?.jobId) return true
-        }
-
-        // Flow transitions that mark lifecycle boundaries
-        val prevFlow = prev.regions.flow.flow
-        val nextFlow = next.regions.flow.flow
-        if (prevFlow != nextFlow) {
-            val majorFlows = setOf(
-                Flow.OfferPresented,
-                Flow.SessionEnded,
-            )
-            if (nextFlow in majorFlows || prevFlow in majorFlows) return true
-        }
-
-        return false
-    }
-
     // ── Crash Recovery ──────────────────────────────────────────────────
 
     private suspend fun restoreState() {
         try {
-            val snapshot = snapshotDao.latest()
-            if (snapshot == null) {
-                Timber.i("No snapshot found — starting fresh")
+            val restored = snapshots.restoreLatest()
+            if (restored == null) {
+                Timber.i("No usable snapshot — starting fresh")
                 _state.value = AppState()
                 return
             }
 
-            // Restore from snapshot. Schema drift within kotlinx's tolerance
-            // (unknown/missing-optional fields) decodes with defaults; anything
-            // beyond that fails LOUDLY and falls back to fresh state (#353).
-            val restoredState = try {
-                StateJson.decodeFromString<AppState>(snapshot.stateJson)
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to deserialize snapshot — starting fresh")
-                _state.value = AppState()
-                return
-            }
-
-            // Tail-replay observations after the snapshot
-            val tail = observationDao.since(snapshot.correlationVersion)
+            // Tail-replay observations after the snapshot, in cv order (#352)
+            val tail = journal.tailAfter(restored.correlationVersion)
             if (tail.isEmpty()) {
-                Timber.i("Restored from snapshot at cv=%d, no tail", snapshot.correlationVersion)
-                _state.value = restoredState
+                Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
+                _state.value = restored.state
                 return
             }
 
             Timber.i(
                 "Replaying %d observations after snapshot cv=%d",
-                tail.size, snapshot.correlationVersion,
+                tail.size, restored.correlationVersion,
             )
 
-            val finalState = tail.fold(restoredState) { acc, entity ->
-                val obs = entity.toObservation()
+            val finalState = tail.fold(restored.state) { acc, obs ->
                 val transition = stateMachine.step(acc, obs)
                 // Process effects in recovery mode (external suppressed, keyed deduped)
                 transition.effects.forEach { effect ->
@@ -259,87 +134,6 @@ class StateManagerV2 @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "State recovery failed — starting fresh")
             _state.value = AppState()
-        }
-    }
-
-    /**
-     * Reconstruct an [Observation] from a persisted [ObservationEntity].
-     * Used during crash-recovery tail replay.
-     */
-    private fun ObservationEntity.toObservation(): Observation {
-        return when (pipelineId) {
-            "accessibility.window" -> Observation.Screen(
-                timestamp = occurredAt,
-                captureId = captureId,
-                ruleId = ruleId,
-                metadata = ReplayMetadata.EMPTY,
-                flow = flow?.let { runCatching { enumValueOf<Flow>(it) }.getOrNull() },
-                modeHint = modeHint?.let {
-                    runCatching { enumValueOf<cloud.trotter.dashbuddy.domain.state.Mode>(it) }.getOrNull()
-                },
-                parsed = deserializeParsed(parsedJson),
-                target = ruleId?.substringAfterLast('.'),
-            )
-
-            "accessibility.click" -> Observation.Click(
-                timestamp = occurredAt,
-                captureId = captureId,
-                ruleId = ruleId,
-                metadata = ReplayMetadata.EMPTY,
-                flow = flow?.let { runCatching { enumValueOf<Flow>(it) }.getOrNull() },
-                modeHint = modeHint?.let {
-                    runCatching { enumValueOf<cloud.trotter.dashbuddy.domain.state.Mode>(it) }.getOrNull()
-                },
-                parsed = deserializeParsed(parsedJson),
-                target = ruleId?.substringAfterLast('.'),
-            )
-
-            "notification" -> Observation.Notification(
-                timestamp = occurredAt,
-                captureId = captureId,
-                ruleId = ruleId,
-                metadata = ReplayMetadata.EMPTY,
-                flow = flow?.let { runCatching { enumValueOf<Flow>(it) }.getOrNull() },
-                modeHint = modeHint?.let {
-                    runCatching { enumValueOf<cloud.trotter.dashbuddy.domain.state.Mode>(it) }.getOrNull()
-                },
-                parsed = deserializeParsed(parsedJson),
-                target = ruleId?.substringAfterLast('.'),
-            )
-
-            "internal.timeout" -> Observation.Timeout(
-                timestamp = occurredAt,
-                type = timeoutType?.let {
-                    runCatching { enumValueOf<TimeoutType>(it) }.getOrNull()
-                } ?: TimeoutType.SETTLE_UI,
-            )
-
-            "internal.ui" -> Observation.UiInput(
-                timestamp = occurredAt,
-                action = "replay",
-            )
-
-            "internal.loopback" -> Observation.Loopback(
-                timestamp = occurredAt,
-                effect = "replay",
-            )
-
-            else -> Observation.Loopback(
-                timestamp = occurredAt,
-                effect = "unknown_pipeline:$pipelineId",
-            )
-        }
-    }
-
-    private fun deserializeParsed(json: String): ParsedFields {
-        // Non-flow observations persist "{}" — that's a legitimate None, not corruption.
-        if (json.isBlank() || json == "{}") return ParsedFields.None
-        return try {
-            StateJson.decodeFromString<ParsedFields>(json)
-        } catch (e: Exception) {
-            // LOUD (#353): the old silent fallback hid replay corruption entirely.
-            Timber.e(e, "Failed to decode persisted ParsedFields — replaying as None: %s", json.take(120))
-            ParsedFields.None
         }
     }
 
