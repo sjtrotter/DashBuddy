@@ -37,27 +37,41 @@ class ObservationClassifier @Inject constructor(
         private set
 
 
-    fun classify(event: PipelineEvent): Observation {
+    // Typed entry points (#361): each event subtype returns its observation
+    // subtype, so pipelines never downcast classify results.
+    fun classify(event: PipelineEvent.Screen): Observation.Screen =
+        prepared(event) { wire, now -> classifyScreen(event, wire, now) }
+
+    fun classify(event: PipelineEvent.Click): Observation.Click =
+        prepared(event) { wire, now -> classifyClick(event, wire, now) }
+
+    fun classify(event: PipelineEvent.Notification): Observation.Notification =
+        prepared(event) { wire, _ -> classifyNotification(event, wire) }
+
+    fun classify(event: PipelineEvent): Observation.FlowObservation = when (event) {
+        is PipelineEvent.Screen -> classify(event)
+        is PipelineEvent.Click -> classify(event)
+        is PipelineEvent.Notification -> classify(event)
+    }
+
+    /**
+     * Shared classification context. One coherent instant per classification
+     * (#343): time transforms (parseTime/parseDeadline) and the resulting
+     * observation timestamp see the same "now" — the notification's postTime,
+     * or the moment this screen/click is classified.
+     */
+    private inline fun <T> prepared(event: PipelineEvent, crossinline block: (String?, Long) -> T): T {
         val platformWire = when (event) {
             is PipelineEvent.Screen -> Platform.fromPackage(event.packageName).wire
             is PipelineEvent.Click -> Platform.fromPackage(event.packageName).wire
             is PipelineEvent.Notification -> Platform.fromPackage(event.raw.packageName).wire
         }.takeIf { it != Platform.Unknown.wire }
 
-        // One coherent instant per classification (#343): time transforms (parseTime/
-        // parseDeadline) and the resulting observation timestamp see the same "now" —
-        // the notification's postTime, or the moment this screen/click is classified.
         val eventNow = when (event) {
             is PipelineEvent.Notification -> event.raw.postTime
             else -> System.currentTimeMillis()
         }
-        return TransformRegistry.withClock(eventNow) {
-            when (event) {
-                is PipelineEvent.Screen -> classifyScreen(event, platformWire, eventNow)
-                is PipelineEvent.Click -> classifyClick(event, platformWire, eventNow)
-                is PipelineEvent.Notification -> classifyNotification(event, platformWire)
-            }
-        }
+        return TransformRegistry.withClock(eventNow) { block(platformWire, eventNow) }
     }
 
     // ── Screen ──────────────────────────────────────────────────────────

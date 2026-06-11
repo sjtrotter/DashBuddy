@@ -1,8 +1,5 @@
 package cloud.trotter.dashbuddy.core.pipeline.notification
 
-import cloud.trotter.dashbuddy.domain.capture.CaptureBus
-import cloud.trotter.dashbuddy.domain.capture.EnvelopeBuilder
-import cloud.trotter.dashbuddy.domain.capture.schema.RawNotificationSchema
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.identity
@@ -10,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
+import cloud.trotter.dashbuddy.core.pipeline.CaptureWriter
 import cloud.trotter.dashbuddy.core.pipeline.FrameGate
 import cloud.trotter.dashbuddy.core.pipeline.notification.input.NotificationSource
 import cloud.trotter.dashbuddy.core.pipeline.notification.mapper.toDomain
@@ -34,7 +32,7 @@ class NotificationPipeline @Inject constructor(
     private val source: NotificationSource,
     private val filter: NotificationFilter,
     private val classifier: ObservationClassifier,
-    private val captureBus: CaptureBus,
+    private val captureWriter: CaptureWriter,
     private val platformPreferences: PlatformPreferences,
 ) {
     companion object {
@@ -49,8 +47,7 @@ class NotificationPipeline @Inject constructor(
         .filter { raw -> filter.isRelevant(raw) }
         .map { raw ->
             val event = PipelineEvent.Notification(raw.postTime, raw)
-            val obs = classifier.classify(event) as Observation.Notification
-            obs to raw
+            classifier.classify(event) to raw
         }
         // Gate: drop noise observations (known-irrelevant, never capture or forward)
         .filter { (obs, _) ->
@@ -68,28 +65,7 @@ class NotificationPipeline @Inject constructor(
         // content hash in a rolling seen-set (#360).
         .mapNotNull { (obs, raw) ->
             if (!frameGate.admit(obs, raw.contentHash)) return@mapNotNull null
-
-            // Derive platform from the source package, not from the matched rule
-            val platform = Platform.fromPackage(raw.packageName).wire
-            val capture = EnvelopeBuilder.build(
-                pipelineId = PIPELINE_ID,
-                schema = RawNotificationSchema,
-                platform = platform,
-                ruleId = obs.ruleId,
-                classificationName = obs.target,
-                payload = raw,
-                contentHash = raw.contentHash,
-                metadata = obs.metadata,
-            )
-            val captureId = captureBus.offer(
-                captureId = capture.captureId,
-                source = PIPELINE_ID,
-                classification = obs.target,
-                platform = platform,
-                envelopeJson = capture.envelopeJson,
-                contentHash = capture.contentHash,
-            )
-            obs.copy(captureId = captureId)
+            captureWriter.captureNotification(obs, raw)
         }
         // Gate: don't forward UNKNOWN to state machine
         .filter { obs ->

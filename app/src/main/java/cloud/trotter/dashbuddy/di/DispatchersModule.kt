@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.di
 
-import cloud.trotter.dashbuddy.core.data.di.ApplicationScope
+import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import cloud.trotter.dashbuddy.core.state.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.core.state.di.IoDispatcher
 import dagger.Module

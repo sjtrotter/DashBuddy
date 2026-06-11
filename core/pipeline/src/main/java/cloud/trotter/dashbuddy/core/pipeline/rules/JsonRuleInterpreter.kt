@@ -30,14 +30,26 @@ class JsonRuleInterpreter @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) {
 
-    var screenRuleset: Ruleset<UiNode>? = null
-        private set
-    var clickRuleset: Ruleset<UiNode>? = null
-        private set
-    var notificationRuleset: Ruleset<RawNotificationData>? = null
-        private set
-    var loadedFormatVersion: Int? = null
-        private set
+    /**
+     * The loaded rulesets as ONE immutable bundle behind a single volatile
+     * reference (#361): readers on flow threads see either the previous
+     * complete set or the next complete set, never a half-swapped mix. This is
+     * the thread-safety prerequisite for the #192 OTA hot-reload path.
+     */
+    @Volatile
+    private var current: LoadedRulesets = LoadedRulesets()
+
+    val screenRuleset: Ruleset<UiNode>? get() = current.screens
+    val clickRuleset: Ruleset<UiNode>? get() = current.clicks
+    val notificationRuleset: Ruleset<RawNotificationData>? get() = current.notifications
+    val loadedFormatVersion: Int? get() = current.formatVersion
+
+    private data class LoadedRulesets(
+        val screens: Ruleset<UiNode>? = null,
+        val clicks: Ruleset<UiNode>? = null,
+        val notifications: Ruleset<RawNotificationData>? = null,
+        val formatVersion: Int? = null,
+    )
 
     /** Load all bundled rule files from `assets/rules/`. */
     fun loadDefaults() {
@@ -55,6 +67,7 @@ class JsonRuleInterpreter @Inject constructor(
             val allClicks = mutableListOf<CompiledRule<UiNode>>()
             val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
             val seenRuleIds = mutableMapOf<String, String>() // ruleId → first source path
+            var lastFormatVersion: Int? = null
 
             for (fileName in files) {
                 val path = "$RULES_DIR/$fileName"
@@ -78,11 +91,15 @@ class JsonRuleInterpreter @Inject constructor(
                 allScreens += result.screens
                 allClicks += result.clicks
                 allNotifications += result.notifications
+                result.formatVersion?.let { lastFormatVersion = it }
             }
 
-            screenRuleset = Ruleset(allScreens)
-            clickRuleset = Ruleset(allClicks)
-            notificationRuleset = Ruleset(allNotifications)
+            current = LoadedRulesets(
+                screens = Ruleset(allScreens),
+                clicks = Ruleset(allClicks),
+                notifications = Ruleset(allNotifications),
+                formatVersion = lastFormatVersion,
+            )
 
             Timber.i(
                 "JsonRuleInterpreter: loaded %d file(s) from %s/ " +
@@ -126,14 +143,14 @@ class JsonRuleInterpreter @Inject constructor(
                 ?.let { RuleCompiler.compileRules<RawNotificationData>(it, RuleContext.NOTIFICATION) }
                 ?: emptyList()
 
-            loadedFormatVersion = root["format_version"]?.jsonPrimitive?.int
+            val formatVersion = root["format_version"]?.jsonPrimitive?.int
 
             Timber.i(
                 "JsonRuleInterpreter: compiled '$source' " +
                     "(screens=${screens.size}, clicks=${clicks.size}, notifications=${notifications.size})"
             )
 
-            CompiledRuleBundle(screens, clicks, notifications)
+            CompiledRuleBundle(screens, clicks, notifications, formatVersion)
         } catch (e: RuleCompileException) {
             Timber.e(e, "JsonRuleInterpreter: compile error in '$source'")
             null
@@ -149,9 +166,12 @@ class JsonRuleInterpreter @Inject constructor(
      */
     fun load(jsonString: String, source: String = "unknown") {
         val result = loadSingle(jsonString, source) ?: return
-        screenRuleset = Ruleset(result.screens)
-        clickRuleset = Ruleset(result.clicks)
-        notificationRuleset = Ruleset(result.notifications)
+        current = LoadedRulesets(
+            screens = Ruleset(result.screens),
+            clicks = Ruleset(result.clicks),
+            notifications = Ruleset(result.notifications),
+            formatVersion = result.formatVersion,
+        )
     }
 
     /** Result of compiling a single rule file. */
@@ -159,6 +179,7 @@ class JsonRuleInterpreter @Inject constructor(
         val screens: List<CompiledRule<UiNode>>,
         val clicks: List<CompiledRule<UiNode>>,
         val notifications: List<CompiledRule<RawNotificationData>>,
+        val formatVersion: Int? = null,
     )
 
     companion object {
