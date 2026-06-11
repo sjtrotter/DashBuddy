@@ -4,18 +4,25 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import java.util.Locale
 
 /**
  * A currency-style input field. Renders the current value as a $-prefixed
- * decimal; the user can scrub it via a numeric keyboard. Commits on blur or
- * enter — there's no separate "submit" button.
+ * decimal; the user can scrub it via a numeric keyboard. Commits every
+ * parseable keystroke (live footers update as you type).
+ *
+ * While the field is FOCUSED the text is the source of truth — the upstream
+ * value round-trip must not re-seed it mid-typing (typing "1." used to commit
+ * 1.0, round-trip, and reset the text to "1", eating the decimal separator —
+ * #350). On blur, the formatted upstream value re-syncs/normalizes the text.
  *
  * Used for: purchase price, insurance/registration deltas, phone plan total.
  */
@@ -27,7 +34,11 @@ fun CurrencyInput(
     modifier: Modifier = Modifier,
     suffix: String? = null,
 ) {
-    var text by remember(value) { mutableStateOf(formatCurrency(value)) }
+    var isFocused by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf(formatCurrency(value)) }
+    LaunchedEffect(value, isFocused) {
+        if (!isFocused) text = formatCurrency(value)
+    }
 
     OutlinedTextField(
         value = text,
@@ -40,13 +51,14 @@ fun CurrencyInput(
         suffix = suffix?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         singleLine = true,
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { isFocused = it.isFocused },
     )
 }
 
 /**
- * A non-currency decimal input field. Same shape as [CurrencyInput] but no
- * `$` prefix. Use this for any value that isn't money (e.g. minutes, miles).
+ * A non-currency decimal input field. Same shape (and the same focus-aware
+ * text handling, #350) as [CurrencyInput] but no `$` prefix. Use this for any
+ * value that isn't money (e.g. minutes, miles).
  */
 @Composable
 fun NumberInput(
@@ -56,7 +68,11 @@ fun NumberInput(
     modifier: Modifier = Modifier,
     suffix: String? = null,
 ) {
-    var text by remember(value) { mutableStateOf(formatCurrency(value)) }
+    var isFocused by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf(formatCurrency(value)) }
+    LaunchedEffect(value, isFocused) {
+        if (!isFocused) text = formatCurrency(value)
+    }
 
     OutlinedTextField(
         value = text,
@@ -68,12 +84,13 @@ fun NumberInput(
         suffix = suffix?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         singleLine = true,
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { isFocused = it.isFocused },
     )
 }
 
 /**
- * An integer-style input field with a custom label. No prefix.
+ * An integer-style input field with a custom label. No prefix. Same
+ * focus-aware text handling as [CurrencyInput] (#350).
  * Used for: phone plan line count, etc.
  */
 @Composable
@@ -83,7 +100,11 @@ fun IntegerInput(
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var text by remember(value) { mutableStateOf(value.toString()) }
+    var isFocused by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf(value.toString()) }
+    LaunchedEffect(value, isFocused) {
+        if (!isFocused) text = value.toString()
+    }
 
     OutlinedTextField(
         value = text,
@@ -94,7 +115,7 @@ fun IntegerInput(
         label = { Text(label) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         singleLine = true,
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { isFocused = it.isFocused },
     )
 }
 

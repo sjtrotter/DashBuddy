@@ -328,6 +328,12 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   match DoorDash's stated times, and no absurd ~24h countdowns appear (especially around
   midnight or just-past deadlines).
   - Confirmed: 0/2.
+- **Economy fields keep the decimal point while typing (#350; desk-verifiable, no dash
+  needed).** In Settings → Personal Economy (or the wizard's costs step), type `12.5` into any
+  cost field — the `.` must survive (the value round-trip used to reset the text mid-typing and
+  eat the separator). Also confirm: the live `$ /mi` footer still updates per keystroke, and the
+  field normalizes (e.g. `012.50` → `12.5`) when you tap away.
+  - Confirmed: 0/2.
 
 ---
 
