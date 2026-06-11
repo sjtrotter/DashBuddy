@@ -60,20 +60,6 @@ class AccessibilityPipeline @Inject constructor(
     /** Last emitted observation identity — for post-classification dedup. */
     private var lastIdentity: ObservationIdentity? = null
 
-    /** Cached enabled platforms — updated reactively from preferences. */
-    @Volatile
-    private var enabledPlatforms: Set<Platform> = Platform.entries.toSet()
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    init {
-        scope.launch {
-            platformPreferences.enabledPlatforms.collect { platforms ->
-                enabledPlatforms = platforms
-            }
-        }
-    }
-
     // ── Source flows ────────────────────────────────────────────────────
 
     private fun screenEvents(): Flow<PipelineEvent.Screen> = merge(
@@ -125,7 +111,8 @@ class AccessibilityPipeline @Inject constructor(
                 else -> null
             }
             val platform = Platform.fromPackage(pkg)
-            platform == Platform.Unknown || platform in enabledPlatforms
+            platform == Platform.Unknown ||
+                platform in platformPreferences.enabledPlatforms.value
         }
 
         // Dedup + Capture: write unique observations to disk, skip duplicates

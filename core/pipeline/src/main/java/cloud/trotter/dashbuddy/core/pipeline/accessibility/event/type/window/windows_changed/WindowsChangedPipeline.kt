@@ -62,7 +62,7 @@ class WindowsChangedPipeline @Inject constructor(
                     // Only snapshot watched-platform windows (e.g. an Uber overlay) — never our own
                     // bubble overlay or other apps. Prevents recognizing our own UI (#4) and keeps
                     // non-target windows out of the pipeline.
-                    if (pkg !in Platform.watchedPackages()) return@mapNotNull null
+                    if (pkg !in Platform.watchedPackages) return@mapNotNull null
                     val tree = try {
                         source.getRootForWindow(w)
                     } catch (_: Exception) {
