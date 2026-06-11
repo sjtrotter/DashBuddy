@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
 /**
  * Pure fold from the AppEvent log to the completed-card list for the bubble
@@ -124,7 +125,7 @@ object FlowCardMapper {
                     val current = openPickup
                     if (current?.taskId == payload.taskId) {
                         openPickup = current.copy(
-                            storeName = payload.storeName,
+                            storeName = payload.storeName.ifBlank { current.storeName },
                             itemsRemaining = payload.itemsRemaining ?: current.itemsRemaining,
                             itemsShopped = payload.itemsShopped ?: current.itemsShopped,
                             deadlineMillis = payload.deadlineMillis ?: current.deadlineMillis,
@@ -136,7 +137,7 @@ object FlowCardMapper {
                             phaseStartedAt = payload.phaseStartedAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
-                            storeName = payload.storeName,
+                            storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             deadlineMillis = payload.deadlineMillis,
                             itemsRemaining = payload.itemsRemaining,
                             itemsShopped = payload.itemsShopped,
@@ -159,7 +160,7 @@ object FlowCardMapper {
                             phaseStartedAt = payload.phaseStartedAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
-                            storeName = payload.storeName,
+                            storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             arrivedAt = payload.arrivedAt ?: event.occurredAt,
                             deadlineMillis = payload.deadlineMillis,
                             itemsRemaining = payload.itemsRemaining,
@@ -183,7 +184,7 @@ object FlowCardMapper {
                             phaseEndedAt = payload.confirmedAt ?: event.occurredAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
-                            storeName = payload.storeName,
+                            storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             arrivedAt = payload.arrivedAt,
                             confirmedAt = payload.confirmedAt ?: event.occurredAt,
                             deadlineMillis = payload.deadlineMillis,

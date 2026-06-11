@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
 /**
  * Region 2+ stepper — per-platform durable state.
@@ -512,7 +513,7 @@ class PlatformRegionStepper @Inject constructor() {
                 currentTask.arrivedAt != null &&
                 taskSubFlow == TaskSubFlow.NAVIGATION &&
                 taskFields?.storeName != null &&
-                !taskFields.storeName.equals("Unknown", ignoreCase = true) &&
+                !taskFields.storeName.equals(UNKNOWN_STORE, ignoreCase = true) &&
                 taskFields.storeName != currentTask.storeName
 
             // Stacked-dropoff transition: symmetric to the pickup case but keyed

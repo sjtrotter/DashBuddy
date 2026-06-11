@@ -38,6 +38,8 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
+import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
+import cloud.trotter.dashbuddy.domain.state.customerDisplayName
 
 /**
  * Replaces 9 reducers + 8 factories. Diffs each region before/after
@@ -108,7 +110,7 @@ class EffectMap @Inject constructor() {
         // across platforms (#257 design discussion).
         if (prevOffer == null && nextOffer != null) {
             val offer = nextOffer.offerFields
-            val platform = next.activePlatform?.name ?: "Unknown"
+            val platform = (next.activePlatform ?: Platform.Unknown).name
 
             // Log OFFER_RECEIVED with the full parsed offer. Evaluation
             // hasn't run yet at this point (it fires async via the
@@ -438,7 +440,7 @@ class EffectMap @Inject constructor() {
                 if (taskStartOverride != null) {
                     addAll(taskStartOverride)
                 } else {
-                    val storeName = nextTask.storeName ?: "Unknown"
+                    val storeName = nextTask.storeName ?: UNKNOWN_STORE
                     val payload = pickupPayload(nextTask, storeName)
                     add(logEffect(sessionId, AppEventType.PICKUP_NAV_STARTED, obs.timestamp, payload))
                     add(AppEffect.ResumeOdometer)
@@ -475,7 +477,7 @@ class EffectMap @Inject constructor() {
                 val customerHash = nextTask.customerNameHash
                 val pickupConfirmed = pickupPayload(
                     task = prevTask,
-                    storeName = prevTask.storeName ?: "Unknown",
+                    storeName = prevTask.storeName ?: UNKNOWN_STORE,
                     confirmedAt = obs.timestamp,
                 )
                 val deliveryStart = deliveryPhasePayload(
@@ -486,7 +488,7 @@ class EffectMap @Inject constructor() {
                 add(logEffect(sessionId, AppEventType.DELIVERY_NAV_STARTED, obs.timestamp, deliveryStart))
                 add(AppEffect.ResumeOdometer)
 
-                val customer = customerHash?.take(6) ?: "Customer"
+                val customer = customerDisplayName(customerHash)
                 add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer)))
             }
 
@@ -506,7 +508,7 @@ class EffectMap @Inject constructor() {
                                 sessionId, AppEventType.PICKUP_ARRIVED, obs.timestamp,
                                 pickupPayload(
                                     task = nextTask,
-                                    storeName = nextTask.storeName ?: "Unknown",
+                                    storeName = nextTask.storeName ?: UNKNOWN_STORE,
                                 ),
                             )
                         )
@@ -531,11 +533,11 @@ class EffectMap @Inject constructor() {
                 val prevName = prevTask.storeName?.trim()
                 val nextName = nextTask.storeName?.trim()
                 val storeChanged = nextName != prevName &&
-                    nextName != null && nextName != "Unknown"
+                    nextName != null && nextName != UNKNOWN_STORE
                 val activityChanged = nextTask.activity != prevTask.activity
 
                 if (storeChanged || activityChanged) {
-                    val storeName = nextTask.storeName ?: "Unknown"
+                    val storeName = nextTask.storeName ?: UNKNOWN_STORE
                     val persona = determinePickupPersona(
                         nextTask.activity,
                         nextTask.arrivedAt != null,
@@ -550,7 +552,7 @@ class EffectMap @Inject constructor() {
                 // PICKUP_NAV_STARTED per task as canonical, so this is the
                 // store name the Pickup card will render.
                 if (storeChanged) {
-                    val storeName = nextTask.storeName ?: "Unknown"
+                    val storeName = nextTask.storeName ?: UNKNOWN_STORE
                     add(
                         logEffect(
                             sessionId, AppEventType.PICKUP_NAV_STARTED, obs.timestamp,
@@ -814,7 +816,7 @@ class EffectMap @Inject constructor() {
     ): ChatPersona {
         return when {
             activity == PickupActivity.SHOPPING -> ChatPersona.Shopper
-            activity == PickupActivity.CONFIRMED -> ChatPersona.Customer(customerHash?.take(6) ?: "Customer")
+            activity == PickupActivity.CONFIRMED -> ChatPersona.Customer(customerDisplayName(customerHash))
             arrived -> ChatPersona.Merchant(storeName)
             else -> ChatPersona.Navigator
         }

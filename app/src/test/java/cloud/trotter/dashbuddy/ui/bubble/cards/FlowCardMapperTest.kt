@@ -24,6 +24,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
+import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
 class FlowCardMapperTest {
 
@@ -666,5 +667,20 @@ class FlowCardMapperTest {
         // Stale Offer card is dropped by the DASH_START reset; the new
         // Awaiting card is still open (no end-time yet).
         assertEquals(0, cards.size)
+    }
+
+    // ── #403: blank store names render the same fallback as the live card ──
+
+    @Test
+    fun `a blank store name on PICKUP_NAV_STARTED falls back to Unknown like the live card`() {
+        val events = listOf(
+            event(AppEventType.PICKUP_NAV_STARTED,
+                pickupPayload(taskId = "t1", jobId = "j1", store = "", started = 1000L), 1000L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload(taskId = "t1", jobId = "j1", store = "", started = 1000L, confirmed = 2000L), 2000L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        val pickup = cards.filterIsInstance<FlowCardSnapshot.Pickup>().single()
+        assertEquals(UNKNOWN_STORE, pickup.storeName)
     }
 }
