@@ -12,9 +12,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.security.MessageDigest
+import java.time.Instant
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Calendar
 import java.util.Locale
 
 /**
@@ -27,6 +28,39 @@ import java.util.Locale
  * Matches ADR-0001 v2 specification.
  */
 object TransformRegistry {
+
+    /**
+     * Reference clock for time transforms (#343): the OBSERVATION's instant + zone,
+     * not evaluation wall-clock — re-parsing a captured screen at a different hour
+     * (or replaying it in tests) must yield the same millis.
+     */
+    data class TransformClock(val nowMillis: Long, val zoneId: ZoneId)
+
+    // Scoped per classification via [withClock]. Classification is synchronous per
+    // event, so a ThreadLocal is safe (pipelines classify concurrently on different
+    // threads). Promote to an explicit parameter when the compiled-lambda signatures
+    // are reworked (#239/#362).
+    private val scopedClock = ThreadLocal<TransformClock?>()
+
+    /**
+     * Runs [block] with time transforms anchored to [nowMillis]/[zoneId].
+     * Unscoped callers fall back to the system clock.
+     */
+    fun <T> withClock(
+        nowMillis: Long,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        block: () -> T,
+    ): T {
+        scopedClock.set(TransformClock(nowMillis, zoneId))
+        return try {
+            block()
+        } finally {
+            scopedClock.remove()
+        }
+    }
+
+    private fun currentClock(): TransformClock =
+        scopedClock.get() ?: TransformClock(System.currentTimeMillis(), ZoneId.systemDefault())
 
     /**
      * Threshold for rolling a parsed wall-clock time forward to tomorrow.
@@ -308,20 +342,19 @@ object TransformRegistry {
             }
         }
 
-        val now = Calendar.getInstance()
-        val target = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, localTime.hour)
-            set(Calendar.MINUTE, localTime.minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        // Anchor "today" to the scoped clock (#343) — the observation's instant and
+        // zone — never the evaluation wall clock, so replaying a captured screen at a
+        // different hour (or zone) yields the same millis.
+        val clock = currentClock()
+        val today = Instant.ofEpochMilli(clock.nowMillis).atZone(clock.zoneId).toLocalDate()
+        val targetMillis = today.atTime(localTime).atZone(clock.zoneId).toInstant().toEpochMilli()
         // Roll forward only when the target is *significantly* in the past —
         // interpret as "this time tomorrow" (e.g. late-night offer for next
         // morning pickup). Past by less than the threshold stays as today's
         // timestamp so a blown deadline renders as "X min late" instead of
         // jumping ~24h ahead. See field log 2026-05-19 #2 for the bug shape
         // ("1434:38" ghost countdown caused by 37-second-past re-parse).
-        return applyRollover(target.timeInMillis, now.timeInMillis)
+        return applyRollover(targetMillis, clock.nowMillis)
     }
 
     /**
