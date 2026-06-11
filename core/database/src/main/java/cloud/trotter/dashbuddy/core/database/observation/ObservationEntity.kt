@@ -33,4 +33,10 @@ data class ObservationEntity(
     val metadataJson: String,
     val correlationVersion: Long,
     val timeoutType: String? = null,
+    /**
+     * Typed projection of non-flow observation payloads (#352) — UiInput action,
+     * Loopback effect/offerHash/evaluation, Timeout target platform — so crash
+     * recovery replays REAL internal observations instead of stubs.
+     */
+    val payloadJson: String? = null,
 )

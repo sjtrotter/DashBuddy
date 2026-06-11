@@ -17,7 +17,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
-import cloud.trotter.dashbuddy.di.DefaultDispatcher
+import cloud.trotter.dashbuddy.core.state.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
 import kotlinx.coroutines.CancellationException
