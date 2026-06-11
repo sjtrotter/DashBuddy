@@ -10,11 +10,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.util.Locale
@@ -79,7 +81,12 @@ private fun IntervalInput(
     suffix: String,
     modifier: Modifier = Modifier,
 ) {
-    var text by remember(value) { mutableStateOf(formatInterval(value)) }
+    // Focus-aware text handling — same pattern as CurrencyInput (#350).
+    var isFocused by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf(formatInterval(value)) }
+    LaunchedEffect(value, isFocused) {
+        if (!isFocused) text = formatInterval(value)
+    }
 
     OutlinedTextField(
         value = text,
@@ -91,7 +98,7 @@ private fun IntervalInput(
         suffix = { Text(suffix) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         singleLine = true,
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { isFocused = it.isFocused },
     )
 }
 
