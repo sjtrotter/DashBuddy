@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.core.state.di.DefaultDispatcher
-import cloud.trotter.dashbuddy.core.state.di.IoDispatcher
+import cloud.trotter.dashbuddy.domain.di.DefaultDispatcher
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
@@ -86,10 +86,27 @@ class StateManagerV2 @Inject constructor(
         // Periodic + major-transition snapshots
         snapshots.maybeSnapshot(scope, ioDispatcher, currentState, transition.newState)
 
+        // Low-cadence journal pruning (#364): the observation log grew
+        // unbounded — pruneOlderThan had zero callers. Retention comfortably
+        // exceeds snapshot retention, so replay-since-snapshot stays intact.
+        if (transition.newState.correlationVersion % JOURNAL_PRUNE_EVERY == 0L) {
+            scope.launch(ioDispatcher) {
+                journal.pruneOlderThan(System.currentTimeMillis() - JOURNAL_RETENTION_MS)
+            }
+        }
+
         // Emit effects — the engine serializes execution in this order (#351).
         transition.effects.forEach { effect ->
             engine.process(effect, correlationVersion = transition.newState.correlationVersion)
         }
+    }
+
+    companion object {
+        /** Prune the observation journal every N accepted observations. */
+        private const val JOURNAL_PRUNE_EVERY = 500L
+
+        /** Keep observations for 48h — 2× snapshot retention (#364). */
+        private const val JOURNAL_RETENTION_MS = 48 * 60 * 60 * 1000L
     }
 
     // ── Crash Recovery ──────────────────────────────────────────────────

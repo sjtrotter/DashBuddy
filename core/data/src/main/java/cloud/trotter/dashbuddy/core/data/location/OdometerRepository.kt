@@ -15,13 +15,17 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.first
 
 @Singleton
 class OdometerRepository @Inject constructor(
     private val odometerLocalDataSource: OdometerLocalDataSource,
-    private val locationDataSource: LocationDataSource
+    private val locationDataSource: LocationDataSource,
+    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
     private var trackingJob: Job? = null
 
     // State
@@ -41,15 +45,13 @@ class OdometerRepository @Inject constructor(
     private val metersToMiles = 0.000621371
 
     init {
+        // Read persisted values ONCE at startup (#364): the old collectors let a
+        // stale DataStore emission (from an in-flight save echo) transiently
+        // REGRESS the live value mid-session. The live StateFlows are the
+        // single source of truth after startup; saves flow one-way to disk.
         scope.launch {
-            odometerLocalDataSource.totalMetersFlow.collect { savedMeters ->
-                if (_meters.value != savedMeters) _meters.value = savedMeters
-            }
-        }
-        scope.launch {
-            odometerLocalDataSource.sessionAnchorFlow.collect { savedAnchor ->
-                if (_anchor.value != savedAnchor) _anchor.value = savedAnchor
-            }
+            _meters.value = odometerLocalDataSource.totalMetersFlow.first()
+            _anchor.value = odometerLocalDataSource.sessionAnchorFlow.first()
         }
     }
 

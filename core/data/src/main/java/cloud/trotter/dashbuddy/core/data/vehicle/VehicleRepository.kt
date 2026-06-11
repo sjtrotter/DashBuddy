@@ -12,17 +12,12 @@ class VehicleRepository @Inject constructor(
 ) {
     suspend fun getYears(): List<String> = dataSource.getYears()
 
-    suspend fun getMakes(year: String): List<String> {
-        val list = dataSource.getMakes(year).toMutableList()
-        list.add(0, "Not Listed")
-        return list
-    }
+    // The "Not Listed" sentinel is a UI concern — the wizard layer prepends
+    // it (#364); data results stay pure EPA values.
+    suspend fun getMakes(year: String): List<String> = dataSource.getMakes(year)
 
-    suspend fun getModels(year: String, make: String): List<String> {
-        val list = dataSource.getModels(year, make).toMutableList()
-        list.add(0, "Not Listed")
-        return list
-    }
+    suspend fun getModels(year: String, make: String): List<String> =
+        dataSource.getModels(year, make)
 
     suspend fun getVehicleOptions(year: String, make: String, model: String): List<VehicleOption> {
         val list = dataSource.getVehicleOptions(year, make, model).toMutableList()

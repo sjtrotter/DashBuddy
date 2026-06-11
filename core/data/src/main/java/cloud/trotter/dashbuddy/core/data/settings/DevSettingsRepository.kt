@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.core.data.settings
 
 import android.util.Log
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
-import cloud.trotter.dashbuddy.core.network.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,12 +14,17 @@ import kotlinx.coroutines.flow.stateIn
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
+import javax.inject.Named
 
 @Singleton
 class DevSettingsRepository @Inject constructor(
-    private val dataSource: DevSettingsDataSource
+    private val dataSource: DevSettingsDataSource,
+    @param:Named("isDebug") private val isDebug: Boolean,
+    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
 
     // ============================================================================================
     // IN-MEMORY SNAPSHOT STATES
@@ -29,7 +33,7 @@ class DevSettingsRepository @Inject constructor(
     private val _snapshotWhitelist = MutableStateFlow<Set<String>>(emptySet())
     val snapshotWhitelist = _snapshotWhitelist.asStateFlow()
 
-    private val _devSnapshotsEnabled = MutableStateFlow(BuildConfig.DEBUG)
+    private val _devSnapshotsEnabled = MutableStateFlow(isDebug)
     val devSnapshotsEnabled = _devSnapshotsEnabled.asStateFlow()
 
     fun toggleSnapshotScreen(screenName: String, isEnabled: Boolean) {
@@ -44,11 +48,11 @@ class DevSettingsRepository @Inject constructor(
     // PERSISTED STREAMS
     // ============================================================================================
     val minLogLevel = dataSource.logLevel.map { level ->
-        level ?: if (BuildConfig.DEBUG) Log.DEBUG else Log.INFO
-    }.stateIn(scope, SharingStarted.Eagerly, if (BuildConfig.DEBUG) Log.DEBUG else Log.INFO)
+        level ?: if (isDebug) Log.DEBUG else Log.INFO
+    }.stateIn(scope, SharingStarted.Eagerly, if (isDebug) Log.DEBUG else Log.INFO)
 
     val isDevModeUnlocked: Flow<Boolean> =
-        dataSource.isDevModeUnlocked.map { it ?: BuildConfig.DEBUG }
+        dataSource.isDevModeUnlocked.map { it ?: isDebug }
 
     // ============================================================================================
     // WRITE ACTIONS

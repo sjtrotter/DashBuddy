@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.database.chat.mappers
 import cloud.trotter.dashbuddy.core.database.chat.ChatMessageEntity
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import timber.log.Timber
 
 fun ChatMessageEntity.toDomain(): ChatMessage {
     val persona = when (this.personaType) {
@@ -17,7 +18,10 @@ fun ChatMessageEntity.toDomain(): ChatMessage {
         "NAVIGATOR" -> ChatPersona.Navigator
         "SHOPPER" -> ChatPersona.Shopper
         "EARNINGS" -> ChatPersona.Earnings
-        else -> ChatPersona.Dispatcher
+        else -> {
+            Timber.w("Unknown chat persona '%s' — coercing to Dispatcher", personaType)
+            ChatPersona.Dispatcher
+        }
     }
 
     return ChatMessage(

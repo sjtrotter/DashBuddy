@@ -35,6 +35,7 @@ import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.VehicleDropdown
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import java.util.Locale
+import cloud.trotter.dashbuddy.ui.main.setup.wizard.VEHICLE_NOT_LISTED
 
 @Composable
 fun VehicleCard(
@@ -59,7 +60,7 @@ fun VehicleCard(
     val uriHandler = LocalUriHandler.current
 
     // Trigger the manual override UI if any of these match
-    val isCustom = make == "Not Listed" || model == "Not Listed" || trim == "Not Listed"
+    val isCustom = make == VEHICLE_NOT_LISTED || model == VEHICLE_NOT_LISTED || trim == VEHICLE_NOT_LISTED
 
     Column(
         modifier = Modifier
@@ -113,7 +114,7 @@ fun VehicleCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Hide Model dropdown if they clicked Not Listed for Make
-                AnimatedVisibility(visible = make.isNotBlank() && make != "Not Listed") {
+                AnimatedVisibility(visible = make.isNotBlank() && make != VEHICLE_NOT_LISTED) {
                     Column {
                         VehicleDropdown(
                             label = "Model",
@@ -126,7 +127,7 @@ fun VehicleCard(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Hide Trim dropdown if they clicked Not Listed for Model
-                        AnimatedVisibility(visible = model.isNotBlank() && model != "Not Listed") {
+                        AnimatedVisibility(visible = model.isNotBlank() && model != VEHICLE_NOT_LISTED) {
                             VehicleDropdown(
                                 label = "Trim / Options",
                                 value = trim,
@@ -152,8 +153,8 @@ fun VehicleCard(
                     onClick = {
                         val queryParts = listOfNotNull(
                             year.takeIf { it.isNotBlank() },
-                            make.takeIf { it != "Not Listed" && it.isNotBlank() },
-                            model.takeIf { it != "Not Listed" && it.isNotBlank() }
+                            make.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() },
+                            model.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() }
                         ).joinToString("+")
 
                         val searchUrl = "https://www.google.com/search?q=$queryParts+mpg"

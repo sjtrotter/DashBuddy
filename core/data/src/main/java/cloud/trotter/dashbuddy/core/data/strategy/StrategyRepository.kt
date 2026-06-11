@@ -22,13 +22,16 @@ import kotlinx.serialization.InternalSerializationApi
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
 
 @Singleton
 class StrategyRepository @Inject constructor(
     private val dataSource: StrategyDataSource,
     private val appPreferencesRepository: AppPreferencesRepository,
+    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
 
     private val defaultRules = listOf(
         ScoringRule.MetricRule("pay", true, MetricType.PAYOUT, 7.0f),
@@ -48,25 +51,28 @@ class StrategyRepository @Inject constructor(
         EvidenceConfig(master, offers, delivery, dash)
     }.stateIn(scope, SharingStarted.Eagerly, EvidenceConfig())
 
+    // Nested TYPED combines (#364): the old positional Flow<Any> + index casts
+    // turned any reorder into a runtime ClassCastException.
+    private data class AcceptHalf(val enabled: Boolean, val minPay: Double, val minRatio: Double)
+    private data class DeclineHalf(val enabled: Boolean, val maxPay: Double, val minRatio: Double)
+
     val automationConfig: Flow<OfferAutomationConfig> = combine(
-        listOf<Flow<Any>>(
-            dataSource.autoMaster,
-            dataSource.autoAccept,
-            dataSource.autoAcceptMinPay,
-            dataSource.autoAcceptMinRatio,
-            dataSource.autoDecline,
-            dataSource.autoDeclineMaxPay,
-            dataSource.autoDeclineMinRatio
-        )
-    ) { values ->
+        dataSource.autoMaster,
+        combine(
+            dataSource.autoAccept, dataSource.autoAcceptMinPay, dataSource.autoAcceptMinRatio,
+        ) { enabled, minPay, minRatio -> AcceptHalf(enabled, minPay, minRatio) },
+        combine(
+            dataSource.autoDecline, dataSource.autoDeclineMaxPay, dataSource.autoDeclineMinRatio,
+        ) { enabled, maxPay, minRatio -> DeclineHalf(enabled, maxPay, minRatio) },
+    ) { master, accept, decline ->
         OfferAutomationConfig(
-            masterAutoPilotEnabled = values[0] as Boolean,
-            autoAcceptEnabled = values[1] as Boolean,
-            autoAcceptMinPay = values[2] as Double,
-            autoAcceptMinRatio = values[3] as Double,
-            autoDeclineEnabled = values[4] as Boolean,
-            autoDeclineMaxPay = values[5] as Double,
-            autoDeclineMinRatio = values[6] as Double
+            masterAutoPilotEnabled = master,
+            autoAcceptEnabled = accept.enabled,
+            autoAcceptMinPay = accept.minPay,
+            autoAcceptMinRatio = accept.minRatio,
+            autoDeclineEnabled = decline.enabled,
+            autoDeclineMaxPay = decline.maxPay,
+            autoDeclineMinRatio = decline.minRatio,
         )
     }
 

@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
+import timber.log.Timber
 
 /** Class used by the Room database to convert Kotlin data types to and from SQL types. */
 class DataTypeConverters {
@@ -96,6 +97,7 @@ class DataTypeConverters {
         } catch (_: Exception) {
             // Fallback for version safety: If we remove an enum later,
             // old logs default to ERROR or a specific UNKNOWN type.
+            Timber.w("Unknown AppEventType '%s' — coercing to ERROR_OCCURRED", value)
             AppEventType.ERROR_OCCURRED
         }
     }

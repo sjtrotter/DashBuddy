@@ -10,7 +10,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -63,19 +62,11 @@ class PlatformPreferencesRepository @Inject constructor(
             }
             .toSet()
 
-    /** Toggle a single platform on or off. Persists to DataStore. */
+    /** Toggle a single platform on or off — one atomic DataStore edit (#364). */
     suspend fun setEnabled(platform: Platform, enabled: Boolean) {
-        val current = currentEnabledWireNames()
-        val updated = if (enabled) {
-            current + platform.wire
-        } else {
-            current - platform.wire
+        dataSource.updateEnabledPlatforms { saved ->
+            val current = saved ?: detectInstalledPlatforms().map { it.wire }.toSet()
+            if (enabled) current + platform.wire else current - platform.wire
         }
-        dataSource.setEnabledPlatforms(updated)
-    }
-
-    private suspend fun currentEnabledWireNames(): Set<String> {
-        val saved = dataSource.enabledPlatforms.first()
-        return saved ?: detectInstalledPlatforms().map { it.wire }.toSet()
     }
 }

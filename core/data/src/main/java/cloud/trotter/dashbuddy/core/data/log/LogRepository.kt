@@ -12,13 +12,36 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
 
 @Singleton
 class LogRepository @Inject constructor(
     @param:ApplicationContext private val context: Context,
+    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) {
     // Run file operations on IO thread to never block the main thread
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
+
+    // Single-writer queue (#364): per-line fire-and-forget launches could land
+    // out of order and race the rotation check. One worker drains in order.
+    private val lines = Channel<String>(Channel.UNLIMITED)
+
+    init {
+        scope.launch {
+            for (line in lines) {
+                try {
+                    if (appLogFile.exists() && appLogFile.length() > maxLogFileSizeBytes) {
+                        rotateLogFile()
+                    }
+                    appLogFile.appendText(line)
+                } catch (_: Exception) {
+                    // Fail silently to avoid crash loops
+                }
+            }
+        }
+    }
 
     // --- Config ---
     // Uses internal storage (filesDir) or external if available
@@ -38,19 +61,7 @@ class LogRepository @Inject constructor(
      * Handles rotation if file gets too big.
      */
     fun appendLog(line: String) {
-        scope.launch {
-            try {
-                // Check if rotation is needed BEFORE writing
-                if (appLogFile.exists() && appLogFile.length() > maxLogFileSizeBytes) {
-                    rotateLogFile()
-                }
-
-                appLogFile.appendText(line)
-
-            } catch (_: Exception) {
-                // Fail silently to avoid crash loops
-            }
-        }
+        lines.trySend(line)
     }
 
     /**
