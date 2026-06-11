@@ -60,33 +60,6 @@ fun CurrencyInput(
  * text handling, #350) as [CurrencyInput] but no `$` prefix. Use this for any
  * value that isn't money (e.g. minutes, miles).
  */
-@Composable
-fun NumberInput(
-    label: String,
-    value: Double,
-    onValueChange: (Double) -> Unit,
-    modifier: Modifier = Modifier,
-    suffix: String? = null,
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf(formatCurrency(value)) }
-    LaunchedEffect(value, isFocused) {
-        if (!isFocused) text = formatCurrency(value)
-    }
-
-    OutlinedTextField(
-        value = text,
-        onValueChange = { input ->
-            text = input
-            input.toDoubleOrNull()?.let(onValueChange)
-        },
-        label = { Text(label) },
-        suffix = suffix?.let { { Text(it) } },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        singleLine = true,
-        modifier = modifier.onFocusChanged { isFocused = it.isFocused },
-    )
-}
 
 /**
  * An integer-style input field with a custom label. No prefix. Same

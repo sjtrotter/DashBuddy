@@ -308,12 +308,10 @@ class SideEffectEngine @Inject constructor(
             EffectVerb.SCREENSHOT -> screenshotFromArgs(e.args)
             EffectVerb.BUBBLE -> bubbleFromArgs(e.args)
             EffectVerb.LOG -> logFromArgs(e.args)
-            EffectVerb.EVALUATE_OFFER -> {
-                Timber.d("Rule-driven evaluate_offer — requires offer context from EffectMap")
-            }
-            EffectVerb.SPEAK -> {
-                Timber.d("Rule-driven speak — requires offer context from EffectMap")
-            }
+            // Deliberate no-ops (#359): offer evaluation + speech fire from
+            // EffectMap's eval-landing diff, never from rule verbs.
+            EffectVerb.EVALUATE_OFFER, EffectVerb.SPEAK ->
+                Timber.d("Rule verb %s is EffectMap-driven — no-op at the engine", e.verb)
 
             // --- Lifecycle verbs ---
             EffectVerb.SESSION_START -> sessionStartFromArgs(e.args)

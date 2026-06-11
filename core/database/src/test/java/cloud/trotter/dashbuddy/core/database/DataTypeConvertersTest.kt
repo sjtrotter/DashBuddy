@@ -1,11 +1,8 @@
 package cloud.trotter.dashbuddy.core.database
 
-import cloud.trotter.dashbuddy.domain.model.dash.DashType
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
-import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -112,60 +109,6 @@ class DataTypeConvertersTest {
     fun `toLongList skips non-numeric parts`() {
         val result = converters.toLongList("1,bad,3")
         assertEquals(listOf(1L, 3L), result)
-    }
-
-    // -------------------------------------------------------------------------
-    // DashType
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `DashType null converts to null`() {
-        assertNull(converters.fromDashType(null))
-    }
-
-    @Test
-    fun `DashType round-trips all values`() {
-        for (type in DashType.entries) {
-            val encoded = converters.fromDashType(type)
-            val decoded = converters.toDashType(encoded)
-            assertEquals(type, decoded)
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // PickupStatus
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `PickupStatus round-trips all values`() {
-        for (status in PickupStatus.entries) {
-            val encoded = converters.fromPickupStatus(status)
-            val decoded = converters.toPickupStatus(encoded)
-            assertEquals(status, decoded)
-        }
-    }
-
-    @Test
-    fun `toPickupStatus unknown string returns UNKNOWN`() {
-        assertEquals(PickupStatus.UNKNOWN, converters.toPickupStatus("GARBAGE"))
-    }
-
-    // -------------------------------------------------------------------------
-    // DropoffStatus
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `DropoffStatus round-trips all values`() {
-        for (status in DropoffStatus.entries) {
-            val encoded = converters.fromDropoffStatus(status)
-            val decoded = converters.toDropoffStatus(encoded)
-            assertEquals(status, decoded)
-        }
-    }
-
-    @Test
-    fun `toDropoffStatus unknown string returns UNKNOWN`() {
-        assertEquals(DropoffStatus.UNKNOWN, converters.toDropoffStatus("GARBAGE"))
     }
 
     // -------------------------------------------------------------------------

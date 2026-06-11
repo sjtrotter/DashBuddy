@@ -37,8 +37,7 @@ class WizardViewModel @Inject constructor(
     private val gasPriceRepository: FuelPriceRepository
 ) : ViewModel() {
 
-    private val _steps = MutableStateFlow(WizardStep.entries)
-    val steps = _steps.asStateFlow()
+    val steps = MutableStateFlow(WizardStep.entries).asStateFlow()
 
     private val _state = MutableStateFlow(WizardState())
     val state = _state.asStateFlow()

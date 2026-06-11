@@ -33,8 +33,6 @@ class AppPreferencesDataSource @Inject constructor(
         // Legacy key (pre-v2 schema, "CAR"/"E_BIKE"). VEHICLE_CLASS supersedes it.
         val VEHICLE_TYPE = stringPreferencesKey("vehicle_type")
         val VEHICLE_CLASS = stringPreferencesKey("vehicle_class")
-        val SIM_PAY = doublePreferencesKey("sim_pay")
-        val SIM_DIST = doublePreferencesKey("sim_dist")
 
         // ----- Personal Economy v2 (#145) -----
         // Maintenance (paired)
@@ -166,12 +164,6 @@ class AppPreferencesDataSource @Inject constructor(
         }
     }
 
-    suspend fun saveSimulationState(pay: Double, dist: Double) {
-        ds.edit {
-            it[Keys.SIM_PAY] = pay
-            it[Keys.SIM_DIST] = dist
-        }
-    }
 
     // --- Personal Economy v2 writes (#145) ---
     // Each write atomically marks the affected EconomyField(s) as user-set so the UI

@@ -1,12 +1,9 @@
 package cloud.trotter.dashbuddy.core.database
 
 import androidx.room.TypeConverter
-import cloud.trotter.dashbuddy.domain.model.dash.DashType
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
-import cloud.trotter.dashbuddy.domain.model.order.DropoffStatus
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
-import cloud.trotter.dashbuddy.domain.model.order.PickupStatus
 
 /** Class used by the Room database to convert Kotlin data types to and from SQL types. */
 class DataTypeConverters {
@@ -85,36 +82,6 @@ class DataTypeConverters {
             ?.split(',')
             ?.mapNotNull { it.toLongOrNull() } // Safely convert each part to Long, ignoring invalid parts
             ?: emptyList()
-    }
-
-    @TypeConverter
-    fun fromDashType(type: DashType?): String? {
-        return type?.name // Converts EarningType.PER_OFFER to the string "PER_OFFER"
-    }
-
-    @TypeConverter
-    fun toDashType(name: String?): DashType? {
-        return name?.let { DashType.valueOf(it) }
-    }
-
-    @TypeConverter
-    fun fromPickupStatus(status: PickupStatus): String = status.name
-
-    @TypeConverter
-    fun toPickupStatus(value: String): PickupStatus = try {
-        enumValueOf<PickupStatus>(value)
-    } catch (_: Exception) {
-        PickupStatus.UNKNOWN
-    }
-
-    @TypeConverter
-    fun fromDropoffStatus(status: DropoffStatus): String = status.name
-
-    @TypeConverter
-    fun toDropoffStatus(value: String): DropoffStatus = try {
-        enumValueOf<DropoffStatus>(value)
-    } catch (_: Exception) {
-        DropoffStatus.UNKNOWN
     }
 
     @TypeConverter

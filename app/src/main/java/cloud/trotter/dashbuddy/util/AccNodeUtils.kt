@@ -9,66 +9,6 @@ import timber.log.Timber
 object AccNodeUtils {
 
     /**
-     * Recursively extracts identifying structural info (class name, view ID) from nodes.
-     */
-    fun extractStructure(nodeInfo: AccessibilityNodeInfo?, builder: StringBuilder) {
-        if (nodeInfo == null || !nodeInfo.isVisibleToUser) return
-
-        builder.append(nodeInfo.className)
-        builder.append(nodeInfo.viewIdResourceName)
-
-        for (i in 0 until nodeInfo.childCount) {
-            extractStructure(nodeInfo.getChild(i), builder)
-        }
-    }
-
-    /**
-     * Recursively extracts visible text from a node and its children.
-     */
-    fun extractTexts(nodeInfo: AccessibilityNodeInfo?, texts: MutableList<String>) {
-        if (nodeInfo == null || !nodeInfo.isVisibleToUser) return
-
-        nodeInfo.text?.let {
-            if (it.isNotEmpty()) texts.add(it.toString().trim())
-        }
-        nodeInfo.contentDescription?.let {
-            val desc = it.toString().trim()
-            if (desc.isNotEmpty() && !texts.contains(desc)) {
-                texts.add(desc)
-            }
-        }
-        for (i in 0 until nodeInfo.childCount) {
-            extractTexts(nodeInfo.getChild(i), texts)
-        }
-    }
-
-    /**
-     * Finds a node containing the exact specified text and performs a click action.
-     * Uses the robust 'clickNode' strategy (Self -> Parent -> Sibling).
-     */
-    fun findAndClickNodeByText(
-        searchStartNode: AccessibilityNodeInfo?,
-        textToFind: String
-    ): Boolean {
-        if (searchStartNode == null) {
-            Timber.w("Cannot perform click, searchStartNode is null.")
-            return false
-        }
-
-        Timber.d("Searching for node with text: '$textToFind'")
-        val foundNodes = searchStartNode.findAccessibilityNodeInfosByText(textToFind)
-
-        if (foundNodes.isNullOrEmpty()) {
-            Timber.w("Text '$textToFind' not found.")
-            return false
-        }
-
-        // Use the first match found
-        val targetNode = foundNodes[0]
-        return clickNode(targetNode)
-    }
-
-    /**
      * ROBUST CLICK STRATEGY:
      * 1. Try the node itself.
      * 2. Try walking up the tree to find a clickable parent (Ancestor Strategy).

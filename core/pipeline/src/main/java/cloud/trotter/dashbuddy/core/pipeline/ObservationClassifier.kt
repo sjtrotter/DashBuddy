@@ -36,8 +36,6 @@ class ObservationClassifier @Inject constructor(
     var lastScreenTarget: String? = null
         private set
 
-    @Volatile
-    private var lastScreenTimestamp: Long = 0L
 
     fun classify(event: PipelineEvent): Observation {
         val platformWire = when (event) {
@@ -102,7 +100,6 @@ class ObservationClassifier @Inject constructor(
         // Cache last non-sensitive screen for click enrichment
         if (obs.parsed !is ParsedFields.SensitiveFields) {
             lastScreenTarget = obs.target
-            lastScreenTimestamp = obs.timestamp
         }
 
         return obs
