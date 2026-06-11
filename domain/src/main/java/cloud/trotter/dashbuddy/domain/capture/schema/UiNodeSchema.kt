@@ -1,8 +1,8 @@
-package cloud.trotter.dashbuddy.core.data.capture.schema
+package cloud.trotter.dashbuddy.domain.capture.schema
 
-import cloud.trotter.dashbuddy.core.database.log.mapper.toDomain
-import cloud.trotter.dashbuddy.core.database.log.mapper.toDto
-import cloud.trotter.dashbuddy.core.database.log.dto.UiNodeDto
+import cloud.trotter.dashbuddy.domain.capture.toDomain
+import cloud.trotter.dashbuddy.domain.capture.toDto
+import cloud.trotter.dashbuddy.domain.capture.dto.UiNodeDto
 import cloud.trotter.dashbuddy.domain.capture.CaptureSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.serialization.json.Json

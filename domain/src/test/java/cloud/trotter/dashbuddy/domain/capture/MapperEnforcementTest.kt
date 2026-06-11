@@ -1,6 +1,6 @@
-package cloud.trotter.dashbuddy.core.database.log.mapper
+package cloud.trotter.dashbuddy.domain.capture
 
-import cloud.trotter.dashbuddy.core.database.log.dto.UiNodeDto
+import cloud.trotter.dashbuddy.domain.capture.dto.UiNodeDto
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import org.junit.Assert.assertEquals
 import org.junit.Test

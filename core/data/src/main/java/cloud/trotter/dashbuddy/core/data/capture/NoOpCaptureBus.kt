@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.capture
 
+import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton

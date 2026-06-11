@@ -42,7 +42,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.timber)
 
-    implementation(project(":core:data"))
     implementation(project(":core:database"))
     implementation(project(":core:pipeline"))
     implementation(project(":domain"))

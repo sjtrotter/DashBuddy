@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.notification
 
-import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.flow.first
@@ -16,7 +16,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class NotificationFilter @Inject constructor(
-    private val platformPreferences: PlatformPreferencesRepository,
+    private val platformPreferences: PlatformPreferences,
 ) {
     /** Cached enabled packages — refreshed lazily. */
     @Volatile

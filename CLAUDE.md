@@ -77,8 +77,8 @@ The project uses modular Clean Architecture with a strict dependency graph:
 
 ```
 :app → :domain, :core:data, :core:database, :core:datastore, :core:designsystem, :core:location, :core:network, :core:pipeline, :core:state
-:core:state → :domain, :core:data, :core:database, :core:pipeline
-:core:pipeline → :domain, :core:data
+:core:state → :domain, :core:database, :core:pipeline
+:core:pipeline → :domain
 :core:data → :domain, :core:database, :core:datastore, :core:location, :core:network
 :core:database → :domain
 :core:network → :domain
@@ -86,9 +86,10 @@ The project uses modular Clean Architecture with a strict dependency graph:
 :core:datastore → :domain
 ```
 
-- **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic, and
-  pipeline/provider contracts. No Android dependencies. (Repository *implementations* live in
-  `:core:data`; only a few provider/data-source interfaces are inverted into `:domain` today.)
+- **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
+  pipeline/provider contracts, and the capture contracts (`CaptureBus`, `EnvelopeBuilder`,
+  capture schemas/DTOs) plus the `PlatformPreferences` read interface (#355). No Android
+  dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.)
 - **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
   (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.
 - **`:core:state`** — Multi-region state machine (StateMachine, FlowRegionStepper,

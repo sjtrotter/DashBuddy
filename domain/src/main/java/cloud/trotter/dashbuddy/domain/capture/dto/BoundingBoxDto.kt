@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.core.database.log.dto
+package cloud.trotter.dashbuddy.domain.capture.dto
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable

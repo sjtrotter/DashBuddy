@@ -40,7 +40,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.timber)
 
-    implementation(project(":core:data"))
     implementation(project(":domain"))
 
     ksp(libs.hilt.compiler)

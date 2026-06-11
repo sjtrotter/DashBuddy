@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.core.pipeline.notification
 
-import cloud.trotter.dashbuddy.core.data.capture.CaptureBus
-import cloud.trotter.dashbuddy.core.data.capture.EnvelopeBuilder
-import cloud.trotter.dashbuddy.core.data.capture.schema.RawNotificationSchema
-import cloud.trotter.dashbuddy.core.data.settings.PlatformPreferencesRepository
+import cloud.trotter.dashbuddy.domain.capture.CaptureBus
+import cloud.trotter.dashbuddy.domain.capture.EnvelopeBuilder
+import cloud.trotter.dashbuddy.domain.capture.schema.RawNotificationSchema
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationIdentity
 import cloud.trotter.dashbuddy.domain.pipeline.identity
@@ -35,7 +35,7 @@ class NotificationPipeline @Inject constructor(
     private val filter: NotificationFilter,
     private val classifier: ObservationClassifier,
     private val captureBus: CaptureBus,
-    private val platformPreferences: PlatformPreferencesRepository,
+    private val platformPreferences: PlatformPreferences,
 ) {
     companion object {
         const val PIPELINE_ID = "notification"
