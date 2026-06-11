@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 
 /**
  * Notification pipeline: maps StatusBarNotification → classified observation.
@@ -68,7 +69,7 @@ class NotificationPipeline @Inject constructor(
         }
         // Gate: don't forward UNKNOWN to state machine
         .filter { obs ->
-            val isUnknown = obs.target == "UNKNOWN"
+            val isUnknown = obs.target == UNKNOWN_TARGET
             if (isUnknown) Timber.v("Notification: captured but not forwarding UNKNOWN")
             !isUnknown
         }

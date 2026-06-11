@@ -15,6 +15,8 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.TransformRegistry
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
+import cloud.trotter.dashbuddy.domain.pipeline.NO_ID_FALLBACK
 
 /**
  * Single classification entry point for all pipeline events.
@@ -84,13 +86,13 @@ class ObservationClassifier @Inject constructor(
         val ruleset = interpreter.screenRuleset
         if (ruleset == null) {
             Timber.w("ObservationClassifier: no screen ruleset loaded")
-            return makeScreenObservation(now, "UNKNOWN", null, null, ParsedFields.None, null)
+            return makeScreenObservation(now, UNKNOWN_TARGET, null, null, ParsedFields.None, null)
         }
 
         val result = ruleset.matchFirst(event.tree, platformWire)
         if (result == null) {
             Timber.i("SCREEN: UNKNOWN")
-            return makeScreenObservation(now, "UNKNOWN", null, null, ParsedFields.None, null)
+            return makeScreenObservation(now, UNKNOWN_TARGET, null, null, ParsedFields.None, null)
         }
 
         Timber.i("SCREEN: ${result.intent}")
@@ -173,7 +175,7 @@ class ObservationClassifier @Inject constructor(
 
         // Unknown click — preserve node details for future classification
         val nodeId = event.node.viewIdResourceName
-            ?.takeIf { it.isNotBlank() && it != "no_id" }
+            ?.takeIf { it.isNotBlank() && it != NO_ID_FALLBACK }
         val nodeText = event.node.text?.takeIf { it.isNotBlank() }
         Timber.d("ObservationClassifier: UNKNOWN click — id=$nodeId text=$nodeText")
         return Observation.Click(
@@ -188,7 +190,7 @@ class ObservationClassifier @Inject constructor(
                 nodeId = nodeId,
                 nodeText = nodeText,
             ),
-            target = "UNKNOWN",
+            target = UNKNOWN_TARGET,
             screenTarget = lastScreenTarget,
         )
     }
@@ -233,7 +235,7 @@ class ObservationClassifier @Inject constructor(
                 intent = "unknown",
                 rawText = rawText,
             ),
-            target = "UNKNOWN",
+            target = UNKNOWN_TARGET,
         )
     }
 }

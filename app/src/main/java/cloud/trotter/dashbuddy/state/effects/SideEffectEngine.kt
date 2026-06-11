@@ -8,7 +8,6 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.Platform
-import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
@@ -40,6 +39,8 @@ import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
 @Singleton
 class SideEffectEngine @Inject constructor(
@@ -233,12 +234,17 @@ class SideEffectEngine @Inject constructor(
                 // the evaluation lands on the pending offer — keeps this handler thin.
                 val config = strategyRepository.evaluationConfigFlow.first()
                 val result = offerEvaluator.evaluate(effect.parsedOffer, config)
+                // Emit the loopback observation directly (#402): the old
+                // OfferEvaluationEvent was a 1:1 shim the bridge re-typed.
                 _events.emit(
-                    OfferEvaluationEvent(
-                        action = result.action,
-                        evaluation = result,
-                        offerHash = effect.offerHash,
+                    Observation.Loopback(
                         timestamp = System.currentTimeMillis(),
+                        effect = Observation.Loopback.EFFECT_OFFER_EVALUATED,
+                        payload = ObservationPayload.EvaluationResult(
+                            action = result.action.name,
+                            offerHash = effect.offerHash,
+                            evaluation = result,
+                        ),
                     )
                 )
             }

@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.domain.di.IoDispatcher
-import cloud.trotter.dashbuddy.domain.model.state.OfferEvaluationEvent
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
@@ -20,7 +19,6 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
 @Singleton
 class StateManagerV2 @Inject constructor(
@@ -171,16 +169,6 @@ class StateManagerV2 @Inject constructor(
                 type = event.type,
                 targetPlatform = event.platform,
                 payload = event.payload,
-            )
-
-            is OfferEvaluationEvent -> Observation.Loopback(
-                timestamp = event.timestamp,
-                effect = "offer_evaluated",
-                payload = ObservationPayload.EvaluationResult(
-                    action = event.action.name,
-                    offerHash = event.offerHash,
-                    evaluation = event.evaluation,
-                ),
             )
 
             else -> {

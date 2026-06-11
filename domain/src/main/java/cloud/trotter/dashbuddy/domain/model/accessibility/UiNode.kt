@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.model.accessibility
 
+import cloud.trotter.dashbuddy.domain.pipeline.NO_ID_FALLBACK
+
 /**
  * A data class to hold structured information about a single UI element (node).
  * Optimized for both efficient recursive searching (Clicks) and full-text collection (Screen Analysis).
@@ -299,7 +301,7 @@ data class UiNode(
 
     private fun appendNode(builder: StringBuilder, node: UiNode, indent: Int) {
         val indentation = "  ".repeat(indent)
-        val id = node.viewIdResourceName?.substringAfter("id/") ?: "no_id"
+        val id = node.viewIdResourceName?.substringAfter("id/") ?: NO_ID_FALLBACK
         val desc = node.contentDescription?.let { "desc='$it'" } ?: ""
         val txt = node.text?.let { "text='$it'" } ?: ""
         val state = node.stateDescription?.let { "state='$it'" }
