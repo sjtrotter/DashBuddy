@@ -813,8 +813,9 @@ object RuleCompiler {
     // ==========================================================================
 
     /**
-     * Derive a classification name from a rule ID by stripping the platform prefix.
-     * "doordash.screen.idle_map" → "idle_map"
+     * THE id→name derivation (#404): strips the platform prefix.
+     * "doordash.screen.idle_map" → "idle_map". Used for classification
+     * targets here and intent fallbacks in [Ruleset] — one rule, one owner.
      */
     internal fun deriveTargetFromId(id: String): String {
         val parts = id.split(".", limit = 3)

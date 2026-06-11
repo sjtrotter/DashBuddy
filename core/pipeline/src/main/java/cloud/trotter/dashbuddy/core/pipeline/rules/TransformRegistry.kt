@@ -224,15 +224,21 @@ object TransformRegistry {
     //  Validate assertions
     // ========================================================================
 
+    // ONE owner for the assertion vocabulary (#404): the dispatch map drives
+    // both validate() and the compile-time name check — adding an assertion
+    // is exactly one entry here plus its implementation.
+    private val knownAssertions: Map<String, (JsonObject, Map<String, Any?>) -> ValidateOutcome> = mapOf(
+        "sumApproxEquals" to ::validateSumApproxEquals,
+        "fieldsLe" to ::validateFieldsLe,
+        "fieldsGe" to ::validateFieldsGe,
+        "fieldNotNull" to ::validateFieldNotNull,
+        "fieldEquals" to ::validateFieldEquals,
+    )
+
     fun validate(name: String, args: JsonObject, parsed: Map<String, Any?>): ValidateOutcome {
-        return when (name) {
-            "sumApproxEquals" -> validateSumApproxEquals(args, parsed)
-            "fieldsLe" -> validateFieldsLe(args, parsed)
-            "fieldsGe" -> validateFieldsGe(args, parsed)
-            "fieldNotNull" -> validateFieldNotNull(args, parsed)
-            "fieldEquals" -> validateFieldEquals(args, parsed)
-            else -> throw RuleCompileException("Unknown validate assertion: '$name'")
-        }
+        val assertion = knownAssertions[name]
+            ?: throw RuleCompileException("Unknown validate assertion: '$name'")
+        return assertion(args, parsed)
     }
 
     // ========================================================================
@@ -320,10 +326,7 @@ object TransformRegistry {
     }
 
     fun validateAssertionName(name: String) {
-        val known = setOf(
-            "sumApproxEquals", "fieldsLe", "fieldsGe", "fieldNotNull", "fieldEquals",
-        )
-        if (name !in known) throw RuleCompileException("Unknown validate assertion: '$name'")
+        if (name !in knownAssertions) throw RuleCompileException("Unknown validate assertion: '$name'")
     }
 
     // ========================================================================
