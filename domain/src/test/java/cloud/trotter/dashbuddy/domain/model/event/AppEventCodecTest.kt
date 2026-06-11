@@ -18,6 +18,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.fail
 import org.junit.Test
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 
 /**
  * The event-payload wire codec (#354): every payload type round-trips through
@@ -39,8 +40,7 @@ class AppEventCodecTest {
         val evaluation = OfferEvaluation(
             action = OfferAction.ACCEPT,
             score = 80.0,
-            qualityLevel = "Good",
-            recommendationText = "Recommended: ACCEPT",
+            qualityLevel = OfferQuality.GOOD,
             payAmount = 7.5,
             fuelCostEstimate = 0.5,
             nonFuelCostEstimate = 0.5,

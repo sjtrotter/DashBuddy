@@ -292,7 +292,7 @@ class WizardViewModel @Inject constructor(
             emptyList(); availableTrimNames.value = emptyList()
 
         // Skip API call if Not Listed
-        if (make != "Not Listed") {
+        if (make != VEHICLE_NOT_LISTED) {
             viewModelScope.launch {
                 _availableModels.value =
                     listOf(VEHICLE_NOT_LISTED) + vehicleRepository.getModels(_state.value.vehicleYear, make)
@@ -305,12 +305,14 @@ class WizardViewModel @Inject constructor(
         _availableTrims.value = emptyList(); availableTrimNames.value = emptyList()
 
         // Skip API call if Not Listed
-        if (model != "Not Listed") {
+        if (model != VEHICLE_NOT_LISTED) {
             viewModelScope.launch {
-                val trims = vehicleRepository.getVehicleOptions(
+                val trims = listOf(
+                    VehicleOption(id = "NOT_LISTED", displayName = VEHICLE_NOT_LISTED),
+                ) + vehicleRepository.getVehicleOptions(
                     _state.value.vehicleYear,
                     _state.value.vehicleMake,
-                    model
+                    model,
                 )
                 _availableTrims.value = trims; availableTrimNames.value =
                 trims.map { it.displayName }
@@ -322,7 +324,7 @@ class WizardViewModel @Inject constructor(
         _state.update { it.copy(vehicleTrim = trimName) }
 
         // Escape hatch! Don't look up MPG if Not Listed.
-        if (trimName == "Not Listed") return
+        if (trimName == VEHICLE_NOT_LISTED) return
 
         viewModelScope.launch {
             val vehicleId =

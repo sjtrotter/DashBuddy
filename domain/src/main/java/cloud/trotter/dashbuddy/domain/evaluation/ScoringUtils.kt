@@ -9,13 +9,13 @@ object ScoringUtils {
     private const val AWESOME = 70.0
 
 
-    fun determineOfferQuality(score: Double): String {
+    fun determineOfferQuality(score: Double): OfferQuality {
         return when {
-            score >= AWESOME -> "AWESOME OFFER"
-            score >= GREAT -> "GREAT OFFER"
-            score >= GOOD -> "GOOD OFFER"
-            score >= DECENT -> "DECENT OFFER"
-            else -> "BAD OFFER"
+            score >= AWESOME -> OfferQuality.AWESOME
+            score >= GREAT -> OfferQuality.GREAT
+            score >= GOOD -> OfferQuality.GOOD
+            score >= DECENT -> OfferQuality.DECENT
+            else -> OfferQuality.BAD
         }
     }
 }

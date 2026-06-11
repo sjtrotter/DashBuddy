@@ -233,7 +233,14 @@ class SideEffectEngine @Inject constructor(
                 // the evaluation lands on the pending offer — keeps this handler thin.
                 val config = strategyRepository.evaluationConfigFlow.first()
                 val result = offerEvaluator.evaluate(effect.parsedOffer, config)
-                _events.emit(OfferEvaluationEvent(result.action, result, offerHash = effect.offerHash))
+                _events.emit(
+                    OfferEvaluationEvent(
+                        action = result.action,
+                        evaluation = result,
+                        offerHash = effect.offerHash,
+                        timestamp = System.currentTimeMillis(),
+                    )
+                )
             }
 
             is AppEffect.PostOfferNotification -> {
@@ -265,7 +272,12 @@ class SideEffectEngine @Inject constructor(
 
                     // Emit Timeout Event back to State Machine
                     _events.emit(
-                        TimeoutEvent(type = effect.type, platform = effect.platform, payload = effect.payload)
+                        TimeoutEvent(
+                            timestamp = System.currentTimeMillis(),
+                            type = effect.type,
+                            platform = effect.platform,
+                            payload = effect.payload,
+                        )
                     )
                 }
                 job.invokeOnCompletion { activeTimers.remove(effect.type, job) }
@@ -416,7 +428,13 @@ class SideEffectEngine @Inject constructor(
         val job = engineScope.launch(start = CoroutineStart.LAZY) {
             delay(durationMs)
             Timber.w("Timer Expired (rule): %s", type)
-            _events.emit(TimeoutEvent(type = type, platform = platform))
+            _events.emit(
+                TimeoutEvent(
+                    timestamp = System.currentTimeMillis(),
+                    type = type,
+                    platform = platform,
+                )
+            )
         }
         job.invokeOnCompletion { activeTimers.remove(type, job) }
         activeTimers[type] = job

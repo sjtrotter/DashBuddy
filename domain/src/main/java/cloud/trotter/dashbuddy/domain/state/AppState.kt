@@ -14,7 +14,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class AppState(
     val regions: Regions = Regions(),
-    val timestamp: Long = System.currentTimeMillis(),
+    /** Explicit (#366): 0 for the pre-restore initial state; obs-driven after. */
+    val timestamp: Long = 0L,
     val correlationVersion: Long = 0L,
 )
 

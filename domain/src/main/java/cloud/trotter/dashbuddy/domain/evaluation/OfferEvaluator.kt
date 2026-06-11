@@ -38,8 +38,7 @@ class OfferEvaluator() {
             return OfferEvaluation(
                 action = OfferAction.ACCEPT,
                 score = 100.0,
-                qualityLevel = "Protected!",
-                recommendationText = "Protected: Accept!",
+                qualityLevel = OfferQuality.PROTECTED,
                 payAmount = grossPay,
                 fuelCostEstimate = fuelCost,
                 nonFuelCostEstimate = nonFuelCost,
@@ -57,22 +56,28 @@ class OfferEvaluator() {
         }
 
         // --- 3. Filter Active Rules ---
+        // No rules enabled is NOT a parse error (#366): parsing succeeded, so
+        // return the REAL economics with an explicit no-verdict quality —
+        // the old branch zeroed everything and claimed "Error Parsing Offer".
         val activeRules = config.rules.filter { it.isEnabled }
         if (activeRules.isEmpty()) {
             return OfferEvaluation(
                 action = OfferAction.NOTHING,
                 score = 0.0,
-                qualityLevel = "UNKNOWN",
-                recommendationText = "Error Parsing Offer",
-                payAmount = 0.0,
-                fuelCostEstimate = 0.0,
-                netPayAmount = 0.0,
-                distanceMiles = 0.0,
-                dollarsPerMile = 0.0,
-                dollarsPerHour = 0.0,
-                estimatedTimeMinutes = 0.0,
-                itemCount = 0.0,
-                merchantName = "UNKNOWN"
+                qualityLevel = OfferQuality.UNKNOWN,
+                payAmount = grossPay,
+                fuelCostEstimate = fuelCost,
+                nonFuelCostEstimate = nonFuelCost,
+                totalOperatingCost = operatingCost,
+                operatingCostPerMile = economy.operatingCostPerMile,
+                netPayAmount = netPay,
+                distanceMiles = dist,
+                dollarsPerMile = dpm,
+                dollarsPerHour = activeHourly,
+                estimatedTimeMinutes = estTimeMinutes,
+                itemCount = items,
+                merchantName = merchants,
+                isUsingDefaults = economy.isUsingDefaults,
             )
         }
 
@@ -89,8 +94,7 @@ class OfferEvaluator() {
             return OfferEvaluation(
                 action = OfferAction.DECLINE,
                 score = 0.0,
-                qualityLevel = "Blocked",
-                recommendationText = "Recommended: DECLINE",
+                qualityLevel = OfferQuality.BLOCKED,
                 payAmount = grossPay,
                 fuelCostEstimate = fuelCost,
                 nonFuelCostEstimate = nonFuelCost,
@@ -143,16 +147,9 @@ class OfferEvaluator() {
         // --- 7. Decision ---
         val action = when {
             requiresManualReview -> OfferAction.MANUAL_REVIEW
-            finalScore >= 70 -> OfferAction.ACCEPT
-            finalScore <= 30 -> OfferAction.DECLINE
+            finalScore >= ACCEPT_THRESHOLD -> OfferAction.ACCEPT
+            finalScore <= DECLINE_THRESHOLD -> OfferAction.DECLINE
             else -> OfferAction.NOTHING
-        }
-
-        val recText = when (action) {
-            OfferAction.ACCEPT -> "Recommended: ACCEPT"
-            OfferAction.DECLINE -> "Recommended: DECLINE"
-            OfferAction.MANUAL_REVIEW -> "Recommended: REVIEW"
-            else -> "Recommended: DECIDE"
         }
 
         val quality = ScoringUtils.determineOfferQuality(finalScore)
@@ -164,7 +161,6 @@ class OfferEvaluator() {
             action = action,
             score = finalScore,
             qualityLevel = quality,
-            recommendationText = recText,
             payAmount = grossPay,
             fuelCostEstimate = fuelCost,
             nonFuelCostEstimate = nonFuelCost,
@@ -234,6 +230,12 @@ class OfferEvaluator() {
         }
 
     companion object {
+        /** Score at or above which the verdict is ACCEPT. */
+        const val ACCEPT_THRESHOLD = 70.0
+
+        /** Score at or below which the verdict is DECLINE. */
+        const val DECLINE_THRESHOLD = 30.0
+
         private const val REALISTIC_MAX_DPM = 2.00
         private const val REALISTIC_MAX_HOURLY = 35.00
         private const val REALISTIC_MAX_PAYOUT = 15.00

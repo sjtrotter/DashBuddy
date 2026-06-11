@@ -8,6 +8,12 @@ package cloud.trotter.dashbuddy.domain.state
  * observation log. The enum is the Kotlin-side source of truth; any rule
  * emitting a wire value not in this set is rejected at load time.
  *
+ * NAMING (#366, decided): this enum collides with `kotlinx.coroutines.flow.Flow`
+ * and stays that way. The handful of files needing both use a fully-qualified
+ * coroutines import; renaming (~21 consumers + the wire-format mental model)
+ * buys nothing behavioral. Revisit only if the collision starts causing real
+ * bugs rather than import friction.
+ *
  * @see Mode for the orthogonal availability axis.
  */
 enum class Flow(val wire: String) {

@@ -31,6 +31,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
 /**
  * #345 — eval/diff correctness pack:
@@ -66,8 +68,7 @@ class EvalDiffCorrectnessTest {
     private fun evaluation() = OfferEvaluation(
         action = OfferAction.ACCEPT,
         score = 75.0,
-        qualityLevel = "Good",
-        recommendationText = "Recommended: ACCEPT",
+        qualityLevel = OfferQuality.GOOD,
         payAmount = 7.50,
         fuelCostEstimate = 0.5,
         netPayAmount = 6.50,
@@ -82,10 +83,10 @@ class EvalDiffCorrectnessTest {
     private fun loopback(evalForHash: String?) = Observation.Loopback(
         timestamp = 2_000L,
         effect = "offer_evaluated",
-        payload = mapOf(
-            "action" to OfferAction.ACCEPT.name,
-            "evaluation" to evaluation(),
-            "offerHash" to evalForHash,
+        payload = ObservationPayload.EvaluationResult(
+            action = OfferAction.ACCEPT.name,
+            offerHash = evalForHash,
+            evaluation = evaluation(),
         ),
     )
 

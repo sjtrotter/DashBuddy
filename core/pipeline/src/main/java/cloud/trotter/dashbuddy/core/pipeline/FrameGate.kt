@@ -34,8 +34,11 @@ internal class FrameGate(
      *   forwarded onward).
      */
     fun admit(obs: Observation, contentHash: Int?): Boolean {
+        // Null identity = never dedup (#366: clicks). It still CLEARS
+        // lastIdentity below, preserving the old behavior where a click's
+        // unique hash reset screen dedup (same screen re-forwards after it).
         val identity = obs.identity()
-        if (identity == lastIdentity) return false
+        if (identity != null && identity == lastIdentity) return false
 
         val target = (obs as? Observation.FlowObservation)?.target
         if (target != "UNKNOWN") {

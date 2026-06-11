@@ -3,7 +3,7 @@ package cloud.trotter.dashbuddy.domain.model.notification
 /**
  * Raw notification payload extracted from a [android.service.notification.StatusBarNotification].
  * Analogous to [cloud.trotter.dashbuddy.domain.model.accessibility.UiNode] — this is the
- * uninterpreted source data; [NotificationInfo] carries the typed, parsed result.
+ * uninterpreted source data; [cloud.trotter.dashbuddy.domain.state.ParsedFields.NotificationFields] carries the typed, parsed result.
  */
 data class RawNotificationData(
     val title: String?,

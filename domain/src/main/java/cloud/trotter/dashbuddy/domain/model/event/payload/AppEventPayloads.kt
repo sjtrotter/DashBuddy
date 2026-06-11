@@ -114,13 +114,22 @@ data class DeliveryPayload(
     val sessionEarningsAtCompletion: Double? = null,
 ) : AppEventPayload
 
+/** Wire values for [SessionStartPayload.source] (#366) — mirrors [SessionEndSource]. */
+object SessionStartSource {
+    /** Normal user-initiated start. */
+    const val INTERACTION = "interaction"
+
+    /** Session resurrected by crash recovery. */
+    const val RECOVERY = "recovery"
+}
+
 /** Payload for `DASH_START`. */
 @Serializable
 data class SessionStartPayload(
     val sessionId: String,
     val platform: String,
     val startedAt: Long,
-    /** "interaction" (normal user start) | "recovery" (crash recovery). */
+    /** One of [SessionStartSource]. */
     val source: String,
     val startScreen: String,
 ) : AppEventPayload

@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.domain.config
 
 /**
  * Rules for the "Offer Robot".
- * Used by DefaultEffectHandler/Reducer to decide instant actions.
+ * Read by the side-effect engine's evaluation loopback to decide instant actions.
  */
 data class OfferAutomationConfig(
     val masterAutoPilotEnabled: Boolean = false,

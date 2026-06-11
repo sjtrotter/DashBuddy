@@ -26,6 +26,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
 /**
  * #352 — the observation journal's fidelity guarantees:
@@ -67,8 +69,7 @@ class ObservationJournalTest {
     private fun state(cv: Long) = AppState(timestamp = cv, correlationVersion = cv)
 
     private fun evaluation() = OfferEvaluation(
-        action = OfferAction.ACCEPT, score = 74.0, qualityLevel = "Good",
-        recommendationText = "Recommended: ACCEPT", payAmount = 7.50,
+        action = OfferAction.ACCEPT, score = 74.0, qualityLevel = OfferQuality.GOOD, payAmount = 7.50,
         fuelCostEstimate = 0.5, netPayAmount = 6.50, distanceMiles = 3.2,
         dollarsPerMile = 2.03, dollarsPerHour = 22.0, estimatedTimeMinutes = 18.0,
         itemCount = 3.0, merchantName = "HEB",
@@ -95,10 +96,10 @@ class ObservationJournalTest {
         val loopback = Observation.Loopback(
             timestamp = 2_000L,
             effect = "offer_evaluated",
-            payload = mapOf(
-                "action" to eval.action.name,
-                "evaluation" to eval,
-                "offerHash" to "offer-A",
+            payload = ObservationPayload.EvaluationResult(
+                action = eval.action.name,
+                offerHash = "offer-A",
+                evaluation = eval,
             ),
         )
 
@@ -107,8 +108,9 @@ class ObservationJournalTest {
         val replayed = journal.tailAfter(0).single() as Observation.Loopback
 
         assertEquals("offer_evaluated", replayed.effect)
-        assertEquals("offer-A", replayed.payload["offerHash"])
-        assertEquals(eval, replayed.payload["evaluation"])
+        val result = replayed.payload as ObservationPayload.EvaluationResult
+        assertEquals("offer-A", result.offerHash)
+        assertEquals(eval, result.evaluation)
 
         // And the replayed loopback LANDS on a pending offer — the fidelity gap
         // this issue exists for.

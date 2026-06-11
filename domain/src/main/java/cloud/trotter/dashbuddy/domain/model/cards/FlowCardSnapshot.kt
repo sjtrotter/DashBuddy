@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.model.cards
 
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 
@@ -61,9 +62,7 @@ sealed class FlowCardSnapshot {
         val dollarsPerMile: Double? = null,
         val dollarsPerHour: Double? = null,
         /** Evaluator quality level ("Great offer", "Bad offer", …) for the verdict chip. */
-        val qualityLevel: String? = null,
-        /** One-line reason from the evaluator, shown under the verdict action word. */
-        val recommendationText: String? = null,
+        val qualityLevel: OfferQuality? = null,
         /** Offer + order badge enum names (e.g. HIGH_PAYING, RED_CARD, ALCOHOL) for the pill row. */
         val badges: List<String> = emptyList(),
         /** When the DoorDash offer countdown expires (presentedAt + initialCountdown). Null if unparsed. */

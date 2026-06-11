@@ -28,6 +28,8 @@ import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 
 /**
  * Tests for [EffectMap.diff] — verifies correct effects are emitted
@@ -121,8 +123,7 @@ class EffectMapTest {
     private val testEvaluation = OfferEvaluation(
         action = OfferAction.ACCEPT,
         score = 74.0,
-        qualityLevel = "Good",
-        recommendationText = "Take it",
+        qualityLevel = OfferQuality.GOOD,
         payAmount = 7.50,
         fuelCostEstimate = 0.50,
         netPayAmount = 7.00,
@@ -806,9 +807,10 @@ class EffectMapTest {
         assertEquals(1, scheduled.size)
         assertEquals(cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.SETTLE_UI, scheduled[0].type)
         assertEquals(500L, scheduled[0].durationMs)
-        // Payload should carry the click context
-        assertEquals("com.example:id/btn", scheduled[0].payload["target.viewIdSuffix"])
-        assertEquals("test.rule", scheduled[0].payload["ruleId"])
+        // Payload should carry the typed click context (#366)
+        val click = scheduled[0].payload as ObservationPayload.DeferredClick
+        assertEquals("com.example:id/btn", click.target?.viewIdSuffix)
+        assertEquals("test.rule", click.ruleId)
         // And NOT emit a RequestEffect for the click directly
         assertTrue(
             "Click should be deferred, not dispatched directly",
@@ -818,16 +820,16 @@ class EffectMapTest {
 
     @Test
     fun `SETTLE_UI timeout re-emits the click as immediate RequestEffect`() {
-        val payload = mapOf<String, Any?>(
-            "verb" to "CLICK",
-            "ruleId" to "test.rule",
-            "target.viewIdSuffix" to "com.example:id/btn",
-            "target.classNameHint" to "android.widget.Button",
-            "target.pathFingerprint" to "fp",
-            "target.bounds.left" to 0,
-            "target.bounds.top" to 0,
-            "target.bounds.right" to 100,
-            "target.bounds.bottom" to 50,
+        val payload = ObservationPayload.DeferredClick(
+            verb = "CLICK",
+            ruleId = "test.rule",
+            target = cloud.trotter.dashbuddy.domain.pipeline.NodeRef(
+                viewIdSuffix = "com.example:id/btn",
+                text = null,
+                classNameHint = "android.widget.Button",
+                boundsInScreen = cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox(0, 0, 100, 50),
+                pathFingerprint = "fp",
+            ),
         )
         val timeoutObs = Observation.Timeout(
             timestamp = 1000L,

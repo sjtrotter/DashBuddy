@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 
 /**
  * Accepted-offer economics on the [Job] (issue #317). A first accept seeds the job's
@@ -45,8 +46,7 @@ class JobEconomicsTest {
     private fun eval(net: Double, est: Double, dist: Double, pay: Double) = OfferEvaluation(
         action = OfferAction.ACCEPT,
         score = 75.0,
-        qualityLevel = "Good",
-        recommendationText = "Accept",
+        qualityLevel = OfferQuality.GOOD,
         payAmount = pay,
         fuelCostEstimate = 0.0,
         netPayAmount = net,

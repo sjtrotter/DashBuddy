@@ -3,7 +3,7 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.core.database.observation.ObservationDao
 import cloud.trotter.dashbuddy.core.database.observation.ObservationEntity
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
-import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -23,18 +23,16 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Typed projection of the non-flow observations' payloads (#352). FlowObservations
- * persist their ParsedFields; Timeout/UiInput/Loopback used to replay as STUBS —
- * notably the `offer_evaluated` loopback, so replayed state never carried its
- * evaluations. Map-payload entries beyond these fields are #366's typed-payload work.
+ * Persisted projection of the non-flow observations (#352, folded by #366):
+ * the payload itself is now the TYPED sealed [ObservationPayload], serialized
+ * polymorphically — no per-key map rebuilding on replay.
  */
 @Serializable
 internal data class InternalObsPayload(
     val action: String? = null,
     val effect: String? = null,
-    val offerHash: String? = null,
-    val evaluation: OfferEvaluation? = null,
     val targetPlatform: String? = null,
+    val payload: ObservationPayload? = null,
 )
 
 /**
@@ -105,17 +103,14 @@ class ObservationJournal @Inject constructor(
     }
 
     private fun internalPayloadOf(obs: Observation): InternalObsPayload? = when (obs) {
-        is Observation.Timeout -> obs.targetPlatform?.let {
-            InternalObsPayload(targetPlatform = it.wire)
-        }
+        is Observation.Timeout ->
+            if (obs.targetPlatform != null || obs.payload != null) {
+                InternalObsPayload(targetPlatform = obs.targetPlatform?.wire, payload = obs.payload)
+            } else null
         // Persisting the REAL action is safe: PerformOfferAction is classified
         // external (#341), so recovery can never replay an offer click from it.
         is Observation.UiInput -> InternalObsPayload(action = obs.action)
-        is Observation.Loopback -> InternalObsPayload(
-            effect = obs.effect,
-            offerHash = obs.payload["offerHash"] as? String,
-            evaluation = obs.payload["evaluation"] as? OfferEvaluation,
-        )
+        is Observation.Loopback -> InternalObsPayload(effect = obs.effect, payload = obs.payload)
         else -> null
     }
 
@@ -169,6 +164,7 @@ class ObservationJournal @Inject constructor(
                     runCatching { enumValueOf<TimeoutType>(it) }.getOrNull()
                 } ?: TimeoutType.SETTLE_UI,
                 targetPlatform = payload?.targetPlatform?.let(Platform::fromWire),
+                payload = payload?.payload,
             )
 
             "internal.ui" -> Observation.UiInput(
@@ -179,15 +175,9 @@ class ObservationJournal @Inject constructor(
             "internal.loopback" -> Observation.Loopback(
                 timestamp = occurredAt,
                 effect = payload?.effect ?: "replay",
-                // Rebuild the exact keys FlowRegionStepper.handleLoopback reads, so
-                // a replayed offer_evaluated LANDS its evaluation (#352).
-                payload = buildMap {
-                    payload?.offerHash?.let { put("offerHash", it) }
-                    payload?.evaluation?.let {
-                        put("evaluation", it)
-                        put("action", it.action.name)
-                    }
-                },
+                // Typed payload round-trips losslessly (#366) — a replayed
+                // offer_evaluated lands its evaluation with no key rebuilding.
+                payload = payload?.payload,
             )
 
             else -> Observation.Loopback(

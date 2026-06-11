@@ -104,11 +104,11 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
          */
         val targetPlatform: Platform? = null,
         /**
-         * Carries opaque context from the original [AppEffect.ScheduleTimeout]'s
-         * payload back into the state machine. Used for deferred-effect patterns
-         * like click-after-settle where the timer fire needs to know what to do.
+         * Typed context from the original ScheduleTimeout (#366) — e.g. the
+         * deferred-click target for click-after-settle. Serializable, so the
+         * journal replays it losslessly.
          */
-        val payload: Map<String, Any?> = emptyMap(),
+        val payload: ObservationPayload? = null,
     ) : Observation {
         override val platform: Platform get() = targetPlatform ?: Platform.fromRuleId(ruleId)
     }
@@ -120,7 +120,6 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val ruleId: String? = null,
         override val metadata: ReplayMetadata = ReplayMetadata.EMPTY,
         val action: String,
-        val payload: Map<String, Any?> = emptyMap(),
     ) : Observation
 
     /** A loopback event from the side-effect engine back into the state machine. */
@@ -130,7 +129,8 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val ruleId: String? = null,
         override val metadata: ReplayMetadata = ReplayMetadata.EMPTY,
         val effect: String,
-        val payload: Map<String, Any?> = emptyMap(),
+        /** Typed loopback context (#366) — e.g. the landed offer evaluation. */
+        val payload: ObservationPayload? = null,
     ) : Observation
 }
 

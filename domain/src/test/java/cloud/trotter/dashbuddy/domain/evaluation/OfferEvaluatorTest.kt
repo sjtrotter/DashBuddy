@@ -107,7 +107,7 @@ class OfferEvaluatorTest {
         val result = evaluator.evaluate(offer(pay = 1.0), cfg)
         assertEquals(OfferAction.ACCEPT, result.action)
         assertEquals(100.0, result.score, 0.0001)
-        assertEquals("Protected!", result.qualityLevel)
+        assertEquals(OfferQuality.PROTECTED, result.qualityLevel)
     }
 
     @Test
@@ -433,7 +433,7 @@ class OfferEvaluatorTest {
         val result = evaluator.evaluate(offer(pay = 20.0, storeName = "Taco Bell"), cfg)
         assertEquals(OfferAction.DECLINE, result.action)
         assertEquals(0.0, result.score, 0.0001)
-        assertEquals("Blocked", result.qualityLevel)
+        assertEquals(OfferQuality.BLOCKED, result.qualityLevel)
     }
 
     @Test
@@ -468,7 +468,6 @@ class OfferEvaluatorTest {
         // pay=10 → score=100, but MANUAL_REVIEW overrides to MANUAL_REVIEW action
         val result = evaluator.evaluate(offer(pay = 10.0, storeName = "Chipotle"), cfg)
         assertEquals(OfferAction.MANUAL_REVIEW, result.action)
-        assertEquals("Recommended: REVIEW", result.recommendationText)
     }
 
     @Test

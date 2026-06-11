@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
 sealed class AppEffect {
 
@@ -62,11 +63,11 @@ sealed class AppEffect {
          */
         val platform: Platform? = null,
         /**
-         * Opaque payload carried through the timer back into [Observation.Timeout].
-         * Used to thread effect context (e.g. click target NodeRef fields) through
-         * the UDF round-trip when the firing of a downstream effect must be deferred.
+         * Typed payload carried through the timer back into [Observation.Timeout]
+         * (#366) — e.g. the deferred-click context when a downstream effect's
+         * firing must wait for the UI to settle.
          */
-        val payload: Map<String, Any?> = emptyMap(),
+        val payload: ObservationPayload? = null,
     ) : AppEffect()
     data class CancelTimeout(val type: TimeoutType) : AppEffect()
 

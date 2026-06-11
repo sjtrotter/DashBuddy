@@ -23,6 +23,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 
 class FlowCardMapperTest {
 
@@ -54,8 +55,7 @@ class FlowCardMapperTest {
     private fun evaluation(score: Double = 80.0) = OfferEvaluation(
         action = OfferAction.ACCEPT,
         score = score,
-        qualityLevel = "Good",
-        recommendationText = "Recommended: ACCEPT",
+        qualityLevel = OfferQuality.GOOD,
         payAmount = 7.50,
         fuelCostEstimate = 0.5,
         nonFuelCostEstimate = 0.5,
