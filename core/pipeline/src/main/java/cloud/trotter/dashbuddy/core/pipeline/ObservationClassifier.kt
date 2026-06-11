@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
+import cloud.trotter.dashbuddy.core.pipeline.rules.TransformRegistry
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,26 +46,39 @@ class ObservationClassifier @Inject constructor(
             is PipelineEvent.Notification -> Platform.fromPackage(event.raw.packageName).wire
         }.takeIf { it != Platform.Unknown.wire }
 
-        return when (event) {
-            is PipelineEvent.Screen -> classifyScreen(event, platformWire)
-            is PipelineEvent.Click -> classifyClick(event, platformWire)
-            is PipelineEvent.Notification -> classifyNotification(event, platformWire)
+        // One coherent instant per classification (#343): time transforms (parseTime/
+        // parseDeadline) and the resulting observation timestamp see the same "now" —
+        // the notification's postTime, or the moment this screen/click is classified.
+        val eventNow = when (event) {
+            is PipelineEvent.Notification -> event.raw.postTime
+            else -> System.currentTimeMillis()
+        }
+        return TransformRegistry.withClock(eventNow) {
+            when (event) {
+                is PipelineEvent.Screen -> classifyScreen(event, platformWire, eventNow)
+                is PipelineEvent.Click -> classifyClick(event, platformWire, eventNow)
+                is PipelineEvent.Notification -> classifyNotification(event, platformWire)
+            }
         }
     }
 
     // ── Screen ──────────────────────────────────────────────────────────
 
-    private fun classifyScreen(event: PipelineEvent.Screen, platformWire: String?): Observation.Screen {
+    private fun classifyScreen(
+        event: PipelineEvent.Screen,
+        platformWire: String?,
+        now: Long,
+    ): Observation.Screen {
         val ruleset = interpreter.screenRuleset
         if (ruleset == null) {
             Timber.w("ObservationClassifier: no screen ruleset loaded")
-            return makeScreenObservation("UNKNOWN", null, null, ParsedFields.None, null)
+            return makeScreenObservation(now, "UNKNOWN", null, null, ParsedFields.None, null)
         }
 
         val result = ruleset.matchFirst(event.tree, platformWire)
         if (result == null) {
             Timber.i("SCREEN: UNKNOWN")
-            return makeScreenObservation("UNKNOWN", null, null, ParsedFields.None, null)
+            return makeScreenObservation(now, "UNKNOWN", null, null, ParsedFields.None, null)
         }
 
         Timber.i("SCREEN: ${result.intent}")
@@ -74,6 +88,7 @@ class ObservationClassifier @Inject constructor(
 
         val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
         val obs = makeScreenObservation(
+            now = now,
             screenName = result.intent,
             flow = result.flow,
             modeHint = result.modeHint,
@@ -94,6 +109,7 @@ class ObservationClassifier @Inject constructor(
     }
 
     private fun makeScreenObservation(
+        now: Long,
         screenName: String,
         flow: Flow?,
         modeHint: Mode?,
@@ -103,7 +119,7 @@ class ObservationClassifier @Inject constructor(
         transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
         expectedOutcomes: Set<Flow>? = null,
     ) = Observation.Screen(
-        timestamp = System.currentTimeMillis(),
+        timestamp = now,
         captureId = null,
         ruleId = ruleId,
         metadata = metadataProvider.current(),
@@ -118,13 +134,17 @@ class ObservationClassifier @Inject constructor(
 
     // ── Click ───────────────────────────────────────────────────────────
 
-    private fun classifyClick(event: PipelineEvent.Click, platformWire: String?): Observation.Click {
+    private fun classifyClick(
+        event: PipelineEvent.Click,
+        platformWire: String?,
+        now: Long,
+    ): Observation.Click {
         val ruleset = interpreter.clickRuleset
         if (ruleset != null) {
             val result = ruleset.matchFirst(event.node, platformWire, lastScreenTarget)
             if (result != null) {
                 return Observation.Click(
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = now,
                     captureId = null,
                     ruleId = result.ruleId,
                     metadata = metadataProvider.current(),
@@ -146,7 +166,7 @@ class ObservationClassifier @Inject constructor(
         val nodeText = event.node.text?.takeIf { it.isNotBlank() }
         Timber.d("ObservationClassifier: UNKNOWN click — id=$nodeId text=$nodeText")
         return Observation.Click(
-            timestamp = System.currentTimeMillis(),
+            timestamp = now,
             captureId = null,
             ruleId = null,
             metadata = metadataProvider.current(),
