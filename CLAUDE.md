@@ -182,6 +182,16 @@ Every new feature or refactor holds to these — they are forefront design input
 4. **Kotlin/Android best practices.** Idiomatic Kotlin (data/sealed types over stringly-typed
    values — see #283), structured concurrency (scoped coroutines; `SharingStarted.WhileSubscribed`
    for shared flows), locale-safe machine string ops (`Locale.ROOT`), immutability by default.
+5. **Single source of truth (SSOT).** Every piece of state, configuration, logic, or copy has
+   exactly one owner; everything else *derives* from it (reactively, where it can change). No
+   hand-maintained second copies — a private cache of a preference, a re-implemented formatter,
+   a duplicated constant, or a parallel UI assembly is a divergence bug waiting to fire. The
+   campaign receipts: five independent enabled-platform caches with three staleness behaviors
+   (#356), twin `formatDuration`s that disagreed on negatives (#358), a duplicated sha256 whose
+   copies had the same plaintext-leak bug (#362), and two hand-maintained economy editors that
+   had already drifted (#357). When two surfaces need the same thing, extract one definition
+   and point both at it; when a value can be computed from an owned anchor, compute it —
+   don't store it twice.
 
 If a change genuinely can't satisfy one of these, say so explicitly in the PR description instead
 of silently violating it.
