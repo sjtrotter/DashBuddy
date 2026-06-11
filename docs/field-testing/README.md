@@ -278,6 +278,15 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   window transition. What to watch/capture: that tapping Exit produces a click
   capture (and note whether back-gesture vs button changes what DoorDash shows next).
   - Confirmed: 0/2.
+- **Drop-off odometer vs "at door" timer disagreement (#294, recheck — survivor of #220).**
+  On a drop-off arrival, watch **both surfaces at the same moment**: when the HUD flips to
+  **AT DOOR**, does the **odometer stop accruing** (bubble session-miles flat while parked)?
+  The label is flow-region-driven while `PauseOdometer` fires on the platform-task
+  `arrivedAt` flip, so they *can* disagree — and desk analysis (2026-06-04/05 logs) suggests
+  `arrivedAt` often stays **null on no-contact drop-offs**, i.e. the odometer may keep
+  counting exactly while the label says AT DOOR. Note the delivery type (hand-to-customer vs
+  leave-at-door) for each sighting; capture if seen.
+  - Confirmed: 0/2.
 
 ---
 
