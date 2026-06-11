@@ -6,7 +6,9 @@ package cloud.trotter.dashbuddy.core.data.capture
  * here. The bus decides whether/how to persist and returns the captureId
  * if written (null if deduped or skipped).
  *
- * Release builds bind [NoOpCaptureBus]. Debug builds bind [DiskCaptureBus].
+ * Release builds bind [NoOpCaptureBus]; debug builds bind [DiskCaptureBus] —
+ * enforced by the per-variant `CaptureBusModule` source sets in `:core:data`
+ * (`src/debug` / `src/release`, #346).
  */
 interface CaptureBus {
 
