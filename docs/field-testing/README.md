@@ -63,7 +63,16 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **HUD numbers/timers re-plumbed through one shared format/time kit (#358, PR pending).**
+- **UNKNOWN capture volume should drop materially (#360, PR pending).**
+  UNKNOWN frames now dedup by content hash in a rolling seen-set (animations/list churn
+  capture once instead of per frame), with a 200-per-process cap (logged loudly when hit).
+  Post-dash check: count files in the capture INBOX vs a May session of similar length —
+  the May baseline was ~66% UNKNOWN; expect a large drop. Also confirm genuinely NEW
+  unknown screens (any screen you visited that DashBuddy doesn't know) still produce a
+  capture, and grep the log for the cap warning — hitting 200 on a normal dash would mean
+  the suppressor is too weak.
+  - Confirmed: 0/2.
+- **HUD numbers/timers re-plumbed through one shared format/time kit (#358, PR #386).**
   All bubble-card money, distance, countdown, and duration strings now come from
   `:core:designsystem` helpers, and the phase chip switched to brand tokens. On a normal dash,
   glance-check: (a) card money/mi/min strings look exactly as before (en-US should be visually

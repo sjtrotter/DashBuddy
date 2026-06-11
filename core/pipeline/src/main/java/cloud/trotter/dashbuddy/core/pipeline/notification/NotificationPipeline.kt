@@ -5,12 +5,12 @@ import cloud.trotter.dashbuddy.domain.capture.EnvelopeBuilder
 import cloud.trotter.dashbuddy.domain.capture.schema.RawNotificationSchema
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
-import cloud.trotter.dashbuddy.domain.pipeline.ObservationIdentity
 import cloud.trotter.dashbuddy.domain.pipeline.identity
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
+import cloud.trotter.dashbuddy.core.pipeline.FrameGate
 import cloud.trotter.dashbuddy.core.pipeline.notification.input.NotificationSource
 import cloud.trotter.dashbuddy.core.pipeline.notification.mapper.toDomain
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +41,8 @@ class NotificationPipeline @Inject constructor(
         const val PIPELINE_ID = "notification"
     }
 
-    private var lastIdentity: ObservationIdentity? = null
+    /** Identity dedup + content-bearing UNKNOWN suppression (#360). */
+    private val frameGate = FrameGate()
 
     fun output(): Flow<Observation.Notification> = source.events
         .mapNotNull { sbn -> sbn.toDomain() }
@@ -63,11 +64,10 @@ class NotificationPipeline @Inject constructor(
             platform == Platform.Unknown ||
                 platform in platformPreferences.enabledPlatforms.value
         }
-        // Dedup + Capture
+        // Dedup + Capture: known notifications dedup by identity; UNKNOWN by
+        // content hash in a rolling seen-set (#360).
         .mapNotNull { (obs, raw) ->
-            val identity = obs.identity()
-            if (identity == lastIdentity) return@mapNotNull null
-            if (obs.target != "UNKNOWN") lastIdentity = identity
+            if (!frameGate.admit(obs, raw.contentHash)) return@mapNotNull null
 
             // Derive platform from the source package, not from the matched rule
             val platform = Platform.fromPackage(raw.packageName).wire

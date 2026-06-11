@@ -9,11 +9,11 @@ import cloud.trotter.dashbuddy.domain.capture.schema.ClickContextSchema
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
-import cloud.trotter.dashbuddy.domain.pipeline.ObservationIdentity
 import cloud.trotter.dashbuddy.domain.pipeline.identity
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.core.pipeline.FrameGate
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
@@ -57,8 +57,8 @@ class AccessibilityPipeline @Inject constructor(
         const val CLICK_PIPELINE_ID = "accessibility.click"
     }
 
-    /** Last emitted observation identity — for post-classification dedup. */
-    private var lastIdentity: ObservationIdentity? = null
+    /** Identity dedup + content-bearing UNKNOWN suppression (#360). */
+    private val frameGate = FrameGate()
 
     // ── Source flows ────────────────────────────────────────────────────
 
@@ -115,18 +115,21 @@ class AccessibilityPipeline @Inject constructor(
                 platform in platformPreferences.enabledPlatforms.value
         }
 
-        // Dedup + Capture: write unique observations to disk, skip duplicates
+        // Dedup + Capture: write unique observations to disk, skip duplicates.
+        // Known screens dedup by identity; UNKNOWN frames dedup by tree/node
+        // content hash in a rolling seen-set (#360) — lastIdentity semantics
+        // (known-after-UNKNOWN re-forwarding) are preserved inside FrameGate.
         .mapNotNull { (obs, event) ->
-            val identity = obs.identity()
-            if (identity == lastIdentity) {
-                Timber.v("Dedup: skipped %s (same identity)", (obs as? Observation.FlowObservation)?.target)
+            val contentHash = when (event) {
+                is PipelineEvent.Screen -> event.tree.stableHash
+                is PipelineEvent.Click ->
+                    clickDedupHash(event.node, classifier.lastScreenTarget)
+                else -> null
+            }
+            if (!frameGate.admit(obs, contentHash)) {
+                Timber.v("Dedup: suppressed %s", (obs as? Observation.FlowObservation)?.target)
                 return@mapNotNull null
             }
-            // Only update lastIdentity for known observations — UNKNOWN observations
-            // get captured below but shouldn't reset dedup state, otherwise the next
-            // known screen after an UNKNOWN re-forwards even if nothing changed.
-            val target = (obs as? Observation.FlowObservation)?.target
-            if (target != "UNKNOWN") lastIdentity = identity
             captureObservation(obs, event)
         }
 
