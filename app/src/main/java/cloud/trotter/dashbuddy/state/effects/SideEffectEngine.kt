@@ -17,10 +17,14 @@ import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
+import cloud.trotter.dashbuddy.di.IoDispatcher
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
@@ -46,6 +50,7 @@ class SideEffectEngine @Inject constructor(
     private val uiInteractionHandler: UiInteractionHandler,
     private val effectsFiredDao: EffectsFiredDao,
     private val ttsEffectHandler: TtsEffectHandler,
+    @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : EffectExecutor {
 
     // 1. OUTPUT STREAM: Events going BACK to the StateMachine (The Loopback)
@@ -81,9 +86,23 @@ class SideEffectEngine @Inject constructor(
      *   - Keyed effects are checked against `effects_fired` for idempotency.
      *   - Loopback effects (timers, evaluations) replay deterministically.
      */
+    /**
+     * Backstop for the effect coroutines this engine spawns (timers, IO writes): an uncaught
+     * failure must never reach the default handler and kill the process (#341).
+     */
+    private val effectExceptionHandler = CoroutineExceptionHandler { _, t ->
+        Timber.e(t, "SideEffectEngine: effect coroutine crashed (isolated)")
+    }
+
     override fun process(effect: AppEffect, scope: CoroutineScope, recovering: Boolean) {
-        scope.launch(Dispatchers.Default) {
-            execute(effect, scope, recovering)
+        scope.launch(effectExceptionHandler) {
+            try {
+                execute(effect, scope, recovering)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Effect failed (isolated): %s", effect::class.simpleName)
+            }
         }
     }
 
@@ -105,7 +124,7 @@ class SideEffectEngine @Inject constructor(
         when (effect) {
             // --- FIRE & FORGET (UI / IO) ---
             is AppEffect.LogEvent -> {
-                scope.launch(Dispatchers.IO) {
+                scope.launch(ioDispatcher + effectExceptionHandler) {
                     appEventRepo.insert(effect.event)
                 }
             }
@@ -177,7 +196,7 @@ class SideEffectEngine @Inject constructor(
                 // lands AFTER the offer screenshot's settle + capture (clean frame).
                 val summary = effect.evaluation.toNotificationSummary()
                 val persona = offerPersona(effect.evaluation.action)
-                scope.launch {
+                scope.launch(effectExceptionHandler) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(summary, persona)
                 }
@@ -189,22 +208,24 @@ class SideEffectEngine @Inject constructor(
                 // Cancel existing timer of this type
                 activeTimers[effect.type]?.cancel()
 
-                // Start new timer
-                val job = scope.launch {
+                // LAZY start so the map entry exists before the body can run; the completion
+                // handler removes only ITSELF (two-arg remove), so an expiring timer can never
+                // untrack a replacement scheduled for the same type (#341).
+                val job = scope.launch(effectExceptionHandler, start = CoroutineStart.LAZY) {
                     delay(effect.durationMs)
                     Timber.w("Timer Expired: ${effect.type}")
 
                     // Emit Timeout Event back to State Machine
                     _events.emit(TimeoutEvent(type = effect.type, payload = effect.payload))
-
-                    activeTimers.remove(effect.type)
                 }
+                job.invokeOnCompletion { activeTimers.remove(effect.type, job) }
                 activeTimers[effect.type] = job
+                job.start()
             }
 
             is AppEffect.CancelTimeout -> {
+                // Untracking happens via the job's self-removing completion handler.
                 activeTimers[effect.type]?.cancel()
-                activeTimers.remove(effect.type)
             }
 
             is AppEffect.SequentialEffect -> {
@@ -214,7 +235,7 @@ class SideEffectEngine @Inject constructor(
 
         // Record keyed effect as fired for idempotency
         if (key != null) {
-            scope.launch(Dispatchers.IO) {
+            scope.launch(ioDispatcher + effectExceptionHandler) {
                 effectsFiredDao.markFired(
                     EffectsFiredEntity(
                         effectKey = key,
@@ -336,13 +357,15 @@ class SideEffectEngine @Inject constructor(
         val durationMs = args["durationMs"]?.toLongOrNull() ?: return
 
         activeTimers[type]?.cancel()
-        val job = scope.launch {
+        // Same LAZY + self-removing pattern as AppEffect.ScheduleTimeout (#341).
+        val job = scope.launch(effectExceptionHandler, start = CoroutineStart.LAZY) {
             delay(durationMs)
             Timber.w("Timer Expired (rule): %s", type)
             _events.emit(TimeoutEvent(type = type))
-            activeTimers.remove(type)
         }
+        job.invokeOnCompletion { activeTimers.remove(type, job) }
         activeTimers[type] = job
+        job.start()
     }
 
     private fun cancelTimeoutFromArgs(args: Map<String, String>) {
@@ -353,8 +376,8 @@ class SideEffectEngine @Inject constructor(
             Timber.w("Unknown timeout type: %s", typeWire)
             return
         }
+        // Untracking happens via the job's self-removing completion handler.
         activeTimers[type]?.cancel()
-        activeTimers.remove(type)
     }
 
     private fun resolvePersona(wire: String?): ChatPersona = when (wire?.lowercase()) {
@@ -392,6 +415,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.PlayNotificationSound,
         is AppEffect.CaptureScreenshot,
         is AppEffect.ClickNode,
+        is AppEffect.PerformOfferAction,
         is AppEffect.RequestEffect,
         is AppEffect.StartOdometer,
         is AppEffect.StopOdometer,
