@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.core.data.settings
 
 import android.content.Context
 import android.content.pm.PackageManager
-import cloud.trotter.dashbuddy.core.data.di.ApplicationScope
+import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import cloud.trotter.dashbuddy.core.datastore.settings.PlatformPreferencesDataSource
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform

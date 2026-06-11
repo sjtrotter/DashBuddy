@@ -125,7 +125,10 @@ and a parallel `NotificationPipeline` (`NotificationListener` → `NotificationF
 `NotificationMapper`) emit `PipelineEvent`s. `AccessibilityPipeline.output()` has three drop gates:
 **sensitive** screens, **noise**, and **UNKNOWN** (captured to disk for triage, never forwarded to
 the state machine). Snapshots are attributed to the window's *real* package (not the event's), so
-our own overlay is dropped (#4 / PR #334).
+our own overlay is dropped (#4 / PR #334). Frame admission is `FrameGate` (identity dedup +
+content-hash rolling suppression of UNKNOWN frames, #360); envelope assembly is the shared
+`CaptureWriter` (#361); `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
+all collectors, so side effects (captures, dedup state) can never double-run (#361).
 
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + `assets/rules/`)
 

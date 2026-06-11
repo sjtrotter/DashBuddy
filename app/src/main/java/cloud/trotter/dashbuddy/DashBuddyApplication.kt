@@ -16,6 +16,9 @@ import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.log.StateAwareTree
 import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
+import cloud.trotter.dashbuddy.domain.di.ApplicationScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.worker.DailyGasPriceWorker
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
@@ -25,6 +28,10 @@ import javax.inject.Provider
 
 @HiltAndroidApp
 class DashBuddyApplication : Application(), Configuration.Provider {
+
+    @Inject
+    @ApplicationScope
+    lateinit var applicationScope: CoroutineScope
 
     @Inject
     lateinit var stateManagerV2: StateManagerV2
@@ -97,8 +104,10 @@ class DashBuddyApplication : Application(), Configuration.Provider {
             )
         )
 
-        // 2. Load JSON rule interpreter (dual-run validation; Kotlin matchers remain authoritative)
-        jsonRuleInterpreter.loadDefaults()
+        // 2. Compile the JSON rulesets off the main thread (#361): ~95KB of
+        // parse+regex-compile work. The classifier tolerates a null ruleset
+        // (classifies UNKNOWN) for the instants before the swap lands.
+        applicationScope.launch { jsonRuleInterpreter.loadDefaults() }
 
         // 3. Initialize State
         stateManagerV2.initialize()

@@ -1,18 +1,13 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility
 
 import android.view.accessibility.AccessibilityEvent
-import cloud.trotter.dashbuddy.domain.capture.CaptureBus
-import cloud.trotter.dashbuddy.domain.capture.EnvelopeBuilder
-import cloud.trotter.dashbuddy.domain.capture.WindowContextDto
-import cloud.trotter.dashbuddy.domain.capture.schema.ClickCapturePayload
-import cloud.trotter.dashbuddy.domain.capture.schema.ClickContextSchema
-import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.identity
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.core.pipeline.CaptureWriter
 import cloud.trotter.dashbuddy.core.pipeline.FrameGate
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
@@ -49,7 +44,7 @@ class AccessibilityPipeline @Inject constructor(
     private val windowsChangedPipeline: WindowsChangedPipeline,
     private val source: AccessibilitySource,
     private val classifier: ObservationClassifier,
-    private val captureBus: CaptureBus,
+    private val captureWriter: CaptureWriter,
     private val platformPreferences: PlatformPreferences,
 ) {
     companion object {
@@ -90,12 +85,12 @@ class AccessibilityPipeline @Inject constructor(
     // ── Main pipeline ──────────────────────────────────────────────────
 
     fun output(): Flow<Observation> = merge(screenEvents(), clickEvents())
-        // Classify through the unified rule engine
+        // Classify through the unified rule engine (typed: FlowObservation, #361)
         .map { event -> classifier.classify(event) to event }
 
         // Gate: drop sensitive/noise observations (pledge: never store or forward)
         .filter { (obs, _) ->
-            val parsed = (obs as Observation.FlowObservation).parsed
+            val parsed = obs.parsed
             val isSensitive = parsed is ParsedFields.SensitiveFields
             val isNoise = parsed is ParsedFields.NoiseFields
             if (isSensitive) Timber.d("Sensitive gate: dropped %s", obs.target)
@@ -127,105 +122,27 @@ class AccessibilityPipeline @Inject constructor(
                 else -> null
             }
             if (!frameGate.admit(obs, contentHash)) {
-                Timber.v("Dedup: suppressed %s", (obs as? Observation.FlowObservation)?.target)
+                Timber.v("Dedup: suppressed %s", obs.target)
                 return@mapNotNull null
             }
-            captureObservation(obs, event)
+            // Capture via the shared writer; smart-casts replace the old
+            // unchecked downcasts (#361).
+            when {
+                obs is Observation.Screen && event is PipelineEvent.Screen ->
+                    captureWriter.captureScreen(obs, event)
+                obs is Observation.Click && event is PipelineEvent.Click ->
+                    captureWriter.captureClick(obs, event, classifier.lastScreenTarget)
+                else -> obs
+            }
         }
 
         // Gate: don't forward UNKNOWN observations to state machine
         .filter { obs ->
-            val target = (obs as? Observation.FlowObservation)?.target
-            val isUnknown = target == "UNKNOWN"
-            if (isUnknown) Timber.v("Unknown gate: captured but not forwarding %s", target)
+            val isUnknown = obs.target == "UNKNOWN"
+            if (isUnknown) Timber.v("Unknown gate: captured but not forwarding %s", obs.target)
             !isUnknown
         }
 
-    // ── Capture ────────────────────────────────────────────────────────
-
-    private fun captureObservation(obs: Observation, event: PipelineEvent): Observation {
-        val flowObs = obs as Observation.FlowObservation
-        // Derive platform from the source package, not from the matched rule
-        val eventPackage = when (event) {
-            is PipelineEvent.Screen -> event.packageName
-            is PipelineEvent.Click -> event.packageName
-            else -> null
-        }
-        val platform = Platform.fromPackage(eventPackage).wire
-
-        return when (event) {
-            is PipelineEvent.Screen -> {
-                val winCtx = event.snapshot.windowContext?.let { wc ->
-                    WindowContextDto(
-                        windowId = wc.windowId,
-                        windowType = wc.windowType,
-                        windowTitle = wc.windowTitle,
-                        windowLayer = wc.windowLayer,
-                        isActive = wc.isActive,
-                        isFocused = wc.isFocused,
-                        totalWindowCount = wc.totalWindowCount,
-                    )
-                }
-                val capture = EnvelopeBuilder.build(
-                    pipelineId = SCREEN_PIPELINE_ID,
-                    schema = UiNodeSchema,
-                    platform = platform,
-                    ruleId = flowObs.ruleId,
-                    classificationName = flowObs.target,
-                    payload = event.tree,
-                    contentHash = event.tree.stableHash,
-                    metadata = flowObs.metadata,
-                    windowContext = winCtx,
-                )
-                val captureId = captureBus.offer(
-                    captureId = capture.captureId,
-                    source = SCREEN_PIPELINE_ID,
-                    classification = flowObs.target,
-                    platform = platform,
-                    envelopeJson = capture.envelopeJson,
-                    contentHash = capture.contentHash,
-                )
-                Timber.d(
-                    "Captured screen: target=%s  ruleId=%s  captured=%s",
-                    flowObs.target, flowObs.ruleId, captureId != null,
-                )
-                (obs as Observation.Screen).copy(captureId = captureId)
-            }
-
-            is PipelineEvent.Click -> {
-                val screenTarget = classifier.lastScreenTarget
-                val clickPayload = ClickCapturePayload(
-                    node = event.node,
-                    screenTarget = screenTarget,
-                )
-                val capture = EnvelopeBuilder.build(
-                    pipelineId = CLICK_PIPELINE_ID,
-                    schema = ClickContextSchema,
-                    platform = platform,
-                    ruleId = flowObs.ruleId,
-                    classificationName = flowObs.target,
-                    payload = clickPayload,
-                    contentHash = clickDedupHash(event.node, screenTarget),
-                    metadata = flowObs.metadata,
-                )
-                val captureId = captureBus.offer(
-                    captureId = capture.captureId,
-                    source = CLICK_PIPELINE_ID,
-                    classification = flowObs.target,
-                    platform = platform,
-                    envelopeJson = capture.envelopeJson,
-                    contentHash = capture.contentHash,
-                )
-                Timber.d(
-                    "Captured click: target=%s  ruleId=%s  captured=%s",
-                    flowObs.target, flowObs.ruleId, captureId != null,
-                )
-                (obs as Observation.Click).copy(captureId = captureId)
-            }
-
-            is PipelineEvent.Notification -> obs // not handled here
-        }
-    }
 }
 
 /**
