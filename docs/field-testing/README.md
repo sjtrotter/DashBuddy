@@ -334,6 +334,12 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   eat the separator). Also confirm: the live `$ /mi` footer still updates per keystroke, and the
   field normalizes (e.g. `012.50` → `12.5`) when you tap away.
   - Confirmed: 0/2.
+- **Captures still write on dev builds (#346).** Capture persistence is now bound per build
+  variant (debug → disk, release → none). Your field builds are debug, so nothing should change —
+  sanity-check after a dash that the session's `captures/` folder is non-empty. If it's ever
+  empty, check logcat for "Capture persistence disabled (release build)" — that means a release
+  build got dashed by mistake.
+  - Confirmed: 0/2.
 
 ---
 
