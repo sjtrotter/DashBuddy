@@ -287,6 +287,21 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   counting exactly while the label says AT DOOR. Note the delivery type (hand-to-customer vs
   leave-at-door) for each sighting; capture if seen.
   - Confirmed: 0/2.
+- **Post-arrival store name is the real merchant (a698bfa scoping; #337).** After arriving at a
+  pickup, glance at the bubble task card (and later the PostTask receipt): the store line should
+  read the actual merchant ("Chili's Grill & Bar"), never "Walk into store" / "Parking
+  instructions" / an order number. Desk-validated 2026-06-10 against the 05-17 Chili's capture
+  (the only `instructions_title` inside `mx_contact_view` is the store name); needs live
+  confirmation. Extra credit: a McDonald's-style merchant (order-number-heavy arrival screen) —
+  that variant was never captured.
+  - Confirmed: 0/2.
+- **Shop-for-items offer card shows ONE pickup (repro watch; #338).** On the next HEB/grocery
+  shop-for-items offer, screenshot the bubble offer card: it must list the store once. The
+  2026-05-17 #5 duplicate's parse-layer cause was ruled out 2026-06-10 (every captured HEB offer
+  frame parses exactly one order), and the card was redesigned in PR #324 — so this watches for
+  recurrence. If it shows two pickups again, grab the `offer_popup` capture + a screenshot pair so
+  parse vs render can be split.
+  - Confirmed: 0/2.
 
 ---
 

@@ -76,7 +76,7 @@ target SDK is 36, Kotlin 2.3.20, JVM 21.
 The project uses modular Clean Architecture with a strict dependency graph:
 
 ```
-:app → :domain, :core:data, :core:database, :core:datastore, :core:location, :core:network, :core:pipeline, :core:state
+:app → :domain, :core:data, :core:database, :core:datastore, :core:designsystem, :core:location, :core:network, :core:pipeline, :core:state
 :core:state → :domain, :core:data, :core:database, :core:pipeline
 :core:pipeline → :domain, :core:data
 :core:data → :domain, :core:database, :core:datastore, :core:location, :core:network
@@ -99,6 +99,11 @@ The project uses modular Clean Architecture with a strict dependency graph:
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration.
 - **`:core:location`** — Play Services GPS tracking.
 - **`:core:datastore`** — Proto DataStore for app preferences.
+- **`:core:designsystem`** — Brand system (no project deps): fixed dark/light palette (`DashColors`),
+  Hanken Grotesk + Space Grotesk fonts (tabular numerals), `DashTheme` + `LocalGlance`, and the
+  shared component library (`DashCard`, `DashChip`, `DashStatTile`, `DashGaugeRing`, `DashSegmented`,
+  `DashSlider`, `DashBarChart`, `DashAccordion`). No M3 dynamic color. Feature-specific composables
+  stay with their feature (Package by Feature); only generic, data-in/lambdas-out components live here.
 - **`:app`** — UI (Compose + overlays), side effect handlers (SideEffectEngine, odometer, screenshots,
   TTS, tips), Hilt DI wiring, and the `DashBuddyApplication` entry point.
 
@@ -107,33 +112,73 @@ The project uses modular Clean Architecture with a strict dependency graph:
 The core architectural challenge is understanding a third-party app's UI without an API. The
 solution is a multi-stage pipeline:
 
-### 1. Accessibility Pipeline (`core/pipeline/.../accessibility/`)
+### 1. Sensor Pipelines (`core/pipeline/`)
 
-`AccessibilityListener` captures raw Android `AccessibilityEvent`s. These are normalized into an
-immutable `UiNode` tree. Two sub-pipelines process events:
+`AccessibilityListener` / `AccessibilitySource` capture raw Android `AccessibilityEvent`s;
+`AccessibilityNodeMapper` normalizes window content into an immutable `UiNode` tree (defined in
+`:domain`). Per-event-type sub-pipelines (`ContentChangedPipeline` — debounced,
+`StateChangedPipeline`, `WindowsChangedPipeline`, plus click handling in `AccessibilityPipeline`)
+and a parallel `NotificationPipeline` (`NotificationListener` → `NotificationFilter` →
+`NotificationMapper`) emit `PipelineEvent`s. `AccessibilityPipeline.output()` has three drop gates:
+**sensitive** screens, **noise**, and **UNKNOWN** (captured to disk for triage, never forwarded to
+the state machine). Snapshots are attributed to the window's *real* package (not the event's), so
+our own overlay is dropped (#4 / PR #334).
 
-- **`WindowPipeline`** — Detects which screen is displayed by running the `UiNode` tree through a
-  chain of `ScreenMatcher` implementations.
-- **`ViewPipeline`** — Classifies tap/click events.
+### 2. JSON Rule Engine (`core/pipeline/.../rules/` + `assets/rules/`)
 
-### 2. Screen Matchers (`core/pipeline/.../recognition/matchers/`)
+Recognition is **data, not code**. Per-platform rule files
+(`core/pipeline/src/main/assets/rules/doordash.json`, `uber.json` — spec in ADR-0001, editor schema
+`docs/rules.schema.json`) are compiled by `RuleCompiler` and matched by `ObservationClassifier`.
+Rules carry a `priority` (sensitive rules are priority 0 and `overrideable: false`, blocking all
+further processing of banking/identity screens), `require` predicates, `bind` blocks, and `parse`
+blocks that produce typed fields via `ParsedFieldsFactory`. There are no Kotlin matcher classes —
+changing recognition means editing rule JSON plus corpus tests.
 
-18+ `ScreenMatcher` implementations, each responsible for recognizing one screen type (e.g.,
-`IdleMapMatcher`, `OfferMatcher`, `DashPausedMatcher`). They use a **weighted priority system** to
-resolve conflicts. `SensitiveScreenMatcher` runs first and blocks any further processing of
-banking/personal information screens.
+### 3. Multi-Region State Machine (`core/state/`)
 
-### 3. State Machine (`core/state/.../StateManagerV2.kt`)
-
-A central reducer merges three event streams (pipeline events, engine events, UI clicks) and routes
-them to state-specific handlers. The output is a `StateFlow<AppStateV2>`. There are 9 state classes:
-`Initializing`, `IdleOffline`, `AwaitingOffer`, `OfferPresented`, `OnPickup`, `OnDelivery`,
-`PostDelivery`, `PostDash`, `DashPaused`, `PausedOrInterrupted`.
+Observations reduce into `AppState(regions)` (`:domain`): **`FlowRegion`** (R0 — ground-truth
+screen interpretation; holds the pending offer), one **`PlatformRegion`** per platform
+(session/task lifecycle; unified grace via `pendingDestructive`), and **`CrossPlatformRegion`**
+(derived aggregates). The steppers (`FlowRegionStepper`, `PlatformRegionStepper`,
+`CrossPlatformRegionStepper`) are pure and driven by `obs.timestamp` — never a wall clock — so
+crash recovery can replay observations over the last snapshot. `StateManagerV2` hosts the
+reduction, exposes `StateFlow<AppState>`, and owns crash recovery; `EffectMap` diffs prev/next
+state into `AppEffect`s.
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 
-State transitions trigger handlers: `DefaultEffectHandler` (DB writes), `OdometerEffectHandler` (
-mileage), `NotificationHandler`, `TimeoutHandler`, `TipEffectHandler`, `UiInteractionHandler`.
+`SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency dedup (recovery-aware)
+and runs the evaluation loopback (offer eval → `OfferEvaluationEvent` back into the machine).
+Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
+`UiInteractionHandler` (cross-window accessibility clicks), `OfferActionReceiver` (notification
+Accept/Decline actions).
+
+## Development Principles
+
+Every new feature or refactor holds to these — they are forefront design inputs, not afterthoughts:
+
+1. **UDF (Unidirectional Data Flow).** State flows down, events flow up. Steppers/reducers are
+   pure (no Android dependencies, no wall clock — `obs.timestamp` only); side effects happen at
+   the edge (`EffectMap` diff → `SideEffectEngine`), never inside reducers. UI observes immutable
+   state (`StateFlow<AppState>`, per-screen immutable `UiState` data classes) and dispatches
+   events/intents — it never writes to repositories directly. The Reactive UI rules below are the
+   Compose-facing half of this.
+2. **MAD (Modern Android Development).** Kotlin-first, Compose-first, coroutines + Flow for async,
+   Hilt for DI, Room / Proto DataStore for persistence, version catalog for dependencies.
+   Modularization follows the MAD roadmap (the milestones are literally named "MAD Phase N"):
+   layer modules under `:core:*` / `:domain`, feature modules under `:feature:*` (Phase 6),
+   Package-by-Feature inside each.
+3. **Clean code / single responsibility.** Small, focused files and classes — the #237 family
+   exists because three files were allowed to grow past ~900 lines; don't add to an oversized
+   file, split it first. No god objects (the original `SettingsRepository` was decomposed for
+   exactly this; keep repositories domain-scoped). Composables stay small and stateless with
+   hoisted state; shared components take pure data + lambdas.
+4. **Kotlin/Android best practices.** Idiomatic Kotlin (data/sealed types over stringly-typed
+   values — see #283), structured concurrency (scoped coroutines; `SharingStarted.WhileSubscribed`
+   for shared flows), locale-safe machine string ops (`Locale.ROOT`), immutability by default.
+
+If a change genuinely can't satisfy one of these, say so explicitly in the PR description instead
+of silently violating it.
 
 ## Reactive UI Principles
 
@@ -183,18 +228,20 @@ Tests are data-driven using captured UI hierarchy JSON files under
 1. Drop raw UI hierarchy `.json` files into `snapshots/INBOX/` (gitignored).
 2. Run `InboxProcessorTest` — it auto-sorts recognized screens into category folders, fails on PII,
    and prints an X-Ray report for unknowns.
-3. For **unknown screens**: read the X-Ray report, write a new `ScreenMatcher`, register it in
-   `TestMatcherFactory.kt`, re-run.
+3. For **unknown screens**: read the X-Ray report, add or broaden a rule in
+   `core/pipeline/src/main/assets/rules/<platform>.json`, re-run.
 4. For **sensitive screens**: manually redact the JSON, move to `snapshots/SENSITIVE/`, verify with
-   `SensitiveScreenRegressionTest`.
+   `AllMatchersSuite` (the golden guard asserts every `SENSITIVE/` snapshot is caught by a
+   sensitive rule or flagged toxic by `SnapshotSecurityScanner`).
 5. Commit only the sorted files from their category folders (never from `INBOX/`).
 
-**Adding a new `ScreenMatcher`:**
+**Adding or changing a recognition rule** (there are no matcher classes to register — rules are data):
 
-1. Create the class in `app/src/main/java/.../matchers/`.
-2. Register it in `TestMatcherFactory.kt` (mirrors the Hilt DI graph for tests).
-3. Register it in the Hilt module that provides the matcher set to the live pipeline.
-4. Run `InboxProcessorTest` and then `AllMatchersSuite` to verify.
+1. Edit the platform's rule JSON (`$schema` gives editor autocomplete/validation against
+   `docs/rules.schema.json`). Golden-corpus folder name == expected intent.
+2. Tests compile the **production** rule files via `TestRulesetFactory` — nothing else to wire up.
+3. Run `InboxProcessorTest` (sorting) and then `AllMatchersSuite` (golden guard + ruleset +
+   classifier regressions) to verify.
 
 ## Key Technologies
 
@@ -209,8 +256,9 @@ Tests are data-driven using captured UI hierarchy JSON files under
 
 ## Git Workflow
 
-**Before creating a branch**, mark the issue(s) as **In Progress** in the GitHub project board.
-See `CLAUDE.local.md` for the command to update the project Status field.
+**Before creating a branch**, mark the issue(s) as **In Progress** in the GitHub project board
+**and add the `in-progress` label** to the issue(s). See `CLAUDE.local.md` for the command to
+update the project Status field.
 
 **Always create a branch** before starting work on any issue or set of issues. Never commit
 feature/fix work directly to `master`.
@@ -233,9 +281,11 @@ Include all relevant issue numbers when a branch covers multiple issues, e.g. `f
 per-commit history and makes it harder to bisect or attribute changes.
 
 ```bash
-GH="/c/Program Files/GitHub CLI/gh.exe"
-"$GH" pr merge <NUMBER> --merge
+gh pr merge <NUMBER> --merge
 ```
+
+(The `gh` binary path and all project/field IDs are workstation-specific — they live in
+`CLAUDE.local.md`, which is gitignored. Never hardcode workstation paths in this file.)
 
 **Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
 `build-and-test` job when the **PR description (body)** contains the literal
@@ -278,6 +328,14 @@ Rules of thumb:
   stale snapshots.
 - Don't duplicate what the repo already records (code, git history, issues, ADRs, this file) —
   memories hold status, decisions, and context that are *not* derivable from the repo.
+
+## Claude Subagent Model Policy
+
+When a Claude agent fans out subagents (Agent tool / workflows), every subagent must run on a
+model **at most one tier below** the spawning agent's own model — and **prefer the exact same
+model** unless there is a specific, stated reason to downgrade (e.g. a trivially mechanical
+search). Never let subagents silently fall to a lower default tier: set the model explicitly at
+spawn time.
 
 ## Field Testing Logs
 
@@ -348,6 +406,7 @@ project number, owner, and `gh` CLI path used to do this.
 | `documentation` | Docs improvements                                      |
 | `data-enrichment`  | Parser fields for event sourcing fidelity / replay  |
 | `on-dash-testing`  | Bug or behavior discovered while actively dashing in the field |
+| `in-progress`   | Actively being worked / partially landed (pairs with board Status = In Progress) |
 
 Apply multiple labels when appropriate (e.g. `refactor` + `architecture`, `testing` +
 `offer-engine`).
