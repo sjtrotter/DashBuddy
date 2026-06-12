@@ -4,6 +4,108 @@
   "platform_id": "uber.driver",
   "screens": [
     {
+      "id": "uber.screen.sensitive.known",
+      "priority": 0,
+      "overrideable": false,
+      "parse": {
+        "as": "sensitive"
+      },
+      "branches": [
+        {
+          "intent": "sensitive.wallet",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "Instant Pay"
+                },
+                {
+                  "hasTextContaining": "Uber Pro Card"
+                },
+                {
+                  "hasTextContaining": "Available balance"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "intent": "sensitive.cashout",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "Cash out"
+                },
+                {
+                  "hasTextContaining": "Transfer to bank"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "intent": "sensitive.bank",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "bank account"
+                },
+                {
+                  "hasTextContaining": "Routing number"
+                },
+                {
+                  "hasTextContaining": "Direct deposit"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "intent": "sensitive.identity",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "Social Security"
+                },
+                {
+                  "hasTextContaining": "Tax information"
+                },
+                {
+                  "hasTextContaining": "Enter the code we sent"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "uber.screen.sensitive.catchall",
+      "priority": 998,
+      "overrideable": false,
+      "parse": {
+        "as": "sensitive"
+      },
+      "require": {
+        "allTextContainsAny": [
+          "routing number",
+          "social security",
+          "bank account",
+          "available balance",
+          "instant pay",
+          "cash out",
+          "tax form",
+          "direct deposit",
+          "card number",
+          "cvv",
+          "expiry"
+        ]
+      }
+    },
+    {
       "id": "uber.screen.offer",
       "priority": 15,
       "branches": [
@@ -631,7 +733,9 @@
         "titleMatchesRegex": "^Going to (?!\\d)"
       },
       "intent": "trip_en_route_pickup",
-      "parse": { "as": "notification" },
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {
@@ -648,7 +752,9 @@
         "titleContains": "Arrived at "
       },
       "intent": "trip_arrived_pickup",
-      "parse": { "as": "notification" },
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {
@@ -665,7 +771,9 @@
         "titleMatchesRegex": "^Going to \\d"
       },
       "intent": "trip_en_route_dropoff",
-      "parse": { "as": "notification" },
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {
@@ -682,7 +790,9 @@
         "titleMatchesRegex": "(Leave the order at|Meet at door for)"
       },
       "intent": "trip_at_dropoff",
-      "parse": { "as": "notification" },
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {
@@ -699,7 +809,9 @@
         "titleMatchesRegex": "received a \\$\\d"
       },
       "intent": "tip_received",
-      "parse": { "as": "notification" },
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {
@@ -715,7 +827,9 @@
       "require": {
         "titleContains": "currently online"
       },
-      "parse": { "as": "noise" }
+      "parse": {
+        "as": "noise"
+      }
     },
     {
       "id": "uber.notification.quest_promo",
@@ -724,7 +838,9 @@
         "titleContains": "Quest awaits"
       },
       "intent": "quest_promo",
-      "parse": { "as": "notification" },
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {
@@ -748,7 +864,9 @@
         ]
       },
       "intent": "quest_deadline",
-      "parse": { "as": "notification" },
+      "parse": {
+        "as": "notification"
+      },
       "effects": [
         {
           "log": {

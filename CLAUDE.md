@@ -208,8 +208,11 @@ Every new feature or refactor holds to these — they are forefront design input
      validation, and — for any remote rule source — **signature/integrity verification before
      compile**, which does not exist yet and is a hard prerequisite for that path.
    - **Sensitive screens are blocked, never parsed or stored** (banking/identity/payment), at the
-     matcher layer, in both sensor pipelines (#399). A recognition change must not be able to
-     downgrade that.
+     matcher layer, in both sensor pipelines (#399) — and the gate fails CLOSED beyond rule
+     coverage (#432): frames are dropped entirely until rulesets load, every platform shipping
+     screen rules must ship sensitive rules (load-time check), and UNKNOWN captures are scrubbed
+     by a rules-independent text-marker backstop (`SensitiveTextMarkers`, the SSOT the test
+     scanner shares). A recognition change must not be able to downgrade any of that.
    - **PII is hashed at the edge before it is persisted or could be uploaded** (`sha256`,
      fail-closed — never echo plaintext on failure, #362). Captures are debug-only (release binds
      `NoOpCaptureBus`, #346).

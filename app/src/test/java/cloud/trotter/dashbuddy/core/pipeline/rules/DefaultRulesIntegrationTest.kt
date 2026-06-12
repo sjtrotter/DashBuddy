@@ -147,6 +147,48 @@ class DefaultRulesIntegrationTest {
     }
 
     // =========================================================================
+    // Sensitive coverage (#432)
+    // =========================================================================
+
+    @Test
+    fun `every platform shipping screen rules ships a sensitive rule`() {
+        // Recompile the production files and assert no platform is uncovered —
+        // the load-time check in JsonRuleInterpreter excludes uncovered
+        // platforms (fail closed); this pins that the SHIPPED bundles never
+        // trip it.
+        val dir = File(TestRulesetFactory.rulesDir)
+        val allScreens = mutableListOf<CompiledRule<UiNode>>()
+        dir.listFiles { f -> f.extension == "json" }?.forEach { file ->
+            val root = Json.parseToJsonElement(file.readText()).jsonObject
+            root["screens"]?.jsonArray
+                ?.let { allScreens += RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
+        }
+        assertTrue(
+            "platforms missing sensitive rules: ${missingSensitivePlatforms(allScreens)}",
+            missingSensitivePlatforms(allScreens).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `uber wallet and cashout screens classify as sensitive`() {
+        val wallet = UiNode(children = listOf(UiNode(text = "Available balance"), UiNode(text = "Set up Instant Pay")))
+            .restoreParents()
+        val walletResult = screenRuleset.matchFirst(wallet, platformWire = "uber")
+        assertTrue(
+            "wallet screen must hit a sensitive rule, got ${walletResult?.ruleId}",
+            walletResult?.ruleId?.contains("sensitive") == true,
+        )
+
+        val cashout = UiNode(children = listOf(UiNode(text = "Cash out"), UiNode(text = "Transfer to bank account")))
+            .restoreParents()
+        val cashoutResult = screenRuleset.matchFirst(cashout, platformWire = "uber")
+        assertTrue(
+            "cashout screen must hit a sensitive rule, got ${cashoutResult?.ruleId}",
+            cashoutResult?.ruleId?.contains("sensitive") == true,
+        )
+    }
+
+    // =========================================================================
     // Parse-output regression on real captures (#433)
     // =========================================================================
 

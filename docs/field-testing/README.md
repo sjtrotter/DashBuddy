@@ -63,6 +63,17 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Uber sensitive screens now blocked + UNKNOWN-capture scrub (#432).**
+  Uber finally has matcher-layer sensitive rules (wallet / Instant Pay / cash-out / bank /
+  identity). On a dash, briefly open Uber's earnings/wallet area: working = the app treats it
+  as sensitive (no capture, no state change, log shows the sensitive gate) and normal offer
+  recognition is unaffected. Also new: UNKNOWN screens whose text contains sensitive markers
+  are no longer captured for triage (PipelineStats logs `unknownScrubbed`), and the pipeline
+  drops all frames until rulesets finish loading at startup. Broken = an Uber wallet screen
+  shows up in captures/, or offer screens misclassify as sensitive (keywords too broad —
+  capture the screen text).
+  - Confirmed: 0/2
+
 - **Session-end grace — summary no longer ends the dash instantly (#431).**
   The dash-summary screen now arms a ~2.5s authoritative grace (cancellable by a task-flow
   frame) instead of ending the session on the spot, and grace commits fire on a timer instead

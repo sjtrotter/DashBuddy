@@ -32,6 +32,8 @@ class PipelineStats @Inject constructor() {
     private val mappingFailures = AtomicLong()
     private val restarts = AtomicLong()
     private val forwarded = AtomicLong()
+    private val droppedAwaitingRules = AtomicLong()
+    private val scrubbedUnknownCaptures = AtomicLong()
 
     val droppedSensitiveCount: Long get() = droppedSensitive.get()
     val droppedNoiseCount: Long get() = droppedNoise.get()
@@ -41,6 +43,8 @@ class PipelineStats @Inject constructor() {
     val mappingFailureCount: Long get() = mappingFailures.get()
     val restartCount: Long get() = restarts.get()
     val forwardedCount: Long get() = forwarded.get()
+    val droppedAwaitingRulesCount: Long get() = droppedAwaitingRules.get()
+    val scrubbedUnknownCaptureCount: Long get() = scrubbedUnknownCaptures.get()
 
     /** A frame the shared content gate dropped (sensitive or noise, #399). */
     fun onContentGateDrop(parsed: ParsedFields) {
@@ -70,6 +74,17 @@ class PipelineStats @Inject constructor() {
         mappingFailures.incrementAndGet()
     }
 
+    /** A frame dropped because no ruleset is loaded yet — the sensitive gate
+     *  is rule-driven, so pre-rules frames are never classified or captured (#432). */
+    fun onDroppedAwaitingRules() {
+        droppedAwaitingRules.incrementAndGet()
+    }
+
+    /** An UNKNOWN capture dropped by the fail-closed text-marker backstop (#432). */
+    fun onScrubbedUnknownCapture() {
+        scrubbedUnknownCaptures.incrementAndGet()
+    }
+
     /** The supervised upstream crashed and is resubscribing. Returns the restart ordinal. */
     fun onPipelineRestart(): Long = restarts.incrementAndGet()
 
@@ -91,6 +106,8 @@ class PipelineStats @Inject constructor() {
             " noiseDropped=${droppedNoise.get()}" +
             " disabledPlatformDropped=${droppedDisabledPlatform.get()}" +
             " mappingFailures=${mappingFailures.get()}" +
+            " awaitingRulesDropped=${droppedAwaitingRules.get()}" +
+            " unknownScrubbed=${scrubbedUnknownCaptures.get()}" +
             " restarts=${restarts.get()}"
 
     companion object {

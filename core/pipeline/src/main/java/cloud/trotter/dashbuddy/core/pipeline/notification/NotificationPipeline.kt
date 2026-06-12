@@ -45,6 +45,13 @@ class NotificationPipeline @Inject constructor(
 
     fun output(): Flow<Observation.Notification> = source.events
         .mapNotNull { sbn -> sbn.toDomain() }
+        // Gate: drop everything until rulesets load (#432) — symmetric with
+        // the accessibility pipeline.
+        .filter { raw ->
+            val ready = classifier.isReady
+            if (!ready) stats.onDroppedAwaitingRules()
+            ready
+        }
         .filter { raw -> filter.isRelevant(raw) }
         .map { raw ->
             val event = PipelineEvent.Notification(raw.postTime, raw)

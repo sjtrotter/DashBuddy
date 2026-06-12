@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import android.content.Context
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
@@ -43,6 +44,14 @@ class JsonRuleInterpreter @Inject constructor(
     val clickRuleset: Ruleset<UiNode>? get() = current.clicks
     val notificationRuleset: Ruleset<RawNotificationData>? get() = current.notifications
     val loadedFormatVersion: Int? get() = current.formatVersion
+
+    /**
+     * True once a ruleset bundle has been published. The pipelines drop (not
+     * capture) every frame until this flips (#432): the sensitive-screen gate
+     * is rule-driven, so a frame classified before rules load would bypass it
+     * and land in the UNKNOWN capture path.
+     */
+    val isLoaded: Boolean get() = current.screens != null
 
     private data class LoadedRulesets(
         val screens: Ruleset<UiNode>? = null,
@@ -94,8 +103,26 @@ class JsonRuleInterpreter @Inject constructor(
                 result.formatVersion?.let { lastFormatVersion = it }
             }
 
+            // Sensitive-coverage check (#432, complements #419): every platform
+            // that ships screen rules MUST ship at least one sensitive rule —
+            // the matcher-layer block is only as real as its coverage. A
+            // platform without one has its SCREEN rules excluded (fail closed:
+            // its frames classify UNKNOWN, where the capture-scrub backstop
+            // applies) rather than loaded blind.
+            val uncovered = missingSensitivePlatforms(allScreens)
+            val effectiveScreens = if (uncovered.isEmpty()) {
+                allScreens
+            } else {
+                Timber.e(
+                    "JsonRuleInterpreter: platform(s) %s ship screen rules but NO sensitive rule — " +
+                        "excluding their screen rules (fail closed)",
+                    uncovered.joinToString { it.wire },
+                )
+                allScreens.filterNot { Platform.fromRuleId(it.id) in uncovered }
+            }
+
             current = LoadedRulesets(
-                screens = Ruleset(allScreens),
+                screens = Ruleset(effectiveScreens),
                 clicks = Ruleset(allClicks),
                 notifications = Ruleset(allNotifications),
                 formatVersion = lastFormatVersion,
@@ -186,4 +213,19 @@ class JsonRuleInterpreter @Inject constructor(
         private const val RULES_DIR = "rules"
         private const val MAX_FILE_BYTES = 1_000_000  // 1 MB
     }
+}
+
+/**
+ * Platforms whose screen-rule set lacks ANY sensitive-shaped branch
+ * (`parse.as == "sensitive"`) — #432. Pure and top-level so it's testable
+ * without an Android Context (public: the app-module integration test pins
+ * that the shipped bundles never trip it).
+ */
+fun missingSensitivePlatforms(screens: List<CompiledRule<UiNode>>): Set<Platform> {
+    val byPlatform = screens.groupBy { Platform.fromRuleId(it.id) }
+    return byPlatform.filterKeys { it != Platform.Unknown }
+        .filterValues { rules ->
+            rules.none { r -> r.branches.any { it.shape == "sensitive" } }
+        }
+        .keys
 }
