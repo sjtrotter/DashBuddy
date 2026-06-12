@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Evidence Locker settings are now real (#426).**
+  Screenshots (offer / delivery / dash-summary PNGs in Pictures/DashBuddy) previously fired
+  unconditionally; they are now gated on the Evidence settings, whose master toggle defaults
+  OFF. On a dash with settings untouched: working = NO new PNGs appear at all. Then flip
+  Master Record + a category on mid-dash: working = only that category's screenshots appear.
+  Broken = PNGs appear with master off, or an enabled category stops capturing (look for
+  "Evidence capture suppressed" in logs with an unexpected category).
+  - Confirmed: 0/2
+
 - **Receipt grace — delivery completion is now deferred ~2.5s (#431 pt 2).**
   The delivery-summary (receipt) screen no longer retires the task instantly; it arms a short
   authoritative grace exactly like the dash summary. Watch: (a) the "Saved: $X" receipt bubble

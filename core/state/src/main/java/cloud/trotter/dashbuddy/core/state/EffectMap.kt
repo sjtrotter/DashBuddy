@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
+import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -351,7 +352,12 @@ class EffectMap @Inject constructor() {
                         )
                         add(AppEffect.StopOdometer)
                         add(AppEffect.UpdateBubble("Session Ended. Total: $earnings", ChatPersona.Dispatcher))
-                        add(AppEffect.CaptureScreenshot("DashSummary - ${endParsed.totalEarnings}"))
+                        add(
+                            AppEffect.CaptureScreenshot(
+                                "DashSummary - ${endParsed.totalEarnings}",
+                                category = EvidenceCategory.DASH_SUMMARY,
+                            ),
+                        )
                     } else {
                         add(
                             logEffect(

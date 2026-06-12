@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
+import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -191,9 +192,7 @@ class SideEffectEngine @Inject constructor(
                 bubbleManager.postMessage(effect.text, effect.persona, effect.expand)
             }
 
-            is AppEffect.CaptureScreenshot -> {
-                screenShotHandler.capture(engineScope, effect)
-            }
+            is AppEffect.CaptureScreenshot -> captureEvidence(effect)
 
             is AppEffect.PerformRuleAction -> {
                 // The ONLY path that taps a third-party app (#425). The target
@@ -371,7 +370,33 @@ class SideEffectEngine @Inject constructor(
 
     private fun screenshotFromArgs(args: Map<String, String>) {
         val prefix = args["prefix"] ?: "Rule"
-        screenShotHandler.capture(engineScope, AppEffect.CaptureScreenshot(filenamePrefix = prefix))
+        captureEvidence(
+            AppEffect.CaptureScreenshot(
+                filenamePrefix = prefix,
+                // Rule-declared (#426): the rule names its consent bucket via
+                // the `category` arg; unknown or missing maps to null → denied.
+                category = EvidenceCategory.fromWire(args["category"]),
+            ),
+        )
+    }
+
+    /**
+     * THE evidence gate (#426): every screenshot — EffectMap-emitted or
+     * rule-declared — passes through here, and fires only when the user's
+     * `EvidenceConfig` allows its category (master toggle AND category
+     * toggle; uncategorized → never). The config's startup default is
+     * master-off, so the gate also fails closed before DataStore loads.
+     */
+    private fun captureEvidence(effect: AppEffect.CaptureScreenshot) {
+        val config = strategyRepository.evidenceConfig.value
+        if (!config.allows(effect.category)) {
+            Timber.i(
+                "Evidence capture suppressed (%s, category=%s) — EvidenceConfig denies it",
+                effect.filenamePrefix, effect.category,
+            )
+            return
+        }
+        screenShotHandler.capture(engineScope, effect)
     }
 
     private fun bubbleFromArgs(args: Map<String, String>) {

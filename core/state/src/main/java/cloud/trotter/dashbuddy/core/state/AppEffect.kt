@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
+import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
@@ -42,8 +43,14 @@ sealed class AppEffect {
     // 3. System Commands (e.g. "Keep Screen On", "Play Sound")
     data object PlayNotificationSound : AppEffect()
 
+    /**
+     * Capture an evidence screenshot. [category] is the user-consent bucket
+     * the engine's evidence gate (#426) checks against `EvidenceConfig` —
+     * null (an effect that never declared one) never fires.
+     */
     data class CaptureScreenshot(
         val filenamePrefix: String, // e.g. "offer" or "payout"
+        val category: EvidenceCategory?,
         val metadata: String? = null // Optional context
     ) : AppEffect()
 
