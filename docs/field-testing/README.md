@@ -63,6 +63,14 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Bubble dash id survives a mid-dash crash/restart (#437).**
+  The bubble's chat + card stack now derive their dash id from restored state instead of an
+  effect that crash recovery suppresses. Mid-dash, force-stop or crash the app and reopen:
+  working = the bubble's chat history and cards are attributed to the SAME dash immediately
+  (no orphaned/empty bubble until the next dash starts). Broken = empty chat/card stack after
+  a mid-dash restart, or messages landing under a null dash in the DB.
+  - Confirmed: 0/2
+
 - **Engine latency + dedupe pack (#436).**
   Four behaviors to watch: (a) accepting/declining an offer FAST (inside ~1s of the verdict
   landing) should no longer pop a stale Accept/Decline heads-up afterwards; (b) offer verdicts
