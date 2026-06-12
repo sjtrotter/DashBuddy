@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.GoldenSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.TriageRulesTest
 import org.junit.runner.RunWith
@@ -29,6 +30,10 @@ import org.junit.runners.Suite
  *
  * - [GoldenSnapshotRegressionTest] — positive guard: every snapshot in an intent
  *   folder still classifies as that folder (SENSITIVE: sensitive rule or scanner).
+ * - [ParseOutputGoldenTest] — parse-OUTPUT guard (#433): every snapshot's typed
+ *   fields match `snapshots/approved-parse-output.json` (regen deliberately with
+ *   `-DupdateParseGolden=true` and review the diff); plus the corpus-coverage
+ *   ratchet and the dead-dedupeKey-template lint.
  * - [ScreenRulesetTest] / [ClickRulesetTest] / [NotificationRulesetTest] — the
  *   ruleset compiles and the core predicates behave.
  * - [TriageRulesTest] — synthetic fixtures for rules added from capture triage.
@@ -38,6 +43,7 @@ import org.junit.runners.Suite
 @RunWith(Suite::class)
 @Suite.SuiteClasses(
     GoldenSnapshotRegressionTest::class,
+    ParseOutputGoldenTest::class,
     ScreenRulesetTest::class,
     ClickRulesetTest::class,
     NotificationRulesetTest::class,
