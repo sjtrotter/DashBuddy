@@ -5,7 +5,6 @@ import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
-import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
@@ -74,6 +73,14 @@ class SideEffectEngine @Inject constructor(
     companion object {
         /** Default throttle between repeated firings of the same action. */
         const val DEFAULT_ACTION_THROTTLE_MS = 500L
+
+        /**
+         * Throttle between repeated firings of the same `RuleAction` per
+         * platform (#425) — an app-owned bound on automated taps that no
+         * ruleset content can loosen. Carried over from the former expand
+         * click's rule-declared `throttleMs`.
+         */
+        const val RULE_ACTION_THROTTLE_MS = 1000L
 
         /**
          * Delay before posting the offer notification, so it lands AFTER the offer screenshot's
@@ -184,18 +191,36 @@ class SideEffectEngine @Inject constructor(
                 screenShotHandler.capture(engineScope, effect)
             }
 
-            is AppEffect.ClickNode -> {
-                Timber.i("Executing Effect: Clicking Node (${effect.description})")
-                uiInteractionHandler.performClick(effect.node, effect.description)
-            }
-
-            is AppEffect.PerformOfferAction -> {
-                val template = offerActionNode(effect.platform, effect.action)
-                if (template != null) {
-                    Timber.i("Performing offer action: ${effect.action} on ${effect.platform.wire}")
-                    uiInteractionHandler.performClick(template, "Bubble ${effect.action}")
-                } else {
-                    Timber.w("No offer-action node for ${effect.platform.wire}/${effect.action}")
+            is AppEffect.PerformRuleAction -> {
+                // The ONLY path that taps a third-party app (#425). The target
+                // is ruleset data; everything that decides whether/where the
+                // tap lands is app-owned: this throttle, the tier gate (the
+                // #417 grant check lands at this seam, keyed by
+                // (sourceRuleId, action) against the enumerated capabilities),
+                // and the package + label verification in the handler.
+                val throttleKey = "action:${effect.action.wire}:${effect.platform.wire}"
+                val now = System.currentTimeMillis()
+                if ((actionLastFiredAt[throttleKey] ?: 0L) + RULE_ACTION_THROTTLE_MS > now) {
+                    Timber.v("Throttled action: %s", throttleKey)
+                    return
+                }
+                if (!isPermissionGranted(PermissionTier.ACCESSIBILITY)) {
+                    Timber.w("Denied %s — ACCESSIBILITY tier not granted (fail closed)", effect.action.wire)
+                    return
+                }
+                actionLastFiredAt[throttleKey] = now
+                Timber.i("Performing %s on %s", effect.action.wire, effect.platform.wire)
+                val clicked = uiInteractionHandler.performVerifiedClick(
+                    ref = effect.targetRef,
+                    expectedPackage = effect.platform.packageName,
+                    expectation = effect.action.verification,
+                    description = "${effect.action.wire} on ${effect.platform.wire} [${effect.sourceRuleId}]",
+                )
+                if (!clicked) {
+                    Timber.w(
+                        "%s did not fire — target failed resolution/verification (fail closed, user acts manually)",
+                        effect.action.wire,
+                    )
                 }
             }
 
@@ -307,7 +332,6 @@ class SideEffectEngine @Inject constructor(
         }
         when (e.verb) {
             // --- Observation-driven verbs ---
-            EffectVerb.CLICK -> resolveAndClick(e)
             EffectVerb.SCREENSHOT -> screenshotFromArgs(e.args)
             EffectVerb.BUBBLE -> bubbleFromArgs(e.args)
             EffectVerb.LOG -> logFromArgs(e.args)
@@ -328,39 +352,6 @@ class SideEffectEngine @Inject constructor(
                 Platform.fromRuleId(e.ruleId).takeIf { it != Platform.Unknown },
             )
             EffectVerb.CANCEL_TIMEOUT -> cancelTimeoutFromArgs(e.args)
-        }
-    }
-
-    /**
-     * Resolve a [RequestedEffect]'s [NodeRef] against the live UI tree and click.
-     */
-    private fun resolveAndClick(effect: RequestedEffect) {
-        val ref = effect.targetRef ?: run {
-            Timber.w("CLICK effect missing targetRef: %s", effect.ruleId)
-            return
-        }
-        val template = cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(
-            viewIdResourceName = ref.viewIdSuffix,
-            text = ref.text,
-            className = ref.classNameHint,
-            boundsInScreen = ref.boundsInScreen,
-        )
-        Timber.i("Auto-Click [%s]: target id=%s", effect.ruleId, ref.viewIdSuffix)
-        uiInteractionHandler.performClick(template, "Auto-Click [${effect.ruleId}]")
-    }
-
-    /**
-     * Resolve the platform's offer Accept/Decline button to a click template. DoorDash-only
-     * for now; Decline targets the *initial* decline button (its confirm dialog is left to the
-     * user in Native mode — auto-confirm is #110 Stage 2c). See #85 for the GigPlatform interface.
-     */
-    private fun offerActionNode(platform: Platform, action: OfferAction): UiNode? {
-        if (platform != Platform.DoorDash) return null
-        val pkg = platform.packageName ?: return null
-        return when (action) {
-            OfferAction.ACCEPT -> UiNode(viewIdResourceName = "$pkg:id/accept_button", text = "Accept")
-            OfferAction.DECLINE -> UiNode(viewIdResourceName = "$pkg:id/secondary_action_button_dash_plus")
-            else -> null
         }
     }
 
@@ -484,8 +475,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.UpdateBubble,
         is AppEffect.PlayNotificationSound,
         is AppEffect.CaptureScreenshot,
-        is AppEffect.ClickNode,
-        is AppEffect.PerformOfferAction,
+        is AppEffect.PerformRuleAction,
         is AppEffect.RequestEffect,
         is AppEffect.StartOdometer,
         is AppEffect.StopOdometer,

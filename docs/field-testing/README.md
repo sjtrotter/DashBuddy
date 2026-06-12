@@ -63,6 +63,22 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Expand-earnings auto-tap via the new action path (#425).**
+  The post-delivery pay breakdown should auto-expand ~0.5s after the collapsed summary appears
+  (same behavior as before, but the tap now flows through the app-owned EXPAND_EARNINGS action
+  with package scoping instead of a rule-declared click). Working = breakdown expands on its own
+  and the line items parse. Broken = summary stays collapsed; grep logs for "did not fire —
+  target failed resolution/verification" (verification too strict) or "Throttled action".
+  - Confirmed: 0/2
+- **Bubble/notification Accept-Decline via rule-bound targets (#425).**
+  Tapping Accept or Decline in DashBuddy's offer notification (or bubble) must tap the matching
+  DoorDash button. The button is now aimed by the offer rule's `acceptButton`/`declineButton`
+  bindings and label-verified at tap time (accept ⇒ "Accept"/"Add to route", decline ⇒
+  "Decline") instead of hardcoded view IDs. Working = DoorDash registers the tap. Broken = log
+  shows "No 'acceptButton' target bound" (rule didn't bind on that screen variant — capture it!)
+  or "NONE passed label verification" (verification too strict for that variant).
+  - Confirmed: 0/2
+
 - **Post-dash HUD: frozen summary + consistent chat (#367, PR pending).**
   Two visible fixes after a dash ends: (a) the "Last session" Duration on the idle bubble is
   now FROZEN (it used to keep growing while you sat idle — check it shows the real dash length

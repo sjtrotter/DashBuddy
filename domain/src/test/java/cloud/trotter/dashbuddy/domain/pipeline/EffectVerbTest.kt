@@ -24,7 +24,10 @@ class EffectVerbTest {
     fun `fromWire returns null for unknown verb`() {
         assertNull(EffectVerb.fromWire("explode"))
         assertNull(EffectVerb.fromWire(""))
-        assertNull(EffectVerb.fromWire("CLICK")) // case-sensitive
+        // Actuation left the rule vocabulary entirely (#425) — the compiler
+        // rejects "click" with a migration error before fromWire is consulted,
+        // and the verb must never silently round-trip.
+        assertNull(EffectVerb.fromWire("click"))
     }
 
     // =========================================================================
@@ -42,15 +45,8 @@ class EffectVerbTest {
     // =========================================================================
 
     @Test
-    fun `CLICK is the only verb requiring a target`() {
-        val targetVerbs = EffectVerb.entries.filter { it.requiresTarget }
-        assertEquals(listOf(EffectVerb.CLICK), targetVerbs)
-    }
-
-    @Test
     fun `observation-driven verbs have hasDefault = false`() {
         val observationDriven = listOf(
-            EffectVerb.CLICK,
             EffectVerb.SCREENSHOT,
             EffectVerb.BUBBLE,
             EffectVerb.LOG,
@@ -85,7 +81,6 @@ class EffectVerbTest {
 
     @Test
     fun `accessibility verbs require ACCESSIBILITY tier`() {
-        assertEquals(PermissionTier.ACCESSIBILITY, EffectVerb.CLICK.tier)
         assertEquals(PermissionTier.ACCESSIBILITY, EffectVerb.SCREENSHOT.tier)
     }
 
@@ -123,6 +118,7 @@ class EffectVerbTest {
     @Test
     fun `verb count matches expected total`() {
         // Update this if verbs are added or removed — forces a conscious review
-        assertEquals("Verb count changed — update this test", 14, EffectVerb.entries.size)
+        // (13 = 14 minus CLICK, which left the rule vocabulary in #425).
+        assertEquals("Verb count changed — update this test", 13, EffectVerb.entries.size)
     }
 }

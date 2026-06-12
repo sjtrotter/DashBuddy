@@ -13,9 +13,10 @@ import timber.log.Timber
 
 /**
  * Handles the offer notification's **Accept / Decline** action buttons. Each fires the same
- * `UiInput` intent the bubble buttons do → EffectMap → `PerformOfferAction` → accessibility
- * click — so the dasher can act straight from the heads-up notification without opening the
- * bubble (which can't auto-expand from the background; see #110 field test 2026-06-09).
+ * `UiInput` intent the bubble buttons do → EffectMap → `PerformRuleAction` (aimed by the offer
+ * rule's bound target, #425) → verified accessibility click — so the dasher can act straight
+ * from the heads-up notification without opening the bubble (which can't auto-expand from the
+ * background; see #110 field test 2026-06-09).
  *
  * Uses [EntryPointAccessors] rather than `@AndroidEntryPoint` so we don't need the Hilt
  * `super.onReceive()` call (which doesn't compile against the abstract receiver in Kotlin).

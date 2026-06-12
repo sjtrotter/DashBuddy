@@ -40,13 +40,6 @@ object RuleCompiler {
     const val MAX_REGEX_LENGTH = 200
     private const val MAX_EACH_SIZE = 50
 
-    /**
-     * Hard cap on per-effect `delayMs` (ms). Prevents rules from holding
-     * deferred side effects indefinitely. Tuned for the longest sensible
-     * UI-settling / countdown window (e.g. auto-accept countdowns).
-     */
-    const val MAX_EFFECT_DELAY_MS = 5000L
-
     // ==========================================================================
     //  Permission introspection
     // ==========================================================================
@@ -77,27 +70,48 @@ object RuleCompiler {
     }
 
     /**
-     * Enumerate the per-rule actuating capabilities a compiled ruleset declares
-     * (#422) — one [RuleCapability] per consent-requiring effect, the unit of
-     * user consent. Deduped by [RuleCapability.key] (a rule declaring the same
-     * click in several branches is one capability). [source] is recorded for
-     * provenance only — consent is uniform regardless of where the rule came
-     * from.
+     * Enumerate the app-owned actions a compiled ruleset's bindings enable
+     * (#422, refit by #425) — one [RuleCapability] per (rule, action) whose
+     * well-known target bind name (`RuleAction.targetBindName`) the rule
+     * binds. The unit of user consent. Deduped by [RuleCapability.key] (the
+     * same binding compiled into several branches is one capability).
+     * [source] is recorded for provenance only — consent is uniform
+     * regardless of where the rule came from.
+     *
+     * The key hashes `(ruleId, action, the CANONICAL binding definition)` —
+     * pinned to the predicate that selects the node, so repointing the
+     * binding (even with the same bind name) forces re-consent. The future
+     * execution gate (#417) looks grants up from this enumeration at fire
+     * time; nothing is threaded through the effect pipeline.
      */
     fun enumerateCapabilities(
         rules: List<CompiledRule<*>>,
         source: String,
     ): List<cloud.trotter.dashbuddy.domain.capability.RuleCapability> {
         val byKey = LinkedHashMap<String, cloud.trotter.dashbuddy.domain.capability.RuleCapability>()
-        fun consider(ruleId: String, effects: List<CompiledEffect>) {
-            for (effect in effects) {
-                if (!effect.verb.consentRequired) continue
-                val key = effect.capabilityKey ?: continue
+        fun consider(ruleId: String, bindings: List<Binding>) {
+            for (binding in bindings) {
+                val action = cloud.trotter.dashbuddy.domain.action.RuleAction
+                    .byTargetBindName[binding.name] ?: continue
+                // Structurally-unambiguous key input (#422): a canonical JSON
+                // object, NOT delimiter-joined fields. Rule ids and bind names
+                // are arbitrary JSON strings (no charset constraint), so JSON
+                // string escaping is what makes the field boundaries exact —
+                // distinct tuples can never collide on the same input.
+                val keyInput = canonicalJson(
+                    buildJsonObject {
+                        put("rule", ruleId)
+                        put("action", action.wire)
+                        put("bind", binding.name)
+                        put("def", binding.defJson ?: JsonNull)
+                    },
+                )
+                val key = sha256OrNull(keyInput) ?: continue // fail closed: unkeyable → not consentable
                 byKey.getOrPut(key) {
                     cloud.trotter.dashbuddy.domain.capability.RuleCapability(
                         ruleId = ruleId,
-                        verb = effect.verb,
-                        targetBindName = effect.targetBindName,
+                        action = action,
+                        targetBindName = binding.name,
                         key = key,
                         source = source,
                     )
@@ -105,45 +119,10 @@ object RuleCompiler {
             }
         }
         for (rule in rules) {
-            for (branch in rule.branches) {
-                consider(rule.id, branch.effects)
-                for ((_, overrideEffects) in branch.transitionOverrides) consider(rule.id, overrideEffects)
-            }
+            consider(rule.id, rule.bindings)
+            for (branch in rule.branches) consider(rule.id, branch.bindings)
         }
         return byKey.values.toList()
-    }
-
-    /**
-     * Stamp the content-pinned consent key (#422) on each consent-requiring
-     * effect. The key hashes `(ruleId, verb, the CANONICAL binding definition
-     * the effect targets)` — pinned to the predicate that selects the node, so
-     * repointing the binding (even with the same bind name) forces re-consent.
-     * Non-actuating effects are returned untouched.
-     */
-    private fun assignCapabilityKeys(
-        effects: List<CompiledEffect>,
-        ruleId: String?,
-        bindObj: JsonObject?,
-    ): List<CompiledEffect> {
-        if (ruleId == null || effects.none { it.verb.consentRequired }) return effects
-        return effects.map { effect ->
-            if (!effect.verb.consentRequired) return@map effect
-            val bindDef = effect.targetBindName?.let { bindObj?.get(it) }
-            // Structurally-unambiguous key input (#422): a canonical JSON
-            // object, NOT delimiter-joined fields. Rule ids and bind names are
-            // arbitrary JSON strings (no charset constraint), so JSON string
-            // escaping is what makes the field boundaries exact — distinct
-            // tuples can never collide on the same input.
-            val keyInput = canonicalJson(
-                buildJsonObject {
-                    put("rule", ruleId)
-                    put("verb", effect.verb.wire)
-                    put("bind", effect.targetBindName ?: "")
-                    put("def", bindDef ?: JsonNull)
-                },
-            )
-            effect.copy(capabilityKey = sha256OrNull(keyInput))
-        }
     }
 
     /** Stable serialization (recursively sorted object keys) so reordering a
@@ -297,14 +276,13 @@ object RuleCompiler {
             compileValidateEntry(entry.jsonObject)
         } ?: emptyList()
 
-        // --- Effects (consent keys assigned for actuating verbs, #422) ---
-        val rawEffects = obj["effects"]?.jsonArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
-        val effects = assignCapabilityKeys(rawEffects, ruleId, effectiveBindObj)
+        // --- Effects (observational/app-internal only; actuation rejected in compileEffectEntry, #425) ---
+        val effects = obj["effects"]?.jsonArray?.map { compileEffectEntry(it.jsonObject) } ?: emptyList()
 
         // --- Transition overrides (screen rules) ---
-        val transitionOverrides = (obj["transitionOverrides"]?.jsonObject?.let {
+        val transitionOverrides = obj["transitionOverrides"]?.jsonObject?.let {
             compileTransitionOverrides(it)
-        } ?: emptyMap()).mapValues { (_, list) -> assignCapabilityKeys(list, ruleId, effectiveBindObj) }
+        } ?: emptyMap()
 
         // --- Click-specific: screenIs ---
         val screenIs = obj["screenIs"]?.jsonPrimitive?.content
@@ -363,7 +341,8 @@ object RuleCompiler {
         val findSpec = specObj["find"] ?: throw RuleCompileException("Binding '$name' has no 'find'")
         val nodePred = compileNodePred(findSpec)
         val find: (UiNode) -> UiNode? = { tree -> tree.findNode(nodePred) }
-        Binding(name, find, optional)
+        // Raw definition retained for capability-key pinning (#422/#425).
+        Binding(name, find, optional, defJson = specObj)
     }
 
     // ==========================================================================
@@ -797,7 +776,17 @@ object RuleCompiler {
         cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SESSION_END to setOf("platformName"),
     )
 
-    private val effectMetaKeys = setOf("onlyIf", "dedupeKey", "throttleMs", "delayMs")
+    private val effectMetaKeys = setOf("onlyIf", "dedupeKey", "throttleMs")
+
+    /**
+     * Actuating verbs rules may NOT declare (#425). Rejected with a migration
+     * pointer instead of the generic unknown-verb error: rules expose target
+     * *bindings* and the app-owned `RuleAction` registry performs the tap.
+     * Fail closed against future gesture wires too — none of these may ever
+     * silently compile from untrusted rule JSON (#192).
+     */
+    private val rejectedActuationWires =
+        setOf("click", "tap", "swipe", "scroll", "set_text", "long_click")
 
     internal fun compileEffectEntry(obj: JsonObject): CompiledEffect {
         val verbEntries = obj.entries.filter { it.key !in effectMetaKeys }
@@ -809,45 +798,35 @@ object RuleCompiler {
             )
 
         val (wireVerb, verbValue) = verbEntries.single()
+        if (wireVerb in rejectedActuationWires) {
+            throw RuleCompileException(
+                "Rule-declared '$wireVerb' effects were removed (#425): rules expose target " +
+                    "bindings (e.g. bind: { \"declineButton\": { \"find\": ... } }) and the " +
+                    "app-owned RuleAction registry performs taps. " +
+                    "See docs/design/rule-capability-consent.md.",
+            )
+        }
         val verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.fromWire(wireVerb)
             ?: throw RuleCompileException("Unknown effect verb: '$wireVerb'")
 
-        val targetBindName: String?
-        val args: Map<String, String>
-        if (verb.requiresTarget) {
-            targetBindName = verbValue.jsonPrimitive.content.removePrefix("$")
-            args = emptyMap()
-        } else {
-            targetBindName = null
-            val argsObj = verbValue.jsonObject
-            val allowed = allowedArgs[verb] ?: emptySet()
-            val argMap = mutableMapOf<String, String>()
-            for ((key, value) in argsObj) {
-                if (key !in allowed) {
-                    throw RuleCompileException(
-                        "Unknown arg '$key' for verb '$wireVerb'. Allowed: $allowed",
-                    )
-                }
-                argMap[key] = value.jsonPrimitive.content
+        val argsObj = verbValue.jsonObject
+        val allowed = allowedArgs[verb] ?: emptySet()
+        val argMap = mutableMapOf<String, String>()
+        for ((key, value) in argsObj) {
+            if (key !in allowed) {
+                throw RuleCompileException(
+                    "Unknown arg '$key' for verb '$wireVerb'. Allowed: $allowed",
+                )
             }
-            args = argMap.toMap()
-        }
-
-        val delayMs = obj["delayMs"]?.jsonPrimitive?.longOrNull
-        if (delayMs != null && delayMs > MAX_EFFECT_DELAY_MS) {
-            throw RuleCompileException(
-                "Effect delayMs=$delayMs exceeds cap of ${MAX_EFFECT_DELAY_MS}ms",
-            )
+            argMap[key] = value.jsonPrimitive.content
         }
 
         return CompiledEffect(
             verb = verb,
-            targetBindName = targetBindName,
-            args = args,
+            args = argMap.toMap(),
             onlyIf = obj["onlyIf"]?.jsonObject?.let { compileGate(it) },
             dedupeKey = obj["dedupeKey"]?.jsonPrimitive?.content,
             throttleMs = obj["throttleMs"]?.jsonPrimitive?.longOrNull,
-            delayMs = delayMs,
         )
     }
 

@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -109,6 +110,7 @@ class ObservationClassifier @Inject constructor(
             parsed = parsed,
             ruleId = result.ruleId,
             effects = result.effects,
+            targets = result.targets,
             transitionOverrides = result.transitionOverrides,
             expectedOutcomes = result.outcomes,
         )
@@ -129,6 +131,7 @@ class ObservationClassifier @Inject constructor(
         parsed: ParsedFields,
         ruleId: String?,
         effects: List<RequestedEffect> = emptyList(),
+        targets: Map<String, NodeRef> = emptyMap(),
         transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
         expectedOutcomes: Set<Flow>? = null,
     ) = Observation.Screen(
@@ -141,6 +144,7 @@ class ObservationClassifier @Inject constructor(
         parsed = parsed,
         target = screenName,
         effects = effects,
+        targets = targets,
         transitionOverrides = transitionOverrides,
         expectedOutcomes = expectedOutcomes,
     )

@@ -7,8 +7,12 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
  *
  * Effects ride on [Observation.FlowObservation] through the state machine
  * (which treats them as opaque) and are emitted as [AppEffect]s by EffectMap.
- * The side-effect engine resolves the verb and executes it, optionally
- * using [targetRef] for UI-targeted verbs like [EffectVerb.CLICK].
+ * The side-effect engine resolves the verb and executes it.
+ *
+ * Rule effects are purely observational/app-internal (#425): actuation left
+ * this surface — rulesets expose target *bindings* (see
+ * `Observation.FlowObservation.targets`) and the app-owned `RuleAction`
+ * registry decides and performs taps.
  *
  * See ADR-0006 for the original actions design; this generalises it to
  * the full [EffectVerb] vocabulary.
@@ -16,34 +20,21 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 data class RequestedEffect(
     val verb: EffectVerb,
     val args: Map<String, String> = emptyMap(),
-    val targetRef: NodeRef? = null,
     val onlyIf: ParsedFieldsGate? = null,
     val dedupeKey: String? = null,
     val throttleMs: Long? = null,
-    /**
-     * Optional delay (ms) before the effect fires. When non-null and > 0,
-     * EffectMap routes the effect through a SETTLE_UI timeout so the delay
-     * is state-machine-visible. See `CompiledEffect.delayMs`.
-     */
-    val delayMs: Long? = null,
     val ruleId: String,
-    /**
-     * Content-pinned consent key for actuating verbs (#422), computed at compile
-     * and carried unchanged so the execution gate matches what the user granted.
-     * Null for verbs that don't require consent ([EffectVerb.consentRequired] ==
-     * false).
-     */
-    val capabilityKey: String? = null,
 )
 
 /**
  * A content fingerprint of a UI node captured at match time.
  *
- * Never a live node reference — the side-effect engine resolves this
- * against the current accessibility tree when executing the action.
- * Carries as many differentiating clues as possible (ID, text, bounds,
- * class name, structural path) so the executor can reliably find the
- * node even on screens where some identifiers are absent.
+ * Never a live node reference — the action executor re-resolves this
+ * against the current accessibility tree (package-scoped, label-verified;
+ * #425) when performing a tap. Carries as many differentiating clues as
+ * possible (ID, text, bounds, class name, structural path) so the executor
+ * can reliably find the node even on screens where some identifiers are
+ * absent.
  */
 @kotlinx.serialization.Serializable
 data class NodeRef(

@@ -29,6 +29,13 @@ data class FlowRegion(
  * pops when leaving it.
  *
  * @param returnFlow The flow to return to on decline/timeout.
+ * @param targets Named UI targets the offer rule bound on this screen
+ *   (#425) — e.g. `"acceptButton"`/`"declineButton"` `NodeRef`s — retained
+ *   so a later `UiInput` accept/decline can resolve the button to tap. The
+ *   app-owned `RuleAction` registry consumes these; an absent name means the
+ *   action is unavailable on this platform.
+ * @param sourceRuleId The rule that matched the offer screen and supplied
+ *   [targets] — consent-gate provenance (#422/#417).
  */
 @Serializable
 data class PendingOffer(
@@ -38,4 +45,6 @@ data class PendingOffer(
     val evaluation: OfferEvaluation? = null,
     val returnFlow: Flow,
     val lastClickIntent: String? = null,
+    val targets: Map<String, cloud.trotter.dashbuddy.domain.pipeline.NodeRef> = emptyMap(),
+    val sourceRuleId: String? = null,
 )

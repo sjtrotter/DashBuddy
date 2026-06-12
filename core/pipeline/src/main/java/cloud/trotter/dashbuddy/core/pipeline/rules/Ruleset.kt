@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
-import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
@@ -96,15 +95,23 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     effectiveFields
                 }
 
-                // Resolve compiled effects against current bindings + parsed fields
+                // Resolve compiled effects against parsed fields
                 val resolvedEffects = resolveEffects(
-                    branch.effects, allBindings, rule.id, rawFields,
+                    branch.effects, rule.id, rawFields,
                 )
 
                 // Resolve transition overrides
                 val resolvedOverrides = resolveTransitionOverrides(
                     branch.transitionOverrides, rule.id,
                 )
+
+                // Expose resolved bindings as named targets (#425) —
+                // recognition-layer data for the app-owned action registry.
+                val targets = buildMap {
+                    for ((name, node) in allBindings) {
+                        if (node != null) put(name, buildNodeRef(node))
+                    }
+                }
 
                 return RuleMatchResult(
                     ruleId = rule.id,
@@ -115,6 +122,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     outcomes = branch.outcomes,
                     fields = fieldsWithIntent,
                     effects = resolvedEffects,
+                    targets = targets,
                     transitionOverrides = resolvedOverrides,
                 )
             }
@@ -149,39 +157,24 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
     // =========================================================================
 
     /**
-     * Resolve [CompiledEffect] bind names against current [bindings] to produce
-     * [RequestedEffect]. For target-bound verbs (e.g. [EffectVerb.CLICK]),
-     * effects whose target node is null are silently dropped.
+     * Resolve [CompiledEffect]s to [RequestedEffect]s. All rule effects are
+     * observational/app-internal (#425) — no targets, no consent keys.
      *
      * Template interpolation: `{fieldName}` references in args values and
      * dedupeKey are resolved against [parsedFields].
      */
     private fun resolveEffects(
         effects: List<CompiledEffect>,
-        bindings: Bindings,
         ruleId: String,
         parsedFields: Map<String, Any?> = emptyMap(),
-    ): List<RequestedEffect> = effects.mapNotNull { effect ->
-        val targetRef = if (effect.targetBindName != null) {
-            val node = bindings[effect.targetBindName]
-            if (node == null) {
-                Timber.v("Effect target '${effect.targetBindName}' not bound; skipping effect")
-                return@mapNotNull null
-            }
-            buildNodeRef(node)
-        } else {
-            null
-        }
+    ): List<RequestedEffect> = effects.map { effect ->
         RequestedEffect(
             verb = effect.verb,
             args = resolveTemplateArgs(effect.args, parsedFields),
-            targetRef = targetRef,
             onlyIf = effect.onlyIf,
             dedupeKey = effect.dedupeKey?.let { resolveTemplate(it, parsedFields) },
             throttleMs = effect.throttleMs,
-            delayMs = effect.delayMs,
             ruleId = ruleId,
-            capabilityKey = effect.capabilityKey, // carried unchanged for the consent gate (#422)
         )
     }
 
@@ -205,11 +198,9 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                 RequestedEffect(
                     verb = effect.verb,
                     args = effect.args,
-                    targetRef = null,
                     onlyIf = effect.onlyIf,
                     dedupeKey = effect.dedupeKey,
                     throttleMs = effect.throttleMs,
-                    delayMs = effect.delayMs,
                     ruleId = ruleId,
                 )
             }

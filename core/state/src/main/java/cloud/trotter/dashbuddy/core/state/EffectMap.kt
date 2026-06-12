@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -13,12 +14,9 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
-import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
-import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
-import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -59,11 +57,20 @@ class EffectMap @Inject constructor() {
          * between the parsed timestamp and the actual timer start.
          */
         const val PAUSE_TIMEOUT_BUFFER_MS = 1000L
+
+        /**
+         * Settle delay before the EXPAND_EARNINGS tap (#425) — lets the
+         * post-delivery summary finish animating so the bound chevron's
+         * fingerprint still matches what gets tapped. Carried over from the
+         * former rule-declared click's `delayMs`.
+         */
+        const val EXPAND_SETTLE_MS = 500L
     }
 
 
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
         addAll(diffRuleEffects(obs))
+        addAll(diffExpandAction(obs))
         addAll(diffSettleUiTimeout(obs))
         // Offer-resolution events fire in the FlowRegion handler. They need to
         // be scoped to the active platform's session so AppEventDao queries
@@ -181,17 +188,30 @@ class EffectMap @Inject constructor() {
             }
         }
 
-        // HUD-initiated accept/decline (bubble buttons) → perform the platform's offer
-        // click, while an offer is on screen. Decline taps the initial decline button;
-        // in Native mode the user confirms in DoorDash's own dialog (auto-confirm = 2c).
+        // HUD-initiated accept/decline (bubble buttons / own-notification actions) →
+        // perform the app-owned action, aimed by the target the offer rule bound
+        // (#425). No binding = action unavailable on this platform (fail to
+        // manual). Decline taps the initial decline button; in Native mode the
+        // user confirms in DoorDash's own dialog (auto-confirm = #110 2c).
         if (obs is Observation.UiInput &&
             (next.flow == Flow.OfferPresented || prev.flow == Flow.OfferPresented)
         ) {
             val platform = next.activePlatform ?: prev.activePlatform
-            if (platform != null) {
-                when (obs.action) {
-                    OfferIntent.ACCEPT -> add(AppEffect.PerformOfferAction(OfferAction.ACCEPT, platform))
-                    OfferIntent.DECLINE -> add(AppEffect.PerformOfferAction(OfferAction.DECLINE, platform))
+            val offer = next.pendingOffer ?: prev.pendingOffer
+            val action = when (obs.action) {
+                OfferIntent.ACCEPT -> RuleAction.ACCEPT_OFFER
+                OfferIntent.DECLINE -> RuleAction.DECLINE_OFFER
+                else -> null
+            }
+            if (platform != null && offer != null && action != null) {
+                val target = offer.targets[action.targetBindName]
+                if (target != null) {
+                    add(AppEffect.PerformRuleAction(action, platform, target, offer.sourceRuleId))
+                } else {
+                    Timber.w(
+                        "No '%s' target bound for %s — %s unavailable, leaving it to the user",
+                        action.targetBindName, platform.wire, action.wire,
+                    )
                 }
             }
         }
@@ -677,64 +697,69 @@ class EffectMap @Inject constructor() {
     /**
      * Extract rule-declared effects from the observation and emit
      * [AppEffect.RequestEffect] for each that passes its gate.
-     * Runs at top level — NOT inside any region stepper.
+     * Runs at top level — NOT inside any region stepper. All rule effects
+     * are observational/app-internal (#425) — actuation never rides here.
      */
     private fun diffRuleEffects(obs: Observation): List<AppEffect> {
         val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
         if (flowObs.effects.isEmpty()) return emptyList()
         return flowObs.effects
             .filter { evaluateGate(it.onlyIf, flowObs.parsed) }
-            .map { effect ->
-                if (effect.verb == EffectVerb.CLICK && (effect.delayMs ?: 0L) > 0L) {
-                    // Defer the click through the state machine via SETTLE_UI
-                    // timeout — keeps the delay observable + cancellable instead
-                    // of sleeping in a hidden coroutine. Payload carries the
-                    // click context so the timeout handler can reconstruct.
-                    AppEffect.ScheduleTimeout(
-                        durationMs = effect.delayMs!!,
-                        type = TimeoutType.SETTLE_UI,
-                        platform = flowObs.platform.takeIf { it != Platform.Unknown },
-                        payload = deferredClickPayload(effect),
-                    )
-                } else {
-                    AppEffect.RequestEffect(effect)
-                }
-            }
+            .map { AppEffect.RequestEffect(it) }
     }
 
     /**
-     * Catch the SETTLE_UI timeout fired by a deferred click (see
-     * [diffRuleEffects]) and re-emit it as an immediate-fire click.
+     * App-owned EXPAND_EARNINGS decision (#425): when the post-delivery
+     * summary is collapsed and the rule bound an expand target, schedule the
+     * tap behind a SETTLE_UI timeout so the screen finishes animating first
+     * (observable + cancellable, unlike a hidden sleep). Replaces the rule's
+     * former `click` effect — the decision is the app's, the target is data.
+     */
+    private fun diffExpandAction(obs: Observation): List<AppEffect> {
+        val flowObs = obs as? Observation.Screen ?: return emptyList()
+        val action = RuleAction.EXPAND_EARNINGS
+        val target = flowObs.targets[action.targetBindName] ?: return emptyList()
+        // Only when the screen itself reports the breakdown collapsed — the
+        // gate fails closed on an absent/unparseable field (#345).
+        val collapsed = evaluateGate(
+            ParsedFieldsGate.FieldEquals("isExpanded", false), flowObs.parsed,
+        )
+        if (!collapsed) return emptyList()
+        return listOf(
+            AppEffect.ScheduleTimeout(
+                durationMs = EXPAND_SETTLE_MS,
+                type = TimeoutType.SETTLE_UI,
+                platform = flowObs.platform.takeIf { it != Platform.Unknown },
+                payload = ObservationPayload.DeferredAction(
+                    action = action.wire,
+                    platform = flowObs.platform.wire,
+                    ruleId = flowObs.ruleId,
+                    target = target,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Catch the SETTLE_UI timeout fired by a deferred action (see
+     * [diffExpandAction]) and emit the immediate-fire [AppEffect.PerformRuleAction].
      */
     private fun diffSettleUiTimeout(obs: Observation): List<AppEffect> {
         val timeout = obs as? Observation.Timeout ?: return emptyList()
         if (timeout.type != TimeoutType.SETTLE_UI) return emptyList()
         // Typed payload (#366) — the old per-key Map round-trip is gone.
-        val click = timeout.payload as? ObservationPayload.DeferredClick ?: return emptyList()
-        val verb = runCatching { EffectVerb.valueOf(click.verb) }.getOrNull() ?: return emptyList()
-        if (verb != EffectVerb.CLICK) return emptyList()
-        val targetRef = click.target ?: return emptyList()
-        val effect = RequestedEffect(
-            verb = verb,
-            args = emptyMap(),
-            targetRef = targetRef,
-            onlyIf = null,
-            dedupeKey = click.dedupeKey,
-            throttleMs = click.throttleMs,
-            delayMs = null,  // immediate fire this time
-            ruleId = click.ruleId,
+        val deferred = timeout.payload as? ObservationPayload.DeferredAction ?: return emptyList()
+        val action = RuleAction.fromWire(deferred.action) ?: return emptyList()
+        val platform = Platform.fromWire(deferred.platform) ?: return emptyList()
+        return listOf(
+            AppEffect.PerformRuleAction(
+                action = action,
+                platform = platform,
+                targetRef = deferred.target,
+                sourceRuleId = deferred.ruleId,
+            ),
         )
-        return listOf(AppEffect.RequestEffect(effect))
     }
-
-    private fun deferredClickPayload(effect: RequestedEffect): ObservationPayload.DeferredClick =
-        ObservationPayload.DeferredClick(
-            verb = effect.verb.name,
-            ruleId = effect.ruleId,
-            dedupeKey = effect.dedupeKey,
-            throttleMs = effect.throttleMs,
-            target = effect.targetRef,
-        )
 
     private fun evaluateGate(gate: ParsedFieldsGate?, parsed: ParsedFields): Boolean {
         if (gate == null) return true

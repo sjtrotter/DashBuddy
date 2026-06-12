@@ -138,7 +138,10 @@ Recognition is **data, not code**. Per-platform rule files
 Rules carry a `priority` (sensitive rules are priority 0 and `overrideable: false`, blocking all
 further processing of banking/identity screens), `require` predicates, `bind` blocks, and `parse`
 blocks that produce typed fields via `ParsedFieldsFactory`. There are no Kotlin matcher classes —
-changing recognition means editing rule JSON plus corpus tests.
+changing recognition means editing rule JSON plus corpus tests. **Rules cannot declare actuation**
+(#425): the compiler rejects `click`/gesture effect verbs; rules instead expose well-known *target
+bindings* (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction`
+registry (`:domain`) consumes — see `docs/design/rule-capability-consent.md`.
 
 ### 3. Multi-Region State Machine (`core/state/`)
 
@@ -156,8 +159,8 @@ state into `AppEffect`s.
 `SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency dedup (recovery-aware)
 and runs the evaluation loopback (offer eval → `OfferEvaluationEvent` back into the machine).
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
-`UiInteractionHandler` (cross-window accessibility clicks), `OfferActionReceiver` (notification
-Accept/Decline actions).
+`UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
+clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
 
 ## Development Principles
 
@@ -209,9 +212,10 @@ Every new feature or refactor holds to these — they are forefront design input
      `NoOpCaptureBus`, #346).
    - **Secrets never reach logs** (EIA api_key redaction, #348); network logging is debug-gated.
    - **Capability gates fail closed.** An effect whose permission tier isn't granted does not
-     fire; an auto-click or any state-changing effect a rule could request must be gated, not
-     assumed safe. (The current single-user build stubs the grant check to always-true — that
-     stub is the first thing the matchers/multi-user work must replace.)
+     fire. Rules cannot request actuation at all (#425) — taps are app-owned `RuleAction`s aimed
+     by ruleset target bindings and verified at fire time (package scope + label allowlist +
+     strict click); any failed check aborts to manual. (The single-user build still stubs the
+     grant check to always-true — replacing it with the consent-keyed gate is #417.)
    When a change touches recognition, capture, network, or effects, state its security/privacy
    posture in the PR — what's trusted, what's gated, what's scrubbed.
 

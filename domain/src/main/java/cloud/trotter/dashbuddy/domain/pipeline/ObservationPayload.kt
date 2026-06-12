@@ -17,18 +17,21 @@ import kotlinx.serialization.Serializable
 sealed interface ObservationPayload {
 
     /**
-     * Context for a rule-declared click deferred through a SETTLE_UI timeout
-     * (see EffectMap's deferred-click round-trip). Carries everything the
-     * timeout handler needs to reconstruct the immediate-fire click.
+     * Context for an app-decided action deferred through a SETTLE_UI timeout
+     * (#425) — e.g. EXPAND_EARNINGS waiting for the summary screen to settle
+     * before tapping. Carries everything the timeout handler needs to emit
+     * the immediate-fire `PerformRuleAction`.
      */
     @Serializable
-    @SerialName("deferredClick")
-    data class DeferredClick(
-        val verb: String,
-        val ruleId: String,
-        val dedupeKey: String? = null,
-        val throttleMs: Long? = null,
-        val target: NodeRef? = null,
+    @SerialName("deferredAction")
+    data class DeferredAction(
+        /** `RuleAction` wire name. */
+        val action: String,
+        /** `Platform` wire name. */
+        val platform: String,
+        /** Rule that supplied the target binding — consent provenance (#422). */
+        val ruleId: String? = null,
+        val target: NodeRef,
     ) : ObservationPayload
 
     /**

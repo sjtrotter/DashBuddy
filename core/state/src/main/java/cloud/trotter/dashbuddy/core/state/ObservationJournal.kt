@@ -107,8 +107,8 @@ class ObservationJournal @Inject constructor(
             if (obs.targetPlatform != null || obs.payload != null) {
                 InternalObsPayload(targetPlatform = obs.targetPlatform?.wire, payload = obs.payload)
             } else null
-        // Persisting the REAL action is safe: PerformOfferAction is classified
-        // external (#341), so recovery can never replay an offer click from it.
+        // Persisting the REAL action is safe: PerformRuleAction is classified
+        // external (#341), so recovery can never replay an offer tap from it.
         is Observation.UiInput -> InternalObsPayload(action = obs.action)
         is Observation.Loopback -> InternalObsPayload(effect = obs.effect, payload = obs.payload)
         else -> null
