@@ -1067,11 +1067,16 @@
         },
         "screenshot": {
           "type": "object",
-          "description": "Capture the current screen. Requires ACCESSIBILITY permission.",
+          "description": "Capture the current screen. Requires ACCESSIBILITY permission, and fires only when the user's Evidence Locker settings allow the declared category (#426) — an effect without a category never fires.",
           "properties": {
             "prefix": {
               "type": "string",
               "description": "Screenshot filename prefix. Supports {fieldName} templates."
+            },
+            "category": {
+              "type": "string",
+              "enum": ["offer", "delivery_summary", "dash_summary"],
+              "description": "Evidence consent bucket the capture is gated on (EvidenceConfig toggle). Required in practice: omitting it means the screenshot is always suppressed."
             }
           },
           "additionalProperties": false

@@ -234,7 +234,8 @@
           "effects": [
             {
               "screenshot": {
-                "prefix": "Offer - {storeName}"
+                "prefix": "Offer - {storeName}",
+                "category": "offer"
               },
               "dedupeKey": "offer-ss-{offerHash}",
               "throttleMs": 60000

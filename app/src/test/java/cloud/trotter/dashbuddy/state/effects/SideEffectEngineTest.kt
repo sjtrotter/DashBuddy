@@ -9,6 +9,8 @@ import cloud.trotter.dashbuddy.core.state.MetadataProvider
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
+import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
+import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
@@ -23,6 +25,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -59,12 +62,24 @@ import org.mockito.kotlin.wheneverBlocking
 @OptIn(ExperimentalCoroutinesApi::class)
 class SideEffectEngineTest {
 
+    /** Backs the evidence gate (#426). Default: everything allowed — individual tests stub denial. */
+    private val evidenceConfig = MutableStateFlow(
+        EvidenceConfig(
+            masterEnabled = true,
+            saveOffers = true,
+            saveDeliverySummaries = true,
+            saveDashSummaries = true,
+        ),
+    )
+
     private val appEventRepo: AppEventRepo = mock()
     private val odometerEffectHandler: OdometerEffectHandler = mock()
     private val tipEffectHandler: TipEffectHandler = mock()
     private val bubbleManager: BubbleManager = mock()
     private val offerEvaluator: OfferEvaluator = mock()
-    private val strategyRepository: StrategyRepository = mock()
+    private val strategyRepository: StrategyRepository = mock {
+        on { this.evidenceConfig } doReturn this@SideEffectEngineTest.evidenceConfig
+    }
     private val screenShotHandler: ScreenShotHandler = mock()
     private val uiInteractionHandler: UiInteractionHandler = mock()
     private val effectsFiredDao: EffectsFiredDao = mock()
@@ -234,10 +249,13 @@ class SideEffectEngineTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         // Distinct dedupeKeys: the engine throttles RequestEffect per effectKey
         // on the wall clock, and a denied fire still consumes the slot.
+        // Category present + evidence fully allowed (defaults), so the TIER is
+        // the only gate under test here.
         fun screenshot(key: String) = AppEffect.RequestEffect(
             RequestedEffect(
                 verb = EffectVerb.SCREENSHOT,
                 ruleId = "doordash.screen.offer_popup",
+                args = mapOf("category" to "offer"),
                 dedupeKey = key,
             ),
         )
@@ -249,6 +267,90 @@ class SideEffectEngineTest {
 
         whenever(permissionTierChecker.isGranted(any())).thenReturn(true)
         engine.process(screenshot("granted"))
+        runCurrent()
+        verify(screenShotHandler, times(1)).capture(any(), any())
+    }
+
+    // =========================================================================
+    // #426 — evidence gate on screenshots
+    // =========================================================================
+
+    private fun dashSummaryShot() = AppEffect.CaptureScreenshot(
+        filenamePrefix = "DashSummary - 87.50",
+        category = EvidenceCategory.DASH_SUMMARY,
+    )
+
+    @Test
+    fun `master off suppresses an EffectMap-emitted screenshot`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        evidenceConfig.value = EvidenceConfig(masterEnabled = false)
+
+        engine.process(dashSummaryShot())
+        runCurrent()
+
+        verify(screenShotHandler, never()).capture(any(), any())
+    }
+
+    @Test
+    fun `a disabled category suppresses its screenshot while others fire`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        evidenceConfig.value = EvidenceConfig(
+            masterEnabled = true,
+            saveOffers = true,
+            saveDashSummaries = false,
+        )
+
+        engine.process(dashSummaryShot())
+        runCurrent()
+        verify(screenShotHandler, never()).capture(any(), any())
+
+        engine.process(
+            AppEffect.CaptureScreenshot("Offer - Chipotle", category = EvidenceCategory.OFFER),
+        )
+        runCurrent()
+        verify(screenShotHandler, times(1)).capture(any(), any())
+    }
+
+    @Test
+    fun `an uncategorized screenshot never fires - fail closed`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        // Everything enabled — the missing category alone must deny it.
+        engine.process(AppEffect.CaptureScreenshot("Mystery", category = null))
+        runCurrent()
+
+        verify(screenShotHandler, never()).capture(any(), any())
+    }
+
+    @Test
+    fun `a rule-declared screenshot is gated by its category arg`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        evidenceConfig.value = EvidenceConfig(masterEnabled = true, saveOffers = false)
+
+        engine.process(
+            AppEffect.RequestEffect(
+                RequestedEffect(
+                    verb = EffectVerb.SCREENSHOT,
+                    ruleId = "doordash.screen.offer_popup",
+                    args = mapOf("prefix" to "Offer - Chipotle", "category" to "offer"),
+                    dedupeKey = "offer-gated",
+                ),
+            ),
+        )
+        runCurrent()
+        verify(screenShotHandler, never()).capture(any(), any())
+
+        evidenceConfig.value = EvidenceConfig(masterEnabled = true, saveOffers = true)
+        engine.process(
+            AppEffect.RequestEffect(
+                RequestedEffect(
+                    verb = EffectVerb.SCREENSHOT,
+                    ruleId = "doordash.screen.offer_popup",
+                    args = mapOf("prefix" to "Offer - Chipotle", "category" to "offer"),
+                    dedupeKey = "offer-allowed",
+                ),
+            ),
+        )
         runCurrent()
         verify(screenShotHandler, times(1)).capture(any(), any())
     }

@@ -219,7 +219,9 @@ Every new feature or refactor holds to these — they are forefront design input
      scanner shares). A recognition change must not be able to downgrade any of that.
    - **PII is hashed at the edge before it is persisted or could be uploaded** (`sha256`,
      fail-closed — never echo plaintext on failure, #362). Captures are debug-only (release binds
-     `NoOpCaptureBus`, #346).
+     `NoOpCaptureBus`, #346). Evidence screenshots are gated by `EvidenceConfig` at the engine
+     edge (#426): master toggle AND per-category toggle, and an uncategorized capture never
+     fires — the master default is OFF.
    - **Secrets never reach logs** (EIA api_key redaction, #348); network logging is debug-gated.
    - **Capability gates fail closed.** An effect whose permission tier isn't granted does not
      fire — tiers back onto real OS state (live accessibility-service handle, runtime location

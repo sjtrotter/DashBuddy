@@ -483,7 +483,8 @@
       "effects": [
         {
           "screenshot": {
-            "prefix": "Offer - {storeName}"
+            "prefix": "Offer - {storeName}",
+            "category": "offer"
           },
           "dedupeKey": "offer-ss-{offerHash}",
           "throttleMs": 60000
@@ -600,7 +601,8 @@
       "effects": [
         {
           "screenshot": {
-            "prefix": "DeliveryBreakdown - {totalPay}"
+            "prefix": "DeliveryBreakdown - {totalPay}",
+            "category": "delivery_summary"
           },
           "dedupeKey": "delivery-ss-expanded-{totalPay}-{sessionEarnings}",
           "throttleMs": 60000
@@ -681,7 +683,8 @@
       "effects": [
         {
           "screenshot": {
-            "prefix": "Delivery - {totalPay}"
+            "prefix": "Delivery - {totalPay}",
+            "category": "delivery_summary"
           },
           "dedupeKey": "delivery-ss-collapsed-{totalPay}-{sessionEarnings}",
           "throttleMs": 60000
@@ -2366,7 +2369,8 @@
       "effects": [
         {
           "screenshot": {
-            "prefix": "DashSummary - {totalEarnings}"
+            "prefix": "DashSummary - {totalEarnings}",
+            "category": "dash_summary"
           },
           "dedupeKey": "dash-summary-ss-{totalEarnings}-{sessionDurationMillis}",
           "throttleMs": 60000
