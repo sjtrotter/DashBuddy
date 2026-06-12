@@ -117,7 +117,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   (no regression — asset rules auto-grant covers them). Broken = a tap silently stops
   happening and the log shows `Denied expand_earnings — no granted capability` or
   `ACCESSIBILITY tier not granted` while the service is clearly running — capture logcat.
-  - Confirmed: 0/2
+  - Confirmed: 1/2. **2026-06-12 (DoorDash):** both gated automation taps fired as before — the
+    post-delivery **expand auto-tap** worked AND the **bubble Accept** clicked DoorDash (#425), so
+    the asset-rule auto-grant covered them with no regression. Needs one more clean sighting. (See
+    2026-06-12 log entry #5.)
 
 - **Uber sensitive screens now blocked + UNKNOWN-capture scrub (#432).**
   Uber finally has matcher-layer sensitive rules (wallet / Instant Pay / cash-out / bank /
@@ -156,7 +159,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   with package scoping instead of a rule-declared click). Working = breakdown expands on its own
   and the line items parse. Broken = summary stays collapsed; grep logs for "did not fire —
   target failed resolution/verification" (verification too strict) or "Throttled action".
-  - Confirmed: 0/2
+  - Confirmed: 1/2. **2026-06-12 (DoorDash):** post-delivery pay breakdown **auto-expanded** on its
+    own as before — confirms the EXPAND_EARNINGS action path AND (implicitly) the #417 consent gate
+    auto-granting the bundled-rule capability (a denied tap would have left it collapsed). Needs one
+    more clean sighting. (See 2026-06-12 log entry #5.)
 - **Bubble/notification Accept-Decline via rule-bound targets (#425).**
   Tapping Accept or Decline in DashBuddy's offer notification (or bubble) must tap the matching
   DoorDash button. The button is now aimed by the offer rule's `acceptButton`/`declineButton`
@@ -530,6 +536,14 @@ is the first clean live confirmation of the `acceptButton`/`declineButton` rule-
 tap path (#425) — the same surface that was **broken on 06-09** (`Could not find any live node`,
 wrong-window search). Bumped the checklist item to 1/2; still want a second sighting covering the
 **Decline** side and the **notification** surface (not just bubble Accept).
+
+#### 5. Post-delivery earnings **auto-expand** still works — #425 EXPAND_EARNINGS + #417 gate (both 1/2)
+The collapsed pay breakdown **auto-expanded on its own** after a delivery, as before. Confirms the
+app-owned EXPAND_EARNINGS action path (#425) AND — implicitly — the live consent gate (#417): a
+denied capability would have left it collapsed (`Denied expand_earnings — no granted capability`),
+so the asset-rule auto-grant is covering it. Together with #1 (bubble Accept), both gated automation
+taps fired with no regression. Bumped the #425 expand-earnings and #417 consent-gate checklist items
+to 1/2 each.
 
 #### 2. Shop & Deliver terminal `total/total` — #302 CONFIRMED (2/2, retired)
 The pickup/shop card read **`shop 25/25 · 0.6/min`** at end of shop — the terminal `total/total`
