@@ -1,10 +1,13 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import android.content.Context
+import cloud.trotter.dashbuddy.domain.capability.RuleCapability
+import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -25,10 +28,17 @@ import javax.inject.Singleton
  * - File size ≤ [MAX_FILE_BYTES] (1 MB) per file
  * - [RuleCompiler.MAX_DEPTH] caps nesting depth during compilation
  * - [RuleCompiler.MAX_REGEX_LENGTH] caps regex patterns during compilation
+ *
+ * Consent (#417): each load enumerates the action capabilities the bundle's
+ * target bindings enable and reconciles them into [RuleCapabilityGrants]
+ * BEFORE the compiled rules go live — by the time a frame can classify, the
+ * grant store already reflects the bundle (asset sources auto-grant; remote
+ * sources never do).
  */
 @Singleton
 class JsonRuleInterpreter @Inject constructor(
     @param:ApplicationContext private val context: Context,
+    private val capabilityGrants: RuleCapabilityGrants,
 ) {
 
     /**
@@ -61,7 +71,7 @@ class JsonRuleInterpreter @Inject constructor(
     )
 
     /** Load all bundled rule files from `assets/rules/`. */
-    fun loadDefaults() {
+    suspend fun loadDefaults() {
         try {
             val files = context.assets.list(RULES_DIR)
                 ?.filter { it.endsWith(".json") }
@@ -75,6 +85,7 @@ class JsonRuleInterpreter @Inject constructor(
             val allScreens = mutableListOf<CompiledRule<UiNode>>()
             val allClicks = mutableListOf<CompiledRule<UiNode>>()
             val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
+            val perFile = mutableListOf<Pair<String, CompiledRuleBundle>>() // path → bundle
             val seenRuleIds = mutableMapOf<String, String>() // ruleId → first source path
             var lastFormatVersion: Int? = null
 
@@ -82,6 +93,7 @@ class JsonRuleInterpreter @Inject constructor(
                 val path = "$RULES_DIR/$fileName"
                 val json = context.assets.open(path).bufferedReader().readText()
                 val result = loadSingle(json, source = path) ?: continue
+                perFile += path to result
 
                 // Collision detection (C3): warn if any rule ID appears in multiple files
                 val newIds = result.screens.map { it.id } +
@@ -120,6 +132,21 @@ class JsonRuleInterpreter @Inject constructor(
                 )
                 allScreens.filterNot { Platform.fromRuleId(it.id) in uncovered }
             }
+
+            // Consent reconcile (#417), BEFORE the swap goes live. Enumerated
+            // from the EFFECTIVE rules — a platform excluded by the sensitive
+            // check must not have its capabilities granted either. Source is
+            // stamped per file so provenance survives the merge.
+            reconcileCapabilities(
+                perFile.flatMap { (path, bundle) ->
+                    val liveScreens =
+                        bundle.screens.filterNot { Platform.fromRuleId(it.id) in uncovered }
+                    RuleCompiler.enumerateCapabilities(
+                        liveScreens + bundle.clicks + bundle.notifications,
+                        source = "${RuleCapabilityGrants.ASSET_SOURCE_PREFIX}$path",
+                    )
+                },
+            )
 
             current = LoadedRulesets(
                 screens = Ruleset(effectiveScreens),
@@ -190,15 +217,40 @@ class JsonRuleInterpreter @Inject constructor(
     /**
      * Load a single ruleset and replace all current rules.
      * Kept for backward compatibility with CDN hot-reload path.
+     *
+     * [source] is NOT asset-prefixed here, so nothing a remote caller loads
+     * is ever auto-granted (#417) — its capabilities reconcile as pending.
      */
-    fun load(jsonString: String, source: String = "unknown") {
+    suspend fun load(jsonString: String, source: String = "unknown") {
         val result = loadSingle(jsonString, source) ?: return
+        reconcileCapabilities(
+            RuleCompiler.enumerateCapabilities(
+                result.screens + result.clicks + result.notifications,
+                source = source,
+            ),
+        )
         current = LoadedRulesets(
             screens = Ruleset(result.screens),
             clicks = Ruleset(result.clicks),
             notifications = Ruleset(result.notifications),
             formatVersion = result.formatVersion,
         )
+    }
+
+    /**
+     * Reconcile failure degrades ACTUATION only, never recognition: the gate
+     * denies ungranted actions (fail closed) while the rules still load and
+     * classify. Throwing here would instead kill the whole rule load — a
+     * datastore hiccup must not blind the app.
+     */
+    private suspend fun reconcileCapabilities(capabilities: List<RuleCapability>) {
+        try {
+            capabilityGrants.reconcile(capabilities)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "JsonRuleInterpreter: capability reconcile failed — automation taps stay denied")
+        }
     }
 
     /** Result of compiling a single rule file. */
