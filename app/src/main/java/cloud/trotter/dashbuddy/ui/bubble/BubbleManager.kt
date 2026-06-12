@@ -15,10 +15,12 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.effects.OfferActionReceiver
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
+import cloud.trotter.dashbuddy.domain.state.activeSessionId
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId // <-- Your new UI Formatter!
 import cloud.trotter.dashbuddy.ui.formatters.notificationPersona
 import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
@@ -26,8 +28,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -37,7 +41,10 @@ import javax.inject.Singleton
 class BubbleManager @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val notificationManager: NotificationManager,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    // dagger.Lazy breaks the StateManagerV2 → EffectExecutor → BubbleManager
+    // construction cycle (#437); resolved on first activeDashId access.
+    private val stateManager: dagger.Lazy<StateManagerV2>,
 ) {
 
     companion object {
@@ -57,22 +64,33 @@ class BubbleManager @Inject constructor(
     private val channelId = "bubble_channel"
     private val shortcutId = "DashBuddy_Bubble_Shortcut"
 
-    private val _activeDashId = MutableStateFlow<String?>(null)
-    val activeDashId = _activeDashId.asStateFlow()
+    /**
+     * The dash id chat/cards attribute to — DERIVED from `AppState` (#437),
+     * not a second effect-driven copy. The old `_activeDashId` was set by
+     * StartSession/EndSession, which crash recovery suppresses (external
+     * effects): a restored mid-dash process had a null id and the bubble
+     * showed nothing until the next DASH_START. State restores; this follows.
+     * Lazy so the Hilt graph finishes building before StateManagerV2 resolves.
+     */
+    val activeDashId: StateFlow<String?> by lazy {
+        stateManager.get().state
+            .map { it.activeSessionId() }
+            .stateIn(scope, SharingStarted.Eagerly, null)
+    }
 
     init {
         createChannel()
         pushDynamicShortcut()
     }
 
+    /** Session chat copy only — the dash id derives from state (#437). */
     fun startSession(sessionId: String, platformName: String) {
-        _activeDashId.value = sessionId
         val verb = sessionVerb(platformName)
         postMessage("Started $verb!", ChatPersona.Dispatcher)
     }
 
+    /** Session chat copy only — the dash id derives from state (#437). */
     fun endSession(platformName: String? = null) {
-        _activeDashId.value = null
         val verb = sessionVerb(platformName)
         postMessage("Done $verb!", ChatPersona.Dispatcher)
     }
@@ -94,7 +112,7 @@ class BubbleManager @Inject constructor(
 
         // 2. UPDATED: Launched in a coroutine because the Repository is pure suspend now!
         scope.launch {
-            chatRepository.saveMessage(_activeDashId.value, text.toString(), persona)
+            chatRepository.saveMessage(activeDashId.value, text.toString(), persona)
         }
 
         // Post Notification
@@ -212,7 +230,7 @@ class BubbleManager @Inject constructor(
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
         Timber.tag("Chat").i("[${persona.displayName}]: $summary")
-        scope.launch { chatRepository.saveMessage(_activeDashId.value, summary.toString(), persona) }
+        scope.launch { chatRepository.saveMessage(activeDashId.value, summary.toString(), persona) }
         showNotification(summary, persona, expand = false, offerActionable = true)
     }
 
