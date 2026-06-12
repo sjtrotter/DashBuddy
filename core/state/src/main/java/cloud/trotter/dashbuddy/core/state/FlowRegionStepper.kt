@@ -53,9 +53,15 @@ class FlowRegionStepper @Inject constructor() {
             // No offer data → keep existing pending offer if any
             offerFields == null || newHash == null -> existingOffer
 
-            // Same hash → update enrichment fields
+            // Same hash → update enrichment fields; refresh action targets
+            // (#425) when this observation re-bound them (bounds shift as the
+            // screen settles — fresher fingerprints aim better).
             existingOffer != null && existingOffer.offerHash == newHash ->
-                existingOffer.copy(offerFields = offerFields)
+                existingOffer.copy(
+                    offerFields = offerFields,
+                    targets = obs.targets.ifEmpty { existingOffer.targets },
+                    sourceRuleId = obs.ruleId ?: existingOffer.sourceRuleId,
+                )
 
             // New or replaced offer → push (old one is implicitly popped)
             else -> PendingOffer(
@@ -70,6 +76,8 @@ class FlowRegionStepper @Inject constructor() {
                     // Fresh offer: return to whatever we were doing
                     prev.flow
                 },
+                targets = obs.targets,
+                sourceRuleId = obs.ruleId,
             )
         }
 

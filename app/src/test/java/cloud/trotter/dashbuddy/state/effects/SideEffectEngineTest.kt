@@ -6,13 +6,15 @@ import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.MetadataProvider
-import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
+import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
+import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import kotlinx.coroutines.CoroutineDispatcher
@@ -104,21 +106,53 @@ class SideEffectEngineTest {
     }
 
     // =========================================================================
-    // #341 — recovery suppression: PerformOfferAction must never replay a click
+    // #341/#425 — recovery suppression: PerformRuleAction must never replay a tap
     // =========================================================================
 
+    private fun acceptActionEffect() = AppEffect.PerformRuleAction(
+        action = RuleAction.ACCEPT_OFFER,
+        platform = Platform.DoorDash,
+        targetRef = NodeRef(
+            viewIdSuffix = "com.doordash.driverapp:id/accept_button",
+            text = null,
+            classNameHint = "android.widget.Button",
+            boundsInScreen = BoundingBox(0, 100, 200, 150),
+            pathFingerprint = "View[0]/Button[1]",
+        ),
+        sourceRuleId = "doordash.screen.offer_popup",
+    )
+
     @Test
-    fun `PerformOfferAction is suppressed during recovery and executes live`() = runTest {
+    fun `PerformRuleAction is suppressed during recovery and executes live`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        val effect = AppEffect.PerformOfferAction(OfferAction.ACCEPT, Platform.DoorDash)
+        val effect = acceptActionEffect()
 
         engine.process(effect, recovering = true)
         runCurrent()
-        verify(uiInteractionHandler, never()).performClick(any(), any())
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any())
 
         engine.process(effect, recovering = false)
         runCurrent()
-        verify(uiInteractionHandler, times(1)).performClick(any(), any())
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(
+            eq(effect.targetRef),
+            eq(Platform.DoorDash.packageName),
+            eq(RuleAction.ACCEPT_OFFER.verification),
+            any(),
+        )
+    }
+
+    @Test
+    fun `PerformRuleAction is throttled per action and platform`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        engine.process(acceptActionEffect())
+        runCurrent()
+        engine.process(acceptActionEffect())
+        runCurrent()
+
+        // Second fire inside RULE_ACTION_THROTTLE_MS is swallowed — an
+        // app-owned bound on automated taps (#425).
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
     }
 
     // =========================================================================

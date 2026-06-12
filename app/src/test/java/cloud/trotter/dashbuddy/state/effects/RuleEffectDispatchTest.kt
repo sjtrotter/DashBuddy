@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
-import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.PermissionTier
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.core.state.AppEffect
@@ -24,10 +23,11 @@ class RuleEffectDispatchTest {
 
     @Test
     fun `every EffectVerb has a defined dispatch path`() {
-        // This test documents that all 14 verbs are handled.
-        // If a verb is added to EffectVerb, the exhaustive when() in
-        // SideEffectEngine.dispatchRuleEffect will fail to compile.
-        assertEquals(14, EffectVerb.entries.size)
+        // This test documents that all 13 verbs are handled (CLICK left the
+        // rule vocabulary in #425). If a verb is added to EffectVerb, the
+        // exhaustive when() in SideEffectEngine.dispatchRuleEffect will fail
+        // to compile.
+        assertEquals(13, EffectVerb.entries.size)
     }
 
     // =========================================================================
@@ -36,40 +36,25 @@ class RuleEffectDispatchTest {
 
     @Test
     fun `effectKey uses dedupeKey when present`() {
-        val effect = makeEffect(EffectVerb.CLICK, dedupeKey = "accept-click")
+        val effect = makeEffect(EffectVerb.SCREENSHOT, dedupeKey = "offer-ss")
         val appEffect = AppEffect.RequestEffect(effect)
-        assertEquals("effect:test.rule:accept-click", appEffect.effectKey)
+        assertEquals("effect:test.rule:offer-ss", appEffect.effectKey)
     }
 
     @Test
-    fun `effectKey uses pathFingerprint when no dedupeKey but targetRef present`() {
-        val ref = NodeRef(
-            viewIdSuffix = "btn_accept",
-            text = "Accept",
-            classNameHint = "android.widget.Button",
-            boundsInScreen = cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox(0, 100, 200, 150),
-            pathFingerprint = "View[0]/Button[1]",
-        )
-        val effect = makeEffect(EffectVerb.CLICK, targetRef = ref)
-        val appEffect = AppEffect.RequestEffect(effect)
-        assertEquals("effect:test.rule:View[0]/Button[1]", appEffect.effectKey)
-    }
-
-    @Test
-    fun `effectKey falls back to verb wire when no dedupeKey and no targetRef`() {
+    fun `effectKey falls back to verb wire when no dedupeKey`() {
         val effect = makeEffect(EffectVerb.SCREENSHOT)
         val appEffect = AppEffect.RequestEffect(effect)
         assertEquals("effect:test.rule:screenshot", appEffect.effectKey)
     }
 
     @Test
-    fun `effectKey differs per verb for non-target effects`() {
+    fun `effectKey differs per verb`() {
         val keys = EffectVerb.entries
-            .filter { !it.requiresTarget }
             .map { AppEffect.RequestEffect(makeEffect(it)).effectKey }
             .toSet()
         // Each verb should produce a unique key
-        assertEquals(EffectVerb.entries.count { !it.requiresTarget }, keys.size)
+        assertEquals(EffectVerb.entries.size, keys.size)
     }
 
     // =========================================================================
@@ -93,7 +78,7 @@ class RuleEffectDispatchTest {
     @Test
     fun `observation-driven verbs do not have defaults`() {
         val observationVerbs = listOf(
-            EffectVerb.CLICK, EffectVerb.SCREENSHOT, EffectVerb.BUBBLE,
+            EffectVerb.SCREENSHOT, EffectVerb.BUBBLE,
             EffectVerb.LOG, EffectVerb.EVALUATE_OFFER, EffectVerb.SPEAK,
         )
         for (verb in observationVerbs) {
@@ -117,11 +102,6 @@ class RuleEffectDispatchTest {
     // =========================================================================
     // Permission tiers — correct verb assignments
     // =========================================================================
-
-    @Test
-    fun `CLICK requires ACCESSIBILITY tier`() {
-        assertEquals(PermissionTier.ACCESSIBILITY, EffectVerb.CLICK.tier)
-    }
 
     @Test
     fun `SCREENSHOT requires ACCESSIBILITY tier`() {
@@ -163,12 +143,10 @@ class RuleEffectDispatchTest {
     private fun makeEffect(
         verb: EffectVerb,
         args: Map<String, String> = emptyMap(),
-        targetRef: NodeRef? = null,
         dedupeKey: String? = null,
     ) = RequestedEffect(
         verb = verb,
         args = args,
-        targetRef = targetRef,
         dedupeKey = dedupeKey,
         ruleId = "test.rule",
     )

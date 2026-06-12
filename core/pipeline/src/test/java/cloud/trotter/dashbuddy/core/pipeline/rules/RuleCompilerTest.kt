@@ -505,13 +505,19 @@ class RuleCompilerTest {
 
     private val compiler = RuleCompiler
 
-    @Test
-    fun `compileEffectEntry accepts valid click verb with target`() {
-        val effect = compiler.compileEffectEntry(
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects rule-declared click - actuation is app-owned`() {
+        // #425: rules expose target bindings; they can never declare a tap.
+        compiler.compileEffectEntry(
             parseJson("""{"click": "${'$'}acceptBtn"}""").jsonObject
         )
-        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK, effect.verb)
-        assertEquals("acceptBtn", effect.targetBindName)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `compileEffectEntry rejects future gesture wires too`() {
+        compiler.compileEffectEntry(
+            parseJson("""{"swipe": {"direction": "up"}}""").jsonObject
+        )
     }
 
     @Test
@@ -520,7 +526,6 @@ class RuleCompilerTest {
             parseJson("""{"screenshot": {"prefix": "Offer"}}""").jsonObject
         )
         assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.SCREENSHOT, effect.verb)
-        assertNull(effect.targetBindName)
         assertEquals("Offer", effect.args["prefix"])
     }
 
@@ -561,14 +566,6 @@ class RuleCompilerTest {
     // compileEffectEntry — format enforcement
     // =========================================================================
 
-    @Test(expected = Exception::class)
-    fun `compileEffectEntry rejects click with object value instead of target string`() {
-        // click requires a string target, not an args object
-        compiler.compileEffectEntry(
-            parseJson("""{"click": {"bad": "value"}}""").jsonObject
-        )
-    }
-
     @Test(expected = RuleCompileException::class)
     fun `compileEffectEntry rejects multiple verb keys`() {
         compiler.compileEffectEntry(
@@ -604,7 +601,7 @@ class RuleCompilerTest {
     @Test
     fun `compileEffectEntry preserves onlyIf gate`() {
         val effect = compiler.compileEffectEntry(
-            parseJson("""{"click": "${'$'}btn", "onlyIf": {"fieldEquals": {"field": "intent", "value": "accept"}}}""").jsonObject
+            parseJson("""{"screenshot": {"prefix": "Offer"}, "onlyIf": {"fieldEquals": {"field": "intent", "value": "accept"}}}""").jsonObject
         )
         assertTrue(effect.onlyIf is cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate.FieldEquals)
     }
@@ -612,9 +609,9 @@ class RuleCompilerTest {
     @Test
     fun `compileEffectEntry preserves dedupeKey and throttleMs`() {
         val effect = compiler.compileEffectEntry(
-            parseJson("""{"click": "${'$'}btn", "dedupeKey": "accept-click", "throttleMs": 1000}""").jsonObject
+            parseJson("""{"screenshot": {"prefix": "Offer"}, "dedupeKey": "offer-ss", "throttleMs": 1000}""").jsonObject
         )
-        assertEquals("accept-click", effect.dedupeKey)
+        assertEquals("offer-ss", effect.dedupeKey)
         assertEquals(1000L, effect.throttleMs)
     }
 
@@ -839,36 +836,15 @@ class RuleCompilerTest {
     }
 
     // =========================================================================
-    // delayMs on effects
+    // effect meta keys
     // =========================================================================
 
     @Test
-    fun `compileEffectEntry accepts delayMs within cap`() {
-        val obj = parseJson("""{"click": "${'$'}btn", "delayMs": 500}""").jsonObject
+    fun `compileEffectEntry treats meta keys as meta - not as a second verb`() {
+        // Regression guard: meta keys alongside a verb must not be flagged
+        // as multiple verb keys.
+        val obj = parseJson("""{"log": {"type": "X"}, "throttleMs": 1000, "dedupeKey": "k"}""").jsonObject
         val effect = RuleCompiler.compileEffectEntry(obj)
-        assertEquals(500L, effect.delayMs)
-    }
-
-    @Test
-    fun `compileEffectEntry omits delayMs when not specified`() {
-        val obj = parseJson("""{"click": "${'$'}btn"}""").jsonObject
-        val effect = RuleCompiler.compileEffectEntry(obj)
-        assertNull(effect.delayMs)
-    }
-
-    @Test(expected = RuleCompileException::class)
-    fun `compileEffectEntry rejects delayMs above 5000ms cap`() {
-        val obj = parseJson("""{"click": "${'$'}btn", "delayMs": 6000}""").jsonObject
-        RuleCompiler.compileEffectEntry(obj)
-    }
-
-    @Test
-    fun `compileEffectEntry treats delayMs as meta-key not verb-key`() {
-        // Regression guard: with delayMs alongside a verb, compileEffectEntry
-        // must not flag it as a second verb.
-        val obj = parseJson("""{"click": "${'$'}btn", "delayMs": 500, "throttleMs": 1000, "dedupeKey": "k"}""").jsonObject
-        val effect = RuleCompiler.compileEffectEntry(obj)
-        assertEquals(500L, effect.delayMs)
         assertEquals(1000L, effect.throttleMs)
         assertEquals("k", effect.dedupeKey)
     }

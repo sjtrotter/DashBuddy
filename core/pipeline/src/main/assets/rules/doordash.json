@@ -299,6 +299,16 @@
         "flow": "offer:presented",
         "modeHint": "online"
       },
+      "bind": {
+        "acceptButton": {
+          "find": { "hasIdSuffix": "accept_button" },
+          "optional": true
+        },
+        "declineButton": {
+          "find": { "hasIdSuffix": "secondary_action_button_dash_plus" },
+          "optional": true
+        }
+      },
       "require": {
         "all": [
           {
@@ -669,18 +679,6 @@
         }
       },
       "effects": [
-        {
-          "click": "$expandButton",
-          "onlyIf": {
-            "fieldEquals": {
-              "field": "isExpanded",
-              "value": false
-            }
-          },
-          "dedupeKey": "expand_pay_breakdown",
-          "throttleMs": 1000,
-          "delayMs": 500
-        },
         {
           "screenshot": {
             "prefix": "Delivery - {totalPay}"

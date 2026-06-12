@@ -317,7 +317,7 @@
 
     "bindBlock": {
       "type": "object",
-      "description": "Phase 1: Named variable bindings. Keys are binding names; referenced as $name in later phases.",
+      "description": "Phase 1: Named variable bindings. Keys are binding names; referenced as $name in later phases. WELL-KNOWN TARGET NAMES (#425): bindings named 'acceptButton', 'declineButton', or 'expandButton' are exposed to the app as action targets — the app-owned RuleAction registry decides whether/when to tap them (rules cannot declare actuation), each enables a per-rule consent capability content-pinned to this binding's definition (#422), and the tap is verified at fire time against the app's own label/package expectations. A platform supports an action iff its ruleset binds the matching name on the relevant screen.",
       "additionalProperties": { "$ref": "#/$defs/bindEntry" }
     },
 
@@ -1050,7 +1050,7 @@
 
     "effectEntry": {
       "type": "object",
-      "description": "A side effect to execute on successful match. Has exactly one verb key plus optional meta keys (onlyIf, dedupeKey, throttleMs).",
+      "description": "A side effect to execute on successful match. Has exactly one verb key plus optional meta keys (onlyIf, dedupeKey, throttleMs). Effects are observational/app-internal ONLY — actuating verbs ('click', 'swipe', etc.) are rejected at compile time (#425); rules expose target bindings (see bindBlock) and the app-owned RuleAction registry performs taps.",
       "properties": {
         "onlyIf": {
           "$ref": "#/$defs/gateCondition",
@@ -1064,11 +1064,6 @@
           "type": "integer",
           "description": "Minimum milliseconds between firings of the same dedupeKey. Default: 500.",
           "minimum": 0
-        },
-        "click": {
-          "type": "string",
-          "description": "Click a bound node. Value is '$bindName'. Requires ACCESSIBILITY permission.",
-          "pattern": "^\\$"
         },
         "screenshot": {
           "type": "object",

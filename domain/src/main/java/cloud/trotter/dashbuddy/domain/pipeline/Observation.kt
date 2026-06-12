@@ -36,6 +36,13 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         val target: String?
         /** Rule-originated side effects to execute. */
         val effects: List<RequestedEffect>
+        /**
+         * Named UI targets the matched rule's `bind` block resolved on this
+         * screen (#425) — e.g. `"declineButton"` → the decline button's
+         * [NodeRef]. Recognition-layer *data*; the app-owned `RuleAction`
+         * registry decides whether anything is ever done with them.
+         */
+        val targets: Map<String, NodeRef>
         /** Per-trigger overrides that replace built-in transition defaults. */
         val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>>
         /** Plausible next flows declared by the matched rule's `outcomes` field. */
@@ -53,6 +60,7 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val parsed: ParsedFields,
         override val target: String? = null,
         override val effects: List<RequestedEffect> = emptyList(),
+        override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
         override val expectedOutcomes: Set<Flow>? = null,
     ) : FlowObservation
@@ -68,6 +76,7 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val parsed: ParsedFields,
         override val target: String? = null,
         override val effects: List<RequestedEffect> = emptyList(),
+        override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
         override val expectedOutcomes: Set<Flow>? = null,
         /** The last classified screen target when this click occurred. */
@@ -85,6 +94,7 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val parsed: ParsedFields,
         override val target: String? = null,
         override val effects: List<RequestedEffect> = emptyList(),
+        override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
         override val expectedOutcomes: Set<Flow>? = null,
     ) : FlowObservation

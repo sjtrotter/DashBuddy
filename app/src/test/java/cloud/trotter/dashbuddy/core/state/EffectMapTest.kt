@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -16,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -784,52 +786,74 @@ class EffectMapTest {
     }
 
     // =========================================================================
-    // CLICK DELAY VIA SETTLE_UI TIMEOUT (UDF round-trip)
+    // APP-OWNED ACTIONS (#425): expand decision + deferred-action round-trip +
+    // UiInput accept/decline aimed by rule-bound targets
     // =========================================================================
 
-    @Test
-    fun `click effect with delayMs emits ScheduleTimeout instead of immediate RequestEffect`() {
-        val nodeRef = cloud.trotter.dashbuddy.domain.pipeline.NodeRef(
-            viewIdSuffix = "com.example:id/btn",
+    private fun testNodeRef(id: String = "com.example:id/btn") =
+        cloud.trotter.dashbuddy.domain.pipeline.NodeRef(
+            viewIdSuffix = id,
             text = null, classNameHint = "android.widget.Button",
             boundsInScreen = cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox(0, 0, 100, 50),
             pathFingerprint = "fp",
         )
-        val effect = cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect(
-            verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK,
-            targetRef = nodeRef,
-            delayMs = 500L,
-            ruleId = "test.rule",
-        )
-        val obs = screenObs(flow = Flow.PostTask).copy(effects = listOf(effect))
+
+    @Test
+    fun `collapsed summary with expand target schedules a deferred EXPAND_EARNINGS`() {
+        val obs = screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 25.0, isExpanded = false),
+            ruleId = "doordash.screen.delivery_summary_collapsed",
+        ).copy(targets = mapOf("expandButton" to testNodeRef()))
+
         val effects = effectMap.diff(AppState(), AppState(), obs)
         val scheduled = effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+            .filter { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.SETTLE_UI }
         assertEquals(1, scheduled.size)
-        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.SETTLE_UI, scheduled[0].type)
-        assertEquals(500L, scheduled[0].durationMs)
-        // Payload should carry the typed click context (#366)
-        val click = scheduled[0].payload as ObservationPayload.DeferredClick
-        assertEquals("com.example:id/btn", click.target?.viewIdSuffix)
-        assertEquals("test.rule", click.ruleId)
-        // And NOT emit a RequestEffect for the click directly
+        assertEquals(EffectMap.EXPAND_SETTLE_MS, scheduled[0].durationMs)
+        val deferred = scheduled[0].payload as ObservationPayload.DeferredAction
+        assertEquals(RuleAction.EXPAND_EARNINGS.wire, deferred.action)
+        assertEquals("com.example:id/btn", deferred.target.viewIdSuffix)
+        assertEquals("doordash.screen.delivery_summary_collapsed", deferred.ruleId)
+        // No direct tap effect — the round-trip is mandatory.
+        assertTrue(effects.filterIsInstance<AppEffect.PerformRuleAction>().isEmpty())
+    }
+
+    @Test
+    fun `expanded summary schedules no expand action`() {
+        val obs = screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 25.0, isExpanded = true),
+            ruleId = "doordash.screen.delivery_summary_expanded",
+        ).copy(targets = mapOf("expandButton" to testNodeRef()))
+        val effects = effectMap.diff(AppState(), AppState(), obs)
         assertTrue(
-            "Click should be deferred, not dispatched directly",
-            effects.filterIsInstance<AppEffect.RequestEffect>().isEmpty(),
+            effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+                .none { it.payload is ObservationPayload.DeferredAction },
         )
     }
 
     @Test
-    fun `SETTLE_UI timeout re-emits the click as immediate RequestEffect`() {
-        val payload = ObservationPayload.DeferredClick(
-            verb = "CLICK",
-            ruleId = "test.rule",
-            target = cloud.trotter.dashbuddy.domain.pipeline.NodeRef(
-                viewIdSuffix = "com.example:id/btn",
-                text = null,
-                classNameHint = "android.widget.Button",
-                boundsInScreen = cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox(0, 0, 100, 50),
-                pathFingerprint = "fp",
-            ),
+    fun `collapsed summary WITHOUT expand target schedules nothing - fail closed`() {
+        val obs = screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 25.0, isExpanded = false),
+            ruleId = "doordash.screen.delivery_summary_collapsed",
+        )
+        val effects = effectMap.diff(AppState(), AppState(), obs)
+        assertTrue(
+            effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+                .none { it.payload is ObservationPayload.DeferredAction },
+        )
+    }
+
+    @Test
+    fun `SETTLE_UI timeout emits the deferred action as immediate PerformRuleAction`() {
+        val payload = ObservationPayload.DeferredAction(
+            action = RuleAction.EXPAND_EARNINGS.wire,
+            platform = Platform.DoorDash.wire,
+            ruleId = "doordash.screen.delivery_summary_collapsed",
+            target = testNodeRef(),
         )
         val timeoutObs = Observation.Timeout(
             timestamp = 1000L,
@@ -837,11 +861,52 @@ class EffectMapTest {
             payload = payload,
         )
         val effects = effectMap.diff(AppState(), AppState(), timeoutObs)
-        val requested = effects.filterIsInstance<AppEffect.RequestEffect>()
-        assertEquals(1, requested.size)
-        assertEquals(cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.CLICK, requested[0].effect.verb)
-        assertEquals("com.example:id/btn", requested[0].effect.targetRef?.viewIdSuffix)
-        assertEquals(null, requested[0].effect.delayMs)  // immediate, not deferred again
+        val actions = effects.filterIsInstance<AppEffect.PerformRuleAction>()
+        assertEquals(1, actions.size)
+        assertEquals(RuleAction.EXPAND_EARNINGS, actions[0].action)
+        assertEquals(Platform.DoorDash, actions[0].platform)
+        assertEquals("com.example:id/btn", actions[0].targetRef.viewIdSuffix)
+        assertEquals("doordash.screen.delivery_summary_collapsed", actions[0].sourceRuleId)
+    }
+
+    @Test
+    fun `UiInput accept fires PerformRuleAction aimed by the offer rule's bound target`() {
+        val acceptRef = testNodeRef("com.doordash.driverapp:id/accept_button")
+        val offerWithTargets = testPendingOffer.copy(
+            targets = mapOf("acceptButton" to acceptRef),
+            sourceRuleId = "doordash.screen.offer_popup",
+        )
+        val flowRegion = FlowRegion(
+            flow = Flow.OfferPresented,
+            pendingOffer = offerWithTargets,
+            activePlatform = Platform.DoorDash,
+        )
+        val state = AppState(regions = Regions(flow = flowRegion))
+        val obs = Observation.UiInput(timestamp = 2000L, action = OfferIntent.ACCEPT)
+
+        val effects = effectMap.diff(state, state, obs)
+        val actions = effects.filterIsInstance<AppEffect.PerformRuleAction>()
+        assertEquals(1, actions.size)
+        assertEquals(RuleAction.ACCEPT_OFFER, actions[0].action)
+        assertEquals(acceptRef, actions[0].targetRef)
+        assertEquals("doordash.screen.offer_popup", actions[0].sourceRuleId)
+    }
+
+    @Test
+    fun `UiInput accept with NO bound target fires nothing - action unavailable`() {
+        val flowRegion = FlowRegion(
+            flow = Flow.OfferPresented,
+            pendingOffer = testPendingOffer, // no targets
+            activePlatform = Platform.DoorDash,
+        )
+        val state = AppState(regions = Regions(flow = flowRegion))
+        val obs = Observation.UiInput(timestamp = 2000L, action = OfferIntent.ACCEPT)
+
+        val effects = effectMap.diff(state, state, obs)
+        assertTrue(
+            "No target bound → no tap (fail closed)",
+            effects.filterIsInstance<AppEffect.PerformRuleAction>().isEmpty(),
+        )
     }
 
     // =========================================================================

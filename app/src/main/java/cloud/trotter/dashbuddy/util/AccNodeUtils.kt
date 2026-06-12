@@ -9,46 +9,27 @@ import timber.log.Timber
 object AccNodeUtils {
 
     /**
-     * ROBUST CLICK STRATEGY:
-     * 1. Try the node itself.
-     * 2. Try walking up the tree to find a clickable parent (Ancestor Strategy).
-     * 3. Try walking the parent's other children to find a clickable sibling (Lateral Strategy).
+     * STRICT CLICK (#425): self-or-ancestor only — no sibling fallback.
      *
-     * @param node The specific node we want to interact with.
-     * @return `true` if a click action was successfully sent to *some* node.
+     * Used for verified `RuleAction` taps, where label verification ran on
+     * *this* node's subtree: a clickable sibling can be the opposite control
+     * (Accept sits beside Decline in the offer footer), so falling laterally
+     * would tap something the verification never looked at.
      */
-    fun clickNode(node: AccessibilityNodeInfo?): Boolean {
+    fun clickNodeStrict(node: AccessibilityNodeInfo?): Boolean {
         if (node == null) {
             Timber.w("Cannot click: node is null.")
             return false
         }
-
-        // Strategy 1 & 2: Self or Parent
-        val clickableAncestor = findClickableCandidate(node)
-        if (clickableAncestor != null) {
-            Timber.i("Clicking ancestor/self (Class: ${clickableAncestor.className})")
-            return clickableAncestor.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        val clickable = findClickableCandidate(node)
+        if (clickable == null) {
+            Timber.w("Strict click: no clickable self/ancestor — refusing (no sibling fallback).")
+            return false
         }
-
-        // Strategy 3: Lateral Search (Siblings)
-        // If the text and the container aren't clickable, maybe there is an icon NEXT to the text.
-        Timber.d("Ancestor click failed. Attempting lateral search (siblings)...")
-
-        val parent = node.parent
-        if (parent != null) {
-            for (i in 0 until parent.childCount) {
-                val sibling = parent.getChild(i) ?: continue
-
-                // Don't check the node itself again, only siblings
-                if (sibling != node && sibling.isClickable) {
-                    Timber.i("Found clickable sibling! (Class: ${sibling.className}). Clicking.")
-                    return sibling.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                }
-            }
+        if (clickable != node) {
+            Timber.i("Strict click: delegating to clickable ancestor (Class: ${clickable.className})")
         }
-
-        Timber.w("Failed to find any clickable candidate (Self, Ancestor, or Sibling).")
-        return false
+        return clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     /**

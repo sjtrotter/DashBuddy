@@ -1,148 +1,209 @@
-# Design: per-rule action capabilities + load-time consent
+# Design: action targets, capabilities + load-time consent
 
-**Status:** proposal (2026-06-11). Concrete shape for #417 (make the permission
-gate real) and a safety prerequisite for #192 (matchers split — remote rules).
-Prompted by: "dynamically bundle the rule ACTIONS into a user-permission list at
-load time, if not already granted for that unique rule."
+**Status:** layers 1–3 and the capability refit implemented by #425 (2026-06-11);
+the grant store + execution gate remain #417, the consent UI is #422 PR 3.
+Supersedes the original draft of this doc (f9193c7, reconciled 51c58e1) and the
+closed #85 ("GigPlatform interface") — see *History* at the bottom.
 
-## The problem it solves
+## The model: three layers
 
-A rule can declare **actuating effects** — today `CLICK` (taps the third-party
-app's UI), `SCREENSHOT`, `SPEAK`; tomorrow likely `SWIPE`/`SCROLL`/`SET_TEXT`/
-global actions. Right now `SideEffectEngine.isPermissionGranted(tier)` returns
-`true` for everything, so any rule-declared action fires unconditionally. For
-bundled rules that's a deliberate single-user choice; once rules arrive from a
-forkable CDN (#192), it's **arbitrary UI actuation from untrusted input**.
+The core question is who may ever tap the third-party app, aimed by what, and
+checked by whom. The answer is a strict split:
 
-The blunt fix (#417) is to make the tier check real — "is the accessibility
-service enabled." But that's all-or-nothing: enabling the service to get
-recognition would also bless *every* rule's clicks. The better model, and what
-this design proposes, is **capability consent keyed on the (rule, action) pair**:
-the user approves "rule X may tap the *Accept* button," not "rules may click."
+```
+┌─ RECOGNITION ─────────── the ruleset (untrusted, forkable — #192) ──┐
+│  "What's on screen?"                                                 │
+│  → parses fields (pay $7.50, 3.2 mi)                                 │
+│  → exposes named TARGET BINDINGS:  acceptButton  → NodeRef           │
+│                                    declineButton → NodeRef           │
+│                                    expandButton  → NodeRef           │
+│  Pure observation. No decisions. No actuation. Just DATA.            │
+└───────────────────────────────────────────────────────────────────────┘
+              │ fields + targets (ride the Observation / PendingOffer)
+              ▼
+┌─ DECISION ────────────── the state machine (app-owned) ──────────────┐
+│  Evaluation (OfferEvaluator × user economy) + policy + user input    │
+│  (bubble / own-notification Accept-Decline) decide IF an action      │
+│  fires. EffectMap owns the expand decision (collapsed summary +      │
+│  bound target → settle → act). Rules can never reach in here.        │
+└───────────────────────────────────────────────────────────────────────┘
+              │ AppEffect.PerformRuleAction(action, platform, target, ruleId)
+              ▼
+┌─ ACTUATION ───────────── the executor (app-owned, verified) ─────────┐
+│  RuleAction registry = the app-owned vocabulary (#425):              │
+│    ACCEPT_OFFER / DECLINE_OFFER / EXPAND_EARNINGS                    │
+│  consent gate (#417, pending) → throttle → package scope →           │
+│  label verification → strict click (self/ancestor only)              │
+└───────────────────────────────────────────────────────────────────────┘
+```
 
-## Core model
+**Rules cannot declare actuation at all.** The `click` effect verb was removed
+from the schema and the compiler rejects it (and future gesture wires:
+`swipe`, `scroll`, `set_text`, …) with a migration error. A rule's only way to
+participate in a tap is to *bind a target* — data the app may or may not act
+on.
 
-A **RuleCapability** is the unit of consent — one actuating action a specific
-rule wants to perform:
+**Targets are the platform contract.** `RuleAction.targetBindName` defines
+well-known bind names (`acceptButton`, `declineButton`, `expandButton`). A
+platform supports an action iff its ruleset binds that name on the relevant
+screen; a missing binding means the action is unavailable there (fail to
+manual — e.g. Uber today, whose offer overlay has no binds yet). This is what
+makes "rulesets define platforms" literal: adding offer actions for a new
+platform is a rules change, not an app release. (This supersedes #85's
+per-platform Kotlin interface, which would have been N hardcoded button sets in
+compiled code — the matcher-class pattern ADR-0001 abolished. The old
+`offerActionNode()` hardcoded-ID path is deleted.)
+
+## Consent: a static half and a dynamic half
+
+Both halves are required; each catches what the other cannot.
+
+### Static: the content-pinned capability key (load time)
+
+A **RuleCapability** is one (rule, action) pair a ruleset's bindings enable —
+the unit of user consent:
 
 ```
 RuleCapability(
-    ruleId: String,        // e.g. "doordash.offer.auto_decline"
-    verb: EffectVerb,      // CLICK, SWIPE, SCREENSHOT, SPEAK, …
-    target: String?,       // semantic target signature for UI-targeting verbs
-    source: String,        // "asset:doordash.json" | "cdn:<url>" | "fork:<id>"
+    ruleId: String,          // e.g. "doordash.screen.offer_popup"
+    action: RuleAction,      // ACCEPT_OFFER | DECLINE_OFFER | EXPAND_EARNINGS
+    targetBindName: String,  // display only
+    key: String,             // the grant key — see below
+    source: String,          // "asset:doordash.json" | "cdn:<url>" | "fork:<id>"
 )
-```
 
-**Grant key = a content hash**, not the rule id alone:
-
-```
-capabilityKey = sha256( canonicalJson({
-    "rule": ruleId,
-    "verb": verb.wire,
-    "bind": targetBindName,        // the rule's bind name for the target, e.g. "declineButton"
-    "def":  <the binding DEFINITION that bind name resolves to>
+key = sha256( canonicalJson({
+    "rule":   ruleId,
+    "action": action.wire,
+    "bind":   bindName,
+    "def":    <the binding DEFINITION — its `find` predicate + flags>
 }) )
 ```
 
-This is the load-bearing security property, and the key is pinned to the
-binding **definition** — the matching predicate that *selects* the node the
-rule will act on. Implementation note (this corrects an earlier draft of this
-doc that hashed a resolved `viewId|text` target): click targets are **dynamic**
-— a `click` effect declares a *bind name* (`"$declineButton"`) and the concrete
-`NodeRef` is resolved against the live UI tree only at match time, so the
-resolved node does not exist at load and cannot be the consent key. The binding
-definition *is* known at load (the `bind` block survives compile), so that is
-what we pin to — which is strictly stronger than `viewId|text`: if a remote
-update to a **trusted rule id** keeps the bind name but repoints
-`declineButton`'s predicate at the **Accept** button, the definition changes →
-the key changes → it re-enters consent. Approving a benign `auto_decline` today
-cannot be silently escalated by a malicious update to the same id tomorrow.
+Enumeration (`RuleCompiler.enumerateCapabilities`) walks the compiled rules'
+bind blocks against the `RuleAction` registry. The key pins the binding
+**definition**: a remote update to a trusted rule id that keeps the bind name
+but repoints `declineButton`'s predicate at the Accept button changes the
+definition → changes the key → the old grant no longer covers it and it
+re-enters consent. Robustness (both tested): the key input is a canonical JSON
+object (structurally unambiguous — no in-band delimiters), recursively
+key-sorted (an innocuous reformat must not re-prompt; re-prompt fatigue trains
+click-through).
 
-Two robustness details, both load-bearing for a *security* key and both tested:
+**No key threading.** The original implementation stamped keys onto compiled
+effects and carried them through the pipeline ("the same value by
+construction") — and the carry chain silently dropped them in two places
+(deferred-click reroute, transition overrides). That chain is deleted. The
+future gate (#417) looks grants up at fire time from the enumeration, keyed by
+the `sourceRuleId` + `action` that ride `PerformRuleAction` — authoritative
+state, not threaded fields.
 
-- **Structurally-unambiguous input.** The key input is a *canonical JSON object*
-  (recursively sorted keys), not delimiter-joined fields. Rule ids and bind
-  names are arbitrary JSON strings with no charset constraint, so any in-band
-  delimiter could let distinct tuples collide; JSON string escaping makes the
-  field boundaries exact.
-- **Canonical (sorted-key) serialization.** Reordering a binding's JSON keys
-  must NOT change the key — otherwise an innocuous reformat re-prompts the user,
-  training click-through (a security anti-pattern). `canonicalJson` sorts keys
-  recursively so semantically-identical definitions hash identically.
+### Dynamic: tap-time verification (fire time) — implemented
 
-The key is computed **once at compile** (`RuleCompiler.assignCapabilityKeys`)
-and carried unchanged onto `RequestedEffect.capabilityKey`, so load-time
-enumeration and the runtime consent gate compute the same value by construction.
-Bounds and other live-node attributes are never part of the key (they shift
-constantly).
+The definition pin is necessary but not sufficient: a **byte-stable definition
+can resolve to a different control** after a platform UI update (DoorDash owns
+what `secondary_action_button_dash_plus` is), and the screen can change between
+decision and tap. So the executor (`UiInteractionHandler.performVerifiedClick`)
+re-checks the *live* resolution against anchors the ruleset cannot influence:
 
-## Lifecycle
+1. **Package scope** — only windows of `platform.packageName` are searched.
+   No package → no tap.
+2. **Label expectation** — `RuleAction.verification` is an app-owned pattern
+   the resolved node's bounded subtree texts must satisfy (buttons label via
+   child TextViews): ACCEPT_OFFER ⇒ `accept|add to route`, DECLINE_OFFER ⇒
+   `decline`. EXPAND_EARNINGS is label-free (icon-only chevron) — package
+   scope is its bar, acceptable for a read-only expansion tap. (Patterns track
+   the platform app's display language — en-US alpha; locale work is #428.)
+3. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
+   fallback is gone from this path: Accept sits beside Decline in the offer
+   footer, and verification ran on *this* node's subtree.
+4. **App-owned throttle** — `RULE_ACTION_THROTTLE_MS` per (action, platform)
+   in the engine; ruleset content cannot loosen it.
 
-1. **Enumerate at load.** Generalize the existing
-   `RuleCompiler.enumeratePermissions(rules): Set<PermissionTier>` into
-   `enumerateCapabilities(rules): List<RuleCapability>` — walk every branch's
-   effects, keep the actuating ones (a defined `EffectVerb.isActuating` set:
-   tier ∈ {ACCESSIBILITY, AUDIO} and not app-internal). App-internal effects
-   (`BUBBLE`, `LOG`, `EVALUATE_OFFER`, odometer, timers) never need consent.
-2. **Partition against the grant store.** New persisted set of granted
-   `capabilityHash`es (`RuleCapabilityDataSource` in `:core:datastore` behind a
-   Hilt qualifier → `RuleCapabilityRepository` in `:core:data` exposing
-   `grantedHashes: StateFlow<Set<String>>`, `grant(hash)`, `revoke(hash)` —
-   reactive, per the shared-StateFlow pattern from #356).
-   - `granted` → action allowed.
-   - `pending` → **recognition still runs; the actuating effect is suppressed
-     (fail closed) until granted.** Populates a user-facing list.
-3. **Consent surface.** A review screen (settings + a prompt when *new* pending
-   capabilities appear after a ruleset update) rendering each in human terms —
-   "Rule `…auto_decline` wants to **tap** *Decline offer*" — with allow / deny.
-4. **Execution gate** (this is the real #417 fix). The engine fires an actuating
-   `RequestedEffect` iff **both**:
-   - the OS-level tier is granted (accessibility service enabled / audio
-     allowed), AND
-   - `capabilityHash(effect) ∈ grantedHashes`.
-   Either missing → log + skip (fail closed). Non-actuating effects bypass the
-   capability check entirely.
+Any check failing skips the tap and logs; the user acts manually. This
+restores — in stronger, app-authored form — the runtime grounding the original
+resolved-node key had (see *History*).
 
-## Bundled vs remote: keep the alpha frictionless, make the split safe
+### What the user actually consents to (UI = #422 PR 3)
 
-`loadSingle`/`load` already thread a `source`. Policy:
+"DashBuddy may **tap Decline** for you on **DoorDash**" — per action, per
+platform, pinned to the rule's current binding definition. Consent copy is
+**app-owned string resources** (#428), never rule-supplied text: the rule
+contributes only a bind name and predicate, neither of which is driver-legible
+or trustworthy enough for a consent prompt. Trigger provenance matters for the
+gate: user-initiated taps (bubble / own-notification `UiInput`) express intent
+for that action; the *grant* check is for automation-initiated fires. Target
+verification (the dynamic half) applies to **both** — integrity is never
+skipped.
 
-- **Asset source** (the bundled rules the developer ships) → **auto-grant** on
-  load. They're trusted; no consent friction in the single-user build.
-- **CDN / fork source** (#192) → **never auto-grant**; every actuating
-  capability is pending until the user approves it. This is what makes "rules
-  delivered over CDN" safe *by construction* — a downloaded rule can recognize
-  screens immediately but cannot touch the UI without an explicit, content-
-  pinned grant.
+### Source policy (unchanged)
 
-So this design is shippable in two stages: the enumeration + grant store + gate
-land now (with asset auto-grant, so behavior is unchanged for bundled rules but
-the gate is finally real), and the consent UI + non-auto-grant remote policy
-land with the matchers work.
+- **Asset source** (bundled rules the developer ships) → auto-grant on load;
+  no consent friction in the single-user alpha.
+- **CDN / fork source** (#192) → never auto-grant; every capability pending
+  until approved. A downloaded rule can recognize screens immediately but
+  cannot aim a tap without an explicit, content-pinned grant.
+
+## Lifecycle (current state)
+
+1. **Enumerate at load** — implemented (`enumerateCapabilities`).
+2. **Partition against the grant store** — #417 (`RuleCapabilityDataSource` in
+   `:core:datastore` → repository in `:core:data`, reactive `grantedHashes`).
+   Pending ⇒ recognition still runs; the action is suppressed (fail closed).
+3. **Consent surface** — #422 PR 3 (review screen + new-pending prompt; show a
+   *diff* on re-consent so a legit update reads differently from a repoint).
+4. **Execution gate** — #417, at the `PerformRuleAction` seam in
+   `SideEffectEngine` (the tier check there is still the alpha always-true
+   stub): OS tier AND grant-lookup by (sourceRuleId, action) AND the dynamic
+   verification above. Any missing → log + skip.
+
+## Known gaps / open decisions
+
+1. **The decision surface is wider than the target.** The key pins the binding
+   definition, not the rule's `parse`/`require` blocks — a fork could keep
+   targets byte-identical and misparse $3.50 as $35.00, passing evaluation,
+   policy, and an existing grant while tapping the *genuine* Accept button.
+   Mitigations to choose from when automation policy ships (auto-accept /
+   auto-decline, `OfferAutomationConfig` — currently dormant): widen the pin
+   to the whole rule for automation-feeding intents, plausibility bounds on
+   parsed fields, and/or per-window rate caps beyond the per-fire throttle.
+2. **Multi-step decline** (#110 Stage 2c): today DECLINE_OFFER taps the
+   initial button and leaves the platform's confirm dialog to the user. A full
+   auto-decline is a staged plan over *intents* (offer screen → confirm
+   screen), each step aimed by that screen's own bound target, with in-flight
+   state + timeout + abort-to-manual.
+3. **Asset auto-grant** — keep for the alpha? (recommend yes.)
+4. **Persist explicit denials** vs treat absence as deny (recommend persist).
+5. **Revocation immediacy** — reactive grant flow should suppress immediately
+   (recommend yes).
 
 ## How it composes with the audit findings
 
-- **#417** — this *is* the real gate; `isPermissionGranted` becomes
-  `isCapabilityGranted(ruleId, effect)` = OS tier AND content-hash grant.
-- **#416 (signatures)** — orthogonal and complementary: signatures prove the
-  bundle is *authentic* (from the configured source); capabilities constrain
-  what an authentic-but-untrusted bundle may *do*. Defense in depth — you want
-  both. A signed malicious fork still can't actuate without per-action consent.
-- **#419 (sensitive rules survive replacement)** — capabilities don't replace
-  the sensitive-screen block (that's recognition-layer, not actuation), but the
-  same "remote bundles are untrusted" posture motivates both.
+- **#417** — this design *is* the real gate's shape; what remains is the grant
+  store + the lookup at the `PerformRuleAction` seam.
+- **#416 (signatures)** — orthogonal and complementary: signatures prove a
+  bundle is *authentic*; capabilities + verification constrain what an
+  authentic-but-untrusted bundle may *do*. A signed malicious fork still can't
+  aim a tap at anything that doesn't look like the consented action's control,
+  inside the platform's own package, after the app itself decided to act.
+- **#419 (sensitive rules survive replacement)** — recognition-layer, not
+  actuation; same "remote bundles are untrusted" posture motivates both.
 
-## Open decisions for the developer
+## History (why this shape)
 
-1. Target granularity: semantic vs structural (recommend semantic).
-2. Asset auto-grant: yes for the single-user alpha? (recommend yes.)
-3. Consent UX: load-time modal vs a passive "N rules want new permissions" badge
-   that opens a review screen (recommend the badge — less interrupt, and a modal
-   on every CDN update trains click-through).
-4. Denied vs merely-not-granted: persist explicit denials (so a re-load doesn't
-   re-surface a rejected capability) vs treat absence as deny and let re-loads
-   re-prompt. (Recommend persisting denials.)
-5. Revocation: a granted capability revoked in settings should suppress the
-   effect immediately (reactive grant flow) — confirm that's desired vs
-   next-load.
+- **f9193c7 (original):** keyed consent to the *resolved node* —
+  `sha256(ruleId|verb|viewId|text)`. Right instinct (pin what the button
+  actually IS), fatally incoherent for load-time consent: the resolved node
+  doesn't exist at load, and live-node signatures churn with third-party UI
+  (re-prompt fatigue).
+- **51c58e1 (reconciliation):** moved to the binding-definition key — load-time
+  enumerable and churn-stable, but discarded the runtime half instead of
+  relocating it, and its "strictly stronger" claim was wrong: definition pins
+  catch rule-side repoints, resolved-node checks catch world-side reshuffles.
+  Each alone is insufficient.
+- **#425 (this design):** keeps the definition key for the static half and
+  restores the runtime half as app-authored tap-time verification — stronger
+  than the original's trust-on-first-use signature because it's authored
+  per-action, works on first fire, and never re-prompts (a benign label change
+  fails closed to manual instead of either wrong-tapping or nagging). Also
+  removed actuation from the rule vocabulary entirely, which the original kept.

@@ -1,13 +1,13 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
-import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
+import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 
@@ -92,24 +92,26 @@ sealed class AppEffect {
      */
     data class PostOfferNotification(val evaluation: OfferEvaluation) : AppEffect()
 
-    data class ClickNode(
-        val node: UiNode,
-        val description: String = "Auto-Click"
-    ) : AppEffect()
-
     /**
-     * HUD-initiated offer action (bubble Accept/Decline) → perform the platform's offer
-     * click. Platform-agnostic; the app layer resolves the concrete node (see #85 GigPlatform).
+     * Perform an app-owned [RuleAction] on the platform app (#425) — the only
+     * path by which DashBuddy ever taps a third-party UI. [targetRef] is the
+     * ruleset-bound target (recognition data); the executor re-resolves it
+     * against the live tree scoped to the platform's package and verifies the
+     * node against the action's app-owned expectation before clicking.
+     * [sourceRuleId] is the rule that supplied the binding — consent-gate
+     * provenance (#422/#417).
      */
-    data class PerformOfferAction(
-        val action: OfferAction,
+    data class PerformRuleAction(
+        val action: RuleAction,
         val platform: Platform,
+        val targetRef: NodeRef,
+        val sourceRuleId: String?,
     ) : AppEffect()
 
     /** A rule-originated side effect. */
     data class RequestEffect(val effect: RequestedEffect) : AppEffect() {
         override val effectKey: String
-            get() = "effect:${effect.ruleId}:${effect.dedupeKey ?: effect.targetRef?.pathFingerprint ?: effect.verb.wire}"
+            get() = "effect:${effect.ruleId}:${effect.dedupeKey ?: effect.verb.wire}"
     }
 
     data class SequentialEffect(

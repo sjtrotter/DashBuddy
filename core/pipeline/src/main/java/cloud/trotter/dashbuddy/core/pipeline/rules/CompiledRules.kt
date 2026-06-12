@@ -25,11 +25,16 @@ typealias Bindings = Map<String, UiNode?>
 /**
  * A named binding declaration compiled from a `bind:` block.
  * Bindings are a screen-rule concept; click and notification rules have no bindings.
+ *
+ * [defJson] retains the binding's raw JSON definition (the `bind` entry value:
+ * `find` predicate + flags) so capability enumeration can content-pin consent
+ * keys to it (#422/#425). Null only for programmatically-built bindings.
  */
 data class Binding(
     val name: String,
     val find: (UiNode) -> UiNode?,
     val optional: Boolean = false,
+    val defJson: kotlinx.serialization.json.JsonElement? = null,
 )
 
 /**
@@ -81,6 +86,10 @@ data class CompiledRule<TInput>(
  * Unified result of matching any rule type (screen, click, or notification).
  * The consumer uses [shape] + [fields] with [ParsedFieldsFactory] to produce
  * typed `ParsedFields`.
+ *
+ * [targets] are the rule's resolved bindings as `NodeRef` fingerprints
+ * (#425) — recognition-layer data the app-owned `RuleAction` registry may
+ * later aim a tap with. Only bindings that resolved to a node appear.
  */
 data class RuleMatchResult(
     val ruleId: String,
@@ -91,37 +100,21 @@ data class RuleMatchResult(
     val outcomes: Set<Flow>? = null,
     val fields: Map<String, Any?> = emptyMap(),
     val effects: List<RequestedEffect> = emptyList(),
+    val targets: Map<String, cloud.trotter.dashbuddy.domain.pipeline.NodeRef> = emptyMap(),
     val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
 )
 
 /**
  * A compiled effect from a rule's `effects:` (or legacy `actions:`) block.
  *
- * At match time, [targetBindName] is resolved against the current bindings
- * to produce a `NodeRef` on the emitted [RequestedEffect]. For non-target
- * verbs (everything except `EffectVerb.CLICK`), [targetBindName] is null.
+ * Purely observational/app-internal (#425): actuating verbs left the rule
+ * vocabulary, so compiled effects carry no target and no consent key. Taps
+ * are app-owned `RuleAction`s aimed by the rule's *bindings* instead.
  */
 data class CompiledEffect(
     val verb: cloud.trotter.dashbuddy.domain.pipeline.EffectVerb,
-    val targetBindName: String? = null,
     val args: Map<String, String> = emptyMap(),
     val onlyIf: cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate? = null,
     val dedupeKey: String? = null,
     val throttleMs: Long? = null,
-    /**
-     * Optional delay (ms) before the effect fires. When non-null and > 0,
-     * EffectMap routes the effect through a SETTLE_UI timeout so the delay
-     * is state-machine-visible (cancellable / observable). Capped at 5000ms.
-     * Primarily used to let dynamic UI (e.g. RecyclerView pages) settle
-     * before an auto-click.
-     */
-    val delayMs: Long? = null,
-    /**
-     * Content-pinned consent key (#422) for actuating verbs
-     * ([EffectVerb.consentRequired]); null otherwise. Computed once at compile
-     * from `(ruleId, verb, the binding definition this effect targets)` and
-     * carried onto the emitted `RequestedEffect`, so load-time enumeration and
-     * the runtime consent gate compute the same value by construction.
-     */
-    val capabilityKey: String? = null,
 )
