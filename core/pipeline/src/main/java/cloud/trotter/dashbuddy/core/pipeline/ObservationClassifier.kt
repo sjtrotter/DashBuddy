@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.core.pipeline.rules.DedupeTokens
 import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
 import cloud.trotter.dashbuddy.core.pipeline.rules.TransformRegistry
@@ -112,7 +113,9 @@ class ObservationClassifier @Inject constructor(
             modeHint = result.modeHint,
             parsed = parsed,
             ruleId = result.ruleId,
-            effects = result.effects,
+            // Reserved tokens ({parsedHash}) resolve HERE — after the factory,
+            // against the typed parse's identity (#427).
+            effects = DedupeTokens.resolve(result.effects, parsed),
             targets = result.targets,
             transitionOverrides = result.transitionOverrides,
             expectedOutcomes = result.outcomes,
@@ -163,6 +166,7 @@ class ObservationClassifier @Inject constructor(
         if (ruleset != null) {
             val result = ruleset.matchFirst(event.node, platformWire, lastScreenTarget)
             if (result != null) {
+                val parsed = ParsedFields.ClickFields(intent = result.intent)
                 return Observation.Click(
                     timestamp = now,
                     captureId = null,
@@ -170,9 +174,9 @@ class ObservationClassifier @Inject constructor(
                     metadata = metadataProvider.current(),
                     flow = result.flow,
                     modeHint = result.modeHint,
-                    parsed = ParsedFields.ClickFields(intent = result.intent),
+                    parsed = parsed,
                     target = result.intent,
-                    effects = result.effects,
+                    effects = DedupeTokens.resolve(result.effects, parsed),
                     transitionOverrides = result.transitionOverrides,
                     expectedOutcomes = result.outcomes,
                     screenTarget = lastScreenTarget,
@@ -221,7 +225,7 @@ class ObservationClassifier @Inject constructor(
                     modeHint = result.modeHint,
                     parsed = parsed,
                     target = result.intent,
-                    effects = result.effects,
+                    effects = DedupeTokens.resolve(result.effects, parsed),
                     transitionOverrides = result.transitionOverrides,
                     expectedOutcomes = result.outcomes,
                 )
