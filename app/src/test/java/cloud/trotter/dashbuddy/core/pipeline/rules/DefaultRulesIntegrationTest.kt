@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Before
 import org.junit.Test
@@ -143,6 +144,40 @@ class DefaultRulesIntegrationTest {
         assertTrue(screenRuleset.ruleCount > 0)
         assertTrue(clickRuleset.ruleCount > 0)
         assertTrue(notificationRuleset.ruleCount > 0)
+    }
+
+    // =========================================================================
+    // Parse-output regression on real captures (#433)
+    // =========================================================================
+
+    @Test
+    fun `timeline task rows parse storeHint and deadline from the real bullet separator`() {
+        // The rule's extractBefore/extractAfter separator was double-encoded
+        // mojibake (" ï¿½ ") instead of the real bullet (" • ") the captures
+        // contain — extractAfter returned null, so storeHint silently parsed
+        // null on EVERY timeline screen while the intent-only golden guard
+        // stayed green (#433). This pins the parse OUTPUT on real snapshots.
+        val snapshots = TestResourceLoader.loadSnapshots("snapshots/timeline")
+        assertTrue("timeline corpus must not be empty", snapshots.isNotEmpty())
+
+        val taskEntries = snapshots.mapNotNull { (_, tree, _) ->
+            val result = screenRuleset.matchFirst(tree, platformWire = "doordash")
+                ?: return@mapNotNull null
+            if (result.intent != "timeline") return@mapNotNull null
+            val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
+                as? cloud.trotter.dashbuddy.domain.state.ParsedFields.TimelineFields
+            parsed?.tasks
+        }.flatten()
+
+        assertTrue("expected parsed timeline task entries across the corpus", taskEntries.isNotEmpty())
+        assertTrue(
+            "at least one task row must parse a storeHint (null on every row before #433)",
+            taskEntries.any { it.storeHint != null },
+        )
+        assertTrue(
+            "at least one task row must parse a deadline",
+            taskEntries.any { it.deadline != null },
+        )
     }
 
     // =========================================================================

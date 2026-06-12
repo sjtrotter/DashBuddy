@@ -221,7 +221,7 @@
                 "navigate": "sibling(1)",
                 "read": "text",
                 "transform": {
-                  "extractBefore": " ï¿½ "
+                  "extractBefore": " • "
                 }
               },
               "deadlineMillis": {
@@ -242,7 +242,7 @@
                 "read": "text",
                 "transform": [
                   {
-                    "extractBefore": " ï¿½ "
+                    "extractBefore": " • "
                   },
                   "parseDeadline"
                 ]
@@ -264,7 +264,7 @@
                 "navigate": "sibling(1)",
                 "read": "text",
                 "transform": {
-                  "extractAfter": " ï¿½ "
+                  "extractAfter": " • "
                 }
               },
               "isCurrent": {
@@ -1825,7 +1825,7 @@
       "require": {
         "allTextContainsAll": [
           "confirm pickup",
-          "loadingï¿½"
+          "loading"
         ]
       }
     },
