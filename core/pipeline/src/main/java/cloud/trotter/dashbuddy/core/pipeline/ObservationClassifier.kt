@@ -39,6 +39,9 @@ class ObservationClassifier @Inject constructor(
     var lastScreenTarget: String? = null
         private set
 
+    /** True once rulesets are published — pipelines drop frames until then (#432). */
+    val isReady: Boolean get() = interpreter.isLoaded
+
 
     // Typed entry points (#361): each event subtype returns its observation
     // subtype, so pipelines never downcast classify results.

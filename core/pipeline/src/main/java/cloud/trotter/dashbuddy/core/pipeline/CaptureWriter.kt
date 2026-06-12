@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.capture.schema.RawNotificationSchema
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 import cloud.trotter.dashbuddy.domain.state.Platform
 import timber.log.Timber
 import javax.inject.Inject
@@ -29,12 +30,27 @@ import javax.inject.Singleton
 @Singleton
 class CaptureWriter @Inject constructor(
     private val captureBus: CaptureBus,
+    private val stats: PipelineStats,
 ) {
 
     fun captureScreen(
         obs: Observation.Screen,
         event: PipelineEvent.Screen,
     ): Observation.Screen {
+        // Fail-closed backstop (#432): the sensitive gate upstream only sees
+        // screens a RULE recognized as sensitive. An UNRECOGNIZED sensitive
+        // screen classifies UNKNOWN and would be captured verbatim for triage
+        // — scan its text and drop the capture on any sensitive marker. The
+        // observation still flows (it dies at the UNKNOWN gate downstream);
+        // only the disk write is suppressed.
+        if (obs.target == UNKNOWN_TARGET) {
+            val marker = SensitiveTextMarkers.findMarker(event.tree)
+            if (marker != null) {
+                stats.onScrubbedUnknownCapture()
+                Timber.w("Capture scrubbed: UNKNOWN screen hit sensitive marker '%s'", marker)
+                return obs
+            }
+        }
         val platform = Platform.fromPackage(event.packageName).wire
         val winCtx = event.snapshot.windowContext?.let { wc ->
             WindowContextDto(
@@ -108,6 +124,16 @@ class CaptureWriter @Inject constructor(
         obs: Observation.Notification,
         raw: RawNotificationData,
     ): Observation.Notification {
+        // Same fail-closed backstop as captureScreen (#432) for UNKNOWN
+        // notification bodies.
+        if (obs.target == UNKNOWN_TARGET) {
+            val marker = SensitiveTextMarkers.findMarker(raw.toFullString())
+            if (marker != null) {
+                stats.onScrubbedUnknownCapture()
+                Timber.w("Capture scrubbed: UNKNOWN notification hit sensitive marker '%s'", marker)
+                return obs
+            }
+        }
         val platform = Platform.fromPackage(raw.packageName).wire
         val capture = EnvelopeBuilder.build(
             pipelineId = NotificationPipeline.PIPELINE_ID,

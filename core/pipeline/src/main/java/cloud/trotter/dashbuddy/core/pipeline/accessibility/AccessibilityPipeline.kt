@@ -95,6 +95,17 @@ class AccessibilityPipeline @Inject constructor(
     // ── Main pipeline ──────────────────────────────────────────────────
 
     fun output(): Flow<Observation> = merge(screenEvents(), clickEvents())
+        // Gate: drop everything until rulesets load (#432). The sensitive gate
+        // below is RULE-driven — a frame classified before rules exist would
+        // bypass it straight into the UNKNOWN capture path.
+        .filter { event ->
+            val ready = classifier.isReady
+            if (!ready) {
+                stats.onDroppedAwaitingRules()
+                Timber.w("Dropping %s — rulesets not loaded yet", event::class.simpleName)
+            }
+            ready
+        }
         // Classify through the unified rule engine (typed: FlowObservation, #361)
         .map { event -> classifier.classify(event) to event }
 
