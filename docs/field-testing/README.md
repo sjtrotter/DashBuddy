@@ -178,7 +178,7 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   - Confirmed: 1/2. **2026-06-12 (DoorDash):** dasher tapped **Accept** in the bubble → DoorDash
     registered the Accept (offer was accepted). First clean live confirmation of the rule-bound tap
     path that was broken on 06-09. Still need a second sighting — ideally the **Decline** side and
-    the **notification** surface (not just bubble Accept). (See 2026-06-12 log entry #4.)
+    the **notification** surface (not just bubble Accept). (See 2026-06-12 log entry #1.)
 
 - **Post-dash HUD: frozen summary + consistent chat (#367, PR pending).**
   Two visible fixes after a dash ends: (a) the "Last session" Duration on the idle bubble is
@@ -391,6 +391,13 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
     2026-06-07 log #1) and the app had **zero crashes** all day. The dedup held: no
     `LazyColumn` duplicate-key crash. Needs one more clean sighting (ideally
     confirming exactly one card per stop visually in the bubble).
+    **2026-06-12 (DoorDash):** crash-free still holds, but the **"exactly one card"**
+    sub-claim got a transient counter-example — a Great Greek (hand-to-customer)
+    dropoff showed **two** delivery cards while at-door, collapsing to one after the
+    paid card. Hypothesis: frozen `completed` Delivery (closed on `DELIVERY_ARRIVED`)
+    + the still-`active` Delivery card overlap, keyed `delivery:id` vs `live:delivery:id`
+    so no crash but two visible cards. Logged as 2026-06-12 entry #5 for investigation;
+    keep watching arrival-bearing dropoffs for the visible duplicate.
 
 - **Shop & Deliver items/min reaches `total/total` at the end (#302).** On a
   Shop & Deliver order, when you finish shopping (add the last item / reach
@@ -402,7 +409,7 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
     are working" (no longer freezing one short). **2026-06-12 (DoorDash):** pickup/shop
     card read **`shop 25/25 · 0.6/min`** at end of shop — the terminal `total/total`
     frame, no longer `total−1/total`. Two clean sightings → **validated** (the add-on
-    case is tracked separately under the #276 watch item). (See 2026-06-12 log entry #3.)
+    case is tracked separately under the #276 watch item). (See 2026-06-12 log entry #4.)
 
 - **⚠️ WATCH FOR RECURRENCE — mid-dash "Done Dashing!" + odometer reset (2026-06-06 #5, root cause confirmed, fix NOT yet shipped).** Confirmed once on 06-06: a
   transient **"Start your scheduled dash"** (`idle_scheduled_dash_ready`,
@@ -542,7 +549,7 @@ tap path (#425) — the same surface that was **broken on 06-09** (`Could not fi
 wrong-window search). Bumped the checklist item to 1/2; still want a second sighting covering the
 **Decline** side and the **notification** surface (not just bubble Accept).
 
-#### 5. Post-delivery earnings **auto-expand** still works — #425 EXPAND_EARNINGS + #417 gate (both 1/2)
+#### 2. Post-delivery earnings **auto-expand** still works — #425 EXPAND_EARNINGS + #417 gate (both 1/2)
 The collapsed pay breakdown **auto-expanded on its own** after a delivery, as before. Confirms the
 app-owned EXPAND_EARNINGS action path (#425) AND — implicitly — the live consent gate (#417): a
 denied capability would have left it collapsed (`Denied expand_earnings — no granted capability`),
@@ -550,7 +557,7 @@ so the asset-rule auto-grant is covering it. Together with #1 (bubble Accept), b
 taps fired with no regression. Bumped the #425 expand-earnings and #417 consent-gate checklist items
 to 1/2 each.
 
-#### 6. Bubble survives force-quit + accessibility-permission reset — #437 (1/2)
+#### 3. Bubble survives force-quit + accessibility-permission reset — #437 (1/2)
 Dasher **force-quit and reloaded the app after resetting the accessibility permission** mid-dash —
 a harder restart than a plain force-stop, since the accessibility service rebinds from scratch — and
 the bubble **reloaded with the current dash still active** (not an orphaned/empty bubble). Confirms
@@ -558,14 +565,44 @@ the bubble's dash id derives from restored state rather than the crash-suppresse
 Bumped the checklist item to 1/2; second sighting should confirm the **chat history + completed
 cards** re-populate under that same dash, not just that the dash reads active.
 
-#### 2. Shop & Deliver terminal `total/total` — #302 CONFIRMED (2/2, retired)
+#### 4. Shop & Deliver terminal `total/total` — #302 CONFIRMED (2/2, retired)
 The pickup/shop card read **`shop 25/25 · 0.6/min`** at end of shop — the terminal `total/total`
 frame, no longer the `total−1/total` off-by-one. Second clean sighting → #302 moved out of the
 watch list as validated. (The add-on / second-order-mid-shop case is still tracked under #276.)
 
+### Open questions / investigations
+
+#### 5. Transient **double drop-off card** during the at-door window (cross-refs #297)
+On the **Great Greek Mediterranean** delivery the dasher saw **two drop-off cards** while at the
+dropoff; **after** completing it and getting the **paid (PostTask) card, only one remained.** No
+crash. The dasher's read — "maybe it auto-corrected" — matches a desk hypothesis:
+
+- **Likely cause (hypothesis):** the card stack is `completed` (folded from the event log) + one
+  `active` live card. On an **arrival-bearing dropoff** (Great Greek is a hand-it-to-customer
+  restaurant order, so `DELIVERY_ARRIVED` fires), `FlowCardMapper` **closes the delivery into
+  `completed`** on `DELIVERY_ARRIVED` (`FlowCardMapper.kt:216-239`) — a frozen card with id
+  `delivery:<taskId>`. Meanwhile the state machine is still in `TaskDropoffArrived`, so
+  `LiveCardBuilder` **also builds an active Delivery card** for the same task
+  (`LiveCardBuilder.kt:80-92`), same id `delivery:<taskId>`.
+- **Why no crash (and why two cards show):** the active card is keyed `"live:${live.id}"` while the
+  completed card is keyed `it.id` (`BubbleScreen.kt:238` vs `:256`). The `live:` prefix means the two
+  keys **don't collide** — so #297's fatal duplicate-key crash is avoided (good — #297 holds) — but
+  the frozen + active cards for the **same stop render as two visible cards** during the at-door
+  window.
+- **Why it resolves to one:** on payment, `DELIVERY_COMPLETED` adds the PostTask card and the flow
+  moves to `Flow.PostTask`, so `LiveCardBuilder` now emits an **active PostTask** card (not a
+  Delivery). The duplicate active Delivery card disappears, leaving the single frozen Delivery card
+  — exactly the "only one now" the dasher saw.
+- **To confirm:** pull the Jun-12 event DB for the Great Greek task — expect `DELIVERY_ARRIVED`
+  **before** `DELIVERY_CONFIRMED`/`DELIVERY_COMPLETED` (arrival-bearing). If confirmed, this is a
+  **cosmetic transient** (a frozen+live overlap), distinct from #297's crash. One direction to weigh
+  would be suppressing the frozen `completed` card whose id matches the current `active` card's id, or
+  not closing the Delivery into `completed` until `DELIVERY_CONFIRMED` — but that's a design call for
+  the desk, **not** a concluded fix.
+
 ### Research / design (improvement ideas — explore, not yet scoped)
 
-#### 3. Offer & finished cards under-surface Shop & Deliver (item count + type badge)
+#### 6. Offer & finished cards under-surface Shop & Deliver (item count + type badge)
 Two related gaps the dasher noticed about the #324 card redesign and the completed-card stack:
 
 - **Item count is buried on the offer card.** Today the count renders only as a small footer
@@ -589,7 +626,7 @@ Two related gaps the dasher noticed about the #324 card redesign and the complet
   `FlowCardItem`. Would need to confirm where order type is known at PostTask time. A SHOP badge in
   `badgeMeta` for the offer card, by contrast, is cheap **if** a shop badge/flag reaches `Offer.badges`.
 
-#### 4. Pickup card not visually upgraded to the redesign + double-"by" wording
+#### 7. Pickup card not visually upgraded to the redesign + double-"by" wording
 The dasher reads the pickup card as **"still the old style"** next to the redesigned offer card —
 it's the line-based `DeadlineBody` (`FlowCardItem.kt:484-582`): a `HeroBig` countdown + caption rows
 (`HEB · arrived 16:39 · shop 25/25 · 0.6/min`), with none of the offer card's ring/banner/pill
