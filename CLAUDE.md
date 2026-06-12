@@ -291,14 +291,22 @@ Tests are data-driven using captured UI hierarchy JSON files under
    `AllMatchersSuite` (the golden guard asserts every `SENSITIVE/` snapshot is caught by a
    sensitive rule or flagged toxic by `SnapshotSecurityScanner`).
 5. Commit only the sorted files from their category folders (never from `INBOX/`).
+6. New corpus changes the parse-output golden — regenerate it deliberately (next section, step 4)
+   and commit `snapshots/approved-parse-output.json` together with the new snapshots.
 
 **Adding or changing a recognition rule** (there are no matcher classes to register — rules are data):
 
 1. Edit the platform's rule JSON (`$schema` gives editor autocomplete/validation against
    `docs/rules.schema.json`). Golden-corpus folder name == expected intent.
 2. Tests compile the **production** rule files via `TestRulesetFactory` — nothing else to wire up.
-3. Run `InboxProcessorTest` (sorting) and then `AllMatchersSuite` (golden guard + ruleset +
-   classifier regressions) to verify.
+3. Run `InboxProcessorTest` (sorting) and then `AllMatchersSuite` (golden guard + parse-output
+   golden + ruleset + classifier regressions) to verify.
+4. If the change legitimately alters **parse output** (`ParseOutputGoldenTest` fails, #433):
+   regenerate with `./gradlew :app:testDebugUnitTest --tests "*ParseOutputGoldenTest*"
+   -DupdateParseGolden=true`, then **review the diff of `approved-parse-output.json`** — that
+   review is the regression gate — and commit it with the rule change. The same test also
+   ratchets corpus coverage (new intents should ship with corpus) and lints dedupeKey
+   `{field}` templates against fields the rule actually parses.
 
 ## Key Technologies
 
