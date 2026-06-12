@@ -63,19 +63,6 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **Bubble dash id survives a mid-dash crash/restart (#437).**
-  The bubble's chat + card stack now derive their dash id from restored state instead of an
-  effect that crash recovery suppresses. Mid-dash, force-stop or crash the app and reopen:
-  working = the bubble's chat history and cards are attributed to the SAME dash immediately
-  (no orphaned/empty bubble until the next dash starts). Broken = empty chat/card stack after
-  a mid-dash restart, or messages landing under a null dash in the DB.
-  - Confirmed: 1/2. **2026-06-12 (DoorDash):** force-quit + reload **after resetting the
-    accessibility permission** (a harder restart than a plain force-stop — the service rebinds from
-    scratch) reloaded the bubble with the **current dash still active**. Confirms the dash id derives
-    from restored state, not the crash-suppressed effect. Needs one more clean sighting (ideally
-    confirming the chat history + completed cards re-populate under that same dash, not just that the
-    dash is active). (See 2026-06-12 log entry #6.)
-
 - **Engine latency + dedupe pack (#436).**
   Four behaviors to watch: (a) accepting/declining an offer FAST (inside ~1s of the verdict
   landing) should no longer pop a stale Accept/Decline heads-up afterwards; (b) offer verdicts
@@ -84,7 +71,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   the next screen; (d) nothing else regresses — notifications still post normally when the
   offer is left alone. Broken = stale heads-up after resolving an offer, duplicated chat
   entries after an app restart, or a missing offer notification.
-  - Confirmed: 0/2
+  - Confirmed: 0/2. **2026-06-12 (DoorDash, partial):** dasher reports offer Accept/Decline feels
+    **fully quick — no perceptible delay** (loosely supports (b) "verdicts land a touch quicker").
+    The (a) stale-heads-up-after-fast-resolve, (c) restart-dedupe, and (d) sub-cases were NOT
+    deliberately exercised — so this stays 0/2 until those are checked. (See 2026-06-12 log entry #10.)
 
 - **Per-offer dedupe now engages (#427).**
   Offer screenshot/log dedupe keys used to resolve to one shared literal, so a second distinct
@@ -113,19 +103,11 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   no longer kills the live task — the task card should survive. Broken = double "Saved" bubble,
   a delivery missing from the log, or the bubble's task card stuck on the finished delivery
   well past ~3s after the receipt.
-  - Confirmed: 0/2
-
-- **Consent gate is live — bound-target taps must still fire (#417).**
-  The always-true permission stub is gone: automation taps (the post-delivery expand chevron)
-  now require a granted capability key, and bundled rules are auto-granted at rule load.
-  Working = expand auto-tap and bubble/notification Accept/Decline behave exactly as before
-  (no regression — asset rules auto-grant covers them). Broken = a tap silently stops
-  happening and the log shows `Denied expand_earnings — no granted capability` or
-  `ACCESSIBILITY tier not granted` while the service is clearly running — capture logcat.
-  - Confirmed: 1/2. **2026-06-12 (DoorDash):** both gated automation taps fired as before — the
-    post-delivery **expand auto-tap** worked AND the **bubble Accept** clicked DoorDash (#425), so
-    the asset-rule auto-grant covered them with no regression. Needs one more clean sighting. (See
-    2026-06-12 log entry #5.)
+  - Confirmed: 1/2 (sub-case a). **2026-06-12 (DoorDash):** two separate deliveries → **exactly one
+    "Saved" bubble each** (no double-fire) — confirms (a). Sub-cases (b) stacked-order split and (c)
+    misrecognition-survival not exercised this dash. **NOTE — separate bug found:** the "Saved" bubble
+    omits the `$` sign (renders `Saved: 5.50`, not `Saved: $5.50`) — logged as 2026-06-12 entry #9.
+    (See 2026-06-12 log entry #10.)
 
 - **Uber sensitive screens now blocked + UNKNOWN-capture scrub (#432).**
   Uber finally has matcher-layer sensitive rules (wallet / Instant Pay / cash-out / bank /
@@ -158,16 +140,6 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   **capture it** — this intent has zero corpus snapshots.
   - Confirmed: 0/2
 
-- **Expand-earnings auto-tap via the new action path (#425).**
-  The post-delivery pay breakdown should auto-expand ~0.5s after the collapsed summary appears
-  (same behavior as before, but the tap now flows through the app-owned EXPAND_EARNINGS action
-  with package scoping instead of a rule-declared click). Working = breakdown expands on its own
-  and the line items parse. Broken = summary stays collapsed; grep logs for "did not fire —
-  target failed resolution/verification" (verification too strict) or "Throttled action".
-  - Confirmed: 1/2. **2026-06-12 (DoorDash):** post-delivery pay breakdown **auto-expanded** on its
-    own as before — confirms the EXPAND_EARNINGS action path AND (implicitly) the #417 consent gate
-    auto-granting the bundled-rule capability (a denied tap would have left it collapsed). Needs one
-    more clean sighting. (See 2026-06-12 log entry #5.)
 - **Bubble/notification Accept-Decline via rule-bound targets (#425).**
   Tapping Accept or Decline in DashBuddy's offer notification (or bubble) must tap the matching
   DoorDash button. The button is now aimed by the offer rule's `acceptButton`/`declineButton`
@@ -536,9 +508,30 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
 - **Branch under test:** `master` field offer-copilot build (includes the #425 rule-bound
   Accept/Decline path; the freshest watch-list items reference #437/#436/#427). Exact SHA not
   captured this session — developer to correct if needed.
-- **Field conditions:** live dash with at least one Shop & Deliver order (HEB, 25 items) and at
-  least one offer the dasher **accepted from the bubble**. Observations narrated in real time;
-  everything below is **recorded for triage — hypotheses, not concluded fixes.**
+- **Field conditions:** **two dashes this session** (a first dash, then a second later the same day).
+  At least one Shop & Deliver order (HEB, 25 items), offers accepted from the bubble, and two
+  separate deliveries on the second dash. Observations narrated in real time; everything below is
+  **recorded for triage — hypotheses, not concluded fixes.**
+
+### Bugs
+
+#### 9. "Saved: $X" earnings bubble omits the `$` sign (currency not formatted as dollars)
+Dasher flagged the post-delivery **"Saved"** bubble's amount "doesn't [render] as a dollar amount"
+and asked whether it was already fixed. **It is not.** Desk finding:
+
+- The "Saved" bubble builds its text with a **local** `formatCurrency` in the state layer —
+  `EffectMap.kt:704/710` call `formatCurrency(...)`, defined at `EffectMap.kt:870-871` as
+  `String.format(locale, "%.2f", amount)`. That format **has no `$`** — so the bubble renders
+  `Saved: 5.50`, not `Saved: $5.50`, even though the method's own docstring describes the output as
+  `"Saved: $X"` (`EffectMap.kt:666`).
+- It **does** zero-fill the cents (`%.2f` → `5.5` becomes `5.50`), so if the dasher saw a missing
+  trailing zero that'd point elsewhere — **capture the exact on-screen string** next time to settle
+  which symptom it is. Most likely the perceived defect is the **missing `$`**.
+- **SSOT smell (#358 family):** this is a **separate, divergent currency formatter** from the
+  app-wide `DashFormats.money` (`DashFormats.kt:25`, `"$%.2f"`, which *does* include the `$`). The
+  docstring even flags it as a "known wart" pending #366 (move rendered copy out of the state layer).
+  **Hypothesis:** the clean fix routes the bubble copy through the one money formatter rather than a
+  local `%.2f`, but where the formatter can live is bound up with #366 — a desk call, not a drop-in.
 
 ### Verification TODOs (confirmations this session)
 
@@ -549,30 +542,41 @@ tap path (#425) — the same surface that was **broken on 06-09** (`Could not fi
 wrong-window search). Bumped the checklist item to 1/2; still want a second sighting covering the
 **Decline** side and the **notification** surface (not just bubble Accept).
 
-#### 2. Post-delivery earnings **auto-expand** still works — #425 EXPAND_EARNINGS + #417 gate (both 1/2)
+#### 2. Post-delivery earnings **auto-expand** — #425 EXPAND_EARNINGS + #417 gate CONFIRMED (2/2, both retired)
 The collapsed pay breakdown **auto-expanded on its own** after a delivery, as before. Confirms the
 app-owned EXPAND_EARNINGS action path (#425) AND — implicitly — the live consent gate (#417): a
 denied capability would have left it collapsed (`Denied expand_earnings — no granted capability`),
-so the asset-rule auto-grant is covering it. Together with #1 (bubble Accept), both gated automation
-taps fired with no regression. Bumped the #425 expand-earnings and #417 consent-gate checklist items
-to 1/2 each.
+so the asset-rule auto-grant is covering it. **Dash 1:** expand fired + bubble Accept (#1) fired —
+both gated taps with no regression. **Dash 2 (2026-06-12):** the post-delivery expand auto-tapped
+**again** — second clean sighting. Two independent dashes of gated automation taps firing with zero
+`Denied`/throttle → both the **#425 expand-earnings** and **#417 consent-gate** checklist items moved
+out as validated (the gate reliably auto-grants bundled-rule capabilities).
 
-#### 3. Bubble survives force-quit + accessibility-permission reset — #437 (1/2)
-Dasher **force-quit and reloaded the app after resetting the accessibility permission** mid-dash —
-a harder restart than a plain force-stop, since the accessibility service rebinds from scratch — and
-the bubble **reloaded with the current dash still active** (not an orphaned/empty bubble). Confirms
-the bubble's dash id derives from restored state rather than the crash-suppressed effect (#437).
-Bumped the checklist item to 1/2; second sighting should confirm the **chat history + completed
-cards** re-populate under that same dash, not just that the dash reads active.
-**Caveat (see investigation #8):** this clean re-attach was for a restart **while the dash was
-still active**. A separate moment this session — after a **crash with no active dash** — did **not**
-fall back to the last dash; the bubble **cleared out** entirely. So #437's active-dash re-attach
-holds, but the post-crash "show the last dash" fallback appears not to survive process death.
+#### 3. Bubble re-attaches to the active dash across a restart — #437 CONFIRMED (2/2, retired)
+**Dash 1 (2026-06-12):** force-quit + reload **after resetting the accessibility permission** mid-dash
+— a harder restart than a plain force-stop, since the accessibility service rebinds from scratch —
+reloaded the bubble with the **current dash still active**. **Dash 2 (2026-06-12):** after a restart
+the **completed cards repopulated** (not just the dash reading active) — the missing half of the
+first sighting. Two clean sightings of the mid-dash active-dash re-attach → #437 moved out as
+validated. The bubble's dash id derives from restored state, not the crash-suppressed effect.
+**Caveat — does NOT cover the no-active-dash case (see investigation #8):** both #437 sightings were
+restarts **while a dash was active**. Separately this session, after a **crash with no active dash**,
+the bubble **cleared out** instead of showing the last dash — that's a distinct gap tracked as #8,
+not part of #437's validated scope.
 
 #### 4. Shop & Deliver terminal `total/total` — #302 CONFIRMED (2/2, retired)
 The pickup/shop card read **`shop 25/25 · 0.6/min`** at end of shop — the terminal `total/total`
 frame, no longer the `total−1/total` off-by-one. Second clean sighting → #302 moved out of the
 watch list as validated. (The add-on / second-order-mid-shop case is still tracked under #276.)
+
+#### 10. "Saved" fires once per delivery (#431 sub-case a, 1/2) + offers feel instant (#436 partial)
+**Dash 2** had two separate deliveries and each produced **exactly one "Saved" bubble** — no
+double-fire. Confirms #431 receipt-grace sub-case (a) ("Saved" fires exactly once per delivery);
+bumped that checklist item to 1/2. The (b) stacked-order split and (c) misrecognition-survival
+sub-cases were not exercised. (The bubble's currency formatting is bug #9 above — separate from the
+once-per-delivery behavior, which is correct.) Separately, the dasher reports offer **Accept/Decline
+feels fully quick — no perceptible delay** (loosely supports #436 (b) "verdicts land a touch
+quicker"); #436 stays 0/2 since its dedupe/restart sub-cases weren't deliberately tested.
 
 ### Open questions / investigations
 
