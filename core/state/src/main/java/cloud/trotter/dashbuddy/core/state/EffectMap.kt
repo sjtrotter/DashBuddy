@@ -164,13 +164,16 @@ class EffectMap @Inject constructor() {
             prevOffer.offerHash == nextOffer.offerHash &&
             prevOffer.evaluation == null
         ) {
-            add(AppEffect.PostOfferNotification(landedEval))
+            add(AppEffect.PostOfferNotification(landedEval, nextOffer.offerHash))
             add(AppEffect.SpeakOffer(landedEval))
         }
 
         // Offer resolved (accepted/declined/timeout)
         if (prevOffer != null && nextOffer == null) {
             val outcome = resolveOfferOutcome(obs, prevOffer)
+            // Abort a notification still waiting out its post delay (#436) —
+            // an Accept/Decline heads-up must not land after the offer is gone.
+            add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
             add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp)))
 
             if (outcome == AppEventType.OFFER_TIMEOUT) {

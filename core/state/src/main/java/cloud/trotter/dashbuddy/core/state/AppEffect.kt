@@ -98,7 +98,20 @@ sealed class AppEffect {
      * fired inline from the [EvaluateOffer] loopback handler — so the offer's UI side-effects stay
      * first-class and testable. The app layer formats the summary + persona from the evaluation.
      */
-    data class PostOfferNotification(val evaluation: OfferEvaluation) : AppEffect()
+    data class PostOfferNotification(
+        val evaluation: OfferEvaluation,
+        /** Keys the engine's delayed post so [CancelOfferNotification] can abort it (#436). */
+        val offerHash: String?,
+    ) : AppEffect()
+
+    /**
+     * Abort a pending (not-yet-posted) offer notification (#436). Emitted by
+     * [EffectMap] when the offer resolves (accept/decline/timeout): the post
+     * is delayed ~750ms behind the screenshot settle, so without this an
+     * actionable Accept/Decline heads-up could land AFTER the offer was
+     * already gone.
+     */
+    data class CancelOfferNotification(val offerHash: String?) : AppEffect()
 
     /**
      * Perform an app-owned [RuleAction] on the platform app (#425) — the only

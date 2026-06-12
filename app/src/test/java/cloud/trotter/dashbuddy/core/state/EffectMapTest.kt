@@ -219,6 +219,8 @@ class EffectMapTest {
         val posts = effects.filterIsInstance<AppEffect.PostOfferNotification>()
         assertEquals("Exactly one PostOfferNotification", 1, posts.size)
         assertEquals("Carries the landed evaluation", testEvaluation, posts[0].evaluation)
+        // Keys the engine's delayed post so an offer-resolved cancel can abort it (#436).
+        assertEquals("Carries the offer hash", "hash-123", posts[0].offerHash)
         // Spoken read also fires on eval-landing, carrying the same evaluation.
         val spoken = effects.filterIsInstance<AppEffect.SpeakOffer>()
         assertEquals("Exactly one SpeakOffer", 1, spoken.size)
@@ -257,6 +259,26 @@ class EffectMapTest {
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_DECLINED))
+    }
+
+    @Test
+    fun `a resolved offer emits CancelOfferNotification for its hash`() {
+        // The heads-up post is delayed ~750ms behind the screenshot settle —
+        // resolving the offer inside that window must abort the post (#436).
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(lastClickIntent = "decline_offer"),
+            ),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.Idle),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        val cancels = effects.filterIsInstance<AppEffect.CancelOfferNotification>()
+        assertEquals(1, cancels.size)
+        assertEquals("hash-123", cancels[0].offerHash)
     }
 
     @Test
