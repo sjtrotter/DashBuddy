@@ -128,7 +128,10 @@ the state machine). Snapshots are attributed to the window's *real* package (not
 our own overlay is dropped (#4 / PR #334). Frame admission is `FrameGate` (identity dedup +
 content-hash rolling suppression of UNKNOWN frames, #360); envelope assembly is the shared
 `CaptureWriter` (#361); `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
-all collectors, so side effects (captures, dedup state) can never double-run (#361).
+all collectors, so side effects (captures, dedup state) can never double-run (#361). The merged
+upstream is supervised — a crash logs + counts a restart and resubscribes with backoff instead of
+silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping failure,
+and restart (periodic summary log line).
 
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + `assets/rules/`)
 

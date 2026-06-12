@@ -52,6 +52,7 @@ class PipelineV2ShareTest {
         val pipeline = PipelineV2(
             accessibilityPipeline = accessibilityPipeline,
             notificationPipeline = notificationPipeline,
+            stats = PipelineStats(),
             scope = backgroundScope,
         )
 

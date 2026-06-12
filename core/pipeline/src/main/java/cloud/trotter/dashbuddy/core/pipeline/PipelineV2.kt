@@ -16,6 +16,7 @@ import javax.inject.Singleton
 class PipelineV2 @Inject constructor(
     accessibilityPipeline: AccessibilityPipeline,
     notificationPipeline: NotificationPipeline,
+    stats: PipelineStats,
     @param:ApplicationScope scope: CoroutineScope,
 ) {
     /**
@@ -25,11 +26,16 @@ class PipelineV2 @Inject constructor(
      * them, double-writing captures and racing the dedup state. One shared
      * upstream collector now feeds all subscribers; both sub-pipelines emit
      * Observation subtypes, which extend StateEvent.
+     *
+     * The merged upstream is [supervised] (#430): a crash anywhere in the
+     * chain logs + counts a restart and resubscribes with backoff instead of
+     * silencing all sensing for the rest of the process.
      */
     val events: SharedFlow<StateEvent> = merge(
         accessibilityPipeline.output(),
         notificationPipeline.output(),
     )
+        .supervised(stats, tag = "sensing")
         // No flowOn: shareIn runs the single upstream collector in [scope],
         // whose dispatcher is Default in production and virtual in tests.
         .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 0)
