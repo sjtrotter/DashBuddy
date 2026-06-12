@@ -52,6 +52,14 @@ android {
 
     buildTypes {
         release {
+            // R8 posture (#434): minify stays OFF until the remaining
+            // reflective surfaces are keep-ruled or removed — Gson over
+            // EventMetadata in DashBuddyApplication.createMetadata(), and
+            // kotlinx-serialization's generated serializers are safe but
+            // unaudited under shrinking. The hot-path reflection that made
+            // this dangerous (EffectMap's gate extraction) was replaced by
+            // sealed ParsedFields.toFieldMap() in #434. Flipping this on
+            // without that audit silently breaks reflective code paths.
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(

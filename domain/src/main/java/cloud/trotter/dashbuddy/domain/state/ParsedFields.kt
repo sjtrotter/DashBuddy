@@ -33,10 +33,23 @@ sealed class ParsedFields {
      */
     open fun dedupeHash(): Int = 0
 
+    /**
+     * Structural fields for effect-gate evaluation (`onlyIf`, #345/#434) —
+     * every constructor property EXCEPT the open [activity] discriminator
+     * (rules gate on structural fields, not the classification tag).
+     *
+     * Hand-written and exhaustive over the sealed hierarchy, replacing the
+     * old Java reflection in EffectMap: rename-proof under R8/minification
+     * and cheaper on the hot diff path. `ParsedFieldsFieldMapTest` asserts
+     * every subtype's map stays in sync with its constructor.
+     */
+    abstract fun toFieldMap(): Map<String, Any?>
+
     @Serializable
 
     data object None : ParsedFields() {
         override val activity: String? = null
+        override fun toFieldMap(): Map<String, Any?> = emptyMap()
     }
 
     @Serializable
@@ -57,6 +70,16 @@ sealed class ParsedFields {
          */
         val startingDash: Boolean = false,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "zoneName" to zoneName,
+            "sessionType" to sessionType,
+            "sessionPay" to sessionPay,
+            "waitTimeEstimate" to waitTimeEstimate,
+            "isHeadingBackToZone" to isHeadingBackToZone,
+            "spotSaveDeadline" to spotSaveDeadline,
+            "startingDash" to startingDash,
+        )
+
         override fun dedupeHash(): Int {
             var h = zoneName.hashCode()
             h = 31 * h + sessionType.hashCode()
@@ -71,6 +94,10 @@ sealed class ParsedFields {
         override val activity: String? = null,
         val parsedOffer: ParsedOffer,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "parsedOffer" to parsedOffer,
+        )
+
         override fun dedupeHash(): Int = parsedOffer.offerHash.hashCode()
     }
 
@@ -90,6 +117,20 @@ sealed class ParsedFields {
         val redCardTotal: Double? = null,
         val arrivalConfirmed: Boolean = false,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "phase" to phase,
+            "subFlow" to subFlow,
+            "storeName" to storeName,
+            "storeAddress" to storeAddress,
+            "customerNameHash" to customerNameHash,
+            "customerAddressHash" to customerAddressHash,
+            "deadline" to deadline,
+            "itemsRemaining" to itemsRemaining,
+            "itemsShopped" to itemsShopped,
+            "redCardTotal" to redCardTotal,
+            "arrivalConfirmed" to arrivalConfirmed,
+        )
+
         override fun dedupeHash(): Int {
             var h = phase.hashCode()
             h = 31 * h + subFlow.hashCode()
@@ -122,6 +163,18 @@ sealed class ParsedFields {
         val offersAccepted: Int? = null,
         val offersTotal: Int? = null,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "totalPay" to totalPay,
+            "appPay" to appPay,
+            "customerTips" to customerTips,
+            "parsedPay" to parsedPay,
+            "isExpanded" to isExpanded,
+            "expandButtonId" to expandButtonId,
+            "sessionEarnings" to sessionEarnings,
+            "offersAccepted" to offersAccepted,
+            "offersTotal" to offersTotal,
+        )
+
         override fun dedupeHash(): Int {
             var h = totalPay.hashCode()
             h = 31 * h + appPay.hashCode()
@@ -140,6 +193,14 @@ sealed class ParsedFields {
         val offersTotal: Int? = null,
         val weeklyEarnings: Double? = null,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "totalEarnings" to totalEarnings,
+            "sessionDurationMillis" to sessionDurationMillis,
+            "offersAccepted" to offersAccepted,
+            "offersTotal" to offersTotal,
+            "weeklyEarnings" to weeklyEarnings,
+        )
+
         override fun dedupeHash(): Int = totalEarnings.hashCode()
     }
 
@@ -150,6 +211,11 @@ sealed class ParsedFields {
         val remainingText: String? = null,
         val remainingMillis: Long? = null,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "remainingText" to remainingText,
+            "remainingMillis" to remainingMillis,
+        )
+
         // Paused is a single state — identity is just "paused".
         override fun dedupeHash(): Int = "paused".hashCode()
     }
@@ -164,6 +230,14 @@ sealed class ParsedFields {
         val endsAtMillis: Long? = null,
         val tasks: List<TimelineTaskEntry> = emptyList(),
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "sessionEarnings" to sessionEarnings,
+            "offerEarnings" to offerEarnings,
+            "endsAtText" to endsAtText,
+            "endsAtMillis" to endsAtMillis,
+            "tasks" to tasks,
+        )
+
         override fun dedupeHash(): Int {
             var h = sessionEarnings.hashCode()
             h = 31 * h + tasks.size
@@ -188,6 +262,21 @@ sealed class ParsedFields {
         val itemsWrongOrMissingRate: Double? = null,
         val lifetimeShoppingOrders: Int? = null,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "acceptanceRate" to acceptanceRate,
+            "completionRate" to completionRate,
+            "onTimeRate" to onTimeRate,
+            "customerRating" to customerRating,
+            "deliveriesLast30Days" to deliveriesLast30Days,
+            "lifetimeDeliveries" to lifetimeDeliveries,
+            "originalItemsFoundRate" to originalItemsFoundRate,
+            "totalItemsFoundRate" to totalItemsFoundRate,
+            "substitutionIssuesRate" to substitutionIssuesRate,
+            "itemsWithQualityIssuesRate" to itemsWithQualityIssuesRate,
+            "itemsWrongOrMissingRate" to itemsWrongOrMissingRate,
+            "lifetimeShoppingOrders" to lifetimeShoppingOrders,
+        )
+
         override fun dedupeHash(): Int {
             var h = customerRating.hashCode()
             h = 31 * h + lifetimeDeliveries.hashCode()
@@ -199,13 +288,17 @@ sealed class ParsedFields {
 
     data class SensitiveFields(
         override val activity: String? = null,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = emptyMap()
+    }
 
     @Serializable
 
     data class NoiseFields(
         override val activity: String? = null,
-    ) : ParsedFields()
+    ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = emptyMap()
+    }
 
     @Serializable
 
@@ -215,6 +308,12 @@ sealed class ParsedFields {
         val nodeId: String? = null,
         val nodeText: String? = null,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "intent" to intent,
+            "nodeId" to nodeId,
+            "nodeText" to nodeText,
+        )
+
         // Every click is unique — identity() returns null for ClickFields
         // observations (#366), an explicit never-dedupe signal.
     }
@@ -229,6 +328,14 @@ sealed class ParsedFields {
         val deliveredAt: String? = null,
         val rawText: String? = null,
     ) : ParsedFields() {
+        override fun toFieldMap(): Map<String, Any?> = mapOf(
+            "intent" to intent,
+            "amount" to amount,
+            "storeName" to storeName,
+            "deliveredAt" to deliveredAt,
+            "rawText" to rawText,
+        )
+
         override fun dedupeHash(): Int {
             var h = intent.hashCode()
             h = 31 * h + amount.hashCode()
