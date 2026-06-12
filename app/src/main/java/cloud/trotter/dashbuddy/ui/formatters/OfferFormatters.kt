@@ -12,6 +12,15 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+
+/** The persona that voices an offer verdict's notification (moved from the engine, #436). */
+fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {
+    OfferAction.ACCEPT -> ChatPersona.GoodOffer
+    OfferAction.DECLINE -> ChatPersona.BadOffer
+    OfferAction.MANUAL_REVIEW -> ChatPersona.Inspector
+    OfferAction.NOTHING -> ChatPersona.Inspector
+}
 
 /**
  * Formatted offer summary for the heads-up notification. Built with **Android** text spans — the

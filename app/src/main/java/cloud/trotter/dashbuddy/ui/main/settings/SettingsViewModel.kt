@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,8 +23,10 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     // --- STATE ---
-    // Combine multiple data sources into one Config object for the UI
-    val evaluationConfig: StateFlow<EvaluationConfig> = strategyRepository.evaluationConfigFlow
+    // The repo materializes the config (#436); the UI just narrows null
+    // (pre-first-load) to a renderable default.
+    val evaluationConfig: StateFlow<EvaluationConfig> = strategyRepository.evaluationConfig
+        .filterNotNull()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EvaluationConfig())
 
     // --- ACTIONS ---

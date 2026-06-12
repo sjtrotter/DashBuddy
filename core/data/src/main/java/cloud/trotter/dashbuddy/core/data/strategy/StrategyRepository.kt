@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -156,7 +157,16 @@ class StrategyRepository @Inject constructor(
         declineMinRatio
     )
 
-    val evaluationConfigFlow: Flow<EvaluationConfig> = combine(
+    /**
+     * THE materialized evaluation config (#436): eagerly shared so the
+     * side-effect engine's per-offer read is a value lookup instead of a cold
+     * DataStore combine inside its single serialized worker (head-of-line
+     * latency on every offer). Null until the first DataStore emission —
+     * consumers `filterNotNull()` rather than evaluate against a guessed
+     * default (mirrors [evidenceConfig]'s pattern, but fail-*waiting* instead
+     * of fail-closed: an offer must never be scored with wrong economics).
+     */
+    val evaluationConfig: StateFlow<EvaluationConfig?> = combine(
         scoringRules,
         protectStatsMode,
         allowShopping,
@@ -168,7 +178,7 @@ class StrategyRepository @Inject constructor(
             allowShopping = shop,
             userEconomy = economy,
         )
-    }
+    }.stateIn(scope, SharingStarted.Eagerly, null)
 
 
     suspend fun clearPreferences() {

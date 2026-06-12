@@ -63,6 +63,16 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Engine latency + dedupe pack (#436).**
+  Four behaviors to watch: (a) accepting/declining an offer FAST (inside ~1s of the verdict
+  landing) should no longer pop a stale Accept/Decline heads-up afterwards; (b) offer verdicts
+  should land a touch quicker (config no longer read cold per offer); (c) relaunching the app
+  mid-dash (non-crash restart) should NOT duplicate session-start bubbles or re-log events on
+  the next screen; (d) nothing else regresses — notifications still post normally when the
+  offer is left alone. Broken = stale heads-up after resolving an offer, duplicated chat
+  entries after an app restart, or a missing offer notification.
+  - Confirmed: 0/2
+
 - **Per-offer dedupe now engages (#427).**
   Offer screenshot/log dedupe keys used to resolve to one shared literal, so a second distinct
   offer within 60s was silently swallowed. Now keyed per-offer via `{parsedHash}`. Watch on a

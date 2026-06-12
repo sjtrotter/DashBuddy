@@ -16,9 +16,12 @@ import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.state.effects.OfferActionReceiver
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId // <-- Your new UI Formatter!
+import cloud.trotter.dashbuddy.ui.formatters.notificationPersona
+import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -199,8 +202,15 @@ class BubbleManager @Inject constructor(
         notificationManager.notify(BUBBLE_NOTIFICATION_ID, builder.build())
     }
 
-    /** Post the offer evaluation as a heads-up notification with Accept / Decline action buttons. */
-    fun postOfferNotification(summary: CharSequence, persona: ChatPersona) {
+    /**
+     * Post the offer evaluation as a heads-up notification with Accept /
+     * Decline action buttons. Formatting (Spannable summary + persona)
+     * happens HERE at the UI edge (#436) — the side-effect engine hands over
+     * the domain evaluation and stays free of Android text types.
+     */
+    fun postOfferNotification(evaluation: OfferEvaluation) {
+        val summary = evaluation.toNotificationSummary()
+        val persona = evaluation.notificationPersona()
         Timber.tag("Chat").i("[${persona.displayName}]: $summary")
         scope.launch { chatRepository.saveMessage(_activeDashId.value, summary.toString(), persona) }
         showNotification(summary, persona, expand = false, offerActionable = true)

@@ -7,7 +7,6 @@ import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
-import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
@@ -21,7 +20,6 @@ import cloud.trotter.dashbuddy.core.state.EffectExecutor
 import cloud.trotter.dashbuddy.core.state.MetadataProvider
 import cloud.trotter.dashbuddy.domain.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
-import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -35,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -75,6 +74,10 @@ class SideEffectEngine @Inject constructor(
     // Action throttle tracker: effectKey → last fired timestamp
     private val actionLastFiredAt = ConcurrentHashMap<String, Long>()
 
+    // Offer notifications waiting out their post delay, keyed by offerHash so
+    // an offer-resolved CancelOfferNotification can abort the post (#436).
+    private val pendingOfferNotifications = ConcurrentHashMap<String, Job>()
+
     companion object {
         /** Default throttle between repeated firings of the same action. */
         const val DEFAULT_ACTION_THROTTLE_MS = 500L
@@ -95,6 +98,12 @@ class SideEffectEngine @Inject constructor(
 
         /** Keep effects_fired idempotency rows for 48h (#364). */
         private const val EFFECTS_RETENTION_MS = 48 * 60 * 60 * 1000L
+
+        /** Prune the throttle map past this size (#436) — a slow per-offer leak otherwise. */
+        private const val THROTTLE_MAP_PRUNE_THRESHOLD = 256
+
+        /** Entries older than this can never gate again (≥ any declared throttle window). */
+        private const val THROTTLE_ENTRY_TTL_MS = 10 * 60 * 1000L
     }
 
     /**
@@ -157,13 +166,15 @@ class SideEffectEngine @Inject constructor(
     }
 
     private suspend fun execute(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
-        // Idempotency: skip keyed effects already fired
+        // Idempotency: skip keyed effects already fired. Consulted on the LIVE
+        // path too (#436) — a non-crash restart used to re-fire keyed external
+        // effects on re-observation because the check was recovery-only. The
+        // table is pruned at 48h, so a key is "already fired" only within that
+        // window (matching the snapshot horizon recovery replays over).
         val key = effect.effectKey
-        if (key != null && recovering) {
-            if (effectsFiredDao.hasBeenFired(key)) {
-                Timber.d("Skipping already-fired effect: %s", key)
-                return
-            }
+        if (key != null && effectsFiredDao.hasBeenFired(key)) {
+            Timber.d("Skipping already-fired effect: %s", key)
+            return
         }
 
         // Suppress external effects during recovery
@@ -221,7 +232,7 @@ class SideEffectEngine @Inject constructor(
                     )
                     return
                 }
-                actionLastFiredAt[throttleKey] = now
+                stampThrottle(throttleKey, now)
                 Timber.i("Performing %s on %s", effect.action.wire, effect.platform.wire)
                 val clicked = uiInteractionHandler.performVerifiedClick(
                     ref = effect.targetRef,
@@ -246,8 +257,12 @@ class SideEffectEngine @Inject constructor(
                     Timber.v("Throttled effect: %s", effectKey)
                     return
                 }
-                actionLastFiredAt[effectKey] = now
-                dispatchRuleEffect(effect.effect)
+                stampThrottle(effectKey, now)
+                // A DENIED effect (tier or evidence gate) must not be marked
+                // fired (#436): once gates are real (#417/#426), marking a
+                // denial would make the effect "already fired" after the user
+                // grants it — skipped on recovery and, now, on the live path.
+                if (!dispatchRuleEffect(effect.effect)) return
             }
 
             is AppEffect.PlayNotificationSound -> { /* Implementation */
@@ -270,7 +285,12 @@ class SideEffectEngine @Inject constructor(
                 // Loopback only: evaluate, then emit the decision back to the state machine. The
                 // notification is posted by the PostOfferNotification effect EffectMap emits once
                 // the evaluation lands on the pending offer — keeps this handler thin.
-                val config = strategyRepository.evaluationConfigFlow.first()
+                // Eagerly-materialized config (#436): a value read after first
+                // load instead of a cold DataStore combine blocking the worker
+                // per offer; filterNotNull means an offer arriving before the
+                // first load WAITS for real economics rather than scoring
+                // against a guessed default.
+                val config = strategyRepository.evaluationConfig.filterNotNull().first()
                 val result = offerEvaluator.evaluate(effect.parsedOffer, config)
                 // Emit the loopback observation directly (#402): the old
                 // OfferEvaluationEvent was a 1:1 shim the bridge re-typed.
@@ -290,14 +310,27 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.PostOfferNotification -> {
                 // The bubble can't auto-expand from the background (#110 field test), so surface the
                 // evaluation as a heads-up notification with Accept/Decline actions. Delayed so it
-                // lands AFTER the offer screenshot's settle + capture (clean frame).
-                val summary = effect.evaluation.toNotificationSummary()
-                val persona = offerPersona(effect.evaluation.action)
-                // Detached: the delay must not block the queue (#351).
-                engineScope.launch {
+                // lands AFTER the offer screenshot's settle + capture (clean frame). Formatting is
+                // BubbleManager's job at the UI edge (#436) — no Android text types here.
+                // Detached: the delay must not block the queue (#351). Tracked
+                // by offerHash with a self-removing completion handler (the
+                // #406 timer pattern) so an offer resolved inside the delay
+                // window cancels the post instead of surfacing an actionable
+                // Accept/Decline for an offer that's already gone (#436).
+                val hashKey = effect.offerHash ?: "no-hash"
+                pendingOfferNotifications[hashKey]?.cancel()
+                val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
-                    bubbleManager.postOfferNotification(summary, persona)
+                    bubbleManager.postOfferNotification(effect.evaluation)
                 }
+                job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, job) }
+                pendingOfferNotifications[hashKey] = job
+                job.start()
+            }
+
+            is AppEffect.CancelOfferNotification -> {
+                // Untracking happens via the job's self-removing completion handler.
+                pendingOfferNotifications[effect.offerHash ?: "no-hash"]?.cancel()
             }
 
             // --- TIMING LOGIC (Pure Coroutines) ---
@@ -337,15 +370,19 @@ class SideEffectEngine @Inject constructor(
     /**
      * Dispatch a [RequestedEffect] to the appropriate handler based on its verb.
      * Permission tier is checked before execution — denied verbs are logged and skipped.
+     *
+     * @return false when a gate (tier or evidence) DENIED the effect — the
+     *   caller must then skip the `markFired` tail (#436): a denial recorded
+     *   as fired would be skipped forever once the user grants the gate.
      */
-    private suspend fun dispatchRuleEffect(e: RequestedEffect) {
+    private suspend fun dispatchRuleEffect(e: RequestedEffect): Boolean {
         if (!permissionTierChecker.isGranted(e.verb.tier)) {
             Timber.w("Denied effect %s — permission tier %s not granted", e.verb, e.verb.tier)
-            return
+            return false
         }
         when (e.verb) {
             // --- Observation-driven verbs ---
-            EffectVerb.SCREENSHOT -> screenshotFromArgs(e.args)
+            EffectVerb.SCREENSHOT -> return screenshotFromArgs(e.args)
             EffectVerb.BUBBLE -> bubbleFromArgs(e.args)
             EffectVerb.LOG -> logFromArgs(e.args)
             // Deliberate no-ops (#359): offer evaluation + speech fire from
@@ -366,11 +403,13 @@ class SideEffectEngine @Inject constructor(
             )
             EffectVerb.CANCEL_TIMEOUT -> cancelTimeoutFromArgs(e.args)
         }
+        return true
     }
 
-    private fun screenshotFromArgs(args: Map<String, String>) {
+    /** @return false when the evidence gate suppressed the capture (#436). */
+    private fun screenshotFromArgs(args: Map<String, String>): Boolean {
         val prefix = args["prefix"] ?: "Rule"
-        captureEvidence(
+        return captureEvidence(
             AppEffect.CaptureScreenshot(
                 filenamePrefix = prefix,
                 // Rule-declared (#426): the rule names its consent bucket via
@@ -386,17 +425,35 @@ class SideEffectEngine @Inject constructor(
      * `EvidenceConfig` allows its category (master toggle AND category
      * toggle; uncategorized → never). The config's startup default is
      * master-off, so the gate also fails closed before DataStore loads.
+     *
+     * @return false when suppressed — a suppression is a denial, never a fire (#436).
      */
-    private fun captureEvidence(effect: AppEffect.CaptureScreenshot) {
+    private fun captureEvidence(effect: AppEffect.CaptureScreenshot): Boolean {
         val config = strategyRepository.evidenceConfig.value
         if (!config.allows(effect.category)) {
             Timber.i(
                 "Evidence capture suppressed (%s, category=%s) — EvidenceConfig denies it",
                 effect.filenamePrefix, effect.category,
             )
-            return
+            return false
         }
         screenShotHandler.capture(engineScope, effect)
+        return true
+    }
+
+    /**
+     * Record a throttle stamp, pruning stale entries first (#436): the map
+     * gains a key per offer/action and previously grew unboundedly over a
+     * long session. Entries older than [THROTTLE_ENTRY_TTL_MS] (≥ any
+     * declared throttle window) can never gate again — drop them once the
+     * map is past [THROTTLE_MAP_PRUNE_THRESHOLD].
+     */
+    private fun stampThrottle(key: String, now: Long) {
+        if (actionLastFiredAt.size > THROTTLE_MAP_PRUNE_THRESHOLD) {
+            val cutoff = now - THROTTLE_ENTRY_TTL_MS
+            actionLastFiredAt.entries.removeIf { it.value < cutoff }
+        }
+        actionLastFiredAt[key] = now
     }
 
     private fun bubbleFromArgs(args: Map<String, String>) {
@@ -490,14 +547,6 @@ class SideEffectEngine @Inject constructor(
         "good_offer" -> ChatPersona.GoodOffer
         "bad_offer" -> ChatPersona.BadOffer
         else -> ChatPersona.Dispatcher
-    }
-
-    /** Map an offer verdict to the persona that voices its notification. */
-    private fun offerPersona(action: OfferAction): ChatPersona = when (action) {
-        OfferAction.ACCEPT -> ChatPersona.GoodOffer
-        OfferAction.DECLINE -> ChatPersona.BadOffer
-        OfferAction.MANUAL_REVIEW -> ChatPersona.Inspector
-        OfferAction.NOTHING -> ChatPersona.Inspector
     }
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {

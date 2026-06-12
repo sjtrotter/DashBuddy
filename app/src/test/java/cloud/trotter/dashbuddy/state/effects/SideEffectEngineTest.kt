@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
@@ -77,12 +78,20 @@ class SideEffectEngineTest {
     private val tipEffectHandler: TipEffectHandler = mock()
     private val bubbleManager: BubbleManager = mock()
     private val offerEvaluator: OfferEvaluator = mock()
+    /** Backs the eval-config read (#436). Non-null so EvaluateOffer never suspends in tests. */
+    private val evaluationConfig =
+        MutableStateFlow<EvaluationConfig?>(EvaluationConfig())
+
     private val strategyRepository: StrategyRepository = mock {
         on { this.evidenceConfig } doReturn this@SideEffectEngineTest.evidenceConfig
+        on { this.evaluationConfig } doReturn this@SideEffectEngineTest.evaluationConfig
     }
     private val screenShotHandler: ScreenShotHandler = mock()
     private val uiInteractionHandler: UiInteractionHandler = mock()
-    private val effectsFiredDao: EffectsFiredDao = mock()
+    /** Live-path dedupe (#436) consults this for every keyed effect — default "not fired". */
+    private val effectsFiredDao: EffectsFiredDao = mock {
+        onBlocking { hasBeenFired(any()) } doReturn false
+    }
     private val ttsEffectHandler: TtsEffectHandler = mock()
 
     /** Default: every tier granted — individual tests stub denial. */
@@ -353,6 +362,95 @@ class SideEffectEngineTest {
         )
         runCurrent()
         verify(screenShotHandler, times(1)).capture(any(), any())
+    }
+
+    // =========================================================================
+    // #436 — engine latency + dedupe pack
+    // =========================================================================
+
+    /** Real evaluation — the summary formatter and persona mapping read its fields. */
+    private fun testEvaluation() = OfferEvaluation(
+        action = cloud.trotter.dashbuddy.domain.evaluation.OfferAction.ACCEPT,
+        score = 74.0,
+        qualityLevel = cloud.trotter.dashbuddy.domain.evaluation.OfferQuality.GOOD,
+        payAmount = 7.50,
+        fuelCostEstimate = 0.50,
+        netPayAmount = 7.00,
+        distanceMiles = 3.2,
+        dollarsPerMile = 2.19,
+        dollarsPerHour = 22.0,
+        estimatedTimeMinutes = 19.0,
+        itemCount = 1.0,
+        merchantName = "Chipotle",
+    )
+
+    @Test
+    fun `a resolved offer cancels the pending notification post`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), offerHash = "hash-9"))
+        runCurrent()
+        engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+
+        verify(bubbleManager, never()).postOfferNotification(any())
+    }
+
+    @Test
+    fun `an unresolved offer notification still posts after the settle delay`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), offerHash = "hash-9"))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+
+        verify(bubbleManager, times(1)).postOfferNotification(any())
+    }
+
+    @Test
+    fun `keyed effects dedupe on the live path - not just during recovery`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val effect = AppEffect.StartSession("sess-7", "DoorDash")
+        wheneverBlocking { effectsFiredDao.hasBeenFired(effect.effectKey!!) }
+            .thenReturn(true)
+
+        engine.process(effect, recovering = false)
+        runCurrent()
+
+        verify(bubbleManager, never()).startSession(any(), any())
+        verifyBlocking(effectsFiredDao, never()) { markFired(any()) }
+    }
+
+    @Test
+    fun `a gate-denied rule effect is not marked fired`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        // Distinct dedupeKeys: a denied fire still consumes the wall-clock
+        // throttle slot, so the granted attempt must not share its key.
+        fun offerShot(key: String) = AppEffect.RequestEffect(
+            RequestedEffect(
+                verb = EffectVerb.SCREENSHOT,
+                ruleId = "doordash.screen.offer_popup",
+                args = mapOf("category" to "offer"),
+                dedupeKey = key,
+            ),
+        )
+
+        evidenceConfig.value = EvidenceConfig(masterEnabled = false)
+        engine.process(offerShot("denied"))
+        runCurrent()
+        verify(screenShotHandler, never()).capture(any(), any())
+        // Denied ≠ fired (#436): marking it would skip the effect forever
+        // (live-path dedupe) once the user enables the Evidence setting.
+        verifyBlocking(effectsFiredDao, never()) { markFired(any()) }
+
+        evidenceConfig.value = EvidenceConfig(masterEnabled = true, saveOffers = true)
+        engine.process(offerShot("granted"))
+        runCurrent()
+        verify(screenShotHandler, times(1)).capture(any(), any())
+        verifyBlocking(effectsFiredDao, times(1)) { markFired(any()) }
     }
 
     // =========================================================================
