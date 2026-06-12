@@ -388,10 +388,14 @@ class PlatformRegionStepper @Inject constructor() {
             is ParsedFields.PostTaskFields -> {
                 val payHash = parsed.parsedPay?.hashCode()
                 // Stamp the per-task announcement gate so EffectMap.diffPostTask
-                // can detect "first time seeing PostTask for this taskId" by
-                // comparing prev region's value to the current taskId. The
-                // currently-completing task is at recentTasks.lastOrNull().
-                val postTaskTaskId = r.recentTasks.lastOrNull()?.taskId
+                // can detect "first time seeing PostTask for this taskId". The
+                // completing task is the still-active one while its retire
+                // grace is pending (#431 pt 2), falling back to the last
+                // committed task. MUST be the same resolution diffPostTask
+                // uses — the old recentTasks-only stamp lagged the commit by
+                // one frame and double-fired the receipt bubble on the
+                // expanded re-observation.
+                val postTaskTaskId = r.activeTask?.taskId ?: r.recentTasks.lastOrNull()?.taskId
                 r = r.copy(
                     lastPostTaskPayHash = payHash,
                     lastPostTaskFields = parsed,
@@ -574,8 +578,14 @@ class PlatformRegionStepper @Inject constructor() {
                 isStackedPickupTransition ||
                 isStackedDropoffTransition
             ) {
-                // New task (different phase, no active task, or stacked-pickup transition)
-                val completedTask = currentTask?.copy(completedAt = obs.timestamp)
+                // New task (different phase, no active task, or stacked-pickup transition).
+                // The displaced task commits inline; if a TASK_RETIRE grace was
+                // pending (receipt or idle already signalled its end, #431 pt 2)
+                // the honest completion time is that signal's appearance, not
+                // this new task's first frame.
+                val retireSince = region.pendingDestructive
+                    ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
+                val completedTask = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
                 val recentTasks = if (completedTask != null) {
                     (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS)
                 } else region.recentTasks
@@ -624,15 +634,37 @@ class PlatformRegionStepper @Inject constructor() {
             )
         }
 
-        // PostTask → complete active task (authoritative; clears any pending grace)
+        // PostTask → the receipt is authoritative for "this task is done", but
+        // it no longer completes the task on the spot (#431 pt 2): one
+        // misrecognized receipt frame mid-dropoff used to retire the live task
+        // irrecoverably. Arm (or tighten) a SHORT authoritative TASK_RETIRE
+        // grace instead — a contradicting task-flow frame inside the window
+        // cancels it (misrecognition flap), expiry commits via the GRACE_COMMIT
+        // timer / lazy expiry, and a stacked next-task frame commits it inline
+        // at mint (above). Replacing a pending SESSION_END here preserves the
+        // pre-#431 contract that a receipt-with-active-task reads as "still
+        // dashing" (single-slot pending — noted on the issue).
         val postTask = region.activeTask
         if (nextFlowVal == Flow.PostTask && postTask != null) {
-            val completedTask = postTask.copy(completedAt = obs.timestamp)
-            return region.copy(
-                activeTask = null,
-                recentTasks = (region.recentTasks + completedTask).takeLast(MAX_RECENT_TASKS),
-                pendingDestructive = null,
-            )
+            val newDeadline = obs.timestamp + policy.authoritativeGraceMs
+            val existing = region.pendingDestructive
+            val pend = if (existing?.kind == DestructiveKind.TASK_RETIRE) {
+                // Already armed (idle-grace, or an earlier receipt frame) —
+                // tighten to the short window; the earliest destructive signal
+                // stays the honest completion time.
+                existing.copy(
+                    deadline = minOf(existing.deadline, newDeadline),
+                    authoritative = true,
+                )
+            } else {
+                PendingDestructive(
+                    kind = DestructiveKind.TASK_RETIRE,
+                    since = obs.timestamp,
+                    deadline = newDeadline,
+                    authoritative = true,
+                )
+            }
+            return region.copy(pendingDestructive = pend)
         }
 
         // Leaving a task flow to idle/offer while online → do NOT retire the task

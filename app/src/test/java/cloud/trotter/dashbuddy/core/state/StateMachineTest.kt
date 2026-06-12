@@ -810,19 +810,50 @@ class StateMachineTest {
     }
 
     @Test
-    fun `task completed on PostTask`() {
+    fun `task completes after the receipt grace - not on the PostTask frame (#431)`() {
         var state = setupOnlineWithPickup()
 
-        // Complete delivery
+        // Complete delivery — the receipt frame arms the short retire grace.
         state = machine.step(state, screenObs(
             flow = Flow.PostTask,
             parsed = ParsedFields.PostTaskFields(totalPay = 7.50),
         )).newState
 
-        val dd = state.regions.platforms[Platform.DoorDash]!!
-        assertNull(dd.activeTask) // task completed
+        var dd = state.regions.platforms[Platform.DoorDash]!!
+        assertNotNull("the task survives the receipt frame", dd.activeTask)
+        assertEquals(DestructiveKind.TASK_RETIRE, dd.pendingDestructive?.kind)
+        assertTrue(dd.pendingDestructive!!.authoritative)
+
+        // Past the deadline (the GRACE_COMMIT timer in production; any later
+        // observation commits via lazy expiry here).
+        state = machine.step(state, screenObs(flow = Flow.Idle, timestamp = tick(3000))).newState
+
+        dd = state.regions.platforms[Platform.DoorDash]!!
+        assertNull("expiry completed the task", dd.activeTask)
+        assertNull(dd.pendingDestructive)
         assertTrue(dd.recentTasks.isNotEmpty())
         assertNotNull(dd.recentTasks.last().completedAt)
+    }
+
+    @Test
+    fun `GRACE_COMMIT timeout commits the pending task retire (#431)`() {
+        var state = setupOnlineWithPickup()
+        state = machine.step(state, screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 7.50),
+        )).newState
+        val deadline = state.regions.platforms[Platform.DoorDash]!!.pendingDestructive!!.deadline
+
+        state = machine.step(state, timeoutObs(
+            type = TimeoutType.GRACE_COMMIT,
+            timestamp = deadline + 1,
+            targetPlatform = Platform.DoorDash,
+        )).newState
+
+        val dd = state.regions.platforms[Platform.DoorDash]!!
+        assertNull("the timer commit retired the task", dd.activeTask)
+        assertNull(dd.pendingDestructive)
+        assertTrue(dd.recentTasks.any { it.completedAt != null })
     }
 
     @Test

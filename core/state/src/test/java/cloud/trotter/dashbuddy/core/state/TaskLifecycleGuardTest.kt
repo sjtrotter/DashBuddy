@@ -141,16 +141,84 @@ class TaskLifecycleGuardTest {
     }
 
     @Test
-    fun `PostTask completes the task and clears a pending grace`() {
+    fun `PostTask arms a short authoritative retire grace - not an immediate completion (#431)`() {
         val r0 = region(
             pickupTask("task-A", "H-E-B", arrivedAt = 800L),
             pending = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 800L, deadline = 11_000L),
         )
         val (r1, _) = step(r0, FlowRegion(flow = Flow.Idle), postTaskObs(timestamp = 1_005L))
 
-        assertNull("PostTask is authoritative — the task completes", r1.activeTask)
-        assertNull(r1.pendingDestructive)
-        assertTrue(r1.recentTasks.any { it.taskId == "task-A" && it.completedAt != null })
+        assertNotNull("the task survives the receipt frame (#431 pt 2)", r1.activeTask)
+        assertEquals("task-A", r1.activeTask?.taskId)
+        val pend = r1.pendingDestructive!!
+        assertEquals(DestructiveKind.TASK_RETIRE, pend.kind)
+        assertTrue("receipt arm is authoritative", pend.authoritative)
+        assertEquals(
+            "an existing idle-grace tightens to the short window",
+            1_005L + TransitionPolicy.AUTHORITATIVE_GRACE_MS, pend.deadline,
+        )
+        assertEquals("the earliest destructive signal stays the honest end time", 800L, pend.since)
+        assertTrue("nothing committed yet", r1.recentTasks.isEmpty())
+    }
+
+    @Test
+    fun `fresh PostTask arms TASK_RETIRE stamped at the receipt's appearance`() {
+        val r0 = region(dropoffTask("task-A", customerAddressHash = "cust-1", arrivedAt = 800L))
+        val (r1, _) = step(r0, FlowRegion(flow = Flow.TaskDropoffArrived), postTaskObs(timestamp = 1_005L))
+
+        assertEquals("task-A", r1.activeTask?.taskId)
+        val pend = r1.pendingDestructive!!
+        assertEquals(DestructiveKind.TASK_RETIRE, pend.kind)
+        assertTrue(pend.authoritative)
+        assertEquals(1_005L, pend.since)
+        assertEquals(1_005L + TransitionPolicy.AUTHORITATIVE_GRACE_MS, pend.deadline)
+    }
+
+    @Test
+    fun `a task-flow frame inside the receipt grace cancels the retire (misrecognition flap)`() {
+        val r0 = region(dropoffTask("task-A", customerAddressHash = "cust-1", arrivedAt = 800L))
+        val (r1, f1) = step(r0, FlowRegion(flow = Flow.TaskDropoffArrived), postTaskObs(timestamp = 1_005L))
+        val (r2, _) = step(
+            r1, f1,
+            taskObs(Flow.TaskDropoffArrived, TaskPhase.DROPOFF, TaskSubFlow.ARRIVED, customerAddressHash = "cust-1", timestamp = 1_500L),
+        )
+
+        assertEquals("the same task lives on", "task-A", r2.activeTask?.taskId)
+        assertNull("the flap cancelled the retire", r2.pendingDestructive)
+        assertTrue("nothing committed", r2.recentTasks.isEmpty())
+    }
+
+    @Test
+    fun `receipt grace expiry retires the task at the receipt's timestamp`() {
+        val r0 = region(dropoffTask("task-A", customerAddressHash = "cust-1", arrivedAt = 800L))
+        val (r1, f1) = step(r0, FlowRegion(flow = Flow.TaskDropoffArrived), postTaskObs(timestamp = 1_005L))
+        val deadline = r1.pendingDestructive!!.deadline
+        val (r2, _) = step(r1, f1, idleObs(timestamp = deadline + 1))
+
+        assertNull("expiry retires the task", r2.activeTask)
+        assertNull(r2.pendingDestructive)
+        assertEquals(
+            "completed when the receipt appeared, not when we got around to believing it",
+            1_005L, r2.recentTasks.single { it.taskId == "task-A" }.completedAt,
+        )
+    }
+
+    @Test
+    fun `stacked next-task frame inside the receipt grace commits the old task inline`() {
+        val r0 = region(dropoffTask("task-A", customerAddressHash = "cust-1", arrivedAt = 800L))
+        val (r1, f1) = step(r0, FlowRegion(flow = Flow.TaskDropoffArrived), postTaskObs(timestamp = 1_005L))
+        val (r2, _) = step(
+            r1, f1,
+            taskObs(Flow.TaskPickupNavigation, TaskPhase.PICKUP, TaskSubFlow.NAVIGATION, storeName = "Wingstop", timestamp = 1_500L),
+        )
+
+        assertEquals(TaskPhase.PICKUP, r2.activeTask?.phase)
+        assertNotEquals("task-A", r2.activeTask?.taskId)
+        assertEquals(
+            "the displaced task committed at the receipt's appearance",
+            1_005L, r2.recentTasks.single { it.taskId == "task-A" }.completedAt,
+        )
+        assertNull(r2.pendingDestructive)
     }
 
     // ---- back-to-back transitions ----
