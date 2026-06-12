@@ -262,12 +262,21 @@ class EffectMap @Inject constructor() {
                     addAll(taskCompletedOverride)
                 } else {
                     val sessionId = next.session?.sessionId ?: p.session?.sessionId
-                    val completedTask = next.recentTasks.lastOrNull()
+                    // The delivered task may still be ACTIVE on PostTask exit —
+                    // its retire grace commits up to ~2.5s later (#431 pt 2).
+                    // Prefer it (same-id guard: a stacked next-task frame mints
+                    // a NEW activeTask on this same exit, which must not be the
+                    // one we report); fall back to the last committed task.
+                    val completedTask = next.activeTask
+                        ?.takeIf { it.taskId == p.activeTask?.taskId }
+                        ?: next.recentTasks.lastOrNull()
                     if (completedTask != null) {
+                        val retireSince = p.pendingDestructive
+                            ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
                         val payload = deliveryCompletedPayload(
                             task = completedTask,
                             jobId = p.activeJob?.jobId,
-                            completedAt = obs.timestamp,
+                            completedAt = completedTask.completedAt ?: retireSince ?: obs.timestamp,
                             postTaskFields = p.lastPostTaskFields,
                             sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                         )
@@ -671,7 +680,12 @@ class EffectMap @Inject constructor() {
         val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
         val parsed = flowObs.parsed as? ParsedFields.PostTaskFields ?: return emptyList()
 
-        val taskId = next.recentTasks.lastOrNull()?.taskId ?: return emptyList()
+        // The completing task stays ACTIVE while its retire grace is pending
+        // (#431 pt 2) — resolve it first, falling back to the last committed
+        // task. Must mirror the stepper's lastAnnouncedPostTaskTaskId stamp.
+        val taskId = next.activeTask?.taskId
+            ?: next.recentTasks.lastOrNull()?.taskId
+            ?: return emptyList()
         if (prev.lastAnnouncedPostTaskTaskId == taskId) return emptyList()
         if (parsed.totalPay <= 0) return emptyList()
 

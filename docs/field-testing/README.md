@@ -63,6 +63,17 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Receipt grace — delivery completion is now deferred ~2.5s (#431 pt 2).**
+  The delivery-summary (receipt) screen no longer retires the task instantly; it arms a short
+  authoritative grace exactly like the dash summary. Watch: (a) the "Saved: $X" receipt bubble
+  fires exactly ONCE per delivery (the expanded re-observation used to be able to double-fire
+  it); (b) stacked orders still split cleanly — receipt → next pickup must show the new task
+  immediately with the old one logged; (c) a receipt that flashes mid-dropoff (misrecognition)
+  no longer kills the live task — the task card should survive. Broken = double "Saved" bubble,
+  a delivery missing from the log, or the bubble's task card stuck on the finished delivery
+  well past ~3s after the receipt.
+  - Confirmed: 0/2
+
 - **Consent gate is live — bound-target taps must still fire (#417).**
   The always-true permission stub is gone: automation taps (the post-delivery expand chevron)
   now require a granted capability key, and bundled rules are auto-granted at rule load.

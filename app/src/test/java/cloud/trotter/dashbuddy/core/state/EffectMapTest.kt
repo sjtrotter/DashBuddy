@@ -15,11 +15,13 @@ import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
@@ -712,9 +714,87 @@ class EffectMapTest {
         )
     }
 
+    @Test
+    fun `leaving PostTask with the task still in retire grace emits DELIVERY_COMPLETED for it (#431)`() {
+        // #431 pt 2: the delivered task stays ACTIVE through the receipt grace,
+        // so on PostTask exit recentTasks does NOT yet contain it. The event
+        // must name the still-active task, stamped at the receipt's appearance.
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val active = Task(taskId = "task-9", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L)
+        val pend = PendingDestructive(
+            kind = DestructiveKind.TASK_RETIRE, since = 950L, deadline = 3_450L, authoritative = true,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.PostTask),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session,
+                activeTask = active, pendingDestructive = pend,
+            )),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.Idle),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session,
+                activeTask = active, pendingDestructive = pend,
+            )),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        assertTrue(
+            "DELIVERY_COMPLETED must fire for the deferred (still-active) task",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_COMPLETED),
+        )
+    }
+
     // =========================================================================
     // POST-TASK ANNOUNCEMENT (single-bubble, per-task idempotency)
     // =========================================================================
+
+    @Test
+    fun `deferred receipt announces exactly once across collapsed and expanded frames (#431)`() {
+        // Under the receipt grace the completing task is still ACTIVE on every
+        // PostTask frame. Frame 1 announces; the stepper stamps the gate with
+        // the SAME id the diff resolved, so the expanded re-observation cannot
+        // double-fire (the old recentTasks-only stamp lagged by one frame).
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val active = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L)
+        fun regionWith(announced: String?) = PlatformRegion(
+            platform, mode = Mode.Online, session = session,
+            activeTask = active,
+            pendingDestructive = PendingDestructive(
+                kind = DestructiveKind.TASK_RETIRE, since = 950L, deadline = 3_450L, authoritative = true,
+            ),
+            lastAnnouncedPostTaskTaskId = announced,
+        )
+        val beforeFirst = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.PostTask),
+            platforms = mapOf(platform to regionWith(announced = null)),
+        ))
+        val afterFirst = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.PostTask),
+            platforms = mapOf(platform to regionWith(announced = "task-1")),
+        ))
+
+        val first = effectMap.diff(beforeFirst, afterFirst, screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 7.50, parsedPay = null),
+        ))
+        assertEquals(
+            "first sighting announces",
+            1, first.filterIsInstance<AppEffect.UpdateBubble>().count { it.text.contains("Saved") },
+        )
+
+        val second = effectMap.diff(afterFirst, afterFirst, screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 7.50, parsedPay = null),
+        ))
+        assertTrue(
+            "the expanded re-observation must NOT re-announce",
+            second.filterIsInstance<AppEffect.UpdateBubble>().none { it.text.contains("Saved") },
+        )
+    }
 
     @Test
     fun `collapsed-only PostTask emits single minimal Saved bubble`() {
