@@ -164,7 +164,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   "Decline") instead of hardcoded view IDs. Working = DoorDash registers the tap. Broken = log
   shows "No 'acceptButton' target bound" (rule didn't bind on that screen variant — capture it!)
   or "NONE passed label verification" (verification too strict for that variant).
-  - Confirmed: 0/2
+  - Confirmed: 1/2. **2026-06-12 (DoorDash):** dasher tapped **Accept** in the bubble → DoorDash
+    registered the Accept (offer was accepted). First clean live confirmation of the rule-bound tap
+    path that was broken on 06-09. Still need a second sighting — ideally the **Decline** side and
+    the **notification** surface (not just bubble Accept). (See 2026-06-12 log entry #4.)
 
 - **Post-dash HUD: frozen summary + consistent chat (#367, PR pending).**
   Two visible fixes after a dash ends: (a) the "Last session" Duration on the idle bubble is
@@ -384,11 +387,11 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   `total−1/total` — and the items/min pace should reflect the full count. This was
   the off-by-one from the 2026-06-05 session, caused by the terminal frame being
   deduped away; the fix makes each shopping count change a distinct observation.
-  - Confirmed: 1/2. **Partial — 2026-06-06 (DoorDash):** developer reported "the
-    item counts are working" (no longer freezing one short). Did not explicitly
-    confirm the terminal `total/total` frame or the add-on case this dash; needs
-    one more clean sighting of the end-of-shop `total/total`. (See 2026-06-06
-    log entry #4.)
+  - Confirmed: 2/2. **2026-06-06 (DoorDash):** developer reported "the item counts
+    are working" (no longer freezing one short). **2026-06-12 (DoorDash):** pickup/shop
+    card read **`shop 25/25 · 0.6/min`** at end of shop — the terminal `total/total`
+    frame, no longer `total−1/total`. Two clean sightings → **validated** (the add-on
+    case is tracked separately under the #276 watch item). (See 2026-06-12 log entry #3.)
 
 - **⚠️ WATCH FOR RECURRENCE — mid-dash "Done Dashing!" + odometer reset (2026-06-06 #5, root cause confirmed, fix NOT yet shipped).** Confirmed once on 06-06: a
   transient **"Start your scheduled dash"** (`idle_scheduled_dash_ready`,
@@ -506,6 +509,73 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
     "summary after the idle screen" ordering was the root cause). Field-validate
     via the #279 checklist item above.
+
+---
+
+## 2026-06-12 — DoorDash session (offer-copilot field test)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` field offer-copilot build (includes the #425 rule-bound
+  Accept/Decline path; the freshest watch-list items reference #437/#436/#427). Exact SHA not
+  captured this session — developer to correct if needed.
+- **Field conditions:** live dash with at least one Shop & Deliver order (HEB, 25 items) and at
+  least one offer the dasher **accepted from the bubble**. Observations narrated in real time;
+  everything below is **recorded for triage — hypotheses, not concluded fixes.**
+
+### Verification TODOs (confirmations this session)
+
+#### 1. Bubble **Accept** clicks DoorDash — #425 rule-bound tap CONFIRMED (1/2)
+Dasher tapped **Accept** in the bubble and DoorDash registered the Accept (offer accepted). This
+is the first clean live confirmation of the `acceptButton`/`declineButton` rule-bound, label-verified
+tap path (#425) — the same surface that was **broken on 06-09** (`Could not find any live node`,
+wrong-window search). Bumped the checklist item to 1/2; still want a second sighting covering the
+**Decline** side and the **notification** surface (not just bubble Accept).
+
+#### 2. Shop & Deliver terminal `total/total` — #302 CONFIRMED (2/2, retired)
+The pickup/shop card read **`shop 25/25 · 0.6/min`** at end of shop — the terminal `total/total`
+frame, no longer the `total−1/total` off-by-one. Second clean sighting → #302 moved out of the
+watch list as validated. (The add-on / second-order-mid-shop case is still tracked under #276.)
+
+### Research / design (improvement ideas — explore, not yet scoped)
+
+#### 3. Offer & finished cards under-surface Shop & Deliver (item count + type badge)
+Two related gaps the dasher noticed about the #324 card redesign and the completed-card stack:
+
+- **Item count is buried on the offer card.** Today the count renders only as a small footer
+  caption — `FlowCardItem.kt:392-401` builds `"$store · $itemCount items"` via `Caption(...)`, and
+  only when `itemCount > 1`. For a Shop & Deliver, the dasher wants the item count promoted to the
+  **same visual tier as the $/hr hero and the mi / $/mi line** (the offer hero `Row` at
+  `FlowCardItem.kt:298-340` is score-ring + `$/hr` hero + a secondary `Net · mi · $/mi` line). The
+  data already exists on the snapshot (`FlowCardSnapshot.Offer.itemCount`,
+  `FlowCardSnapshot.kt:57`) — **hypothesis:** this is a pure presentation change (elevate item count
+  into the hero row), no parser/state work needed. Dasher noted there's **space on the right** of
+  the hero row to place it.
+- **No Shop & Deliver indicator / badge, and the finished card doesn't show the type at all.**
+  The offer card has a badge pill row (`FlowCardItem.kt:379-390` + `badgeMeta` `:421-433`), but
+  `badgeMeta` has **no Shop & Deliver / shopping entry**, and the **PostTask (finished) card carries
+  no order-type or activity field whatsoever** — `FlowCardSnapshot.PostTask`
+  (`FlowCardSnapshot.kt:124-135`) has `storeName`/`totalPay`/`parsedPay` but nothing that says "this
+  was a shop." (The `SHOPPING` activity only lives on `FlowCardSnapshot.Pickup.activity`,
+  `:94`.) **Hypothesis:** surfacing "Shop & Deliver" on the finished card would need an order-type/
+  activity field threaded onto `PostTask` (and possibly `Offer`), i.e. it's **not** purely cosmetic
+  — it touches the snapshot model + the mapper (`FlowCardMapper`/`LiveCardBuilder`), not just
+  `FlowCardItem`. Would need to confirm where order type is known at PostTask time. A SHOP badge in
+  `badgeMeta` for the offer card, by contrast, is cheap **if** a shop badge/flag reaches `Offer.badges`.
+
+#### 4. Pickup card not visually upgraded to the redesign + double-"by" wording
+The dasher reads the pickup card as **"still the old style"** next to the redesigned offer card —
+it's the line-based `DeadlineBody` (`FlowCardItem.kt:484-582`): a `HeroBig` countdown + caption rows
+(`HEB · arrived 16:39 · shop 25/25 · 0.6/min`), with none of the offer card's ring/banner/pill
+visual language. Two sub-items:
+
+- **Visual parity.** Pickup (and by extension Delivery, which shares `DeadlineBody`) didn't get a
+  comparable redesign pass. **Hypothesis:** this is a deliberate-or-not gap from the #324 redesign
+  (which targeted the offer card); worth deciding whether the pickup/delivery cards should adopt the
+  same component vocabulary (gauge ring for deadline pressure, etc.) or stay deliberately minimal.
+- **Double "by".** The deadline caption renders **`till pickup-by · by 17:10`** — `deadlineLabel =
+  "till pickup-by"` (`FlowCardItem.kt:454`) concatenated with `Caption("$deadlineLabel · by
+  ${formatTime(deadlineMillis)}")` (`:512`). The two "by"s read awkwardly; trivial wording fix
+  (drop one "by", e.g. `"pickup by 17:10"` or `"till pickup · by 17:10"`).
 
 ---
 
