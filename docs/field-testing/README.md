@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Timeline storeHint now parses + pickup_picked_up rule newly matchable (#433).**
+  Two rule fixes from mojibake literals: (a) timeline task rows should now carry store names
+  (watch the dash-controls overlay's task chain — logs/cards referencing timeline tasks should
+  name the store, not blank); (b) the `pickup_picked_up` screen rule could NEVER match before
+  (its require contained a mangled literal) — on the confirm-pickup/loading screen, watch
+  whether it now classifies (bubble/log shows pickup_picked_up instead of UNKNOWN) and
+  **capture it** — this intent has zero corpus snapshots.
+  - Confirmed: 0/2
+
 - **Expand-earnings auto-tap via the new action path (#425).**
   The post-delivery pay breakdown should auto-expand ~0.5s after the collapsed summary appears
   (same behavior as before, but the tap now flows through the app-owned EXPAND_EARNINGS action
