@@ -63,6 +63,17 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Session-end grace — summary no longer ends the dash instantly (#431).**
+  The dash-summary screen now arms a ~2.5s authoritative grace (cancellable by a task-flow
+  frame) instead of ending the session on the spot, and grace commits fire on a timer instead
+  of waiting for the next event. Watch: (a) the post-dash summary still attributes to the
+  right session (chat/cards/totals) — just ~2.5s later; (b) NO spurious mid-dash session
+  splits (the old failure was one misrecognized frame = split); (c) leaving the app right
+  after going offline still logs DASH_STOP promptly (timer-driven) with endedAt ≈ when you
+  went offline. Broken = duplicate DASH_START/STOP pairs, summary attributed to a new empty
+  session, or a session lingering long after the dash.
+  - Confirmed: 0/2
+
 - **Timeline storeHint now parses + pickup_picked_up rule newly matchable (#433).**
   Two rule fixes from mojibake literals: (a) timeline task rows should now carry store names
   (watch the dash-controls overlay's task chain — logs/cards referencing timeline tasks should

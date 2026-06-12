@@ -78,7 +78,11 @@ class PlatformRegionStepper @Inject constructor() {
         // provisional transition.
         current.pendingDestructive?.let { pend ->
             if (obs.timestamp > pend.deadline) {
-                current = commitDestructive(current, pend.kind, pend.deadline)
+                // Commit stamped at pend.since — the obs.timestamp of the signal
+                // that armed the grace — not the deadline: the dash/task really
+                // ended when the destructive signal appeared, the grace only
+                // delayed our belief in it (#431).
+                current = commitDestructive(current, pend.kind, pend.since)
             }
         }
 
@@ -89,10 +93,13 @@ class PlatformRegionStepper @Inject constructor() {
         // dash-end is pending in its grace window means the old dash really ended
         // and a new one is starting — commit the end now so the next Online mints
         // a fresh session instead of resuming the old one.
-        if (current.pendingDestructive?.kind == DestructiveKind.SESSION_END) {
-            val startParsed = (obs as? Observation.FlowObservation)?.parsed
-            if ((startParsed as? ParsedFields.IdleFields)?.startingDash == true) {
-                current = endSession(current, obs.timestamp)
+        current.pendingDestructive?.let { pend ->
+            if (pend.kind == DestructiveKind.SESSION_END) {
+                val startParsed = (obs as? Observation.FlowObservation)?.parsed
+                if ((startParsed as? ParsedFields.IdleFields)?.startingDash == true) {
+                    // Honest end time = when the destructive signal appeared (#431).
+                    current = endSession(current, pend.since)
+                }
             }
         }
 
@@ -160,10 +167,16 @@ class PlatformRegionStepper @Inject constructor() {
         when {
             prev.mode != Mode.Online && newMode == Mode.Online -> {
                 val pend = region.pendingDestructive
-                if (pend?.kind == DestructiveKind.SESSION_END && region.session != null) {
+                if (pend?.kind == DestructiveKind.SESSION_END && !pend.authoritative &&
+                    region.session != null
+                ) {
                     // Grace active + the same session is still present → a genuine
                     // resume (a transient offline flash). A real new-dash start
                     // would already have committed the end in step() (startingDash).
+                    // An AUTHORITATIVE pending (armed by the dash summary, #431) is
+                    // deliberately NOT cancelled here: a post-summary online flash
+                    // must not resurrect a really-ended session. Only a task-flow
+                    // observation cancels it (updateTaskLifecycle).
                     region = region.copy(pendingDestructive = null)
                 } else if (region.session == null) {
                     // No session — start a fresh one.
@@ -273,12 +286,38 @@ class PlatformRegionStepper @Inject constructor() {
         obs: Observation.FlowObservation,
         policy: TransitionPolicy,
     ): PlatformRegion {
-        // Authoritative session end: a session:ended observation (the dash
-        // summary) ends the session immediately, even when already Offline — the
-        // summary commonly shows AFTER the idle/offline screen, mid-grace. Must
-        // run before the Offline early-return below or that ordering is missed.
+        // Authoritative session end: the dash-summary screen. It no longer ends
+        // the session on the spot (#431) — one misrecognized frame used to split
+        // a live session irrecoverably. Instead it arms (or tightens) a SHORT
+        // authoritative grace: a contradicting task-flow frame inside the window
+        // cancels (misrecognition), anything else lets it commit at the deadline
+        // (GRACE_COMMIT timer or lazy expiry). The summary's parsed fields ride
+        // the pending so the deferred DASH_STOP payload keeps full fidelity.
+        // Runs before the Offline early-return below because the summary commonly
+        // shows AFTER the idle/offline screen, mid-grace.
         if (obs.flow == Flow.SessionEnded && region.session != null) {
-            return endSession(region, obs.timestamp)
+            val endFields = obs.parsed as? ParsedFields.SessionEndedFields
+            val newDeadline = obs.timestamp + policy.authoritativeGraceMs
+            val existing = region.pendingDestructive
+            val pend = if (existing?.kind == DestructiveKind.SESSION_END) {
+                // Offline-grace already armed (idle/offline before summary) —
+                // tighten to the short window, keep the original `since` (the
+                // earliest destructive signal is the honest end time).
+                existing.copy(
+                    deadline = minOf(existing.deadline, newDeadline),
+                    authoritative = true,
+                    endFields = endFields ?: existing.endFields,
+                )
+            } else {
+                PendingDestructive(
+                    kind = DestructiveKind.SESSION_END,
+                    since = obs.timestamp,
+                    deadline = newDeadline,
+                    authoritative = true,
+                    endFields = endFields,
+                )
+            }
+            return region.copy(pendingDestructive = pend)
         }
         if (region.mode == Mode.Offline) {
             // Clear the idle anchor and any TASK_RETIRE pending, but PRESERVE a

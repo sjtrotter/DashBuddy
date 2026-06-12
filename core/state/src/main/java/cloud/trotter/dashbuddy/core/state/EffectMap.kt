@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -234,6 +235,7 @@ class EffectMap @Inject constructor() {
 
         return buildList {
             addAll(diffMode(p, next, obs))
+            addAll(diffGraceTimer(p, next, obs))
             addAll(diffTask(p, next, prevFlow, nextFlow, obs))
             addAll(diffPostTask(p, next, nextFlow, obs))
             addAll(diffNotification(obs))
@@ -299,8 +301,19 @@ class EffectMap @Inject constructor() {
                 if (offlineOverride != null) {
                     addAll(offlineOverride)
                 } else {
-                    val endParsed = (obs as? Observation.FlowObservation)?.parsed
-                    if (endParsed is ParsedFields.SessionEndedFields) {
+                    // Summary fields: from the committing observation when it IS
+                    // the summary, else from the grace pending that stashed them
+                    // at arm time (#431) — deferred commits (GRACE_COMMIT timer,
+                    // lazy expiry) keep full payload fidelity. endedAt = when the
+                    // destructive signal appeared, not when we got around to
+                    // believing it.
+                    val pend = prev.pendingDestructive
+                        ?.takeIf { it.kind == DestructiveKind.SESSION_END }
+                    val endParsed = ((obs as? Observation.FlowObservation)?.parsed
+                        as? ParsedFields.SessionEndedFields)
+                        ?: pend?.endFields
+                    val endedAt = pend?.since ?: obs.timestamp
+                    if (endParsed != null) {
                         val earnings = formatCurrency(endParsed.totalEarnings)
                         add(
                             logEffect(
@@ -309,7 +322,7 @@ class EffectMap @Inject constructor() {
                                 obs.timestamp,
                                 SessionStopPayload(
                                     sessionId = sessionId,
-                                    endedAt = obs.timestamp,
+                                    endedAt = endedAt,
                                     source = SessionEndSource.SUMMARY_SCREEN,
                                     totalEarnings = endParsed.totalEarnings,
                                     sessionDurationMillis = endParsed.sessionDurationMillis,
@@ -330,7 +343,7 @@ class EffectMap @Inject constructor() {
                                 obs.timestamp,
                                 SessionStopPayload(
                                     sessionId = sessionId,
-                                    endedAt = obs.timestamp,
+                                    endedAt = endedAt,
                                     source = SessionEndSource.EARLY_OFFLINE,
                                     totalEarnings = prevSession.runningEarnings,
                                 ),
@@ -426,6 +439,38 @@ class EffectMap @Inject constructor() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Schedule/cancel the wake-up timer for a [PendingDestructive] grace
+     * window (#431). Before this, grace commits were only LAZY — they waited
+     * for the next observation, so a session could stay alive in state for
+     * hours after going offline with the app backgrounded. The timer routes
+     * back to this region (platform-scoped, #342); the stepper's lazy expiry
+     * performs the actual commit when the timeout observation arrives.
+     * A commit (pending → null with the destructive applied) also lands in
+     * the cancel branch — harmless, the timer has already fired or no-ops.
+     */
+    private fun diffGraceTimer(
+        prev: PlatformRegion,
+        next: PlatformRegion,
+        obs: Observation,
+    ): List<AppEffect> {
+        val prevPend = prev.pendingDestructive
+        val nextPend = next.pendingDestructive
+        return when {
+            nextPend != null && (prevPend == null || prevPend.deadline != nextPend.deadline) ->
+                listOf(
+                    AppEffect.ScheduleTimeout(
+                        durationMs = (nextPend.deadline - obs.timestamp).coerceAtLeast(1L),
+                        type = TimeoutType.GRACE_COMMIT,
+                        platform = next.platform,
+                    ),
+                )
+            prevPend != null && nextPend == null ->
+                listOf(AppEffect.CancelTimeout(TimeoutType.GRACE_COMMIT))
+            else -> emptyList()
         }
     }
 

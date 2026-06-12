@@ -158,4 +158,12 @@ enum class TimeoutType {
     SETTLE_UI,
     DECLINE_POPUP_WAIT,
     SCREENSHOT_WAIT,
+
+    /**
+     * Wakes the state machine when a [PendingDestructive] grace deadline
+     * lapses (#431), so commits fire on time instead of waiting for the next
+     * observation. Carries no handler logic of its own: the stepper's lazy
+     * expiry (which runs before timeout handling) performs the commit.
+     */
+    GRACE_COMMIT,
 }

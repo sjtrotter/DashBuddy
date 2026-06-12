@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.state.Session
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -109,12 +110,21 @@ class IdleAnchorTest {
     }
 
     @Test
-    fun `idleEnteredAt cleared on session end`() {
+    fun `idleEnteredAt cleared when the session-end grace commits (#431)`() {
         val prev = onlineRegion(idleEnteredAt = 800L)
         val prevFlow = FlowRegion(flow = Flow.Idle)
         val obs = screen(flow = Flow.SessionEnded, modeHint = Mode.Offline, timestamp = 1500L)
-        val result = step(prev, obs, prevFlow)
-        assertNull(result.idleEnteredAt)
+        val graced = step(prev, obs, prevFlow)
+        // The summary arms the authoritative grace; the anchor survives until commit.
+        assertNotNull(graced.pendingDestructive)
+
+        val committed = step(
+            graced,
+            screen(flow = Flow.Idle, modeHint = Mode.Offline, timestamp = 1500L + 3_000L),
+            prevFlow,
+        )
+        assertNull(committed.session)
+        assertNull(committed.idleEnteredAt)
     }
 
     @Test
@@ -129,15 +139,32 @@ class IdleAnchorTest {
         assertNotNull("grace armed", offlineGraced.pendingDestructive)
         assertEquals(DestructiveKind.SESSION_END, offlineGraced.pendingDestructive?.kind)
 
-        // dash_summary then arrives while STILL offline (mode unchanged). The
-        // authoritative session:ended end must fire anyway, clearing the session so
-        // the summary attributes to the just-ended dash instead of expiring as thin.
-        val ended = step(
+        // dash_summary then arrives while STILL offline (mode unchanged). It
+        // TIGHTENS the grace to the short authoritative window (#431) — the
+        // session stays alive briefly so a misrecognized summary can still be
+        // cancelled by a task-flow frame — and the commit fires at the
+        // tightened deadline, attributing the summary to the just-ended dash.
+        val tightened = step(
             offlineGraced,
             screen(flow = Flow.SessionEnded, modeHint = Mode.Offline, timestamp = 2000L),
             prevFlow = FlowRegion(flow = Flow.Idle),
         )
-        assertNull("session ended by the summary even though mode stayed offline", ended.session)
+        assertNotNull("session alive through the short grace", tightened.session)
+        val pend = tightened.pendingDestructive!!
+        assertTrue("summary marks the pending authoritative", pend.authoritative)
+        assertEquals(
+            "deadline tightened to summary + short grace",
+            2000L + TransitionPolicy.AUTHORITATIVE_GRACE_MS,
+            pend.deadline,
+        )
+        assertEquals("original offline flash stays the honest end time", 1000L, pend.since)
+
+        val ended = step(
+            tightened,
+            screen(flow = Flow.Idle, modeHint = Mode.Offline, timestamp = pend.deadline + 100),
+            prevFlow = FlowRegion(flow = Flow.Idle),
+        )
+        assertNull("session ended at the tightened deadline", ended.session)
     }
 
     @Test

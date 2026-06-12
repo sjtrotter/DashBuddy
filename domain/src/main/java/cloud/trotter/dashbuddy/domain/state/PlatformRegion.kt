@@ -79,6 +79,22 @@ data class PendingDestructive(
     /** Once an observation's timestamp passes this, the transition is committed. */
     val deadline: Long,
     val reason: String? = null,
+    /**
+     * Armed by an authoritative-looking signal (the dash-summary screen)
+     * rather than inferred from an offline flash (#431). Authoritative
+     * pendings use the short grace and are NOT cancelled by a mere
+     * online-resume — a post-summary online flash must not resurrect a
+     * really-ended session. Only a task-flow observation (unambiguously
+     * still dashing) cancels them.
+     */
+    val authoritative: Boolean = false,
+    /**
+     * The summary screen's parsed fields, stashed at arm time (#431) so the
+     * deferred commit's DASH_STOP payload keeps full fidelity (earnings,
+     * duration, offer counts) even though the committing observation is a
+     * grace timeout, not the summary itself.
+     */
+    val endFields: ParsedFields.SessionEndedFields? = null,
 )
 
 enum class DestructiveKind {
