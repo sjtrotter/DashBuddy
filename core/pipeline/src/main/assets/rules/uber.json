@@ -237,7 +237,7 @@
                 "prefix": "Offer - {storeName}",
                 "category": "offer"
               },
-              "dedupeKey": "offer-ss-{offerHash}",
+              "dedupeKey": "offer-ss-{parsedHash}",
               "throttleMs": 60000
             },
             {
@@ -245,7 +245,7 @@
                 "type": "OFFER_RECEIVED",
                 "payload": "pay={payAmount} dist={distance}"
               },
-              "dedupeKey": "offer-log-{offerHash}",
+              "dedupeKey": "offer-log-{parsedHash}",
               "throttleMs": 60000
             }
           ]
