@@ -21,9 +21,19 @@ class TransitionPolicy @Inject constructor() {
 
     companion object {
         const val DEFAULT_GRACE_MS = 10_000L
+
+        /**
+         * Short grace for destructive transitions armed by an authoritative-
+         * looking signal (the dash-summary screen, #431). Long enough for a
+         * contradicting task-flow frame to land and cancel a misrecognition;
+         * short enough that real session ends commit promptly.
+         */
+        const val AUTHORITATIVE_GRACE_MS = 2_500L
     }
 
     val gracePeriodMs: Long = DEFAULT_GRACE_MS
+
+    val authoritativeGraceMs: Long = AUTHORITATIVE_GRACE_MS
 
     /**
      * Determine what mode a flow + modeHint combination implies.

@@ -8,6 +8,9 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -91,7 +94,8 @@ class StateMachineTest {
     private fun timeoutObs(
         type: TimeoutType = TimeoutType.SESSION_PAUSED_SAFETY,
         timestamp: Long = tick(),
-    ) = Observation.Timeout(timestamp = timestamp, type = type)
+        targetPlatform: Platform? = null,
+    ) = Observation.Timeout(timestamp = timestamp, type = type, targetPlatform = targetPlatform)
 
     private fun offerFields(storeName: String = "Chipotle", hash: String = "hash-123") =
         ParsedFields.OfferFields(
@@ -437,26 +441,142 @@ class StateMachineTest {
     }
 
     @Test
-    fun `SessionEnded bypasses grace — session ends immediately`() {
+    fun `SessionEnded arms a short authoritative grace - not an immediate end (#431)`() {
         var state = AppState()
 
-        // Get Online
         state = machine.step(state, screenObs(
             flow = Flow.OfferPresented, parsed = offerFields(),
         )).newState
         val sessionId = state.regions.platforms[Platform.DoorDash]!!.session!!.sessionId
         assertNotNull(sessionId)
 
-        // SessionEnded → Offline, session ends immediately (no grace)
-        state = machine.step(state, screenObs(
+        val summaryAt = tick()
+        val transition = machine.step(state, screenObs(
             flow = Flow.SessionEnded,
             parsed = ParsedFields.SessionEndedFields(totalEarnings = 25.0),
-        )).newState
+            timestamp = summaryAt,
+        ))
+        state = transition.newState
 
         val dd = state.regions.platforms[Platform.DoorDash]!!
         assertEquals(Mode.Offline, dd.mode)
-        assertNull(dd.session) // ended immediately — no grace
-        assertNull(dd.pendingDestructive) // no grace set
+        // One frame must never split a live session: it stays alive through
+        // the SHORT authoritative grace, with the summary's data stashed.
+        assertNotNull(dd.session)
+        val pend = dd.pendingDestructive!!
+        assertEquals(DestructiveKind.SESSION_END, pend.kind)
+        assertTrue(pend.authoritative)
+        assertEquals(summaryAt, pend.since)
+        assertEquals(summaryAt + TransitionPolicy.AUTHORITATIVE_GRACE_MS, pend.deadline)
+        assertEquals(25.0, pend.endFields!!.totalEarnings, 0.001)
+        // And the machine armed a wake-up so the commit doesn't wait for the
+        // next observation.
+        val timer = transition.effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+            .single { it.type == TimeoutType.GRACE_COMMIT }
+        assertEquals(Platform.DoorDash, timer.platform)
+    }
+
+    @Test
+    fun `false summary mid-dash - a task flow inside the window cancels the end (#431)`() {
+        var state = AppState()
+
+        // Online and mid-pickup (heal path mints job+task from the task flow).
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskPickupNavigation,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION, storeName = "Chipotle"),
+        )).newState
+        val sessionId = state.regions.platforms[Platform.DoorDash]!!.session!!.sessionId
+
+        // Misrecognized dash summary.
+        state = machine.step(state, screenObs(
+            flow = Flow.SessionEnded,
+            parsed = ParsedFields.SessionEndedFields(totalEarnings = 99.0),
+        )).newState
+        assertNotNull(state.regions.platforms[Platform.DoorDash]!!.pendingDestructive)
+
+        // The pickup screen is still there 1s later — clearly still dashing.
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskPickupNavigation,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION, storeName = "Chipotle"),
+        )).newState
+
+        val dd = state.regions.platforms[Platform.DoorDash]!!
+        assertNull("misrecognition cancelled", dd.pendingDestructive)
+        assertEquals("same session survives", sessionId, dd.session!!.sessionId)
+        assertNotNull("task survives", dd.activeTask)
+    }
+
+    @Test
+    fun `real summary commits at the deadline via GRACE_COMMIT - honest endedAt + full payload (#431)`() {
+        var state = AppState()
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
+
+        val summaryAt = tick()
+        state = machine.step(state, screenObs(
+            flow = Flow.SessionEnded,
+            parsed = ParsedFields.SessionEndedFields(
+                totalEarnings = 25.0,
+                sessionDurationMillis = 3_600_000L,
+                offersAccepted = 5,
+                offersTotal = 8,
+            ),
+            timestamp = summaryAt,
+        )).newState
+
+        // The grace timer fires just past the deadline.
+        val transition = machine.step(state, timeoutObs(
+            type = TimeoutType.GRACE_COMMIT,
+            timestamp = summaryAt + TransitionPolicy.AUTHORITATIVE_GRACE_MS + 100,
+            targetPlatform = Platform.DoorDash,
+        ))
+        state = transition.newState
+
+        assertNull(state.regions.platforms[Platform.DoorDash]!!.session)
+        val stop = transition.effects.filterIsInstance<AppEffect.LogEvent>()
+            .single { it.event.type == AppEventType.DASH_STOP }
+        val payload = stop.event.payload as SessionStopPayload
+        assertEquals(SessionEndSource.SUMMARY_SCREEN, payload.source)
+        assertEquals(25.0, payload.totalEarnings!!, 0.001)
+        assertEquals(3_600_000L, payload.sessionDurationMillis)
+        // endedAt = when the summary appeared, not when the timer got around
+        // to committing it.
+        assertEquals(summaryAt, payload.endedAt)
+    }
+
+    @Test
+    fun `post-summary online flash does NOT resurrect the session (#431)`() {
+        var state = AppState()
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(),
+        )).newState
+
+        val summaryAt = tick()
+        state = machine.step(state, screenObs(
+            flow = Flow.SessionEnded,
+            parsed = ParsedFields.SessionEndedFields(totalEarnings = 25.0),
+            timestamp = summaryAt,
+        )).newState
+
+        // The idle map flashes "online" right after the summary — the old
+        // immediate-commit existed exactly to stop this resurrecting the
+        // session. The authoritative grace must not cancel on it.
+        state = machine.step(state, screenObs(
+            flow = Flow.Idle, modeHint = Mode.Online,
+        )).newState
+        assertNotNull(
+            "authoritative pending survives an online flash",
+            state.regions.platforms[Platform.DoorDash]!!.pendingDestructive,
+        )
+
+        // Commit still lands at the deadline.
+        state = machine.step(state, timeoutObs(
+            type = TimeoutType.GRACE_COMMIT,
+            timestamp = summaryAt + TransitionPolicy.AUTHORITATIVE_GRACE_MS + 100,
+            targetPlatform = Platform.DoorDash,
+        )).newState
+        assertNull(state.regions.platforms[Platform.DoorDash]!!.session)
     }
 
     @Test
