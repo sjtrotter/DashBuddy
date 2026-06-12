@@ -100,8 +100,9 @@ The project uses modular Clean Architecture with a strict dependency graph:
   concrete data layers.
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration.
 - **`:core:location`** — Play Services GPS tracking.
-- **`:core:datastore`** — Preferences DataStore (six single-concern stores behind Hilt
-  qualifiers — app prefs, strategy, dev settings, odometer, app state, platforms).
+- **`:core:datastore`** — Preferences DataStore (seven single-concern stores behind Hilt
+  qualifiers — app prefs, strategy, dev settings, odometer, app state, platforms,
+  rule-capability grants).
 - **`:core:designsystem`** — Brand system (no project deps): fixed dark/light palette (`DashColors`),
   Hanken Grotesk + Space Grotesk fonts (tabular numerals), `DashTheme` + `LocalGlance`, and the
   shared component library (`DashCard`, `DashChip`, `DashStatTile`, `DashGaugeRing`, `DashSegmented`,
@@ -159,8 +160,11 @@ state into `AppEffect`s.
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 
-`SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency dedup (recovery-aware)
-and runs the evaluation loopback (offer eval → `OfferEvaluationEvent` back into the machine).
+`SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency dedup (recovery-aware),
+runs the evaluation loopback (offer eval → `OfferEvaluationEvent` back into the machine), and owns
+the fail-closed action gates (#417): live `PermissionTierChecker` + the capability consent gate on
+automation-triggered `RuleAction`s (grant store: `RuleCapabilityRepository` over the
+`rule_capability_grants` DataStore; asset rules auto-grant at load).
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
@@ -218,10 +222,15 @@ Every new feature or refactor holds to these — they are forefront design input
      `NoOpCaptureBus`, #346).
    - **Secrets never reach logs** (EIA api_key redaction, #348); network logging is debug-gated.
    - **Capability gates fail closed.** An effect whose permission tier isn't granted does not
-     fire. Rules cannot request actuation at all (#425) — taps are app-owned `RuleAction`s aimed
-     by ruleset target bindings and verified at fire time (package scope + label allowlist +
-     strict click); any failed check aborts to manual. (The single-user build still stubs the
-     grant check to always-true — replacing it with the consent-keyed gate is #417.)
+     fire — tiers back onto real OS state (live accessibility-service handle, runtime location
+     grant; #417 removed the always-true stub). Rules cannot request actuation at all (#425) —
+     taps are app-owned `RuleAction`s aimed by ruleset target bindings and verified at fire
+     time (package scope + label allowlist + strict click); any failed check aborts to manual.
+     Automation-initiated taps must additionally be covered by a granted, content-pinned
+     capability key (#417): rule loads enumerate capabilities and reconcile them into the
+     grant store *before* rules go live; bundled (asset) sources auto-grant, remote sources
+     never will. A dasher-pressed Accept/Decline is its own consent (integrity checks still
+     apply). Consent UI = #422 PR 3.
    When a change touches recognition, capture, network, or effects, state its security/privacy
    posture in the PR — what's trusted, what's gated, what's scrubbed.
 

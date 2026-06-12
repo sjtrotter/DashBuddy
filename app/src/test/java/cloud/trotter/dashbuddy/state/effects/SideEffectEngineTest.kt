@@ -6,13 +6,17 @@ import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.MetadataProvider
+import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
+import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
+import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
+import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -28,7 +32,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.inOrder
@@ -38,6 +44,7 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyBlocking
 import org.mockito.kotlin.whenever
+import org.mockito.kotlin.wheneverBlocking
 
 /**
  * Behavior tests for the SideEffectEngine execution edge:
@@ -63,6 +70,16 @@ class SideEffectEngineTest {
     private val effectsFiredDao: EffectsFiredDao = mock()
     private val ttsEffectHandler: TtsEffectHandler = mock()
 
+    /** Default: every tier granted — individual tests stub denial. */
+    private val permissionTierChecker: PermissionTierChecker = mock {
+        on { isGranted(any()) } doReturn true
+    }
+
+    /** Default: every capability granted — individual tests stub denial. */
+    private val capabilityGrants: RuleCapabilityGrants = mock {
+        onBlocking { isActionGranted(anyOrNull(), any()) } doReturn true
+    }
+
     private fun buildEngine(defaultDispatcher: CoroutineDispatcher) = SideEffectEngine(
         appEventRepo = appEventRepo,
         odometerEffectHandler = odometerEffectHandler,
@@ -74,6 +91,8 @@ class SideEffectEngineTest {
         uiInteractionHandler = uiInteractionHandler,
         effectsFiredDao = effectsFiredDao,
         ttsEffectHandler = ttsEffectHandler,
+        permissionTierChecker = permissionTierChecker,
+        capabilityGrants = capabilityGrants,
         metadataProvider = MetadataProvider { "{}" },
         defaultDispatcher = defaultDispatcher,
     )
@@ -109,18 +128,20 @@ class SideEffectEngineTest {
     // #341/#425 — recovery suppression: PerformRuleAction must never replay a tap
     // =========================================================================
 
-    private fun acceptActionEffect() = AppEffect.PerformRuleAction(
-        action = RuleAction.ACCEPT_OFFER,
-        platform = Platform.DoorDash,
-        targetRef = NodeRef(
-            viewIdSuffix = "com.doordash.driverapp:id/accept_button",
-            text = null,
-            classNameHint = "android.widget.Button",
-            boundsInScreen = BoundingBox(0, 100, 200, 150),
-            pathFingerprint = "View[0]/Button[1]",
-        ),
-        sourceRuleId = "doordash.screen.offer_popup",
-    )
+    private fun acceptActionEffect(trigger: ActionTrigger = ActionTrigger.AUTOMATION) =
+        AppEffect.PerformRuleAction(
+            action = RuleAction.ACCEPT_OFFER,
+            platform = Platform.DoorDash,
+            targetRef = NodeRef(
+                viewIdSuffix = "com.doordash.driverapp:id/accept_button",
+                text = null,
+                classNameHint = "android.widget.Button",
+                boundsInScreen = BoundingBox(0, 100, 200, 150),
+                pathFingerprint = "View[0]/Button[1]",
+            ),
+            sourceRuleId = "doordash.screen.offer_popup",
+            trigger = trigger,
+        )
 
     @Test
     fun `PerformRuleAction is suppressed during recovery and executes live`() = runTest {
@@ -153,6 +174,83 @@ class SideEffectEngineTest {
         // Second fire inside RULE_ACTION_THROTTLE_MS is swallowed — an
         // app-owned bound on automated taps (#425).
         verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+    }
+
+    // =========================================================================
+    // #417 — consent gate at the PerformRuleAction seam
+    // =========================================================================
+
+    @Test
+    fun `an AUTOMATION fire without a granted capability is denied`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        wheneverBlocking { capabilityGrants.isActionGranted(anyOrNull(), any()) }
+            .thenReturn(false)
+
+        engine.process(acceptActionEffect(trigger = ActionTrigger.AUTOMATION))
+        runCurrent()
+
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any())
+    }
+
+    @Test
+    fun `an AUTOMATION fire with a granted capability fires`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+
+        engine.process(acceptActionEffect(trigger = ActionTrigger.AUTOMATION))
+        runCurrent()
+
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+        verifyBlocking(capabilityGrants) {
+            isActionGranted(eq("doordash.screen.offer_popup"), eq(RuleAction.ACCEPT_OFFER))
+        }
+    }
+
+    @Test
+    fun `a USER fire is its own consent — the grant store is not consulted`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        wheneverBlocking { capabilityGrants.isActionGranted(anyOrNull(), any()) }
+            .thenReturn(false)
+
+        engine.process(acceptActionEffect(trigger = ActionTrigger.USER))
+        runCurrent()
+
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+        verifyBlocking(capabilityGrants, never()) { isActionGranted(anyOrNull(), any()) }
+    }
+
+    @Test
+    fun `a denied ACCESSIBILITY tier blocks even a USER fire`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        whenever(permissionTierChecker.isGranted(any())).thenReturn(false)
+
+        engine.process(acceptActionEffect(trigger = ActionTrigger.USER))
+        runCurrent()
+
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any())
+    }
+
+    @Test
+    fun `rule-verb dispatch consults the real tier checker`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        // Distinct dedupeKeys: the engine throttles RequestEffect per effectKey
+        // on the wall clock, and a denied fire still consumes the slot.
+        fun screenshot(key: String) = AppEffect.RequestEffect(
+            RequestedEffect(
+                verb = EffectVerb.SCREENSHOT,
+                ruleId = "doordash.screen.offer_popup",
+                dedupeKey = key,
+            ),
+        )
+
+        whenever(permissionTierChecker.isGranted(any())).thenReturn(false)
+        engine.process(screenshot("denied"))
+        runCurrent()
+        verify(screenShotHandler, never()).capture(any(), any())
+
+        whenever(permissionTierChecker.isGranted(any())).thenReturn(true)
+        engine.process(screenshot("granted"))
+        runCurrent()
+        verify(screenShotHandler, times(1)).capture(any(), any())
     }
 
     // =========================================================================

@@ -25,3 +25,7 @@ annotation class StrategyPreferences
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class PlatformPreferences
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class RuleCapabilityPreferences

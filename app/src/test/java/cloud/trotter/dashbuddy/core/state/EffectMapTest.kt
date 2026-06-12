@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
@@ -867,6 +868,8 @@ class EffectMapTest {
         assertEquals(Platform.DoorDash, actions[0].platform)
         assertEquals("com.example:id/btn", actions[0].targetRef.viewIdSuffix)
         assertEquals("doordash.screen.delivery_summary_collapsed", actions[0].sourceRuleId)
+        // App-decided tap → must pass the engine's capability grant gate (#417).
+        assertEquals(ActionTrigger.AUTOMATION, actions[0].trigger)
     }
 
     @Test
@@ -890,6 +893,8 @@ class EffectMapTest {
         assertEquals(RuleAction.ACCEPT_OFFER, actions[0].action)
         assertEquals(acceptRef, actions[0].targetRef)
         assertEquals("doordash.screen.offer_popup", actions[0].sourceRuleId)
+        // Dasher-pressed → its own consent; the grant gate does not apply (#417).
+        assertEquals(ActionTrigger.USER, actions[0].trigger)
     }
 
     @Test

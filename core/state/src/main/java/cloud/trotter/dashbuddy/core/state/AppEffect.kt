@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -99,13 +100,17 @@ sealed class AppEffect {
      * against the live tree scoped to the platform's package and verifies the
      * node against the action's app-owned expectation before clicking.
      * [sourceRuleId] is the rule that supplied the binding — consent-gate
-     * provenance (#422/#417).
+     * provenance (#422/#417). [trigger] records who initiated the fire: an
+     * AUTOMATION fire must be covered by a granted capability at the engine's
+     * consent gate, while a USER fire is its own consent (#417); integrity
+     * checks (tier, package, label, throttle) apply to both.
      */
     data class PerformRuleAction(
         val action: RuleAction,
         val platform: Platform,
         val targetRef: NodeRef,
         val sourceRuleId: String?,
+        val trigger: ActionTrigger,
     ) : AppEffect()
 
     /** A rule-originated side effect. */

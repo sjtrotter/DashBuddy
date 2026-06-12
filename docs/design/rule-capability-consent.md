@@ -1,9 +1,13 @@
 # Design: action targets, capabilities + load-time consent
 
 **Status:** layers 1–3 and the capability refit implemented by #425 (2026-06-11);
-the grant store + execution gate remain #417, the consent UI is #422 PR 3.
-Supersedes the original draft of this doc (f9193c7, reconciled 51c58e1) and the
-closed #85 ("GigPlatform interface") — see *History* at the bottom.
+the grant store + execution gate implemented by #417 (2026-06-12): asset
+auto-grant on load, AUTOMATION fires gated by (sourceRuleId, action) →
+all-enumerated-keys-granted lookup, USER fires are their own consent, and the
+OS tier check is real (live service handle / runtime permission). The consent
+UI is #422 PR 3. Supersedes the original draft of this doc (f9193c7,
+reconciled 51c58e1) and the closed #85 ("GigPlatform interface") — see
+*History* at the bottom.
 
 ## The model: three layers
 

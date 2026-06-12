@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Consent gate is live — bound-target taps must still fire (#417).**
+  The always-true permission stub is gone: automation taps (the post-delivery expand chevron)
+  now require a granted capability key, and bundled rules are auto-granted at rule load.
+  Working = expand auto-tap and bubble/notification Accept/Decline behave exactly as before
+  (no regression — asset rules auto-grant covers them). Broken = a tap silently stops
+  happening and the log shows `Denied expand_earnings — no granted capability` or
+  `ACCESSIBILITY tier not granted` while the service is clearly running — capture logcat.
+  - Confirmed: 0/2
+
 - **Uber sensitive screens now blocked + UNKNOWN-capture scrub (#432).**
   Uber finally has matcher-layer sensitive rules (wallet / Instant Pay / cash-out / bank /
   identity). On a dash, briefly open Uber's earnings/wallet area: working = the app treats it

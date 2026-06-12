@@ -4,6 +4,8 @@ import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
+import cloud.trotter.dashbuddy.domain.action.ActionTrigger
+import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -53,6 +55,8 @@ class SideEffectEngine @Inject constructor(
     private val uiInteractionHandler: UiInteractionHandler,
     private val effectsFiredDao: EffectsFiredDao,
     private val ttsEffectHandler: TtsEffectHandler,
+    private val permissionTierChecker: PermissionTierChecker,
+    private val capabilityGrants: RuleCapabilityGrants,
     private val metadataProvider: MetadataProvider,
     @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
 ) : EffectExecutor {
@@ -194,9 +198,10 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.PerformRuleAction -> {
                 // The ONLY path that taps a third-party app (#425). The target
                 // is ruleset data; everything that decides whether/where the
-                // tap lands is app-owned: this throttle, the tier gate (the
-                // #417 grant check lands at this seam, keyed by
-                // (sourceRuleId, action) against the enumerated capabilities),
+                // tap lands is app-owned: this throttle, the live tier check,
+                // the consent gate (#417 — an AUTOMATION fire must be covered
+                // by a granted, content-pinned capability looked up by
+                // (sourceRuleId, action); a USER fire is its own consent),
                 // and the package + label verification in the handler.
                 val throttleKey = "action:${effect.action.wire}:${effect.platform.wire}"
                 val now = System.currentTimeMillis()
@@ -204,8 +209,17 @@ class SideEffectEngine @Inject constructor(
                     Timber.v("Throttled action: %s", throttleKey)
                     return
                 }
-                if (!isPermissionGranted(PermissionTier.ACCESSIBILITY)) {
+                if (!permissionTierChecker.isGranted(PermissionTier.ACCESSIBILITY)) {
                     Timber.w("Denied %s — ACCESSIBILITY tier not granted (fail closed)", effect.action.wire)
+                    return
+                }
+                if (effect.trigger == ActionTrigger.AUTOMATION &&
+                    !capabilityGrants.isActionGranted(effect.sourceRuleId, effect.action)
+                ) {
+                    Timber.w(
+                        "Denied %s — no granted capability for rule '%s' (fail closed)",
+                        effect.action.wire, effect.sourceRuleId,
+                    )
                     return
                 }
                 actionLastFiredAt[throttleKey] = now
@@ -326,7 +340,7 @@ class SideEffectEngine @Inject constructor(
      * Permission tier is checked before execution — denied verbs are logged and skipped.
      */
     private suspend fun dispatchRuleEffect(e: RequestedEffect) {
-        if (!isPermissionGranted(e.verb.tier)) {
+        if (!permissionTierChecker.isGranted(e.verb.tier)) {
             Timber.w("Denied effect %s — permission tier %s not granted", e.verb, e.verb.tier)
             return
         }
@@ -460,16 +474,6 @@ class SideEffectEngine @Inject constructor(
         OfferAction.MANUAL_REVIEW -> ChatPersona.Inspector
         OfferAction.NOTHING -> ChatPersona.Inspector
     }
-
-    /**
-     * Check if the given [PermissionTier] is granted.
-     *
-     * For alpha (single user, all permissions already granted via system settings),
-     * this returns true for all tiers. When multi-user or permission-gated features
-     * are needed, swap in a DataStore-backed implementation.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    private fun isPermissionGranted(tier: PermissionTier): Boolean = true
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
         is AppEffect.UpdateBubble,

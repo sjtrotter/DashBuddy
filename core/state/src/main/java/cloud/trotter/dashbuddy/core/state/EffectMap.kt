@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
@@ -207,7 +208,14 @@ class EffectMap @Inject constructor() {
             if (platform != null && offer != null && action != null) {
                 val target = offer.targets[action.targetBindName]
                 if (target != null) {
-                    add(AppEffect.PerformRuleAction(action, platform, target, offer.sourceRuleId))
+                    // USER trigger: the dasher pressed Accept/Decline — that
+                    // press is the consent for this fire (#417).
+                    add(
+                        AppEffect.PerformRuleAction(
+                            action, platform, target, offer.sourceRuleId,
+                            trigger = ActionTrigger.USER,
+                        ),
+                    )
                 } else {
                     Timber.w(
                         "No '%s' target bound for %s — %s unavailable, leaving it to the user",
@@ -802,6 +810,9 @@ class EffectMap @Inject constructor() {
                 platform = platform,
                 targetRef = deferred.target,
                 sourceRuleId = deferred.ruleId,
+                // The app decided this tap on its own — it must be covered by
+                // a granted capability at the engine's consent gate (#417).
+                trigger = ActionTrigger.AUTOMATION,
             ),
         )
     }
