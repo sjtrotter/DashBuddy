@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.core.pipeline.FrameGate
 import cloud.trotter.dashbuddy.core.pipeline.passesContentGates
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
+import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed.WindowsChangedPipeline
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onEach
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,6 +46,7 @@ class AccessibilityPipeline @Inject constructor(
     private val classifier: ObservationClassifier,
     private val captureWriter: CaptureWriter,
     private val platformPreferences: PlatformPreferences,
+    private val stats: PipelineStats,
 ) {
     companion object {
         const val SCREEN_PIPELINE_ID = "accessibility.window"
@@ -71,13 +74,22 @@ class AccessibilityPipeline @Inject constructor(
     private fun clickEvents(): Flow<PipelineEvent.Click> = source.events
         .filter { it.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED }
         .mapNotNull { event ->
-            val sourceNode = event.source ?: return@mapNotNull null
-            val node = sourceNode.toUiNode() ?: return@mapNotNull null
-            PipelineEvent.Click(
-                timestamp = System.currentTimeMillis(),
-                node = node,
-                packageName = event.packageName?.toString(),
-            )
+            try {
+                val sourceNode = event.source ?: return@mapNotNull null
+                val node = sourceNode.toUiNode() ?: return@mapNotNull null
+                PipelineEvent.Click(
+                    timestamp = System.currentTimeMillis(),
+                    node = node,
+                    packageName = event.packageName?.toString(),
+                )
+            } catch (e: Exception) {
+                // A malformed node tree must cost one click, not the whole
+                // sensing upstream (#430) — this was the only unwrapped
+                // mapping call in the chain.
+                stats.onMappingFailure()
+                Timber.w(e, "Click mapping failed — dropping click event")
+                null
+            }
         }
 
     // ── Main pipeline ──────────────────────────────────────────────────
@@ -88,7 +100,11 @@ class AccessibilityPipeline @Inject constructor(
 
         // Gate: drop sensitive/noise observations (pledge: never store or
         // forward) — the shared content gate (#399).
-        .filter { (obs, _) -> passesContentGates(obs) }
+        .filter { (obs, _) ->
+            val passes = passesContentGates(obs)
+            if (!passes) stats.onContentGateDrop(obs.parsed)
+            passes
+        }
 
         // Gate: drop observations from disabled platforms (defense-in-depth)
         .filter { (_, event) ->
@@ -98,8 +114,10 @@ class AccessibilityPipeline @Inject constructor(
                 else -> null
             }
             val platform = Platform.fromPackage(pkg)
-            platform == Platform.Unknown ||
+            val allowed = platform == Platform.Unknown ||
                 platform in platformPreferences.enabledPlatforms.value
+            if (!allowed) stats.onDisabledPlatformDrop()
+            allowed
         }
 
         // Dedup + Capture: write unique observations to disk, skip duplicates.
@@ -114,6 +132,7 @@ class AccessibilityPipeline @Inject constructor(
                 else -> null
             }
             if (!frameGate.admit(obs, contentHash)) {
+                stats.onDuplicateSuppressed()
                 Timber.v("Dedup: suppressed %s", obs.target)
                 return@mapNotNull null
             }
@@ -131,9 +150,13 @@ class AccessibilityPipeline @Inject constructor(
         // Gate: don't forward UNKNOWN observations to state machine
         .filter { obs ->
             val isUnknown = obs.target == UNKNOWN_TARGET
-            if (isUnknown) Timber.v("Unknown gate: captured but not forwarding %s", obs.target)
+            if (isUnknown) {
+                stats.onUnknownDropped()
+                Timber.v("Unknown gate: captured but not forwarding %s", obs.target)
+            }
             !isUnknown
         }
+        .onEach { stats.onForwarded() }
 
 }
 
