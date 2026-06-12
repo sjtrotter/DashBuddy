@@ -326,10 +326,12 @@ Branch naming: `<type>/<issue-number(s)>-<short-description>`, e.g. `feature/110
 Include all relevant issue numbers when a branch covers multiple issues, e.g. `feature/79-80-offer-bubble-net-pay`.
 
 **Always merge PRs with `--merge`** (a true merge commit), never `--squash`. Squash loses
-per-commit history and makes it harder to bisect or attribute changes.
+per-commit history and makes it harder to bisect or attribute changes. **Always pass
+`--delete-branch`** so the merged branch is pruned automatically — without it, merged branches
+pile up on the remote (a 57-branch cleanup on 2026-06-12 was the receipt).
 
 ```bash
-gh pr merge <NUMBER> --merge
+gh pr merge <NUMBER> --merge --delete-branch
 ```
 
 (The `gh` binary path and all project/field IDs are workstation-specific — they live in
