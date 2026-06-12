@@ -223,6 +223,58 @@ class DefaultRulesIntegrationTest {
     }
 
     // =========================================================================
+    // Per-offer dedupe keys (#427)
+    // =========================================================================
+
+    @Test
+    fun `distinct offers resolve distinct dedupe keys via the parsedHash token`() {
+        // The old 'offer-ss-{offerHash}' template stayed literal (offerHash is
+        // computed in ParsedFieldsFactory, not a raw parse field), so every
+        // offer shared ONE dedupe key and the second offer inside the 60s
+        // throttle window was silently swallowed. The reserved {parsedHash}
+        // token resolves post-factory (DedupeTokens — same call the classifier
+        // makes) to the typed parse's content identity.
+        val snapshots = TestResourceLoader.loadSnapshots("snapshots/offer_popup")
+        assertTrue("offer corpus must not be empty", snapshots.isNotEmpty())
+
+        val keysByFile = snapshots.mapNotNull { (fn, tree, _) ->
+            val result = screenRuleset.matchFirst(tree, platformWire = "doordash")
+                ?: return@mapNotNull null
+            if (result.intent != "offer_popup") return@mapNotNull null
+            val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
+            val resolved = DedupeTokens.resolve(result.effects, parsed)
+            val key = resolved.firstNotNullOfOrNull { e ->
+                e.dedupeKey?.takeIf { it.startsWith("offer-ss-") }
+            } ?: return@mapNotNull null
+            fn to key
+        }
+
+        assertTrue("expected offer screenshots with dedupe keys", keysByFile.size >= 2)
+        assertTrue(
+            "no unresolved template tokens may survive resolution: $keysByFile",
+            keysByFile.none { (_, k) -> k.contains('{') },
+        )
+        assertTrue(
+            "distinct offers must resolve DISTINCT dedupe keys (was one literal for all): $keysByFile",
+            keysByFile.map { it.second }.toSet().size > 1,
+        )
+    }
+
+    @Test
+    fun `the same offer resolves the same dedupe key on re-observation`() {
+        val (_, tree, _) = TestResourceLoader.loadSnapshots("snapshots/offer_popup").first()
+        fun resolveOnce(): String? {
+            val result = screenRuleset.matchFirst(tree, platformWire = "doordash") ?: return null
+            val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
+            return DedupeTokens.resolve(result.effects, parsed)
+                .firstNotNullOfOrNull { e -> e.dedupeKey?.takeIf { it.startsWith("offer-ss-") } }
+        }
+        val first = resolveOnce()
+        assertNotNull("offer snapshot must resolve a screenshot dedupe key", first)
+        assertEquals("re-observation must dedupe against the same key", first, resolveOnce())
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

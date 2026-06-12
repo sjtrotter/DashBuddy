@@ -1058,7 +1058,7 @@
         },
         "dedupeKey": {
           "type": "string",
-          "description": "Stable key for deduplication. Supports {fieldName} template interpolation."
+          "description": "Stable key for deduplication. Supports {fieldName} template interpolation against the branch's RAW parse fields, plus the reserved {parsedHash} token, resolved after typed parsing to the parse's content identity (ParsedFields.dedupeHash) — use it for per-offer/per-parse dedupe of fields the rule itself doesn't parse (#427)."
         },
         "throttleMs": {
           "type": "integer",

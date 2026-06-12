@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Per-offer dedupe now engages (#427).**
+  Offer screenshot/log dedupe keys used to resolve to one shared literal, so a second distinct
+  offer within 60s was silently swallowed. Now keyed per-offer via `{parsedHash}`. Watch on a
+  busy dash (with Evidence master + offers enabled, see #426 item): two different offers
+  arriving close together should BOTH capture; the same offer re-rendering (collapse/expand,
+  re-observation) should still capture only once. Broken = missing capture for a distinct
+  second offer, or duplicate captures of one offer inside the same minute.
+  - Confirmed: 0/2
+
 - **Evidence Locker settings are now real (#426).**
   Screenshots (offer / delivery / dash-summary PNGs in Pictures/DashBuddy) previously fired
   unconditionally; they are now gated on the Evidence settings, whose master toggle defaults

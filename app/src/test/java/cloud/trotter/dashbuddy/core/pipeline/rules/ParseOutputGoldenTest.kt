@@ -227,18 +227,20 @@ class ParseOutputGoldenTest {
 
     /**
      * Dead dedupeKey templates already known (ratchet — may only shrink):
-     * - `offer_popup:offerHash` — the literal-`{offerHash}` bug, #427's scope.
      * - `delivery_summary_expanded:sessionEarnings` — never parses non-null on
      *   any expanded-summary capture; either the screen stopped showing it or
-     *   the extractor regressed. Triage with #427.
+     *   the extractor regressed. The expanded key still differentiates per
+     *   delivery via its `{totalPay}` half, so dedupe works; clean up the dead
+     *   half when the summary rules are next touched.
      * - `delivery_summary_collapsed:totalPay` — the mirror image: collapsed
      *   receipts parse sessionEarnings but never the per-delivery totalPay
-     *   (it's behind the expand), so that half of the key never substitutes.
-     *   Triage with #427.
+     *   (it's behind the expand); the `{sessionEarnings}` half differentiates.
+     * (The third original entry, `offer_popup:offerHash`, was the #427 bug —
+     * fixed by the reserved `{parsedHash}` token, resolved post-factory by the
+     * classifier via [DedupeTokens].)
      * Entries are "ruleId:field".
      */
     private val knownDeadDedupeTemplates = setOf(
-        "doordash.screen.offer_popup:offerHash",
         "doordash.screen.delivery_summary_expanded:sessionEarnings",
         "doordash.screen.delivery_summary_collapsed:totalPay",
     )
@@ -265,6 +267,9 @@ class ParseOutputGoldenTest {
                     val dk = effect.dedupeKey ?: continue
                     for (m in template.findAll(dk)) {
                         val field = m.groupValues[1]
+                        // Reserved tokens resolve post-factory in the
+                        // classifier (DedupeTokens, #427) — never raw fields.
+                        if (field in DedupeTokens.RESERVED_FIELD_NAMES) continue
                         val key = result.ruleId to field
                         seen[key] = (seen[key] ?: false) || (result.fields[field] != null)
                         exampleKey.putIfAbsent(key, dk)
