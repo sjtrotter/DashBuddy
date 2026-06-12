@@ -763,9 +763,12 @@ class EffectMap @Inject constructor() {
 
     private fun evaluateGate(gate: ParsedFieldsGate?, parsed: ParsedFields): Boolean {
         if (gate == null) return true
-        // Fail CLOSED: if fields can't be extracted we can't prove the condition,
-        // and a gated action (potentially an auto-click) must not fire (#345).
-        val fieldsMap = parsedFieldsToMap(parsed) ?: return false
+        // Explicit per-subtype field maps (#434) replace the old Java
+        // reflection here — exhaustive over the sealed hierarchy, so
+        // extraction can never fail, and rename-proof under R8. The #345
+        // fail-closed posture is preserved by the absent-field semantics
+        // below: a field the subtype doesn't carry proves nothing.
+        val fieldsMap = parsed.toFieldMap()
         return when (gate) {
             is ParsedFieldsGate.FieldEquals -> fieldsMap[gate.field] == gate.value
             // An ABSENT field (wrong name, or ParsedFields.None) proves nothing —
@@ -773,31 +776,6 @@ class EffectMap @Inject constructor() {
             is ParsedFieldsGate.FieldNotEquals ->
                 gate.field in fieldsMap && fieldsMap[gate.field] != gate.value
             is ParsedFieldsGate.FieldNotNull -> fieldsMap[gate.field] != null
-        }
-    }
-
-    /**
-     * Extract named fields from a [ParsedFields] subtype into a flat map
-     * for gate evaluation. Uses Java reflection on data class fields.
-     *
-     * `activity` is excluded because it is a classification tag inherited
-     * from the sealed parent — rules gate on structural fields, not the
-     * activity discriminator. Returns null on extraction failure so the
-     * caller rejects (fail closed) instead of evaluating against an empty
-     * map, where FieldNotEquals would spuriously fire (#345).
-     */
-    private fun parsedFieldsToMap(parsed: ParsedFields): Map<String, Any?>? {
-        if (parsed is ParsedFields.None) return emptyMap()
-        return try {
-            parsed::class.java.declaredFields
-                .filter { it.name != "activity" }
-                .associate { field ->
-                    field.isAccessible = true
-                    field.name to field.get(parsed)
-                }
-        } catch (e: Exception) {
-            Timber.w(e, "Gate field extraction failed for %s", parsed::class.simpleName)
-            null
         }
     }
 
