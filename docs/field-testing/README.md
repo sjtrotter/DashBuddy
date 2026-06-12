@@ -69,7 +69,12 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   working = the bubble's chat history and cards are attributed to the SAME dash immediately
   (no orphaned/empty bubble until the next dash starts). Broken = empty chat/card stack after
   a mid-dash restart, or messages landing under a null dash in the DB.
-  - Confirmed: 0/2
+  - Confirmed: 1/2. **2026-06-12 (DoorDash):** force-quit + reload **after resetting the
+    accessibility permission** (a harder restart than a plain force-stop — the service rebinds from
+    scratch) reloaded the bubble with the **current dash still active**. Confirms the dash id derives
+    from restored state, not the crash-suppressed effect. Needs one more clean sighting (ideally
+    confirming the chat history + completed cards re-populate under that same dash, not just that the
+    dash is active). (See 2026-06-12 log entry #6.)
 
 - **Engine latency + dedupe pack (#436).**
   Four behaviors to watch: (a) accepting/declining an offer FAST (inside ~1s of the verdict
@@ -544,6 +549,14 @@ denied capability would have left it collapsed (`Denied expand_earnings — no g
 so the asset-rule auto-grant is covering it. Together with #1 (bubble Accept), both gated automation
 taps fired with no regression. Bumped the #425 expand-earnings and #417 consent-gate checklist items
 to 1/2 each.
+
+#### 6. Bubble survives force-quit + accessibility-permission reset — #437 (1/2)
+Dasher **force-quit and reloaded the app after resetting the accessibility permission** mid-dash —
+a harder restart than a plain force-stop, since the accessibility service rebinds from scratch — and
+the bubble **reloaded with the current dash still active** (not an orphaned/empty bubble). Confirms
+the bubble's dash id derives from restored state rather than the crash-suppressed effect (#437).
+Bumped the checklist item to 1/2; second sighting should confirm the **chat history + completed
+cards** re-populate under that same dash, not just that the dash reads active.
 
 #### 2. Shop & Deliver terminal `total/total` — #302 CONFIRMED (2/2, retired)
 The pickup/shop card read **`shop 25/25 · 0.6/min`** at end of shop — the terminal `total/total`
