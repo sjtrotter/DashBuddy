@@ -222,10 +222,15 @@ class DefaultRulesIntegrationTest {
         val idMatch = screen("Identity verification", "2 of 4", "Verify that the ID matches the recipient and they aren't intoxicated.", "Verify", "Can't verify")
         val signatureHandoff = screen("Hand your phone to the customer so they can provide their signature.", "Got it")
         val scanResult = screen("Scan Successful", "Now you're ready to start verification.", "Continue")
+        // Found in the #462 sweep — were leaking to UNKNOWN (the arrival banner
+        // with recipient name+address). Both must block.
+        val signatureCanvas = screen("3 of 4", "A recipient signature is required for this order", "I have received this order", "Clear")
+        val alcoholArrival = screen("I've arrived at recipient", "Verify the recipient's identity and collect a signature at dropoff", "Remember, you’re required by law to confirm the recipient's identity before handing over the order.", "Hand it to recipient")
 
         for ((name, node) in listOf(
             "license-scan" to licenseScan, "id-match" to idMatch,
             "signature-handoff" to signatureHandoff, "scan-result" to scanResult,
+            "signature-canvas" to signatureCanvas, "alcohol-arrival" to alcoholArrival,
         )) {
             val r = screenRuleset.matchFirst(node, platformWire = "doordash")
             assertTrue(

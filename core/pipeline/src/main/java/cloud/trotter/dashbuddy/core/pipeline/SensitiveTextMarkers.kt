@@ -62,6 +62,11 @@ object SensitiveTextMarkers {
         "Driver's License",
         "Identity verification",
         "provide their signature",
+        // The signature canvas + the alcohol-arrival identity/signature banner
+        // (the latter leaks recipient name+address) — found in the #462 sweep.
+        "A recipient signature is required",
+        "collect a signature at dropoff",
+        "required by law to confirm the recipient",
     )
 
     /**
