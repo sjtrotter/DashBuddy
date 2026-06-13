@@ -221,6 +221,20 @@
             "zoneName": null
         }
     },
+    "dash_along_the_way/2026-06-12__doordash__dash_along_the_way__9a598a.json": {
+        "ruleId": "doordash.screen.dash_along_the_way",
+        "intent": "dash_along_the_way",
+        "shape": "idle",
+        "fields": {
+            "isHeadingBackToZone": false,
+            "sessionPay": null,
+            "sessionType": null,
+            "spotSaveDeadline": 1780337340000,
+            "startingSession": false,
+            "waitTimeEstimate": null,
+            "zoneName": null
+        }
+    },
     "dash_along_the_way/20260128_151426_597_ON_DASH_ALONG_THE_WAY.json": {
         "ruleId": "doordash.screen.dash_along_the_way",
         "intent": "dash_along_the_way",
@@ -452,6 +466,12 @@
     "dash_schedule/2026-03-27_10-39-27__UNKNOWN__546dde80.json": {
         "ruleId": "doordash.screen.dash_schedule",
         "intent": "dash_schedule",
+        "shape": null,
+        "fields": {}
+    },
+    "dash_schedule_picker/2026-06-12__doordash__dash_schedule_picker__020377.json": {
+        "ruleId": "doordash.screen.dash_schedule_picker",
+        "intent": "dash_schedule_picker",
         "shape": null,
         "fields": {}
     },
@@ -1830,6 +1850,12 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "dropoff_reminder/2026-06-12__doordash__dropoff_reminder__fd6e80.json": {
+        "ruleId": "doordash.screen.dropoff_reminder",
+        "intent": "dropoff_reminder",
+        "shape": null,
+        "fields": {}
+    },
     "end_dash_confirm/2026-02-24_20-42-56__UNKNOWN__a9057da6.json": {
         "ruleId": "doordash.screen.end_dash_confirm",
         "intent": "end_dash_confirm",
@@ -1863,6 +1889,12 @@
     "help/2026-04-19_15-45-14__HELP_VIEW__14a25496.json": {
         "ruleId": "doordash.screen.help",
         "intent": "help",
+        "shape": null,
+        "fields": {}
+    },
+    "help_menu/2026-06-12__doordash__help_menu__985214.json": {
+        "ruleId": "doordash.screen.help_menu",
+        "intent": "help_menu",
         "shape": null,
         "fields": {}
     },
@@ -3446,6 +3478,12 @@
             "storeName": "[redacted]",
             "subFlow": "NAVIGATION"
         }
+    },
+    "pickup_qr_confirm/2026-06-12__doordash__pickup_qr_confirm__86cce3.json": {
+        "ruleId": "doordash.screen.pickup_qr_confirm",
+        "intent": "pickup_qr_confirm",
+        "shape": null,
+        "fields": {}
     },
     "pickup_resolution_options/2026-06-12__doordash__pickup_resolution_options__56f6eb.json": {
         "ruleId": "doordash.screen.pickup_resolution_options",
