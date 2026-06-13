@@ -19,6 +19,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 
@@ -151,5 +152,18 @@ class JobEconomicsTest {
         assertNotNull(job)
         assertEquals("offer-1 already counted → no duplicate", 1, job!!.acceptedOffers.size)
         assertEquals(6.0, job.totalNetPay, 0.001)
+    }
+
+    @Test
+    fun `blended economics are null with no accepted offers, summed otherwise (#460)`() {
+        // The task card's $/hr co-hero shows "—" (null), never a misleading $0,
+        // when no accepted-offer economics exist yet.
+        val empty = Job(jobId = "j0", offerStoreHint = emptyList(), parentOfferHash = "o0", startedAt = 0L)
+        assertNull(empty.blendedNetPay)
+        assertNull(empty.blendedEstMinutes)
+
+        val seeded = jobWith("o1", net = 6.5, est = 18.0, dist = 4.2, pay = 7.5)
+        assertEquals(6.5, seeded.blendedNetPay!!, 0.001)
+        assertEquals(18.0, seeded.blendedEstMinutes!!, 0.001)
     }
 }

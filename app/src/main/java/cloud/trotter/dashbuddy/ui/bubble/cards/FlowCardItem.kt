@@ -35,6 +35,7 @@ import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -435,155 +436,247 @@ private fun badgeMeta(name: String, c: AppColors): Pair<String, Color> = when (n
     else -> name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() } to c.neutral
 }
 
-/**
- * Pickup body: hero is the **countdown to pickup-by deadline**, colored
- * green/amber/red. When no deadline is parsed, falls back to elapsed time.
- * Frozen cards show a "+Xm ahead" / "Xm late" delta vs the deadline plus
- * arrival info.
- */
+/** Pickup body — the #324/#460 task-card vocabulary (co-hero pair). */
 @Composable
 private fun PickupBody(snap: FlowCardSnapshot.Pickup, isActive: Boolean) {
-    DeadlineBody(
+    TaskBody(
         phaseStartedAt = snap.phaseStartedAt,
         arrivedAt = snap.arrivedAt,
         deadlineMillis = snap.deadlineMillis,
         phaseEndedAt = snap.phaseEndedAt,
         isActive = isActive,
+        isDrop = false,
         primary = snap.storeName,
+        netPay = snap.netPay,
+        estMinutes = snap.estMinutes,
         confirmedAt = snap.confirmedAt,
         itemsShopped = snap.itemsShopped,
         itemsRemaining = snap.itemsRemaining,
         activity = snap.activity,
-        // No "-by": the DeadlineBody caption already appends "· by HH:MM",
-        // so "till pickup-by" read as "till pickup-by · by 17:10" (#460).
-        deadlineLabel = "till pickup",
     )
 }
 
-/**
- * Delivery body: same shape as Pickup but with deliver-by deadline and
- * customer hash instead of store name.
- */
+/** Delivery body — same co-hero shape as Pickup, deliver-by deadline + customer. */
 @Composable
 private fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
-    DeadlineBody(
+    TaskBody(
         phaseStartedAt = snap.phaseStartedAt,
         arrivedAt = snap.arrivedAt,
         deadlineMillis = snap.deadlineMillis,
         phaseEndedAt = snap.phaseEndedAt,
         isActive = isActive,
+        isDrop = true,
         primary = customerDisplayName(snap.customerHash),
+        netPay = snap.netPay,
+        estMinutes = snap.estMinutes,
         confirmedAt = null,
         itemsShopped = null,
         itemsRemaining = null,
         activity = null,
-        deadlineLabel = "till deliver",
     )
 }
 
 /**
- * Shared body for Pickup + Delivery — both have a deadline + arrival
- * lifecycle. Hero is countdown-to-deadline while active; "+Xm ahead" /
- * "Xm late" once frozen.
+ * Shared task-card body for Pickup + Delivery (#324/#460). Two co-heroes:
+ * the phase timer (To-go countdown → Dwell count-up once arrived) and the
+ * live "Running at $/hr" realized rate (holds until the deadline, then erodes
+ * — the drop-it signal). Below: an arrival/deadline caption, the drop-it
+ * floor banner, shop pace, and a store/customer detail line. All time-derived
+ * values tick off `rememberNow()` while the card is live.
  */
 @Composable
-private fun DeadlineBody(
+private fun TaskBody(
     phaseStartedAt: Long,
     arrivedAt: Long?,
     deadlineMillis: Long?,
     phaseEndedAt: Long?,
     isActive: Boolean,
+    isDrop: Boolean,
     primary: String,
+    netPay: Double?,
+    estMinutes: Double?,
     confirmedAt: Long?,
     itemsShopped: Int?,
     itemsRemaining: Int?,
     activity: String?,
-    deadlineLabel: String,
 ) {
+    val c = AppTheme.colors
+    val now = if (isActive) rememberNow().value else (phaseEndedAt ?: phaseStartedAt)
+    val arrived = arrivedAt != null
+    val verb = if (isDrop) "deliver" else "pickup"
+    val overdue = deadlineMillis != null && now > deadlineMillis
+    val hourly = projectedHourly(netPay, estMinutes, deadlineMillis, now)
+
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        val now = if (isActive) rememberNow().value else (phaseEndedAt ?: phaseStartedAt)
-
-        if (isActive) {
-            if (deadlineMillis != null) {
-                val remaining = deadlineMillis - now
-                HeroBig(text = formatCountdown(remaining), color = deadlineColor(remaining))
-                // Caption is `${deadlineLabel} · by HH:MM` — the wall-clock anchor
-                // lets the dasher cross-check the countdown against what DoorDash
-                // itself is showing on screen (field log 2026-05-19 #1 / 2026-05-17 #2).
-                Caption("$deadlineLabel · by ${formatTime(deadlineMillis)}")
-            } else {
-                // No deadline parsed — fall back to elapsed time
-                HeroBig(formatDuration(now - phaseStartedAt))
-                Caption(if (arrivedAt == null) "en route" else "at stop")
-            }
-        } else {
-            // Frozen card. Three cases:
-            //   (a) arrivedAt + deadlineMillis → delta vs deadline ("+Xm ahead" / "Xm late")
-            //   (b) arrivedAt null but phaseEndedAt set → drop-off completed without
-            //       an observed arrival sub-state (typical DoorDash no-contact flow).
-            //       Show total phase duration with started/completed times in
-            //       the tertiary row instead of the "—" placeholder.
-            //   (c) nothing useful → placeholder
-            val arrivalRemaining = if (deadlineMillis != null && arrivedAt != null)
-                deadlineMillis - arrivedAt else null
+        // ---- Co-hero pair: phase timer + live realized $/hr ----
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // LEFT — phase timer.
+            val timerLabel: String
+            val timerValue: String
+            val timerSub: String?
+            val timerColor: Color
             when {
-                arrivalRemaining != null -> {
-                    val deltaLabel = if (arrivalRemaining >= 0)
-                        "+${formatCountdown(arrivalRemaining)} ahead"
-                    else
-                        "${formatCountdown(-arrivalRemaining)} late"
-                    HeroBig(text = deltaLabel, color = deadlineColor(arrivalRemaining))
-                    Caption("vs $deadlineLabel")
+                arrived -> {
+                    timerLabel = "Dwell"
+                    timerValue = formatCountdown(now - arrivedAt)
+                    timerSub = if (isDrop) "at door" else "at store"
+                    timerColor = deadlineMillis?.let { deadlineColor(it - arrivedAt) } ?: c.text
                 }
-                phaseEndedAt != null -> {
-                    HeroBig(formatDuration(phaseEndedAt - phaseStartedAt))
-                    Caption("duration")
+                deadlineMillis != null -> {
+                    timerLabel = if (overdue) "Overdue" else "To go"
+                    timerValue = formatCountdown(deadlineMillis - now)
+                    timerSub = null
+                    timerColor = deadlineColor(deadlineMillis - now)
                 }
                 else -> {
-                    HeroBig("—")
-                    Caption(deadlineLabel)
+                    timerLabel = "Elapsed"
+                    timerValue = formatDuration(now - phaseStartedAt)
+                    timerSub = "en route"
+                    timerColor = c.text
+                }
+            }
+            TaskMetric(
+                modifier = Modifier.weight(1f),
+                live = isActive,
+                label = timerLabel,
+                value = timerValue,
+                sub = timerSub,
+                color = timerColor,
+            )
+            Box(Modifier.size(width = 1.dp, height = 36.dp).background(c.line))
+            // RIGHT — Running at $/hr (erodes past the deadline).
+            TaskMetric(
+                modifier = Modifier.weight(1f),
+                live = isActive && hourly != null,
+                label = "Running at",
+                value = if (hourly != null) "${Formats.money0(hourly)}/hr${if (overdue) " ↓" else ""}" else "—",
+                sub = if (hourly == null) null else if (overdue) "dropping" else "on track",
+                color = hourly?.let { hourlyColor(it, c) } ?: c.text3,
+            )
+        }
+
+        // ---- arrival / deadline caption ----
+        val caption = buildString {
+            if (arrived && deadlineMillis != null) {
+                val margin = deadlineMillis - arrivedAt
+                append("arrived ${formatCountdown(kotlin.math.abs(margin))} ${if (margin >= 0) "early" else "late"} · ")
+            }
+            when {
+                deadlineMillis == null -> append(if (arrived) "at stop" else "en route")
+                overdue -> append("${formatCountdown(now - deadlineMillis)} past $verb-by")
+                else -> append("$verb by ${formatTime(deadlineMillis)}")
+            }
+        }
+        Caption(caption)
+
+        // ---- drop-it floor banner: overdue AND the rate has eroded below the floor ----
+        if (isActive && overdue && hourly != null && hourly < DROP_FLOOR_HOURLY) {
+            Surface(shape = MaterialTheme.shapes.small, color = c.badBg) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = null, tint = c.bad, modifier = Modifier.size(16.dp))
+                    Text(
+                        "Below your floor — no longer worth the wait.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = c.bad,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
         }
 
-        // Tertiary row — store/customer + lifecycle times + items
-        val tertiary = buildString {
-            append(primary)
-            arrivedAt?.let {
-                append(" · arrived ${formatTime(it)}")
-            }
-            confirmedAt?.let {
-                append(" · picked up ${formatTime(it)}")
-            }
-            // When we don't have an arrival (no-contact-delivery case),
-            // surface the started/completed wall-clock so the dasher can
-            // read what happened — paralleling Pickup's "arrived · picked up".
-            if (arrivedAt == null && phaseEndedAt != null && !isActive) {
-                append(" · started ${formatTime(phaseStartedAt)}")
-                append(" · completed ${formatTime(phaseEndedAt)}")
-            }
-            // Shop & Deliver: show progress + a live items/min pace (derived off
-            // `now`, so it ticks while shopping and freezes with the card). The bare
-            // "items left" count alone isn't useful; pace + shopped/total is.
-            if (activity == PickupActivity.SHOPPING) {
-                val shopped = itemsShopped ?: 0
-                val total = shopped + (itemsRemaining ?: 0)
-                if (total > 0) {
-                    append(" · shop $shopped/$total")
-                    val elapsedMs = now - (arrivedAt ?: phaseStartedAt)
-                    if (elapsedMs > 0) {
-                        val perMin = shopped / (elapsedMs / 60_000.0)
-                        append(" · ${Formats.decimal(perMin)}/min")
+        // ---- shop progress (Shop & Deliver): shopped/total + live pace ----
+        if (activity == PickupActivity.SHOPPING) {
+            val shopped = itemsShopped ?: 0
+            val total = shopped + (itemsRemaining ?: 0)
+            if (total > 0) {
+                val elapsedMs = now - (arrivedAt ?: phaseStartedAt)
+                val pace = if (elapsedMs > 0) shopped / (elapsedMs / 60_000.0) else 0.0
+                Surface(shape = MaterialTheme.shapes.small, color = c.stPickup.copy(alpha = 0.12f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("shop $shopped/$total", style = AppTheme.num.smNum, color = c.text, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text("${Formats.decimal(pace)}/min", style = AppTheme.num.smNum, color = c.stPickup, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
-        Caption(tertiary)
+
+        // ---- detail line — store/customer + lifecycle times ----
+        val detail = buildString {
+            append(primary)
+            arrivedAt?.let { append(" · arrived ${formatTime(it)}") }
+            confirmedAt?.let { append(" · picked up ${formatTime(it)}") }
+            if (arrivedAt == null && phaseEndedAt != null && !isActive) {
+                append(" · ${formatDuration(phaseEndedAt - phaseStartedAt)}")
+            }
+        }
+        Caption(detail)
     }
+}
+
+/** One co-hero metric — a label (with a live dot), a big value, and an optional sub. */
+@Composable
+private fun TaskMetric(
+    modifier: Modifier = Modifier,
+    live: Boolean,
+    label: String,
+    value: String,
+    sub: String?,
+    color: Color,
+) {
+    val c = AppTheme.colors
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (live) Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(color))
+            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = c.text3, fontWeight = FontWeight.Bold)
+        }
+        // 24sp — a co-hero size (vs the 30sp single hero) so the two metrics fit
+        // side by side in the bubble's width without clipping.
+        Text(value, style = AppTheme.num.heroNum.copy(fontSize = 24.sp), color = color, maxLines = 1)
+        if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall, color = c.text3, maxLines = 1)
+    }
+}
+
+/** The drop-it floor (#460): once overdue and the realized rate falls below
+ *  this, the card flags the wait as no longer worth it. */
+private const val DROP_FLOOR_HOURLY = 12.0
+
+/**
+ * Live realized $/hr on a task (#460). Pay is fixed; the offer's time estimate
+ * has slack up to the deadline — once past it, every extra minute erodes the
+ * rate (the drop-it signal). Null when no accepted-offer economics are known.
+ */
+private fun projectedHourly(netPay: Double?, estMinutes: Double?, deadlineMillis: Long?, now: Long): Double? {
+    if (netPay == null || estMinutes == null || estMinutes <= 0.0) return null
+    val pastMin = if (deadlineMillis != null) ((now - deadlineMillis) / 60_000.0).coerceAtLeast(0.0) else 0.0
+    return netPay / ((estMinutes + pastMin) / 60.0)
+}
+
+/** $/hr color tiers for the task co-hero (#460): ≥16 good, ≥10 amber, else red. */
+private fun hourlyColor(hourly: Double, c: AppColors): Color = when {
+    hourly >= 16.0 -> c.good
+    hourly >= 10.0 -> c.warn
+    else -> c.bad
 }
 
 /**

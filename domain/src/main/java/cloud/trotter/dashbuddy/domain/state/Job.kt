@@ -54,6 +54,18 @@ data class Job(
     /** Total estimated minutes across all offers — the denominator for the job's blended $/hr. */
     val totalEstMinutes: Double get() = acceptedOffers.sumOf { it.estMinutes ?: 0.0 }
 
+    /**
+     * Net pay for the live task-card "Running at $/hr" co-hero (#460) — null when
+     * no accepted offer has carried economics yet, so the card shows "—" rather
+     * than a misleading $0.
+     */
+    val blendedNetPay: Double?
+        get() = acceptedOffers.mapNotNull { it.netPay }.takeIf { it.isNotEmpty() }?.sum()
+
+    /** Estimated minutes denominator for the blended $/hr — null until known, must be > 0. */
+    val blendedEstMinutes: Double?
+        get() = acceptedOffers.mapNotNull { it.estMinutes }.takeIf { it.isNotEmpty() }?.sum()?.takeIf { it > 0.0 }
+
     /** Total quoted distance in miles across all offers. */
     val totalDistanceMiles: Double get() = acceptedOffers.sumOf { it.distanceMiles ?: 0.0 }
 

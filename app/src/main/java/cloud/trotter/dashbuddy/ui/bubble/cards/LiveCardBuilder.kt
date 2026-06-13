@@ -74,6 +74,8 @@ object LiveCardBuilder {
                     itemsRemaining = task.itemsRemaining,
                     itemsShopped = task.itemsShopped,
                     activity = task.activity,
+                    netPay = region.activeJob?.blendedNetPay,
+                    estMinutes = region.activeJob?.blendedEstMinutes,
                 )
             }
 
@@ -88,6 +90,8 @@ object LiveCardBuilder {
                     customerHash = task.customerNameHash,
                     arrivedAt = task.arrivedAt,
                     deadlineMillis = task.deadlineMillis,
+                    netPay = region.activeJob?.blendedNetPay,
+                    estMinutes = region.activeJob?.blendedEstMinutes,
                 )
             }
 

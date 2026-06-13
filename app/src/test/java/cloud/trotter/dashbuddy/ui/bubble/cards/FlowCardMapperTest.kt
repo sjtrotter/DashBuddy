@@ -724,4 +724,30 @@ class FlowCardMapperTest {
         val offer = FlowCardMapper.fold(events).filterIsInstance<FlowCardSnapshot.Offer>().single()
         assertTrue("plain pickup must not carry SHOP", !offer.badges.contains("SHOP"))
     }
+
+    @Test
+    fun `accepted offer economics thread onto the pickup and delivery cards (#460)`() {
+        // The "Running at $/hr" co-hero needs netPay + estMinutes on the task
+        // cards. They come from the accepted offer's evaluation (netPayAmount
+        // 6.50, estimatedTimeMinutes 18.0 in the test fixture).
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+            event(AppEventType.OFFER_ACCEPTED,
+                offerPayload("o1", AppEventType.OFFER_ACCEPTED, 2000L, 2500L), 2500L),
+            event(AppEventType.PICKUP_NAV_STARTED, pickupPayload("T1", "J1", "Wendy's", 2500L), 2500L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 2500L, arrived = 3000L, confirmed = 3500L), 3500L),
+            event(AppEventType.DELIVERY_NAV_STARTED, deliveryPayload("T2", "J1", 3500L), 3500L),
+            event(AppEventType.DELIVERY_ARRIVED, deliveryPayload("T2", "J1", 3500L, arrived = 4000L), 4000L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        val pickup = cards.filterIsInstance<FlowCardSnapshot.Pickup>().single()
+        val delivery = cards.filterIsInstance<FlowCardSnapshot.Delivery>().single()
+
+        assertEquals(6.50, pickup.netPay!!, 0.001)
+        assertEquals(18.0, pickup.estMinutes!!, 0.001)
+        assertEquals(6.50, delivery.netPay!!, 0.001)
+        assertEquals(18.0, delivery.estMinutes!!, 0.001)
+    }
 }

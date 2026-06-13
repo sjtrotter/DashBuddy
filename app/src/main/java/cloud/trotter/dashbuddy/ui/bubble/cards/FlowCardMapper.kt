@@ -35,6 +35,11 @@ object FlowCardMapper {
         var openPickup: FlowCardSnapshot.Pickup? = null
         var openDelivery: FlowCardSnapshot.Delivery? = null
         var lastDeliveryArrivedAt: Long? = null
+        // The accepted offer's economics, carried onto the task cards for the
+        // "Running at $/hr" co-hero (#460). v1 tracks a single job in flight; a
+        // stacked add-on overwrites (the live card uses the accurate Job.blended).
+        var acceptedNetPay: Double? = null
+        var acceptedEstMin: Double? = null
 
         for (event in events) {
             when (event.type) {
@@ -45,6 +50,8 @@ object FlowCardMapper {
                     openPickup = null
                     openDelivery = null
                     lastDeliveryArrivedAt = null
+                    acceptedNetPay = null
+                    acceptedEstMin = null
 
                     val payload = event.payload as? SessionStartPayload
                     openAwaiting = FlowCardSnapshot.Awaiting(
@@ -111,6 +118,12 @@ object FlowCardMapper {
                             outcome = payload.outcome,
                         )
                     )
+                    // On accept, capture the offer's economics for the upcoming
+                    // task cards' live $/hr co-hero (#460).
+                    if (payload.outcome == AppEventType.OFFER_ACCEPTED) {
+                        acceptedNetPay = payload.evaluation?.netPayAmount
+                        acceptedEstMin = payload.evaluation?.estimatedTimeMinutes
+                    }
                     // Re-open Awaiting if the dasher returned to the
                     // waiting-for-offer state (declined / timeout). Accept
                     // skips this — they're going into pickup.
@@ -145,6 +158,8 @@ object FlowCardMapper {
                             phaseStartedAt = payload.phaseStartedAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
+                            netPay = acceptedNetPay,
+                            estMinutes = acceptedEstMin,
                             storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             deadlineMillis = payload.deadlineMillis,
                             itemsRemaining = payload.itemsRemaining,
@@ -168,6 +183,8 @@ object FlowCardMapper {
                             phaseStartedAt = payload.phaseStartedAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
+                            netPay = acceptedNetPay,
+                            estMinutes = acceptedEstMin,
                             storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             arrivedAt = payload.arrivedAt ?: event.occurredAt,
                             deadlineMillis = payload.deadlineMillis,
@@ -192,6 +209,8 @@ object FlowCardMapper {
                             phaseEndedAt = payload.confirmedAt ?: event.occurredAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
+                            netPay = acceptedNetPay,
+                            estMinutes = acceptedEstMin,
                             storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             arrivedAt = payload.arrivedAt,
                             confirmedAt = payload.confirmedAt ?: event.occurredAt,
@@ -214,6 +233,8 @@ object FlowCardMapper {
                             phaseStartedAt = payload.phaseStartedAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
+                            netPay = acceptedNetPay,
+                            estMinutes = acceptedEstMin,
                             storeName = payload.storeName,
                             customerHash = payload.customerHash,
                             deadlineMillis = payload.deadlineMillis,
@@ -235,6 +256,8 @@ object FlowCardMapper {
                             phaseEndedAt = payload.arrivedAt ?: event.occurredAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
+                            netPay = acceptedNetPay,
+                            estMinutes = acceptedEstMin,
                             storeName = payload.storeName,
                             customerHash = payload.customerHash,
                             arrivedAt = payload.arrivedAt ?: event.occurredAt,
@@ -260,6 +283,8 @@ object FlowCardMapper {
                             phaseEndedAt = event.occurredAt,
                             taskId = payload.taskId,
                             jobId = payload.jobId,
+                            netPay = acceptedNetPay,
+                            estMinutes = acceptedEstMin,
                             storeName = payload.storeName,
                             customerHash = payload.customerHash,
                             arrivedAt = payload.arrivedAt,
