@@ -26,6 +26,17 @@ interface AppEventDao {
     fun getEventsForDash(dashId: String): Flow<List<AppEventEntity>>
 
     /**
+     * The dash ([aggregateId]) of the most recent event, or null if none. The
+     * durable "last completed dash" fallback for the bubble HUD when no session
+     * is live (#459): the in-memory scan latch that fed `displayedDashId` was
+     * wiped by process death (8a) and by a post-dash bubble re-subscribe (8b),
+     * emptying the chat/cards. The event log survives both, so the bubble
+     * reviews the last dash until the next one starts.
+     */
+    @Query("SELECT aggregateId FROM app_events WHERE aggregateId IS NOT NULL ORDER BY sequenceId DESC LIMIT 1")
+    fun getMostRecentDashId(): Flow<String?>
+
+    /**
      * Returns all events of a specific type (e.g., all OFFER_RECEIVED events).
      * Room automatically converts the Enum parameter to a String for the query.
      */
