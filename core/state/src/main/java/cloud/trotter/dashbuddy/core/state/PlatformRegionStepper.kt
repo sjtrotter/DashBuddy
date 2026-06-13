@@ -96,7 +96,7 @@ class PlatformRegionStepper @Inject constructor() {
         current.pendingDestructive?.let { pend ->
             if (pend.kind == DestructiveKind.SESSION_END) {
                 val startParsed = (obs as? Observation.FlowObservation)?.parsed
-                if ((startParsed as? ParsedFields.IdleFields)?.startingDash == true) {
+                if ((startParsed as? ParsedFields.IdleFields)?.startingSession == true) {
                     // Honest end time = when the destructive signal appeared (#431).
                     current = endSession(current, pend.since)
                 }
@@ -172,7 +172,7 @@ class PlatformRegionStepper @Inject constructor() {
                 ) {
                     // Grace active + the same session is still present → a genuine
                     // resume (a transient offline flash). A real new-dash start
-                    // would already have committed the end in step() (startingDash).
+                    // would already have committed the end in step() (startingSession).
                     // An AUTHORITATIVE pending (armed by the dash summary, #431) is
                     // deliberately NOT cancelled here: a post-summary online flash
                     // must not resurrect a really-ended session. Only a task-flow
