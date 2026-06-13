@@ -40,9 +40,6 @@ sealed class AppEffect {
         val expand: Boolean = false
     ) : AppEffect()
 
-    // 3. System Commands (e.g. "Keep Screen On", "Play Sound")
-    data object PlayNotificationSound : AppEffect()
-
     /**
      * Capture an evidence screenshot. [category] is the user-consent bucket
      * the engine's evidence gate (#426) checks against `EvidenceConfig` —
@@ -138,10 +135,6 @@ sealed class AppEffect {
         override val effectKey: String
             get() = "effect:${effect.ruleId}:${effect.dedupeKey ?: effect.verb.wire}"
     }
-
-    data class SequentialEffect(
-        val effects: List<AppEffect>
-    ) : AppEffect()
 
     data class StartSession(val sessionId: String, val platformName: String) : AppEffect() {
         override val effectKey: String get() = "start_session:$sessionId"
