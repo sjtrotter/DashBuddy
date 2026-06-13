@@ -147,15 +147,16 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   "Decline") instead of hardcoded view IDs. Working = DoorDash registers the tap. Broken = log
   shows "No 'acceptButton' target bound" (rule didn't bind on that screen variant — capture it!)
   or "NONE passed label verification" (verification too strict for that variant).
-  - Confirmed: 1/2 (BUBBLE surface only). **2026-06-12 (DoorDash):** dasher tapped **Accept** in the
-    bubble → DoorDash registered the Accept (offer was accepted). First clean live confirmation of the
+  - Confirmed: 1/2 (IN-BUBBLE buttons only). **2026-06-12 (DoorDash):** dasher tapped **Accept** in the
+    **expanded bubble** → DoorDash registered the Accept. First clean live confirmation of the
     rule-bound tap path that was broken on 06-09. (See 2026-06-12 log entry #1.)
-  - ⚠️ **NOTIFICATION surface FOUND BROKEN — 2026-06-12 (DoorDash):** tapping **Accept and Decline
-    from the heads-up notification itself did NOTHING** (neither worked), same dash the bubble worked.
-    Dispatch path/wire strings are identical to the bubble; likely the click target isn't reachable
-    from the notification shade (offer window not foreground). Triaged as 2026-06-12 log entry #11 —
-    pull logcat for `OfferActionReceiver: accept_offer/decline_offer` to split broadcast-not-landing
-    vs click-target-absent. Bubble half still needs a 2nd sighting (esp. Decline).
+  - ⚠️ **NOTIFICATION-SHADE buttons FOUND BROKEN — 2026-06-12 (DoorDash):** the Accept/Decline buttons
+    on the **system shade notification** (NOT the in-bubble buttons) did **NOTHING** (neither worked),
+    same dash the in-bubble buttons worked. Dispatch path/wire strings are identical to the bubble;
+    likely the click target isn't reachable from the shade (offer window not foreground). Triaged as
+    2026-06-12 log entry #11 — pull logcat for `OfferActionReceiver: accept_offer/decline_offer` to
+    split broadcast-not-landing vs click-target-absent. In-bubble half still needs a 2nd sighting (esp.
+    Decline).
 
 - **Post-dash HUD: frozen summary + consistent chat (#367, PR pending).**
   Two visible fixes after a dash ends: (a) the "Last session" Duration on the idle bubble is
@@ -538,11 +539,18 @@ and asked whether it was already fixed. **It is not.** Desk finding:
   **Hypothesis:** the clean fix routes the bubble copy through the one money formatter rather than a
   local `%.2f`, but where the formatter can live is bound up with #366 — a desk call, not a drop-in.
 
-#### 11. **FOUND BROKEN** — notification Accept/Decline don't work (neither), though the bubble's do
-On a later offer the dasher tapped **Accept and then Decline from the heads-up notification itself**
-— **neither did anything** on DoorDash. This is **distinct from the bubble path (entry #1), which
-worked**: same dash, the bubble's Accept clicked DoorDash, but the notification's buttons don't.
-Moves the notification half of the #425 checklist item to broken.
+#### 11. **FOUND BROKEN** — the notification-SHADE Accept/Decline buttons don't work (the in-bubble ones do)
+**Surface taxonomy (dasher clarified — investigate the right one):**
+- ✅ **In-bubble buttons** — the Accept/Decline buttons inside the **expanded bubble** (the in-app
+  Compose `OfferActionRow`) **work** (entry #1: bubble Accept clicked DoorDash).
+- ❌ **Notification-shade action buttons** — the Accept/Decline buttons on the **heads-up / shade
+  notification** are what the dasher tapped, and **neither did anything** on DoorDash. **This is the
+  broken surface.** Moves the notification half of the #425 checklist item to broken.
+- ℹ️ Side note: the bubble's own (collapsed/conversation) notification "doesn't have buttons on it" —
+  so the buttons the dasher pressed were unambiguously the **shade notification's action buttons**,
+  not the in-bubble ones.
+
+The two surfaces are NOT the same code path at the click edge even though they share the dispatch:
 
 - **What's the same (so it's not the wire string):** the notification's Accept/Decline send
   `OfferIntent.ACCEPT`/`DECLINE` = `"accept_offer"`/`"decline_offer"`
@@ -552,19 +560,20 @@ Moves the notification half of the #425 checklist item to broken.
 - **What's different (the hypothesis):** the receiver is **manifest-registered**
   (`AndroidManifest.xml:80-81`) and the PendingIntent is an **explicit, same-app broadcast** with
   `FLAG_IMMUTABLE` (`BubbleManager.kt:238-245`), so it *should* reach `onReceive`. The likely break
-  is **downstream of dispatch**: acting from the **notification shade**, DoorDash's offer button
-  isn't reachable to the accessibility click the way it is when the **bubble overlays the live
-  offer** — the shade (or an advanced/expired offer) is foreground, so `UiInteractionHandler`'s
-  all-windows click finds **no live target** and aborts to manual. Same `Could not find any live
-  node` *class* as the 06-09 bubble bug, but a different cause (wrong foreground window, not
-  wrong-window search).
+  is **downstream of dispatch**: acting from the **system notification shade**, DoorDash's offer
+  button isn't reachable to the accessibility click the way it is when the **in-app bubble overlays
+  the live offer** — the shade (or an advanced/expired offer) is foreground, so
+  `UiInteractionHandler`'s all-windows click finds **no live target** and aborts to manual. Same
+  `Could not find any live node` *class* as the 06-09 bubble bug, but a different cause (wrong
+  foreground window, not wrong-window search). The in-bubble buttons working fits this: the bubble is
+  drawn over the live offer, so the target window is present.
 - **One log line splits the two hypotheses (desk):** pull logcat around the taps. If
   `OfferActionReceiver: accept_offer` / `decline_offer` is **absent**, the broadcast never landed
   (PendingIntent/registration). If it's **present** but followed by a target-resolution failure /
   `Could not find any live node`, it's the click-target-absent path. Capture which.
-- **Field note for next time:** retry the notification action **while still on the DoorDash offer
-  screen** (notification shade pulled down over the live offer, offer not yet expired) and see if it
-  behaves differently from tapping it after navigating away.
+- **Field note for next time:** retry the **shade** action **while still on the DoorDash offer
+  screen** (shade pulled down over the live offer, offer not yet expired) and see if it behaves
+  differently from tapping it after navigating away.
 
 ### Verification TODOs (confirmations this session)
 
