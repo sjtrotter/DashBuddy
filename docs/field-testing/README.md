@@ -661,29 +661,38 @@ crash. The dasher's read — "maybe it auto-corrected" — matches a desk hypoth
   not closing the Delivery into `completed` until `DELIVERY_CONFIRMED` — but that's a design call for
   the desk, **not** a concluded fix.
 
-#### 8. After a crash with **no active dash**, the bubble cleared instead of showing the last dash (cross-refs #437, #367)
-Distinct from #3: the clean re-attach in #3 was for a restart **while the dash was still active**.
-Separately this session, **after a crash where no dash was active**, the dash did **not** persist as
-the "last dash" — the **bubble cleared out** (empty chat + empty card stack) rather than showing the
-most-recently-completed dash. Flagged by the dasher for the desk/Android Studio agent.
+#### 8. Bubble clears instead of showing the last dash — after a crash AND after a normal dash-end (cross-refs #437, #367)
+Distinct from #3 (which was a re-attach **while the dash was still active**). This item now has **two
+triggers**, and a second sighting makes it look like a **real gap, not just transitional**:
+- **8a — after a crash with no active dash (earlier this session):** the bubble **cleared out**
+  (empty chat + empty card stack) instead of showing the most-recently-completed dash.
+- **8b — after a normal dash END (2026-06-13 ~late):** ending a dash **again cleared the cards**. The
+  dasher's read: "we might be in a state where it's just not displaying the last dash … might just be
+  we're in transition." Desk finding below suggests it's the **same root cause as 8a**, not a benign
+  transition.
 
-- **Likely cause (hypothesis):** the bubble's `displayedDashId` is a purely **in-memory latch** —
-  `bubbleManager.activeDashId.scan(null) { last, current -> current ?: last }`
-  (`BubbleViewModel.kt:95-96`). It holds the last non-null **active** dash id, but a **process death
-  resets the `scan` to null**; on restart, if `activeSessionId()` is null (no active dash), nothing
-  repopulates it. Both downstream flows then key off `null` → `messages` = empty
-  (`BubbleViewModel.kt:98-104`) and `cardStack.completed` = empty (events query returns empty for a
-  null dash id, `:119-122`) — i.e. the bubble empties.
-- **The code comment claims a fallback that isn't implemented for the crash case:**
-  `BubbleViewModel.kt:106-107` says the card stack uses "the current active dash when one is running,
-  **otherwise the most-recently-completed one**" — but there's no **persisted** last-completed-dash-id
-  lookup feeding `displayedDashId`; the only "otherwise" is the in-memory `scan` latch, which a crash
-  wipes. So the documented "review the previous dash" behavior survives a normal idle transition but
-  **not** a process death.
-- **To confirm / one direction to weigh (desk, not a fix):** reproduce by crashing with the dash
-  ended/none-active and check whether `activeDashId` is null at restart. A durable fix would mean
-  sourcing `displayedDashId`'s fallback from a persisted "most-recently-completed dash id" (DB/
-  datastore) rather than an in-memory `scan` — overlaps with the #367 post-dash HUD persistence work.
+- **Likely cause (hypothesis, same for both triggers):** the bubble's `displayedDashId` is a purely
+  **in-memory latch** — `bubbleManager.activeDashId.scan(null) { last, current -> current ?: last }`
+  (`BubbleViewModel.kt:95-96`). `activeDashId` is null whenever there's no live session
+  (`AppState.activeSessionId()` returns a session id only while `session != null`,
+  `AppState.kt:48-52`). The `scan` holds the last **non-null** active id — but it gets **reset to
+  null** two ways: (8a) **process death** wipes the scan; (8b) the downstream `messages`/`cardStack`
+  flows are `SharingStarted.WhileSubscribed(5000)` (`BubbleViewModel.kt:104,128`), so when the bubble
+  is collapsed / has no subscribers for >5s and then **re-subscribes after the dash has ended**, the
+  `scan` chain is torn down and **restarts from `null`** while `activeSessionId()` is already null.
+  Either way `displayedDashId` → null → `messages` empty (`:98-104`) and `cardStack.completed` empty
+  (events query returns empty for a null dash id, `:119-122`) — the bubble empties.
+- **The code comment claims a fallback that isn't implemented:** `BubbleViewModel.kt:106-107` says the
+  card stack uses "the current active dash when one is running, **otherwise the most-recently-completed
+  one**" — but there's **no persisted** last-completed-dash-id feeding `displayedDashId`; the only
+  "otherwise" is the in-memory `scan` latch. So the documented "review the previous dash until you go
+  Online again" behavior holds **only** as long as the scan survives — and it does **not** survive a
+  crash (8a) **nor** a post-dash-end bubble re-subscribe (8b). The 8b sighting **contradicts** the
+  earlier "survives a normal idle transition" assumption.
+- **To confirm / one direction to weigh (desk, not a fix):** for 8b, end a dash, collapse the bubble
+  >5s, reopen → check whether cards/chat are gone and whether `activeDashId.value` is null. A durable
+  fix sources `displayedDashId`'s fallback from a **persisted** "most-recently-completed dash id"
+  (DB/datastore) instead of the in-memory `scan` — overlaps with #367 post-dash HUD persistence.
 
 ### Research / design (improvement ideas — explore, not yet scoped)
 
