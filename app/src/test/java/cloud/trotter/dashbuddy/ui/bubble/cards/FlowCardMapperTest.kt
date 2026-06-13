@@ -683,4 +683,45 @@ class FlowCardMapperTest {
         val pickup = cards.filterIsInstance<FlowCardSnapshot.Pickup>().single()
         assertEquals(UNKNOWN_STORE, pickup.storeName)
     }
+
+    // ── #461: Shop & Deliver gets a SHOP badge ──
+
+    @Test
+    fun `a Shop & Deliver offer gets a synthetic SHOP badge`() {
+        val shopOffer = ParsedOffer(
+            offerHash = "shop-1", payAmount = 22.0, distanceMiles = 3.0, itemCount = 18,
+            orders = listOf(
+                ParsedOrder(
+                    orderIndex = 0, orderType = OrderType.SHOP_FOR_ITEMS, storeName = "H-E-B",
+                    itemCount = 18, isItemCountEstimated = false, badges = emptySet(),
+                ),
+            ),
+        )
+        val events = listOf(
+            event(
+                AppEventType.OFFER_ACCEPTED,
+                OfferPayload(
+                    offerHash = "shop-1", parsedOffer = shopOffer, evaluation = evaluation(),
+                    outcome = AppEventType.OFFER_ACCEPTED, presentedAt = 2000L, decidedAt = 2500L,
+                    returnFlow = Flow.Idle,
+                ),
+                occurredAt = 2500L,
+            ),
+        )
+        val offer = FlowCardMapper.fold(events).filterIsInstance<FlowCardSnapshot.Offer>().single()
+        assertTrue("Shop & Deliver offer must carry the SHOP badge", offer.badges.contains("SHOP"))
+    }
+
+    @Test
+    fun `a plain pickup offer does NOT get a SHOP badge`() {
+        val events = listOf(
+            event(
+                AppEventType.OFFER_ACCEPTED,
+                offerPayload("plain-1", AppEventType.OFFER_ACCEPTED, 2000L, 2500L),
+                occurredAt = 2500L,
+            ),
+        )
+        val offer = FlowCardMapper.fold(events).filterIsInstance<FlowCardSnapshot.Offer>().single()
+        assertTrue("plain pickup must not carry SHOP", !offer.badges.contains("SHOP"))
+    }
 }

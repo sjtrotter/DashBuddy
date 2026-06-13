@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Offer card surfaces Shop & Deliver: item count in the hero row + a SHOP badge (#461 a/b).**
+  The item count moved from a small footer caption up to the hero row (beside the score ring /
+  $/hr), and a Shop & Deliver offer now shows a "Shop & Deliver" badge pill. On a shop offer:
+  working = the item count is prominent in the hero and a "Shop & Deliver" pill shows; a plain
+  pickup offer shows NO shop pill. Broken = item count missing/duplicated, or the shop pill on a
+  non-shop offer. (**#461 stays open** for part (c) — the finished/PostTask card showing the
+  order type, which needs offer→job→delivery data flow.)
+  - Confirmed: 0/2
+
 - **7-Eleven / alcohol "Verify items" pickup screen now recognized (#462, first slice).**
   The store "Verify items for <name>" screen (with "Do not open sealed bags" / "Can't verify
   items" / the item list) classified UNKNOWN — the 7-Eleven alcohol pickup from the 2026-06-12

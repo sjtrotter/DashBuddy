@@ -337,6 +337,15 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                     Text(secondary, style = DashTheme.num.smNum, color = c.text2, maxLines = 1)
                 }
             }
+            // Item count promoted to the hero tier (#461): Shop & Deliver and
+            // multi-item offers surface the count beside the $/hr hero (the
+            // footer caption was easy to miss), using the space on the right.
+            if (snap.itemCount > 1) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("${snap.itemCount}", style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
+                    Text("items", style = DashTheme.num.smNum, color = c.text2, maxLines = 1)
+                }
+            }
         }
 
         // Verdict banner — action word + reason + quality chip, tinted by the action.
@@ -389,16 +398,9 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             }
         }
 
-        // Footer: stores · items.
+        // Footer: stores. (Item count moved up to the hero tier, #461.)
         val storeText = snap.storeNames.joinToString(" & ").ifBlank { null }
-        val footer = buildString {
-            storeText?.let { append(it) }
-            if (snap.itemCount > 1) {
-                if (isNotEmpty()) append(" · ")
-                append("${snap.itemCount} items")
-            }
-        }
-        if (footer.isNotBlank()) Caption(footer)
+        if (storeText != null) Caption(storeText)
     }
 }
 
@@ -420,6 +422,7 @@ private fun OfferCountdownText(expiresAt: Long, countdownSeconds: Int) {
 
 /** Maps a badge enum name to a short label + brand color for the pill row. */
 private fun badgeMeta(name: String, c: DashColors): Pair<String, Color> = when (name) {
+    "SHOP" -> "Shop & Deliver" to c.stPickup
     "HIGH_PAYING" -> "High pay" to c.good
     "PRIORITY_ACCESS" -> "Priority" to c.stOffer
     "RED_CARD" -> "Red Card" to c.bad
