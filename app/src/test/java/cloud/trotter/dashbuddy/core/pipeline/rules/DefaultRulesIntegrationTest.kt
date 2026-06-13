@@ -261,6 +261,47 @@ class DefaultRulesIntegrationTest {
         )
     }
 
+    @Test
+    fun `7-Eleven 'Delivery for' dropoff arrival card is a dropoff_pre_arrival branch — but the alcohol variant stays blocked (#462 vs #463)`() {
+        // The arrival detail card uses "Delivery for" (name in a sibling node) +
+        // "Hand it to recipient", not the "Deliver to <name>" form the rule
+        // originally keyed on, so it fell to UNKNOWN. It must now branch into
+        // dropoff_pre_arrival.
+        val arrivalCard = UiNode(
+            children = listOf(
+                UiNode(text = "Deliver by 20:04"),
+                UiNode(text = "Delivery for"),
+                UiNode(text = "Sample C"),
+                UiNode(text = "100 Sample St, San Antonio, TX 78000, USA"),
+                UiNode(text = "Directions"),
+                UiNode(text = "Hand it to recipient"),
+            ),
+        ).restoreParents()
+        val card = screenRuleset.matchFirst(arrivalCard, platformWire = "doordash")
+        assertEquals(
+            "the 'Delivery for' dropoff arrival card must branch into dropoff_pre_arrival (got ${card?.ruleId})",
+            "doordash.screen.dropoff_pre_arrival", card?.ruleId,
+        )
+
+        // The alcohol variant of the SAME card carries the priority-0 identity/
+        // signature banner — it must stay blocked, never reach the dropoff branch.
+        val alcoholVariant = UiNode(
+            children = listOf(
+                UiNode(text = "Deliver by 20:04"),
+                UiNode(text = "Delivery for"),
+                UiNode(text = "Sample C"),
+                UiNode(text = "Hand it to recipient"),
+                UiNode(text = "Verify the recipient's identity and collect a signature at dropoff"),
+                UiNode(text = "Remember, you’re required by law to confirm the recipient's identity before handing over the order."),
+            ),
+        ).restoreParents()
+        val blocked = screenRuleset.matchFirst(alcoholVariant, platformWire = "doordash")
+        assertTrue(
+            "the alcohol arrival variant must stay sensitive-blocked (got ${blocked?.ruleId})",
+            blocked?.ruleId?.contains("sensitive") == true,
+        )
+    }
+
     // =========================================================================
     // Parse-output regression on real captures (#433)
     // =========================================================================
