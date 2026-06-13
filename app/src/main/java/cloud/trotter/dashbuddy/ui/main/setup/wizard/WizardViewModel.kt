@@ -7,7 +7,7 @@ import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
-import cloud.trotter.dashbuddy.domain.config.DashStrategy
+import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
@@ -80,7 +80,7 @@ class WizardViewModel @Inject constructor(
 
             val currentProtectMode = strategyRepository.protectStatsMode.first()
             val currentStrategy =
-                if (currentProtectMode) DashStrategy.PROTECT_PLATINUM else DashStrategy.MANUAL
+                if (currentProtectMode) OfferStrategy.PROTECT_PLATINUM else OfferStrategy.MANUAL
 
             val rules = strategyRepository.scoringRules.first()
             val minPayoutRule = rules.filterIsInstance<ScoringRule.MetricRule>()
@@ -133,10 +133,10 @@ class WizardViewModel @Inject constructor(
                     totalLifetimeMi = storedEconomy.totalLifetimeMi,
                     insuranceDeltaPerMonth = storedEconomy.insuranceDeltaPerMonth,
                     registrationDeltaPerYear = storedEconomy.registrationDeltaPerYear,
-                    expectedAnnualDashMiles = storedEconomy.expectedAnnualDashMiles,
+                    expectedAnnualMiles = storedEconomy.expectedAnnualMiles,
                     phonePlanTotal = storedEconomy.phonePlanTotal,
                     phonePlanLines = storedEconomy.phonePlanLines,
-                    phoneDashPercent = storedEconomy.phoneDashPercent,
+                    phoneBusinessPercent = storedEconomy.phoneBusinessPercent,
                     avgMinutesPerMile = storedEconomy.avgMinutesPerMile,
                     basePickupMinutes = storedEconomy.basePickupMinutes,
                     userSetEconomyFields = storedEconomy.userSetFields,
@@ -242,20 +242,20 @@ class WizardViewModel @Inject constructor(
         )
     }
 
-    fun updateExpectedAnnualDashMiles(miles: Double) = _state.update {
+    fun updateExpectedAnnualMiles(miles: Double) = _state.update {
         it.copy(
-            expectedAnnualDashMiles = miles,
-            userSetEconomyFields = it.userSetEconomyFields + EconomyField.EXPECTED_ANNUAL_DASH_MI,
+            expectedAnnualMiles = miles,
+            userSetEconomyFields = it.userSetEconomyFields + EconomyField.EXPECTED_ANNUAL_MI,
         )
     }
 
     fun updatePhonePlan(total: Double, lines: Int, dashPercent: Double) = _state.update {
         it.copy(
-            phonePlanTotal = total, phonePlanLines = lines, phoneDashPercent = dashPercent,
+            phonePlanTotal = total, phonePlanLines = lines, phoneBusinessPercent = dashPercent,
             userSetEconomyFields = it.userSetEconomyFields + setOf(
                 EconomyField.PHONE_PLAN_TOTAL,
                 EconomyField.PHONE_PLAN_LINES,
-                EconomyField.PHONE_DASH_PERCENT,
+                EconomyField.PHONE_BUSINESS_PERCENT,
             ),
         )
     }
@@ -430,7 +430,7 @@ class WizardViewModel @Inject constructor(
         }
     }
 
-    fun updateStrategy(strategy: DashStrategy) {
+    fun updateStrategy(strategy: OfferStrategy) {
         _state.update { it.copy(strategy = strategy) }
     }
 
@@ -515,17 +515,17 @@ class WizardViewModel @Inject constructor(
             if (EconomyField.REGISTRATION_DELTA in userSet) {
                 appPreferencesRepository.updateRegistrationDelta(finalState.registrationDeltaPerYear)
             }
-            if (EconomyField.EXPECTED_ANNUAL_DASH_MI in userSet) {
-                appPreferencesRepository.updateExpectedAnnualDashMi(finalState.expectedAnnualDashMiles)
+            if (EconomyField.EXPECTED_ANNUAL_MI in userSet) {
+                appPreferencesRepository.updateExpectedAnnualMi(finalState.expectedAnnualMiles)
             }
             if (EconomyField.PHONE_PLAN_TOTAL in userSet ||
                 EconomyField.PHONE_PLAN_LINES in userSet ||
-                EconomyField.PHONE_DASH_PERCENT in userSet
+                EconomyField.PHONE_BUSINESS_PERCENT in userSet
             ) {
                 appPreferencesRepository.updatePhonePlan(
                     finalState.phonePlanTotal,
                     finalState.phonePlanLines,
-                    finalState.phoneDashPercent,
+                    finalState.phoneBusinessPercent,
                 )
             }
             if (EconomyField.AVG_MIN_PER_MILE in userSet || EconomyField.BASE_PICKUP_MIN in userSet) {
@@ -553,8 +553,8 @@ class WizardViewModel @Inject constructor(
                 )
             }
 
-            val isCherryPicker = finalState.strategy == DashStrategy.CHERRY_PICKER
-            val isPlatinum = finalState.strategy == DashStrategy.PROTECT_PLATINUM
+            val isCherryPicker = finalState.strategy == OfferStrategy.CHERRY_PICKER
+            val isPlatinum = finalState.strategy == OfferStrategy.PROTECT_PLATINUM
 
             // Only write what the wizard actually collects (#347): the strategy-derived
             // toggles and the SHOPPING step's preference. The threshold values are NOT

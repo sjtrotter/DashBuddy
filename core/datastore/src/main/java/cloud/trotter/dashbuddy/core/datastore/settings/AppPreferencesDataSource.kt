@@ -55,12 +55,12 @@ class AppPreferencesDataSource @Inject constructor(
         // Fixed costs (amortized via expected annual dash miles)
         val INSURANCE_DELTA_PER_MONTH = doublePreferencesKey("insurance_delta_per_month")
         val REGISTRATION_DELTA_PER_YEAR = doublePreferencesKey("registration_delta_per_year")
-        val EXPECTED_ANNUAL_DASH_MI = doublePreferencesKey("expected_annual_dash_mi")
+        val EXPECTED_ANNUAL_MI = doublePreferencesKey("expected_annual_dash_mi")
 
         // Phone & data (not vehicle-driven)
         val PHONE_PLAN_TOTAL = doublePreferencesKey("phone_plan_total")
         val PHONE_PLAN_LINES = intPreferencesKey("phone_plan_lines")
-        val PHONE_DASH_PERCENT = doublePreferencesKey("phone_dash_percent")
+        val PHONE_BUSINESS_PERCENT = doublePreferencesKey("phone_dash_percent")
 
         // Time constants (newly persisted)
         val AVG_MIN_PER_MILE = doublePreferencesKey("avg_min_per_mile")
@@ -114,11 +114,11 @@ class AppPreferencesDataSource @Inject constructor(
 
     val insuranceDeltaPerMonth: Flow<Double?> = ds.data.map { it[Keys.INSURANCE_DELTA_PER_MONTH] }
     val registrationDeltaPerYear: Flow<Double?> = ds.data.map { it[Keys.REGISTRATION_DELTA_PER_YEAR] }
-    val expectedAnnualDashMi: Flow<Double?> = ds.data.map { it[Keys.EXPECTED_ANNUAL_DASH_MI] }
+    val expectedAnnualMi: Flow<Double?> = ds.data.map { it[Keys.EXPECTED_ANNUAL_MI] }
 
     val phonePlanTotal: Flow<Double?> = ds.data.map { it[Keys.PHONE_PLAN_TOTAL] }
     val phonePlanLines: Flow<Int?> = ds.data.map { it[Keys.PHONE_PLAN_LINES] }
-    val phoneDashPercent: Flow<Double?> = ds.data.map { it[Keys.PHONE_DASH_PERCENT] }
+    val phoneBusinessPercent: Flow<Double?> = ds.data.map { it[Keys.PHONE_BUSINESS_PERCENT] }
 
     val avgMinPerMile: Flow<Double?> = ds.data.map { it[Keys.AVG_MIN_PER_MILE] }
     val basePickupMin: Flow<Double?> = ds.data.map { it[Keys.BASE_PICKUP_MIN] }
@@ -240,11 +240,11 @@ class AppPreferencesDataSource @Inject constructor(
         }
     }
 
-    suspend fun updateExpectedAnnualDashMi(miles: Double) {
+    suspend fun updateExpectedAnnualMi(miles: Double) {
         ds.edit {
-            it[Keys.EXPECTED_ANNUAL_DASH_MI] = miles
+            it[Keys.EXPECTED_ANNUAL_MI] = miles
             it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("EXPECTED_ANNUAL_DASH_MI")
+                setOf("EXPECTED_ANNUAL_MI")
         }
     }
 
@@ -252,9 +252,9 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit {
             it[Keys.PHONE_PLAN_TOTAL] = total
             it[Keys.PHONE_PLAN_LINES] = lines
-            it[Keys.PHONE_DASH_PERCENT] = dashPercent
+            it[Keys.PHONE_BUSINESS_PERCENT] = dashPercent
             it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("PHONE_PLAN_TOTAL", "PHONE_PLAN_LINES", "PHONE_DASH_PERCENT")
+                setOf("PHONE_PLAN_TOTAL", "PHONE_PLAN_LINES", "PHONE_BUSINESS_PERCENT")
         }
     }
 
@@ -280,10 +280,10 @@ class AppPreferencesDataSource @Inject constructor(
             it.remove(Keys.PURCHASE_PRICE); it.remove(Keys.TOTAL_LIFETIME_MI)
             it.remove(Keys.INSURANCE_DELTA_PER_MONTH)
             it.remove(Keys.REGISTRATION_DELTA_PER_YEAR)
-            it.remove(Keys.EXPECTED_ANNUAL_DASH_MI)
+            it.remove(Keys.EXPECTED_ANNUAL_MI)
             it.remove(Keys.PHONE_PLAN_TOTAL)
             it.remove(Keys.PHONE_PLAN_LINES)
-            it.remove(Keys.PHONE_DASH_PERCENT)
+            it.remove(Keys.PHONE_BUSINESS_PERCENT)
             it.remove(Keys.AVG_MIN_PER_MILE)
             it.remove(Keys.BASE_PICKUP_MIN)
         }

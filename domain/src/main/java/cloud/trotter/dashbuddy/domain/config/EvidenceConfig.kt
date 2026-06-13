@@ -4,7 +4,7 @@ data class EvidenceConfig(
     val masterEnabled: Boolean = DEFAULT_MASTER,
     val saveOffers: Boolean = DEFAULT_SAVE_OFFERS,
     val saveDeliverySummaries: Boolean = DEFAULT_SAVE_DELIVERIES,
-    val saveDashSummaries: Boolean = DEFAULT_SAVE_DASHES,
+    val saveSessionSummaries: Boolean = DEFAULT_SAVE_SESSIONS,
 ) {
     /**
      * THE evidence-capture policy (#426): a screenshot fires only when the
@@ -15,7 +15,7 @@ data class EvidenceConfig(
     fun allows(category: EvidenceCategory?): Boolean = masterEnabled && when (category) {
         EvidenceCategory.OFFER -> saveOffers
         EvidenceCategory.DELIVERY_SUMMARY -> saveDeliverySummaries
-        EvidenceCategory.DASH_SUMMARY -> saveDashSummaries
+        EvidenceCategory.SESSION_SUMMARY -> saveSessionSummaries
         null -> false
     }
 
@@ -24,7 +24,7 @@ data class EvidenceConfig(
         const val DEFAULT_MASTER = false
         const val DEFAULT_SAVE_OFFERS = true
         const val DEFAULT_SAVE_DELIVERIES = true
-        const val DEFAULT_SAVE_DASHES = true
+        const val DEFAULT_SAVE_SESSIONS = true
     }
 }
 
@@ -38,7 +38,7 @@ data class EvidenceConfig(
 enum class EvidenceCategory(val wire: String) {
     OFFER("offer"),
     DELIVERY_SUMMARY("delivery_summary"),
-    DASH_SUMMARY("dash_summary"),
+    SESSION_SUMMARY("dash_summary"),
     ;
 
     companion object {

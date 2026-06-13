@@ -12,7 +12,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
  * subtraction: `netPay = grossPay - distance * operatingCostPerMile`.
  *
  * Time-fixed costs (insurance, registration, phone) are amortized via
- * [expectedAnnualDashMiles] — the user's estimate of how many miles per year
+ * [expectedAnnualMiles] — the user's estimate of how many miles per year
  * they expect to dash. Fixed-cost per-mile = (annual cost) / annual dash miles.
  *
  * Defaults come from the selected [vehicleClass]'s preset values. Switching
@@ -51,16 +51,16 @@ data class UserEconomy(
     val purchasePrice: Double = 0.0,
     val totalLifetimeMi: Double = 1.0,
 
-    // Fixed costs (amortized via expectedAnnualDashMiles)
+    // Fixed costs (amortized via expectedAnnualMiles)
     val insuranceDeltaPerMonth: Double = 0.0,
     val registrationDeltaPerYear: Double = 0.0,
-    val expectedAnnualDashMiles: Double = DEFAULT_ANNUAL_DASH_MI,
+    val expectedAnnualMiles: Double = DEFAULT_ANNUAL_MI,
 
     // Phone & data (NOT driven by VehicleClass; stored separately). Domain
     // default is zero plan cost — production populates via repository.
     val phonePlanTotal: Double = 0.0,
     val phonePlanLines: Int = 1,
-    val phoneDashPercent: Double = 0.0,
+    val phoneBusinessPercent: Double = 0.0,
 
     /** Which [EconomyField]s the user has explicitly set. The rest are class defaults. */
     val userSetFields: Set<EconomyField> = emptySet(),
@@ -77,13 +77,13 @@ data class UserEconomy(
     val depreciationCostPerMile: Double =
         if (includeDepreciation) purchasePrice / totalLifetimeMi.coerceAtLeast(1.0) else 0.0
     val insuranceCostPerMile: Double =
-        (insuranceDeltaPerMonth * 12.0) / expectedAnnualDashMiles.coerceAtLeast(1.0)
+        (insuranceDeltaPerMonth * 12.0) / expectedAnnualMiles.coerceAtLeast(1.0)
     val registrationCostPerMile: Double =
-        registrationDeltaPerYear / expectedAnnualDashMiles.coerceAtLeast(1.0)
+        registrationDeltaPerYear / expectedAnnualMiles.coerceAtLeast(1.0)
     val phoneCostPerMile: Double = run {
         val yourLineShare = phonePlanTotal / phonePlanLines.coerceAtLeast(1)
-        val dashingMonthly = yourLineShare * (phoneDashPercent / 100.0)
-        (dashingMonthly * 12.0) / expectedAnnualDashMiles.coerceAtLeast(1.0)
+        val dashingMonthly = yourLineShare * (phoneBusinessPercent / 100.0)
+        (dashingMonthly * 12.0) / expectedAnnualMiles.coerceAtLeast(1.0)
     }
 
     val nonFuelCostPerMile: Double
@@ -104,9 +104,9 @@ data class UserEconomy(
 
         const val DEFAULT_MINUTES_PER_MILE = 2.5
         const val DEFAULT_BASE_PICKUP_MINUTES = 7.0
-        const val DEFAULT_ANNUAL_DASH_MI = 10_000.0
+        const val DEFAULT_ANNUAL_MI = 10_000.0
         const val DEFAULT_PHONE_PLAN_TOTAL = 80.0
         const val DEFAULT_PHONE_PLAN_LINES = 1
-        const val DEFAULT_PHONE_DASH_PERCENT = 30.0
+        const val DEFAULT_PHONE_BUSINESS_PERCENT = 30.0
     }
 }

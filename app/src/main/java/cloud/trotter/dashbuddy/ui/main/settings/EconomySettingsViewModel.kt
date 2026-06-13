@@ -64,8 +64,8 @@ class EconomySettingsViewModel @Inject constructor(
         repo.updateRegistrationDelta(perYear)
     }
 
-    fun setExpectedAnnualDashMiles(miles: Double) = viewModelScope.launch {
-        repo.updateExpectedAnnualDashMi(miles)
+    fun setExpectedAnnualMiles(miles: Double) = viewModelScope.launch {
+        repo.updateExpectedAnnualMi(miles)
     }
 
     fun setPhone(total: Double, lines: Int, dashPercent: Double) = viewModelScope.launch {

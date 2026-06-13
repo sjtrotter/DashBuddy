@@ -381,7 +381,7 @@ class EffectMap @Inject constructor() {
                         add(
                             AppEffect.CaptureScreenshot(
                                 "DashSummary - ${endParsed.totalEarnings}",
-                                category = EvidenceCategory.DASH_SUMMARY,
+                                category = EvidenceCategory.SESSION_SUMMARY,
                             ),
                         )
                     } else {

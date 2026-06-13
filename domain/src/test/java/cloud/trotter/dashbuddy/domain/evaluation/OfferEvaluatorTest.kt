@@ -718,9 +718,9 @@ class OfferEvaluatorTest {
             includeDepreciation = true,
             purchasePrice = 28_000.0, totalLifetimeMi = 200_000.0, // depr: $0.14/mi → $1.40
             insuranceDeltaPerMonth = 30.0,
-            expectedAnnualDashMiles = 10_000.0,                    // insurance: $0.036/mi → $0.36
+            expectedAnnualMiles = 10_000.0,                    // insurance: $0.036/mi → $0.36
             registrationDeltaPerYear = 100.0,                      // reg: $0.01/mi → $0.10
-            phonePlanTotal = 80.0, phonePlanLines = 4, phoneDashPercent = 30.0, // phone: $0.0072/mi → $0.072
+            phonePlanTotal = 80.0, phonePlanLines = 4, phoneBusinessPercent = 30.0, // phone: $0.0072/mi → $0.072
         )
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
         val result = evaluator.evaluate(offer(pay = 10.0, dist = 10.0), cfg)
@@ -750,7 +750,7 @@ class OfferEvaluatorTest {
         val economy = UserEconomy(
             vehicleClass = VehicleClass.SEDAN,
             insuranceDeltaPerMonth = 30.0,
-            expectedAnnualDashMiles = 10_000.0,
+            expectedAnnualMiles = 10_000.0,
         )
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
         val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
@@ -763,7 +763,7 @@ class OfferEvaluatorTest {
         val economy = UserEconomy(
             vehicleClass = VehicleClass.SEDAN,
             registrationDeltaPerYear = 100.0,
-            expectedAnnualDashMiles = 10_000.0,
+            expectedAnnualMiles = 10_000.0,
         )
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
         val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
@@ -778,8 +778,8 @@ class OfferEvaluatorTest {
             vehicleClass = VehicleClass.SEDAN,
             phonePlanTotal = 80.0,
             phonePlanLines = 4,
-            phoneDashPercent = 30.0,
-            expectedAnnualDashMiles = 10_000.0,
+            phoneBusinessPercent = 30.0,
+            expectedAnnualMiles = 10_000.0,
         )
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
         val result = evaluator.evaluate(offer(pay = 10.0, dist = 10.0), cfg)
@@ -789,20 +789,20 @@ class OfferEvaluatorTest {
     @Test
     fun `operating cost - phone not affected by vehicle class change`() {
         // Same phone setup; only the vehicleClass differs. Phone cost should be identical.
-        val sedanEco = UserEconomy(vehicleClass = VehicleClass.SEDAN, phonePlanTotal = 100.0, phoneDashPercent = 50.0)
-        val truckEco = UserEconomy(vehicleClass = VehicleClass.TRUCK, phonePlanTotal = 100.0, phoneDashPercent = 50.0)
+        val sedanEco = UserEconomy(vehicleClass = VehicleClass.SEDAN, phonePlanTotal = 100.0, phoneBusinessPercent = 50.0)
+        val truckEco = UserEconomy(vehicleClass = VehicleClass.TRUCK, phonePlanTotal = 100.0, phoneBusinessPercent = 50.0)
         assertEquals(sedanEco.phoneCostPerMile, truckEco.phoneCostPerMile, 0.0001)
     }
 
     @Test
     fun `operating cost - zero expected annual dash miles does not divide by zero`() {
-        // expectedAnnualDashMiles = 0 should be coerced; result must be finite.
+        // expectedAnnualMiles = 0 should be coerced; result must be finite.
         val economy = UserEconomy(
             vehicleClass = VehicleClass.SEDAN,
             insuranceDeltaPerMonth = 30.0,
             registrationDeltaPerYear = 100.0,
             phonePlanTotal = 80.0,
-            expectedAnnualDashMiles = 0.0,
+            expectedAnnualMiles = 0.0,
         )
         val cfg = EvaluationConfig(rules = listOf(metricRule(MetricType.PAYOUT, 10.0f)), userEconomy = economy)
         val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)

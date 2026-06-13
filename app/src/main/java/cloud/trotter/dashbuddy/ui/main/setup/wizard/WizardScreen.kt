@@ -36,7 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import cloud.trotter.dashbuddy.domain.config.DashStrategy
+import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.EconomyCostsCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.GasPriceCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.MetricSliderCard
@@ -66,7 +66,7 @@ fun WizardScreen(
     val pagerState = rememberPagerState(pageCount = { steps.size })
     val coroutineScope = rememberCoroutineScope()
 
-    val isCherryPicker = state.strategy == DashStrategy.CHERRY_PICKER
+    val isCherryPicker = state.strategy == OfferStrategy.CHERRY_PICKER
 
     var showCompletionSheet by remember { mutableStateOf(false) }
     // Skip and Finish share the completion sheet but must NOT share a save path:
@@ -160,7 +160,7 @@ fun WizardScreen(
                             onInsuranceChange = viewModel::updateInsuranceDelta,
                             onRegistrationChange = viewModel::updateRegistrationDelta,
                             onPhoneChange = viewModel::updatePhonePlan,
-                            onExpectedAnnualDashMilesChange = viewModel::updateExpectedAnnualDashMiles,
+                            onExpectedAnnualMilesChange = viewModel::updateExpectedAnnualMiles,
                             onTimeConstantsChange = viewModel::updateTimeConstants,
                         )
                     }
@@ -175,16 +175,16 @@ fun WizardScreen(
                             option3Title = "Manual Mode",
                             option3Desc = "Just show me the math. I will make my own decisions.",
                             selectedIndex = when (state.strategy) {
-                                DashStrategy.CHERRY_PICKER -> 0
-                                DashStrategy.PROTECT_PLATINUM -> 1
-                                DashStrategy.MANUAL -> 2
+                                OfferStrategy.CHERRY_PICKER -> 0
+                                OfferStrategy.PROTECT_PLATINUM -> 1
+                                OfferStrategy.MANUAL -> 2
                             },
                             onOptionSelected = { index ->
                                 viewModel.updateStrategy(
                                     when (index) {
-                                        0 -> DashStrategy.CHERRY_PICKER
-                                        1 -> DashStrategy.PROTECT_PLATINUM
-                                        else -> DashStrategy.MANUAL
+                                        0 -> OfferStrategy.CHERRY_PICKER
+                                        1 -> OfferStrategy.PROTECT_PLATINUM
+                                        else -> OfferStrategy.MANUAL
                                     }
                                 )
                             }
