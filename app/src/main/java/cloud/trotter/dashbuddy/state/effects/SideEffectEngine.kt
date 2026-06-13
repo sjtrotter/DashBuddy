@@ -271,9 +271,6 @@ class SideEffectEngine @Inject constructor(
                 if (!dispatchRuleEffect(effect.effect)) return
             }
 
-            is AppEffect.PlayNotificationSound -> { /* Implementation */
-            }
-
             is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.evaluation)
 
             is AppEffect.StartSession -> bubbleManager.startSession(effect.sessionId, effect.platformName)
@@ -347,10 +344,6 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.CancelTimeout -> {
                 // Untracking happens via the job's self-removing completion handler.
                 activeTimers[effect.type]?.cancel()
-            }
-
-            is AppEffect.SequentialEffect -> {
-                effect.effects.forEach { child -> execute(child, recovering, correlationVersion) }
             }
         }
 
@@ -557,7 +550,6 @@ class SideEffectEngine @Inject constructor(
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
         is AppEffect.UpdateBubble,
-        is AppEffect.PlayNotificationSound,
         is AppEffect.CaptureScreenshot,
         is AppEffect.PerformRuleAction,
         is AppEffect.RequestEffect,

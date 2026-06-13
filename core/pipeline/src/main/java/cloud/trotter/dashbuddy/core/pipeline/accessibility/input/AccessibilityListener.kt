@@ -57,14 +57,12 @@ class AccessibilityListener : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        _instance = null
         Timber.d("Accessibility service destroyed")
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
 
-        _instance = this
         Timber.d("Accessibility service connected")
 
         // In debug builds, widen to ALL event types and ALL packages so we can
@@ -83,12 +81,6 @@ class AccessibilityListener : AccessibilityService() {
     }
 
     companion object {
-        @Volatile
-        private var _instance: AccessibilityListener? = null
-
-        val instance: AccessibilityListener?
-            get() = _instance
-
         /** Event types that have pipeline handlers — everything else is "unhandled". */
         private val HANDLED_TYPES = setOf(
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,

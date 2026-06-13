@@ -154,10 +154,7 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
  */
 enum class TimeoutType {
     SESSION_PAUSED_SAFETY,
-    RETRY_CLICK,
     SETTLE_UI,
-    DECLINE_POPUP_WAIT,
-    SCREENSHOT_WAIT,
 
     /**
      * Wakes the state machine when a [PendingDestructive] grace deadline
