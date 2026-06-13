@@ -8,18 +8,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import java.util.Date
-import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 /**
  * The shared time kit (#358): the CLAUDE.md-canonical 1-Hz ticker plus the
- * duration/countdown/clock formatters that the bubble HUD's glance surfaces
- * derive from it. One definition repo-wide — the two divergent local copies
- * (FlowCardItem, BubbleScreen) are gone.
+ * device-aware wall-clock formatter for the bubble HUD's glance surfaces.
  *
- * Digits are pinned to [Locale.ROOT]: durations and countdowns are clock-like
- * strings ("3m 12s", "7:05") whose digits must not localize to non-ASCII
- * numerals on a glance surface.
+ * The pure duration/countdown formatters (`formatDuration`/`formatCountdown`)
+ * moved to `:domain` (`format.TimeFormats`, #467) so the formatting SSOT is
+ * colocated with [cloud.trotter.dashbuddy.domain.format.Formats] and reachable
+ * from every layer; only the Compose-bound helpers remain here.
  */
 
 /** 1-Hz tick, scoped to the calling composable. See CLAUDE.md ▸ Reactive UI Principles. */
@@ -31,33 +28,6 @@ fun rememberNow(tickMs: Long = 1000L): State<Long> =
             value = System.currentTimeMillis()
         }
     }
-
-/**
- * "2h 5m" / "3m 12s" / "45s". Negative inputs floor to "0s" — a duration that
- * hasn't started reads as zero, never as a negative.
- */
-fun formatDuration(millis: Long): String {
-    val safe = millis.coerceAtLeast(0)
-    val hours = TimeUnit.MILLISECONDS.toHours(safe)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(safe) % 60
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(safe) % 60
-    return when {
-        hours > 0 -> String.format(Locale.ROOT, "%dh %dm", hours, minutes)
-        minutes > 0 -> String.format(Locale.ROOT, "%dm %ds", minutes, seconds)
-        else -> String.format(Locale.ROOT, "%ds", seconds)
-    }
-}
-
-/**
- * "m:ss" countdown for deadline heroes. Negatives format as their absolute
- * magnitude — the caller renders the ahead/late label and color.
- */
-fun formatCountdown(millis: Long): String {
-    val safe = kotlin.math.abs(millis)
-    val totalMinutes = TimeUnit.MILLISECONDS.toMinutes(safe)
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(safe) % 60
-    return String.format(Locale.ROOT, "%d:%02d", totalMinutes, seconds)
-}
 
 /**
  * A remembered wall-clock formatter honoring the device's 12/24-hour setting

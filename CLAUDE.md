@@ -89,8 +89,10 @@ The project uses modular Clean Architecture with a strict dependency graph:
 - **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
   pipeline/provider contracts, the capture contracts (`CaptureBus`, `EnvelopeBuilder`,
   capture schemas/DTOs), the `PlatformPreferences` read interface (#355), and the
-  number/money formatting SSOT (`format.Formats` — the locale policy, #358/#456; lives here
-  so both the UI and the state layer route through one definition). No Android
+  number/money/duration formatting SSOT (`format.Formats` money/decimal + `format.TimeFormats`
+  `formatDuration`/`formatCountdown` — the locale policy, #358/#456/#467; lives here so both the
+  UI and the state layer route through one definition; the Compose time helpers
+  `rememberNow`/`rememberTimeFormatter` stay in `:core:designsystem`). No Android
   dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.)
 - **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
   (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.

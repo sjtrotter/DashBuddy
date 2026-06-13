@@ -35,9 +35,9 @@ fun CurrencyInput(
     suffix: String? = null,
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf(formatCurrency(value)) }
+    var text by remember { mutableStateOf(editableAmount(value)) }
     LaunchedEffect(value, isFocused) {
-        if (!isFocused) text = formatCurrency(value)
+        if (!isFocused) text = editableAmount(value)
     }
 
     OutlinedTextField(
@@ -92,5 +92,9 @@ fun IntegerInput(
     )
 }
 
-private fun formatCurrency(value: Double): String =
+// Input-field machine string (#467): the editable amount the field round-trips
+// via toDoubleOrNull — Locale.US, trailing zeros trimmed ("5.5", "0"), NOT the
+// display money SSOT (Formats.money, which renders "$5.50"). Renamed from
+// formatCurrency to avoid confusion with the removed display formatter.
+private fun editableAmount(value: Double): String =
     if (value == 0.0) "0" else String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
