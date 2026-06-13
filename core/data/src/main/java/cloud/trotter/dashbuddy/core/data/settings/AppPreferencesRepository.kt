@@ -93,11 +93,11 @@ class AppPreferencesRepository @Inject constructor(
         combine(
             dataSource.insuranceDeltaPerMonth,
             dataSource.registrationDeltaPerYear,
-            dataSource.expectedAnnualDashMi,
+            dataSource.expectedAnnualMi,
             dataSource.phonePlanTotal,
             dataSource.phonePlanLines,
-        ) { ins, reg, dashMi, phoneTotal, phoneLines ->
-            FixedAndPhoneTuple(ins, reg, dashMi, phoneTotal, phoneLines)
+        ) { ins, reg, annualMi, phoneTotal, phoneLines ->
+            FixedAndPhoneTuple(ins, reg, annualMi, phoneTotal, phoneLines)
         },
     ) { id, maintA, maintB, depr, fixedPhone ->
         val cls = id.vehicleClass
@@ -122,17 +122,17 @@ class AppPreferencesRepository @Inject constructor(
             totalLifetimeMi = depr.lifetimeMi ?: cls.totalLifetimeMi,
             insuranceDeltaPerMonth = fixedPhone.insurance ?: 0.0,
             registrationDeltaPerYear = fixedPhone.registration ?: 0.0,
-            expectedAnnualDashMiles = fixedPhone.dashMi ?: UserEconomy.DEFAULT_ANNUAL_DASH_MI,
+            expectedAnnualMiles = fixedPhone.annualMi ?: UserEconomy.DEFAULT_ANNUAL_MI,
             phonePlanTotal = fixedPhone.phoneTotal ?: UserEconomy.DEFAULT_PHONE_PLAN_TOTAL,
             phonePlanLines = fixedPhone.phoneLines ?: UserEconomy.DEFAULT_PHONE_PLAN_LINES,
-            phoneDashPercent = UserEconomy.DEFAULT_PHONE_DASH_PERCENT, // wired below via separate read
+            phoneBusinessPercent = UserEconomy.DEFAULT_PHONE_BUSINESS_PERCENT, // wired below via separate read
             userSetFields = emptySet(), // populated by mergeUserSetFields below
         )
     }
-    // Wire userSetFields + phoneDashPercent on top — combine has a 5-arg max so we
+    // Wire userSetFields + phoneBusinessPercent on top — combine has a 5-arg max so we
     // do it as a final transform.
-    .combine(dataSource.phoneDashPercent) { eco, phoneDashPct ->
-        eco.copy(phoneDashPercent = phoneDashPct ?: UserEconomy.DEFAULT_PHONE_DASH_PERCENT)
+    .combine(dataSource.phoneBusinessPercent) { eco, phoneBusinessPct ->
+        eco.copy(phoneBusinessPercent = phoneBusinessPct ?: UserEconomy.DEFAULT_PHONE_BUSINESS_PERCENT)
     }
     .combine(dataSource.userSetEconomyFields) { eco, savedNames ->
         eco.copy(userSetFields = parseUserSetFields(savedNames))
@@ -167,19 +167,15 @@ class AppPreferencesRepository @Inject constructor(
     private data class FixedAndPhoneTuple(
         val insurance: Double?,
         val registration: Double?,
-        val dashMi: Double?,
+        val annualMi: Double?,
         val phoneTotal: Double?,
         val phoneLines: Int?,
     )
 
+    // EconomyField owns its own legacy-name aliasing (#469) — see
+    // EconomyField.fromPersistedName.
     private fun parseUserSetFields(names: Set<String>): Set<EconomyField> =
-        names.mapNotNull { name ->
-            try {
-                EconomyField.valueOf(name)
-            } catch (_: IllegalArgumentException) {
-                null
-            }
-        }.toSet()
+        names.mapNotNull(EconomyField::fromPersistedName).toSet()
 
     // ============================================================================================
     // WRITE ACTIONS
@@ -221,8 +217,8 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateRegistrationDelta(perYear: Double) =
         dataSource.updateRegistrationDelta(perYear)
 
-    suspend fun updateExpectedAnnualDashMi(miles: Double) =
-        dataSource.updateExpectedAnnualDashMi(miles)
+    suspend fun updateExpectedAnnualMi(miles: Double) =
+        dataSource.updateExpectedAnnualMi(miles)
 
     suspend fun updatePhonePlan(total: Double, lines: Int, dashPercent: Double) =
         dataSource.updatePhonePlan(total, lines, dashPercent)

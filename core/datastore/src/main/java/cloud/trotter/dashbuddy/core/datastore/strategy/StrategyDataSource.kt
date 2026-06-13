@@ -26,7 +26,7 @@ class StrategyDataSource @Inject constructor(
         val EVIDENCE_MASTER = booleanPreferencesKey("evidence_master_enabled")
         val EVIDENCE_OFFERS = booleanPreferencesKey("evidence_save_offers")
         val EVIDENCE_DELIVERY = booleanPreferencesKey("evidence_save_delivery_summary")
-        val EVIDENCE_DASH = booleanPreferencesKey("evidence_save_dash_summary")
+        val EVIDENCE_SESSION = booleanPreferencesKey("evidence_save_dash_summary")
 
         val AUTO_MASTER = booleanPreferencesKey("auto_master_enabled")
 
@@ -46,7 +46,7 @@ class StrategyDataSource @Inject constructor(
     val evidenceMaster: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_MASTER] ?: EvidenceConfig.DEFAULT_MASTER }
     val evidenceOffers: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_OFFERS] ?: EvidenceConfig.DEFAULT_SAVE_OFFERS }
     val evidenceDelivery: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DELIVERY] ?: EvidenceConfig.DEFAULT_SAVE_DELIVERIES }
-    val evidenceDash: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DASH] ?: EvidenceConfig.DEFAULT_SAVE_DASHES }
+    val evidenceSession: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_SESSION] ?: EvidenceConfig.DEFAULT_SAVE_SESSIONS }
 
     val autoMaster: Flow<Boolean> = ds.data.map { it[Keys.AUTO_MASTER] ?: OfferAutomationConfig.DEFAULT_MASTER }
 
@@ -90,7 +90,7 @@ class StrategyDataSource @Inject constructor(
         ds.edit { prefs ->
             prefs[Keys.EVIDENCE_OFFERS] = offers
             prefs[Keys.EVIDENCE_DELIVERY] = delivery
-            prefs[Keys.EVIDENCE_DASH] = dash
+            prefs[Keys.EVIDENCE_SESSION] = dash
         }
     }
 

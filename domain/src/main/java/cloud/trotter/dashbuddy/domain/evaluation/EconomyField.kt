@@ -30,8 +30,30 @@ enum class EconomyField {
     TOTAL_LIFETIME_MI,
     INSURANCE_DELTA,
     REGISTRATION_DELTA,
-    EXPECTED_ANNUAL_DASH_MI,
+    EXPECTED_ANNUAL_MI,
     PHONE_PLAN_TOTAL,
     PHONE_PLAN_LINES,
-    PHONE_DASH_PERCENT,
+    PHONE_BUSINESS_PERCENT,
+    ;
+
+    companion object {
+        /**
+         * #469: two constants were de-dashed (`EXPECTED_ANNUAL_DASH_MI`,
+         * `PHONE_DASH_PERCENT`). The persisted `USER_SET_ECONOMY_FIELDS` set on
+         * existing installs may still hold those legacy names — map them forward
+         * so the dasher's "user-set" markers don't silently reset.
+         */
+        private val LEGACY_NAMES = mapOf(
+            "EXPECTED_ANNUAL_DASH_MI" to EXPECTED_ANNUAL_MI,
+            "PHONE_DASH_PERCENT" to PHONE_BUSINESS_PERCENT,
+        )
+
+        /**
+         * Resolve a name persisted in `USER_SET_ECONOMY_FIELDS` back to a field,
+         * honoring legacy (pre-#469) names. Returns null for names no current
+         * build knows (forward-compat: a value written by a newer build).
+         */
+        fun fromPersistedName(name: String): EconomyField? =
+            LEGACY_NAMES[name] ?: entries.firstOrNull { it.name == name }
+    }
 }

@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.setup.wizard.model
 
-import cloud.trotter.dashbuddy.domain.config.DashStrategy
+import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
@@ -41,16 +41,16 @@ data class WizardState(
     val totalLifetimeMi: Double = VehicleClass.SEDAN.totalLifetimeMi,
     val insuranceDeltaPerMonth: Double = 0.0,
     val registrationDeltaPerYear: Double = 0.0,
-    val expectedAnnualDashMiles: Double = UserEconomy.DEFAULT_ANNUAL_DASH_MI,
+    val expectedAnnualMiles: Double = UserEconomy.DEFAULT_ANNUAL_MI,
     val phonePlanTotal: Double = UserEconomy.DEFAULT_PHONE_PLAN_TOTAL,
     val phonePlanLines: Int = UserEconomy.DEFAULT_PHONE_PLAN_LINES,
-    val phoneDashPercent: Double = UserEconomy.DEFAULT_PHONE_DASH_PERCENT,
+    val phoneBusinessPercent: Double = UserEconomy.DEFAULT_PHONE_BUSINESS_PERCENT,
     val avgMinutesPerMile: Double = UserEconomy.DEFAULT_MINUTES_PER_MILE,
     val basePickupMinutes: Double = UserEconomy.DEFAULT_BASE_PICKUP_MINUTES,
     val userSetEconomyFields: Set<EconomyField> = emptySet(),
 
     // Strategy Variables
-    val strategy: DashStrategy = DashStrategy.MANUAL,
+    val strategy: OfferStrategy = OfferStrategy.MANUAL,
 
     // Targets & Enforcement
     val enforceMinPayout: Boolean = false,

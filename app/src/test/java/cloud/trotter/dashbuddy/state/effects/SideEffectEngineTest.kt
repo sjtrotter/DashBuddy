@@ -69,7 +69,7 @@ class SideEffectEngineTest {
             masterEnabled = true,
             saveOffers = true,
             saveDeliverySummaries = true,
-            saveDashSummaries = true,
+            saveSessionSummaries = true,
         ),
     )
 
@@ -286,7 +286,7 @@ class SideEffectEngineTest {
 
     private fun dashSummaryShot() = AppEffect.CaptureScreenshot(
         filenamePrefix = "DashSummary - 87.50",
-        category = EvidenceCategory.DASH_SUMMARY,
+        category = EvidenceCategory.SESSION_SUMMARY,
     )
 
     @Test
@@ -306,7 +306,7 @@ class SideEffectEngineTest {
         evidenceConfig.value = EvidenceConfig(
             masterEnabled = true,
             saveOffers = true,
-            saveDashSummaries = false,
+            saveSessionSummaries = false,
         )
 
         engine.process(dashSummaryShot())

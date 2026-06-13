@@ -47,7 +47,7 @@ fun EconomyCostsCard(
     onInsuranceChange: (Double) -> Unit,
     onRegistrationChange: (Double) -> Unit,
     onPhoneChange: (Double, Int, Double) -> Unit,
-    onExpectedAnnualDashMilesChange: (Double) -> Unit,
+    onExpectedAnnualMilesChange: (Double) -> Unit,
     onTimeConstantsChange: (Double, Double) -> Unit,
 ) {
     // Build a live UserEconomy from current state so the editor can show
@@ -87,7 +87,7 @@ fun EconomyCostsCard(
                 onInsuranceChange = onInsuranceChange,
                 onRegistrationChange = onRegistrationChange,
                 onPhoneChange = onPhoneChange,
-                onExpectedAnnualDashMilesChange = onExpectedAnnualDashMilesChange,
+                onExpectedAnnualMilesChange = onExpectedAnnualMilesChange,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -115,9 +115,9 @@ private fun WizardState.toUserEconomy() = UserEconomy(
     purchasePrice = purchasePrice, totalLifetimeMi = totalLifetimeMi,
     insuranceDeltaPerMonth = insuranceDeltaPerMonth,
     registrationDeltaPerYear = registrationDeltaPerYear,
-    expectedAnnualDashMiles = expectedAnnualDashMiles,
+    expectedAnnualMiles = expectedAnnualMiles,
     phonePlanTotal = phonePlanTotal,
     phonePlanLines = phonePlanLines,
-    phoneDashPercent = phoneDashPercent,
+    phoneBusinessPercent = phoneBusinessPercent,
     userSetFields = userSetEconomyFields,
 )

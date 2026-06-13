@@ -48,7 +48,7 @@ fun EconomyEditor(
     onInsuranceChange: (perMonth: Double) -> Unit,
     onRegistrationChange: (perYear: Double) -> Unit,
     onPhoneChange: (total: Double, lines: Int, dashPercent: Double) -> Unit,
-    onExpectedAnnualDashMilesChange: (miles: Double) -> Unit,
+    onExpectedAnnualMilesChange: (miles: Double) -> Unit,
 ) {
     val userSet = economy.userSetFields
 
@@ -214,14 +214,14 @@ fun EconomyEditor(
         summary = "${Formats.money3(economy.phoneCostPerMile)}/mi*",
         isUserSet = EconomyField.PHONE_PLAN_TOTAL in userSet ||
             EconomyField.PHONE_PLAN_LINES in userSet ||
-            EconomyField.PHONE_DASH_PERCENT in userSet,
+            EconomyField.PHONE_BUSINESS_PERCENT in userSet,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CurrencyInput(
                 label = "Plan total",
                 value = economy.phonePlanTotal,
                 onValueChange = {
-                    onPhoneChange(it, economy.phonePlanLines, economy.phoneDashPercent)
+                    onPhoneChange(it, economy.phonePlanLines, economy.phoneBusinessPercent)
                 },
                 suffix = "/mo",
                 modifier = Modifier.weight(1f),
@@ -230,14 +230,14 @@ fun EconomyEditor(
                 label = "Lines",
                 value = economy.phonePlanLines,
                 onValueChange = {
-                    onPhoneChange(economy.phonePlanTotal, it, economy.phoneDashPercent)
+                    onPhoneChange(economy.phonePlanTotal, it, economy.phoneBusinessPercent)
                 },
                 modifier = Modifier.weight(1f),
             )
         }
-        Text("% for gig work: ${economy.phoneDashPercent.toInt()}%")
+        Text("% for gig work: ${economy.phoneBusinessPercent.toInt()}%")
         Slider(
-            value = economy.phoneDashPercent.toFloat(),
+            value = economy.phoneBusinessPercent.toFloat(),
             onValueChange = {
                 onPhoneChange(economy.phonePlanTotal, economy.phonePlanLines, it.toDouble())
             },
@@ -246,8 +246,8 @@ fun EconomyEditor(
         val perLine = economy.phonePlanTotal / economy.phonePlanLines.coerceAtLeast(1)
         Text(
             text = "Your line: ${Formats.money(perLine)}/mo" +
-                " × ${economy.phoneDashPercent.toInt()}%" +
-                " = ${Formats.money(perLine * economy.phoneDashPercent / 100.0)}/mo for gig work",
+                " × ${economy.phoneBusinessPercent.toInt()}%" +
+                " = ${Formats.money(perLine * economy.phoneBusinessPercent / 100.0)}/mo for gig work",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -256,17 +256,17 @@ fun EconomyEditor(
     // -------- Expected annual gig miles --------
     EconomyAccordionRow(
         title = "Expected gig miles / yr",
-        summary = "${Formats.commaInt(economy.expectedAnnualDashMiles.toInt())} mi",
-        isUserSet = EconomyField.EXPECTED_ANNUAL_DASH_MI in userSet,
+        summary = "${Formats.commaInt(economy.expectedAnnualMiles.toInt())} mi",
+        isUserSet = EconomyField.EXPECTED_ANNUAL_MI in userSet,
     ) {
         Text(
-            text = "${Formats.commaInt(economy.expectedAnnualDashMiles.toInt())} miles per year",
+            text = "${Formats.commaInt(economy.expectedAnnualMiles.toInt())} miles per year",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
         )
         Slider(
-            value = economy.expectedAnnualDashMiles.toFloat(),
-            onValueChange = { onExpectedAnnualDashMilesChange(it.toDouble()) },
+            value = economy.expectedAnnualMiles.toFloat(),
+            onValueChange = { onExpectedAnnualMilesChange(it.toDouble()) },
             valueRange = 500f..30_000f,
             steps = 58, // 500-mile increments
         )
@@ -348,7 +348,7 @@ private fun EconomyEditorPreview() = DashBuddyTheme {
                 onInsuranceChange = {},
                 onRegistrationChange = {},
                 onPhoneChange = { _, _, _ -> },
-                onExpectedAnnualDashMilesChange = {},
+                onExpectedAnnualMilesChange = {},
             )
             TrueCostFooter(operatingCostPerMile = economy.operatingCostPerMile)
         }

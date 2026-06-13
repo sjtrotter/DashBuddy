@@ -62,7 +62,7 @@ fun EvidenceSettingsScreen(
                     viewModel.updateEvidenceConfig(
                         it,
                         config.saveDeliverySummaries,
-                        config.saveDashSummaries
+                        config.saveSessionSummaries
                     )
                 }
             )
@@ -72,14 +72,14 @@ fun EvidenceSettingsScreen(
                 subtitle = "Track completion stats",
                 checked = config.saveDeliverySummaries,
                 onCheckedChange = {
-                    viewModel.updateEvidenceConfig(config.saveOffers, it, config.saveDashSummaries)
+                    viewModel.updateEvidenceConfig(config.saveOffers, it, config.saveSessionSummaries)
                 }
             )
 
             SwitchRow(
                 label = "Save Dash Summary",
                 subtitle = "End of dash earnings report",
-                checked = config.saveDashSummaries,
+                checked = config.saveSessionSummaries,
                 onCheckedChange = {
                     viewModel.updateEvidenceConfig(
                         config.saveOffers,

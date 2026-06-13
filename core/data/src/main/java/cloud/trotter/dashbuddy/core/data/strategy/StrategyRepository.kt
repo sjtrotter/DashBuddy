@@ -45,7 +45,7 @@ class StrategyRepository @Inject constructor(
     // ============================================================================================
     val evidenceConfig = combine(
         dataSource.evidenceMaster, dataSource.evidenceOffers,
-        dataSource.evidenceDelivery, dataSource.evidenceDash
+        dataSource.evidenceDelivery, dataSource.evidenceSession
     ) { master, offers, delivery, dash ->
         EvidenceConfig(master, offers, delivery, dash)
     }.stateIn(scope, SharingStarted.Eagerly, EvidenceConfig())

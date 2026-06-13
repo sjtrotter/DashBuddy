@@ -16,7 +16,7 @@ class EvidenceConfigTest {
         masterEnabled = true,
         saveOffers = true,
         saveDeliverySummaries = true,
-        saveDashSummaries = true,
+        saveSessionSummaries = true,
     )
 
     @Test
@@ -41,7 +41,7 @@ class EvidenceConfigTest {
         val config = allOn.copy(saveDeliverySummaries = false)
         assertTrue(config.allows(EvidenceCategory.OFFER))
         assertFalse(config.allows(EvidenceCategory.DELIVERY_SUMMARY))
-        assertTrue(config.allows(EvidenceCategory.DASH_SUMMARY))
+        assertTrue(config.allows(EvidenceCategory.SESSION_SUMMARY))
     }
 
     @Test

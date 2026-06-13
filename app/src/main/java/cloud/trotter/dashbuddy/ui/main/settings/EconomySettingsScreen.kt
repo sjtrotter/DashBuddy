@@ -92,7 +92,7 @@ fun EconomySettingsScreen(
                 onInsuranceChange = viewModel::setInsurance,
                 onRegistrationChange = viewModel::setRegistration,
                 onPhoneChange = viewModel::setPhone,
-                onExpectedAnnualDashMilesChange = viewModel::setExpectedAnnualDashMiles,
+                onExpectedAnnualMilesChange = viewModel::setExpectedAnnualMiles,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
