@@ -212,32 +212,62 @@ class DefaultRulesIntegrationTest {
     }
 
     @Test
-    fun `alcohol customer-ID and signature CAPTURE screens classify as sensitive (#463)`() {
-        // The identity-CAPTURE surfaces that leaked to UNKNOWN on 2026-06-12 —
-        // each must hit the priority-0 sensitive rule (block, never parse/store).
+    fun `alcohol document-CAPTURE surfaces stay sensitive (#463)`() {
+        // We block only the document-CAPTURE surfaces: the license-scan camera
+        // (an image of a government ID) and the signature pad/handoff. These
+        // carry an actual ID image / signature, so they're blocked regardless of
+        // whose. (The instruction + arrival screens are recognized instead — see
+        // the next test.)
         fun screen(vararg texts: String) =
             UiNode(children = texts.map { UiNode(text = it) }).restoreParents()
 
         val licenseScan = screen("Driver's License", "Scan barcode on the back of license", "HELP")
-        val idMatch = screen("Identity verification", "2 of 4", "Verify that the ID matches the recipient and they aren't intoxicated.", "Verify", "Can't verify")
         val signatureHandoff = screen("Hand your phone to the customer so they can provide their signature.", "Got it")
         val scanResult = screen("Scan Successful", "Now you're ready to start verification.", "Continue")
-        // Found in the #462 sweep — were leaking to UNKNOWN (the arrival banner
-        // with recipient name+address). Both must block.
         val signatureCanvas = screen("3 of 4", "A recipient signature is required for this order", "I have received this order", "Clear")
-        val alcoholArrival = screen("I've arrived at recipient", "Verify the recipient's identity and collect a signature at dropoff", "Remember, you’re required by law to confirm the recipient's identity before handing over the order.", "Hand it to recipient")
 
         for ((name, node) in listOf(
-            "license-scan" to licenseScan, "id-match" to idMatch,
-            "signature-handoff" to signatureHandoff, "scan-result" to scanResult,
-            "signature-canvas" to signatureCanvas, "alcohol-arrival" to alcoholArrival,
+            "license-scan" to licenseScan, "signature-handoff" to signatureHandoff,
+            "scan-result" to scanResult, "signature-canvas" to signatureCanvas,
         )) {
             val r = screenRuleset.matchFirst(node, platformWire = "doordash")
             assertTrue(
-                "alcohol identity $name screen must hit a sensitive rule, got ${r?.ruleId}",
+                "alcohol capture surface '$name' must hit a sensitive rule, got ${r?.ruleId}",
                 r?.ruleId?.contains("sensitive") == true,
             )
         }
+    }
+
+    @Test
+    fun `alcohol ID-CHECK instruction + arrival card are recognized, not blocked (#463 reversal)`() {
+        // We block the dasher's own sensitive data + document-image captures, but
+        // we RECOGNIZE the alcohol delivery flow: the ID-check instruction (no
+        // PII) and the arrival card (customer name/address, which the dropoff
+        // parse hashes). Customers are hashed, not blocked.
+        fun screen(vararg texts: String) =
+            UiNode(children = texts.map { UiNode(text = it) }).restoreParents()
+
+        val idCheck = screen("Identity verification", "2 of 4", "Verify that the ID matches the recipient and they aren't intoxicated.", "Verify", "Can't verify")
+        val idCheckResult = screenRuleset.matchFirst(idCheck, platformWire = "doordash")
+        assertEquals(
+            "the ID-check instruction must recognize as alcohol_id_check (got ${idCheckResult?.ruleId})",
+            "doordash.screen.alcohol_id_check", idCheckResult?.ruleId,
+        )
+
+        // The alcohol arrival card (same "Delivery for" + "Hand it to recipient"
+        // layout as a normal dropoff, plus the alcohol banner) must recognize as
+        // a dropoff, NOT block — the name/address get hashed by the parse.
+        val arrival = screen(
+            "Deliver by 20:04", "Delivery for", "Sample C",
+            "100 Sample St, San Antonio, TX 78000, USA", "Directions", "Hand it to recipient",
+            "Verify the recipient's identity and collect a signature at dropoff",
+            "Remember, you’re required by law to confirm the recipient's identity before handing over the order.",
+        )
+        val arrivalResult = screenRuleset.matchFirst(arrival, platformWire = "doordash")
+        assertEquals(
+            "the alcohol arrival card must recognize as dropoff_pre_arrival (got ${arrivalResult?.ruleId})",
+            "doordash.screen.dropoff_pre_arrival", arrivalResult?.ruleId,
+        )
     }
 
     @Test
@@ -262,7 +292,7 @@ class DefaultRulesIntegrationTest {
     }
 
     @Test
-    fun `7-Eleven 'Delivery for' dropoff arrival card is a dropoff_pre_arrival branch — but the alcohol variant stays blocked (#462 vs #463)`() {
+    fun `7-Eleven 'Delivery for' dropoff arrival card branches into dropoff_pre_arrival — alcohol variant too (#462 + #463 reversal)`() {
         // The arrival detail card uses "Delivery for" (name in a sibling node) +
         // "Hand it to recipient", not the "Deliver to <name>" form the rule
         // originally keyed on, so it fell to UNKNOWN. It must now branch into
@@ -283,8 +313,10 @@ class DefaultRulesIntegrationTest {
             "doordash.screen.dropoff_pre_arrival", card?.ruleId,
         )
 
-        // The alcohol variant of the SAME card carries the priority-0 identity/
-        // signature banner — it must stay blocked, never reach the dropoff branch.
+        // The ALCOHOL variant of the same card carries the ID/signature banner but
+        // no document image — it now ALSO recognizes as a dropoff (name/address
+        // hashed by the parse), rather than being blocked (#463 reversal). Only
+        // the literal scanner + signature-pad surfaces stay sensitive.
         val alcoholVariant = UiNode(
             children = listOf(
                 UiNode(text = "Deliver by 20:04"),
@@ -295,10 +327,10 @@ class DefaultRulesIntegrationTest {
                 UiNode(text = "Remember, you’re required by law to confirm the recipient's identity before handing over the order."),
             ),
         ).restoreParents()
-        val blocked = screenRuleset.matchFirst(alcoholVariant, platformWire = "doordash")
-        assertTrue(
-            "the alcohol arrival variant must stay sensitive-blocked (got ${blocked?.ruleId})",
-            blocked?.ruleId?.contains("sensitive") == true,
+        val alcohol = screenRuleset.matchFirst(alcoholVariant, platformWire = "doordash")
+        assertEquals(
+            "the alcohol arrival variant must now recognize as dropoff_pre_arrival, not block (got ${alcohol?.ruleId})",
+            "doordash.screen.dropoff_pre_arrival", alcohol?.ruleId,
         )
     }
 

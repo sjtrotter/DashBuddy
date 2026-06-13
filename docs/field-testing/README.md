@@ -90,9 +90,13 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   keyed on "Delivery for" + "Hand it to recipient" (dropoff-specific so it won't steal the pickup
   card). On a dropoff: working = arriving at the customer shows a recognized dropoff screen (not
   UNKNOWN) and the flow is on dropoff; the customer name + deadline are captured (name hashed).
-  **Critical to verify on an ALCOHOL dropoff:** the identity/signature-banner variant must STILL be
-  blocked (no recognition, no parse) — only the plain arrival card recognizes. Broken = still
-  UNKNOWN, mis-steps the flow, or the alcohol variant leaks recipient PII.
+  **On an ALCOHOL dropoff (#463 reversal):** the arrival card + the ID-CHECK instruction screen
+  ("verify the ID matches the recipient") now ALSO recognize (name hashed) — only the literal
+  license-SCANNER and the SIGNATURE pad stay blocked/sensitive. Working = the alcohol arrival +
+  ID-check show recognized screens with the customer name HASHED (never raw in any log/capture);
+  the scanner + signature screens show nothing (blocked). Broken = still UNKNOWN, the flow
+  mis-steps, raw recipient name/address appears anywhere, or the scanner/signature screen gets
+  parsed.
   - Confirmed: 0/2
 
 - **Batch-1 recognition gaps from 2026-06-12 now recognized (#462).** Twelve more screens that

@@ -54,19 +54,14 @@
           ] }
         },
         {
+          "comment": "Blocks only the document-CAPTURE surfaces of the alcohol-ID flow — the license-scan camera (an image of a government ID) and the signature pad/handoff. The instruction screens (the ID-check 'verify the ID matches the recipient' and the alcohol arrival card) are NOT blocked: they carry no document image and only customer name/address, which the dropoff parse hashes (we hash customers, we don't block them). See alcohol_id_check + dropoff_pre_arrival.",
           "intent": "sensitive.id_verification",
           "require": { "any": [
             { "exists": { "hasTextContaining": "Scan barcode on the back" } },
             { "exists": { "hasTextContaining": "Driver's License" } },
-            { "all": [
-              { "exists": { "hasTextContaining": "Identity verification" } },
-              { "exists": { "hasTextContaining": "matches the recipient" } }
-            ] },
             { "exists": { "hasTextContaining": "provide their signature" } },
             { "exists": { "hasTextContaining": "ready to start verification" } },
-            { "exists": { "hasTextContaining": "A recipient signature is required" } },
-            { "exists": { "hasTextContaining": "collect a signature at dropoff" } },
-            { "exists": { "hasTextContaining": "required by law to confirm the recipient" } }
+            { "exists": { "hasTextContaining": "A recipient signature is required" } }
           ] }
         },
         {
@@ -2787,6 +2782,20 @@
         "all": [
           { "exists": { "hasTextContaining": "Hand order to recipient" } },
           { "exists": { "hasTextContaining": "4 of 4" } }
+        ]
+      }
+    },
+    {
+      "comment": "Alcohol ID-CHECK instruction screen (step 2 of 4) — the dasher visually verifies the recipient's ID matches and they aren't intoxicated. Instruction text only (NO recipient PII, NO document image), so it is recognized as a flow step, not blocked. Keyed on the recipient-specific text so it can't match a dasher's own identity screen (#463 reversal).",
+      "id": "doordash.screen.alcohol_id_check",
+      "priority": 55,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Identity verification" } },
+          { "exists": { "any": [
+            { "hasTextContaining": "matches the recipient" },
+            { "hasTextContaining": "aren't intoxicated" }
+          ] } }
         ]
       }
     },
