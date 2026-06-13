@@ -32,8 +32,16 @@ posture so neutralizing one does not collapse the others:
    #194.
 
 **Pledges (non-negotiable).** All recognition / evaluation / economic computation happens
-on-device. Sensitive screens (banking, identity, payment) are blocked at the matcher layer.
-Network access is opt-in per feature. PII scrubbing runs at the edge before any upload.
+on-device. We protect **the dasher** (our user): the dasher's own sensitive screens — banking /
+DasherDirect balances & transfers, payment, their own identity documents — are blocked at the
+matcher layer, never parsed or stored; so are **document-image capture surfaces** (the license-scan
+camera, the signature pad), regardless of whose, because they're an image of an ID / a signature.
+**Customers are hashed, not blocked:** customer PII (name, address) is recognized and `sha256`'d at
+the edge so we can tell customers apart for dedup/correlation without ever keeping their actual
+info — so an alcohol delivery's ID-CHECK instruction screen and arrival card are *recognized* (name
+hashed), only the literal scanner/signature surfaces are blocked. The dasher's own name in
+first-last-initial form (e.g. the main-menu greeting) is fine to process. Network access is opt-in
+per feature. PII scrubbing runs at the edge before any upload.
 
 **Framing discipline.** When writing public-facing material — issues, RFCs, README, grant
 copy, marketing — describe the academic pillar as **empirical measurement of the visible
@@ -218,14 +226,22 @@ Every new feature or refactor holds to these — they are forefront design input
      comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps), fail-closed
      validation, and — for any remote rule source — **signature/integrity verification before
      compile**, which does not exist yet and is a hard prerequisite for that path.
-   - **Sensitive screens are blocked, never parsed or stored** (banking/identity/payment), at the
-     matcher layer, in both sensor pipelines (#399) — and the gate fails CLOSED beyond rule
-     coverage (#432): frames are dropped entirely until rulesets load, every platform shipping
-     screen rules must ship sensitive rules (load-time check), and UNKNOWN captures are scrubbed
-     by a rules-independent text-marker backstop (`SensitiveTextMarkers`, the SSOT the test
-     scanner shares). A recognition change must not be able to downgrade any of that.
+   - **The dasher's sensitive screens are blocked, never parsed or stored** (the dasher's banking /
+     DasherDirect / payment / own identity docs) — plus **document-image capture surfaces** (the
+     license-scan camera, the signature pad), regardless of whose, since they're an image of an ID /
+     a signature — at the matcher layer, in both sensor pipelines (#399). The gate fails CLOSED
+     beyond rule coverage (#432): frames are dropped entirely until rulesets load, every platform
+     shipping screen rules must ship sensitive rules (load-time check), and UNKNOWN captures are
+     scrubbed by a rules-independent text-marker backstop (`SensitiveTextMarkers`, the SSOT the test
+     scanner shares). **Customers are hashed, not blocked** (#463): customer-facing delivery screens
+     — incl. an alcohol delivery's ID-CHECK instruction + arrival card — are *recognized*, with the
+     customer name/address `sha256`'d in the parse, so only the literal scanner/signature surfaces
+     are sensitive. A recognition change must not be able to downgrade the block side, nor start
+     storing raw customer PII on the hash side.
    - **PII is hashed at the edge before it is persisted or could be uploaded** (`sha256`,
-     fail-closed — never echo plaintext on failure, #362). Captures are debug-only (release binds
+     fail-closed — never echo plaintext on failure, #362). This is how customers are
+     differentiated without keeping their info; the dasher's own name (first + last-initial) is
+     acceptable to process. Captures are debug-only (release binds
      `NoOpCaptureBus`, #346). Evidence screenshots are gated by `EvidenceConfig` at the engine
      edge (#426): master toggle AND per-category toggle, and an uncategorized capture never
      fires — the master default is OFF.

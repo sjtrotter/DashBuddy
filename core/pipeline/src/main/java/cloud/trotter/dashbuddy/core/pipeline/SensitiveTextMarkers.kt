@@ -52,21 +52,17 @@ object SensitiveTextMarkers {
         // sensitive.savings branch, these markers are the fail-closed backstop.
         "Savings jar",
         "You transferred",
-        // Customer ID / signature capture during alcohol delivery (#463) — the
-        // license-scan, identity-match, and signature-handoff surfaces.
-        // Rule-side block is sensitive.id_verification; markers are the backstop.
-        // NB: the alcohol delivery instruction CHECKLIST ("Verify recipient's
-        // identity" step text) is deliberately NOT here — that's recognized as
-        // flow (#462); only the actual capture surfaces are blocked.
+        // Alcohol-delivery DOCUMENT-capture surfaces only (#463): the license-scan
+        // camera (an image of a government ID) and the signature pad/handoff.
+        // The ID-CHECK instruction screen and the alcohol arrival card are NOT
+        // here — they carry no document image, only customer name/address (which
+        // the dropoff parse hashes); we recognize them (alcohol_id_check /
+        // dropoff_pre_arrival), we don't block them. We block the *dasher's* own
+        // sensitive data, and image captures of IDs/signatures — not customers.
         "Scan barcode on the back",
         "Driver's License",
-        "Identity verification",
         "provide their signature",
-        // The signature canvas + the alcohol-arrival identity/signature banner
-        // (the latter leaks recipient name+address) — found in the #462 sweep.
         "A recipient signature is required",
-        "collect a signature at dropoff",
-        "required by law to confirm the recipient",
     )
 
     /**

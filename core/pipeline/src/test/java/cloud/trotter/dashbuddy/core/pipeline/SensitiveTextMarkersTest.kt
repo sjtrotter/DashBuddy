@@ -22,15 +22,22 @@ class SensitiveTextMarkersTest {
         // DasherDirect Savings flow (#463) — the markers that leaked on 2026-06-12.
         assertEquals("Savings jar", SensitiveTextMarkers.findMarker(tree("Your transfer should now appear in your Savings jar")))
         assertEquals("You transferred", SensitiveTextMarkers.findMarker(tree("You transferred \$9.06")))
-        // Alcohol customer-ID / signature capture (#463 identity slice).
+        // Alcohol DOCUMENT-capture surfaces only — license scanner + signature pad
+        // (#463). The ID-check instruction + the arrival card are NOT markers: we
+        // recognize those (customers are hashed, not blocked).
         assertEquals("Scan barcode on the back", SensitiveTextMarkers.findMarker(tree("Scan barcode on the back of license")))
         assertEquals("Driver's License", SensitiveTextMarkers.findMarker(tree("Driver's License")))
-        assertEquals("Identity verification", SensitiveTextMarkers.findMarker(tree("Identity verification")))
         assertEquals("provide their signature", SensitiveTextMarkers.findMarker(tree("Hand your phone to the customer so they can provide their signature.")))
-        // Signature canvas + the alcohol-arrival identity/signature banner (#462 sweep).
         assertEquals("A recipient signature is required", SensitiveTextMarkers.findMarker(tree("A recipient signature is required for this order")))
-        assertEquals("collect a signature at dropoff", SensitiveTextMarkers.findMarker(tree("Verify the recipient's identity and collect a signature at dropoff")))
-        assertEquals("required by law to confirm the recipient", SensitiveTextMarkers.findMarker(tree("you're required by law to confirm the recipient's identity")))
+    }
+
+    @Test
+    fun `alcohol ID-check + arrival text are NOT scrubbed — they're recognized, not blocked (#463 reversal)`() {
+        // The ID-check instruction ("matches the recipient") and the arrival
+        // banner ("collect a signature at dropoff") carry no document image; we
+        // recognize them and hash the customer PII, so they must stay clean.
+        assertNull(SensitiveTextMarkers.findMarker(tree("Identity verification", "Verify that the ID matches the recipient and they aren't intoxicated.")))
+        assertNull(SensitiveTextMarkers.findMarker(tree("Verify the recipient's identity and collect a signature at dropoff")))
     }
 
     @Test
