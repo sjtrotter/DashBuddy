@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.bubble.cards
 
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -99,7 +100,14 @@ object FlowCardMapper {
                             dollarsPerHour = payload.evaluation?.dollarsPerHour,
                             qualityLevel = payload.evaluation?.qualityLevel,
                             badges = (payload.parsedOffer.badges.map { it.name } +
-                                payload.parsedOffer.orders.flatMap { it.badges }.map { it.name }).distinct(),
+                                payload.parsedOffer.orders.flatMap { it.badges }.map { it.name } +
+                                // Synthetic SHOP badge (#461) so a Shop & Deliver offer is
+                                // typed at a glance — orderType is known at offer time.
+                                if (payload.parsedOffer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }) {
+                                    listOf("SHOP")
+                                } else {
+                                    emptyList()
+                                }).distinct(),
                             outcome = payload.outcome,
                         )
                     )
