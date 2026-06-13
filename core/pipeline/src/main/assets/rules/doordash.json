@@ -54,6 +54,19 @@
           ] }
         },
         {
+          "intent": "sensitive.id_verification",
+          "require": { "any": [
+            { "exists": { "hasTextContaining": "Scan barcode on the back" } },
+            { "exists": { "hasTextContaining": "Driver's License" } },
+            { "all": [
+              { "exists": { "hasTextContaining": "Identity verification" } },
+              { "exists": { "hasTextContaining": "matches the recipient" } }
+            ] },
+            { "exists": { "hasTextContaining": "provide their signature" } },
+            { "exists": { "hasTextContaining": "ready to start verification" } }
+          ] }
+        },
+        {
           "intent": "sensitive.otp",
           "require": { "exists": { "hasTextContaining": "Enter the code we sent" } }
         },
