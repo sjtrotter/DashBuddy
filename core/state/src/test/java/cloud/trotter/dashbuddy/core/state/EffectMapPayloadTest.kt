@@ -169,7 +169,7 @@ class EffectMapPayloadTest {
         assertEquals(1, logs.size)
 
         // Regression: aggregateId must match sessionId so the bubble HUD's
-        // getEventsForDash(dashId) query sees it.
+        // getEventsForSession(dashId) query sees it.
         assertEquals("dash-7", logs[0].event.sessionId)
 
         val payload = (logs[0].event.payload as OfferReceivedPayload)
@@ -209,7 +209,7 @@ class EffectMapPayloadTest {
         val logs = logEvents(prev, next, click, AppEventType.OFFER_ACCEPTED)
         assertEquals(1, logs.size)
 
-        // Regression: AppEventDao.getEventsForDash(dashId) filters by
+        // Regression: AppEventDao.getEventsForSession(dashId) filters by
         // aggregateId. Offer events with null aggregateId are invisible
         // to the bubble HUD's flow-card stack (#257).
         assertEquals("dash-42", logs[0].event.sessionId)
