@@ -111,6 +111,19 @@ class DefaultRulesIntegrationTest {
     }
 
     @Test
+    fun `order-ready push on the background channel classifies as order_ready (#462)`() {
+        // The 2026-06-12 log showed this push on channelId
+        // `dasher-notification-background`, not `delivery-update` — the rule now
+        // accepts either, gated by the "ready for pickup" body.
+        val raw = raw(
+            title = "Delivery Update",
+            text = "Adam's order is ready for pickup at 7-Eleven.",
+            channelId = "dasher-notification-background",
+        )
+        assertEquals("order_ready_for_pickup", notificationRuleset.matchFirst(raw)?.intent)
+    }
+
+    @Test
     fun `Scheduled dash expired notification classifies correctly`() {
         val raw = raw(text = "Your scheduled dash has expired")
         assertEquals("scheduled_dash_expired", notificationRuleset.matchFirst(raw)?.intent)
@@ -424,9 +437,13 @@ class DefaultRulesIntegrationTest {
     // Helpers
     // =========================================================================
 
-    private fun raw(title: String? = null, text: String? = null, bigText: String? = null) =
+    private fun raw(
+        title: String? = null, text: String? = null, bigText: String? = null,
+        channelId: String? = null,
+    ) =
         RawNotificationData(
             title = title, text = text, bigText = bigText, tickerText = null,
             packageName = "com.doordash.driverapp", postTime = 0L, isClearable = true,
+            channelId = channelId,
         )
 }

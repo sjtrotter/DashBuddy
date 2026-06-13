@@ -3202,12 +3202,16 @@
       ]
     },
     {
+      "comment": "The order-ready push arrives on either the delivery-update channel OR the generic dasher-notification-background channel (#462, 2026-06-12 log). The 'ready for pickup' body is the real discriminator; the channelId is a coarse gate. Logs a constant ORDER_READY signal — the customer name in the body is never parsed.",
       "id": "doordash.notification.order_ready",
       "priority": 24,
       "intent": "order_ready_for_pickup",
       "require": {
         "all": [
-          { "channelIdContains": "delivery-update" },
+          { "any": [
+            { "channelIdContains": "delivery-update" },
+            { "channelIdContains": "dasher-notification-background" }
+          ] },
           { "anyFieldContains": "ready for pickup" }
         ]
       },
