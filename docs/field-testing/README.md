@@ -82,6 +82,19 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   recognition gaps from that dash; the rest are a larger effort.)
   - Confirmed: 0/2
 
+- **"Delivery for <name>" dropoff arrival card now recognized as dropoff_pre_arrival (#462/#460).**
+  The dropoff arrival/detail card (the one with "Delivery for", the customer name, the address,
+  "Directions", and "Hand it to recipient" — e.g. the 7-Eleven order to Adam C) was falling to
+  UNKNOWN: its first text is "Delivery for"/"Deliver by", neither of which the rule's "Deliver to"
+  predicate matched. It's now a branch of `dropoff_pre_arrival` (flow = task:dropoff:navigation),
+  keyed on "Delivery for" + "Hand it to recipient" (dropoff-specific so it won't steal the pickup
+  card). On a dropoff: working = arriving at the customer shows a recognized dropoff screen (not
+  UNKNOWN) and the flow is on dropoff; the customer name + deadline are captured (name hashed).
+  **Critical to verify on an ALCOHOL dropoff:** the identity/signature-banner variant must STILL be
+  blocked (no recognition, no parse) — only the plain arrival card recognizes. Broken = still
+  UNKNOWN, mis-steps the flow, or the alcohol variant leaks recipient PII.
+  - Confirmed: 0/2
+
 - **Batch-1 recognition gaps from 2026-06-12 now recognized (#462).** Twelve more screens that
   fell to UNKNOWN are now recognized (mostly recognize-only — no flow change): pickup steps
   (`Pickup steps` / `Take receipt photo`), pickup "what's causing your wait" survey, pickup

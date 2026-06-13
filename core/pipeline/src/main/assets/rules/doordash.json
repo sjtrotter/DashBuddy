@@ -1306,34 +1306,53 @@
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
       },
+      "comment": "Two dropoff layouts (#462/#460): the en-route nav card ('Deliver to <name>' + Directions/Call/Message) and the arrival detail card ('Delivery for' label with the name in a sibling node + 'Hand it to recipient'). The arrival card was dropping to UNKNOWN — its first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' is the dropoff-specific discriminator (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The alcohol variant of the arrival card additionally carries the priority-0 sensitive id/signature banner (#463), so it is blocked before reaching here.",
       "require": {
-        "all": [
+        "any": [
           {
-            "exists": {
-              "any": [
-                {
-                  "hasTextStartsWith": "Deliver to"
-                },
-                {
-                  "hasTextStartsWith": "Heading to"
+            "all": [
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasTextStartsWith": "Deliver to"
+                    },
+                    {
+                      "hasTextStartsWith": "Heading to"
+                    }
+                  ]
                 }
-              ]
-            }
+              },
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasText": "Directions"
+                    },
+                    {
+                      "hasText": "Call"
+                    },
+                    {
+                      "hasText": "Message"
+                    }
+                  ]
+                }
+              }
+            ]
           },
           {
-            "exists": {
-              "any": [
-                {
-                  "hasText": "Directions"
-                },
-                {
-                  "hasText": "Call"
-                },
-                {
-                  "hasText": "Message"
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Delivery for"
                 }
-              ]
-            }
+              },
+              {
+                "exists": {
+                  "hasText": "Hand it to recipient"
+                }
+              }
+            ]
           }
         ]
       },
@@ -1343,26 +1362,41 @@
           "phase": "DROPOFF",
           "subFlow": "NAVIGATION",
           "customerNameHash": {
-            "find": {
-              "any": [
-                {
-                  "hasTextStartsWith": "Deliver to"
-                },
-                {
-                  "hasTextStartsWith": "Heading to"
-                }
-              ]
-            },
-            "read": "text",
-            "transform": [
+            "coalesce": [
               {
-                "stripPrefixes": [
-                  "Deliver to ",
-                  "Heading to "
+                "find": {
+                  "any": [
+                    {
+                      "hasTextStartsWith": "Deliver to"
+                    },
+                    {
+                      "hasTextStartsWith": "Heading to"
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": [
+                  {
+                    "stripPrefixes": [
+                      "Deliver to ",
+                      "Heading to "
+                    ]
+                  },
+                  "trim",
+                  "sha256"
                 ]
               },
-              "trim",
-              "sha256"
+              {
+                "find": {
+                  "hasTextContaining": "Delivery for"
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": [
+                  "trim",
+                  "sha256"
+                ]
+              }
             ]
           },
           "customerAddressHash": {
