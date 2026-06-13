@@ -451,7 +451,9 @@ private fun PickupBody(snap: FlowCardSnapshot.Pickup, isActive: Boolean) {
         itemsShopped = snap.itemsShopped,
         itemsRemaining = snap.itemsRemaining,
         activity = snap.activity,
-        deadlineLabel = "till pickup-by",
+        // No "-by": the DeadlineBody caption already appends "· by HH:MM",
+        // so "till pickup-by" read as "till pickup-by · by 17:10" (#460).
+        deadlineLabel = "till pickup",
     )
 }
 
@@ -472,7 +474,7 @@ private fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
         itemsShopped = null,
         itemsRemaining = null,
         activity = null,
-        deadlineLabel = "till deliver-by",
+        deadlineLabel = "till deliver",
     )
 }
 

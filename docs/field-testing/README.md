@@ -63,6 +63,12 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **Pickup/Delivery card deadline reads cleanly — no double "by" (#460).**
+  The deadline caption read `till pickup-by · by 17:10` (two "by"s); now `till pickup · by 17:10`
+  / `till deliver · by 17:10`. Desk- or dash-verifiable on any pickup/delivery card. (The
+  separate pickup/delivery card visual-parity redesign stays tracked in #460.)
+  - Confirmed: 0/2
+
 - **No transient double drop-off card at the door (#458).**
   On an arrival-bearing dropoff (hand-it-to-customer / photo / PIN) the same delivery briefly
   rendered as TWO cards during the at-door window (a frozen completed copy + the live one). The
