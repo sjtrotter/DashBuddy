@@ -21,7 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -33,7 +33,7 @@ fun FakeOfferCard(
     evaluation: OfferEvaluation,
     modifier: Modifier = Modifier
 ) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
 
     val targetContainerColor = when (evaluation.action) {
         OfferAction.ACCEPT -> c.goodBg

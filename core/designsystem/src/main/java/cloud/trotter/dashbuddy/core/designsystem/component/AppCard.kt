@@ -13,20 +13,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 
 /**
  * Card surface — the `.db-card` / `.db-card-active` tokens. `active` raises elevation tone
  * (surface-2 + stronger hairline) for the pinned/active HUD card. Content is a [ColumnScope].
  */
 @Composable
-fun DashCard(
+fun AppCard(
     modifier: Modifier = Modifier,
     active: Boolean = false,
     contentPadding: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
@@ -45,31 +45,31 @@ fun DashCard(
  * (e.g. accentDim / goodBg / warnBg / badBg).
  */
 @Composable
-fun DashCallout(
+fun AppCallout(
     text: String,
     modifier: Modifier = Modifier,
-    container: Color = DashTheme.colors.accentDim,
+    container: Color = AppTheme.colors.accentDim,
 ) {
     Surface(modifier = modifier, shape = MaterialTheme.shapes.small, color = container) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             style = MaterialTheme.typography.bodySmall,
-            color = DashTheme.colors.text2,
+            color = AppTheme.colors.text2,
         )
     }
 }
 
 @Preview
 @Composable
-private fun DashCardPreview() = DashBuddyTheme {
+private fun AppCardPreview() = DashBuddyTheme {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.padding(16.dp)) {
-            DashCard(active = true) {
-                Text("Active card", style = MaterialTheme.typography.titleMedium, color = DashTheme.colors.text)
+            AppCard(active = true) {
+                Text("Active card", style = MaterialTheme.typography.titleMedium, color = AppTheme.colors.text)
             }
             Column(Modifier.padding(top = 12.dp)) {
-                DashCallout("You kept $612 of $812 gross — a 75% true margin.")
+                AppCallout("You kept $612 of $812 gross — a 75% true margin.")
             }
         }
     }

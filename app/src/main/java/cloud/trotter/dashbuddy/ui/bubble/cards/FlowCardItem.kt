@@ -28,7 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.format.formatCountdown
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
@@ -44,9 +44,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.draw.clip
-import cloud.trotter.dashbuddy.core.designsystem.component.DashChip
-import cloud.trotter.dashbuddy.core.designsystem.component.DashGaugeRing
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashColors
+import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
+import cloud.trotter.dashbuddy.core.designsystem.component.AppGaugeRing
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -153,9 +153,9 @@ private fun CardHeader(
 
 @Composable
 private fun PhaseChip(snapshot: FlowCardSnapshot, isActive: Boolean) {
-    // Semantic brand tokens per DashColors' contract (#358) — the chip now
+    // Semantic brand tokens per AppColors' contract (#358) — the chip now
     // agrees with statusBadge instead of remapping phases onto M3 roles.
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     val (label, color, bg) = when (snapshot) {
         is FlowCardSnapshot.Awaiting -> Triple("AWAIT", c.neutral, c.neutralBg)
         is FlowCardSnapshot.Offer -> Triple("OFFER", c.stOffer, c.stOfferBg)
@@ -273,7 +273,7 @@ private fun AwaitingBody(snap: FlowCardSnapshot.Awaiting, isActive: Boolean) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -307,7 +307,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                     score <= OfferEvaluator.DECLINE_THRESHOLD -> c.bad
                     else -> c.warn
                 }
-                DashGaugeRing(
+                AppGaugeRing(
                     progress = (score / 100.0).toFloat(),
                     value = score.toInt().toString(),
                     label = "Score",
@@ -318,8 +318,8 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             Column(modifier = Modifier.weight(1f)) {
                 val hourly = snap.dollarsPerHour
                 when {
-                    hourly != null -> Text("${Formats.money0(hourly)}/hr", style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
-                    snap.payAmount != null -> Text(Formats.money(snap.payAmount!!), style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
+                    hourly != null -> Text("${Formats.money0(hourly)}/hr", style = AppTheme.num.heroNum, color = c.text, maxLines = 1)
+                    snap.payAmount != null -> Text(Formats.money(snap.payAmount!!), style = AppTheme.num.heroNum, color = c.text, maxLines = 1)
                 }
                 val net = snap.netPayAmount ?: snap.payAmount
                 val secondary = buildString {
@@ -334,7 +334,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                     }
                 }
                 if (secondary.isNotBlank()) {
-                    Text(secondary, style = DashTheme.num.smNum, color = c.text2, maxLines = 1)
+                    Text(secondary, style = AppTheme.num.smNum, color = c.text2, maxLines = 1)
                 }
             }
             // Item count promoted to the hero tier (#461): Shop & Deliver and
@@ -342,8 +342,8 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             // footer caption was easy to miss), using the space on the right.
             if (snap.itemCount > 1) {
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("${snap.itemCount}", style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
-                    Text("items", style = DashTheme.num.smNum, color = c.text2, maxLines = 1)
+                    Text("${snap.itemCount}", style = AppTheme.num.heroNum, color = c.text, maxLines = 1)
+                    Text("items", style = AppTheme.num.smNum, color = c.text2, maxLines = 1)
                 }
             }
         }
@@ -380,7 +380,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                             color = vColor,
                         )
                     }
-                    snap.qualityLevel?.let { DashChip(it.displayLabel(), color = c.text3, container = c.surface3) }
+                    snap.qualityLevel?.let { AppChip(it.displayLabel(), color = c.text3, container = c.surface3) }
                 }
             }
         }
@@ -393,7 +393,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             ) {
                 snap.badges.forEach { b ->
                     val (label, col) = badgeMeta(b, c)
-                    DashChip(label, color = col, container = c.surface3)
+                    AppChip(label, color = col, container = c.surface3)
                 }
             }
         }
@@ -407,21 +407,21 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
 /** Live m:ss offer-expiry countdown for the active offer card header. */
 @Composable
 private fun OfferCountdownText(expiresAt: Long, countdownSeconds: Int) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     val now by rememberNow()
     val secsLeft = ((expiresAt - now) / 1000.0).coerceAtLeast(0.0)
     val frac = if (countdownSeconds > 0) (secsLeft / countdownSeconds).coerceIn(0.0, 1.0) else 0.0
     val col = offerExpiryColor(frac, c)
     Text(
         text = formatCountdown((secsLeft * 1000).toLong()),
-        style = DashTheme.num.smNum,
+        style = AppTheme.num.smNum,
         color = col,
         fontWeight = FontWeight.Bold,
     )
 }
 
 /** Maps a badge enum name to a short label + brand color for the pill row. */
-private fun badgeMeta(name: String, c: DashColors): Pair<String, Color> = when (name) {
+private fun badgeMeta(name: String, c: AppColors): Pair<String, Color> = when (name) {
     "SHOP" -> "Shop & Deliver" to c.stPickup
     "HIGH_PAYING" -> "High pay" to c.good
     "PRIORITY_ACCESS" -> "Priority" to c.stOffer
@@ -625,7 +625,7 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
 /** Manual Accept / Decline buttons on the active offer card (#110 Stage 2b). */
 @Composable
 private fun OfferActionRow(onAccept: () -> Unit, onDecline: () -> Unit) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -648,7 +648,7 @@ private fun OfferActionRow(onAccept: () -> Unit, onDecline: () -> Unit) {
 private fun HeroBig(text: String, color: Color = MaterialTheme.colorScheme.onSurface) {
     Text(
         text = text,
-        style = DashTheme.num.heroNum,
+        style = AppTheme.num.heroNum,
         color = color,
         maxLines = 1,
     )
@@ -677,7 +677,7 @@ private fun BreakdownRow(label: String, value: String) {
 
 @Composable
 private fun OutcomeChip(outcome: AppEventType) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     val (text, color) = when (outcome) {
         AppEventType.OFFER_ACCEPTED -> "Accepted" to c.good
         AppEventType.OFFER_DECLINED -> "Declined" to c.bad
@@ -701,7 +701,7 @@ private fun OutcomeChip(outcome: AppEventType) {
 @Composable
 private fun deadlineColor(remainingMs: Long): Color {
     val mins = remainingMs / 60_000L
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     return when {
         remainingMs < 0 -> c.bad              // past — red
         mins < 5 -> c.bad                     // <5m — red
@@ -715,7 +715,7 @@ private fun deadlineColor(remainingMs: Long): Color {
 // ---------------------------------------------------------------------------
 
 /** THE offer-expiry color tiers (#406) — previously written twice in this file. */
-private fun offerExpiryColor(frac: Double, c: DashColors): Color = when {
+private fun offerExpiryColor(frac: Double, c: AppColors): Color = when {
     frac > 0.45 -> c.good
     frac > 0.2 -> c.warn
     else -> c.bad

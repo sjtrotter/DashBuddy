@@ -33,7 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -119,15 +119,15 @@ fun PermissionCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(DashTheme.colors.goodBg) // Soft Green
+                .background(AppTheme.colors.goodBg) // Soft Green
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Security, contentDescription = "Privacy", tint = DashTheme.colors.good)
+            Icon(Icons.Default.Security, contentDescription = "Privacy", tint = AppTheme.colors.good)
             Text(
                 text = stringResource(id = R.string.perm_privacy_guarantee),
                 style = MaterialTheme.typography.bodySmall,
-                color = DashTheme.colors.good,
+                color = AppTheme.colors.good,
                 modifier = Modifier.padding(start = 8.dp)
             )
         }

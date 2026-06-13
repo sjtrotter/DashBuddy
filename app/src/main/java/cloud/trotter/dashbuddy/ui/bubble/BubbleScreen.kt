@@ -10,7 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -366,7 +366,7 @@ private fun SessionMetricsActions(
 
 @Composable
 private fun statusBadge(region: PlatformRegion?, flow: Flow): Pair<String, Color> {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     val green = c.good
     val amber = c.warn
     val blue = c.stOffer
@@ -531,7 +531,7 @@ fun ChatBubble(message: ChatMessage) {
             modifier = Modifier
                 .fillMaxWidth()
                 // Deliberate 12dp chat-bubble radius — between the small/medium
-                // shape tokens; revisit if DashShapes grows a chat variant (#406).
+                // shape tokens; revisit if AppShapes grows a chat variant (#406).
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .padding(12.dp)

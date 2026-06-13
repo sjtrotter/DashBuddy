@@ -18,20 +18,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 
 /**
  * Pill segmented control — analytics tabs / period switches. Selected segment fills with the
  * brand accent. Pure data + an `onSelect` lambda.
  */
 @Composable
-fun DashSegmented(
+fun AppSegmented(
     options: List<String>,
     selected: String,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     Row(
         modifier = modifier
             .clip(CircleShape)
@@ -62,9 +62,9 @@ fun DashSegmented(
 
 @Preview
 @Composable
-private fun DashSegmentedPreview() = DashBuddyTheme {
+private fun AppSegmentedPreview() = DashBuddyTheme {
     Surface(color = MaterialTheme.colorScheme.background) {
-        DashSegmented(
+        AppSegmented(
             options = listOf("Money", "Patterns", "Decisions", "Time"),
             selected = "Money",
             onSelect = {},

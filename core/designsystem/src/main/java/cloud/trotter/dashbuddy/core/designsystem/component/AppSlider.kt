@@ -19,14 +19,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 
 /**
  * Slider with a min / value / max readout below (the live value in the brand accent, numeric).
  * Economy costs, strategy targets, wizard steps. [format] turns the raw float into display text.
  */
 @Composable
-fun DashSlider(
+fun AppSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
     valueRange: ClosedFloatingPointRange<Float>,
@@ -34,7 +34,7 @@ fun DashSlider(
     steps: Int = 0,
     format: (Float) -> String = { it.toString() },
 ) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     Column(modifier) {
         Slider(
             value = value,
@@ -49,7 +49,7 @@ fun DashSlider(
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(format(valueRange.start), style = MaterialTheme.typography.bodySmall, color = c.text3)
-            Text(format(value), style = DashTheme.num.smNum, color = c.accent)
+            Text(format(value), style = AppTheme.num.smNum, color = c.accent)
             Text(format(valueRange.endInclusive), style = MaterialTheme.typography.bodySmall, color = c.text3)
         }
     }
@@ -57,10 +57,10 @@ fun DashSlider(
 
 @Preview
 @Composable
-private fun DashSliderPreview() = DashBuddyTheme {
+private fun AppSliderPreview() = DashBuddyTheme {
     Surface(color = MaterialTheme.colorScheme.background) {
         var v by remember { mutableFloatStateOf(22f) }
-        DashSlider(
+        AppSlider(
             value = v,
             onValueChange = { v = it },
             valueRange = 10f..40f,

@@ -10,13 +10,13 @@ import androidx.compose.ui.graphics.Color
  *
  * Design-specific semantics (phase chips, status badges, good/warn/bad, offer/pickup)
  * read from [LocalDashColors] — NOT Material 3 roles — so they stay meaningful and fixed,
- * never wallpaper-derived. Material 3 roles are still mapped (see DashTheme) so stock M3
+ * never wallpaper-derived. Material 3 roles are still mapped (see AppTheme) so stock M3
  * components render on-brand.
  *
  * `*Bg` tokens are the base color at 14% (dark) / 12% (light) alpha.
  */
 @Immutable
-data class DashColors(
+data class AppColors(
     val bg: Color,
     val surface: Color,
     val surface2: Color,
@@ -47,7 +47,7 @@ data class DashColors(
 )
 
 /** Dark theme — primary. */
-fun darkDashColors(): DashColors = DashColors(
+fun darkAppColors(): AppColors = AppColors(
     bg = Color(0xFF0C1014),
     surface = Color(0xFF141A21),
     surface2 = Color(0xFF1B2530),
@@ -78,7 +78,7 @@ fun darkDashColors(): DashColors = DashColors(
 )
 
 /** Light theme — follows system; semantic tokens stay meaningful. */
-fun lightDashColors(): DashColors = DashColors(
+fun lightAppColors(): AppColors = AppColors(
     bg = Color(0xFFEEF2F4),
     surface = Color(0xFFFFFFFF),
     surface2 = Color(0xFFF3F6F8),
@@ -108,5 +108,5 @@ fun lightDashColors(): DashColors = DashColors(
     isDark = false,
 )
 
-/** Brand semantic tokens. Provided by [DashBuddyTheme]; read via `DashTheme.colors`. */
-val LocalDashColors = staticCompositionLocalOf { darkDashColors() }
+/** Brand semantic tokens. Provided by [DashBuddyTheme]; read via `AppTheme.colors`. */
+val LocalDashColors = staticCompositionLocalOf { darkAppColors() }

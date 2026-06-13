@@ -15,22 +15,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 
 /**
  * Mini stat cell — uppercase label (+ optional [leading] slot), a numeric value, optional sub.
  * Dashboard "Today" glance, analytics tiles, ratings counts.
  */
 @Composable
-fun DashStatTile(
+fun AppStatTile(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
     sub: String? = null,
-    valueColor: Color = DashTheme.colors.text,
+    valueColor: Color = AppTheme.colors.text,
     leading: (@Composable () -> Unit)? = null,
 ) {
-    DashCard(modifier = modifier) {
+    AppCard(modifier = modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -39,27 +39,27 @@ fun DashStatTile(
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelMedium,
-                color = DashTheme.colors.text3,
+                color = AppTheme.colors.text3,
             )
         }
         Spacer(Modifier.height(6.dp))
-        Text(text = value, style = DashTheme.num.xlNum, color = valueColor)
+        Text(text = value, style = AppTheme.num.xlNum, color = valueColor)
         if (sub != null) {
             Spacer(Modifier.height(4.dp))
-            Text(text = sub, style = MaterialTheme.typography.bodySmall, color = DashTheme.colors.text3)
+            Text(text = sub, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.text3)
         }
     }
 }
 
 @Preview
 @Composable
-private fun DashStatTilePreview() = DashBuddyTheme {
+private fun AppStatTilePreview() = DashBuddyTheme {
     Surface(color = MaterialTheme.colorScheme.background) {
-        DashStatTile(
+        AppStatTile(
             label = "Net/hr",
             value = "$19.40",
             sub = "after real costs",
-            valueColor = DashTheme.colors.good,
+            valueColor = AppTheme.colors.good,
             modifier = Modifier.padding(16.dp),
         )
     }

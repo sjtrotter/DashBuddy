@@ -13,23 +13,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 
 /**
  * Uppercase pill / badge — the `.db-chip` token. Phase chips, status badges, outcome chips,
  * analytics legend keys. Pure data + tokens.
  */
 @Composable
-fun DashChip(
+fun AppChip(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = DashTheme.colors.neutral,
-    container: Color = DashTheme.colors.neutralBg,
+    color: Color = AppTheme.colors.neutral,
+    container: Color = AppTheme.colors.neutralBg,
     uppercase: Boolean = true,
 ) {
     Text(
         text = if (uppercase) text.uppercase() else text,
-        style = DashTheme.num.chip,
+        style = AppTheme.num.chip,
         color = color,
         modifier = modifier
             .clip(CircleShape)
@@ -40,12 +40,12 @@ fun DashChip(
 
 @Preview
 @Composable
-private fun DashChipPreview() = DashBuddyTheme {
+private fun AppChipPreview() = DashBuddyTheme {
     Surface(color = MaterialTheme.colorScheme.background) {
-        DashChip(
+        AppChip(
             "Offer",
-            color = DashTheme.colors.stOffer,
-            container = DashTheme.colors.stOfferBg,
+            color = AppTheme.colors.stOffer,
+            container = AppTheme.colors.stOfferBg,
             modifier = Modifier.padding(16.dp),
         )
     }
