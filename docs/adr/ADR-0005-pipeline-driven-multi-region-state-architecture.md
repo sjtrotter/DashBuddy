@@ -9,6 +9,18 @@
 
 ---
 
+> **Amendment (2026-06-13, #440).** Two parts of the original design were not built as
+> written — the as-implemented system diverges as follows:
+> - **Lifecycle healing is `TransitionPolicy`, not `ModeConfidence` thresholds.** The
+>   confidence-threshold healing in §5.5/§5.8 was abandoned. Healing is now an
+>   expected/unexpected transition classification plus commit graces (`TransitionPolicy`),
+>   and in practice rides on the Offline→Online edge — there is no `ModeConfidence`
+>   accumulator. (The expected/unexpected `outcomes` machinery is itself currently dormant —
+>   no ruleset declares `outcomes` — see #439.)
+> - **A single set of steppers, not a per-platform stepper map.** `FlowRegionStepper` /
+>   `PlatformRegionStepper` / `CrossPlatformRegionStepper` are pure functions applied per
+>   region; the per-platform map of stepper instances described here was never built.
+
 ## Context
 
 DashBuddy's pipeline and state machine have grown organically. The accessibility

@@ -25,8 +25,9 @@ data class FlowRegion(
 
 /**
  * An offer that has been presented and is awaiting accept/decline/timeout.
- * The offer stack automaton pushes when entering [Flow.OfferPresented] and
- * pops when leaving it.
+ * A single depth-1 slot (NOT a stack): set when entering [Flow.OfferPresented]
+ * and cleared when leaving it — one pending offer at a time (relevant to #251's
+ * concurrent-offer case, which this does not yet model).
  *
  * @param returnFlow The flow to return to on decline/timeout.
  * @param targets Named UI targets the offer rule bound on this screen

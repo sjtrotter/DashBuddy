@@ -105,8 +105,9 @@ The project uses modular Clean Architecture with a strict dependency graph:
 - **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
   (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.
 - **`:core:state`** — Multi-region state machine (StateMachine, FlowRegionStepper,
-  PlatformRegionStepper, CrossPlatformRegionStepper), effect map, healing policy, crash recovery
-  (StateManagerV2). Defines `EffectExecutor` and `MetadataProvider` interfaces.
+  PlatformRegionStepper, CrossPlatformRegionStepper), effect map, `TransitionPolicy` (the
+  expected/unexpected classification + commit graces; replaced the old `HealingPolicy`), crash
+  recovery (StateManagerV2). Defines `EffectExecutor` and `MetadataProvider` interfaces.
 - **`:core:database`** — Room entities, DAOs, and database setup.
 - **`:core:data`** — Repository implementations, mappers, data sources. Bridges domain interfaces to
   concrete data layers.
@@ -138,9 +139,10 @@ solution is a multi-stage pipeline:
 `:domain`). Per-event-type sub-pipelines (`ContentChangedPipeline` — debounced,
 `StateChangedPipeline`, `WindowsChangedPipeline`, plus click handling in `AccessibilityPipeline`)
 and a parallel `NotificationPipeline` (`NotificationListener` → `NotificationFilter` →
-`NotificationMapper`) emit `PipelineEvent`s. `AccessibilityPipeline.output()` has three drop gates:
-**sensitive** screens, **noise**, and **UNKNOWN** (captured to disk for triage, never forwarded to
-the state machine). Snapshots are attributed to the window's *real* package (not the event's), so
+`NotificationMapper`) emit `PipelineEvent`s. `AccessibilityPipeline.output()` drops in stages:
+a fail-closed **rulesets-not-loaded** gate (#432), then **sensitive**/**noise** (the shared content
+gate, #399), then **disabled-platform** (defense-in-depth), then **UNKNOWN** (captured to disk for
+triage, never forwarded to the state machine). Snapshots are attributed to the window's *real* package (not the event's), so
 our own overlay is dropped (#4 / PR #334). Frame admission is `FrameGate` (identity dedup +
 content-hash rolling suppression of UNKNOWN frames, #360); envelope assembly is the shared
 `CaptureWriter` (#361); `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds

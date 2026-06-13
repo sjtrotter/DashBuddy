@@ -134,7 +134,8 @@ class AccessibilityPipeline @Inject constructor(
         // Dedup + Capture: write unique observations to disk, skip duplicates.
         // Known screens dedup by identity; UNKNOWN frames dedup by tree/node
         // content hash in a rolling seen-set (#360) — lastIdentity semantics
-        // (known-after-UNKNOWN re-forwarding) are preserved inside FrameGate.
+        // (an UNKNOWN interlude doesn't reset known-screen dedup) are preserved
+        // inside FrameGate.
         .mapNotNull { (obs, event) ->
             val contentHash = when (event) {
                 is PipelineEvent.Screen -> event.tree.stableHash

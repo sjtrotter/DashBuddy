@@ -14,8 +14,9 @@ import java.util.UUID
  * Builds a capture envelope from pipeline context and a raw payload,
  * serializes it to JSON. Stateless utility — all context is passed per call.
  *
- * Lives in `:core:data` because it depends on kotlinx.serialization for
- * JSON encoding — `:domain` is pure Kotlin.
+ * Lives in `:domain` alongside the capture contracts — kotlinx.serialization
+ * is available here (`:domain` has no *Android* dependencies, which is the
+ * actual constraint; it is not serialization-free).
  */
 object EnvelopeBuilder {
 

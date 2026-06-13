@@ -13,8 +13,11 @@ import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
  * The two layers solve different problems:
  *  - **Identity dedup** (`lastIdentity`) suppresses the same RECOGNIZED screen
  *    re-observed back-to-back. It is deliberately NOT updated by UNKNOWN
- *    frames, so a known screen re-forwards after an UNKNOWN interlude even if
- *    its own identity didn't change.
+ *    frames, so an UNKNOWN interlude does not reset identity dedup: an
+ *    *unchanged* known screen STAYS suppressed across it (an UNKNOWN between two
+ *    identical sightings isn't a change), while a known screen with a *new*
+ *    identity still forwards. (A null-identity click clears `lastIdentity`, so
+ *    the same screen forwards again after it.)
  *  - **UNKNOWN suppression** ([UnknownSuppressor]): UNKNOWN identity is
  *    contentless (constant target + ParsedFields.None), so consecutive
  *    *distinct* unknown screens were indistinguishable and every noisy frame

@@ -10,6 +10,20 @@ envelope header with pipeline declarations.
 
 ---
 
+> **Implementation status (2026-06-13, #440).** The **rule format / engine** half of this ADR
+> is implemented and shipping; the **distribution** half is aspirational. Read the spec below
+> with this table in mind:
+>
+> | Area | Status |
+> |---|---|
+> | Compiled rule format, 5-phase evaluation, named bindings, reject entries, `on` modifier, parse sub-language, engine-owned transforms | **Implemented** — see `RuleCompiler` / `Ruleset` / `JsonRuleInterpreter`, `docs/rules.schema.json` |
+> | Platform envelope header (`platform_id` / `format_version` / `pipelines`) | **Implemented** (in the bundled `assets/rules/*.json`) |
+> | JSON5 authoring → canonical JSON tooling | **Future** — rules are hand-authored as JSON today; no JSON5 toolchain |
+> | Signing / integrity verification before compile | **Future** — hard prerequisite for any remote source (#416) |
+> | CDN / OTA delivery, dual-running, forkable sources | **Future** — the #192 matchers split; rules are bundled in-APK today (`assets/rules/`) |
+>
+> The DSL↔schema discrepancies are tracked separately in #241.
+
 ## Context
 
 Screen matchers, click classifiers, and notification classifiers are currently compiled into the
