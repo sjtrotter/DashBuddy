@@ -110,8 +110,24 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   before). On a dash: working = hitting any of these screens shows a recognized screen (not
   UNKNOWN) and the pickup/dropoff flow does NOT mis-step (these are recognize-only, so the
   task state should be unchanged). Broken = still UNKNOWN, or the flow jumps/regresses when one
-  appears. (**#462 stays open** for the long tail — PII-bearing active-delivery cards, restricted/
-  stacked offer variants, idle/navigate-to-zone, and transient frames.)
+  appears.
+  - Confirmed: 0/2
+
+- **Batch-2 recognition gaps — idle/lifecycle (#462, now CLOSED).** The last UNKNOWN screens are
+  recognized: the **"Navigate to zone / We'll look for orders along the way / Spot saved until …"**
+  repositioning card (now a recognized idle screen, and the "Spot saved until HH:MM" countdown
+  should populate); the **scheduled-dash slot picker** ("Start time / End Time"); the **dropoff
+  reminder** ("Deliver to door of … / Got it"); the **pickup QR-confirm** ("Confirm that the code
+  was scanned"); and the **help/support menu** ("Get an account checkup / Dashing FAQs"). Working =
+  these show recognized (not UNKNOWN); the repositioning card shows a spot-save countdown. Broken =
+  any still UNKNOWN, or the navigate-to-zone card mis-reads the idle state.
+  - Confirmed: 0/2
+
+- **Order-ready push notification now recognized (#462).** The "‹name›'s order is ready for pickup
+  at ‹store›" push arrives on the `dasher-notification-background` channel (it was UNKNOWN before).
+  Working = when DoorDash sends the order-ready notification, the log shows it classified
+  (`ORDER_READY`), not UNKNOWN — and the customer name is never stored (the rule logs a constant).
+  Broken = still UNKNOWN, or a customer name shows up parsed.
   - Confirmed: 0/2
 
 - **Pickup/Delivery task cards redesigned to the co-hero design (#460/#324).** The task cards
@@ -161,20 +177,20 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   doubled `$`, or a wrong decimal.
   - Confirmed: 0/2
 
-- **Sensitive screens now blocked: DasherDirect Savings + alcohol customer-ID/signature (#463, complete).**
-  On the 2026-06-12 dash two sensitive surfaces leaked to UNKNOWN capture: the DasherDirect
-  **Savings jar** flow (plaintext balances — "Transfer $X" / "You transferred $X") and the
-  **alcohol customer-ID/signature capture** screens (license-scan, the "Identity verification"
-  ID-match, the "hand your phone … signature" handoff, the "Scan Successful" confirmation). Both
-  are now blocked at the matcher layer (priority-0 `sensitive.savings` / `sensitive.id_verification`)
-  + `SensitiveTextMarkers` backstop. On a dash:
-  - **Banking:** open DasherDirect → Savings, do a small transfer → the screen produces NO capture
-    (log shows the sensitive gate / "Capture scrubbed").
-  - **Alcohol ID:** on a 21+ delivery, the license-scan / ID-verify / signature screens should
-    produce NO capture, while the *instruction checklist* ("Verify recipient's identity" steps)
-    and the rest of the dropoff flow still recognize normally (the recognize-vs-block boundary).
-  Broken = a Savings/Transfer balance OR a license-scan / ID-match / signature screen shows up in
-  captures/, or the alcohol delivery flow stops advancing (over-blocked the instruction steps).
+- **Sensitive model corrected — block the DASHER's data + ID/signature IMAGES; HASH customers (#463/#485).**
+  The privacy rule is now: block the **dasher's own** sensitive screens (DasherDirect Savings /
+  banking — plaintext balances) and the **document-image capture surfaces** (the license-SCAN
+  camera + the SIGNATURE pad/handoff), regardless of whose; but **recognize** the alcohol
+  **ID-CHECK instruction** ("Identity verification … matches the recipient") and the alcohol
+  **arrival card**, with the customer name/address **hashed** (we hash customers, we don't block
+  them). On a dash:
+  - **Banking:** DasherDirect → Savings, small transfer → NO capture (log shows the sensitive gate).
+  - **Alcohol delivery (21+):** the license-SCANNER and the SIGNATURE pad screens produce **NO
+    capture**; but the ID-check instruction + the arrival card + the verify-step screens **recognize
+    normally**, and the customer name appears only as a HASH (never raw) in any log/capture.
+  Broken = a Savings/Transfer balance OR a license-scan/signature screen shows in captures/; OR the
+  alcohol arrival/ID-check stays UNKNOWN / mis-steps the flow; OR a raw customer name/address
+  appears anywhere.
   - Confirmed: 0/2
 
 - **Engine latency + dedupe pack (#436).**
