@@ -1016,6 +1016,34 @@ class EffectMapTest {
         )
     }
 
+    @Test
+    fun `UiInput accept when R0 left OfferPresented fires nothing — the #457 shade-drop path`() {
+        // The heads-up notification can outlive the on-screen offer: by the
+        // time a SHADE Accept tap dispatches, R0 may have advanced past
+        // OfferPresented (a UiInput never changes the flow itself). The action
+        // is dropped — pinned here as the documented #457 drop path so a future
+        // fix (and the new diagnostic log) is deliberate, not accidental.
+        val acceptRef = testNodeRef("com.doordash.driverapp:id/accept_button")
+        val offerWithTargets = testPendingOffer.copy(
+            targets = mapOf("acceptButton" to acceptRef),
+            sourceRuleId = "doordash.screen.offer_popup",
+        )
+        // Same offer state, but flow has moved to PostTask (offer left the screen).
+        val flowRegion = FlowRegion(
+            flow = Flow.PostTask,
+            pendingOffer = offerWithTargets,
+            activePlatform = Platform.DoorDash,
+        )
+        val state = AppState(regions = Regions(flow = flowRegion))
+        val obs = Observation.UiInput(timestamp = 2000L, action = OfferIntent.ACCEPT)
+
+        val effects = effectMap.diff(state, state, obs)
+        assertTrue(
+            "off-OfferPresented UiInput must not fire a tap (the #457 silent drop)",
+            effects.filterIsInstance<AppEffect.PerformRuleAction>().isEmpty(),
+        )
+    }
+
     // =========================================================================
     // NOTIFICATION EFFECTS
     // =========================================================================
