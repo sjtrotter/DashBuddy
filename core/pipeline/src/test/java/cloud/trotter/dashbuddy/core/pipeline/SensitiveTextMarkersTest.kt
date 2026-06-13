@@ -27,6 +27,10 @@ class SensitiveTextMarkersTest {
         assertEquals("Driver's License", SensitiveTextMarkers.findMarker(tree("Driver's License")))
         assertEquals("Identity verification", SensitiveTextMarkers.findMarker(tree("Identity verification")))
         assertEquals("provide their signature", SensitiveTextMarkers.findMarker(tree("Hand your phone to the customer so they can provide their signature.")))
+        // Signature canvas + the alcohol-arrival identity/signature banner (#462 sweep).
+        assertEquals("A recipient signature is required", SensitiveTextMarkers.findMarker(tree("A recipient signature is required for this order")))
+        assertEquals("collect a signature at dropoff", SensitiveTextMarkers.findMarker(tree("Verify the recipient's identity and collect a signature at dropoff")))
+        assertEquals("required by law to confirm the recipient", SensitiveTextMarkers.findMarker(tree("you're required by law to confirm the recipient's identity")))
     }
 
     @Test

@@ -63,7 +63,10 @@
               { "exists": { "hasTextContaining": "matches the recipient" } }
             ] },
             { "exists": { "hasTextContaining": "provide their signature" } },
-            { "exists": { "hasTextContaining": "ready to start verification" } }
+            { "exists": { "hasTextContaining": "ready to start verification" } },
+            { "exists": { "hasTextContaining": "A recipient signature is required" } },
+            { "exists": { "hasTextContaining": "collect a signature at dropoff" } },
+            { "exists": { "hasTextContaining": "required by law to confirm the recipient" } }
           ] }
         },
         {
