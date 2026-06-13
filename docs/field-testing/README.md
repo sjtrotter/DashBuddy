@@ -147,10 +147,15 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   "Decline") instead of hardcoded view IDs. Working = DoorDash registers the tap. Broken = log
   shows "No 'acceptButton' target bound" (rule didn't bind on that screen variant — capture it!)
   or "NONE passed label verification" (verification too strict for that variant).
-  - Confirmed: 1/2. **2026-06-12 (DoorDash):** dasher tapped **Accept** in the bubble → DoorDash
-    registered the Accept (offer was accepted). First clean live confirmation of the rule-bound tap
-    path that was broken on 06-09. Still need a second sighting — ideally the **Decline** side and
-    the **notification** surface (not just bubble Accept). (See 2026-06-12 log entry #1.)
+  - Confirmed: 1/2 (BUBBLE surface only). **2026-06-12 (DoorDash):** dasher tapped **Accept** in the
+    bubble → DoorDash registered the Accept (offer was accepted). First clean live confirmation of the
+    rule-bound tap path that was broken on 06-09. (See 2026-06-12 log entry #1.)
+  - ⚠️ **NOTIFICATION surface FOUND BROKEN — 2026-06-12 (DoorDash):** tapping **Accept and Decline
+    from the heads-up notification itself did NOTHING** (neither worked), same dash the bubble worked.
+    Dispatch path/wire strings are identical to the bubble; likely the click target isn't reachable
+    from the notification shade (offer window not foreground). Triaged as 2026-06-12 log entry #11 —
+    pull logcat for `OfferActionReceiver: accept_offer/decline_offer` to split broadcast-not-landing
+    vs click-target-absent. Bubble half still needs a 2nd sighting (esp. Decline).
 
 - **Post-dash HUD: frozen summary + consistent chat (#367, PR pending).**
   Two visible fixes after a dash ends: (a) the "Last session" Duration on the idle bubble is
@@ -533,6 +538,34 @@ and asked whether it was already fixed. **It is not.** Desk finding:
   **Hypothesis:** the clean fix routes the bubble copy through the one money formatter rather than a
   local `%.2f`, but where the formatter can live is bound up with #366 — a desk call, not a drop-in.
 
+#### 11. **FOUND BROKEN** — notification Accept/Decline don't work (neither), though the bubble's do
+On a later offer the dasher tapped **Accept and then Decline from the heads-up notification itself**
+— **neither did anything** on DoorDash. This is **distinct from the bubble path (entry #1), which
+worked**: same dash, the bubble's Accept clicked DoorDash, but the notification's buttons don't.
+Moves the notification half of the #425 checklist item to broken.
+
+- **What's the same (so it's not the wire string):** the notification's Accept/Decline send
+  `OfferIntent.ACCEPT`/`DECLINE` = `"accept_offer"`/`"decline_offer"`
+  (`BubbleManager.kt:216-217`, `OfferIntent.kt:10-11`) — the **identical** strings the bubble
+  dispatches — and `OfferActionReceiver` then dispatches the **same** `Observation.UiInput`
+  (`OfferActionReceiver.kt:32-39`). So EffectMap's offer-action handling isn't the divergence.
+- **What's different (the hypothesis):** the receiver is **manifest-registered**
+  (`AndroidManifest.xml:80-81`) and the PendingIntent is an **explicit, same-app broadcast** with
+  `FLAG_IMMUTABLE` (`BubbleManager.kt:238-245`), so it *should* reach `onReceive`. The likely break
+  is **downstream of dispatch**: acting from the **notification shade**, DoorDash's offer button
+  isn't reachable to the accessibility click the way it is when the **bubble overlays the live
+  offer** — the shade (or an advanced/expired offer) is foreground, so `UiInteractionHandler`'s
+  all-windows click finds **no live target** and aborts to manual. Same `Could not find any live
+  node` *class* as the 06-09 bubble bug, but a different cause (wrong foreground window, not
+  wrong-window search).
+- **One log line splits the two hypotheses (desk):** pull logcat around the taps. If
+  `OfferActionReceiver: accept_offer` / `decline_offer` is **absent**, the broadcast never landed
+  (PendingIntent/registration). If it's **present** but followed by a target-resolution failure /
+  `Could not find any live node`, it's the click-target-absent path. Capture which.
+- **Field note for next time:** retry the notification action **while still on the DoorDash offer
+  screen** (notification shade pulled down over the live offer, offer not yet expired) and see if it
+  behaves differently from tapping it after navigating away.
+
 ### Verification TODOs (confirmations this session)
 
 #### 1. Bubble **Accept** clicks DoorDash — #425 rule-bound tap CONFIRMED (1/2)
@@ -579,6 +612,26 @@ feels fully quick — no perceptible delay** (loosely supports #436 (b) "verdict
 quicker"); #436 stays 0/2 since its dedupe/restart sub-cases weren't deliberately tested.
 
 ### Open questions / investigations
+
+#### 12. 7-Eleven alcohol pickup: initial pickup screen UNKNOWN, but self-corrected to drop-off on nav (cross-refs #149/#433)
+On a **7-Eleven alcohol** order (~**19:59 local**), the **initial pickup screen was not recognized**
+(UNKNOWN — no pickup classification). The dasher picked the order up anyway and watched whether it
+would recover: **as soon as the screen changed to the map (drop-off navigation), the app "automatically
+knew" it was on drop-off** and corrected itself.
+
+- **What this tells us:** the **state machine recovered via the nav/flow transition** — even though
+  the pickup-confirm screen itself didn't classify, the drop-off-nav frame did, and the platform
+  region advanced to DROPOFF. Good resilience signal (the missed pickup frame didn't strand the task).
+- **The gap to chase:** the **7-Eleven (alcohol) pickup/confirm screen is an unrecognized variant**.
+  Two ties: #433 notes `pickup_picked_up` had **zero corpus** and could never match before its
+  mojibake fix — this may be exactly that screen failing to classify on a 7-Eleven layout; and #149
+  is the alcohol ID-verify flow. **To confirm:** pull the ~19:59 capture for this task — expect an
+  UNKNOWN around the pickup/confirm step; if so it needs a rule/corpus addition for the 7-Eleven
+  (and possibly alcohol) pickup variant. **Capture is the unblock here** — this screen has little/no
+  corpus.
+- **Did NOT observe:** whether the missed pickup screen cost anything downstream (arrival/confirm
+  timestamps, the pickup card's store/items) — worth checking the event DB for this task vs a clean
+  pickup.
 
 #### 5. Transient **double drop-off card** during the at-door window (cross-refs #297)
 On the **Great Greek Mediterranean** delivery the dasher saw **two drop-off cards** while at the
