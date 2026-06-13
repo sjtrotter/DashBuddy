@@ -97,13 +97,13 @@ class BubbleViewModel @Inject constructor(
     // emptying the chat/cards. The active dash wins while one is running; the
     // DB fallback survives both restarts, so the bubble reviews the last dash
     // until the next one starts (when activeSessionId takes over again).
-    @OptIn(ExperimentalCoroutinesApi::class)
     private val displayedSessionId = combine(
         bubbleManager.activeSessionId,
         appEventRepo.getMostRecentSessionId(),
     ) { active, mostRecent -> active ?: mostRecent }
         .distinctUntilChanged()
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val messages = displayedSessionId.flatMapLatest { dashId ->
         if (dashId != null) {
             chatRepository.getMessages(dashId)

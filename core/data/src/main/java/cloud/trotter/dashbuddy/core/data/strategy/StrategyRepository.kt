@@ -28,7 +28,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 class StrategyRepository @Inject constructor(
     private val dataSource: StrategyDataSource,
     private val appPreferencesRepository: AppPreferencesRepository,
-    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
+    @IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) {
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
 

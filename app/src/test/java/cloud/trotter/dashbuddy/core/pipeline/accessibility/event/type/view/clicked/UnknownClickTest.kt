@@ -31,7 +31,7 @@ class UnknownClickTest {
         UiNode(viewIdResourceName = viewId, text = text)
 
     private fun classifyClick(node: UiNode): Observation.Click =
-        classifier.classify(PipelineEvent.Click(System.currentTimeMillis(), node)) as Observation.Click
+        classifier.classify(PipelineEvent.Click(System.currentTimeMillis(), node))
 
     private fun Observation.Click.intent(): String =
         (parsed as ParsedFields.ClickFields).intent

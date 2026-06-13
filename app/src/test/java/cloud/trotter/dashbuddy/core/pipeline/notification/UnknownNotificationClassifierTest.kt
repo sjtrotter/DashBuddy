@@ -40,7 +40,7 @@ class UnknownNotificationClassifierTest {
         )
 
     private fun classifyNotification(raw: RawNotificationData): Observation.Notification =
-        classifier.classify(PipelineEvent.Notification(raw.postTime, raw)) as Observation.Notification
+        classifier.classify(PipelineEvent.Notification(raw.postTime, raw))
 
     @Test
     fun `all-null notification is unknown`() {

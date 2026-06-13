@@ -46,7 +46,7 @@ class ClickClassifierTest {
             isAccessible = true
             set(classifier, screenTarget)
         }
-        return classifier.classify(PipelineEvent.Click(System.currentTimeMillis(), node)) as Observation.Click
+        return classifier.classify(PipelineEvent.Click(System.currentTimeMillis(), node))
     }
 
     private fun Observation.Click.intent(): String =

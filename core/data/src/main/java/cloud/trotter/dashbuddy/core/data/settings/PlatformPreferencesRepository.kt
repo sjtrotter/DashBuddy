@@ -19,7 +19,7 @@ import javax.inject.Singleton
 class PlatformPreferencesRepository @Inject constructor(
     private val dataSource: PlatformPreferencesDataSource,
     @param:ApplicationContext private val context: Context,
-    @param:ApplicationScope scope: CoroutineScope,
+    @ApplicationScope scope: CoroutineScope,
 ) : PlatformPreferences {
     private val packageManager: PackageManager = context.packageManager
 

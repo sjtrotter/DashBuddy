@@ -51,7 +51,7 @@ class NotificationClassifierTest {
     )
 
     private fun classifyNotification(raw: RawNotificationData): Observation.Notification =
-        classifier.classify(PipelineEvent.Notification(raw.postTime, raw)) as Observation.Notification
+        classifier.classify(PipelineEvent.Notification(raw.postTime, raw))
 
     /** Extract [ParsedFields.NotificationFields] from a classification result. */
     private fun Observation.Notification.notifFields(): ParsedFields.NotificationFields =
