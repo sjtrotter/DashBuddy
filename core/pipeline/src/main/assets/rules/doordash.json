@@ -2618,7 +2618,10 @@
       "priority": 65,
       "state": { "flow": "task:dropoff:arrived" },
       "require": {
-        "exists": { "hasTextContaining": "Confirm order was completed" }
+        "exists": { "any": [
+          { "hasTextContaining": "Confirm order was completed" },
+          { "hasTextContaining": "Confirm delivery was completed" }
+        ] }
       }
     },
     {
@@ -2636,6 +2639,130 @@
           "schedule your dash for later",
           "this zone's full right now",
           "you scheduled a dash"
+        ]
+      }
+    },
+    {
+      "comment": "#462 batch 1 — recognize-only interstitials/menus/surveys so they no longer fall to UNKNOWN. No state.flow (cannot perturb the machine) and no parse (no PII). Keyed on 2+ stable non-PII strings.",
+      "id": "doordash.screen.pickup_steps",
+      "priority": 104,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Pickup steps" } },
+          { "exists": { "any": [
+            { "hasTextContaining": "Take receipt photo" },
+            { "hasTextContaining": "Confirm pickup" }
+          ] } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_wait_survey",
+      "priority": 88,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "What's causing your wait" } },
+          { "exists": { "hasTextContaining": "Order still being prepared when I arrived" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_select_issue",
+      "priority": 102,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Select an issue" } },
+          { "exists": { "hasTextContaining": "Order already picked up" } }
+        ]
+      }
+    },
+    {
+      "comment": "Deeper than pickup_select_issue — the resolution panel reached after picking an issue. Keyed on its own distinctive strings so it never overlaps the issue list.",
+      "id": "doordash.screen.pickup_resolution_options",
+      "priority": 103,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Resolution options" } },
+          { "exists": { "hasTextContaining": "Unassign with no pay" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_intro_message",
+      "priority": 79,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Send this intro" } },
+          { "exists": { "hasTextContaining": "Don't send" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_item_status",
+      "priority": 83,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Found empty shelf" } },
+          { "exists": { "hasTextContaining": "Can't find item location" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_wrong_item",
+      "priority": 66,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Wrong item scanned" } },
+          { "exists": { "hasTextContaining": "Scan again" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.delivery_feedback",
+      "priority": 57,
+      "require": {
+        "exists": { "hasTextContaining": "How did this delivery go" }
+      }
+    },
+    {
+      "id": "doordash.screen.safety_feedback",
+      "priority": 58,
+      "require": {
+        "exists": { "any": [
+          { "hasTextContaining": "Feedback about your safety" },
+          { "hasTextContaining": "How safe did you feel on this delivery" }
+        ] }
+      }
+    },
+    {
+      "comment": "Alcohol ID-verify instruction CHECKLIST — no recipient PII, no capture surface, so it is recognized as a flow step (deliberately distinct from the priority-0 sensitive id-verification capture screens, #463).",
+      "id": "doordash.screen.alcohol_verify_checklist",
+      "priority": 54,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Verify recipient's identity" } },
+          { "exists": { "hasTextContaining": "Do NOT hand over items until ID has been verified" } }
+        ]
+      }
+    },
+    {
+      "comment": "Alcohol verification complete (step 4 of 4) — non-sensitive completion prompt.",
+      "id": "doordash.screen.alcohol_verify_complete",
+      "priority": 56,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Hand order to recipient" } },
+          { "exists": { "hasTextContaining": "4 of 4" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.account_checkup",
+      "priority": 121,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "You're all set to receive offers" } },
+          { "exists": { "hasTextContaining": "No account issues" } }
         ]
       }
     }

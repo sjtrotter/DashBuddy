@@ -82,6 +82,21 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   recognition gaps from that dash; the rest are a larger effort.)
   - Confirmed: 0/2
 
+- **Batch-1 recognition gaps from 2026-06-12 now recognized (#462).** Twelve more screens that
+  fell to UNKNOWN are now recognized (mostly recognize-only — no flow change): pickup steps
+  (`Pickup steps` / `Take receipt photo`), pickup "what's causing your wait" survey, pickup
+  "Select an issue" + "Resolution options" menus, shopping intro-message / item-status /
+  wrong-item-scanned, post-delivery "How did this delivery go?" + "Feedback about your safety",
+  the alcohol ID-verify instruction checklist + "4 of 4" complete step, and the
+  "You're all set to receive offers" account-checkup. Also the delivery-complete dialog now
+  matches "Confirm **delivery** was completed" (it only matched "Confirm order was completed"
+  before). On a dash: working = hitting any of these screens shows a recognized screen (not
+  UNKNOWN) and the pickup/dropoff flow does NOT mis-step (these are recognize-only, so the
+  task state should be unchanged). Broken = still UNKNOWN, or the flow jumps/regresses when one
+  appears. (**#462 stays open** for the long tail — PII-bearing active-delivery cards, restricted/
+  stacked offer variants, idle/navigate-to-zone, and transient frames.)
+  - Confirmed: 0/2
+
 - **Bubble keeps showing the last dash after it ends / after a crash (#459).**
   The bubble's chat + card stack used to go EMPTY after a dash ended (8b: collapse it >5s then
   reopen) or after a crash with no active dash (8a) — the fallback dash id was a volatile

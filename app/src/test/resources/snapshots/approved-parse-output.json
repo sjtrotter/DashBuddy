@@ -1,4 +1,22 @@
 {
+    "account_checkup/2026-06-12__doordash__account_checkup__092341.json": {
+        "ruleId": "doordash.screen.account_checkup",
+        "intent": "account_checkup",
+        "shape": null,
+        "fields": {}
+    },
+    "alcohol_verify_checklist/2026-06-12__doordash__alcohol_verify_checklist__f35039.json": {
+        "ruleId": "doordash.screen.alcohol_verify_checklist",
+        "intent": "alcohol_verify_checklist",
+        "shape": null,
+        "fields": {}
+    },
+    "alcohol_verify_complete/2026-06-12__doordash__alcohol_verify_complete__a8d7cb.json": {
+        "ruleId": "doordash.screen.alcohol_verify_complete",
+        "intent": "alcohol_verify_complete",
+        "shape": null,
+        "fields": {}
+    },
     "app_startup/2026-03-25_22-21-25__UNKNOWN__3afaa104.json": {
         "ruleId": "doordash.screen.app_startup",
         "intent": "app_startup",
@@ -647,6 +665,12 @@
         "shape": null,
         "fields": {}
     },
+    "delivery_feedback/2026-06-12__doordash__delivery_feedback__92c9ef.json": {
+        "ruleId": "doordash.screen.delivery_feedback",
+        "intent": "delivery_feedback",
+        "shape": null,
+        "fields": {}
+    },
     "delivery_summary_collapsed/20260128_163015_182_DELIVERY_SUMMARY_COLLAPSED.json": {
         "ruleId": "doordash.screen.delivery_summary_collapsed",
         "intent": "delivery_summary_collapsed",
@@ -1114,6 +1138,12 @@
         "fields": {}
     },
     "dropoff_completed_confirm/2026-03-27_20-49-07__UNKNOWN__3cdff3f4.json": {
+        "ruleId": "doordash.screen.dropoff_completed_confirm",
+        "intent": "dropoff_completed_confirm",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_completed_confirm/2026-06-12__doordash__dropoff_completed_confirm__f2ead7.json": {
         "ruleId": "doordash.screen.dropoff_completed_confirm",
         "intent": "dropoff_completed_confirm",
         "shape": null,
@@ -3369,6 +3399,18 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "pickup_resolution_options/2026-06-12__doordash__pickup_resolution_options__56f6eb.json": {
+        "ruleId": "doordash.screen.pickup_resolution_options",
+        "intent": "pickup_resolution_options",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_select_issue/2026-06-12__doordash__pickup_select_issue__0a08a9.json": {
+        "ruleId": "doordash.screen.pickup_select_issue",
+        "intent": "pickup_select_issue",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_shopping/20260128_170657_958_PICKUP_DETAILS_POST_ARRIVAL_SHOP.json": {
         "ruleId": "doordash.screen.pickup_shopping",
         "intent": "pickup_shopping",
@@ -3639,6 +3681,12 @@
             "subFlow": "ARRIVED"
         }
     },
+    "pickup_steps/2026-06-12__doordash__pickup_steps__932126.json": {
+        "ruleId": "doordash.screen.pickup_steps",
+        "intent": "pickup_steps",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_verify_items/2026-06-12_19-58-10__doordash__pickup_verify_items__74398e.json": {
         "ruleId": "doordash.screen.pickup_verify_items",
         "intent": "pickup_verify_items",
@@ -3656,6 +3704,12 @@
             "storeName": null,
             "subFlow": "ARRIVED"
         }
+    },
+    "pickup_wait_survey/2026-06-12__doordash__pickup_wait_survey__d90d0f.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": null,
+        "fields": {}
     },
     "promos/2026-02-02_22-15-05__PROMOS_VIEW__4dd44e49.json": {
         "ruleId": "doordash.screen.promos",
@@ -3972,6 +4026,18 @@
             "totalItemsFoundRate": null
         }
     },
+    "safety_feedback/2026-06-12__doordash__safety_feedback__5e5251.json": {
+        "ruleId": "doordash.screen.safety_feedback",
+        "intent": "safety_feedback",
+        "shape": null,
+        "fields": {}
+    },
+    "safety_feedback/2026-06-12__doordash__safety_feedback__8f054d.json": {
+        "ruleId": "doordash.screen.safety_feedback",
+        "intent": "safety_feedback",
+        "shape": null,
+        "fields": {}
+    },
     "schedule/2026-04-09_22-11-48__SCHEDULE_VIEW__7f34245a.json": {
         "ruleId": "doordash.screen.schedule",
         "intent": "schedule",
@@ -4272,6 +4338,12 @@
             "zoneName": "TX: Leon Valley"
         }
     },
+    "shopping_intro_message/2026-06-12__doordash__shopping_intro_message__334e4e.json": {
+        "ruleId": "doordash.screen.shopping_intro_message",
+        "intent": "shopping_intro_message",
+        "shape": null,
+        "fields": {}
+    },
     "shopping_item/2026-03-27_20-07-20__UNKNOWN__e377cdcf.json": {
         "ruleId": "doordash.screen.shopping_item",
         "intent": "shopping_item",
@@ -4359,6 +4431,18 @@
     "shopping_item/2026-03-27_20-39-58__UNKNOWN__eb0db660.json": {
         "ruleId": "doordash.screen.shopping_item",
         "intent": "shopping_item",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_item_status/2026-06-12__doordash__shopping_item_status__25710d.json": {
+        "ruleId": "doordash.screen.shopping_item_status",
+        "intent": "shopping_item_status",
+        "shape": null,
+        "fields": {}
+    },
+    "shopping_wrong_item/2026-06-12__doordash__shopping_wrong_item__41a0c3.json": {
+        "ruleId": "doordash.screen.shopping_wrong_item",
+        "intent": "shopping_wrong_item",
         "shape": null,
         "fields": {}
     },
