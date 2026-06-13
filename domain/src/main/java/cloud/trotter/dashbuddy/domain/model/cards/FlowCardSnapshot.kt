@@ -92,6 +92,12 @@ sealed class FlowCardSnapshot {
         val itemsRemaining: Int? = null,
         val itemsShopped: Int? = null,
         val activity: String? = null,
+        /** The job's blended net pay — the numerator for the live "Running at $/hr"
+         *  co-hero (#460). Null until an accepted offer's economics are known. */
+        val netPay: Double? = null,
+        /** The job's blended estimated minutes — the $/hr denominator (erodes past
+         *  the deadline, the drop-it signal). */
+        val estMinutes: Double? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "pickup:$taskId"
     }
@@ -112,6 +118,10 @@ sealed class FlowCardSnapshot {
         val customerHash: String? = null,
         val arrivedAt: Long? = null,
         val deadlineMillis: Long? = null,
+        /** Blended net pay for the live "Running at $/hr" co-hero (#460). */
+        val netPay: Double? = null,
+        /** Blended estimated minutes — the $/hr denominator (erodes past deadline). */
+        val estMinutes: Double? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "delivery:$taskId"
     }

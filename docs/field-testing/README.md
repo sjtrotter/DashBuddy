@@ -110,6 +110,20 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   stacked offer variants, idle/navigate-to-zone, and transient frames.)
   - Confirmed: 0/2
 
+- **Pickup/Delivery task cards redesigned to the co-hero design (#460/#324).** The task cards
+  no longer show a single countdown + caption — they now have the **dual co-hero**: LEFT = the
+  phase timer (counts DOWN to the deadline as "To go", then flips to "Dwell" counting UP once you
+  arrive, with "at store"/"at door"), RIGHT = **"Running at $X/hr"** — the live realized rate from
+  the accepted offer's net pay ÷ time, which **holds until the deadline then erodes** (shows a ↓
+  and "dropping"). Below: an "arrived N early/late · deliver by H:MM" caption, a red **"Below your
+  floor"** banner once overdue + the rate drops under $12/hr, the shop pace block (Shop & Deliver),
+  and the store/customer detail line. On a dash: working = during pickup/dropoff the live card
+  shows both heroes ticking; the $/hr roughly matches the accepted offer's $/hr and drops if you
+  run late; "Running at —" only when the offer had no economics. Broken = $/hr shows "—" on a
+  normal accepted offer, the timer doesn't flip to Dwell on arrival, values clip/overflow the
+  bubble width, or the $/hr doesn't erode past the deadline.
+  - Confirmed: 0/2
+
 - **Bubble keeps showing the last dash after it ends / after a crash (#459).**
   The bubble's chat + card stack used to go EMPTY after a dash ended (8b: collapse it >5s then
   reopen) or after a crash with no active dash (8a) — the fallback dash id was a volatile
