@@ -636,12 +636,12 @@ class StateMachineTest {
         )).newState
         assertNotNull(state.regions.platforms[Platform.DoorDash]!!.pendingDestructive)
 
-        // The set-end-time screen (startingDash) arrives WITHIN the grace window —
+        // The set-end-time screen (startingSession) arrives WITHIN the grace window —
         // the old dash really ended; commit it now (#279-B).
         val t3 = t2 + 1000
         state = machine.step(state, screenObs(
             modeHint = Mode.Offline, flow = Flow.Idle,
-            parsed = ParsedFields.IdleFields(startingDash = true), timestamp = t3,
+            parsed = ParsedFields.IdleFields(startingSession = true), timestamp = t3,
         )).newState
         val afterStart = state.regions.platforms[Platform.DoorDash]!!
         assertNull("the dash-start signal ends the old dash", afterStart.session)

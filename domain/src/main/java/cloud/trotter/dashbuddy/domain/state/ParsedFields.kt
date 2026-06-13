@@ -68,7 +68,7 @@ sealed class ParsedFields {
          * still in its grace window and start a fresh one rather than resuming.
          * Transient signal — excluded from [dedupeHash].
          */
-        val startingDash: Boolean = false,
+        val startingSession: Boolean = false,
     ) : ParsedFields() {
         override fun toFieldMap(): Map<String, Any?> = mapOf(
             "zoneName" to zoneName,
@@ -77,7 +77,7 @@ sealed class ParsedFields {
             "waitTimeEstimate" to waitTimeEstimate,
             "isHeadingBackToZone" to isHeadingBackToZone,
             "spotSaveDeadline" to spotSaveDeadline,
-            "startingDash" to startingDash,
+            "startingSession" to startingSession,
         )
 
         override fun dedupeHash(): Int {

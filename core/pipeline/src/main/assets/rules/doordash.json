@@ -2209,7 +2209,7 @@
             },
             "read": "text"
           },
-          "startingDash": {
+          "startingSession": {
             "literal": true
           }
         }
@@ -2234,7 +2234,7 @@
       "parse": {
         "as": "idle",
         "fields": {
-          "startingDash": {
+          "startingSession": {
             "literal": true
           }
         }
