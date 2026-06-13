@@ -67,8 +67,8 @@ class WizardViewModelTest {
         whenever(strategyRepository.protectStatsMode).thenReturn(flowOf(false))
         whenever(strategyRepository.scoringRules).thenReturn(flowOf(emptyList()))
         whenever(strategyRepository.automationConfig).thenReturn(flowOf(tunedAutomation))
-        wheneverBlocking { vehicleRepository.getYears() }.thenReturn(emptyList())
-        wheneverBlocking { gasPriceRepository.fetchGasPriceOnly(any()) }
+        whenever { vehicleRepository.getYears() }.thenReturn(emptyList())
+        whenever { gasPriceRepository.fetchGasPriceOnly(any()) }
             .thenReturn(Result.failure(RuntimeException("offline in test")))
     }
 

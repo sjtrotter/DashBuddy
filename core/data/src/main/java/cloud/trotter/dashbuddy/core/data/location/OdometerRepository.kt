@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.first
 class OdometerRepository @Inject constructor(
     private val odometerLocalDataSource: OdometerLocalDataSource,
     private val locationDataSource: LocationDataSource,
-    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
+    @IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) {
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
     private var trackingJob: Job? = null

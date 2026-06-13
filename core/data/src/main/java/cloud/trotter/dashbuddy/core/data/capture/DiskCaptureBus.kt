@@ -30,7 +30,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 @Singleton
 class DiskCaptureBus @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
+    @IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) : CaptureBus {
 
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())

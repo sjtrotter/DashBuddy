@@ -31,7 +31,7 @@ import javax.inject.Singleton
 @Singleton
 class RuleCapabilityRepository @Inject constructor(
     private val dataSource: RuleCapabilityDataSource,
-    @param:ApplicationScope scope: CoroutineScope,
+    @ApplicationScope scope: CoroutineScope,
 ) : RuleCapabilityGrants {
 
     /**

@@ -19,7 +19,7 @@ import kotlinx.coroutines.channels.Channel
 @Singleton
 class LogRepository @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
+    @IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) {
     // Run file operations on IO thread to never block the main thread
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())

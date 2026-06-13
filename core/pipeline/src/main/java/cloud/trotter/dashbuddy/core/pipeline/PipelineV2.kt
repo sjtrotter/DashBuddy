@@ -17,7 +17,7 @@ class PipelineV2 @Inject constructor(
     accessibilityPipeline: AccessibilityPipeline,
     notificationPipeline: NotificationPipeline,
     stats: PipelineStats,
-    @param:ApplicationScope scope: CoroutineScope,
+    @ApplicationScope scope: CoroutineScope,
 ) {
     /**
      * HOT shared stream (#361). The upstream chain runs side effects — frame

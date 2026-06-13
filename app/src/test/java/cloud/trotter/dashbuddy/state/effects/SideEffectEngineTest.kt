@@ -90,7 +90,7 @@ class SideEffectEngineTest {
     private val uiInteractionHandler: UiInteractionHandler = mock()
     /** Live-path dedupe (#436) consults this for every keyed effect — default "not fired". */
     private val effectsFiredDao: EffectsFiredDao = mock {
-        onBlocking { hasBeenFired(any()) } doReturn false
+        on { hasBeenFired(any()) } doReturn false
     }
     private val ttsEffectHandler: TtsEffectHandler = mock()
 
@@ -101,7 +101,7 @@ class SideEffectEngineTest {
 
     /** Default: every capability granted — individual tests stub denial. */
     private val capabilityGrants: RuleCapabilityGrants = mock {
-        onBlocking { isActionGranted(anyOrNull(), any()) } doReturn true
+        on { isActionGranted(anyOrNull(), any()) } doReturn true
     }
 
     private fun buildEngine(defaultDispatcher: CoroutineDispatcher) = SideEffectEngine(
@@ -207,7 +207,7 @@ class SideEffectEngineTest {
     @Test
     fun `an AUTOMATION fire without a granted capability is denied`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        wheneverBlocking { capabilityGrants.isActionGranted(anyOrNull(), any()) }
+        whenever { capabilityGrants.isActionGranted(anyOrNull(), any()) }
             .thenReturn(false)
 
         engine.process(acceptActionEffect(trigger = ActionTrigger.AUTOMATION))
@@ -232,7 +232,7 @@ class SideEffectEngineTest {
     @Test
     fun `a USER fire is its own consent — the grant store is not consulted`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        wheneverBlocking { capabilityGrants.isActionGranted(anyOrNull(), any()) }
+        whenever { capabilityGrants.isActionGranted(anyOrNull(), any()) }
             .thenReturn(false)
 
         engine.process(acceptActionEffect(trigger = ActionTrigger.USER))
@@ -414,7 +414,7 @@ class SideEffectEngineTest {
     fun `keyed effects dedupe on the live path - not just during recovery`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         val effect = AppEffect.StartSession("sess-7", "DoorDash")
-        wheneverBlocking { effectsFiredDao.hasBeenFired(effect.effectKey!!) }
+        whenever { effectsFiredDao.hasBeenFired(effect.effectKey) }
             .thenReturn(true)
 
         engine.process(effect, recovering = false)

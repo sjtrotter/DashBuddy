@@ -21,7 +21,7 @@ import javax.inject.Named
 class DevSettingsRepository @Inject constructor(
     private val dataSource: DevSettingsDataSource,
     @param:Named("isDebug") private val isDebug: Boolean,
-    @param:IoDispatcher ioDispatcher: CoroutineDispatcher,
+    @IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) {
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
 

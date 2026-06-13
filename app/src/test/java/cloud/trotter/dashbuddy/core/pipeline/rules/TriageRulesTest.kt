@@ -301,7 +301,7 @@ class TriageRulesTest {
         )
         assertEquals("pickup_shopping", result?.intent)
         assertEquals(5, (result?.fields?.get("itemsRemaining") as Number).toInt())
-        assertEquals(13, (result?.fields?.get("itemsShopped") as Number).toInt())
+        assertEquals(13, (result.fields["itemsShopped"] as Number).toInt())
     }
 
     @Test
