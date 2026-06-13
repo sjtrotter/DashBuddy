@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * The dash-id derivation BubbleManager's `activeDashId` reads (#437). The
+ * The dash-id derivation BubbleManager's `activeSessionId` reads (#437). The
  * recovery property follows directly: snapshots restore [AppState], so a
  * restored mid-dash process derives its session id instead of waiting for a
  * StartSession effect that recovery suppresses.

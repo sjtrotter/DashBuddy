@@ -35,7 +35,7 @@ data class Regions(
 
 /**
  * THE session id the UI attributes to (#437) — derived from state, never a
- * second copy. BubbleManager used to mutate its own `activeDashId` from
+ * second copy. BubbleManager used to mutate its own `activeSessionId` from
  * StartSession/EndSession effects; crash recovery SUPPRESSES StartSession
  * (external effect), so a restored mid-dash process had a null dash id and
  * chat/cards attributed to nothing until the next DASH_START. Deriving from

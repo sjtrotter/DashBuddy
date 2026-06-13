@@ -43,7 +43,7 @@ class BubbleManager @Inject constructor(
     private val notificationManager: NotificationManager,
     private val chatRepository: ChatRepository,
     // dagger.Lazy breaks the StateManagerV2 → EffectExecutor → BubbleManager
-    // construction cycle (#437); resolved on first activeDashId access.
+    // construction cycle (#437); resolved on first activeSessionId access.
     private val stateManager: dagger.Lazy<StateManagerV2>,
 ) {
 
@@ -72,7 +72,7 @@ class BubbleManager @Inject constructor(
      * showed nothing until the next DASH_START. State restores; this follows.
      * Lazy so the Hilt graph finishes building before StateManagerV2 resolves.
      */
-    val activeDashId: StateFlow<String?> by lazy {
+    val activeSessionId: StateFlow<String?> by lazy {
         stateManager.get().state
             .map { it.activeSessionId() }
             .stateIn(scope, SharingStarted.Eagerly, null)
@@ -112,7 +112,7 @@ class BubbleManager @Inject constructor(
 
         // 2. UPDATED: Launched in a coroutine because the Repository is pure suspend now!
         scope.launch {
-            chatRepository.saveMessage(activeDashId.value, text.toString(), persona)
+            chatRepository.saveMessage(activeSessionId.value, text.toString(), persona)
         }
 
         // Post Notification
@@ -230,7 +230,7 @@ class BubbleManager @Inject constructor(
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
         Timber.tag("Chat").i("[${persona.displayName}]: $summary")
-        scope.launch { chatRepository.saveMessage(activeDashId.value, summary.toString(), persona) }
+        scope.launch { chatRepository.saveMessage(activeSessionId.value, summary.toString(), persona) }
         showNotification(summary, persona, expand = false, offerActionable = true)
     }
 

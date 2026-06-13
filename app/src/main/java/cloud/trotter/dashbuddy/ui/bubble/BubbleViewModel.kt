@@ -96,15 +96,15 @@ class BubbleViewModel @Inject constructor(
     // process death AND by a post-dash bubble re-subscribe (>5s collapsed),
     // emptying the chat/cards. The active dash wins while one is running; the
     // DB fallback survives both restarts, so the bubble reviews the last dash
-    // until the next one starts (when activeDashId takes over again).
+    // until the next one starts (when activeSessionId takes over again).
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val displayedDashId = combine(
-        bubbleManager.activeDashId,
-        appEventRepo.getMostRecentDashId(),
+    private val displayedSessionId = combine(
+        bubbleManager.activeSessionId,
+        appEventRepo.getMostRecentSessionId(),
     ) { active, mostRecent -> active ?: mostRecent }
         .distinctUntilChanged()
 
-    val messages = displayedDashId.flatMapLatest { dashId ->
+    val messages = displayedSessionId.flatMapLatest { dashId ->
         if (dashId != null) {
             chatRepository.getMessages(dashId)
         } else {
@@ -117,7 +117,7 @@ class BubbleViewModel @Inject constructor(
 
     /**
      * Bubble HUD flow-card stack (#257). Completed cards are folded from
-     * the AppEvent log scoped to [displayedDashId]; the live card is built
+     * the AppEvent log scoped to [displayedSessionId]; the live card is built
      * from current [appState]. A new dash clears the stack via DASH_START's
      * fold logic, so the user can review the previous dash's cards until
      * they go Online again.
@@ -125,8 +125,8 @@ class BubbleViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val cardStack = combine(
         stateManager.state,
-        displayedDashId.flatMapLatest { dashId ->
-            if (dashId != null) appEventRepo.getEventsForDash(dashId)
+        displayedSessionId.flatMapLatest { dashId ->
+            if (dashId != null) appEventRepo.getEventsForSession(dashId)
             else flowOf(emptyList())
         },
     ) { state, events ->

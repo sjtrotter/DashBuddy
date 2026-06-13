@@ -17,7 +17,7 @@ class ChatRepository @Inject constructor(
 ) {
     // Queries specific dash messages and maps them to pure Domain models
     fun getMessages(dashId: String): Flow<List<ChatMessage>> {
-        return chatDao.getMessagesForDash(dashId).map { entities ->
+        return chatDao.getMessagesForSession(dashId).map { entities ->
             entities.map { it.toDomain() }
         }
     }
@@ -34,7 +34,7 @@ class ChatRepository @Inject constructor(
         chatDao.insertMessage(domainMessage.toEntity())
     }
 
-    fun getAllDashIds(): Flow<List<String>> {
-        return chatDao.getAllDashIds()
+    fun getAllSessionIds(): Flow<List<String>> {
+        return chatDao.getAllSessionIds()
     }
 }

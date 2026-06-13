@@ -31,7 +31,7 @@ class DashboardViewModel @Inject constructor(
 ) : AndroidViewModel(application) {
 
     // 1. Am I Dashing?
-    val isDashing: StateFlow<Boolean> = stateManager.state
+    val isInSession: StateFlow<Boolean> = stateManager.state
         .map { state ->
             val dd = state.regions.platforms[Platform.DoorDash]
             dd != null && dd.mode != Mode.Offline
