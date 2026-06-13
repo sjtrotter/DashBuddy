@@ -216,7 +216,13 @@ class SideEffectEngine @Inject constructor(
                 val throttleKey = "action:${effect.action.wire}:${effect.platform.wire}"
                 val now = System.currentTimeMillis()
                 if ((actionLastFiredAt[throttleKey] ?: 0L) + RULE_ACTION_THROTTLE_MS > now) {
-                    Timber.v("Throttled action: %s", throttleKey)
+                    // .i not .v (#457): a throttled USER offer tap would otherwise be
+                    // invisible under release log filtering — one of the silent drop
+                    // points a shade Accept/Decline could die at.
+                    Timber.i(
+                        "Throttled action %s (%s) — within %dms of the last fire",
+                        throttleKey, effect.trigger, RULE_ACTION_THROTTLE_MS,
+                    )
                     return
                 }
                 if (!permissionTierChecker.isGranted(PermissionTier.ACCESSIBILITY)) {

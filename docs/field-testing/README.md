@@ -165,9 +165,15 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   - ⚠️ **NOTIFICATION-SHADE buttons FOUND BROKEN — 2026-06-12 (DoorDash):** the Accept/Decline buttons
     on the **system shade notification** (NOT the in-bubble buttons) did **NOTHING** (neither worked),
     same dash the in-bubble buttons worked. Dispatch path/wire strings are identical to the bubble;
-    likely the click target isn't reachable from the shade (offer window not foreground). Triaged as
-    2026-06-12 log entry #11 — pull logcat for `OfferActionReceiver: accept_offer/decline_offer` to
-    split broadcast-not-landing vs click-target-absent. In-bubble half still needs a 2nd sighting (esp.
+    likely the click target isn't reachable from the shade (offer window not foreground). Filed as
+    **#457**. **Instrumented (PR pending):** the silent drop points now log durably — next time a shade
+    tap does nothing, the persistent app log self-documents the cause (no live logcat needed). Read the
+    log around the tap and match: `OfferActionReceiver: accept_offer` **absent** = broadcast never landed;
+    `Offer action accept_offer dropped (#457): R0 flow is … not OfferPresented` = the offer left the
+    screen before the tap (most likely); `… no active platform/pending offer` = offer state cleared;
+    `Offer action accept_offer firing` then `Could not find any live node`/`No live windows` = the
+    DoorDash button wasn't reachable from the shade; `Throttled action …` = swallowed by the 1s throttle.
+    Whichever line appears points straight at the fix. In-bubble half still needs a 2nd sighting (esp.
     Decline).
 
 - **Post-dash HUD: frozen summary + consistent chat (#367, PR pending).**

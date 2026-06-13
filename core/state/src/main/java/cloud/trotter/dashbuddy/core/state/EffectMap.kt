@@ -199,32 +199,54 @@ class EffectMap @Inject constructor() {
         // (#425). No binding = action unavailable on this platform (fail to
         // manual). Decline taps the initial decline button; in Native mode the
         // user confirms in DoorDash's own dialog (auto-confirm = #110 2c).
-        if (obs is Observation.UiInput &&
-            (next.flow == Flow.OfferPresented || prev.flow == Flow.OfferPresented)
-        ) {
-            val platform = next.activePlatform ?: prev.activePlatform
-            val offer = next.pendingOffer ?: prev.pendingOffer
+        //
+        // #457 instrumentation: the notification-SHADE Accept/Decline buttons
+        // were found broken in the field while the in-bubble ones work — yet
+        // both dispatch this IDENTICAL UiInput, so the divergence is here or
+        // downstream. A UiInput never changes the flow (it isn't a
+        // FlowObservation), so this gate is purely "was R0 OfferPresented when
+        // the tap dispatched" — and a heads-up notification can outlive the
+        // on-screen offer. Every drop reason now logs (the gate-skip and the
+        // null platform/offer cases were previously silent) so the next field
+        // OR chance-desk occurrence self-documents which gate ate the tap, no
+        // live logcat required. Behavior is unchanged — only logging is added.
+        if (obs is Observation.UiInput) {
             val action = when (obs.action) {
                 OfferIntent.ACCEPT -> RuleAction.ACCEPT_OFFER
                 OfferIntent.DECLINE -> RuleAction.DECLINE_OFFER
                 else -> null
             }
-            if (platform != null && offer != null && action != null) {
-                val target = offer.targets[action.targetBindName]
-                if (target != null) {
-                    // USER trigger: the dasher pressed Accept/Decline — that
-                    // press is the consent for this fire (#417).
-                    add(
-                        AppEffect.PerformRuleAction(
-                            action, platform, target, offer.sourceRuleId,
-                            trigger = ActionTrigger.USER,
-                        ),
+            if (action != null) {
+                val onOfferFlow = next.flow == Flow.OfferPresented || prev.flow == Flow.OfferPresented
+                val platform = next.activePlatform ?: prev.activePlatform
+                val offer = next.pendingOffer ?: prev.pendingOffer
+                val target = offer?.targets?.get(action.targetBindName)
+                when {
+                    !onOfferFlow -> Timber.w(
+                        "Offer action %s dropped (#457): R0 flow is %s, not OfferPresented — " +
+                            "shade tap likely arrived after the offer left the screen",
+                        action.wire, next.flow,
                     )
-                } else {
-                    Timber.w(
-                        "No '%s' target bound for %s — %s unavailable, leaving it to the user",
+                    platform == null || offer == null -> Timber.w(
+                        "Offer action %s dropped (#457): no active platform/pending offer " +
+                            "(platform=%s, offerHash=%s)",
+                        action.wire, platform?.wire, offer?.offerHash,
+                    )
+                    target == null -> Timber.w(
+                        "No '%s' target bound for %s — %s unavailable, leaving it to the user (#457)",
                         action.targetBindName, platform.wire, action.wire,
                     )
+                    else -> {
+                        // USER trigger: the dasher pressed Accept/Decline — that
+                        // press is the consent for this fire (#417).
+                        Timber.i("Offer action %s firing on %s (#457)", action.wire, platform.wire)
+                        add(
+                            AppEffect.PerformRuleAction(
+                                action, platform, target, offer.sourceRuleId,
+                                trigger = ActionTrigger.USER,
+                            ),
+                        )
+                    }
                 }
             }
         }
