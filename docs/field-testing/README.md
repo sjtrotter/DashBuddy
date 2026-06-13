@@ -63,20 +63,6 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **Do alcohol / restricted / 7-Eleven (Beer, Wine & Spirits) offers get EVALUATED on-dash? (#462 tail).**
-  On the 2026-06-12 dash, several alcohol-offer frames captured as UNKNOWN — they had the pay/
-  distance/store/"Contains restricted items, including alcohol" text but **no viewIds and no
-  "Accept" text**, so `offer_popup` (which requires the `accept_button` id to avoid matching our own
-  bubble overlay, #4) didn't recognize them. These are *probably* transient partial renders of an
-  offer that DID get recognized on a complete frame — but that's unconfirmed. **What to watch:** when
-  an alcohol / 7-Eleven / "restricted items" offer comes in, does the bubble show a normal evaluated
-  offer card ($/hr, verdict, badges) + TTS read, like any other offer? Working = yes, alcohol offers
-  evaluate normally. Broken = the bubble shows nothing / no evaluation for alcohol offers (they'd be
-  invisible to the engine). **Do NOT fix blind** — loosening offer recognition to catch the id-less
-  frames risks re-opening #4 (our own overlay being mis-read as an offer). If broken, it's a new
-  focused offer-recognition issue, not a screen rule.
-  - Confirmed: 0/2
-
 - **Offer card surfaces Shop & Deliver: item count in the hero row + a SHOP badge (#461 a/b).**
   The item count moved from a small footer caption up to the hero row (beside the score ring /
   $/hr), and a Shop & Deliver offer now shows a "Shop & Deliver" badge pill. On a shop offer:
