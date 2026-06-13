@@ -19,6 +19,9 @@ class SensitiveTextMarkersTest {
         assertEquals("Available Balance", SensitiveTextMarkers.findMarker(tree("available balance: \$52.10")))
         assertEquals("Instant Pay", SensitiveTextMarkers.findMarker(tree("Set up instant pay")))
         assertEquals("CVV", SensitiveTextMarkers.findMarker(tree("Enter CVV")))
+        // DasherDirect Savings flow (#463) — the markers that leaked on 2026-06-12.
+        assertEquals("Savings jar", SensitiveTextMarkers.findMarker(tree("Your transfer should now appear in your Savings jar")))
+        assertEquals("You transferred", SensitiveTextMarkers.findMarker(tree("You transferred \$9.06")))
     }
 
     @Test
