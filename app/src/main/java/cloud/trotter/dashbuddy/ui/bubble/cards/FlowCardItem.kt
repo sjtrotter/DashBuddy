@@ -29,8 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
-import cloud.trotter.dashbuddy.core.designsystem.time.formatCountdown
-import cloud.trotter.dashbuddy.core.designsystem.time.formatDuration
+import cloud.trotter.dashbuddy.domain.format.formatCountdown
+import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import androidx.compose.ui.text.font.FontWeight

@@ -9,7 +9,7 @@ import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.core.designsystem.time.formatDuration
+import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box

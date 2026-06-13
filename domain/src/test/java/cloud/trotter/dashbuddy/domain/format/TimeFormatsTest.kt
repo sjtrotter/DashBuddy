@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.core.designsystem.time
+package cloud.trotter.dashbuddy.domain.format
 
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -7,11 +7,11 @@ import org.junit.Test
 import java.util.Locale
 
 /**
- * #358: ONE duration/countdown definition repo-wide, with unified zero/negative
+ * #358/#467: ONE duration/countdown definition repo-wide, with unified zero/negative
  * semantics (the two old private copies disagreed) and ASCII digits regardless
  * of device locale (clock-like glance strings must not localize numerals).
  */
-class TimeKitTest {
+class TimeFormatsTest {
 
     private lateinit var original: Locale
 
