@@ -78,6 +78,14 @@ android {
         unitTests.all { test ->
             test.jvmArgs("-XX:+EnableDynamicAgentLoading")
 
+            // Forward the parse-output golden regen flag to the forked test JVM
+            // (#433/#462): `-DupdateParseGolden=true` is set on the Gradle JVM,
+            // but the test runs in a fork — without this it never reaches
+            // System.getProperty(...) and the documented regen silently no-ops.
+            System.getProperty("updateParseGolden")?.let {
+                test.systemProperty("updateParseGolden", it)
+            }
+
             // JUnit @Suite aggregators (e.g. AllMatchersSuite) re-run their member
             // classes, so during a broad sweep the members would run twice — once
             // directly, once via the suite. Exclude suites from an unfiltered sweep;
