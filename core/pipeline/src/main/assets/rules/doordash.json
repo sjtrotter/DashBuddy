@@ -1211,6 +1211,27 @@
       }
     },
     {
+      "id": "doordash.screen.pickup_verify_items",
+      "priority": 76,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Verify items for" } },
+          { "exists": { "hasText": "Do not open sealed bags" } }
+        ]
+      },
+      "parse": {
+        "as": "task",
+        "fields": {
+          "phase": "PICKUP",
+          "subFlow": "ARRIVED"
+        }
+      }
+    },
+    {
       "id": "doordash.screen.pickup_shopping",
       "priority": 72,
       "state": {

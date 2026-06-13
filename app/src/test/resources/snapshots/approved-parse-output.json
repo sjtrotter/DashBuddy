@@ -3639,6 +3639,24 @@
             "subFlow": "ARRIVED"
         }
     },
+    "pickup_verify_items/2026-06-12_19-58-10__doordash__pickup_verify_items__74398e.json": {
+        "ruleId": "doordash.screen.pickup_verify_items",
+        "intent": "pickup_verify_items",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": null,
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "ARRIVED"
+        }
+    },
     "promos/2026-02-02_22-15-05__PROMOS_VIEW__4dd44e49.json": {
         "ruleId": "doordash.screen.promos",
         "intent": "promos",
