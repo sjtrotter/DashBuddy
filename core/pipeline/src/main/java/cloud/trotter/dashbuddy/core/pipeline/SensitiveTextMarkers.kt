@@ -52,6 +52,16 @@ object SensitiveTextMarkers {
         // sensitive.savings branch, these markers are the fail-closed backstop.
         "Savings jar",
         "You transferred",
+        // Customer ID / signature capture during alcohol delivery (#463) — the
+        // license-scan, identity-match, and signature-handoff surfaces.
+        // Rule-side block is sensitive.id_verification; markers are the backstop.
+        // NB: the alcohol delivery instruction CHECKLIST ("Verify recipient's
+        // identity" step text) is deliberately NOT here — that's recognized as
+        // flow (#462); only the actual capture surfaces are blocked.
+        "Scan barcode on the back",
+        "Driver's License",
+        "Identity verification",
+        "provide their signature",
     )
 
     /**

@@ -22,6 +22,26 @@ class SensitiveTextMarkersTest {
         // DasherDirect Savings flow (#463) — the markers that leaked on 2026-06-12.
         assertEquals("Savings jar", SensitiveTextMarkers.findMarker(tree("Your transfer should now appear in your Savings jar")))
         assertEquals("You transferred", SensitiveTextMarkers.findMarker(tree("You transferred \$9.06")))
+        // Alcohol customer-ID / signature capture (#463 identity slice).
+        assertEquals("Scan barcode on the back", SensitiveTextMarkers.findMarker(tree("Scan barcode on the back of license")))
+        assertEquals("Driver's License", SensitiveTextMarkers.findMarker(tree("Driver's License")))
+        assertEquals("Identity verification", SensitiveTextMarkers.findMarker(tree("Identity verification")))
+        assertEquals("provide their signature", SensitiveTextMarkers.findMarker(tree("Hand your phone to the customer so they can provide their signature.")))
+    }
+
+    @Test
+    fun `alcohol delivery instruction checklist stays clean — recognize-vs-block boundary (#463)`() {
+        // The step-CHECKLIST text (no actual ID/signature capture) must NOT be
+        // scrubbed — it's a recognizable flow step (#462), not a sensitive surface.
+        assertNull(
+            SensitiveTextMarkers.findMarker(
+                tree(
+                    "Follow all of the steps below to complete this delivery.",
+                    "Verify recipient's identity",
+                    "Complete delivery",
+                ),
+            ),
+        )
     }
 
     @Test

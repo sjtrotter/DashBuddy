@@ -86,16 +86,20 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   doubled `$`, or a wrong decimal.
   - Confirmed: 0/2
 
-- **DasherDirect Savings screens now blocked as sensitive (#463, partial — banking slice).**
-  On the 2026-06-12 dash the DasherDirect **Savings jar** flow (balance + "Transfer $X" + "You
-  transferred $X") leaked plaintext dollar balances to UNKNOWN capture — the redesigned savings
-  UI no rule covered. Now caught by a priority-0 `sensitive.savings` rule + `SensitiveTextMarkers`
-  backstop. On a dash, open DasherDirect → Savings and do a small transfer: working = the screen
-  produces NO capture (matcher-layer block, log shows the sensitive gate / "Capture scrubbed"),
-  and normal flow recognition is unaffected. Broken = a Savings/Transfer screen with a dollar
-  balance shows up in captures/, or a non-banking screen gets wrongly blocked. **Still open in
-  #463:** the identity/ID-scan slice (license-scan, identity-verify, signature-canvas) is a
-  separate follow-up.
+- **Sensitive screens now blocked: DasherDirect Savings + alcohol customer-ID/signature (#463, complete).**
+  On the 2026-06-12 dash two sensitive surfaces leaked to UNKNOWN capture: the DasherDirect
+  **Savings jar** flow (plaintext balances — "Transfer $X" / "You transferred $X") and the
+  **alcohol customer-ID/signature capture** screens (license-scan, the "Identity verification"
+  ID-match, the "hand your phone … signature" handoff, the "Scan Successful" confirmation). Both
+  are now blocked at the matcher layer (priority-0 `sensitive.savings` / `sensitive.id_verification`)
+  + `SensitiveTextMarkers` backstop. On a dash:
+  - **Banking:** open DasherDirect → Savings, do a small transfer → the screen produces NO capture
+    (log shows the sensitive gate / "Capture scrubbed").
+  - **Alcohol ID:** on a 21+ delivery, the license-scan / ID-verify / signature screens should
+    produce NO capture, while the *instruction checklist* ("Verify recipient's identity" steps)
+    and the rest of the dropoff flow still recognize normally (the recognize-vs-block boundary).
+  Broken = a Savings/Transfer balance OR a license-scan / ID-match / signature screen shows up in
+  captures/, or the alcohol delivery flow stops advancing (over-blocked the instruction steps).
   - Confirmed: 0/2
 
 - **Engine latency + dedupe pack (#436).**

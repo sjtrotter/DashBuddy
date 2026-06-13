@@ -211,6 +211,51 @@ class DefaultRulesIntegrationTest {
         }
     }
 
+    @Test
+    fun `alcohol customer-ID and signature CAPTURE screens classify as sensitive (#463)`() {
+        // The identity-CAPTURE surfaces that leaked to UNKNOWN on 2026-06-12 —
+        // each must hit the priority-0 sensitive rule (block, never parse/store).
+        fun screen(vararg texts: String) =
+            UiNode(children = texts.map { UiNode(text = it) }).restoreParents()
+
+        val licenseScan = screen("Driver's License", "Scan barcode on the back of license", "HELP")
+        val idMatch = screen("Identity verification", "2 of 4", "Verify that the ID matches the recipient and they aren't intoxicated.", "Verify", "Can't verify")
+        val signatureHandoff = screen("Hand your phone to the customer so they can provide their signature.", "Got it")
+        val scanResult = screen("Scan Successful", "Now you're ready to start verification.", "Continue")
+
+        for ((name, node) in listOf(
+            "license-scan" to licenseScan, "id-match" to idMatch,
+            "signature-handoff" to signatureHandoff, "scan-result" to scanResult,
+        )) {
+            val r = screenRuleset.matchFirst(node, platformWire = "doordash")
+            assertTrue(
+                "alcohol identity $name screen must hit a sensitive rule, got ${r?.ruleId}",
+                r?.ruleId?.contains("sensitive") == true,
+            )
+        }
+    }
+
+    @Test
+    fun `alcohol delivery instruction CHECKLIST does NOT classify as sensitive — recognize-vs-block boundary (#463 vs #462)`() {
+        // The step-CHECKLIST (instructions, no recipient PII, no scanning) must
+        // stay non-sensitive so #462 can recognize it as a dropoff flow step.
+        // Only the actual capture surfaces are blocked.
+        val checklist = UiNode(
+            children = listOf(
+                UiNode(text = "Follow all of the steps below to complete this delivery."),
+                UiNode(text = "Do NOT hand over items until ID has been verified"),
+                UiNode(text = "Verify recipient's identity"),
+                UiNode(text = "Complete delivery"),
+            ),
+        ).restoreParents()
+
+        val r = screenRuleset.matchFirst(checklist, platformWire = "doordash")
+        assertTrue(
+            "the instruction checklist must NOT be blocked sensitive (got ${r?.ruleId}) — it's a recognizable flow step (#462)",
+            r?.ruleId?.contains("sensitive") != true,
+        )
+    }
+
     // =========================================================================
     // Parse-output regression on real captures (#433)
     // =========================================================================
