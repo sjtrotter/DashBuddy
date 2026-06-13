@@ -121,7 +121,9 @@ class BubbleViewModel @Inject constructor(
             else flowOf(emptyList())
         },
     ) { state, events ->
-        CardStack(
+        // CardStack.of drops a frozen completed card that duplicates the active
+        // card's id — the at-door frozen+live overlap (#458).
+        CardStack.of(
             completed = FlowCardMapper.fold(events),
             active = LiveCardBuilder.build(state),
         )
