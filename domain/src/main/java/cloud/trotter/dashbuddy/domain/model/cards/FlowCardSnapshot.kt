@@ -148,5 +148,23 @@ data class CardStack(
 
     companion object {
         val Empty = CardStack()
+
+        /**
+         * Assemble the stack from the folded [completed] history + the current
+         * [active] card, dropping any frozen completed card whose id matches
+         * the active one (#458). On an arrival-bearing dropoff the mapper
+         * closes the Delivery into `completed` on DELIVERY_ARRIVED while the
+         * live builder still emits an active Delivery for the same task — same
+         * id `delivery:<taskId>` — which would render as TWO cards during the
+         * at-door window (no crash: #297's `live:` key prefix holds). Suppress
+         * the frozen twin so exactly one card shows; it resolves on
+         * DELIVERY_COMPLETED anyway when the active card becomes a PostTask.
+         */
+        fun of(completed: List<FlowCardSnapshot>, active: FlowCardSnapshot?): CardStack =
+            CardStack(
+                completed = if (active == null) completed
+                else completed.filterNot { it.id == active.id },
+                active = active,
+            )
     }
 }

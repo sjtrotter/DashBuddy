@@ -63,6 +63,14 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **No transient double drop-off card at the door (#458).**
+  On an arrival-bearing dropoff (hand-it-to-customer / photo / PIN) the same delivery briefly
+  rendered as TWO cards during the at-door window (a frozen completed copy + the live one). The
+  stack now drops the frozen twin when it shares the active card's id. On a dash: working = at
+  the customer's door you see exactly ONE delivery card (then the single frozen card + the live
+  "Saved" receipt after you complete). Broken = two identical delivery cards stacked at the door.
+  - Confirmed: 0/2
+
 - **"Saved: $X" bubble shows the dollar sign now (#456).**
   The post-delivery earnings bubble rendered `Saved: 5.50` (no `$`) because the state layer had
   its own money formatter that omitted it. Both local formatters are gone — money now formats
