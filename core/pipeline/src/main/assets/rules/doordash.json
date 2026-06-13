@@ -2010,25 +2010,25 @@
         "flow": "idle",
         "modeHint": "online"
       },
+      "comment": "Repositioning-to-zone while online (idle, no offer yet). The id form is the bottom-sheet variant; the text form (#462) is the full-screen 'Navigate to zone / We'll look for orders along the way / Spot saved until …' card, which ships no viewIds.",
       "require": {
-        "all": [
+        "any": [
           {
-            "exists": {
-              "hasIdSuffix": "navigate_button"
-            }
+            "all": [
+              { "exists": { "hasIdSuffix": "navigate_button" } },
+              { "any": [
+                { "exists": { "hasIdSuffix": "bottom_view_info_ctd_v2_title" } },
+                { "exists": { "hasIdSuffix": "bottom_view_info_title" } }
+              ] }
+            ]
           },
           {
-            "any": [
-              {
-                "exists": {
-                  "hasIdSuffix": "bottom_view_info_ctd_v2_title"
-                }
-              },
-              {
-                "exists": {
-                  "hasIdSuffix": "bottom_view_info_title"
-                }
-              }
+            "all": [
+              { "exists": { "hasTextContaining": "We'll look for orders along the way" } },
+              { "exists": { "any": [
+                { "hasTextContaining": "Navigate to zone" },
+                { "hasTextContaining": "Spot saved until" }
+              ] } }
             ]
           }
         ]
@@ -2040,25 +2040,26 @@
             "literal": false
           },
           "spotSaveDeadline": {
-            "find": {
-              "all": [
-                {
-                  "any": [
-                    {
-                      "hasIdSuffix": "bottom_view_info_ctd_v2_title"
-                    },
-                    {
-                      "hasIdSuffix": "bottom_view_info_title"
-                    }
+            "coalesce": [
+              {
+                "find": {
+                  "all": [
+                    { "any": [
+                      { "hasIdSuffix": "bottom_view_info_ctd_v2_title" },
+                      { "hasIdSuffix": "bottom_view_info_title" }
+                    ] },
+                    { "hasTextContaining": "Spot saved until" }
                   ]
                 },
-                {
-                  "hasTextContaining": "Spot saved until"
-                }
-              ]
-            },
-            "read": "text",
-            "transform": "parseDeadline"
+                "read": "text",
+                "transform": "parseDeadline"
+              },
+              {
+                "find": { "hasTextContaining": "Spot saved until" },
+                "read": "text",
+                "transform": "parseDeadline"
+              }
+            ]
           }
         }
       }
@@ -2808,6 +2809,48 @@
           { "exists": { "hasTextContaining": "No account issues" } }
         ]
       }
+    },
+    {
+      "comment": "#462 batch 2 — recognize-only idle/lifecycle + pickup/dropoff dialogs that shipped no viewIds and fell to UNKNOWN. No state.flow, no parse.",
+      "id": "doordash.screen.dropoff_reminder",
+      "priority": 51,
+      "require": {
+        "all": [
+          { "exists": { "hasTextStartsWith": "Deliver to door of" } },
+          { "exists": { "hasText": "Got it" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_qr_confirm",
+      "priority": 53,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Confirm that the code was scanned" } },
+          { "exists": { "hasTextContaining": "Scan code again" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dash_schedule_picker",
+      "priority": 85,
+      "require": {
+        "all": [
+          { "exists": { "hasText": "Start time" } },
+          { "exists": { "hasText": "End Time" } },
+          { "exists": { "hasText": "Schedule" } }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.help_menu",
+      "priority": 122,
+      "require": {
+        "all": [
+          { "exists": { "hasTextContaining": "Get an account checkup" } },
+          { "exists": { "hasTextContaining": "Dashing FAQs" } }
+        ]
+      }
     }
   ],
   "clicks": [
@@ -3159,12 +3202,16 @@
       ]
     },
     {
+      "comment": "The order-ready push arrives on either the delivery-update channel OR the generic dasher-notification-background channel (#462, 2026-06-12 log). The 'ready for pickup' body is the real discriminator; the channelId is a coarse gate. Logs a constant ORDER_READY signal — the customer name in the body is never parsed.",
       "id": "doordash.notification.order_ready",
       "priority": 24,
       "intent": "order_ready_for_pickup",
       "require": {
         "all": [
-          { "channelIdContains": "delivery-update" },
+          { "any": [
+            { "channelIdContains": "delivery-update" },
+            { "channelIdContains": "dasher-notification-background" }
+          ] },
           { "anyFieldContains": "ready for pickup" }
         ]
       },
