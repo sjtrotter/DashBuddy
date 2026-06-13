@@ -188,6 +188,29 @@ class DefaultRulesIntegrationTest {
         )
     }
 
+    @Test
+    fun `DasherDirect savings transfer screens classify as sensitive (#463)`() {
+        // The three frames that LEAKED plaintext balances to UNKNOWN capture on
+        // the 2026-06-12 dash — each must now hit the priority-0 sensitive rule.
+        fun screen(vararg texts: String) =
+            UiNode(children = texts.map { UiNode(text = it) }).restoreParents()
+
+        // Savings landing: "Savings jar" + "$99.08" + "Transfer $9.06".
+        val landing = screen("Transfer in", "Savings jar", "$99.08", "Transfer $9.06")
+        // Transfer-confirmation: "You transferred $9.06" + "Savings jar".
+        val confirm = screen("You transferred $9.06", "Your transfer should now appear in your Savings jar", "Got it")
+        // Transfer-entry (no "Savings jar"): "Transfer in" + "$9.06 available".
+        val entry = screen("Transfer in", "$9.06 available", "$0", "Continue")
+
+        for ((name, node) in listOf("landing" to landing, "confirm" to confirm, "entry" to entry)) {
+            val r = screenRuleset.matchFirst(node, platformWire = "doordash")
+            assertTrue(
+                "DasherDirect savings $name screen must hit a sensitive rule, got ${r?.ruleId}",
+                r?.ruleId?.contains("sensitive") == true,
+            )
+        }
+    }
+
     // =========================================================================
     // Parse-output regression on real captures (#433)
     // =========================================================================

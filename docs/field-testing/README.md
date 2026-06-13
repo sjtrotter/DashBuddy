@@ -63,6 +63,18 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **DasherDirect Savings screens now blocked as sensitive (#463, partial — banking slice).**
+  On the 2026-06-12 dash the DasherDirect **Savings jar** flow (balance + "Transfer $X" + "You
+  transferred $X") leaked plaintext dollar balances to UNKNOWN capture — the redesigned savings
+  UI no rule covered. Now caught by a priority-0 `sensitive.savings` rule + `SensitiveTextMarkers`
+  backstop. On a dash, open DasherDirect → Savings and do a small transfer: working = the screen
+  produces NO capture (matcher-layer block, log shows the sensitive gate / "Capture scrubbed"),
+  and normal flow recognition is unaffected. Broken = a Savings/Transfer screen with a dollar
+  balance shows up in captures/, or a non-banking screen gets wrongly blocked. **Still open in
+  #463:** the identity/ID-scan slice (license-scan, identity-verify, signature-canvas) is a
+  separate follow-up.
+  - Confirmed: 0/2
+
 - **Engine latency + dedupe pack (#436).**
   Four behaviors to watch: (a) accepting/declining an offer FAST (inside ~1s of the verdict
   landing) should no longer pop a stale Accept/Decline heads-up afterwards; (b) offer verdicts

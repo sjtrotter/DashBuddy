@@ -47,6 +47,11 @@ object SensitiveTextMarkers {
         "Instant Pay",
         "Cash out",
         "CVV",
+        // DasherDirect Savings flow (#463) — leaked dollar balances to UNKNOWN
+        // capture on the 2026-06-12 dash; the rule-side block is the
+        // sensitive.savings branch, these markers are the fail-closed backstop.
+        "Savings jar",
+        "You transferred",
     )
 
     /**

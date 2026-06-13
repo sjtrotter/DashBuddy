@@ -43,6 +43,17 @@
           "require": { "exists": { "hasTextContaining": "transfer was initiated" } }
         },
         {
+          "intent": "sensitive.savings",
+          "require": { "any": [
+            { "exists": { "hasTextContaining": "Savings jar" } },
+            { "exists": { "hasTextContaining": "You transferred" } },
+            { "all": [
+              { "exists": { "hasText": "Transfer in" } },
+              { "exists": { "hasTextContaining": "available" } }
+            ] }
+          ] }
+        },
+        {
           "intent": "sensitive.otp",
           "require": { "exists": { "hasTextContaining": "Enter the code we sent" } }
         },
