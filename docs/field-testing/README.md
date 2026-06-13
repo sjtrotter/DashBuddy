@@ -73,6 +73,16 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   recognition gaps from that dash; the rest are a larger effort.)
   - Confirmed: 0/2
 
+- **Bubble keeps showing the last dash after it ends / after a crash (#459).**
+  The bubble's chat + card stack used to go EMPTY after a dash ended (8b: collapse it >5s then
+  reopen) or after a crash with no active dash (8a) — the fallback dash id was a volatile
+  in-memory latch. It's now sourced durably from the event log (most-recent dash). On a dash:
+  end a dash, collapse the bubble for >5s, reopen → working = the chat + completed cards of the
+  just-finished dash are still shown (not empty); start the next dash → it switches to the new
+  dash. Also force-stop/crash right after a dash and reopen → still shows the last dash. Broken =
+  empty chat/cards after dash-end-then-reopen, or the wrong dash shown.
+  - Confirmed: 0/2
+
 - **Pickup/Delivery card deadline reads cleanly — no double "by" (#460).**
   The deadline caption read `till pickup-by · by 17:10` (two "by"s); now `till pickup · by 17:10`
   / `till deliver · by 17:10`. Desk- or dash-verifiable on any pickup/delivery card. (The

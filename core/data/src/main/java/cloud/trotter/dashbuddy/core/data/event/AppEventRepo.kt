@@ -57,6 +57,9 @@ class AppEventRepo @Inject constructor(
     fun getEventsForDash(dashId: String): Flow<List<AppEvent>> =
         dao.getEventsForDash(dashId).map { rows -> rows.map { it.toDomain() } }
 
+    /** Durable "last completed dash" fallback for the bubble HUD (#459). */
+    fun getMostRecentDashId(): Flow<String?> = dao.getMostRecentDashId()
+
     fun getEventsByType(type: AppEventType): Flow<List<AppEvent>> =
         dao.getEventsByType(type).map { rows -> rows.map { it.toDomain() } }
 

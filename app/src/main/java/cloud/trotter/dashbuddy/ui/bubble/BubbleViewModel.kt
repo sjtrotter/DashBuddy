@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -87,13 +88,21 @@ class BubbleViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
 
-    // Messages scoped to the active dash session
+    // Messages scoped to the active dash session.
+    //
+    // Chat and cards key off the SAME displayed dash id (#367). The fallback
+    // when no dash is live is now the DURABLE most-recent dash from the event
+    // log (#459), not an in-memory scan latch: the old latch was wiped by
+    // process death AND by a post-dash bubble re-subscribe (>5s collapsed),
+    // emptying the chat/cards. The active dash wins while one is running; the
+    // DB fallback survives both restarts, so the bubble reviews the last dash
+    // until the next one starts (when activeDashId takes over again).
     @OptIn(ExperimentalCoroutinesApi::class)
-    // Chat and cards key off the SAME latched dash id (#367) — the old
-    // split (messages on activeDashId) emptied the ticker post-dash while
-    // the card stack still showed the finished dash.
-    private val displayedDashId = bubbleManager.activeDashId
-        .scan(null as String?) { last, current -> current ?: last }
+    private val displayedDashId = combine(
+        bubbleManager.activeDashId,
+        appEventRepo.getMostRecentDashId(),
+    ) { active, mostRecent -> active ?: mostRecent }
+        .distinctUntilChanged()
 
     val messages = displayedDashId.flatMapLatest { dashId ->
         if (dashId != null) {
