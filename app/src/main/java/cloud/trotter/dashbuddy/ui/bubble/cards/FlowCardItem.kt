@@ -27,7 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.formatCountdown
 import cloud.trotter.dashbuddy.core.designsystem.time.formatDuration
@@ -199,7 +199,7 @@ private fun awaitingSummary(snap: FlowCardSnapshot.Awaiting, isActive: Boolean):
 
 private fun offerSummary(snap: FlowCardSnapshot.Offer): String {
     val store = snap.storeNames.firstOrNull()?.takeIf { it.isNotBlank() } ?: "Offer"
-    val pay = snap.payAmount?.let { " · ${DashFormats.money(it)}" } ?: ""
+    val pay = snap.payAmount?.let { " · ${Formats.money(it)}" } ?: ""
     // Outcome is rendered as a trailing chip in the header — see
     // CardHeader — so we omit it from the summary text.
     return "$store$pay"
@@ -229,7 +229,7 @@ private fun deliverySummary(snap: FlowCardSnapshot.Delivery, isActive: Boolean):
 
 private fun postTaskSummary(snap: FlowCardSnapshot.PostTask): String {
     val store = snap.storeName?.let { "$it · " } ?: ""
-    return store + DashFormats.money(snap.totalPay)
+    return store + Formats.money(snap.totalPay)
 }
 
 // ---------------------------------------------------------------------------
@@ -318,19 +318,19 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             Column(modifier = Modifier.weight(1f)) {
                 val hourly = snap.dollarsPerHour
                 when {
-                    hourly != null -> Text("${DashFormats.money0(hourly)}/hr", style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
-                    snap.payAmount != null -> Text(DashFormats.money(snap.payAmount!!), style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
+                    hourly != null -> Text("${Formats.money0(hourly)}/hr", style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
+                    snap.payAmount != null -> Text(Formats.money(snap.payAmount!!), style = DashTheme.num.heroNum, color = c.text, maxLines = 1)
                 }
                 val net = snap.netPayAmount ?: snap.payAmount
                 val secondary = buildString {
-                    if (net != null) append("Net ${DashFormats.money(net)}")
+                    if (net != null) append("Net ${Formats.money(net)}")
                     snap.distanceMiles?.let {
                         if (isNotEmpty()) append(" · ")
-                        append("${DashFormats.decimal(it)} mi")
+                        append("${Formats.decimal(it)} mi")
                     }
                     snap.dollarsPerMile?.let {
                         if (isNotEmpty()) append(" · ")
-                        append("${DashFormats.money(it)}/mi")
+                        append("${Formats.money(it)}/mi")
                     }
                 }
                 if (secondary.isNotBlank()) {
@@ -572,7 +572,7 @@ private fun DeadlineBody(
                     val elapsedMs = now - (arrivedAt ?: phaseStartedAt)
                     if (elapsedMs > 0) {
                         val perMin = shopped / (elapsedMs / 60_000.0)
-                        append(" · ${DashFormats.decimal(perMin)}/min")
+                        append(" · ${Formats.decimal(perMin)}/min")
                     }
                 }
             }
@@ -592,7 +592,7 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        HeroBig(DashFormats.money(snap.totalPay))
+        HeroBig(Formats.money(snap.totalPay))
         Caption("delivery total")
         snap.parsedPay?.let { pay ->
             Column(
@@ -600,15 +600,15 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 pay.appPayComponents.forEach { item ->
-                    BreakdownRow(item.type, DashFormats.money(item.amount))
+                    BreakdownRow(item.type, Formats.money(item.amount))
                 }
                 pay.customerTips.forEach { tip ->
-                    BreakdownRow("tip · ${tip.type}", DashFormats.money(tip.amount))
+                    BreakdownRow("tip · ${tip.type}", Formats.money(tip.amount))
                 }
             }
         }
         snap.sessionEarningsAtCompletion?.let {
-            Caption("session ${DashFormats.money(it)}")
+            Caption("session ${Formats.money(it)}")
         }
     }
 }

@@ -1,9 +1,9 @@
-package cloud.trotter.dashbuddy.core.designsystem.format
+package cloud.trotter.dashbuddy.domain.format
 
 import java.util.Locale
 
 /**
- * Locale policy for every formatted number in DashBuddy (#358):
+ * Locale policy for every formatted number in DashBuddy (#358, #456):
  *
  *  - **Display strings** (anything a human reads: money, distances, rates,
  *    counts) format through THIS object, which pins `Locale.getDefault()`
@@ -14,10 +14,18 @@ import java.util.Locale
  *    back — e.g. editable text fields that round-trip `toDoubleOrNull`) pin
  *    `Locale.ROOT`/`Locale.US` at their own call site.
  *
+ * Lives in `:domain` (pure Kotlin, no Android) so BOTH the UI (`:app`) and the
+ * state layer (`:core:state`) route through the one definition. EffectMap used
+ * to carry a private `formatCurrency` that omitted the `$` — the "Saved: $X"
+ * bubble rendered `Saved: 5.50` (#456) — because `:core:state` can't reach the
+ * old designsystem `DashFormats`. Pulling the formatter down to `:domain`
+ * removes that divergence (and the platform-flavoured "Dash" name). Formatting
+ * is platform-neutral; the name is too.
+ *
  * Acceptance grep: `.format(` without `Locale` on the same line should not
- * appear in ui/ code — everything routes here.
+ * appear in ui/ or rendered-copy code — everything routes here.
  */
-object DashFormats {
+object Formats {
 
     private val locale: Locale get() = Locale.getDefault()
 
@@ -36,5 +44,4 @@ object DashFormats {
 
     /** "12,500" — grouped integer. */
     fun commaInt(value: Int): String = String.format(locale, "%,d", value)
-
 }

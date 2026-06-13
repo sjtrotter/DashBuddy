@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import java.util.Locale
-import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.domain.format.Formats
 
 @Composable
 fun DraggableRuleRow(
@@ -108,9 +108,9 @@ fun MetricContent(
         // Value Display (e.g., "$15.00" or "10 mi")
         if (rule.isEnabled) {
             val formatted = when (type) {
-                MetricType.PAYOUT, MetricType.ACTIVE_HOURLY -> DashFormats.money(value.toDouble())
-                MetricType.DOLLAR_PER_MILE -> "${DashFormats.money(value.toDouble())}/mi"
-                MetricType.MAX_DISTANCE -> "${DashFormats.decimal(value.toDouble())} mi"
+                MetricType.PAYOUT, MetricType.ACTIVE_HOURLY -> Formats.money(value.toDouble())
+                MetricType.DOLLAR_PER_MILE -> "${Formats.money(value.toDouble())}/mi"
+                MetricType.MAX_DISTANCE -> "${Formats.decimal(value.toDouble())} mi"
                 MetricType.ITEM_COUNT -> "${value.toInt()} items"
             }
             Text(

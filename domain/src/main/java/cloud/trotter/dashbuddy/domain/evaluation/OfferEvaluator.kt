@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 
@@ -211,17 +212,17 @@ class OfferEvaluator() {
             val target = rule.targetValue.toDouble()
             when (rule.metricType) {
                 MetricType.DOLLAR_PER_MILE -> if (target > REALISTIC_MAX_DPM)
-                    "Your \$/mile target of \$${String.format(java.util.Locale.ROOT, "%.2f", target)} is above what most DoorDash offers pay. " +
+                    "Your \$/mile target of ${Formats.money(target)} is above what most DoorDash offers pay. " +
                     "Most offers are \$0.80–\$1.50/mi. Setting this high will result in most offers being auto-declined."
                 else null
 
                 MetricType.ACTIVE_HOURLY -> if (target > REALISTIC_MAX_HOURLY)
-                    "Your hourly target of \$${String.format(java.util.Locale.ROOT, "%.2f", target)}/hr is above typical DoorDash earnings. " +
+                    "Your hourly target of ${Formats.money(target)}/hr is above typical DoorDash earnings. " +
                     "Most dashers earn \$15–\$25/hr active. Setting this high will result in most offers being auto-declined."
                 else null
 
                 MetricType.PAYOUT -> if (target > REALISTIC_MAX_PAYOUT)
-                    "Your minimum payout of \$${String.format(java.util.Locale.ROOT, "%.2f", target)} is above what most single orders pay. " +
+                    "Your minimum payout of ${Formats.money(target)} is above what most single orders pay. " +
                     "Most DoorDash orders are under \$10. Setting this high will result in most offers being auto-declined."
                 else null
 

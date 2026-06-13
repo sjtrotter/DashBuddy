@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.toArgb
 import cloud.trotter.dashbuddy.core.designsystem.theme.darkDashColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
-import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 
@@ -59,15 +59,15 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
         setSpan(RelativeSizeSpan(1.2f), start, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         append(" · ")
-        append("${DashFormats.money0(dollarsPerHour)}/hr net")
+        append("${Formats.money0(dollarsPerHour)}/hr net")
         // Whole headline (verdict + rate) bold.
         setSpan(StyleSpan(Typeface.BOLD), start, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         append("\n")
         append(
-            "Net ${DashFormats.money(netPayAmount)} · " +
-                "${DashFormats.decimal(distanceMiles)} mi · " +
-                "${DashFormats.money(dollarsPerMile)}/mi · " +
+            "Net ${Formats.money(netPayAmount)} · " +
+                "${Formats.decimal(distanceMiles)} mi · " +
+                "${Formats.money(dollarsPerMile)}/mi · " +
                 "Score ${score.toInt()} · " +
                 merchantName,
         )

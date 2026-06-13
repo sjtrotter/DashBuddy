@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **"Saved: $X" bubble shows the dollar sign now (#456).**
+  The post-delivery earnings bubble rendered `Saved: 5.50` (no `$`) because the state layer had
+  its own money formatter that omitted it. Both local formatters are gone — money now formats
+  through one `:domain` `Formats.money` SSOT. On a dash, after a delivery: working = the "Saved"
+  bubble reads `Saved: $5.50` (with the `$`); the dash-summary "Session Ended. Total: $X" and
+  the offer notification's `$/hr`/`$/mi` should all still read correctly. Broken = a missing or
+  doubled `$`, or a wrong decimal.
+  - Confirmed: 0/2
+
 - **DasherDirect Savings screens now blocked as sensitive (#463, partial — banking slice).**
   On the 2026-06-12 dash the DasherDirect **Savings jar** flow (balance + "Transfer $X" + "You
   transferred $X") leaked plaintext dollar balances to UNKNOWN capture — the redesigned savings

@@ -13,7 +13,7 @@ import timber.log.Timber
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.domain.format.Formats
 
 @Singleton
 class TtsEffectHandler @Inject constructor(
@@ -88,9 +88,9 @@ class TtsEffectHandler @Inject constructor(
             else -> "Offer"
         }
         return "$verdict. ${eval.merchantName.trim()}. " +
-            "${DashFormats.decimal(eval.dollarsPerHour, 0)} dollars an hour net. " +
-            "Net ${DashFormats.decimal(eval.netPayAmount, 2)}, " +
-            "${DashFormats.decimal(eval.distanceMiles)} miles, " +
+            "${Formats.decimal(eval.dollarsPerHour, 0)} dollars an hour net. " +
+            "Net ${Formats.decimal(eval.netPayAmount, 2)}, " +
+            "${Formats.decimal(eval.distanceMiles)} miles, " +
             "score ${eval.score.toInt()}."
     }
 
