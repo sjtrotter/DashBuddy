@@ -107,11 +107,14 @@ The project uses modular Clean Architecture with a strict dependency graph:
 - **`:core:datastore`** — Preferences DataStore (seven single-concern stores behind Hilt
   qualifiers — app prefs, strategy, dev settings, odometer, app state, platforms,
   rule-capability grants).
-- **`:core:designsystem`** — Brand system (no project deps): fixed dark/light palette (`DashColors`),
-  Hanken Grotesk + Space Grotesk fonts (tabular numerals), `DashTheme` + `LocalGlance`, and the
-  shared component library (`DashCard`, `DashChip`, `DashStatTile`, `DashGaugeRing`, `DashSegmented`,
-  `DashSlider`, `DashBarChart`, `DashAccordion`). No M3 dynamic color. Feature-specific composables
-  stay with their feature (Package by Feature); only generic, data-in/lambdas-out components live here.
+- **`:core:designsystem`** — Brand system (no project deps): fixed dark/light palette (`AppColors`),
+  Hanken Grotesk + Space Grotesk fonts (tabular numerals), `AppTheme` + `LocalGlance` (the public
+  theme wrapper is `DashBuddyTheme`, the only `Dash`-named symbol kept — it's the app name, not a
+  platform term), and the shared component library (`AppCard`, `AppChip`, `AppStatTile`,
+  `AppGaugeRing`, `AppSegmented`, `AppSlider`, `AppBarChart`, `AppAccordion`). The design-system
+  brand vocabulary is `App*`, not `Dash*` (#468) — no platform-flavoured names. No M3 dynamic
+  color. Feature-specific composables stay with their feature (Package by Feature); only generic,
+  data-in/lambdas-out components live here.
 - **`:app`** — UI (Compose + overlays), side effect handlers (SideEffectEngine, odometer, screenshots,
   TTS, tips), Hilt DI wiring, and the `DashBuddyApplication` entry point.
 

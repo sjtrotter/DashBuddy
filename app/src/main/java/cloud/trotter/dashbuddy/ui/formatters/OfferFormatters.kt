@@ -7,7 +7,7 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import androidx.compose.ui.graphics.toArgb
-import cloud.trotter.dashbuddy.core.designsystem.theme.darkDashColors
+import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.format.Formats
@@ -38,7 +38,7 @@ fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {
  * it. `toString()` yields the plain text used for chat storage.
  */
 fun OfferEvaluation.toNotificationSummary(): CharSequence {
-    val colors = darkDashColors()
+    val colors = darkAppColors()
     val verdict = when (action) {
         OfferAction.ACCEPT -> "ACCEPT"
         OfferAction.DECLINE -> "DECLINE"

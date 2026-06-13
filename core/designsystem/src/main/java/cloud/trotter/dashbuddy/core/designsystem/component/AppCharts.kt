@@ -33,16 +33,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import kotlin.math.roundToInt
 
 /** A single bar. [highlight] paints it in the brand accent (e.g. a "hot" day/zone). */
-data class DashBar(val label: String, val value: Float, val highlight: Boolean = false)
+data class AppBar(val label: String, val value: Float, val highlight: Boolean = false)
 
 /** Simple labelled bar chart — earnings-by-period, etc. */
 @Composable
-fun DashBarChart(bars: List<DashBar>, modifier: Modifier = Modifier, height: Dp = 96.dp) {
-    val c = DashTheme.colors
+fun AppBarChart(bars: List<AppBar>, modifier: Modifier = Modifier, height: Dp = 96.dp) {
+    val c = AppTheme.colors
     val max = bars.maxOfOrNull { it.value }?.takeIf { it > 0f } ?: 1f
     Column(modifier) {
         Row(
@@ -79,15 +79,15 @@ fun DashBarChart(bars: List<DashBar>, modifier: Modifier = Modifier, height: Dp 
 
 /** Circular progress gauge with a centred value + caption — ratings, on-time scorecard. */
 @Composable
-fun DashGaugeRing(
+fun AppGaugeRing(
     progress: Float,
     value: String,
     label: String,
     modifier: Modifier = Modifier,
-    color: Color = DashTheme.colors.accent,
+    color: Color = AppTheme.colors.accent,
     diameter: Dp = 88.dp,
 ) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     val track = c.surface3
     Column(
         modifier,
@@ -105,18 +105,18 @@ fun DashGaugeRing(
                     topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round),
                 )
             }
-            Text(value, style = DashTheme.num.lgNum, color = c.text)
+            Text(value, style = AppTheme.num.lgNum, color = c.text)
         }
         Text(label, style = MaterialTheme.typography.bodySmall, color = c.text2)
     }
 }
 
 /** A proportion in a stacked bar / legend. */
-data class DashSegment(val label: String, val value: Float, val color: Color, val note: String? = null)
+data class AppSegment(val label: String, val value: Float, val color: Color, val note: String? = null)
 
 /** Stacked proportion bar — offer funnel, time split, deadhead ratio. */
 @Composable
-fun DashStackBar(segments: List<DashSegment>, modifier: Modifier = Modifier, height: Dp = 12.dp) {
+fun AppStackBar(segments: List<AppSegment>, modifier: Modifier = Modifier, height: Dp = 12.dp) {
     val total = segments.sumOf { it.value.toDouble() }.toFloat().takeIf { it > 0f } ?: 1f
     Row(modifier.clip(CircleShape).fillMaxWidth().height(height)) {
         segments.forEach { s ->
@@ -125,11 +125,11 @@ fun DashStackBar(segments: List<DashSegment>, modifier: Modifier = Modifier, hei
     }
 }
 
-/** Legend for a [DashStackBar]. Shows each key + its `note` (or computed percent). */
+/** Legend for a [AppStackBar]. Shows each key + its `note` (or computed percent). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DashLegend(segments: List<DashSegment>, modifier: Modifier = Modifier) {
-    val c = DashTheme.colors
+fun AppLegend(segments: List<AppSegment>, modifier: Modifier = Modifier) {
+    val c = AppTheme.colors
     val total = segments.sumOf { it.value.toDouble() }.toFloat().takeIf { it > 0f } ?: 1f
     FlowRow(
         modifier,
@@ -142,7 +142,7 @@ fun DashLegend(segments: List<DashSegment>, modifier: Modifier = Modifier) {
                 Text(s.label, style = MaterialTheme.typography.bodySmall, color = c.text2)
                 Text(
                     s.note ?: "${(s.value / total * 100f).roundToInt()}%",
-                    style = DashTheme.num.smNum,
+                    style = AppTheme.num.smNum,
                     color = c.text,
                 )
             }
@@ -152,23 +152,23 @@ fun DashLegend(segments: List<DashSegment>, modifier: Modifier = Modifier) {
 
 @Preview
 @Composable
-private fun DashChartsPreview() = DashBuddyTheme {
+private fun AppChartsPreview() = DashBuddyTheme {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            DashBarChart(
+            AppBarChart(
                 listOf(
-                    DashBar("M", 96f), DashBar("T", 110f), DashBar("W", 88f),
-                    DashBar("T", 132f, highlight = true), DashBar("F", 158f, highlight = true),
+                    AppBar("M", 96f), AppBar("T", 110f), AppBar("W", 88f),
+                    AppBar("T", 132f, highlight = true), AppBar("F", 158f, highlight = true),
                 ),
             )
-            DashGaugeRing(progress = 0.96f, value = "96%", label = "Before deadline", color = DashTheme.colors.good)
+            AppGaugeRing(progress = 0.96f, value = "96%", label = "Before deadline", color = AppTheme.colors.good)
             val segs = listOf(
-                DashSegment("Accepted", 54f, DashTheme.colors.good),
-                DashSegment("Declined", 32f, DashTheme.colors.bad),
-                DashSegment("Timed out", 5f, DashTheme.colors.neutral),
+                AppSegment("Accepted", 54f, AppTheme.colors.good),
+                AppSegment("Declined", 32f, AppTheme.colors.bad),
+                AppSegment("Timed out", 5f, AppTheme.colors.neutral),
             )
-            DashStackBar(segs, height = 14.dp)
-            DashLegend(segs)
+            AppStackBar(segs, height = 14.dp)
+            AppLegend(segs)
         }
     }
 }

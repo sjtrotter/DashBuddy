@@ -28,14 +28,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 
 /**
  * Expandable row with a `$/mi`-style [trailing] summary — Personal Economy cost accordions.
  * Caller owns the [expanded] state and the [onToggle] lambda (hoisted, pure).
  */
 @Composable
-fun DashAccordion(
+fun AppAccordion(
     title: String,
     expanded: Boolean,
     onToggle: () -> Unit,
@@ -43,7 +43,7 @@ fun DashAccordion(
     trailing: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val c = DashTheme.colors
+    val c = AppTheme.colors
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
@@ -60,7 +60,7 @@ fun DashAccordion(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = c.text)
-                if (trailing != null) Text(trailing, style = DashTheme.num.smNum, color = c.text2)
+                if (trailing != null) Text(trailing, style = AppTheme.num.smNum, color = c.text2)
                 Chevron(expanded, c.text3)
             }
             if (expanded) {
@@ -87,17 +87,17 @@ private fun Chevron(expanded: Boolean, tint: Color) {
 
 @Preview
 @Composable
-private fun DashAccordionPreview() = DashBuddyTheme {
+private fun AppAccordionPreview() = DashBuddyTheme {
     Surface(color = MaterialTheme.colorScheme.background) {
         var open by remember { mutableStateOf(true) }
-        DashAccordion(
+        AppAccordion(
             title = "Tires",
             expanded = open,
             onToggle = { open = !open },
             trailing = "$0.016/mi",
             modifier = Modifier.padding(16.dp),
         ) {
-            Text("Set cost ÷ lifetime miles.", style = MaterialTheme.typography.bodySmall, color = DashTheme.colors.text3)
+            Text("Set cost ÷ lifetime miles.", style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.text3)
         }
     }
 }

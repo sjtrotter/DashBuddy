@@ -10,7 +10,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 
 /** Maps the fixed brand palette onto Material 3 roles so stock M3 components render on-brand. */
-private fun dashColorScheme(c: DashColors): ColorScheme {
+private fun dashColorScheme(c: AppColors): ColorScheme {
     val base = if (c.isDark) darkColorScheme() else lightColorScheme()
     return base.copy(
         primary = c.accent,
@@ -56,7 +56,7 @@ fun DashBuddyTheme(
     glance: Float = 1f,
     content: @Composable () -> Unit,
 ) {
-    val dash = if (darkTheme) darkDashColors() else lightDashColors()
+    val dash = if (darkTheme) darkAppColors() else lightAppColors()
     CompositionLocalProvider(
         LocalDashColors provides dash,
         LocalDashTextStyles provides dashTextStyles(),
@@ -64,18 +64,18 @@ fun DashBuddyTheme(
     ) {
         MaterialTheme(
             colorScheme = dashColorScheme(dash),
-            typography = DashTypography,
-            shapes = DashShapes,
+            typography = AppTypography,
+            shapes = AppShapes,
             content = content,
         )
     }
 }
 
-/** Ergonomic accessors for the brand tokens: `DashTheme.colors.good`, `DashTheme.num.heroNum`. */
-object DashTheme {
-    val colors: DashColors
+/** Ergonomic accessors for the brand tokens: `AppTheme.colors.good`, `AppTheme.num.heroNum`. */
+object AppTheme {
+    val colors: AppColors
         @Composable @ReadOnlyComposable get() = LocalDashColors.current
-    val num: DashTextStyles
+    val num: AppTextStyles
         @Composable @ReadOnlyComposable get() = LocalDashTextStyles.current
     val glance: Float
         @Composable @ReadOnlyComposable get() = LocalGlance.current

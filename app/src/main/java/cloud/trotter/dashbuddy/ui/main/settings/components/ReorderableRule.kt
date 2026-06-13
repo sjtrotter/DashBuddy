@@ -23,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
@@ -102,7 +102,7 @@ fun MetricContent(
         Text(
             text = type.label,
             style = MaterialTheme.typography.titleMedium,
-            color = if (rule.isEnabled) MaterialTheme.colorScheme.onSurface else DashTheme.colors.neutral
+            color = if (rule.isEnabled) MaterialTheme.colorScheme.onSurface else AppTheme.colors.neutral
         )
 
         // Value Display (e.g., "$15.00" or "10 mi")
