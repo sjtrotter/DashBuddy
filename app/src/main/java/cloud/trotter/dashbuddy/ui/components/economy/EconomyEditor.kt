@@ -18,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
@@ -55,7 +55,7 @@ fun EconomyEditor(
     // -------- Tires --------
     EconomyAccordionRow(
         title = "Tires",
-        summary = "${DashFormats.money3(economy.tireCostPerMile)}/mi",
+        summary = "${Formats.money3(economy.tireCostPerMile)}/mi",
         isUserSet = EconomyField.TIRE_COST in userSet || EconomyField.TIRE_LIFETIME in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
@@ -71,7 +71,7 @@ fun EconomyEditor(
     // -------- Oil changes --------
     EconomyAccordionRow(
         title = "Oil changes",
-        summary = "${DashFormats.money3(economy.oilCostPerMile)}/mi",
+        summary = "${Formats.money3(economy.oilCostPerMile)}/mi",
         isUserSet = EconomyField.OIL_COST in userSet || EconomyField.OIL_INTERVAL in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
@@ -87,7 +87,7 @@ fun EconomyEditor(
     // -------- Brakes --------
     EconomyAccordionRow(
         title = "Brakes",
-        summary = "${DashFormats.money3(economy.brakesCostPerMile)}/mi",
+        summary = "${Formats.money3(economy.brakesCostPerMile)}/mi",
         isUserSet = EconomyField.BRAKES_COST in userSet || EconomyField.BRAKES_INTERVAL in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
@@ -103,7 +103,7 @@ fun EconomyEditor(
     // -------- Fluids --------
     EconomyAccordionRow(
         title = "Fluids",
-        summary = "${DashFormats.money3(economy.fluidsCostPerMile)}/mi",
+        summary = "${Formats.money3(economy.fluidsCostPerMile)}/mi",
         isUserSet = EconomyField.FLUIDS_COST in userSet || EconomyField.FLUIDS_INTERVAL in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
@@ -119,7 +119,7 @@ fun EconomyEditor(
     // -------- Misc repairs --------
     EconomyAccordionRow(
         title = "Misc repairs",
-        summary = "${DashFormats.money3(economy.miscCostPerMile)}/mi",
+        summary = "${Formats.money3(economy.miscCostPerMile)}/mi",
         isUserSet = EconomyField.MISC_YEARLY in userSet || EconomyField.MISC_YEARLY_MI in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
@@ -138,7 +138,7 @@ fun EconomyEditor(
     EconomyAccordionRow(
         title = "Depreciation",
         summary = if (economy.includeDepreciation) {
-            "${DashFormats.money3(economy.depreciationCostPerMile)}/mi"
+            "${Formats.money3(economy.depreciationCostPerMile)}/mi"
         } else {
             "off"
         },
@@ -172,7 +172,7 @@ fun EconomyEditor(
     // -------- Insurance --------
     EconomyAccordionRow(
         title = "Insurance",
-        summary = "${DashFormats.money3(economy.insuranceCostPerMile)}/mi*",
+        summary = "${Formats.money3(economy.insuranceCostPerMile)}/mi*",
         isUserSet = EconomyField.INSURANCE_DELTA in userSet,
     ) {
         CurrencyInput(
@@ -191,7 +191,7 @@ fun EconomyEditor(
     // -------- Registration --------
     EconomyAccordionRow(
         title = "Registration",
-        summary = "${DashFormats.money3(economy.registrationCostPerMile)}/mi*",
+        summary = "${Formats.money3(economy.registrationCostPerMile)}/mi*",
         isUserSet = EconomyField.REGISTRATION_DELTA in userSet,
     ) {
         CurrencyInput(
@@ -211,7 +211,7 @@ fun EconomyEditor(
     // -------- Phone & data --------
     EconomyAccordionRow(
         title = "Phone & data",
-        summary = "${DashFormats.money3(economy.phoneCostPerMile)}/mi*",
+        summary = "${Formats.money3(economy.phoneCostPerMile)}/mi*",
         isUserSet = EconomyField.PHONE_PLAN_TOTAL in userSet ||
             EconomyField.PHONE_PLAN_LINES in userSet ||
             EconomyField.PHONE_DASH_PERCENT in userSet,
@@ -245,9 +245,9 @@ fun EconomyEditor(
         )
         val perLine = economy.phonePlanTotal / economy.phonePlanLines.coerceAtLeast(1)
         Text(
-            text = "Your line: ${DashFormats.money(perLine)}/mo" +
+            text = "Your line: ${Formats.money(perLine)}/mo" +
                 " × ${economy.phoneDashPercent.toInt()}%" +
-                " = ${DashFormats.money(perLine * economy.phoneDashPercent / 100.0)}/mo for gig work",
+                " = ${Formats.money(perLine * economy.phoneDashPercent / 100.0)}/mo for gig work",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -256,11 +256,11 @@ fun EconomyEditor(
     // -------- Expected annual gig miles --------
     EconomyAccordionRow(
         title = "Expected gig miles / yr",
-        summary = "${DashFormats.commaInt(economy.expectedAnnualDashMiles.toInt())} mi",
+        summary = "${Formats.commaInt(economy.expectedAnnualDashMiles.toInt())} mi",
         isUserSet = EconomyField.EXPECTED_ANNUAL_DASH_MI in userSet,
     ) {
         Text(
-            text = "${DashFormats.commaInt(economy.expectedAnnualDashMiles.toInt())} miles per year",
+            text = "${Formats.commaInt(economy.expectedAnnualDashMiles.toInt())} miles per year",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
         )
@@ -316,7 +316,7 @@ fun TrueCostFooter(operatingCostPerMile: Double) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Your true cost: ${DashFormats.money(operatingCostPerMile)}/mi",
+                text = "Your true cost: ${Formats.money(operatingCostPerMile)}/mi",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )

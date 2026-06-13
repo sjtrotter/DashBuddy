@@ -8,7 +8,7 @@ import android.text.format.DateFormat
 import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.time.formatDuration
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -346,7 +346,7 @@ private fun SessionMetricsActions(
             MaterialTheme.colorScheme.onSurface
 
         Text(
-            text = DashFormats.money(displayEarnings),
+            text = Formats.money(displayEarnings),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = textColor
@@ -357,7 +357,7 @@ private fun SessionMetricsActions(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
         )
         Text(
-            text = "${DashFormats.decimal(displayMiles)} mi",
+            text = "${Formats.decimal(displayMiles)} mi",
             style = MaterialTheme.typography.titleSmall,
             color = textColor
         )
@@ -404,12 +404,12 @@ private fun ModeIdle(lastSessionSummary: SessionSummary?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
             Text(
-                text = DashFormats.money(lastSessionSummary.earnings),
+                text = Formats.money(lastSessionSummary.earnings),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
-            ModeRow(label = "Miles", value = "${DashFormats.decimal(lastSessionSummary.miles)} mi")
+            ModeRow(label = "Miles", value = "${Formats.decimal(lastSessionSummary.miles)} mi")
             ModeRow(
                 label = "Duration",
                 value = formatDuration(lastSessionSummary.endedAt - lastSessionSummary.startedAt),

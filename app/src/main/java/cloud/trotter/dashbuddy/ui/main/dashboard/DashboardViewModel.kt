@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import cloud.trotter.dashbuddy.core.designsystem.format.DashFormats
+import cloud.trotter.dashbuddy.domain.format.Formats
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
@@ -47,7 +47,7 @@ class DashboardViewModel @Inject constructor(
     val sessionMiles: StateFlow<String> = odometerRepository.sessionMeters
         .map { meters ->
             val miles = meters * 0.000621371
-            "${DashFormats.decimal(miles)} mi"
+            "${Formats.decimal(miles)} mi"
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 mi")
 

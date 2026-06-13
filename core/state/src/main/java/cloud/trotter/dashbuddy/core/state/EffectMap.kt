@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -357,7 +358,7 @@ class EffectMap @Inject constructor() {
                         ?: pend?.endFields
                     val endedAt = pend?.since ?: obs.timestamp
                     if (endParsed != null) {
-                        val earnings = formatCurrency(endParsed.totalEarnings)
+                        val earnings = Formats.money(endParsed.totalEarnings)
                         add(
                             logEffect(
                                 sessionId,
@@ -723,13 +724,13 @@ class EffectMap @Inject constructor() {
         val payData = parsed.parsedPay
         val text = if (payData != null) {
             buildString {
-                append("Saved: ${formatCurrency(payData.total)}")
+                append("Saved: ${Formats.money(payData.total)}")
                 payData.customerTips.forEach { item ->
-                    append("\nTip: ${item.type} • ${formatCurrency(item.amount)}")
+                    append("\nTip: ${item.type} • ${Formats.money(item.amount)}")
                 }
             }
         } else {
-            "Saved: ${formatCurrency(parsed.totalPay)}"
+            "Saved: ${Formats.money(parsed.totalPay)}"
         }
         return listOf(AppEffect.UpdateBubble(text, ChatPersona.Earnings))
     }
@@ -883,14 +884,6 @@ class EffectMap @Inject constructor() {
     // =========================================================================
     // HELPERS
     // =========================================================================
-
-    /**
-     * Display formatting inside the state layer is a known wart: UpdateBubble
-     * carries rendered copy, so the formatter lives here until #366 moves the
-     * copy out of state. Locale pinned EXPLICITLY per the #358 policy.
-     */
-    private fun formatCurrency(amount: Double): String =
-        String.format(java.util.Locale.getDefault(), "%.2f", amount)
 
     private fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
         // 1. Stored click intent on PendingOffer — covers the common case where
