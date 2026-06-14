@@ -85,7 +85,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   pickup offer shows NO shop pill. Broken = item count missing/duplicated, or the shop pill on a
   non-shop offer. (**#461 stays open** for part (c) — the finished/PostTask card showing the
   order type, which needs offer→job→delivery data flow.)
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (single-order). **2026-06-14 (DoorDash):** the Shop & Deliver badge shows and the item
+    count is up in the hero on a **single** order. **FOUND BROKEN on STACKED orders:** the hero shows the
+    **# of stacked orders, not the # of items** (logged 2026-06-14 #1). Single-order half advanced to
+    1/2; the stacked-count is a tracked bug. (See also the design rethink, 2026-06-14 #2.)
 
 - **7-Eleven / alcohol "Verify items" pickup screen now recognized (#462, first slice).**
   The store "Verify items for <name>" screen (with "Do not open sealed bags" / "Can't verify
@@ -480,6 +483,8 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
     unconfirmed: that the **active task** survived the blip (no event proves task
     retention either way), and the **scheduled** fresh-start path. See 2026-06-07 log
     entry #4/#5.
+    **2026-06-14 (DoorDash): not exercised** — only one dash this session, so the
+    end-then-start-fresh path (esp. the scheduled-start variant) couldn't be tested. Stays 1/2.
 
 - **Alcohol delivery ID-verification flow recognized + arrival timing (#149).**
   On an alcohol dropoff, the ID-check flow is now recognized (previously
@@ -625,7 +630,9 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   the heads-up notification + spoken read should always describe the CURRENT offer's economics.
   Watch for any mismatch between the card's numbers and what's spoken/notified, especially when
   offers arrive back-to-back.
-  - Confirmed: 0/2.
+  - Confirmed: 0/2. **2026-06-14 (DoorDash):** dasher believes the eval matched the on-screen offer but
+    couldn't verify in the field — needs a desk check of this dash's heads-up/TTS vs. the card numbers.
+    Stays 0/2 until the log confirms.
 - **Deadline countdowns still correct under the new transform clock (#343).** Time parsing
   (`parseDeadline`/`parseTime`) is now anchored to the observation's instant instead of the
   wall clock at evaluation time (replay determinism; the 05-19 "1434:38 ghost countdown" class).
@@ -686,15 +693,18 @@ confirmations below). FOUND BROKEN on the stacked case.
 
 ### Research / design (improvement ideas — explore, not yet scoped)
 
-#### 2. Rethink how Shop & Deliver / Red Card is surfaced on the offer card (#461)
-Developer feedback on the #461 co-hero treatment: the **item count in the co-hero feels too surfaced**
-("almost too surfaced") for what it is. Directions to explore (not scoped, not a fix):
+#### 2. Offer badges should use icons; the SHOP badge carries the item count (#461)
+Developer **design direction** on #461 — the item count in the co-hero **feels too surfaced** ("almost
+too surfaced"), and it should not live in a co-hero slot at all:
 
-- Use an **icon** for Shop & Deliver and for the **Red Card** instead of text — we already had icons for
-  these somewhere that may be worth revisiting.
-- Consider putting the **item count inside the badge chip alongside the shop icon** (e.g. a "🛒 N"
-  pill) rather than giving it a co-hero slot — keeps it legible without competing with the score ring /
-  $/hr.
+- **Icons are the norm for offer badges** (Shop & Deliver, Red Card, etc.) — use the icon, not a text
+  label. We already had icons for these somewhere worth revisiting.
+- **The Shop & Deliver badge specifically is the shop icon WITH the number of items** — icon + item
+  count together, in the badge, **full stop**. Not "icon *or* count," not a separate co-hero slot — the
+  shop badge is `[🛒 N]`.
+- The **Red Card** likewise gets its own icon badge.
+
+Recorded as the developer's stated design direction for #461, not a fix applied here.
 
 ### Verification TODOs (checklist outcomes this session)
 
