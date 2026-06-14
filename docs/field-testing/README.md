@@ -667,6 +667,55 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
+## 2026-06-14 — DoorDash session (live dash #2 — Go Puff QR pickup, post-#495 build)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` @ `9240d54` (post-#495 merge; field build on the
+  `claude/gopuff-qr-pickup-recognition-2vb5zu` branch, which is even with master — no code
+  changes of its own yet).
+- **Field conditions:** new live dash narrated in real time while driving. First order is a
+  **Go Puff** pickup — a "special" pickup type where the dasher must **scan a QR code at the
+  store** to pick the order up. Recorded for triage — **hypotheses, not concluded fixes.** The
+  dasher expects **several new Go-Puff-specific screens** that will each need recognition and will
+  feed captures separately.
+
+### Bugs
+
+#### 1. Go Puff QR pickup — **post-arrival screen(s) not recognized** (UNKNOWN)
+On a Go Puff pickup the **post-arrival** step fell to UNKNOWN. Go Puff differs from a normal store
+pickup: instead of (or in addition to) the usual "Pickup from / Confirm pickup" flow, the dasher
+arrives and has to **scan a QR code** to claim the order, which appears to introduce one or more
+Go-Puff-specific screens between arrival and pickup-complete that the DoorDash ruleset doesn't
+cover yet.
+
+- **What's already covered (desk, `core/pipeline/src/main/assets/rules/doordash.json`):** there is
+  a `doordash.screen.pickup_qr_confirm` rule (priority 53) keyed on `"Confirm that the code was
+  scanned"` + `"Scan code again"` — i.e. the **post-scan confirmation** screen. The standard
+  `pickup_arrival` / `pickup_pre_arrival` / `pickup_navigation` screens also exist. So the gap is
+  the **Go-Puff arrival / QR-prompt surface(s)** that sit *before* that confirm screen (the screen
+  that actually tells the dasher to scan, and possibly a Go-Puff-branded arrival card), which match
+  none of the current `require` predicates and so classify UNKNOWN.
+- **Likely cause (hypothesis):** the Go Puff arrival/scan-prompt screens carry text/viewIds that
+  none of the existing pickup rules' predicates match (the existing pickup rules key on
+  "Pickup from"/"Pickup for"; the only scan rule keys on the *confirm* copy). Without a Go-Puff
+  arrival/QR-prompt rule, the post-arrival frame has no match → UNKNOWN → captured to disk for
+  triage, never stepped into the flow, so the pickup task likely doesn't advance on the bubble for
+  this order.
+- **To confirm (desk, after capture download):** pull this dash's `UNKNOWN/` captures for the Go
+  Puff order and read the X-Ray for the arrival + scan-prompt screens; enumerate the full set of
+  Go-Puff-specific screens (arrival card, "scan QR" prompt, the in-app QR/scanner surface itself,
+  any "code scanned / confirm" and error states), then decide which are **recognize-only flow
+  steps** vs. **document-capture surfaces**. Note for the privacy posture: a **QR/barcode scanner
+  camera surface** is plausibly an image-capture surface, but a QR for *order pickup* is not a
+  government ID / signature — so unlike the alcohol license-scan, the Go Puff scan prompt is most
+  likely a **recognize-only** pickup step, not a blocked sensitive surface. Confirm against the
+  actual captured tree before writing rules. Desk call — not a concluded fix.
+- **Captures needed:** the dasher will supply the Go-Puff arrival + QR-scan + post-scan screens
+  (drop into `snapshots/INBOX/`, run `InboxProcessorTest` for the X-Ray) so the new rules can be
+  written against real trees.
+
+---
+
 ## 2026-06-14 — DoorDash session (live dash, post-#494 build)
 
 - **Platform tested:** DoorDash
