@@ -737,6 +737,49 @@ than stacked-handling in general.
   the dasher says is behaving) to isolate whether the Go Puff path is the differentiator. Desk
   call — not a concluded fix.
 
+#### 3. **Same-store shopping add-on RE-MINTED the task** (Sprouts + PetSmart stack) — case study
+Strong case study for "what goes right vs. wrong" on stacked-shop + add-on. The order was a double
+stack: **Sprouts + PetSmart/Petco**. Sequence the dasher narrated:
+1. The app wanted **PetSmart first**, but the dasher would pass **Sprouts** on the way, so they used
+   the **timeline screen to manually switch task order** and go to Sprouts first. *(Good: the
+   `doordash.screen.timeline` screen — `TimelineFields` task chain, `ParsedFields.kt:225` — is
+   recognized, so the reorder surface is at least seen.)*
+2. While **shopping at Sprouts**, an **add-on offer** popped. The dasher accepted it.
+3. **Bug:** because an offer came in, it **shouldn't have changed the task — but it effectively
+   "re-minted" the task** (treated it as a new/restarted task) instead of folding the add-on into
+   the active Sprouts shop.
+
+**What it SHOULD have done (dasher):** for a **same-store** add-on it should *not* re-mint — it
+should **bump the combined shop counts on the same task**, **add time to the pickup deadline**, and
+**update the pickup line** (same store). 
+
+- **Desk context — there's already a test asserting exactly the desired behavior:**
+  `TaskLifecycleGuardTest."shopping add-on (or same-store stack) bumps the combined counts on the
+  same task"` (`core/state/.../TaskLifecycleGuardTest.kt:327`) asserts `taskId` is **not re-minted**
+  and the to-shop count grows. Job-model intent agrees: add-ons **append** to the active job, not
+  replace it (`domain/.../state/Job.kt:7,31`; `TransitionDefaults.kt:18`). So the field behavior
+  **diverges from the modeled/asserted behavior** — meaning the real path isn't the one the test
+  exercises.
+- **Likely cause (hypothesis):** the test models the add-on as a same-store `TaskPickupArrived`
+  observation bumping counts. The **real** path went through the **offer→accept (new Job) flow**,
+  and — per the dasher — the UI may have shown a **pickup-navigation frame first, then realized it
+  was already at the store and swapped into the combined/"multi-pickup store" shop interface**. That
+  navigation→store re-entry on a freshly-accepted offer is a plausible trigger for the stepper to
+  start a fresh task (re-mint) rather than recognizing it as the same-store continuation the guard
+  expects. So the guard may simply **not cover the accept-then-renavigate path**.
+- **Open question — is the "multi-pickup store interface" its own recognized screen?** Grep shows
+  pickup rules (`pickup_arrival`/`pickup_pre_arrival`/`pickup_navigation`) but no explicit combined
+  **multi-pickup / two-pickup store** shop screen. If that interface is a distinct tree, it may need
+  its own recognition so the add-on/same-store-stack reads as a continuation, not a new arrival.
+- **Field UX context — same-store heuristic:** a pop-up add-on *while on another offer* **can** route
+  to a different store, but **shopping add-ons frequently route to the same store**. A useful signal
+  the dasher noted: **absence of an interstitial pickup arrival/navigation screen** ⇒ likely the
+  **same store** (so fold in, don't re-mint). Not deterministic, but a candidate disambiguator.
+- **To confirm (desk, after capture download):** replay the Sprouts add-on moment — the
+  `offer_popup` + accept event, then the frame sequence (navigation? → combined shop interface?),
+  and watch whether `activeTask.taskId` changes (re-mint) or counts bump on the same task. Capture
+  the multi-pickup shop tree for a possible new rule. Desk call — not a concluded fix.
+
 ---
 
 ## 2026-06-14 — DoorDash session (live dash, post-#494 build)
