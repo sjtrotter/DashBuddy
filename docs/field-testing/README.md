@@ -714,23 +714,28 @@ cover yet.
   (drop into `snapshots/INBOX/`, run `InboxProcessorTest` for the X-Ray) so the new rules can be
   written against real trees.
 
-#### 2. Multi-dropoff / stacked Go Puff order — **review the whole session pickup → dropoffs end-to-end**
-This order is a **multi-dropoff** situation: **three drop-offs** off the one (Go Puff) pickup, and
-the dasher reports it's "kind of a weird drop-off situation." Currently mid-flow — **on the second
-drop-off** as of this note. Flagged so the **entire session is reviewed end-to-end** once captures
-are down, not just the pickup-recognition gap (#1): the Go Puff QR pickup → first dropoff → second
-dropoff → third dropoff, including how the multi-stop flow stepped (task splits, which dropoff the
-bubble showed, deadlines/cards, any UNKNOWN frames in between, customer PII hashed throughout).
+#### 2. Go Puff stacked order — **2-dropoff order logged FOUR drop-offs (doubled)**
+The Go Puff order was a **stacked order with two orders / two drop-offs** (not three — the earlier
+"three" note was the in-the-moment count, corrected here). The app **logged a total of four
+drop-offs** for it — i.e. **each real dropoff was logged twice (2 → 4 doubling)**. That's the
+"weird drop-off situation." The dasher's hypothesis: it's likely **specific to the Go Puff order
+type** — a **later, ordinary (non-Go-Puff) stacked order on the same dash is so far working fine on
+the pickup**, which points to the Go Puff flow (unrecognized QR arrival, #1) as the trigger rather
+than stacked-handling in general.
 
-- **Why it matters (hypothesis):** stacked/multi-dropoff flows are exactly where the partial-render
-  and task-split classes have bitten before (cf. 2026-06-13 #1 premature drop-off card, recurred
-  2026-06-14 dash #1; #458 frozen-twin; #470/#458 double-dropoff). A 3-dropoff order layered on top
-  of an unrecognized Go Puff arrival is a strong candidate to surface flow-stepping bugs — worth a
-  careful desk replay.
+- **Why it matters / hypothesis:** a 2→4 doubling is the **partial-render / unsettled-frame class**
+  again (cf. 2026-06-13 #1 premature drop-off card, recurred 2026-06-14 dash #1; #458 frozen-twin;
+  #470/#458 double-dropoff). The new wrinkle: it fired on a **Go Puff** order whose **arrival was
+  UNKNOWN (#1)**. One possibility is that the unrecognized Go Puff QR/arrival sequence churned the
+  flow (UNKNOWN frames between arrival and pickup) such that each dropoff committed twice — i.e. #1
+  and #2 may be the **same root** (an unsettled Go-Puff pickup destabilizing the downstream dropoff
+  commits), not two independent bugs. Would need the capture replay to confirm.
 - **To confirm (desk, after capture download):** replay this session's `captures/` + `app_events`
-  for the full Go Puff order and walk every transition pickup→DO1→DO2→DO3; note any mis-step,
-  duplicate/extra dropoff card, missing dropoff, or stuck-on-wrong-stop bubble. Desk call — not a
-  concluded fix. The dasher will narrate / supply more on the "weird" part of the dropoff.
+  for the Go Puff order and count dropoff commit/log events vs. the two real stops — find where the
+  extra two come from (re-observation of a dropoff frame? a grace commit firing twice? a task split
+  spawning a phantom?). Compare against the later non-Go-Puff stacked order on the same dash (which
+  the dasher says is behaving) to isolate whether the Go Puff path is the differentiator. Desk
+  call — not a concluded fix.
 
 ---
 
