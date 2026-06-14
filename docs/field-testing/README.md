@@ -656,6 +656,60 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
 
 ---
 
+## 2026-06-13 — DoorDash session (live evening dash, post-#487 build)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` @ `55b93d0` (post the morning batch + #491 field-log). Includes the
+  #460/#324 **co-hero task-card redesign** (`39a54a9`) and the #461/#476 Shop & Deliver cards.
+- **Field conditions:** live dash, narrated in real time while driving. First HEB offer of the day;
+  later declined one offer and took a second (also HEB). Recorded for triage — **hypotheses, not
+  concluded fixes.**
+
+### Bugs
+
+#### 1. Premature/duplicate **drop-off card** — recognized before the screen fully loaded (same class as the ghost offer)
+On the first delivery (first HEB of the day), the **drop-off card appeared before the screen finished
+loading** — it briefly showed "Drop off customer", a **~2-second** timer, and **`$37/hr`** — and then
+**a second drop-off card appeared directly after it**. The dasher explicitly tied it to the ghost
+offer ("did the same thing as the offer where it recognized the screen before it fully loaded").
+
+- **Context on the new look:** the `$37/hr` is expected — the #460 co-hero redesign now shows a live
+  **"Running at $/hr"** on task cards (`FlowCardItem.kt` co-hero, ~`:514-560`). So the `$/hr` itself
+  isn't the bug; the **two drop-off cards** are.
+- **Likely cause (hypothesis):** same **partial-frame** class as the 2026-06-13 desk-review ghost
+  offer (#1, prior entry) — a dropoff-nav/arrival frame recognized **mid-render** opens a Delivery
+  card before the real one settles, leaving two. In `FlowCardMapper`, `DELIVERY_NAV_STARTED` opens a
+  card keyed by `taskId`; a premature frame with a missing/again-different `taskId` (or an
+  arrived-then-replaced frame) would produce a second card. This is **distinct from #470** (which
+  fixed the frozen-`completed` + live-`active` overlap of the *same* taskId) — here the symptom is a
+  *premature* card from an unsettled frame, not the at-door overlap.
+- **To confirm (desk):** pull this delivery's `captures/` + `app_events` — expect a dropoff frame
+  recognized very early (short dwell, ~2s) and **two Delivery rows / card ids** for the one stop
+  (check whether the taskIds match or one is empty/garbage). If the early frame parsed empty (no
+  customer/store), it's the same empty-partial-render root as the ghost offer → argues for a shared
+  **settle/validity gate** on recognition (offer **and** task screens), a desk call.
+
+#### 2. Second HEB pickup card not showing the **running total** ("Running at $/hr" and/or shop total)
+After declining one offer and taking a second (another HEB, Shop & Deliver), the **pickup card isn't
+showing the running total**. (Ambiguous from narration — capture will disambiguate; two candidates:)
+
+- **(a) "Running at $/hr" co-hero is blank/"—".** The co-hero `$/hr` comes from
+  `projectedHourly(netPay, estMinutes, deadlineMillis, now)` (`FlowCardItem.kt:508,665`); it renders
+  **"—" when `netPay` or `estMinutes` is null** (`:558`). On a **second/declined-then-accepted**
+  offer, the pickup snapshot may not have the offer's **net pay / time estimate** threaded through
+  (offer→job→task), so `$/hr` can't be computed → "—". This is the most likely reading of "running
+  at total."
+- **(b) Shop progress (`shop X/total · /min`) missing.** That line only renders when
+  `activity == PickupActivity.SHOPPING` (`FlowCardItem.kt:598`). If the second HEB's pickup activity
+  hasn't classified as SHOPPING yet (or the parse missed it), the shop total wouldn't show.
+- **To confirm (desk):** for this second HEB task, check the `Pickup` snapshot / `app_events` for
+  (a) a non-null `netPay`/time estimate and (b) `activity == SHOPPING`. Whichever is null points to
+  the cause — does the second-accept path drop the offer economics, or the activity classification?
+  Note vs. the **first** HEB pickup (which presumably *did* show it) to isolate "second offer" as the
+  variable.
+
+---
+
 ## 2026-06-13 — DoorDash session (desk review of post-#487 build)
 
 - **Platform tested:** DoorDash
