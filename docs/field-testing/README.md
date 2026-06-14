@@ -714,6 +714,24 @@ cover yet.
   (drop into `snapshots/INBOX/`, run `InboxProcessorTest` for the X-Ray) so the new rules can be
   written against real trees.
 
+#### 2. Multi-dropoff / stacked Go Puff order — **review the whole session pickup → dropoffs end-to-end**
+This order is a **multi-dropoff** situation: **three drop-offs** off the one (Go Puff) pickup, and
+the dasher reports it's "kind of a weird drop-off situation." Currently mid-flow — **on the second
+drop-off** as of this note. Flagged so the **entire session is reviewed end-to-end** once captures
+are down, not just the pickup-recognition gap (#1): the Go Puff QR pickup → first dropoff → second
+dropoff → third dropoff, including how the multi-stop flow stepped (task splits, which dropoff the
+bubble showed, deadlines/cards, any UNKNOWN frames in between, customer PII hashed throughout).
+
+- **Why it matters (hypothesis):** stacked/multi-dropoff flows are exactly where the partial-render
+  and task-split classes have bitten before (cf. 2026-06-13 #1 premature drop-off card, recurred
+  2026-06-14 dash #1; #458 frozen-twin; #470/#458 double-dropoff). A 3-dropoff order layered on top
+  of an unrecognized Go Puff arrival is a strong candidate to surface flow-stepping bugs — worth a
+  careful desk replay.
+- **To confirm (desk, after capture download):** replay this session's `captures/` + `app_events`
+  for the full Go Puff order and walk every transition pickup→DO1→DO2→DO3; note any mis-step,
+  duplicate/extra dropoff card, missing dropoff, or stuck-on-wrong-stop bubble. Desk call — not a
+  concluded fix. The dasher will narrate / supply more on the "weird" part of the dropoff.
+
 ---
 
 ## 2026-06-14 — DoorDash session (live dash, post-#494 build)
