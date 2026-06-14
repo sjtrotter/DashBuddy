@@ -73,10 +73,15 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   **blank store and no pay/miles** — note when it appears (mid another offer? between offers?) and
   **grab the `offer_popup` capture + `OFFER_TIMEOUT` event** so we can confirm the partial-render tree
   and decide a validity/settle gate. (See 2026-06-13 log entry #1.)
-  - Sightings: 1 blank-offer (2026-06-13, desk/screenshot). **2026-06-14:** no blank-store *offer* card
-    recurred — but the sibling **premature drop-off card** (2026-06-13 #1, same unsettled-frame class)
-    DID recur this dash (now 2 separate dashes), so the partial-render root is real even if the
-    empty-offer variant is rarer. Gathering offer-variant frequency before a fix.
+  - Sightings: 1 blank-offer (2026-06-13, desk/screenshot). **2026-06-14 (dash #1):** no blank-store
+    *offer* card recurred — but the sibling **premature drop-off card** (2026-06-13 #1, same
+    unsettled-frame class) DID recur, so the partial-render root is real. **2026-06-14 (dash #2,
+    ~16:35–16:36 UTC):** the **blank-offer card itself RECURRED** — a preframe/chrome of the offer
+    recognized as an Offer with **no value**, again **`$-2/hr`** (same Net `-$0.36`-class figure as
+    the 2026-06-13 sighting — i.e. the all-zeros economics fallback). So now **2 separate
+    blank-offer sightings** on top of the recurring premature-dropoff sibling — the empty-offer
+    variant is confirmed reproducible, not a one-off. Grab this dash's `offer_popup` capture +
+    `OFFER_TIMEOUT`/offer event near 16:35 UTC.
 
 - **Offer card surfaces Shop & Deliver: item count in the hero row + a SHOP badge (#461 a/b).**
   The item count moved from a small footer caption up to the hero row (beside the score ring /
