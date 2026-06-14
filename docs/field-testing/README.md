@@ -73,7 +73,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   **blank store and no pay/miles** — note when it appears (mid another offer? between offers?) and
   **grab the `offer_popup` capture + `OFFER_TIMEOUT` event** so we can confirm the partial-render tree
   and decide a validity/settle gate. (See 2026-06-13 log entry #1.)
-  - Sightings: 1 (2026-06-13, desk/screenshot). Gathering frequency before a fix.
+  - Sightings: 1 blank-offer (2026-06-13, desk/screenshot). **2026-06-14:** no blank-store *offer* card
+    recurred — but the sibling **premature drop-off card** (2026-06-13 #1, same unsettled-frame class)
+    DID recur this dash (now 2 separate dashes), so the partial-render root is real even if the
+    empty-offer variant is rarer. Gathering offer-variant frequency before a fix.
 
 - **Offer card surfaces Shop & Deliver: item count in the hero row + a SHOP badge (#461 a/b).**
   The item count moved from a small footer caption up to the hero row (beside the score ring /
@@ -82,7 +85,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   pickup offer shows NO shop pill. Broken = item count missing/duplicated, or the shop pill on a
   non-shop offer. (**#461 stays open** for part (c) — the finished/PostTask card showing the
   order type, which needs offer→job→delivery data flow.)
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (single-order). **2026-06-14 (DoorDash):** the Shop & Deliver badge shows and the item
+    count is up in the hero on a **single** order. **FOUND BROKEN on STACKED orders:** the hero shows the
+    **# of stacked orders, not the # of items** (logged 2026-06-14 #1). Single-order half advanced to
+    1/2; the stacked-count is a tracked bug. (See also the design rethink, 2026-06-14 #2.)
 
 - **7-Eleven / alcohol "Verify items" pickup screen now recognized (#462, first slice).**
   The store "Verify items for <name>" screen (with "Do not open sealed bags" / "Can't verify
@@ -154,7 +160,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   run late; "Running at —" only when the offer had no economics. Broken = $/hr shows "—" on a
   normal accepted offer, the timer doesn't flip to Dwell on arrival, values clip/overflow the
   bubble width, or the $/hr doesn't erode past the deadline.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (pickup card). **2026-06-14 (DoorDash, 1 dash):** the **pickup** co-hero rendered
+    (timer + "Running at $/hr") — dasher flagged it "maybe not wired right" though. The **drop-off**
+    `$/hr` still reads nil (FOUND BROKEN — the blend doesn't survive into the dropoff leg, 2026-06-13 #2).
+    Pickup half advanced to 1/2; drop-off half tracked as a bug.
 
 - **Bubble keeps showing the last dash after it ends / after a crash (#459).**
   The bubble's chat + card stack used to go EMPTY after a dash ended (8b: collapse it >5s then
@@ -164,13 +173,15 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   just-finished dash are still shown (not empty); start the next dash → it switches to the new
   dash. Also force-stop/crash right after a dash and reopen → still shows the last dash. Broken =
   empty chat/cards after dash-end-then-reopen, or the wrong dash shown.
-  - Confirmed: 0/2
+  - Confirmed: 1/2. **2026-06-14 (DoorDash):** after the dash ended the bubble **kept showing the last
+    dash** (chat + completed cards), not empty — clean confirmation of the #473 durable fix. One more.
 
 - **Pickup/Delivery card deadline reads cleanly — no double "by" (#460).**
   The deadline caption read `till pickup-by · by 17:10` (two "by"s); now `till pickup · by 17:10`
   / `till deliver · by 17:10`. Desk- or dash-verifiable on any pickup/delivery card. (The
   separate pickup/delivery card visual-parity redesign stays tracked in #460.)
-  - Confirmed: 0/2
+  - Confirmed: 1/2. **2026-06-14 (DoorDash):** caption reads **fully fixed/different from before** — no
+    double "by". One more to validate.
 
 - **No transient double drop-off card at the door (#458).**
   On an arrival-bearing dropoff (hand-it-to-customer / photo / PIN) the same delivery briefly
@@ -178,7 +189,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   stack now drops the frozen twin when it shares the active card's id. On a dash: working = at
   the customer's door you see exactly ONE delivery card (then the single frozen card + the live
   "Saved" receipt after you complete). Broken = two identical delivery cards stacked at the door.
-  - Confirmed: 0/2
+  - Confirmed: 0/2. **2026-06-14 (DoorDash):** an extra drop-off card DID appear this dash — but it's the
+    **premature/unsettled-frame** class (2026-06-13 #1), *not* the frozen-twin overlap this #458 fix
+    targets, so this stays 0/2 (the frozen-twin case wasn't disambiguated). The recurrence is tracked
+    under 2026-06-13 #1 / the ghost-frame watch — pull the dropoff capture to tell the two apart.
 
 - **"Saved: $X" bubble shows the dollar sign now (#456).**
   The post-delivery earnings bubble rendered `Saved: 5.50` (no `$`) because the state layer had
@@ -187,7 +201,9 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   bubble reads `Saved: $5.50` (with the `$`); the dash-summary "Session Ended. Total: $X" and
   the offer notification's `$/hr`/`$/mi` should all still read correctly. Broken = a missing or
   doubled `$`, or a wrong decimal.
-  - Confirmed: 0/2
+  - Confirmed: 1/2. **2026-06-14 (DoorDash):** the "Saved" bubble shows `$X.XX` (with the `$`, 2 decimals)
+    on **all** of them now — confirmed. (The separate "tip added" bubble is still a raw float — 2026-06-13
+    #3.) One more to validate.
 
 - **Sensitive model corrected — block the DASHER's data + ID/signature IMAGES; HASH customers (#463/#485).**
   The privacy rule is now: block the **dasher's own** sensitive screens (DasherDirect Savings /
@@ -217,6 +233,8 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
     **fully quick — no perceptible delay** (loosely supports (b) "verdicts land a touch quicker").
     The (a) stale-heads-up-after-fast-resolve, (c) restart-dedupe, and (d) sub-cases were NOT
     deliberately exercised — so this stays 0/2 until those are checked. (See 2026-06-12 log entry #10.)
+    **2026-06-14 (DoorDash):** no stale Accept/Decline heads-up observed after resolving offers (loose
+    support for (a)); (c)/(d) still not deliberately exercised. Stays 0/2 pending a clean (a)/(c) check.
 
 - **Per-offer dedupe now engages (#427).**
   Offer screenshot/log dedupe keys used to resolve to one shared literal, so a second distinct
@@ -225,7 +243,9 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   arriving close together should BOTH capture; the same offer re-rendering (collapse/expand,
   re-observation) should still capture only once. Broken = missing capture for a distinct
   second offer, or duplicate captures of one offer inside the same minute.
-  - Confirmed: 0/2
+  - Confirmed: 0/2. **2026-06-14 (DoorDash):** dasher believes it's working but couldn't verify in the
+    field — needs a desk check of this dash's `captures/` (two distinct offers close together → both
+    captured?). Stays 0/2 until the log confirms.
 
 - **Evidence Locker settings are now real (#426).**
   Screenshots (offer / delivery / dash-summary PNGs in Pictures/DashBuddy) previously fired
@@ -245,11 +265,12 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   no longer kills the live task — the task card should survive. Broken = double "Saved" bubble,
   a delivery missing from the log, or the bubble's task card stuck on the finished delivery
   well past ~3s after the receipt.
-  - Confirmed: 1/2 (sub-case a). **2026-06-12 (DoorDash):** two separate deliveries → **exactly one
-    "Saved" bubble each** (no double-fire) — confirms (a). Sub-cases (b) stacked-order split and (c)
-    misrecognition-survival not exercised this dash. **NOTE — separate bug found:** the "Saved" bubble
-    omits the `$` sign (renders `Saved: 5.50`, not `Saved: $5.50`) — logged as 2026-06-12 entry #9.
-    (See 2026-06-12 log entry #10.)
+  - Confirmed: **2/2 for sub-case (a)** — once-per-delivery receipt — **VALIDATED** (moved to the
+    2026-06-14 entry). **2026-06-12:** two deliveries → one "Saved" each. **2026-06-14 (DoorDash):** no
+    double "Saved" receipt anywhere across the dash. ⏳ **Still open:** (b) stacked-order
+    receipt→next-pickup split and (c) receipt-flash-mid-dropoff survival weren't exercised on either
+    dash — keep watching those two on the next stacked/edge dash. (The `$`-sign bug noted here on 06-12
+    is fixed — #456/#466, confirmed 2026-06-14.)
 
 - **Uber sensitive screens now blocked + UNKNOWN-capture scrub (#432).**
   Uber finally has matcher-layer sensitive rules (wallet / Instant Pay / cash-out / bank /
@@ -271,7 +292,9 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   after going offline still logs DASH_STOP promptly (timer-driven) with endedAt ≈ when you
   went offline. Broken = duplicate DASH_START/STOP pairs, summary attributed to a new empty
   session, or a session lingering long after the dash.
-  - Confirmed: 0/2
+  - Confirmed: 1/2. **2026-06-14 (DoorDash):** dash ended cleanly — summary on the right session, no
+    spurious mid-dash splits, no lingering session (supports (a)/(b); (c) leave-app-after-offline not
+    explicitly checked). One more to validate.
 
 - **Timeline storeHint now parses + pickup_picked_up rule newly matchable (#433).**
   Two rule fixes from mojibake literals: (a) timeline task rows should now carry store names
@@ -282,29 +305,9 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   **capture it** — this intent has zero corpus snapshots.
   - Confirmed: 0/2
 
-- **Bubble/notification Accept-Decline via rule-bound targets (#425).**
-  Tapping Accept or Decline in DashBuddy's offer notification (or bubble) must tap the matching
-  DoorDash button. The button is now aimed by the offer rule's `acceptButton`/`declineButton`
-  bindings and label-verified at tap time (accept ⇒ "Accept"/"Add to route", decline ⇒
-  "Decline") instead of hardcoded view IDs. Working = DoorDash registers the tap. Broken = log
-  shows "No 'acceptButton' target bound" (rule didn't bind on that screen variant — capture it!)
-  or "NONE passed label verification" (verification too strict for that variant).
-  - Confirmed: 1/2 (IN-BUBBLE buttons only). **2026-06-12 (DoorDash):** dasher tapped **Accept** in the
-    **expanded bubble** → DoorDash registered the Accept. First clean live confirmation of the
-    rule-bound tap path that was broken on 06-09. (See 2026-06-12 log entry #1.)
-  - ⚠️ **NOTIFICATION-SHADE buttons FOUND BROKEN — 2026-06-12 (DoorDash):** the Accept/Decline buttons
-    on the **system shade notification** (NOT the in-bubble buttons) did **NOTHING** (neither worked),
-    same dash the in-bubble buttons worked. Dispatch path/wire strings are identical to the bubble;
-    likely the click target isn't reachable from the shade (offer window not foreground). Filed as
-    **#457**. **Instrumented (PR pending):** the silent drop points now log durably — next time a shade
-    tap does nothing, the persistent app log self-documents the cause (no live logcat needed). Read the
-    log around the tap and match: `OfferActionReceiver: accept_offer` **absent** = broadcast never landed;
-    `Offer action accept_offer dropped (#457): R0 flow is … not OfferPresented` = the offer left the
-    screen before the tap (most likely); `… no active platform/pending offer` = offer state cleared;
-    `Offer action accept_offer firing` then `Could not find any live node`/`No live windows` = the
-    DoorDash button wasn't reachable from the shade; `Throttled action …` = swallowed by the 1s throttle.
-    Whichever line appears points straight at the fix. In-bubble half still needs a 2nd sighting (esp.
-    Decline).
+_(The #425 **in-bubble** Accept/Decline item was **VALIDATED** (2/2) on the 2026-06-14 dash — both
+Accept and Decline registered on DoorDash — and moved to that session's entry below. The
+**notification-shade** buttons remain broken and are tracked separately by **#457** / 2026-06-12 #11.)_
 
 - **Post-dash HUD: frozen summary + consistent chat (#367, PR pending).**
   Two visible fixes after a dash ends: (a) the "Last session" Duration on the idle bubble is
@@ -453,7 +456,8 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   idle/offline screen (the after-idle ordering was the bug). It must NOT finalize
   as a thin "early offline" the instant the idle/offline screen appears; the rich
   total should reach the HUD.
-  - Confirmed: 0/2.
+  - Confirmed: 1/2. **2026-06-14 (DoorDash):** dash summary landed on the just-ended dash
+    (totals/duration correct), not a thin early-offline finalize. One more to validate.
 - **New dash right after ending one starts fresh (#286 / #279-B / #290).** End a
   dash, then start a new one within ~10s. The bubble should treat it as a
   **brand-new dash** (fresh session / earnings reset), not "Session resumed
@@ -479,6 +483,8 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
     unconfirmed: that the **active task** survived the blip (no event proves task
     retention either way), and the **scheduled** fresh-start path. See 2026-06-07 log
     entry #4/#5.
+    **2026-06-14 (DoorDash): not exercised** — only one dash this session, so the
+    end-then-start-fresh path (esp. the scheduled-start variant) couldn't be tested. Stays 1/2.
 
 - **Alcohol delivery ID-verification flow recognized + arrival timing (#149).**
   On an alcohol dropoff, the ID-check flow is now recognized (previously
@@ -558,6 +564,9 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
     from `WaitingForOffer` — no `idle_scheduled_dash_ready` start path this session,
     so still **no second data point** on whether another screen can trigger it. Fix
     stays held; keep watching (esp. dashes with a scheduled block queued).
+    **2026-06-14 (DoorDash): did NOT recur** — no mid-dash "Done Dashing!" / odometer reset. Single dash,
+    and the discriminating `idle_scheduled_dash_ready` start path wasn't confirmed, so still no second
+    data point on the trigger. Fix stays held.
 
 - **`nav_arriving` screen now recognized — confirm it fires + gauge frequency
   (PR #312).** The in-app nav "Arriving at \<destination\>" / "Arriving soon"
@@ -621,7 +630,9 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   the heads-up notification + spoken read should always describe the CURRENT offer's economics.
   Watch for any mismatch between the card's numbers and what's spoken/notified, especially when
   offers arrive back-to-back.
-  - Confirmed: 0/2.
+  - Confirmed: 0/2. **2026-06-14 (DoorDash):** dasher believes the eval matched the on-screen offer but
+    couldn't verify in the field — needs a desk check of this dash's heads-up/TTS vs. the card numbers.
+    Stays 0/2 until the log confirms.
 - **Deadline countdowns still correct under the new transform clock (#343).** Time parsing
   (`parseDeadline`/`parseTime`) is now anchored to the observation's instant instead of the
   wall clock at evaluation time (replay determinism; the 05-19 "1434:38 ghost countdown" class).
@@ -653,6 +664,89 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
     "summary after the idle screen" ordering was the root cause). Field-validate
     via the #279 checklist item above.
+
+---
+
+## 2026-06-14 — DoorDash session (live dash, post-#494 build)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` @ `4a81d34` (post the 2026-06-13 batch through #494 — incl. #473
+  durable-last-dash, #470/#458 double-dropoff, #466/#467 money-formatter SSOT, #461/#476 shop cards,
+  #460/#324 co-hero task cards, #462/#463 recognition + privacy batches).
+- **Field conditions:** one live dash, narrated post-dash. Several offers (took some, declined some),
+  including at least one stacked Shop & Deliver. This entry both records new findings and folds in the
+  field confirmations that cleared/advanced the "Next field test" checklist this dash. Recorded for
+  triage — **hypotheses, not concluded fixes.**
+
+### Bugs
+
+#### 1. Shop & Deliver hero **item count shows the # of stacked orders, not the # of items** (#461)
+On a **stacked** Shop & Deliver offer the #461 hero item count surfaced the **number of stacked orders**
+instead of the **number of items to shop**. On a single order the hero item count looked correct (see
+confirmations below). FOUND BROKEN on the stacked case.
+
+- **Likely cause (hypothesis):** the hero is bound to an orders/stops count rather than the shop item
+  count, so it only diverges once `orderCount > 1`.
+- **To confirm (desk):** pull this dash's stacked-offer `offer_popup` capture + the parsed fields feeding
+  the #461 hero, and check what the hero count binds to when there are multiple orders (items vs. order
+  count). Desk call — not a concluded fix.
+
+### Research / design (improvement ideas — explore, not yet scoped)
+
+#### 2. Offer badges should use icons; the SHOP badge carries the item count (#461)
+Developer **design direction** on #461 — the item count in the co-hero **feels too surfaced** ("almost
+too surfaced"), and it should not live in a co-hero slot at all:
+
+- **Icons are the norm for offer badges** (Shop & Deliver, Red Card, etc.) — use the icon, not a text
+  label. We already had icons for these somewhere worth revisiting.
+- **The Shop & Deliver badge specifically is the shop icon WITH the number of items** — icon + item
+  count together, in the badge, **full stop**. Not "icon *or* count," not a separate co-hero slot — the
+  shop badge is `[🛒 N]`.
+- The **Red Card** likewise gets its own icon badge.
+
+Recorded as the developer's stated design direction for #461, not a fix applied here.
+
+### Verification TODOs (checklist outcomes this session)
+
+Confirmations that cleared or advanced the "Next field test" checklist on this dash:
+
+- ✅ **In-bubble Accept/Decline (#425) — VALIDATED (2/2).** Both Accept and Decline tapped in the
+  expanded bubble registered on DoorDash (2nd clean confirmation after the 2026-06-12 Accept-only
+  sighting). The separate **notification-shade** buttons remain broken — tracked by **#457** (2026-06-12
+  #11). Removed from the checklist.
+- ✅ **Receipt grace, once-per-delivery (#431 pt 2, sub-case a) — VALIDATED (2/2).** No double "Saved"
+  receipt anywhere this dash (2nd confirmation after 2026-06-12). Sub-cases (b) stacked-split and (c)
+  misrecognition-survival are still unverified — kept on the checklist.
+- ⏳ **Durable last-dash (#473/#459) — 1/2.** After the dash ended the bubble kept showing the last dash
+  (chat + completed cards), not empty.
+- ⏳ **"Saved: $X.XX" money format (#456) — 1/2.** The "Saved" bubble shows the `$` and 2-decimal format
+  on all of them now. (The "tip added" bubble is the remaining raw-float straggler — 2026-06-13 #3.)
+- ⏳ **Deadline caption, no double "by" (#460) — 1/2.** Reads fully fixed / different from before.
+- ⏳ **Co-hero pickup card (#460/#324) — 1/2 (pickup).** Pickup co-hero rendered (timer + $/hr), though
+  the dasher flagged it "maybe not wired right"; the drop-off `$/hr` still reads nil (broken —
+  2026-06-13 #2).
+- ⏳ **Session-end attribution + no mid-dash splits (#431/#279) — 1/2.** Dash ended cleanly, summary on
+  the right session, no spurious splits or lingering session.
+- ⏳ **No stale heads-up after resolving offers (#436 sub-case a) — partial.** None observed this dash.
+- ⏳ **Per-offer dedupe (#427) / offer-eval matches screen (#345) — needs desk log check.** Dasher
+  believes both are working but couldn't verify in the field; needs a desk pass over this dash's
+  `captures/` + event log.
+- 🔁 **New-dash-after-ending (#286/#290) — not exercised.** Only one dash today, so the
+  end-then-start-fresh path couldn't be tested.
+- ⚠️ **Extra drop-off card recurred (2026-06-13 #1, premature-frame class).** Another premature/extra
+  drop-off card appeared this dash — now seen on a 2nd separate dash, so upgrade from "stray one-off" to
+  a real recurring partial-render bug. Still distinct from the #458 frozen-twin case; grab the dropoff
+  frame + `app_events` to confirm the unsettled-frame root (a shared settle/validity gate on recognition
+  is the likely direction — desk call).
+- ✅ **Watches — no recurrence this dash:** no "ghost offer" / blank-store offer cards (2026-06-13 #1
+  ghost watch), and no mid-dash "Done Dashing!" + odometer reset (2026-06-06 #5 watch).
+
+### Recognition screens (need desk verification after capture download)
+
+The #462 recognition batch + #433 (`pickup_picked_up`) + #149 alcohol flow couldn't be verified from
+memory in the field — they need a desk pass over this dash's downloaded `captures/` to confirm the
+screens classified (not UNKNOWN), the flow stepped correctly, and customer PII was hashed (never raw).
+Kept on the checklist at 0/2.
 
 ---
 
