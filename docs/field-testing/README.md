@@ -720,6 +720,24 @@ Refined live (the dasher clarified — "running total" = the co-hero **"Running 
   like `FlowCardMapper`'s `acceptedNetPay`/`acceptedEstMin`, `FlowCardMapper.kt:161-162/186-213`)
   rather than a "remaining" blend that decays to 0. (Desk call — not a concluded fix.)
 
+#### 3. **CONFIRMED** — the "tip added" bubble message bypasses the money-formatter SSOT (raw float)
+The post-delivery **additional-tip** notification that posts to the bubble (e.g. *"Nice! $2.0 tip from
+Cheesecake Factory"*) shows a **raw float** — it has a `$` but isn't currency-formatted (`2.0`, not
+`2.00`). Same class as the "Saved: $X" fix (#456/#466), but a **separate message that was missed** in
+the "route everything through the domain `Formats` SSOT" sweep.
+
+- **Confirmed in code (not a hypothesis):** `TipEffectHandler.kt:23` builds the bubble text as
+  `"Nice! \$${effect.amount} tip from ${effect.storeName}"` — `effect.amount` is a `Double`
+  interpolated raw. The log line `:21` (`"Tip received: \$${effect.amount} …"`) has the same raw
+  interpolation.
+- **It's the only straggler:** a sweep of `app`/`core`/`domain` for `$`-prefixed raw money
+  interpolations (excluding tests) found **only** `TipEffectHandler` (`:21`, `:23`). The tip line in
+  the card breakdown already uses the SSOT (`FlowCardItem.kt:704`, `Formats.money(tip.amount)`).
+- **Fix direction (SSOT, the obvious route — desk/follow-up):** route the amount through the
+  `:domain` money formatter — `Formats.money(effect.amount)` → `$2.00` — in both the bubble text and
+  the log line, exactly as `FlowCardItem`/the "Saved" message now do (#456/#467). A one-line change;
+  recorded here per "note + follow-up."
+
 ---
 
 ## 2026-06-13 — DoorDash session (desk review of post-#487 build)
