@@ -688,25 +688,37 @@ offer ("did the same thing as the offer where it recognized the screen before it
   (check whether the taskIds match or one is empty/garbage). If the early frame parsed empty (no
   customer/store), it's the same empty-partial-render root as the ghost offer → argues for a shared
   **settle/validity gate** on recognition (offer **and** task screens), a desk call.
+- **Live update — did NOT recur:** on the **second** delivery (the next order's dropoff) **only one
+  drop-off card showed**. So this may have been a **stray/transient** one-off rather than a
+  reproducible dup. Downgraded to low-confidence; keep an eye out, but the capture above is only worth
+  chasing if it happens again.
 
-#### 2. Second HEB pickup card not showing the **running total** ("Running at $/hr" and/or shop total)
-After declining one offer and taking a second (another HEB, Shop & Deliver), the **pickup card isn't
-showing the running total**. (Ambiguous from narration — capture will disambiguate; two candidates:)
+#### 2. Co-hero "Running at $/hr" goes **nil on the DROP-OFF** (pickup eventually shows it; shop X/total is fine)
+Refined live (the dasher clarified — "running total" = the co-hero **"Running at $/hr"**, not the shop count):
 
-- **(a) "Running at $/hr" co-hero is blank/"—".** The co-hero `$/hr` comes from
-  `projectedHourly(netPay, estMinutes, deadlineMillis, now)` (`FlowCardItem.kt:508,665`); it renders
-  **"—" when `netPay` or `estMinutes` is null** (`:558`). On a **second/declined-then-accepted**
-  offer, the pickup snapshot may not have the offer's **net pay / time estimate** threaded through
-  (offer→job→task), so `$/hr` can't be computed → "—". This is the most likely reading of "running
-  at total."
-- **(b) Shop progress (`shop X/total · /min`) missing.** That line only renders when
-  `activity == PickupActivity.SHOPPING` (`FlowCardItem.kt:598`). If the second HEB's pickup activity
-  hasn't classified as SHOPPING yet (or the parse missed it), the shop total wouldn't show.
-- **To confirm (desk):** for this second HEB task, check the `Pickup` snapshot / `app_events` for
-  (a) a non-null `netPay`/time estimate and (b) `activity == SHOPPING`. Whichever is null points to
-  the cause — does the second-accept path drop the offer economics, or the activity classification?
-  Note vs. the **first** HEB pickup (which presumably *did* show it) to isolate "second offer" as the
-  variable.
+- ✅ **Shop `X/total` works** — confirmed on **both** HEB pickups this dash. So the redesign's shop
+  progress is fine; **rule out** the earlier candidate (b).
+- ⏳ **Pickup `$/hr` populated (eventually).** The second HEB pickup card **eventually showed `$51/hr`**,
+  which is **in line with the offer** — so the value is correct, but it may have been **slow to
+  appear** ("eventually"), i.e. the blended economics threaded in a beat late.
+- ❌ **Drop-off `$/hr` is nil.** On the drop-off the co-hero reads **~nil** ("Running at —").
+
+- **Why this is odd (grounded):** `LiveCardBuilder` feeds **both** the live Pickup and the live
+  Delivery the **same** source — `region.activeJob?.blendedNetPay` / `blendedEstMinutes`
+  (`LiveCardBuilder.kt:77-78` pickup, `:93-94` delivery) — and `projectedHourly` returns null **only**
+  when `netPay`/`estMinutes` is null **or `estMinutes <= 0`** (`FlowCardItem.kt:669-673`). Since the
+  pickup showed `$51/hr`, `activeJob.blended*` was populated during pickup — so a **nil drop-off**
+  means those values **don't survive into the dropoff phase** (or `blendedEstMinutes` has eroded to
+  `0`/null by then).
+- **Hypothesis:** the blended offer economics are dropped/zeroed at the **PICKUP→DROPOFF** transition
+  (e.g. `blendedEstMinutes` is "remaining estimate" and goes to 0 once picked up, or `activeJob` is
+  re-derived for the dropoff leg without re-blending). The "eventually" on pickup also hints the
+  blend populates **late**.
+- **To confirm (desk):** inspect `region.activeJob.blendedNetPay` / `blendedEstMinutes` (and how
+  they're computed) at **dropoff** vs **pickup** for this job — expect one of them null-or-0 at
+  dropoff. Decide whether the dropoff co-hero should reuse the **accepted-offer** net/time (fixed,
+  like `FlowCardMapper`'s `acceptedNetPay`/`acceptedEstMin`, `FlowCardMapper.kt:161-162/186-213`)
+  rather than a "remaining" blend that decays to 0. (Desk call — not a concluded fix.)
 
 ---
 
