@@ -81,7 +81,15 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
     the 2026-06-13 sighting — i.e. the all-zeros economics fallback). So now **2 separate
     blank-offer sightings** on top of the recurring premature-dropoff sibling — the empty-offer
     variant is confirmed reproducible, not a one-off. Grab this dash's `offer_popup` capture +
-    `OFFER_TIMEOUT`/offer event near 16:35 UTC.
+    `OFFER_TIMEOUT`/offer event near 16:35 UTC. **2026-06-15 (~00:33–00:34 UTC, dash #2 cont.):**
+    **new trigger — a ghost offer fired immediately AFTER the dasher ACCEPTED an offer.** The app
+    "acted like it got a new offer" right on accept, again blank / **`$-2/hr`** all-zeros. So the
+    blank-offer card isn't only a pre-render of an *incoming* popup — it can also spawn on the
+    **post-accept transition** (a 3rd blank sighting, new trigger). Hypothesis extension: the
+    accept→job transition may re-emit/observe a stale or chrome-only `offer_popup` frame that
+    re-satisfies `require` with no content → a phantom "new offer." Grab the `offer_popup` +
+    offer/accept events near 00:33 UTC to see whether the ghost frame is a leftover of the
+    just-accepted offer or a genuinely new partial popup.
 
 - **Offer card surfaces Shop & Deliver: item count in the hero row + a SHOP badge (#461 a/b).**
   The item count moved from a small footer caption up to the hero row (beside the score ring /
