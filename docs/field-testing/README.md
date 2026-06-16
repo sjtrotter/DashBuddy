@@ -727,6 +727,54 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
+## 2026-06-16 — DoorDash session (live dash, in-field narration)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` (field build) — exact SHA not captured in-field; infer from the
+  most recent `master` merge if needed. Build is post-#503-slice-3 (the dropoff-from-offer +
+  lowercase-"the customer" placeholder is present, see below), but **before slice 3b** (multi-drop
+  ownership), so a stacked/multi-drop is expected to still mis-handle extra dropoffs.
+- **Field conditions:** narrated live while driving. Recorded for triage — **hypotheses, not
+  concluded fixes.** No code changes this session.
+
+### Bugs
+
+#### 1. Stacked (double) H-E-B order — dropoff card never resolves to the customer hash; stays on "the customer"
+On a **double / stacked** order (the dasher first read it as a single dropoff, then corrected: there
+**was a second minted task** — it's a genuine double), believed to be **H-E-B**, a drop-off card
+showed the **placeholder "to the customer"** and **never resolved to a real customer hash**. The
+dasher's read: the chrome/frame was **recognized but carried no customer data** — the customer field
+was **probably null/empty** in the hash (i.e. recognized frame, empty customer parse), so the card
+sat on the placeholder instead of the short 6-char hash code.
+
+- **Field UX note — the placeholder copy CHANGED (and this part looks correct):** the placeholder is
+  now all-lowercase **"to the customer"**, not the old name-like capital **"Customer."** That matches
+  the **#503 slice 3** design exactly ("an unresolved one shows 'the customer' (lowercase, briefly,
+  never the name-like 'Customer')"). So the lowercase placeholder is the **shipped fix behaving as
+  designed**; the open problem is that on this order it **didn't go on to resolve** to the real
+  customer hash.
+- **Likely cause (hypothesis):** this is a **stacked / multi-drop** order, and the
+  `## Next field test` checklist for **#503** is explicit that **multi-drop is slice 3b and NOT yet
+  shipped** — "a stacked/GoPuff multi-drop may still mis-handle the extra dropoffs." So a stuck
+  "the customer" card on a *double* is consistent with the known not-yet-shipped multi-drop
+  ownership, rather than a new regression in the single-order slice-3 path. One possibility: the
+  dropoff subtask created at offer-accept (customer TBD) never gets the real customer **resolved onto
+  it** for the second/extra drop in a stack, so the placeholder lingers. A second possibility: the
+  dropoff frame for this order genuinely parsed an **empty customer** (null name → empty/sentinel
+  hash), in which case the resolve had nothing to bind. These need the capture to tell apart.
+- **To confirm (desk, after capture download):** pull this dash's `captures/` + `app_events` for the
+  H-E-B double and (a) check whether the dropoff frame(s) actually parsed a customer name/address at
+  all (was the `order_cx_name`/customer bind populated, or empty → null hash?); (b) trace whether a
+  customer **ever resolved** onto the dropoff subtask(s) or it stayed on the placeholder for the
+  whole leg; (c) confirm how many dropoff subtasks the stack minted vs. the two real stops (ties into
+  the #503 slice-3b multi-drop work and the earlier 2→4 doubling, 2026-06-14 #2). Desk call — not a
+  concluded fix.
+- **Relates to:** [#503](https://github.com/sjtrotter/DashBuddy/issues/503) (Job container / dropoff
+  ownership — slice 3 shipped the lowercase placeholder + dropoff-from-offer; **slice 3b multi-drop
+  not yet shipped**). Also cross-refs the premature/unsettled-frame dropoff class (2026-06-13 #1,
+  2026-06-14 #2).
+- **Status:** Open (data point on the known-unshipped #503 slice-3b multi-drop case).
+
 ## 2026-06-14 — DoorDash session (live dash #2 — Go Puff QR pickup, post-#495 build)
 
 - **Platform tested:** DoorDash
