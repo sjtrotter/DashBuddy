@@ -127,6 +127,39 @@ class TaskLifecycleGuardTest {
     }
 
     @Test
+    fun `returning to a prior task after switching away resumes its taskId (#499 A-B-A, slice 2)`() {
+        // PICKUP(H-E-B) -> DROPOFF(addr-1) -> back to PICKUP(H-E-B): the pickup must keep its identity,
+        // not re-mint. The single-slot model completes-and-re-mints on each phase switch (#499); with
+        // Job.tasks as the container, returning re-matches the existing subtask by store + phase.
+        val r0 = region(activeTask = null)
+        val (r1, f1) = step(
+            r0, FlowRegion(flow = Flow.Idle),
+            taskObs(Flow.TaskPickupNavigation, TaskPhase.PICKUP, TaskSubFlow.NAVIGATION, storeName = "H-E-B", timestamp = 1_000L),
+        )
+        val pickupId = r1.activeTask?.taskId
+        assertNotNull("pickup minted", pickupId)
+
+        val (r2, f2) = step(
+            r1, f1,
+            taskObs(Flow.TaskDropoffNavigation, TaskPhase.DROPOFF, TaskSubFlow.NAVIGATION, customerAddressHash = "addr-1", timestamp = 2_000L),
+        )
+        assertNotEquals("switching to the dropoff is a different task", pickupId, r2.activeTask?.taskId)
+        val dropoffId = r2.activeTask?.taskId
+
+        val (r3, _) = step(
+            r2, f2,
+            taskObs(Flow.TaskPickupNavigation, TaskPhase.PICKUP, TaskSubFlow.NAVIGATION, storeName = "H-E-B", timestamp = 3_000L),
+        )
+        assertEquals("returning to the H-E-B pickup must resume its taskId, not re-mint", pickupId, r3.activeTask?.taskId)
+        assertEquals("the job still has exactly the two subtasks (no phantom third)", 2, r3.activeJob?.tasks?.size)
+        assertEquals(
+            "Job.tasks holds the original pickup + dropoff, no duplicate",
+            setOf(pickupId, dropoffId),
+            r3.activeJob?.tasks?.map { it.taskId }?.toSet(),
+        )
+    }
+
+    @Test
     fun `Job tasks mirrors the job's task lineage (#503 slice 1)`() {
         // A pickup then a dropoff in the same job → Job.tasks accumulates both in lineage order,
         // even though the model still tracks only one activeTask + recentTasks (additive shadow).
