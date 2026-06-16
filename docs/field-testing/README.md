@@ -775,6 +775,41 @@ sat on the placeholder instead of the short 6-char hash code.
   2026-06-14 #2).
 - **Status:** Open (data point on the known-unshipped #503 slice-3b multi-drop case).
 
+### Open questions / investigations
+
+#### 2. Does the dasher's items/min shop pace feed into offer value? — VALIDATED (desk): NO, not yet
+The dasher asked whether their **item-picking speed (items-per-minute / shop pace)** is being used to
+**assist the offer-value calculation**, and whether it's "still keeping track." Desk validation over
+the code (this session):
+
+- **Still tracked? Yes — but live + display-only.** items/min is computed inline in the shop bubble
+  card (`app/.../ui/bubble/cards/FlowCardItem.kt:597-614`) as `shopped / elapsedMinutes`
+  (`elapsedMs = now - (arrivedAt ?: phaseStartedAt)`), recomputed each recomposition. The computed
+  `pace` is a local `val` — **never stored, emitted, or returned**.
+- **Fed into offer value? No.** The evaluator (`domain/.../evaluation/OfferEvaluator.kt`,
+  `UserEconomy.kt`) estimates time as `estTimeMinutes = dist * avgMinutesPerMile + basePickupMinutes`
+  (`OfferEvaluator.kt:24`) — both **fixed user constants** (defaults 2.5 / 7.0, `UserEconomy.kt:105-106`),
+  with **no item-count term and no pace term**. A 3-item vs 40-item shop estimates the same time → same
+  $/hr. `offer.itemCount` does reach the evaluator but **only** as an optional "Max Items" cap metric
+  (`MetricType.ITEM_COUNT`, `OfferEvaluator.kt:204-206`) — a score nudge, never converted to time, so
+  it never moves the $/hr.
+- **No historical/aggregated pace exists.** No DataStore source, DB entity, or repository persists
+  items/min; there is no stored average pace the evaluator could consult. So even if we wanted a
+  pace-adjusted shop-time estimate, the input data isn't being retained yet.
+- **Upshot / where this could go (NOT a concluded fix — a direction to weigh):** wiring shop pace
+  into offer value would need (a) persisting per-session/aggregated items/min somewhere, and (b) a
+  shop-aware time term in `UserEconomy`/`OfferEvaluator` (e.g. estimated shop minutes ≈ `itemCount /
+  avgItemsPerMinute`) instead of the flat `basePickupMinutes`. Today neither exists. Possible future
+  enhancement; the dasher decides whether to file it.
+
+### Meta / architecture
+
+#### 3. Go Puff offers are RARE for this dasher (context for #501)
+For desk awareness: **Go Puff (DoorDash Drive / warehouse) offers are a very rare offer type** for
+this dasher — so the #501 Go-Puff recognition work and any Go-Puff capture asks will see **infrequent
+field opportunities**. Plan capture collection accordingly (grab everything when a Go Puff order does
+land, since the next one may be a while out).
+
 ## 2026-06-14 — DoorDash session (live dash #2 — Go Puff QR pickup, post-#495 build)
 
 - **Platform tested:** DoorDash
