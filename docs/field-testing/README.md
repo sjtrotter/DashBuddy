@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **✅ FIX SHIPPED — same-store add-on no longer re-mints the task (#499 / #503 slice 2). CONFIRM ON DASH.**
+  The task lifecycle now **resumes a prior subtask** instead of re-minting on a phase switch / after an
+  offer interlude (re-match by store for pickups, customer address for dropoffs). **Confirm on dash:
+  0/2 —** on a same-store shopping add-on (e.g. an offer accepted mid-shop at the same store), the shop
+  task should **keep its identity and fold the add-on in** (combined item count bumps on the *same*
+  card), not spawn a second/fresh task. Also watch a stacked order with *different* stops: those must
+  still be **distinct** tasks. If a same-store add-on still re-mints, capture the shop→offer→shop frame
+  sequence + note the timing.
+
 - **📸 CAPTURE NEEDED — GoPuff (Drive) screens, to finalize the #501 rules.** The 06-14 deep-dive
   enumerated the GoPuff flow (all inside the DoorDash app — there is no separate GoPuff app) from real
   captures, but three things would help finalize the rules. **On the next GoPuff dash, drop these into
