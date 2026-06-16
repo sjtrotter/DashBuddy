@@ -335,6 +335,19 @@ Tests are data-driven using captured UI hierarchy JSON files under
    ratchets corpus coverage (new intents should ship with corpus) and lints dedupeKey
    `{field}` templates against fields the rule actually parses.
 
+### Session replay (capture sequence → recognition → state machine)
+
+The snapshot tests above are **per-frame** (does this screen recognize/parse right, in isolation).
+To reproduce a **field bug that's emergent across a session** — a ghost offer, a re-mint, doubled
+dropoffs — `SessionReplay` (`app/src/test/.../test/util/SessionReplay.kt`) replays a *chronological
+sequence* of real device `CaptureEnvelope`s: `replayRecognition` (Level A → `List<Observation>` via
+the production rules) and `reduce` (Level B → folds through the real `StateMachine`, returning a
+per-frame trace of `{observation, stateAfter, events}` where events match the db `app_events` shape).
+The captured session's db `app_events` is a **characterization** oracle (it *encodes* the bug), so
+Level-B assertions are hand-authored correct-behaviour invariants, **never `replay == db`**.
+`GhostOfferReplayTest` is the worked example (red/green for #498). Tracked + roadmapped (on-device
+review tool, verdict export) under epic #505.
+
 ## Key Technologies
 
 - **DI:** Hilt 2.59.2 with KSP
