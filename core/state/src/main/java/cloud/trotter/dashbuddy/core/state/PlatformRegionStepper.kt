@@ -600,6 +600,53 @@ class PlatformRegionStepper @Inject constructor() {
                 isStackedPickupTransition ||
                 isStackedDropoffTransition
             ) {
+                // #503 slice 2: returning to a prior subtask of this job (A→B→A, or back to a
+                // store after an offer interlude that retired the task) RESUMES its identity
+                // instead of re-minting — unless the platform signalled a genuinely-new stacked
+                // task (different store/customer, already arrived). Re-match by phase + store
+                // (pickup) / customer address (dropoff); this is the same-store add-on "fold in,
+                // don't re-mint" (#499). The single activeTask slot loses identity on every phase
+                // switch; the Job's task lineage in recentTasks lets us restore it.
+                val resumable = if (!isStackedPickupTransition && !isStackedDropoffTransition) {
+                    region.recentTasks.lastOrNull { prior ->
+                        prior.jobId == jobId && prior.phase == taskPhase &&
+                            when (taskPhase) {
+                                TaskPhase.PICKUP ->
+                                    prior.storeName != null && prior.storeName == taskFields?.storeName
+                                TaskPhase.DROPOFF ->
+                                    prior.customerAddressHash != null &&
+                                        prior.customerAddressHash == taskFields?.customerAddressHash
+                                else -> false
+                            }
+                    }
+                } else null
+
+                if (resumable != null) {
+                    val retireSince = region.pendingDestructive
+                        ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
+                    val displaced = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
+                    val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && resumable.arrivedAt == null
+                    return region.copy(
+                        activeTask = resumable.copy(
+                            subPhase = taskSubFlow,
+                            completedAt = null,
+                            storeName = taskFields?.storeName ?: resumable.storeName,
+                            storeAddress = taskFields?.storeAddress ?: resumable.storeAddress,
+                            customerNameHash = taskFields?.customerNameHash ?: resumable.customerNameHash,
+                            customerAddressHash = taskFields?.customerAddressHash ?: resumable.customerAddressHash,
+                            deadlineMillis = taskFields?.deadline?.time ?: resumable.deadlineMillis,
+                            activity = taskFields?.activity ?: resumable.activity,
+                            itemsRemaining = taskFields?.itemsRemaining ?: resumable.itemsRemaining,
+                            itemsShopped = taskFields?.itemsShopped ?: resumable.itemsShopped,
+                            redCardTotal = taskFields?.redCardTotal ?: resumable.redCardTotal,
+                            arrivedAt = if (justArrived) obs.timestamp else resumable.arrivedAt,
+                        ),
+                        recentTasks = (region.recentTasks.filterNot { it.taskId == resumable.taskId } +
+                            listOfNotNull(displaced)).takeLast(MAX_RECENT_TASKS),
+                        pendingDestructive = null,
+                    )
+                }
+
                 // New task (different phase, no active task, or stacked-pickup transition).
                 // The displaced task commits inline; if a TASK_RETIRE grace was
                 // pending (receipt or idle already signalled its end, #431 pt 2)
