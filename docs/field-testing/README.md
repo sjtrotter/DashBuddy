@@ -63,6 +63,23 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **📸 CAPTURE NEEDED — GoPuff (Drive) screens, to finalize the #501 rules.** The 06-14 deep-dive
+  enumerated the GoPuff flow (all inside the DoorDash app — there is no separate GoPuff app) from real
+  captures, but three things would help finalize the rules. **On the next GoPuff dash, drop these into
+  `snapshots/INBOX/`:**
+  1. **The GoPuff bin/scan-steps screen** ("Pickup steps" / "Scan barcodes on N items" / "Pick up
+     order in Bin #N") — confirm it always follows an explicit "Arrived at store" tap (so #501 mints
+     `PICKUP_ARRIVED` from the right screen, not twice).
+  2. **A GoPuff offer card** — does it ever show an **Accept** button, or is acceptance always the
+     `accept_constraint_layout` control? (affects whether the Accept RuleAction can be aimed).
+  3. **A 3+ order GoPuff batch's bin screen** — does every order carry a customer name
+     (`order_cx_name`)? The per-drop dedupe depends on a stable per-order hash.
+  - **(Low-priority curiosity, NOT a known issue):** we saw a click labeled "Open digital Red Card"
+    but never captured what it opens. If it's easy, capture that screen once just to *see* what's on
+    it — there is **no evidence it exposes anything sensitive**; this is only to confirm, not because
+    a leak is known. (#504 was filed on a bad assumption about this and has been closed.)
+  - Captured: 0/1 each (these are capture asks, not pass/fail validations).
+
 - **⚠️ WATCH — "ghost offer" with EMPTY parse logged as a card (2026-06-13 #1, NOT yet fixed).**
   A phantom Offer card appeared in the stack (between Mello Mushroom and Pei Wei) with **no store, no
   pay, no miles** — Score 24, `$-2/hr`, Net `-$0.36`, outcome **Timed out**. Hypothesis: a partial
@@ -90,6 +107,11 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
     re-satisfies `require` with no content → a phantom "new offer." Grab the `offer_popup` +
     offer/accept events near 00:33 UTC to see whether the ghost frame is a leftover of the
     just-accepted offer or a genuinely new partial popup.
+  - **Triaged 2026-06-15 → [#498](https://github.com/sjtrotter/DashBuddy/issues/498)** (recognition
+    rejects incomplete frames — the `offer_popup` rule must `require` the scored fields and an empty
+    parse must not become an offer; the all-zeros economics is `sha256("null|null|null|")`). The
+    post-accept ghost-offer trigger also feeds **#503** (Job container — the accept→job transition
+    shouldn't re-observe a chrome-only offer frame).
 
 - **Offer card surfaces Shop & Deliver: item count in the hero row + a SHOP badge (#461 a/b).**
   The item count moved from a small footer caption up to the hero row (beside the score ring /
@@ -726,6 +748,10 @@ cover yet.
 - **Captures needed:** the dasher will supply the Go-Puff arrival + QR-scan + post-scan screens
   (drop into `snapshots/INBOX/`, run `InboxProcessorTest` for the X-Ray) so the new rules can be
   written against real trees.
+- **Triaged 2026-06-15 → [#501](https://github.com/sjtrotter/DashBuddy/issues/501)** (recognize the
+  Go Puff / DoorDash-Drive flow; deep-dive over the 06-14 captures/db/log was run — db aggregate
+  `session-doordash-1781450940064-21` confirms NO clean `PICKUP_ARRIVED` on the warehouse pickup).
+  Recognize-only, not a sensitive surface.
 
 #### 2. Go Puff stacked order — **2-dropoff order logged FOUR drop-offs (doubled)**
 The Go Puff order was a **stacked order with two orders / two drop-offs** (not three — the earlier
@@ -749,8 +775,11 @@ than stacked-handling in general.
   spawning a phantom?). Compare against the later non-Go-Puff stacked order on the same dash (which
   the dasher says is behaving) to isolate whether the Go Puff path is the differentiator. Desk
   call — not a concluded fix.
-
-#### 3. **Same-store shopping add-on RE-MINTED the task** (Sprouts + PetSmart stack) — case study
+- **Triaged 2026-06-15 → [#501](https://github.com/sjtrotter/DashBuddy/issues/501) +
+  [#503](https://github.com/sjtrotter/DashBuddy/issues/503).** db confirms this is the unrecognized
+  Go Puff warehouse pickup + a **multi-drop batch** (one offer → 4 drop subtasks with phantom same-ms
+  `DELIVERY_NAV/ARRIVED`, seq 82–84). Recognizing the warehouse-pickup phase (#501) plus the Job
+  container owning the drop subtasks (#503) is what removes the doubling — not a generic settle gate.
 Strong case study for "what goes right vs. wrong" on stacked-shop + add-on. The order was a double
 stack: **Sprouts + PetSmart/Petco**. Sequence the dasher narrated:
 1. The app wanted **PetSmart first**, but the dasher would pass **Sprouts** on the way, so they used
@@ -792,6 +821,12 @@ should **bump the combined shop counts on the same task**, **add time to the pic
   `offer_popup` + accept event, then the frame sequence (navigation? → combined shop interface?),
   and watch whether `activeTask.taskId` changes (re-mint) or counts bump on the same task. Capture
   the multi-pickup shop tree for a possible new rule. Desk call — not a concluded fix.
+- **Triaged 2026-06-15 → [#499](https://github.com/sjtrotter/DashBuddy/issues/499) (blocked-by
+  [#503](https://github.com/sjtrotter/DashBuddy/issues/503)).** Direction: don't tune the 10s
+  `TASK_RETIRE` grace — re-model the **Job as the offer-accumulating container** so an add-on offer
+  accumulates into the active job and the returning shop screen **re-matches the existing subtask via
+  the offer's store hint** (the same-store correlation the dasher does by eye). Re-mint then can't
+  happen by construction.
 
 ---
 
