@@ -502,6 +502,13 @@
           }
         }
       },
+      "validate": [
+        {
+          "assert": "fieldNotNull",
+          "field": "payAmount",
+          "onFail": "skip"
+        }
+      ],
       "effects": [
         {
           "screenshot": {
