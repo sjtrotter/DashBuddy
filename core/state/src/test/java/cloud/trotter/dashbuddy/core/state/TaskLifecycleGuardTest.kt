@@ -127,6 +127,35 @@ class TaskLifecycleGuardTest {
     }
 
     @Test
+    fun `Job tasks mirrors the job's task lineage (#503 slice 1)`() {
+        // A pickup then a dropoff in the same job → Job.tasks accumulates both in lineage order,
+        // even though the model still tracks only one activeTask + recentTasks (additive shadow).
+        val r0 = region(activeTask = null)
+        val (r1, f1) = step(
+            r0, FlowRegion(flow = Flow.Idle),
+            taskObs(Flow.TaskPickupNavigation, TaskPhase.PICKUP, TaskSubFlow.NAVIGATION, storeName = "H-E-B", timestamp = 1_000L),
+        )
+        assertEquals("the active pickup is mirrored into Job.tasks", 1, r1.activeJob?.tasks?.size)
+        assertEquals(r1.activeTask?.taskId, r1.activeJob?.tasks?.single()?.taskId)
+        assertEquals(TaskPhase.PICKUP, r1.activeJob?.tasks?.single()?.phase)
+
+        val (r2, _) = step(
+            r1, f1,
+            taskObs(Flow.TaskDropoffNavigation, TaskPhase.DROPOFF, TaskSubFlow.NAVIGATION, customerAddressHash = "addr-1", timestamp = 2_000L),
+        )
+        assertEquals(
+            "Job.tasks now mirrors both legs in order",
+            listOf(TaskPhase.PICKUP, TaskPhase.DROPOFF),
+            r2.activeJob?.tasks?.map { it.phase },
+        )
+        assertEquals("the active dropoff is the last entry", r2.activeTask?.taskId, r2.activeJob?.tasks?.last()?.taskId)
+        assertTrue(
+            "every mirrored task belongs to the active job",
+            r2.activeJob?.tasks?.all { it.jobId == r2.activeJob?.jobId } == true,
+        )
+    }
+
+    @Test
     fun `sustained idle past the grace window retires the task`() {
         val r0 = region(pickupTask("task-A", "H-E-B", arrivedAt = 800L))
         val (r1, f1) = step(r0, FlowRegion(flow = Flow.TaskPickupArrived), idleObs(timestamp = 1_000L))

@@ -67,6 +67,28 @@ class PlatformRegionStepper @Inject constructor() {
         nextFlow: FlowRegion,
         obs: Observation,
         policy: TransitionPolicy,
+    ): PlatformRegion = reconcileJobTasks(stepCore(prev, prevFlow, nextFlow, obs, policy))
+
+    /**
+     * Step 1 of the #503 job-container re-model (additive): mirror the active job's task lineage
+     * onto [Job.tasks] after every core step — the completed tasks still in [PlatformRegion.recentTasks]
+     * plus the active task. Pure derivation from existing region state; nothing reads [Job.tasks] yet,
+     * so this changes no behavior. Later slices make the list authoritative (resume from it; create
+     * dropoff subtasks onto it from the offer).
+     */
+    private fun reconcileJobTasks(region: PlatformRegion): PlatformRegion {
+        val job = region.activeJob ?: return region
+        val jobTasks = region.recentTasks.filter { it.jobId == job.jobId } +
+            listOfNotNull(region.activeTask?.takeIf { it.jobId == job.jobId })
+        return if (job.tasks == jobTasks) region else region.copy(activeJob = job.copy(tasks = jobTasks))
+    }
+
+    private fun stepCore(
+        prev: PlatformRegion,
+        prevFlow: FlowRegion,
+        nextFlow: FlowRegion,
+        obs: Observation,
+        policy: TransitionPolicy,
     ): PlatformRegion {
         var current = prev
 
