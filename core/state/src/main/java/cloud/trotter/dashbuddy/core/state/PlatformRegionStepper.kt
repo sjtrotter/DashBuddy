@@ -78,8 +78,14 @@ class PlatformRegionStepper @Inject constructor() {
      */
     private fun reconcileJobTasks(region: PlatformRegion): PlatformRegion {
         val job = region.activeJob ?: return region
-        val jobTasks = region.recentTasks.filter { it.jobId == job.jobId } +
+        val lineage = region.recentTasks.filter { it.jobId == job.jobId } +
             listOfNotNull(region.activeTask?.takeIf { it.jobId == job.jobId })
+        val lineageIds = lineage.mapTo(HashSet()) { it.taskId }
+        // #503 slice 3: preserve pre-created (offer-spawned, not-yet-activated) subtasks — those on
+        // the job but not yet in the active/completed lineage — then the lineage. Once an expected
+        // subtask is activated its taskId enters the lineage, so it isn't double-listed.
+        val pending = job.tasks.filter { it.taskId !in lineageIds && it.completedAt == null }
+        val jobTasks = pending + lineage
         return if (job.tasks == jobTasks) region else region.copy(activeJob = job.copy(tasks = jobTasks))
     }
 
@@ -494,15 +500,29 @@ class PlatformRegionStepper @Inject constructor() {
             val existing = region.activeJob
 
             if (existing == null) {
+                val jobId = mintId("job", region, obs)
                 return region.copy(
                     activeJob = Job(
-                        jobId = mintId("job", region, obs),
+                        jobId = jobId,
                         offerStoreHint = storeHints,
                         parentOfferHash = pending?.offerHash,
                         acceptedOffers = listOf(economics),
                         startedAt = obs.timestamp,
+                        // #503 slice 3: pre-create the offer's dropoff subtask (customer TBD). The
+                        // dropoff screen later RESOLVES the customer onto this subtask instead of
+                        // minting a fresh dropoff — the root fix for the premature "Customer" card
+                        // (a dropoff surfaced before its customer resolves).
+                        tasks = listOf(
+                            Task(
+                                taskId = mintId("task", region, obs, offset = 1),
+                                jobId = jobId,
+                                phase = TaskPhase.DROPOFF,
+                                customerNameHash = null,
+                                startedAt = obs.timestamp,
+                            ),
+                        ),
                     ),
-                    mintCounter = region.mintCounter + 1,
+                    mintCounter = region.mintCounter + 2,
                 )
             }
 
@@ -643,6 +663,47 @@ class PlatformRegionStepper @Inject constructor() {
                         ),
                         recentTasks = (region.recentTasks.filterNot { it.taskId == resumable.taskId } +
                             listOfNotNull(displaced)).takeLast(MAX_RECENT_TASKS),
+                        pendingDestructive = null,
+                    )
+                }
+
+                // #503 slice 3: resolve onto a pre-created (offer-spawned, customer-TBD) dropoff
+                // subtask of this job instead of minting a fresh dropoff — the dropoff screen
+                // RESOLVES the customer onto the subtask the offer created at accept. Fixes the
+                // premature "Customer" card / phantom drops (a dropoff that exists before its
+                // customer is known).
+                val expectedDropoff = if (taskPhase == TaskPhase.DROPOFF) {
+                    val displacedIds = region.recentTasks.mapTo(HashSet()) { it.taskId }
+                    region.activeJob?.tasks?.firstOrNull { pending ->
+                        pending.phase == TaskPhase.DROPOFF &&
+                            pending.customerNameHash == null &&
+                            pending.completedAt == null &&
+                            pending.taskId != currentTask?.taskId &&
+                            pending.taskId !in displacedIds
+                    }
+                } else null
+
+                if (expectedDropoff != null) {
+                    val retireSince = region.pendingDestructive
+                        ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
+                    val displaced = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
+                    val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && expectedDropoff.arrivedAt == null
+                    return region.copy(
+                        activeTask = expectedDropoff.copy(
+                            subPhase = taskSubFlow,
+                            storeName = taskFields?.storeName ?: expectedDropoff.storeName,
+                            storeAddress = taskFields?.storeAddress ?: expectedDropoff.storeAddress,
+                            customerNameHash = taskFields?.customerNameHash,
+                            customerAddressHash = taskFields?.customerAddressHash,
+                            deadlineMillis = taskFields?.deadline?.time ?: expectedDropoff.deadlineMillis,
+                            activity = taskFields?.activity,
+                            itemsRemaining = taskFields?.itemsRemaining,
+                            itemsShopped = taskFields?.itemsShopped,
+                            redCardTotal = taskFields?.redCardTotal,
+                            startedAt = obs.timestamp,
+                            arrivedAt = if (justArrived) obs.timestamp else expectedDropoff.arrivedAt,
+                        ),
+                        recentTasks = (region.recentTasks + listOfNotNull(displaced)).takeLast(MAX_RECENT_TASKS),
                         pendingDestructive = null,
                     )
                 }

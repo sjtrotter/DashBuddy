@@ -85,6 +85,16 @@ class JobEconomicsTest {
         ),
     )
 
+    private fun dropoffObs(timestamp: Long, customerNameHash: String?, customerAddressHash: String? = null) =
+        Observation.Screen(
+            timestamp = timestamp, captureId = null, ruleId = "doordash.screen.dropoff_nav",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.TaskDropoffNavigation, modeHint = Mode.Online,
+            parsed = ParsedFields.TaskFields(
+                phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION,
+                customerNameHash = customerNameHash, customerAddressHash = customerAddressHash,
+            ),
+        )
+
     private fun jobWith(offerHash: String, net: Double, est: Double, dist: Double, pay: Double) = Job(
         jobId = "job-1",
         offerStoreHint = listOf("H-E-B"),
@@ -104,6 +114,48 @@ class JobEconomicsTest {
     }
 
     // ---- tests ----
+
+    @Test
+    fun `accept pre-creates the offer's dropoff subtask, customer TBD (#503 slice 3)`() {
+        val r1 = step(
+            onlineRegion(activeJob = null),
+            offerFlow("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
+            acceptObs(1_000L, "H-E-B"),
+        )
+        val job = r1.activeJob
+        assertNotNull("accept starts a job", job)
+        val dropoffs = job!!.tasks.filter { it.phase == TaskPhase.DROPOFF }
+        assertEquals("accept pre-creates exactly one dropoff subtask", 1, dropoffs.size)
+        assertNull("its customer is TBD until the dropoff screen resolves it", dropoffs.single().customerNameHash)
+        assertEquals("the active task is the pickup, not the pre-created dropoff", TaskPhase.PICKUP, r1.activeTask?.phase)
+    }
+
+    @Test
+    fun `the dropoff screen resolves the customer onto the pre-created subtask, no fresh mint (#503 slice 3)`() {
+        val r1 = step(
+            onlineRegion(activeJob = null),
+            offerFlow("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
+            acceptObs(1_000L, "H-E-B"),
+        )
+        val expectedDropoffId = r1.activeJob!!.tasks.single { it.phase == TaskPhase.DROPOFF }.taskId
+
+        // The dropoff screen (a real customer) RESOLVES onto the pre-created subtask — same taskId,
+        // customer filled in — instead of minting a fresh dropoff.
+        val r2 = step(r1, FlowRegion(flow = Flow.TaskPickupNavigation), dropoffObs(2_000L, customerNameHash = "cust-1"))
+
+        assertEquals("resolves onto the pre-created subtask (same taskId)", expectedDropoffId, r2.activeTask?.taskId)
+        assertEquals("the customer is now resolved", "cust-1", r2.activeTask?.customerNameHash)
+        assertEquals(
+            "no phantom: the job still has exactly the pickup + the (now-resolved) dropoff",
+            2,
+            r2.activeJob?.tasks?.size,
+        )
+        assertEquals(
+            "exactly one DROPOFF subtask (the resolved one), no duplicate",
+            1,
+            r2.activeJob?.tasks?.count { it.phase == TaskPhase.DROPOFF },
+        )
+    }
 
     @Test
     fun `first accept seeds job economics from the offer`() {
