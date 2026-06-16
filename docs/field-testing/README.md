@@ -80,7 +80,13 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
     a leak is known. (#504 was filed on a bad assumption about this and has been closed.)
   - Captured: 0/1 each (these are capture asks, not pass/fail validations).
 
-- **⚠️ WATCH — "ghost offer" with EMPTY parse logged as a card (2026-06-13 #1, NOT yet fixed).**
+- **✅ FIX SHIPPED — "ghost offer" with EMPTY parse logged as a card (#498). CONFIRM ON DASH.**
+  Fixed by gating the `offer_popup` rule on a parsed `payAmount` (a blank/chrome-only frame with no
+  pay is no longer recognized as an offer; proven by `GhostOfferReplayTest` replaying the real
+  16:31:52 ghost capture — now classifies UNKNOWN, emits no OFFER_RECEIVED). **Confirm on dash: 0/2 —**
+  no blank-store / `$-2/hr` Offer card should appear (mid-offer, between offers, or right after an
+  accept), while **real offers still recognize normally**. If a blank card still appears, capture the
+  `offer_popup` frame + the offer event. *(Below is the original watch context, kept for reference.)*
   A phantom Offer card appeared in the stack (between Mello Mushroom and Pei Wei) with **no store, no
   pay, no miles** — Score 24, `$-2/hr`, Net `-$0.36`, outcome **Timed out**. Hypothesis: a partial
   `offer_popup` frame whose chrome (Decline + Accept/footer id) satisfied `require` before the content
