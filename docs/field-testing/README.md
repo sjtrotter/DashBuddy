@@ -727,15 +727,15 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
-## 2026-06-16 — DoorDash session (live dash, in-field narration)
+## 2026-06-17 — DoorDash session (live dash, in-field narration)
 
 - **Platform tested:** DoorDash
 - **Branch under test:** `master` (field build) — exact SHA not captured in-field; infer from the
   most recent `master` merge if needed. Build is post-#503-slice-3 (the dropoff-from-offer +
   lowercase-"the customer" placeholder is present, see below), but **before slice 3b** (multi-drop
   ownership), so a stacked/multi-drop is expected to still mis-handle extra dropoffs.
-- **Field conditions:** narrated live while driving. Recorded for triage — **hypotheses, not
-  concluded fixes.** No code changes this session.
+- **Field conditions:** narrated live while driving (evening, ~8pm). Recorded for triage —
+  **hypotheses, not concluded fixes.** No code changes this session.
 
 ### Bugs
 
@@ -775,9 +775,60 @@ sat on the placeholder instead of the short 6-char hash code.
   2026-06-14 #2).
 - **Status:** Open (data point on the known-unshipped #503 slice-3b multi-drop case).
 
+#### 2. Premature "$0.00 PAID" card mints IMMEDIATELY on accepting an offer (stacked order)
+**Happened a few times today (2026-06-17, this sighting ~20:13 / 8pm).** Right after accepting an
+offer, the bubble's completed-card stack shows a **PAID card reading `$0.00` delivery total** —
+before any pickup or delivery has occurred. Screenshot evidence (two frames, 20:13): the stack shows,
+top to bottom, the just-accepted **Offer** card (Chili's Grill & Bar · $19.10 · score 82 · $37/hr ·
+net $16.35 · 7.7 mi · 2 items · **Accepted**), then a **`PAID — $0.00` card** ("$0.00 delivery total,
+session $32.05"), then the correct **Pickup** card (Chili's). Header still reads **`AT STORE`** — the
+delivery hasn't happened, yet a $0 paid card already minted.
+
+- **Field signal:** it was a **stacked / double offer** — the offer detail line read **"Chili's Grill
+  & Bar + Jim's Restaurant"** (two stores). Same stacked-order context as bug #1 (the H-E-B double).
+  And the paid figure is **all-zeros ($0.00)** — the same all-zeros/empty-parse signature seen in the
+  ghost-offer class.
+- **Desk trace (hypothesis, NOT a concluded fix):** the accept *reducer* itself does **not** produce a
+  paid signal — the "Saved: $X" bubble (`core/state/.../EffectMap.kt:705-736`) and `DELIVERY_COMPLETED`
+  (`EffectMap.kt:286-311`) are both strictly gated on `Flow.PostTask`, which only the **delivery-summary
+  (receipt) rules** produce (`core/pipeline/src/main/assets/rules/doordash.json:531-640`
+  `delivery_summary_expanded`, `:641-722` `delivery_summary_collapsed`, both `flow: post:task`). So the
+  premature paid almost certainly comes from a **post-accept transient frame misrecognized as a
+  delivery-summary frame**, not from the accept logic.
+  - **Load-bearing detail:** the `delivery_summary_collapsed` rule (priority 31) requires only
+    `allTextContainsAny: ["this offer", "delivery complete"]` + a `final_value` currency parse
+    (`doordash.json:649-653`). The phrase **"this offer"** is generic offer-context copy that can
+    appear on a post-accept/transition frame; if such a frame also carries any `$`-node that parses as
+    `final_value`, it classifies as `post:task` → enters PostTask. The **$0.00** we see fits an
+    **empty/zero parse** (no real `totalPay`), which is also why the "Saved: $X" *chat* bubble (which
+    gates on `totalPay > 0`, `EffectMap.kt:722`) may not have spoken even though the **PAID card**
+    rendered from the PostTask entry.
+  - **Why the idempotency gate didn't stop it:** `diffPostTask` gates on
+    `next.activeTask?.taskId ?: next.recentTasks.lastOrNull()?.taskId` (`EffectMap.kt:718-720`), and the
+    #503 dropoff-from-offer change pre-creates a fresh DROPOFF subtask (new, never-announced taskId) at
+    accept (`PlatformRegionStepper.kt:502-526`) — so the per-task gate that normally blocks a repeat
+    "paid" doesn't protect a *first* spurious fire on that brand-new task identity.
+- **Strongly related to prior reports:** this is the same **post-accept unsettled/stale-frame** failure
+  class already logged (2026-06-14/-15 ghost-offer "fired right after accept", README #498 watch item)
+  — here it lands on the **delivery-summary** rule instead of `offer_popup`. Cross-refs
+  [#498](https://github.com/sjtrotter/DashBuddy/issues/498) (recognition must reject incomplete/chrome
+  frames) and [#503](https://github.com/sjtrotter/DashBuddy/issues/503) (Job container / accept→job
+  transition should not re-observe a chrome-only frame; stacked context).
+- **To confirm (desk, after capture download):** pull this dash's `captures/` + `app_events` around
+  ~20:13 for the Chili's+Jim's accept; find the frame between `OFFER_ACCEPTED` and the first task flow,
+  read its X-Ray for "this offer"/"delivery complete" text + any `final_value` currency node, and
+  confirm whether it classified `post:task` with `totalPay == 0`. Also count how many of "a few times
+  today" left a $0 PAID card vs. emitted a real `DELIVERY_COMPLETED`/"Saved" bubble.
+- **Files:** `EffectMap.kt:705-736` (Saved bubble), `:286-311` (DELIVERY_COMPLETED),
+  `doordash.json:531-640` + `:641-722` (post:task receipt rules; the "this offer" trigger),
+  `PlatformRegionStepper.kt:366-378` (pay accumulation on PostTask entry), `:502-526` (#503
+  dropoff-from-offer), `OfferActionReceiver.kt:32-39` (accept dispatch).
+- **Status:** Open — appears repeatable today; needs the capture replay to confirm the misrecognized
+  frame. (Recognition/state class — desk fix, not in-field.)
+
 ### Open questions / investigations
 
-#### 2. Does the dasher's items/min shop pace feed into offer value? — VALIDATED (desk): NO, not yet
+#### 3. Does the dasher's items/min shop pace feed into offer value? — VALIDATED (desk): NO, not yet
 The dasher asked whether their **item-picking speed (items-per-minute / shop pace)** is being used to
 **assist the offer-value calculation**, and whether it's "still keeping track." Desk validation over
 the code (this session):
@@ -804,7 +855,7 @@ the code (this session):
 
 ### Meta / architecture
 
-#### 3. Go Puff offers are RARE for this dasher (context for #501)
+#### 4. Go Puff offers are RARE for this dasher (context for #501)
 For desk awareness: **Go Puff (DoorDash Drive / warehouse) offers are a very rare offer type** for
 this dasher — so the #501 Go-Puff recognition work and any Go-Puff capture asks will see **infrequent
 field opportunities**. Plan capture collection accordingly (grab everything when a Go Puff order does
