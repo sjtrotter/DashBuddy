@@ -613,7 +613,14 @@ class PlatformRegionStepper @Inject constructor() {
                 currentTask.arrivedAt != null &&
                 taskSubFlow == TaskSubFlow.NAVIGATION &&
                 taskFields?.customerAddressHash != null &&
-                taskFields.customerAddressHash != currentTask.customerAddressHash
+                taskFields.customerAddressHash != currentTask.customerAddressHash &&
+                // #498 task-path: only a genuinely DIFFERENT customer starts a new stacked dropoff —
+                // gate on the stable customer NAME hash, not just the address. An unstable dropoff
+                // address parse split one physical drop into two tasks on 06-17 (task-39/-40 carried
+                // the same name hash f5b3497a but different address hashes). A present, changed name
+                // is required; a null/unchanged name is the same customer, so update, don't re-mint.
+                taskFields.customerNameHash != null &&
+                taskFields.customerNameHash != currentTask.customerNameHash
 
             if (currentTask == null ||
                 currentTask.phase != taskPhase ||
