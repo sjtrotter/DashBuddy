@@ -313,7 +313,15 @@ class EffectMap @Inject constructor() {
                             postTaskFields = p.lastPostTaskFields,
                             sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                         )
-                        add(logEffect(sessionId, AppEventType.DELIVERY_COMPLETED, obs.timestamp, payload))
+                        // #518: scope idempotency to the completed task, not obs.timestamp, so a
+                        // re-entered PostTask receipt can't re-fire (and double-count) the same
+                        // delivery. taskId is replay-stable; the cross-job leak is handled above.
+                        add(
+                            logEffect(
+                                sessionId, AppEventType.DELIVERY_COMPLETED, obs.timestamp, payload,
+                                effectKeyOverride = "log:${AppEventType.DELIVERY_COMPLETED}:${completedTask.taskId}",
+                            )
+                        )
                     }
                 }
             }
@@ -933,13 +941,15 @@ class EffectMap @Inject constructor() {
         type: AppEventType,
         occurredAt: Long,
         payload: AppEventPayload?,
+        effectKeyOverride: String? = null,
     ): AppEffect = AppEffect.LogEvent(
         AppEvent(
             type = type,
             occurredAt = occurredAt,
             sessionId = sessionId,
             payload = payload,
-        )
+        ),
+        effectKeyOverride = effectKeyOverride,
     )
 
     // =========================================================================
