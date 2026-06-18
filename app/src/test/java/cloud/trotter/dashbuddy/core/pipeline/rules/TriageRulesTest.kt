@@ -366,6 +366,26 @@ class TriageRulesTest {
     }
 
     @Test
+    fun `a pickup screen with a 'this offer' recap is NOT a delivery summary (#517)`() {
+        // The Chili's 06-17 misrecognition: a live pickup screen whose stacked-offer recap row carries
+        // the literal "this offer" matched delivery_summary_collapsed -> post:task -> a spurious $0
+        // DELIVERY_COMPLETED. The reject on pickup chrome must now exclude it.
+        assertNotEquals(
+            "a pickup frame must not classify as a delivery summary",
+            "delivery_summary_collapsed",
+            screen(
+                tree(
+                    node(text = "this offer"),
+                    node(text = "\$19.10"),
+                    node(text = "Pickup from"),
+                    node(text = "Chili's Grill & Bar"),
+                    node(text = "Arrived at store"),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `navigation_generic — ETA path keeps flow idle (so a declined offer returns to idle)`() {
         val t = tree(node(text = "5 min"), node(text = "Exit 23"), node(text = "1.2 mi"))
         assertEquals("navigation_generic", screen(t))
