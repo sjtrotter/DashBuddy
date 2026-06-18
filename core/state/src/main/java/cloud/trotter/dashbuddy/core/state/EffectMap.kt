@@ -294,9 +294,15 @@ class EffectMap @Inject constructor() {
                     // Prefer it (same-id guard: a stacked next-task frame mints
                     // a NEW activeTask on this same exit, which must not be the
                     // one we report); fall back to the last committed task.
-                    val completedTask = next.activeTask
-                        ?.takeIf { it.taskId == p.activeTask?.taskId }
-                        ?: next.recentTasks.lastOrNull()
+                    // #518: resolve the task being completed — the still-active delivered task, or
+                    // the one just retired into recentTasks on this exit, JOB-SCOPED so a PRIOR job's
+                    // stale task can never be the fallback (the cross-job leak, db seq 117/100 — a
+                    // prior job's already-completed dropoff re-firing under the new job). When there
+                    // is no active job to scope by, keep the prior unscoped behaviour (the payload's
+                    // jobId would be null regardless).
+                    val completedJobId = p.activeJob?.jobId
+                    val completedTask = next.activeTask?.takeIf { it.taskId == p.activeTask?.taskId }
+                        ?: next.recentTasks.lastOrNull { completedJobId == null || it.jobId == completedJobId }
                     if (completedTask != null) {
                         val retireSince = p.pendingDestructive
                             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since

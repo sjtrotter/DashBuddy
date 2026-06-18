@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -31,6 +32,7 @@ import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
@@ -444,6 +446,51 @@ class EffectMapTest {
         assertTrue("Should emit UpdateBubble with store name", effects.any {
             it is AppEffect.UpdateBubble && it.text.contains("Chipotle")
         })
+    }
+
+    @Test
+    fun `DELIVERY_COMPLETED does not re-fire a prior job's already-completed task on PostTask exit (#518)`() {
+        val (platform, base) = stateWithPlatform()
+        // A stale PRIOR-job dropoff that already completed (sits in recentTasks); the active job is NEW.
+        val stale = Task(
+            taskId = "task-prior-33", jobId = "job-prior", phase = TaskPhase.DROPOFF,
+            customerNameHash = "3c53c662", startedAt = 100L, completedAt = 200L,
+        )
+        val region = base.copy(
+            activeJob = Job("job-new", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 1000L),
+            activeTask = null,
+            recentTasks = listOf(stale),
+        )
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.PostTask), platforms = mapOf(platform to region)))
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskPickupArrived), platforms = mapOf(platform to region)))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskPickupArrived))
+        assertFalse(
+            "a PostTask exit must not re-complete a prior job's stale task (cross-job leak)",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_COMPLETED),
+        )
+    }
+
+    @Test
+    fun `DELIVERY_COMPLETED fires for the task just retired on this PostTask exit (#518 keeps normal)`() {
+        val (platform, base) = stateWithPlatform()
+        val job = Job("job-new", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 1000L)
+        val active = Task(
+            taskId = "task-36", jobId = "job-new", phase = TaskPhase.DROPOFF,
+            customerNameHash = "abc123", startedAt = 100L, completedAt = null,
+        )
+        // prev: PostTask, the delivered task is ACTIVE (NOT yet in recentTasks).
+        val prevRegion = base.copy(activeJob = job, activeTask = active, recentTasks = emptyList())
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.PostTask), platforms = mapOf(platform to prevRegion)))
+        // next: PostTask exit; the task is freshly retired into recentTasks (was NOT in prev.recentTasks).
+        val nextRegion = prevRegion.copy(activeTask = null, recentTasks = listOf(active.copy(completedAt = 2000L)))
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskDropoffArrived), platforms = mapOf(platform to nextRegion)))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskDropoffArrived))
+        assertTrue(
+            "a genuinely just-retired task still completes",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_COMPLETED),
+        )
     }
 
     @Test
