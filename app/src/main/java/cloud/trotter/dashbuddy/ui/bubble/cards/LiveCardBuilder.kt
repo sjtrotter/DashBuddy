@@ -76,6 +76,7 @@ object LiveCardBuilder {
                     activity = task.activity,
                     netPay = region.activeJob?.blendedNetPay,
                     estMinutes = region.activeJob?.blendedEstMinutes,
+                    distanceMiles = region.activeJob?.blendedDistanceMiles,
                 )
             }
 
@@ -92,6 +93,7 @@ object LiveCardBuilder {
                     deadlineMillis = task.deadlineMillis,
                     netPay = region.activeJob?.blendedNetPay,
                     estMinutes = region.activeJob?.blendedEstMinutes,
+                    distanceMiles = region.activeJob?.blendedDistanceMiles,
                 )
             }
 
