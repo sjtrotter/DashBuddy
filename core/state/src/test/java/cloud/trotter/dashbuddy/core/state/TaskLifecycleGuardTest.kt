@@ -55,9 +55,15 @@ class TaskLifecycleGuardTest {
         storeName = storeName, startedAt = 300L, arrivedAt = arrivedAt,
     )
 
-    private fun dropoffTask(taskId: String, customerAddressHash: String, arrivedAt: Long? = null) = Task(
+    private fun dropoffTask(
+        taskId: String,
+        customerAddressHash: String,
+        arrivedAt: Long? = null,
+        customerNameHash: String? = null,
+    ) = Task(
         taskId = taskId, jobId = "job-1", phase = TaskPhase.DROPOFF,
-        customerAddressHash = customerAddressHash, startedAt = 300L, arrivedAt = arrivedAt,
+        customerAddressHash = customerAddressHash, customerNameHash = customerNameHash,
+        startedAt = 300L, arrivedAt = arrivedAt,
     )
 
     private fun taskObs(
@@ -67,6 +73,7 @@ class TaskLifecycleGuardTest {
         storeName: String? = null,
         storeAddress: String? = null,
         customerAddressHash: String? = null,
+        customerNameHash: String? = null,
         itemsShopped: Int? = null,
         itemsRemaining: Int? = null,
         timestamp: Long,
@@ -76,7 +83,7 @@ class TaskLifecycleGuardTest {
         parsed = ParsedFields.TaskFields(
             phase = phase, subFlow = subFlow,
             storeName = storeName, storeAddress = storeAddress,
-            customerAddressHash = customerAddressHash,
+            customerAddressHash = customerAddressHash, customerNameHash = customerNameHash,
             itemsShopped = itemsShopped, itemsRemaining = itemsRemaining,
         ),
     )
@@ -301,16 +308,80 @@ class TaskLifecycleGuardTest {
 
     @Test
     fun `stacked dropoff mints a new task on customer change`() {
-        val r0 = region(dropoffTask("task-A", customerAddressHash = "cust-1", arrivedAt = 800L))
+        val r0 = region(dropoffTask("task-A", customerAddressHash = "cust-1", customerNameHash = "name-1", arrivedAt = 800L))
         val (r1, _) = step(
             r0, FlowRegion(flow = Flow.TaskDropoffArrived),
-            taskObs(Flow.TaskDropoffNavigation, TaskPhase.DROPOFF, TaskSubFlow.NAVIGATION, customerAddressHash = "cust-2", timestamp = 1_000L),
+            taskObs(Flow.TaskDropoffNavigation, TaskPhase.DROPOFF, TaskSubFlow.NAVIGATION, customerAddressHash = "cust-2", customerNameHash = "name-2", timestamp = 1_000L),
         )
 
         assertNotEquals("a different customer mints a new dropoff task", "task-A", r1.activeTask?.taskId)
         assertEquals(TaskPhase.DROPOFF, r1.activeTask?.phase)
         assertEquals("cust-2", r1.activeTask?.customerAddressHash)
         assertTrue(r1.recentTasks.any { it.taskId == "task-A" && it.completedAt != null })
+    }
+
+    @Test
+    fun `same customer with a drifting dropoff address does NOT split into a second task (#498)`() {
+        // 06-17 over-mint: one physical Jim's drop minted task-39 and task-40 — same customer NAME
+        // hash (f5b3497a) but a different (unstable) address parse. The stacked-dropoff transition
+        // is now gated on the stable NAME hash, so a drifting address alone must not re-mint.
+        val r0 = region(dropoffTask("task-A", customerAddressHash = "cust-1", customerNameHash = "name-1", arrivedAt = 800L))
+        val (r1, _) = step(
+            r0, FlowRegion(flow = Flow.TaskDropoffArrived),
+            taskObs(Flow.TaskDropoffNavigation, TaskPhase.DROPOFF, TaskSubFlow.NAVIGATION, customerAddressHash = "cust-2", customerNameHash = "name-1", timestamp = 1_000L),
+        )
+
+        assertEquals("same customer name must NOT mint a second task on a drifting address", "task-A", r1.activeTask?.taskId)
+        assertTrue("no prior dropoff should be retired", r1.recentTasks.none { it.taskId == "task-A" && it.completedAt != null })
+    }
+
+    @Test
+    fun `a dropoff frame with no customer name does NOT mint a second task (#498)`() {
+        // A null/blank customer-name parse (the phantom-task source) must never start a new
+        // stacked dropoff — it's the same customer until a present, different name says otherwise.
+        val r0 = region(dropoffTask("task-A", customerAddressHash = "cust-1", customerNameHash = "name-1", arrivedAt = 800L))
+        val (r1, _) = step(
+            r0, FlowRegion(flow = Flow.TaskDropoffArrived),
+            taskObs(Flow.TaskDropoffNavigation, TaskPhase.DROPOFF, TaskSubFlow.NAVIGATION, customerAddressHash = "cust-2", customerNameHash = null, timestamp = 1_000L),
+        )
+
+        assertEquals("a nameless dropoff frame must NOT mint a second task", "task-A", r1.activeTask?.taskId)
+    }
+
+    @Test
+    fun `an identity-less dropoff frame does NOT mint a phantom dropoff (#498)`() {
+        // 06-17: a transient dropoff confirm/arriving screen (flow task:dropoff:* but no customer
+        // parse — dropoff_completed_confirm / dropoff_geofence_warning / nav_arriving) minted an
+        // identity-less "the customer" dropoff that immediately completed (task-9 single H-E-B,
+        // task-38 Jim's stack). The pickup must stay active until a customer-bearing dropoff frame.
+        val r0 = region(pickupTask("pick-A", "H-E-B", arrivedAt = 800L))
+        val (r1, _) = step(
+            r0, FlowRegion(flow = Flow.TaskPickupArrived),
+            taskObs(Flow.TaskDropoffArrived, TaskPhase.DROPOFF, TaskSubFlow.ARRIVED, timestamp = 1_000L),
+        )
+
+        assertEquals("identity-less dropoff frame must NOT mint a task", "pick-A", r1.activeTask?.taskId)
+        assertEquals("the pickup stays active", TaskPhase.PICKUP, r1.activeTask?.phase)
+        assertTrue("no phantom retired the pickup", r1.recentTasks.none { it.completedAt != null })
+    }
+
+    @Test
+    fun `a customer-bearing dropoff after an identity-less one mints with identity (#498)`() {
+        // The guard only DELAYS the mint until identity is known: once the real
+        // dropoff_navigation arrives with a customer, the transition happens normally.
+        val r0 = region(pickupTask("pick-A", "H-E-B", arrivedAt = 800L))
+        val (r1, f1) = step(
+            r0, FlowRegion(flow = Flow.TaskPickupArrived),
+            taskObs(Flow.TaskDropoffArrived, TaskPhase.DROPOFF, TaskSubFlow.ARRIVED, timestamp = 1_000L),
+        )
+        val (r2, _) = step(
+            r1, f1,
+            taskObs(Flow.TaskDropoffNavigation, TaskPhase.DROPOFF, TaskSubFlow.NAVIGATION, customerNameHash = "name-1", customerAddressHash = "cust-1", timestamp = 1_100L),
+        )
+
+        assertNotEquals("a customer-bearing dropoff mints a new task", "pick-A", r2.activeTask?.taskId)
+        assertEquals(TaskPhase.DROPOFF, r2.activeTask?.phase)
+        assertEquals("name-1", r2.activeTask?.customerNameHash)
     }
 
     @Test

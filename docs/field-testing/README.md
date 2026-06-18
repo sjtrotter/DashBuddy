@@ -82,6 +82,19 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   (Single-order this build; **multi-drop is slice 3b, not yet shipped** — a stacked/GoPuff multi-drop
   may still mis-handle the extra dropoffs.)
 
+- **🔧 FIX IN FLIGHT — phantom + over-minted dropoff tasks cleaned up (#498, PR #521). CONFIRM ON DASH.**
+  Two state-layer guards from the 06-17 capture investigation: (a) a dropoff frame that parses **no
+  customer at all** (a transient confirm/arriving screen) no longer mints a fresh **identity-less**
+  dropoff — the "the customer" card that immediately completes (06-17 task-9 on a **single H-E-B**
+  order); (b) a **drifting dropoff address** with the **same customer name** no longer splits one drop
+  into two tasks (06-17 task-39/-40). **Confirm on dash: 0/2 —** on a **single** order, the dropoff
+  card should resolve to the **real 6-char hash** with **no** brief "the customer" card flashing/
+  completing alongside it, and exactly **one** dropoff card per real stop (no duplicate). The phantom
+  also silently fired spurious `DELIVERY_COMPLETED`s — watch for any **$0.00 PAID** card that mints
+  with no real delivery. If a phantom/duplicate dropoff still shows, capture the dropoff frame sequence
+  + the `app_state_snapshots` for that order. (Stacks are still #503 slice 3b — extra dropoffs on a
+  multi-drop may still mis-handle, separate from this.)
+
 - **📸 CAPTURE NEEDED — GoPuff (Drive) screens, to finalize the #501 rules.** The 06-14 deep-dive
   enumerated the GoPuff flow (all inside the DoorDash app — there is no separate GoPuff app) from real
   captures, but three things would help finalize the rules. **On the next GoPuff dash, drop these into
@@ -739,13 +752,32 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ### Bugs
 
-#### 1. Stacked (double) H-E-B order — dropoff card never resolves to the customer hash; stays on "the customer"
-On a **double / stacked** order (the dasher first read it as a single dropoff, then corrected: there
-**was a second minted task** — it's a genuine double), believed to be **H-E-B**, a drop-off card
-showed the **placeholder "to the customer"** and **never resolved to a real customer hash**. The
-dasher's read: the chrome/frame was **recognized but carried no customer data** — the customer field
-was **probably null/empty** in the hash (i.e. recognized frame, empty customer parse), so the card
-sat on the placeholder instead of the short 6-char hash code.
+#### 1. Single H-E-B order — dropoff card never resolves to the customer hash; stays on "the customer"
+> **CORRECTION (2026-06-18, dev):** this was **NOT a stack** — *H-E-B offers are only ever single*
+> (right now). The original in-field read of a "double" was wrong; the "second minted task" it
+> referred to was the **phantom dropoff** the desk follow-up below identifies, not a real second drop.
+> The stacked/multi-drop framing in the rest of this item is superseded by that follow-up.
+
+On a (single) **H-E-B** order, a drop-off card showed the **placeholder "to the customer"** and
+**never resolved to a real customer hash**. The dasher's read: the chrome/frame was **recognized but
+carried no customer data** — the customer field was **null/empty** in the hash (recognized frame,
+empty customer parse), so the card sat on the placeholder instead of the short 6-char hash code.
+
+- **Desk follow-up (2026-06-18, grounded in the 06-17 capture db `app_state_snapshots`):** confirmed
+  the mechanism, and it is **not** multi-drop. Dropoff phase is entered from the *flow* (a
+  `task:dropoff:*` screen), so a transient confirmation/arriving screen that parses **no customer**
+  (`dropoff_completed_confirm`, `dropoff_geofence_warning`, `nav_arriving`) yields `taskPhase=DROPOFF`
+  with a null customer, and the stepper's fall-through mint created a fresh **identity-less dropoff**
+  (`customerNameHash==null && customerAddressHash==null`) that immediately completed — rendering as
+  "the customer". Evidence: the *only* such null/null DROPOFF tasks in the whole ~2-day session were
+  **task-9** (this single H-E-B order), **task-13**, and **task-38** (which belongs to a genuine Jim's
+  stack — a separate case); every real, resolved dropoff carried a customer hash. A second, distinct
+  defect on the Jim's **stack** also split one physical drop into two tasks (task-39/-40 — same name
+  hash, drifting address hash). **Fix in flight — PR #521** (`#498`): (a) gate the stacked-dropoff
+  mint on the stable customer-**name** hash; (b) suppress the fall-through dropoff mint when the frame
+  carries no customer identity at all (resume / resolve-onto-placeholder paths untouched). Needs field
+  re-validation that a single H-E-B dropoff now shows the real 6-char hash. The multi-drop *stack*
+  ownership itself remains #503 slice 3b.
 
 - **Field UX note — the placeholder copy CHANGED (and this part looks correct):** the placeholder is
   now all-lowercase **"to the customer"**, not the old name-like capital **"Customer."** That matches

@@ -66,6 +66,8 @@ class PlatformRegionStepperTest {
         storeName: String?,
         phase: TaskPhase,
         subFlow: TaskSubFlow,
+        customerNameHash: String? = null,
+        customerAddressHash: String? = null,
         timestamp: Long = 1_000L,
     ): Observation.Screen = Observation.Screen(
         timestamp = timestamp,
@@ -78,6 +80,8 @@ class PlatformRegionStepperTest {
             storeName = storeName,
             phase = phase,
             subFlow = subFlow,
+            customerNameHash = customerNameHash,
+            customerAddressHash = customerAddressHash,
         ),
     )
 
@@ -251,6 +255,10 @@ class PlatformRegionStepperTest {
                 storeName = null,
                 phase = TaskPhase.DROPOFF,
                 subFlow = TaskSubFlow.NAVIGATION,
+                // A real dropoff_navigation always carries a customer hash; an identity-less
+                // dropoff frame is suppressed by the #498 phantom guard (see TaskLifecycleGuardTest).
+                customerNameHash = "cust-name-1",
+                customerAddressHash = "cust-addr-1",
             ),
             policy = policy,
         )

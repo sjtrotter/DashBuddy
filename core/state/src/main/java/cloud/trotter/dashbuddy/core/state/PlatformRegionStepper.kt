@@ -613,7 +613,14 @@ class PlatformRegionStepper @Inject constructor() {
                 currentTask.arrivedAt != null &&
                 taskSubFlow == TaskSubFlow.NAVIGATION &&
                 taskFields?.customerAddressHash != null &&
-                taskFields.customerAddressHash != currentTask.customerAddressHash
+                taskFields.customerAddressHash != currentTask.customerAddressHash &&
+                // #498 task-path: only a genuinely DIFFERENT customer starts a new stacked dropoff —
+                // gate on the stable customer NAME hash, not just the address. An unstable dropoff
+                // address parse split one physical drop into two tasks on 06-17 (task-39/-40 carried
+                // the same name hash f5b3497a but different address hashes). A present, changed name
+                // is required; a null/unchanged name is the same customer, so update, don't re-mint.
+                taskFields.customerNameHash != null &&
+                taskFields.customerNameHash != currentTask.customerNameHash
 
             if (currentTask == null ||
                 currentTask.phase != taskPhase ||
@@ -706,6 +713,26 @@ class PlatformRegionStepper @Inject constructor() {
                         recentTasks = (region.recentTasks + listOfNotNull(displaced)).takeLast(MAX_RECENT_TASKS),
                         pendingDestructive = null,
                     )
+                }
+
+                // #498 phantom-dropoff guard: a transition INTO a dropoff that carries no
+                // customer identity at all (no name hash AND no address hash) is a transient
+                // confirmation/geofence/arriving screen — dropoff_completed_confirm,
+                // dropoff_geofence_warning, nav_arriving — whose flow is task:dropoff:* but
+                // which parses no customer. It is NOT a distinct delivery. Minting a fresh
+                // dropoff here produced the "the customer" phantom: an identity-less dropoff
+                // that immediately completed (06-17 captures: task-9 on a single H-E-B order,
+                // task-13, and task-38 on the Jim's stack — the only cn==null && ca==null
+                // dropoffs in the whole session; every real dropoff carried a customer hash).
+                // Keep the current task; the customer-bearing dropoff_navigation/pre_arrival
+                // frame that follows transitions properly (it just resolves identity first).
+                // Resume and resolve-onto-placeholder above are unaffected — both reuse an
+                // existing task; this only suppresses the fall-through NEW mint.
+                if (taskPhase == TaskPhase.DROPOFF &&
+                    taskFields?.customerNameHash == null &&
+                    taskFields?.customerAddressHash == null
+                ) {
+                    return region
                 }
 
                 // New task (different phase, no active task, or stacked-pickup transition).
