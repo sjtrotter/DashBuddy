@@ -116,6 +116,28 @@ class StateMachineTest {
             ),
         )
 
+    /** An offer covering N orders (a stack) — one [ParsedOrder] per store. */
+    private fun multiOrderOfferFields(
+        stores: List<String>,
+        hash: String = "hash-multi",
+    ) = ParsedFields.OfferFields(
+        parsedOffer = ParsedOffer(
+            offerHash = hash,
+            payAmount = 12.0,
+            distanceMiles = 5.0,
+            orders = stores.mapIndexed { i, s ->
+                ParsedOrder(
+                    orderIndex = i,
+                    orderType = OrderType.PICKUP,
+                    storeName = s,
+                    itemCount = 1,
+                    isItemCountEstimated = false,
+                    badges = emptySet(),
+                )
+            },
+        ),
+    )
+
     private fun taskFields(
         storeName: String = "Chipotle",
         phase: TaskPhase = TaskPhase.PICKUP,
@@ -791,6 +813,53 @@ class StateMachineTest {
         assertNotNull(dd.activeJob)
         assertNotNull(dd.activeTask)
         assertEquals(TaskPhase.PICKUP, dd.activeTask!!.phase)
+    }
+
+    @Test
+    fun `single-order offer pre-creates one dropoff placeholder (#503 slice 3)`() {
+        var state = AppState()
+        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
+        state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
+
+        val job = state.regions.platforms[Platform.DoorDash]!!.activeJob!!
+        val dropoffs = job.tasks.filter { it.phase == TaskPhase.DROPOFF }
+        assertEquals("a single delivery owns one dropoff placeholder", 1, dropoffs.size)
+        assertTrue("customer is TBD until the dropoff screen", dropoffs.all { it.customerNameHash == null })
+    }
+
+    @Test
+    fun `two-order offer pre-creates two dropoff placeholders (#503 slice 3b)`() {
+        var state = AppState()
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented,
+            parsed = multiOrderOfferFields(listOf("Chili's Grill & Bar", "Jim's Restaurant")),
+        )).newState
+        state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
+
+        val job = state.regions.platforms[Platform.DoorDash]!!.activeJob!!
+        val dropoffs = job.tasks.filter { it.phase == TaskPhase.DROPOFF }
+        assertEquals("a 2-order stack owns 2 ordered dropoffs", 2, dropoffs.size)
+        assertTrue("all start as customer-TBD placeholders", dropoffs.all { it.customerNameHash == null })
+        assertEquals("distinct task ids", 2, dropoffs.map { it.taskId }.toSet().size)
+    }
+
+    @Test
+    fun `add-on offer appends a dropoff placeholder onto the active job (#503 slice 3b)`() {
+        var state = AppState()
+        // First offer (1 order) → job with 1 dropoff placeholder.
+        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Chipotle", "hash-A"))).newState
+        state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
+        // Add-on offer (different hash) accepted mid-pickup → append its own dropoff placeholder.
+        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Wendy's", "hash-B"))).newState
+        state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields(storeName = "Wendy's"))).newState
+
+        val job = state.regions.platforms[Platform.DoorDash]!!.activeJob!!
+        assertEquals("both offers fold into the one job", 2, job.acceptedOffers.size)
+        assertEquals(
+            "the add-on appended its own dropoff placeholder",
+            2,
+            job.tasks.count { it.phase == TaskPhase.DROPOFF },
+        )
     }
 
     @Test
