@@ -25,7 +25,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
-import java.util.Locale
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.ui.formatters.recommendationLabel
 
 @Composable
@@ -84,28 +84,28 @@ fun FakeOfferCard(
                 if (hasAnyCost) {
                     val netSuffix = if (evaluation.isUsingDefaults) " (est.)" else ""
                     Text(
-                        text = "$${fmt(evaluation.payAmount)} gross  →  $${fmt(evaluation.netPayAmount)} net$netSuffix",
+                        text = "${Formats.money(evaluation.payAmount)} gross  →  ${Formats.money(evaluation.netPayAmount)} net$netSuffix",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = animatedContentColor
                     )
                     if (hasFuelCost) {
                         Text(
-                            text = "−$${fmt(evaluation.fuelCostEstimate)} fuel",
+                            text = "−${Formats.money(evaluation.fuelCostEstimate)} fuel",
                             style = MaterialTheme.typography.bodySmall,
                             color = animatedContentColor.copy(alpha = 0.65f)
                         )
                     }
                     if (hasNonFuelCost) {
                         Text(
-                            text = "−$${fmt(evaluation.nonFuelCostEstimate)} wear & fixed costs",
+                            text = "−${Formats.money(evaluation.nonFuelCostEstimate)} wear & fixed costs",
                             style = MaterialTheme.typography.bodySmall,
                             color = animatedContentColor.copy(alpha = 0.65f)
                         )
                     }
                 } else {
                     Text(
-                        text = "$${fmt(evaluation.payAmount)}",
+                        text = "${Formats.money(evaluation.payAmount)}",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = animatedContentColor
@@ -123,12 +123,12 @@ fun FakeOfferCard(
                 ) {
                     MetricCell(
                         label = "\$/mi",
-                        value = "$${fmt(evaluation.dollarsPerMile)}",
+                        value = "${Formats.money(evaluation.dollarsPerMile)}",
                         color = animatedContentColor
                     )
                     MetricCell(
                         label = "\$/hr",
-                        value = "$${fmt(evaluation.dollarsPerHour)}",
+                        value = "${Formats.money(evaluation.dollarsPerHour)}",
                         color = animatedContentColor
                     )
                     MetricCell(
@@ -147,7 +147,7 @@ fun FakeOfferCard(
                 ) {
                     MetricCell(
                         label = "miles",
-                        value = fmt(evaluation.distanceMiles),
+                        value = Formats.decimal(evaluation.distanceMiles),
                         color = animatedContentColor
                     )
                     MetricCell(
@@ -190,5 +190,3 @@ private fun MetricCell(label: String, value: String, color: Color) {
         )
     }
 }
-
-private fun fmt(value: Double): String = String.format(Locale.getDefault(), "%.2f", value)

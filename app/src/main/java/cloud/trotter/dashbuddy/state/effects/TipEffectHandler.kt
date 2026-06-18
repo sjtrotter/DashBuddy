@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.state.effects
 
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import kotlinx.coroutines.CoroutineScope
@@ -18,9 +19,9 @@ class TipEffectHandler @Inject constructor(
     fun process(scope: CoroutineScope, effect: AppEffect.ProcessTipNotification) {
         scope.launch(Dispatchers.IO) {
             try {
-                Timber.i("Tip received: \$${effect.amount} from ${effect.storeName}")
+                Timber.i("Tip received: ${Formats.money(effect.amount)} from ${effect.storeName}")
                 bubbleManager.postMessage(
-                    text = "Nice! \$${effect.amount} tip from ${effect.storeName}",
+                    text = "Nice! ${Formats.money(effect.amount)} tip from ${effect.storeName}",
                     persona = ChatPersona.Dispatcher
                 )
             } catch (e: Exception) {
