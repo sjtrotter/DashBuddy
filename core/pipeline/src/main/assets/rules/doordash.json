@@ -654,6 +654,15 @@
       "reject": [
         {
           "allTextContains": "pause orders"
+        },
+        {
+          "allTextContains": "Pickup from"
+        },
+        {
+          "allTextContains": "Arrived at store"
+        },
+        {
+          "allTextContains": "Start pickup"
         }
       ],
       "parse": {
