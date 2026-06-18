@@ -117,6 +117,15 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   GoPuff recognition is still #501). If a drop duplicates, mis-resolves, or a phantom appears, capture
   the dropoff frame sequence + `app_state_snapshots` for the stack.
 
+- **🔧 FIX SHIPPED — live $/mi on the task card, read off the Job (#503 deliverable 2, PR #525). CONFIRM ON DASH.**
+  The live pickup/delivery card's "Running at $X/hr" co-hero now shows a **$Y/mi** sub line (fixed
+  efficiency off `Job.blendedDistanceMiles`; "—" when no offer distance is known, never `$X/0mi`).
+  **Confirm on dash: 0/2 —** while driving a delivery the card should show a sensible **$/mi** under the
+  $/hr (e.g. `$1.85/mi`), it should **persist** through nav→arrival (distance doesn't erode like the
+  $/hr does), and on a **stacked/add-on** it should reflect the **summed** job distance (not a single
+  offer's). If $/mi shows "—" on a normal offer (that carried a distance), or looks wrong on a stack,
+  note the offer's quoted miles + net pay.
+
 - **📸 CAPTURE NEEDED — GoPuff (Drive) screens, to finalize the #501 rules.** The 06-14 deep-dive
   enumerated the GoPuff flow (all inside the DoorDash app — there is no separate GoPuff app) from real
   captures, but three things would help finalize the rules. **On the next GoPuff dash, drop these into
