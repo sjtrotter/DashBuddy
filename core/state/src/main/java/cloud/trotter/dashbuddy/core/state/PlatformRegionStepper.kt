@@ -61,6 +61,30 @@ class PlatformRegionStepper @Inject constructor() {
         offset: Long = 0,
     ): String = "$kind-${region.platform.wire}-${obs.timestamp}-${region.mintCounter + offset}"
 
+    /**
+     * #503 slice 3b: pre-create one customer-TBD dropoff placeholder per order an accepted offer
+     * covers, so a Job owns ordered dropoffs for a stack (not just a single drop). Each dropoff
+     * screen later RESOLVES its customer onto the next open placeholder by name (slice 3 + 3b-2).
+     * The count comes from the offer's parsed order list (fallback 1 when the offer wasn't parsed);
+     * ids are minted at [startOffset]..[startOffset]+count-1 off the region's mint counter, which the
+     * caller advances past in the same copy().
+     */
+    private fun preCreatedDropoffs(
+        region: PlatformRegion,
+        obs: Observation,
+        jobId: String,
+        count: Int,
+        startOffset: Long,
+    ): List<Task> = (0 until count).map { i ->
+        Task(
+            taskId = mintId("task", region, obs, offset = startOffset + i),
+            jobId = jobId,
+            phase = TaskPhase.DROPOFF,
+            customerNameHash = null,
+            startedAt = obs.timestamp,
+        )
+    }
+
     fun step(
         prev: PlatformRegion,
         prevFlow: FlowRegion,
@@ -499,8 +523,14 @@ class PlatformRegionStepper @Inject constructor() {
             val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
             val existing = region.activeJob
 
+            // #503 slice 3b: pre-create one dropoff placeholder PER ORDER the offer covers, so a
+            // stack's Job owns ordered dropoffs (not a single drop). Fallback to 1 when the offer
+            // wasn't parsed — the pre-3b behaviour for a single delivery.
+            val dropoffCount = parsedOffer?.orders?.size?.takeIf { it > 0 } ?: 1
+
             if (existing == null) {
                 val jobId = mintId("job", region, obs)
+                // job at offset 0; the N dropoff placeholders at offsets 1..N.
                 return region.copy(
                     activeJob = Job(
                         jobId = jobId,
@@ -508,21 +538,9 @@ class PlatformRegionStepper @Inject constructor() {
                         parentOfferHash = pending?.offerHash,
                         acceptedOffers = listOf(economics),
                         startedAt = obs.timestamp,
-                        // #503 slice 3: pre-create the offer's dropoff subtask (customer TBD). The
-                        // dropoff screen later RESOLVES the customer onto this subtask instead of
-                        // minting a fresh dropoff — the root fix for the premature "Customer" card
-                        // (a dropoff surfaced before its customer resolves).
-                        tasks = listOf(
-                            Task(
-                                taskId = mintId("task", region, obs, offset = 1),
-                                jobId = jobId,
-                                phase = TaskPhase.DROPOFF,
-                                customerNameHash = null,
-                                startedAt = obs.timestamp,
-                            ),
-                        ),
+                        tasks = preCreatedDropoffs(region, obs, jobId, dropoffCount, startOffset = 1),
                     ),
-                    mintCounter = region.mintCounter + 2,
+                    mintCounter = region.mintCounter + dropoffCount + 1,
                 )
             }
 
@@ -530,11 +548,16 @@ class PlatformRegionStepper @Inject constructor() {
             val alreadyCounted = economics.offerHash != null &&
                 existing.acceptedOffers.any { it.offerHash == economics.offerHash }
             if (alreadyCounted) return region
+            // #503 slice 3b: the add-on offer brings its own dropoff(s) — append a placeholder per
+            // order so a stacked add-on's drops are owned by the job too (offsets 0..N-1, no job mint
+            // this step).
             return region.copy(
                 activeJob = existing.copy(
                     acceptedOffers = existing.acceptedOffers + economics,
                     offerStoreHint = existing.offerStoreHint + storeHints,
+                    tasks = existing.tasks + preCreatedDropoffs(region, obs, existing.jobId, dropoffCount, startOffset = 0),
                 ),
+                mintCounter = region.mintCounter + dropoffCount,
             )
         }
 
@@ -627,26 +650,31 @@ class PlatformRegionStepper @Inject constructor() {
                 isStackedPickupTransition ||
                 isStackedDropoffTransition
             ) {
-                // #503 slice 2: returning to a prior subtask of this job (A→B→A, or back to a
-                // store after an offer interlude that retired the task) RESUMES its identity
-                // instead of re-minting — unless the platform signalled a genuinely-new stacked
-                // task (different store/customer, already arrived). Re-match by phase + store
-                // (pickup) / customer address (dropoff); this is the same-store add-on "fold in,
-                // don't re-mint" (#499). The single activeTask slot loses identity on every phase
-                // switch; the Job's task lineage in recentTasks lets us restore it.
-                val resumable = if (!isStackedPickupTransition && !isStackedDropoffTransition) {
-                    region.recentTasks.lastOrNull { prior ->
-                        prior.jobId == jobId && prior.phase == taskPhase &&
-                            when (taskPhase) {
-                                TaskPhase.PICKUP ->
-                                    prior.storeName != null && prior.storeName == taskFields?.storeName
-                                TaskPhase.DROPOFF ->
-                                    prior.customerAddressHash != null &&
-                                        prior.customerAddressHash == taskFields?.customerAddressHash
-                                else -> false
-                            }
-                    }
-                } else null
+                // #503 slice 2/3b-2: returning to a prior subtask of this job (A→B→A, or back to a
+                // store after an offer interlude that retired the task) RESUMES its identity instead
+                // of re-minting. The single activeTask slot loses identity on every phase switch; the
+                // Job's task lineage in recentTasks lets us restore it.
+                //
+                // Dropoff is re-matched on the STABLE customer-NAME hash, NOT the address (#498:
+                // dropoff addresses drift between frames, so an address key split one physical drop
+                // into two). This runs even under a stacked-dropoff transition, so returning to an
+                // earlier stacked drop routes to it instead of minting a duplicate. Pickup re-matches
+                // by store, but only when the platform did NOT signal a genuinely-new stacked pickup
+                // (two distinct orders at the same store must stay distinct — the same-store add-on
+                // "fold in, don't re-mint" of #499 is the !isStackedPickupTransition case).
+                val resumable = when {
+                    taskPhase == TaskPhase.DROPOFF && taskFields?.customerNameHash != null ->
+                        region.recentTasks.lastOrNull {
+                            it.jobId == jobId && it.phase == TaskPhase.DROPOFF &&
+                                it.customerNameHash == taskFields.customerNameHash
+                        }
+                    taskPhase == TaskPhase.PICKUP && !isStackedPickupTransition ->
+                        region.recentTasks.lastOrNull {
+                            it.jobId == jobId && it.phase == TaskPhase.PICKUP &&
+                                it.storeName != null && it.storeName == taskFields?.storeName
+                        }
+                    else -> null
+                }
 
                 if (resumable != null) {
                     val retireSince = region.pendingDestructive
