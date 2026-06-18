@@ -852,10 +852,29 @@ rewards-tier UI may be the differentiator.
   PostTask-entry "Saved" effect; (c) whether the flow stayed parked in PostTask. **Drop any
   unrecognized Silver-tier / summary screen into `snapshots/INBOX/`** so the rule can be checked against
   the real tree.
+- **Desk trace UPDATE (mechanism confirmed; still a hypothesis pending capture):** the PAID card in the
+  bubble stack is built **only** from an `AppEventType.DELIVERY_COMPLETED` event
+  (`app/.../ui/bubble/cards/FlowCardMapper.kt:299-330`), and `DELIVERY_COMPLETED` is emitted **only** on
+  the **PostTask→non-PostTask EXIT edge** (`EffectMap.kt:286-311`). The "Saved: $X" chat, by contrast,
+  fires on **PostTask ENTRY/dwell** (`EffectMap.kt:705-736`, only needs one PostTask frame with
+  `totalPay > 0`). And an **UNKNOWN / unrecognized screen leaves the flow unchanged** — `flow == null`
+  returns `prev.copy(...)` (`FlowRegionStepper.kt:33-36`), with no timer that force-exits PostTask. So a
+  **rewards-tier interstitial** ("You reached Silver!") sitting between the receipt and idle keeps the
+  flow parked in PostTask → the exit edge never fires → no `DELIVERY_COMPLETED` → **no PAID card**, even
+  though the Saved chat already fired. Confirming detail: the ruleset has **NO tier/Silver/Gold/rewards
+  handling at all** (grep of `doordash.json`), so a Silver screen is UNKNOWN *by construction*.
+  Secondary path (not excluded): a tier-variant **layout** could fail the `delivery_summary_expanded`
+  `containsAll`/sum-check (`doordash.json:618-628`) or the `dash_summary` parse (`doordash.json:2320`).
+- **Which "earnings card"?** The trace clarifies the **end-of-dash SUMMARY is a SEPARATE surface**
+  (`SessionSummary`, `BubbleViewModel.kt:147-173`), **not** a card in the stack — there are only five
+  card types (Awaiting/Offer/Pickup/Delivery/PostTask). So "the earnings card at the end" is most
+  likely the **per-delivery PAID card** (the one gated on the PostTask exit), which fits Saved-chat-yes,
+  card-no exactly.
 - **Relates to:** the post-accept/receipt recognition family (#498/#503) and the receipt-grace work
   (#431). Distinct from bug #2 (there a $0 paid card minted with no Saved chat; here the inverse —
   Saved chat with no card).
-- **Status:** Open — desk trace in progress; capture needed (esp. the Silver-tier screen).
+- **Status:** Open — desk trace done (mechanism above); **capture still needed** (esp. the Silver-tier
+  screen → `snapshots/INBOX/`) to confirm the flow parked in PostTask vs. a summary-parse failure.
 
 #### 4. Declined offer logged as TIMED OUT (and may be linked to #3)
 **~20:48, 2026-06-17, the next offer right after the missing-earnings-card dash.** The dasher
@@ -871,11 +890,29 @@ separate but maybe related bugs."*
   misread. Both could share a root in "the prior task/PostTask never closed cleanly." The background
   desk trace is checking the OFFER_TIMEOUT vs decline trigger conditions and whether stale prior-task
   state can bleed into the next offer's outcome.
+- **Desk trace UPDATE (root identified; strong hypothesis):** `resolveOfferOutcome`
+  (`EffectMap.kt:888-906`) returns `OFFER_TIMEOUT` as the **default fallback whenever no ACCEPT/DECLINE
+  click intent was recorded** — it is **not** driven by any expiry timer; the offer "resolves" simply
+  when the popup vanishes (`EffectMap.kt:173`, `FlowRegionStepper.kt:96-100`). The catch: the **first**
+  decline tap emits intent **`initial_decline`** (`doordash.json:2901-2911`), which is **neither**
+  `OfferIntent.ACCEPT` **nor** `OfferIntent.DECLINE` — so it falls through to the TIMEOUT default.
+  `OFFER_DECLINED` is recorded **only** if the **confirmation dialog's** "Decline offer" tap
+  (intent `decline_offer`, screen `offer_popup_confirm_decline`, `doordash.json:2912-2923`) is captured.
+  So a decline the dasher confirmed in DoorDash's dialog whose **confirm-tap wasn't observed as a Click**
+  → defaults to `OFFER_TIMEOUT`. That is exactly "declined but logged as timed out."
+- **Re: "maybe related" to #3 — confirmed right instinct, but mechanically INDEPENDENT.** The next
+  offer mints a **fresh `PendingOffer` with `lastClickIntent = null`** (`FlowRegionStepper.kt:67-81`); a
+  lingering PostTask from #3 does **not** feed `resolveOfferOutcome`, so there's no shared *code* root.
+  What they likely share is an **environmental** root: the Silver-tier UI churn / transient unrecognized
+  screens that parked #3 in PostTask are the same kind of recognition disruption that can **drop the
+  decline-confirm Click capture** on the very next offer (#4). Two distinct code paths, one common
+  trigger window.
 - **To confirm (desk, after capture download):** pull the ~20:48 offer `captures/` + `app_events` for
-  the declined offer; check the recorded outcome event and whether a decline signal (decline
-  RuleAction / confirmation screen / popup-vanish) was observed, vs. an expiry/timeout fallback; and
-  whether prior-task/PostTask state was still open when the offer arrived.
-- **Status:** Open — desk trace in progress; capture needed.
+  the declined offer; confirm whether the confirm-dialog `decline_offer` Click was captured (→
+  DECLINED) or only `initial_decline`/nothing (→ TIMEOUT default), and whether tier-screen churn
+  coincided.
+- **Status:** Open — desk trace done (root above: decline-confirm click not captured ⇒ TIMEOUT
+  default); capture confirms which.
 
 ### Open questions / investigations
 
