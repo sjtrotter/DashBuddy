@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.capture.toDomain
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import java.io.File
@@ -89,6 +90,15 @@ object TestResourceLoader {
      * Loads a single file into a UiNode. Used by SnapshotLibrarian for content fingerprinting.
      */
     fun loadNode(file: File): UiNode = parseFlexibleJson(file.readText()).first
+
+    /**
+     * Decode a [UiNode] from a [JsonElement] that IS a bare `UiNodeDto` — e.g. a CLICK capture's
+     * `payload.node` (a click envelope's `payload` is `{node, screenTarget}`, NOT a bare node, so
+     * [loadNode] / [parseFlexibleJson] would decode the wrong object). Used by SessionReplay's
+     * click injection.
+     */
+    fun nodeFromElement(element: JsonElement): UiNode =
+        jsonParser.decodeFromJsonElement<UiNodeDto>(element).toDomain().also { it.restoreParents() }
 
     /**
      * LEGACY SUPPORT: Returns [Filename, Node] for older tests (2-argument constructor)
