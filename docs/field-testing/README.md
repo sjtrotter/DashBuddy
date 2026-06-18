@@ -826,9 +826,60 @@ delivery hasn't happened, yet a $0 paid card already minted.
 - **Status:** Open — appears repeatable today; needs the capture replay to confirm the misrecognized
   frame. (Recognition/state class — desk fix, not in-field.)
 
+#### 3. End-of-dash earnings/PAID card did NOT render, though the "Saved: $X" chat DID — possible rewards-tier (Silver) parse variant
+**~20:48, 2026-06-17.** The dasher **just reached a DoorDash rewards tier — "Silver" status** — and on
+ending the dash the **earnings/PAID card did not appear** in the bubble's completed-card stack, **even
+though the "Saved: $X" chat message DID fire** (so earnings were captured at least into the chat). The
+dasher's own framing: *"we might have to double-check our strategy for parsing"* — i.e. the
+rewards-tier UI may be the differentiator.
+
+- **Which card is "the earnings card at the end"?** Ambiguous in-field between (a) the per-delivery
+  **PAID/PostTask completed card** and (b) the **end-of-dash summary card**. Logged as both candidates;
+  desk to disambiguate from captures. The "Silver status / at the end" framing leans toward the
+  **end-of-dash summary** (tier progress usually shows on the dash-summary screen), but the
+  per-delivery paid card can't be ruled out yet.
+- **Preliminary hypothesis (NOT concluded — desk trace running):** the "Saved: $X" chat fires *while on*
+  `Flow.PostTask` (gated on `totalPay > 0`), whereas the completed-card commit / `DELIVERY_COMPLETED`
+  fires on the **PostTask→non-PostTask EXIT edge** (`EffectMap.kt:286-311`, per the bug #2 trace). So a
+  plausible mechanism is: the receipt parsed enough to fire the Saved chat, but the flow **never cleanly
+  left PostTask** to commit the completed card — and a **rewards-tier interstitial** (e.g. "You reached
+  Silver!") landing between the receipt and idle is exactly the kind of unrecognized screen that could
+  disrupt that exit. Equally, a **tier-variant dash-summary layout** could fail the dash-summary rule's
+  field parse so the summary card never builds. Needs the capture to confirm which.
+- **To confirm (desk, after capture download):** pull the ~20:48 end-of-dash `captures/` + `app_events`;
+  look for (a) a "Silver"/tier interstitial or a tier-variant summary screen classifying UNKNOWN or
+  mis-parsing; (b) whether `DELIVERY_COMPLETED` / the summary-card event was ever logged vs. only the
+  PostTask-entry "Saved" effect; (c) whether the flow stayed parked in PostTask. **Drop any
+  unrecognized Silver-tier / summary screen into `snapshots/INBOX/`** so the rule can be checked against
+  the real tree.
+- **Relates to:** the post-accept/receipt recognition family (#498/#503) and the receipt-grace work
+  (#431). Distinct from bug #2 (there a $0 paid card minted with no Saved chat; here the inverse —
+  Saved chat with no card).
+- **Status:** Open — desk trace in progress; capture needed (esp. the Silver-tier screen).
+
+#### 4. Declined offer logged as TIMED OUT (and may be linked to #3)
+**~20:48, 2026-06-17, the next offer right after the missing-earnings-card dash.** The dasher
+**DECLINED** an offer, but the app recorded it as a **timeout** (an `OFFER_TIMEOUT`-style outcome, not a
+decline). The dasher suspects the missing-earnings-card state (#3) **contributed** to this — *"two
+separate but maybe related bugs."*
+
+- **Preliminary hypothesis (NOT concluded — desk trace running):** a decline is likely detected from a
+  recognized decline action/confirmation or the offer popup vanishing; if the machine didn't see an
+  explicit decline signal it may **fall back to timeout** when the offer expires/disappears. The
+  suspected link to #3: if the machine were still **parked in a prior unresolved PostTask/task** (or a
+  lingering grace) from the dash that didn't close cleanly, the next offer's resolution could be
+  misread. Both could share a root in "the prior task/PostTask never closed cleanly." The background
+  desk trace is checking the OFFER_TIMEOUT vs decline trigger conditions and whether stale prior-task
+  state can bleed into the next offer's outcome.
+- **To confirm (desk, after capture download):** pull the ~20:48 offer `captures/` + `app_events` for
+  the declined offer; check the recorded outcome event and whether a decline signal (decline
+  RuleAction / confirmation screen / popup-vanish) was observed, vs. an expiry/timeout fallback; and
+  whether prior-task/PostTask state was still open when the offer arrived.
+- **Status:** Open — desk trace in progress; capture needed.
+
 ### Open questions / investigations
 
-#### 3. Does the dasher's items/min shop pace feed into offer value? — VALIDATED (desk): NO, not yet
+#### 5. Does the dasher's items/min shop pace feed into offer value? — VALIDATED (desk): NO, not yet
 The dasher asked whether their **item-picking speed (items-per-minute / shop pace)** is being used to
 **assist the offer-value calculation**, and whether it's "still keeping track." Desk validation over
 the code (this session):
@@ -855,7 +906,7 @@ the code (this session):
 
 ### Meta / architecture
 
-#### 4. Go Puff offers are RARE for this dasher (context for #501)
+#### 6. Go Puff offers are RARE for this dasher (context for #501)
 For desk awareness: **Go Puff (DoorDash Drive / warehouse) offers are a very rare offer type** for
 this dasher — so the #501 Go-Puff recognition work and any Go-Puff capture asks will see **infrequent
 field opportunities**. Plan capture collection accordingly (grab everything when a Go Puff order does
