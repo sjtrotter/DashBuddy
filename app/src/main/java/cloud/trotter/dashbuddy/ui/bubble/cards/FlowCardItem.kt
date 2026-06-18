@@ -449,6 +449,7 @@ private fun PickupBody(snap: FlowCardSnapshot.Pickup, isActive: Boolean) {
         primary = snap.storeName,
         netPay = snap.netPay,
         estMinutes = snap.estMinutes,
+        distanceMiles = snap.distanceMiles,
         confirmedAt = snap.confirmedAt,
         itemsShopped = snap.itemsShopped,
         itemsRemaining = snap.itemsRemaining,
@@ -469,6 +470,7 @@ private fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
         primary = customerDisplayName(snap.customerHash),
         netPay = snap.netPay,
         estMinutes = snap.estMinutes,
+        distanceMiles = snap.distanceMiles,
         confirmedAt = null,
         itemsShopped = null,
         itemsRemaining = null,
@@ -495,6 +497,7 @@ private fun TaskBody(
     primary: String,
     netPay: Double?,
     estMinutes: Double?,
+    distanceMiles: Double?,
     confirmedAt: Long?,
     itemsShopped: Int?,
     itemsRemaining: Int?,
@@ -506,6 +509,9 @@ private fun TaskBody(
     val verb = if (isDrop) "deliver" else "pickup"
     val overdue = deadlineMillis != null && now > deadlineMillis
     val hourly = projectedHourly(netPay, estMinutes, deadlineMillis, now)
+    // Fixed $/mi efficiency off the job (#503 deliverable 2) — distance doesn't erode like time,
+    // so it's the steady companion to the realized $/hr; shown as the metric's sub line.
+    val perMile = if (netPay != null && distanceMiles != null && distanceMiles > 0.0) netPay / distanceMiles else null
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -556,7 +562,9 @@ private fun TaskBody(
                 live = isActive && hourly != null,
                 label = "Running at",
                 value = if (hourly != null) "${Formats.money0(hourly)}/hr${if (overdue) " ↓" else ""}" else "—",
-                sub = if (hourly == null) null else if (overdue) "dropping" else "on track",
+                // Sub line prefers the fixed $/mi efficiency; falls back to the erosion status.
+                sub = perMile?.let { "${Formats.money(it)}/mi" }
+                    ?: if (hourly == null) null else if (overdue) "dropping" else "on track",
                 color = hourly?.let { hourlyColor(it, c) } ?: c.text3,
             )
         }

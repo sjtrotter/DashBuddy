@@ -213,9 +213,11 @@ class JobEconomicsTest {
         val empty = Job(jobId = "j0", offerStoreHint = emptyList(), parentOfferHash = "o0", startedAt = 0L)
         assertNull(empty.blendedNetPay)
         assertNull(empty.blendedEstMinutes)
+        assertNull("no distance → null, never a misleading per-mile (#503 live per-mile)", empty.blendedDistanceMiles)
 
         val seeded = jobWith("o1", net = 6.5, est = 18.0, dist = 4.2, pay = 7.5)
         assertEquals(6.5, seeded.blendedNetPay!!, 0.001)
         assertEquals(18.0, seeded.blendedEstMinutes!!, 0.001)
+        assertEquals("blended distance sums the accepted offers (#503 live per-mile)", 4.2, seeded.blendedDistanceMiles!!, 0.001)
     }
 }

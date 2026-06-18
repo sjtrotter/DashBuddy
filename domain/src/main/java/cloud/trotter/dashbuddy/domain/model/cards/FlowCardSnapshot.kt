@@ -98,6 +98,9 @@ sealed class FlowCardSnapshot {
         /** The job's blended estimated minutes — the $/hr denominator (erodes past
          *  the deadline, the drop-it signal). */
         val estMinutes: Double? = null,
+        /** The job's blended quoted distance — the denominator for the fixed "$/mi"
+         *  efficiency shown beside the live $/hr (#503 deliverable 2). Null → "—". */
+        val distanceMiles: Double? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "pickup:$taskId"
     }
@@ -122,6 +125,9 @@ sealed class FlowCardSnapshot {
         val netPay: Double? = null,
         /** Blended estimated minutes — the $/hr denominator (erodes past deadline). */
         val estMinutes: Double? = null,
+        /** Blended quoted distance — the denominator for the fixed "$/mi" efficiency
+         *  shown beside the live $/hr (#503 deliverable 2). Null → "—". */
+        val distanceMiles: Double? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "delivery:$taskId"
     }

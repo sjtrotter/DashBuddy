@@ -40,6 +40,7 @@ object FlowCardMapper {
         // stacked add-on overwrites (the live card uses the accurate Job.blended).
         var acceptedNetPay: Double? = null
         var acceptedEstMin: Double? = null
+        var acceptedDistanceMiles: Double? = null
 
         for (event in events) {
             when (event.type) {
@@ -52,6 +53,7 @@ object FlowCardMapper {
                     lastDeliveryArrivedAt = null
                     acceptedNetPay = null
                     acceptedEstMin = null
+                    acceptedDistanceMiles = null
 
                     val payload = event.payload as? SessionStartPayload
                     openAwaiting = FlowCardSnapshot.Awaiting(
@@ -123,6 +125,7 @@ object FlowCardMapper {
                     if (payload.outcome == AppEventType.OFFER_ACCEPTED) {
                         acceptedNetPay = payload.evaluation?.netPayAmount
                         acceptedEstMin = payload.evaluation?.estimatedTimeMinutes
+                        acceptedDistanceMiles = payload.evaluation?.distanceMiles ?: payload.parsedOffer.distanceMiles
                     }
                     // Re-open Awaiting if the dasher returned to the
                     // waiting-for-offer state (declined / timeout). Accept
@@ -160,6 +163,7 @@ object FlowCardMapper {
                             jobId = payload.jobId,
                             netPay = acceptedNetPay,
                             estMinutes = acceptedEstMin,
+                            distanceMiles = acceptedDistanceMiles,
                             storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             deadlineMillis = payload.deadlineMillis,
                             itemsRemaining = payload.itemsRemaining,
@@ -185,6 +189,7 @@ object FlowCardMapper {
                             jobId = payload.jobId,
                             netPay = acceptedNetPay,
                             estMinutes = acceptedEstMin,
+                            distanceMiles = acceptedDistanceMiles,
                             storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             arrivedAt = payload.arrivedAt ?: event.occurredAt,
                             deadlineMillis = payload.deadlineMillis,
@@ -211,6 +216,7 @@ object FlowCardMapper {
                             jobId = payload.jobId,
                             netPay = acceptedNetPay,
                             estMinutes = acceptedEstMin,
+                            distanceMiles = acceptedDistanceMiles,
                             storeName = payload.storeName.ifBlank { UNKNOWN_STORE },
                             arrivedAt = payload.arrivedAt,
                             confirmedAt = payload.confirmedAt ?: event.occurredAt,
@@ -235,6 +241,7 @@ object FlowCardMapper {
                             jobId = payload.jobId,
                             netPay = acceptedNetPay,
                             estMinutes = acceptedEstMin,
+                            distanceMiles = acceptedDistanceMiles,
                             storeName = payload.storeName,
                             customerHash = payload.customerHash,
                             deadlineMillis = payload.deadlineMillis,
@@ -258,6 +265,7 @@ object FlowCardMapper {
                             jobId = payload.jobId,
                             netPay = acceptedNetPay,
                             estMinutes = acceptedEstMin,
+                            distanceMiles = acceptedDistanceMiles,
                             storeName = payload.storeName,
                             customerHash = payload.customerHash,
                             arrivedAt = payload.arrivedAt ?: event.occurredAt,
@@ -285,6 +293,7 @@ object FlowCardMapper {
                             jobId = payload.jobId,
                             netPay = acceptedNetPay,
                             estMinutes = acceptedEstMin,
+                            distanceMiles = acceptedDistanceMiles,
                             storeName = payload.storeName,
                             customerHash = payload.customerHash,
                             arrivedAt = payload.arrivedAt,

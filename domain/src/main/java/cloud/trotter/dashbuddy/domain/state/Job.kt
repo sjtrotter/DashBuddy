@@ -69,6 +69,14 @@ data class Job(
     /** Total quoted distance in miles across all offers. */
     val totalDistanceMiles: Double get() = acceptedOffers.sumOf { it.distanceMiles ?: 0.0 }
 
+    /**
+     * Distance denominator for the live "$/mi" task-card metric — null when no accepted offer has
+     * carried a distance yet (or it sums to 0), so the card shows "—" rather than a misleading
+     * $X/0mi. Mirrors [blendedEstMinutes] (#460 nullability discipline).
+     */
+    val blendedDistanceMiles: Double?
+        get() = acceptedOffers.mapNotNull { it.distanceMiles }.takeIf { it.isNotEmpty() }?.sum()?.takeIf { it > 0.0 }
+
     /** Every offer hash that contributed to this job (the add-on chain). */
     val parentOfferHashes: List<String> get() = acceptedOffers.mapNotNull { it.offerHash }
 }
