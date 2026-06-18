@@ -472,6 +472,9 @@ class EffectMapPayloadTest {
         assertEquals(7.50, payload.parsedPay!!.total, 0.001)
         assertEquals(47.50, payload.sessionEarningsAtCompletion!!, 0.001)
         assertEquals(3000L, payload.completedAt)
+        // #518: idempotency scoped to the completed task (not obs.timestamp) so a re-entered
+        // PostTask receipt can't re-fire the same delivery via effects_fired.
+        assertEquals("log:DELIVERY_COMPLETED:T6", logs[0].effectKey)
     }
 
     // =========================================================================

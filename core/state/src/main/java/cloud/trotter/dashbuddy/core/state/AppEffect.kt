@@ -27,10 +27,20 @@ sealed class AppEffect {
      * Log a domain [AppEvent] (the core of event sourcing). Entity assembly —
      * payload encoding + device metadata — happens at the executor edge (#354/#119);
      * the state layer emits pure domain data. `occurredAt` is observation-derived,
-     * so this key is identical between live execution and recovery replay (#300).
+     * so the default key is identical between live execution and recovery replay (#300).
+     *
+     * [effectKeyOverride] lets a caller scope idempotency to a logical identity instead of
+     * the observation timestamp — a once-per-thing event whose triggering screen can recur.
+     * #518: DELIVERY_COMPLETED keys on the completed task so a re-entered PostTask receipt
+     * (PostTask→nav→PostTask→nav) can't fire — and double-count — the same delivery twice
+     * (06-17 db: real $23.62 and $11.20 deliveries each logged twice on a receipt flap). The
+     * override must itself be replay-stable (taskId is minted deterministically).
      */
-    data class LogEvent(val event: AppEvent) : AppEffect() {
-        override val effectKey: String get() = "log:${event.type}:${event.occurredAt}"
+    data class LogEvent(
+        val event: AppEvent,
+        val effectKeyOverride: String? = null,
+    ) : AppEffect() {
+        override val effectKey: String get() = effectKeyOverride ?: "log:${event.type}:${event.occurredAt}"
     }
 
     // 2. Update UI (The Bubble)

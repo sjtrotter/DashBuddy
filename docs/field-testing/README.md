@@ -95,6 +95,17 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   + the `app_state_snapshots` for that order. (Stacks are still #503 slice 3b — extra dropoffs on a
   multi-drop may still mis-handle, separate from this.)
 
+- **🔧 FIX IN FLIGHT — a delivery can't be logged/counted twice (#518, PRs #520 + #522). CONFIRM ON DASH.**
+  Two halves of the spurious-`DELIVERY_COMPLETED` bug: PR #520 stopped a **prior job's** task
+  re-completing under a new job (cross-job leak); PR #522 makes `DELIVERY_COMPLETED` **idempotent per
+  task** so a re-shown receipt (`PostTask → nav → PostTask → nav`) can't fire the **same** delivery
+  twice. 06-17 evidence: two **real** deliveries ($23.62, $11.20) were each logged twice → doubled
+  earnings. **Confirm on dash: 0/2 —** each completed delivery should produce **exactly one** "Saved:
+  $X" bubble and **one** completed card, and the **session-earnings total must match the sum of the
+  real deliveries** (no doubling). Watch especially when the receipt screen is shown, dismissed, and
+  re-shown. If a delivery double-counts, capture the `app_events` (`DELIVERY_COMPLETED` rows) +
+  `app_state_snapshots` for that order.
+
 - **📸 CAPTURE NEEDED — GoPuff (Drive) screens, to finalize the #501 rules.** The 06-14 deep-dive
   enumerated the GoPuff flow (all inside the DoorDash app — there is no separate GoPuff app) from real
   captures, but three things would help finalize the rules. **On the next GoPuff dash, drop these into
