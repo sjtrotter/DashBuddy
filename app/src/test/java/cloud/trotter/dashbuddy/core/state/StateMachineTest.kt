@@ -142,10 +142,14 @@ class StateMachineTest {
         storeName: String = "Chipotle",
         phase: TaskPhase = TaskPhase.PICKUP,
         subFlow: TaskSubFlow = TaskSubFlow.NAVIGATION,
+        customerNameHash: String? = null,
+        customerAddressHash: String? = null,
     ) = ParsedFields.TaskFields(
         storeName = storeName,
         phase = phase,
         subFlow = subFlow,
+        customerNameHash = customerNameHash,
+        customerAddressHash = customerAddressHash,
     )
 
     // =========================================================================
@@ -860,6 +864,82 @@ class StateMachineTest {
             2,
             job.tasks.count { it.phase == TaskPhase.DROPOFF },
         )
+    }
+
+    @Test
+    fun `a stacked offer routes each dropoff screen to its own customer subtask (#503 slice 3b)`() {
+        var state = AppState()
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented,
+            parsed = multiOrderOfferFields(listOf("Chili's Grill & Bar", "Jim's Restaurant")),
+        )).newState
+        state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
+        // Drop A (arrive), then drop B — the arrival + distinct customer makes B a stacked-dropoff
+        // transition, so each resolves onto its own placeholder instead of B overwriting A.
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskDropoffNavigation,
+            parsed = taskFields(phase = TaskPhase.DROPOFF, customerNameHash = "cust-A", customerAddressHash = "addr-A"),
+        )).newState
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskDropoffArrived,
+            parsed = taskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.ARRIVED, customerNameHash = "cust-A", customerAddressHash = "addr-A"),
+        )).newState
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskDropoffNavigation,
+            parsed = taskFields(phase = TaskPhase.DROPOFF, customerNameHash = "cust-B", customerAddressHash = "addr-B"),
+        )).newState
+
+        val dd = state.regions.platforms[Platform.DoorDash]!!
+        val resolvedDropoffs = (dd.activeJob!!.tasks + dd.recentTasks + listOfNotNull(dd.activeTask))
+            .filter { it.phase == TaskPhase.DROPOFF && it.customerNameHash != null }
+            .distinctBy { it.taskId }
+        assertEquals("two distinct customers → two resolved dropoffs", 2, resolvedDropoffs.size)
+        assertEquals(setOf("cust-A", "cust-B"), resolvedDropoffs.map { it.customerNameHash }.toSet())
+    }
+
+    @Test
+    fun `returning to an earlier stacked drop resumes it, not a duplicate (#503 slice 3b-2)`() {
+        var state = AppState()
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented,
+            parsed = multiOrderOfferFields(listOf("Chili's Grill & Bar", "Jim's Restaurant")),
+        )).newState
+        state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
+        // A (arrive) → B (arrive) → back to A. Each move is a stacked-dropoff transition.
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskDropoffNavigation,
+            parsed = taskFields(phase = TaskPhase.DROPOFF, customerNameHash = "cust-A", customerAddressHash = "addr-A"),
+        )).newState
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskDropoffArrived,
+            parsed = taskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.ARRIVED, customerNameHash = "cust-A", customerAddressHash = "addr-A"),
+        )).newState
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskDropoffNavigation,
+            parsed = taskFields(phase = TaskPhase.DROPOFF, customerNameHash = "cust-B", customerAddressHash = "addr-B"),
+        )).newState
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskDropoffArrived,
+            parsed = taskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.ARRIVED, customerNameHash = "cust-B", customerAddressHash = "addr-B"),
+        )).newState
+        // Return to A — with a DRIFTED address (addr-A2) to prove the resume keys on the stable
+        // NAME hash, not the address. Must RESUME A's subtask, not mint a third dropoff.
+        state = machine.step(state, screenObs(
+            flow = Flow.TaskDropoffNavigation,
+            parsed = taskFields(phase = TaskPhase.DROPOFF, customerNameHash = "cust-A", customerAddressHash = "addr-A2"),
+        )).newState
+
+        val dd = state.regions.platforms[Platform.DoorDash]!!
+        val dropsForA = (dd.activeJob!!.tasks + dd.recentTasks + listOfNotNull(dd.activeTask))
+            .filter { it.phase == TaskPhase.DROPOFF && it.customerNameHash == "cust-A" }
+            .distinctBy { it.taskId }
+        assertEquals("returning to A resumes its subtask, no duplicate", 1, dropsForA.size)
+        assertEquals("A is active again", "cust-A", dd.activeTask?.customerNameHash)
+        // And exactly two distinct customer dropoffs overall (A and B), never a third.
+        val allResolved = (dd.activeJob!!.tasks + dd.recentTasks + listOfNotNull(dd.activeTask))
+            .filter { it.phase == TaskPhase.DROPOFF && it.customerNameHash != null }
+            .distinctBy { it.taskId }
+        assertEquals("only two customer dropoffs ever exist", 2, allResolved.size)
     }
 
     @Test

@@ -650,26 +650,31 @@ class PlatformRegionStepper @Inject constructor() {
                 isStackedPickupTransition ||
                 isStackedDropoffTransition
             ) {
-                // #503 slice 2: returning to a prior subtask of this job (A→B→A, or back to a
-                // store after an offer interlude that retired the task) RESUMES its identity
-                // instead of re-minting — unless the platform signalled a genuinely-new stacked
-                // task (different store/customer, already arrived). Re-match by phase + store
-                // (pickup) / customer address (dropoff); this is the same-store add-on "fold in,
-                // don't re-mint" (#499). The single activeTask slot loses identity on every phase
-                // switch; the Job's task lineage in recentTasks lets us restore it.
-                val resumable = if (!isStackedPickupTransition && !isStackedDropoffTransition) {
-                    region.recentTasks.lastOrNull { prior ->
-                        prior.jobId == jobId && prior.phase == taskPhase &&
-                            when (taskPhase) {
-                                TaskPhase.PICKUP ->
-                                    prior.storeName != null && prior.storeName == taskFields?.storeName
-                                TaskPhase.DROPOFF ->
-                                    prior.customerAddressHash != null &&
-                                        prior.customerAddressHash == taskFields?.customerAddressHash
-                                else -> false
-                            }
-                    }
-                } else null
+                // #503 slice 2/3b-2: returning to a prior subtask of this job (A→B→A, or back to a
+                // store after an offer interlude that retired the task) RESUMES its identity instead
+                // of re-minting. The single activeTask slot loses identity on every phase switch; the
+                // Job's task lineage in recentTasks lets us restore it.
+                //
+                // Dropoff is re-matched on the STABLE customer-NAME hash, NOT the address (#498:
+                // dropoff addresses drift between frames, so an address key split one physical drop
+                // into two). This runs even under a stacked-dropoff transition, so returning to an
+                // earlier stacked drop routes to it instead of minting a duplicate. Pickup re-matches
+                // by store, but only when the platform did NOT signal a genuinely-new stacked pickup
+                // (two distinct orders at the same store must stay distinct — the same-store add-on
+                // "fold in, don't re-mint" of #499 is the !isStackedPickupTransition case).
+                val resumable = when {
+                    taskPhase == TaskPhase.DROPOFF && taskFields?.customerNameHash != null ->
+                        region.recentTasks.lastOrNull {
+                            it.jobId == jobId && it.phase == TaskPhase.DROPOFF &&
+                                it.customerNameHash == taskFields.customerNameHash
+                        }
+                    taskPhase == TaskPhase.PICKUP && !isStackedPickupTransition ->
+                        region.recentTasks.lastOrNull {
+                            it.jobId == jobId && it.phase == TaskPhase.PICKUP &&
+                                it.storeName != null && it.storeName == taskFields?.storeName
+                        }
+                    else -> null
+                }
 
                 if (resumable != null) {
                     val retireSince = region.pendingDestructive
