@@ -394,6 +394,23 @@ gh pr merge <NUMBER> --merge --delete-branch
 (The `gh` binary path and all project/field IDs are workstation-specific — they live in
 `CLAUDE.local.md`, which is gitignored. Never hardcode workstation paths in this file.)
 
+**Branch deletion is workstation-only. Field/remote agents MUST NOT attempt to delete their own
+branch.** Agents running in the remote execution environment (Claude Code on the web / mobile app)
+reach GitHub through a local auth proxy (`http://local_proxy@127.0.0.1:…`) that **refuses ref
+deletions** — every form of the delete hangs the connection (`send-pack: unexpected disconnect` /
+`the remote end hung up unexpectedly`, then a misleading `Everything up-to-date`). This was verified
+2026-06-18 against the merged branch with **all** of: `git push origin --delete <branch>`,
+`git push origin :<branch>`, and a retry with the sandbox disabled — all failed identically. The
+GitHub MCP server (the only GitHub access these agents have besides git) exposes **no**
+branch/ref-delete tool, and `merge_pull_request` has no delete-branch option. So there is **no method
+available to a field/remote agent to delete a branch.** Do **not** run the delete (in any form) and
+do **not** retry it — repeated failing attempts are just noise. Instead: after merging via the MCP
+`merge_pull_request` tool, **leave the branch** and note in your final reply that it needs manual
+cleanup — the merged branch can be pruned from the **GitHub PR page's "Delete branch" button** or by
+the **workstation agent** with the `gh pr merge … --delete-branch` command above. (The
+`--delete-branch` rule applies to the workstation `gh` flow, which can and should prune; it does not
+apply to remote/MCP merges, which cannot.)
+
 **Every PR ships with context updates — no exceptions.** As part of preparing/merging ANY PR:
 
 1. **Memories** — update the persistent memory (see *Claude Memory Upkeep*) to record what the
