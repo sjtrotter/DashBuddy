@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.datastore.settings
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
@@ -10,6 +11,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.AppPreferences
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -129,6 +131,19 @@ class AppPreferencesDataSource @Inject constructor(
     // ============================================================================================
     // ENCAPSULATED WRITE ACTIONS
     // ============================================================================================
+
+    /**
+     * Adds [fields] to the persisted user-set marker set. Takes [EconomyField] values
+     * (not raw strings) so the marker names derive from the `:domain` enum — the SSOT
+     * the read path already resolves through [EconomyField.fromPersistedName] — and a
+     * field rename is caught by the compiler instead of silently writing a name no read
+     * can resolve. Must be called from inside a [DataStore.edit] block.
+     */
+    private fun MutablePreferences.markUserSet(vararg fields: EconomyField) {
+        this[Keys.USER_SET_ECONOMY_FIELDS] =
+            (this[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) + fields.map { it.name }
+    }
+
     suspend fun updateGasPrice(price: Float) {
         ds.edit { it[Keys.GAS_PRICE] = price }
     }
@@ -173,8 +188,7 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit {
             it[Keys.TIRE_SET_COST] = setCost
             it[Keys.TIRE_LIFETIME_MI] = lifetimeMi
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("TIRE_COST", "TIRE_LIFETIME")
+            it.markUserSet(EconomyField.TIRE_COST, EconomyField.TIRE_LIFETIME)
         }
     }
 
@@ -182,8 +196,7 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit {
             it[Keys.OIL_COST] = cost
             it[Keys.OIL_INTERVAL_MI] = intervalMi
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("OIL_COST", "OIL_INTERVAL")
+            it.markUserSet(EconomyField.OIL_COST, EconomyField.OIL_INTERVAL)
         }
     }
 
@@ -191,8 +204,7 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit {
             it[Keys.BRAKES_COST] = cost
             it[Keys.BRAKES_INTERVAL_MI] = intervalMi
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("BRAKES_COST", "BRAKES_INTERVAL")
+            it.markUserSet(EconomyField.BRAKES_COST, EconomyField.BRAKES_INTERVAL)
         }
     }
 
@@ -200,8 +212,7 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit {
             it[Keys.FLUIDS_COST] = cost
             it[Keys.FLUIDS_INTERVAL_MI] = intervalMi
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("FLUIDS_COST", "FLUIDS_INTERVAL")
+            it.markUserSet(EconomyField.FLUIDS_COST, EconomyField.FLUIDS_INTERVAL)
         }
     }
 
@@ -209,8 +220,7 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit {
             it[Keys.MISC_YEARLY] = yearly
             it[Keys.MISC_YEARLY_MI] = yearlyMi
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("MISC_YEARLY", "MISC_YEARLY_MI")
+            it.markUserSet(EconomyField.MISC_YEARLY, EconomyField.MISC_YEARLY_MI)
         }
     }
 
@@ -219,32 +229,32 @@ class AppPreferencesDataSource @Inject constructor(
             it[Keys.INCLUDE_DEPRECIATION] = include
             it[Keys.PURCHASE_PRICE] = purchasePrice
             it[Keys.TOTAL_LIFETIME_MI] = totalLifetimeMi
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("INCLUDE_DEPRECIATION", "PURCHASE_PRICE", "TOTAL_LIFETIME_MI")
+            it.markUserSet(
+                EconomyField.INCLUDE_DEPRECIATION,
+                EconomyField.PURCHASE_PRICE,
+                EconomyField.TOTAL_LIFETIME_MI,
+            )
         }
     }
 
     suspend fun updateInsuranceDelta(perMonth: Double) {
         ds.edit {
             it[Keys.INSURANCE_DELTA_PER_MONTH] = perMonth
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("INSURANCE_DELTA")
+            it.markUserSet(EconomyField.INSURANCE_DELTA)
         }
     }
 
     suspend fun updateRegistrationDelta(perYear: Double) {
         ds.edit {
             it[Keys.REGISTRATION_DELTA_PER_YEAR] = perYear
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("REGISTRATION_DELTA")
+            it.markUserSet(EconomyField.REGISTRATION_DELTA)
         }
     }
 
     suspend fun updateExpectedAnnualMi(miles: Double) {
         ds.edit {
             it[Keys.EXPECTED_ANNUAL_MI] = miles
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("EXPECTED_ANNUAL_MI")
+            it.markUserSet(EconomyField.EXPECTED_ANNUAL_MI)
         }
     }
 
@@ -253,8 +263,11 @@ class AppPreferencesDataSource @Inject constructor(
             it[Keys.PHONE_PLAN_TOTAL] = total
             it[Keys.PHONE_PLAN_LINES] = lines
             it[Keys.PHONE_BUSINESS_PERCENT] = dashPercent
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("PHONE_PLAN_TOTAL", "PHONE_PLAN_LINES", "PHONE_BUSINESS_PERCENT")
+            it.markUserSet(
+                EconomyField.PHONE_PLAN_TOTAL,
+                EconomyField.PHONE_PLAN_LINES,
+                EconomyField.PHONE_BUSINESS_PERCENT,
+            )
         }
     }
 
@@ -262,8 +275,7 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit {
             it[Keys.AVG_MIN_PER_MILE] = avgMinPerMile
             it[Keys.BASE_PICKUP_MIN] = basePickupMin
-            it[Keys.USER_SET_ECONOMY_FIELDS] = (it[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) +
-                setOf("AVG_MIN_PER_MILE", "BASE_PICKUP_MIN")
+            it.markUserSet(EconomyField.AVG_MIN_PER_MILE, EconomyField.BASE_PICKUP_MIN)
         }
     }
 
