@@ -39,11 +39,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.ui.main.settings.components.DraggableRuleRow
 import cloud.trotter.dashbuddy.ui.main.settings.components.FakeOfferCard
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import java.util.Locale
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -117,7 +117,7 @@ fun StrategySettingsScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Pay: $${String.format(Locale.getDefault(), "%.2f", simPay)}",
+                            "Pay: ${Formats.money(simPay.toDouble())}",
                             style = MaterialTheme.typography.labelSmall
                         )
                         Slider(
@@ -129,7 +129,7 @@ fun StrategySettingsScreen(
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Dist: ${String.format(Locale.getDefault(), "%.1f", simDist)} mi",
+                            "Dist: ${Formats.decimal(simDist.toDouble())} mi",
                             style = MaterialTheme.typography.labelSmall
                         )
                         Slider(

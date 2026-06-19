@@ -25,10 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
-import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -114,7 +114,7 @@ fun GasPriceCard(
                 CircularProgressIndicator(modifier = Modifier.size(48.dp))
             } else {
                 Text(
-                    text = String.format(Locale.getDefault(), "$%.2f", price),
+                    text = Formats.money(price.toDouble()),
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary
@@ -127,7 +127,7 @@ fun GasPriceCard(
             }
         } else {
             Text(
-                text = String.format(Locale.getDefault(), "$%.2f", price),
+                text = Formats.money(price.toDouble()),
                 style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.primary
