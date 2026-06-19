@@ -54,8 +54,12 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppGaugeRing
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
+import cloud.trotter.dashbuddy.domain.state.flowPhase
+import cloud.trotter.dashbuddy.domain.state.presentation
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.ui.formatters.color
 import cloud.trotter.dashbuddy.ui.formatters.displayLabel
+import cloud.trotter.dashbuddy.ui.formatters.phaseBg
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.state.customerDisplayName
 
@@ -158,16 +162,15 @@ private fun CardHeader(
 
 @Composable
 private fun PhaseChip(snapshot: FlowCardSnapshot, isActive: Boolean) {
-    // Semantic brand tokens per AppColors' contract (#358) — the chip now
-    // agrees with statusBadge instead of remapping phases onto M3 roles.
+    // Short-form label + color from the phase-presentation SSOT (#audit-12) —
+    // the same row statusBadge() reads, so the two can no longer drift. The chip
+    // uses the SHORT label/color; the status badge uses the long pair on the same
+    // entry. Background is the family's *Bg variant.
     val c = AppTheme.colors
-    val (label, color, bg) = when (snapshot) {
-        is FlowCardSnapshot.Awaiting -> Triple("AWAIT", c.neutral, c.neutralBg)
-        is FlowCardSnapshot.Offer -> Triple("OFFER", c.stOffer, c.stOfferBg)
-        is FlowCardSnapshot.Pickup -> Triple("PICKUP", c.stPickup, c.stPickupBg)
-        is FlowCardSnapshot.Delivery -> Triple("DROPOFF", c.stPickup, c.stPickupBg)
-        is FlowCardSnapshot.PostTask -> Triple("PAID", c.good, c.goodBg)
-    }
+    val p = snapshot.flowPhase().presentation
+    val label = p.shortLabel
+    val color = p.shortColor.color(c)
+    val bg = p.shortColor.phaseBg(c)
     Surface(
         shape = RoundedCornerShape(4.dp),
         color = if (isActive) bg else bg.copy(alpha = bg.alpha * 0.6f),
