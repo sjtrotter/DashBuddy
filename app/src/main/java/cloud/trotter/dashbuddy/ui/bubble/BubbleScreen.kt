@@ -70,7 +70,9 @@ import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.presentation
 import cloud.trotter.dashbuddy.ui.bubble.cards.FlowCardItem
+import cloud.trotter.dashbuddy.ui.formatters.color
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
@@ -367,31 +369,20 @@ private fun SessionMetricsActions(
 @Composable
 private fun statusBadge(region: PlatformRegion?, flow: Flow): Pair<String, Color> {
     val c = AppTheme.colors
-    val green = c.good
-    val amber = c.warn
-    val blue = c.stOffer
-    val grey = c.neutral
 
-    // Mode-driven badges
-    if (region?.mode == Mode.Paused) return "PAUSED" to amber
+    // Mode-driven badges — orthogonal to the flow phase (availability axis).
+    if (region?.mode == Mode.Paused) return "PAUSED" to c.warn
     if (region == null || region.mode == Mode.Offline) {
         return when (flow) {
-            Flow.SessionEnded -> "DONE" to grey
-            else -> "OFFLINE" to grey
+            Flow.SessionEnded -> "DONE" to c.neutral
+            else -> "OFFLINE" to c.neutral
         }
     }
 
-    // Flow-driven badges (online)
-    return when (flow) {
-        Flow.Idle -> "WAITING" to green
-        Flow.OfferPresented -> "OFFER" to blue
-        Flow.TaskPickupNavigation -> "PICKUP" to green
-        Flow.TaskPickupArrived -> "AT STORE" to green
-        Flow.TaskDropoffNavigation -> "DELIVERING" to green
-        Flow.TaskDropoffArrived -> "AT DOOR" to green
-        Flow.PostTask -> "DELIVERED" to green
-        Flow.SessionEnded -> "DONE" to grey
-    }
+    // Flow-driven badges (online) — long-form label + color from the phase SSOT
+    // (PhasePresentation in :domain; the chip in FlowCardItem shares the row).
+    val p = flow.presentation
+    return p.longLabel to p.longColor.color(c)
 }
 
 @Composable
