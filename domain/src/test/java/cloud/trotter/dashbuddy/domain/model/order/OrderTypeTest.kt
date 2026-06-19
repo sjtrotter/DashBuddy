@@ -1,68 +1,16 @@
 package cloud.trotter.dashbuddy.domain.model.order
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
+/**
+ * Recognition is data, not code (CLAUDE.md): the text-matching helpers
+ * (`fromTypeName`/`orderTypeCount`/`allTypeNames`) were superseded by the JSON rule engine and
+ * deleted, so their tests are gone too. `ParsedFieldsFactory` now resolves the order type from
+ * parse output via the intrinsic [OrderType.valueOf]. What remains is the [OrderType.isShoppingOrder]
+ * flag and the [OrderType.typeName] label.
+ */
 class OrderTypeTest {
-
-    // -------------------------------------------------------------------------
-    // fromTypeName
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `fromTypeName - exact match returns correct type`() {
-        assertEquals(OrderType.PICKUP, OrderType.fromTypeName("Pickup"))
-        assertEquals(OrderType.RESTAURANT_PICKUP, OrderType.fromTypeName("Restaurant Pickup"))
-        assertEquals(OrderType.SHOP_FOR_ITEMS, OrderType.fromTypeName("Shop for items"))
-        assertEquals(OrderType.RETAIL_PICKUP, OrderType.fromTypeName("Retail pickup"))
-    }
-
-    @Test
-    fun `fromTypeName - match is case insensitive`() {
-        assertEquals(OrderType.PICKUP, OrderType.fromTypeName("pickup"))
-        assertEquals(OrderType.PICKUP, OrderType.fromTypeName("PICKUP"))
-        assertEquals(OrderType.SHOP_FOR_ITEMS, OrderType.fromTypeName("SHOP FOR ITEMS"))
-    }
-
-    @Test
-    fun `fromTypeName - unknown text returns null`() {
-        assertNull(OrderType.fromTypeName("Unknown"))
-        assertNull(OrderType.fromTypeName(""))
-        assertNull(OrderType.fromTypeName("Deliver"))
-    }
-
-    // -------------------------------------------------------------------------
-    // orderTypeCount
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `orderTypeCount - counts matching type names in list`() {
-        val texts = listOf("Pickup", "Shop for items", "3.2 mi", "\$7.50")
-        assertEquals(2, OrderType.orderTypeCount(texts))
-    }
-
-    @Test
-    fun `orderTypeCount - empty list returns 0`() {
-        assertEquals(0, OrderType.orderTypeCount(emptyList()))
-    }
-
-    @Test
-    fun `orderTypeCount - no matches returns 0`() {
-        assertEquals(0, OrderType.orderTypeCount(listOf("Accept", "Decline", "3.2 mi")))
-    }
-
-    @Test
-    fun `orderTypeCount - multiple of same type counts each occurrence`() {
-        val texts = listOf("Pickup", "Pickup", "Pickup")
-        assertEquals(3, OrderType.orderTypeCount(texts))
-    }
-
-    @Test
-    fun `orderTypeCount - matching is case insensitive`() {
-        val texts = listOf("pickup", "SHOP FOR ITEMS")
-        assertEquals(2, OrderType.orderTypeCount(texts))
-    }
 
     // -------------------------------------------------------------------------
     // isShoppingOrder flag
@@ -86,5 +34,23 @@ class OrderTypeTest {
     @Test
     fun `isShoppingOrder - RETAIL_PICKUP is not a shopping order`() {
         assert(!OrderType.RETAIL_PICKUP.isShoppingOrder)
+    }
+
+    // -------------------------------------------------------------------------
+    // Serialized-key contract (ParsedFieldsFactory resolves via valueOf)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `valueOf round-trips the serialized name for every type`() {
+        OrderType.entries.forEach { type ->
+            assertEquals(type, OrderType.valueOf(type.name))
+        }
+    }
+
+    @Test
+    fun `every type exposes a non-blank typeName`() {
+        OrderType.entries.forEach { type ->
+            assert(type.typeName.isNotBlank()) { "typeName for $type should be non-blank" }
+        }
     }
 }
