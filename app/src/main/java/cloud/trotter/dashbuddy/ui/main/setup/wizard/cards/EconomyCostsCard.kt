@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
@@ -23,6 +22,7 @@ import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.toUserEconomy
 
 /**
  * The ECONOMY_COSTS wizard step. Chrome only: the card, header, scroll, and
@@ -95,29 +95,3 @@ fun EconomyCostsCard(
         }
     }
 }
-
-/**
- * Builds a [UserEconomy] from the wizard state so the card can display live per-mile
- * derived values without going through the repository.
- */
-private fun WizardState.toUserEconomy() = UserEconomy(
-    vehicleClass = vehicleClass,
-    vehicleMpg = estimatedMpg.toDouble(),
-    gasPricePerGallon = gasPrice.toDouble(),
-    avgMinutesPerMile = avgMinutesPerMile,
-    basePickupMinutes = basePickupMinutes,
-    tireSetCost = tireSetCost, tireLifetimeMi = tireLifetimeMi,
-    oilCost = oilCost, oilIntervalMi = oilIntervalMi,
-    brakesCost = brakesCost, brakesIntervalMi = brakesIntervalMi,
-    fluidsCost = fluidsCost, fluidsIntervalMi = fluidsIntervalMi,
-    miscYearly = miscYearly, miscYearlyMi = miscYearlyMi,
-    includeDepreciation = includeDepreciation,
-    purchasePrice = purchasePrice, totalLifetimeMi = totalLifetimeMi,
-    insuranceDeltaPerMonth = insuranceDeltaPerMonth,
-    registrationDeltaPerYear = registrationDeltaPerYear,
-    expectedAnnualMiles = expectedAnnualMiles,
-    phonePlanTotal = phonePlanTotal,
-    phonePlanLines = phonePlanLines,
-    phoneBusinessPercent = phoneBusinessPercent,
-    userSetFields = userSetEconomyFields,
-)
