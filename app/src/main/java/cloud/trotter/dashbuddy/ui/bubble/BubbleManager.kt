@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.state.effects.OfferActionReceiver
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.activeSessionId
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId // <-- Your new UI Formatter!
 import cloud.trotter.dashbuddy.ui.formatters.notificationPersona
@@ -95,11 +96,22 @@ class BubbleManager @Inject constructor(
         postMessage("Done $verb!", ChatPersona.Dispatcher)
     }
 
-    private fun sessionVerb(platformName: String?): String = when {
-        platformName.equals("uber", ignoreCase = true) -> "Ubering"
-        platformName.equals("doordash", ignoreCase = true) -> "Dashing"
-        platformName != null -> "driving for $platformName"
-        else -> "driving"
+    /**
+     * The dispatcher chat verb for a session. Resolves the serialized
+     * platform id (the enum constant name [EffectMap] carries, e.g.
+     * `"DoorDash"`) to a [Platform] and reads its [Platform.sessionVerb]
+     * SSOT (audit #9) — no more wire-name string matching leaking into the
+     * UI layer. Platforms without a specific verb fall back to
+     * "driving for <displayName>"; an unresolved or null id to "driving".
+     */
+    private fun sessionVerb(platformName: String?): String {
+        val platform = Platform.fromName(platformName)
+        return when {
+            platform?.sessionVerb != null -> platform.sessionVerb!!
+            platform != null -> "driving for ${platform.displayName}"
+            platformName != null -> "driving for $platformName"
+            else -> "driving"
+        }
     }
 
     fun postMessage(

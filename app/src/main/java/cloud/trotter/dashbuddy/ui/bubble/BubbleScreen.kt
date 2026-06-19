@@ -282,10 +282,11 @@ private fun StatusBadgeTitle(region: PlatformRegion?, flow: FlowRegion, platform
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Platform label — only shown when a platform is active
+        // Platform label — only shown when a platform is active.
+        // Short name is the SSOT on the Platform enum (audit #9).
         platform?.let {
             Text(
-                text = platformShortName(it),
+                text = it.shortName,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 fontWeight = FontWeight.Medium,
@@ -617,14 +618,6 @@ private fun ModeRow(
 }
 
 
-
-private fun platformShortName(platform: Platform): String = when (platform) {
-    Platform.DoorDash -> "DD"
-    Platform.Uber -> "Uber"
-    Platform.Instacart -> "IC"
-    Platform.WalmartSpark -> "Spark"
-    Platform.Unknown -> ""
-}
 
 fun getPreviewText(html: String): String {
     if (html.isBlank()) return ""
