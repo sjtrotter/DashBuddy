@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.toUserEconomy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -481,59 +482,12 @@ class WizardViewModel @Inject constructor(
             appPreferencesRepository.updateFuelType(finalState.fuelType)
             appPreferencesRepository.updateVehicleClass(finalState.vehicleClass)
 
-            // Persist any economy fields the user explicitly set in the ECONOMY_COSTS step.
-            // Each call atomically marks the corresponding EconomyField as user-set.
-            val userSet = finalState.userSetEconomyFields
-            if (EconomyField.TIRE_COST in userSet || EconomyField.TIRE_LIFETIME in userSet) {
-                appPreferencesRepository.updateTireCost(finalState.tireSetCost, finalState.tireLifetimeMi)
-            }
-            if (EconomyField.OIL_COST in userSet || EconomyField.OIL_INTERVAL in userSet) {
-                appPreferencesRepository.updateOilCost(finalState.oilCost, finalState.oilIntervalMi)
-            }
-            if (EconomyField.BRAKES_COST in userSet || EconomyField.BRAKES_INTERVAL in userSet) {
-                appPreferencesRepository.updateBrakesCost(finalState.brakesCost, finalState.brakesIntervalMi)
-            }
-            if (EconomyField.FLUIDS_COST in userSet || EconomyField.FLUIDS_INTERVAL in userSet) {
-                appPreferencesRepository.updateFluidsCost(finalState.fluidsCost, finalState.fluidsIntervalMi)
-            }
-            if (EconomyField.MISC_YEARLY in userSet || EconomyField.MISC_YEARLY_MI in userSet) {
-                appPreferencesRepository.updateMiscMaintenance(finalState.miscYearly, finalState.miscYearlyMi)
-            }
-            if (EconomyField.INCLUDE_DEPRECIATION in userSet ||
-                EconomyField.PURCHASE_PRICE in userSet ||
-                EconomyField.TOTAL_LIFETIME_MI in userSet
-            ) {
-                appPreferencesRepository.updateDepreciation(
-                    finalState.includeDepreciation,
-                    finalState.purchasePrice,
-                    finalState.totalLifetimeMi,
-                )
-            }
-            if (EconomyField.INSURANCE_DELTA in userSet) {
-                appPreferencesRepository.updateInsuranceDelta(finalState.insuranceDeltaPerMonth)
-            }
-            if (EconomyField.REGISTRATION_DELTA in userSet) {
-                appPreferencesRepository.updateRegistrationDelta(finalState.registrationDeltaPerYear)
-            }
-            if (EconomyField.EXPECTED_ANNUAL_MI in userSet) {
-                appPreferencesRepository.updateExpectedAnnualMi(finalState.expectedAnnualMiles)
-            }
-            if (EconomyField.PHONE_PLAN_TOTAL in userSet ||
-                EconomyField.PHONE_PLAN_LINES in userSet ||
-                EconomyField.PHONE_BUSINESS_PERCENT in userSet
-            ) {
-                appPreferencesRepository.updatePhonePlan(
-                    finalState.phonePlanTotal,
-                    finalState.phonePlanLines,
-                    finalState.phoneBusinessPercent,
-                )
-            }
-            if (EconomyField.AVG_MIN_PER_MILE in userSet || EconomyField.BASE_PICKUP_MIN in userSet) {
-                appPreferencesRepository.updateTimeConstants(
-                    finalState.avgMinutesPerMile,
-                    finalState.basePickupMinutes,
-                )
-            }
+            // Persist the economy fields the user explicitly set in the ECONOMY_COSTS step.
+            // The repository owns the EconomyField → grouped-write mapping (#357 SSOT): each
+            // user-set field routes through the same atomic write — and atomic user-set marker —
+            // the Personal Economy settings screen uses, instead of a parallel `if (field in
+            // userSet)` chain re-derived here.
+            appPreferencesRepository.persistUserSetEconomy(finalState.toUserEconomy())
 
             if (finalState.vehicleClass == VehicleClass.E_BIKE) {
                 appPreferencesRepository.updateEconomySettings(

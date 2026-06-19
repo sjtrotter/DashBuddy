@@ -64,3 +64,33 @@ data class WizardState(
 
     val maxItems: Float = 15.0f // Shopping
 )
+
+/**
+ * Projects the wizard's in-memory economy edits onto a [UserEconomy] — the single
+ * owner of this conversion (#357). The ECONOMY_COSTS card uses it to drive live
+ * $/mi summaries and "(default)" badges; [cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardViewModel.saveAndFinish]
+ * hands it to `AppPreferencesRepository.persistUserSetEconomy`, which persists each
+ * user-set field through the same atomic write the settings screen uses. Carries
+ * [userSetEconomyFields] so the repository persists exactly the fields the user touched.
+ */
+fun WizardState.toUserEconomy(): UserEconomy = UserEconomy(
+    vehicleClass = vehicleClass,
+    vehicleMpg = estimatedMpg.toDouble(),
+    gasPricePerGallon = gasPrice.toDouble(),
+    avgMinutesPerMile = avgMinutesPerMile,
+    basePickupMinutes = basePickupMinutes,
+    tireSetCost = tireSetCost, tireLifetimeMi = tireLifetimeMi,
+    oilCost = oilCost, oilIntervalMi = oilIntervalMi,
+    brakesCost = brakesCost, brakesIntervalMi = brakesIntervalMi,
+    fluidsCost = fluidsCost, fluidsIntervalMi = fluidsIntervalMi,
+    miscYearly = miscYearly, miscYearlyMi = miscYearlyMi,
+    includeDepreciation = includeDepreciation,
+    purchasePrice = purchasePrice, totalLifetimeMi = totalLifetimeMi,
+    insuranceDeltaPerMonth = insuranceDeltaPerMonth,
+    registrationDeltaPerYear = registrationDeltaPerYear,
+    expectedAnnualMiles = expectedAnnualMiles,
+    phonePlanTotal = phonePlanTotal,
+    phonePlanLines = phonePlanLines,
+    phoneBusinessPercent = phoneBusinessPercent,
+    userSetFields = userSetEconomyFields,
+)
