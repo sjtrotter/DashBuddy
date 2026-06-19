@@ -1,18 +1,10 @@
 package cloud.trotter.dashbuddy.core.network.di
 
-import cloud.trotter.dashbuddy.core.network.BuildConfig
 import cloud.trotter.dashbuddy.core.network.vehicle.efficiency.epa.EpaApi
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import timber.log.Timber
 import javax.inject.Singleton
 
 /**
@@ -28,36 +20,11 @@ object VehicleNetworkModule {
     @Provides
     @Singleton
     fun provideFuelEconomyApi(): EpaApi {
-        // Custom OkHttp logger that pipes directly into Timber at the VERBOSE level.
-        // This prevents OkHttp from cluttering the standard INFO logcat.
-        val customTimberLogger = HttpLoggingInterceptor.Logger { message ->
-            Timber.tag("FuelEconomyAPI").v(message)
-        }
-
-        val loggingInterceptor = HttpLoggingInterceptor(customTimberLogger).apply {
-            // Logs headers and body. If this becomes too noisy, drop it to BASIC
-            level = HttpLoggingInterceptor.Level.BODY
-        }
-
-        val client = OkHttpClient.Builder()
-            // Debug builds only — release gets no HTTP logging at all (#348).
-            .apply { if (BuildConfig.DEBUG) addInterceptor(loggingInterceptor) }
-            .build()
-
-        // Configure JSON parsing to be highly forgiving since we don't control the government's API schemas
-        val networkJson = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-            coerceInputValues = true
-        }
-
-        val contentType = "application/json".toMediaType()
-
-        return Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .client(client)
-            .addConverterFactory(networkJson.asConverterFactory(contentType))
-            .build()
+        // Same hardened client + lenient gov-API Json as the gas-price module, via the
+        // shared factory — including the #348 secret-redaction + timeouts it previously
+        // lacked.
+        val client = NetworkClientFactory.okHttpClient(logTag = "FuelEconomyAPI")
+        return NetworkClientFactory.retrofit(BASE_URL, client)
             .create(EpaApi::class.java)
     }
 }
