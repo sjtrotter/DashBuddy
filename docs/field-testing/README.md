@@ -72,6 +72,9 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   pure-pickup (or pickup stack) shows **no** cart/count. Other badges should render as their icons. If
   a count is off by the number of pickups in a stack, or the shop badge doesn't show live, note the
   offer's order mix.
+  - Confirmed: 1/2 — **2026-06-19 (DoorDash):** the Shop & Deliver shopping chip with the item count
+    inside looks good and is working. (Order mix not noted; needs one more clean sighting — ideally
+    verify the true count on a known-size shop, and that a pure-pickup shows no chip.)
 
 - **✅ FIX SHIPPED — same-store add-on no longer re-mints the task (#499 / #503 slice 2). CONFIRM ON DASH.**
   The task lifecycle now **resumes a prior subtask** instead of re-minting on a phase switch / after an
