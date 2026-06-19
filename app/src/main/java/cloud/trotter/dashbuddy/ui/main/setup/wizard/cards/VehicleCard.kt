@@ -30,11 +30,11 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.VehicleDropdown
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
-import java.util.Locale
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.VEHICLE_NOT_LISTED
 import android.net.Uri
 
@@ -179,7 +179,7 @@ fun VehicleCard(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = String.format(Locale.getDefault(), "%.1f MPG", mpg),
+                    text = "${Formats.decimal(mpg.toDouble())} MPG",
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary

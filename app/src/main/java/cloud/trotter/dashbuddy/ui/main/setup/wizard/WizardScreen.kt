@@ -46,7 +46,6 @@ import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardBottomBar
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardTopBar
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 import kotlinx.coroutines.launch
-import java.util.Locale
 import cloud.trotter.dashbuddy.domain.format.Formats
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -221,7 +220,7 @@ fun WizardScreen(
                     WizardStep.MAX_DISTANCE -> {
                         MetricSliderCard(
                             step = currentStep, value = state.maxDistance, valueRange = 1f..25f,
-                            valueFormatter = { String.format(Locale.getDefault(), "%.1f mi", it) },
+                            valueFormatter = { "${Formats.decimal(it.toDouble())} mi" },
                             onValueChange = viewModel::updateMaxDistance,
                             footerText = if (isCherryPicker) "We will auto-decline offers exceeding this distance." else "We will flag offers exceeding this distance in red."
                         )
