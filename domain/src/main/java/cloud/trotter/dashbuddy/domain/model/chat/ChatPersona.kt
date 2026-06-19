@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.model.chat
 
+import java.util.Locale
+
 sealed class ChatPersona {
     abstract val id: String
     abstract val displayName: String
@@ -57,5 +59,35 @@ sealed class ChatPersona {
     data object Earnings : ChatPersona() {
         override val id = "earnings"
         override val displayName = "Earnings"
+    }
+
+    companion object {
+        /**
+         * SSOT for parsing a wire/string persona token into a [ChatPersona] (#audit-2).
+         *
+         * Case-INSENSITIVE (`Locale.ROOT`), so it accepts both the rule-engine
+         * lowercase tokens (`"dispatcher"`, `"good_offer"`, …) and the persisted
+         * UPPERCASE persisted-entity tokens (`"DISPATCHER"`, `"GOOD_OFFER"`, …)
+         * — the union of the two former hand-maintained `when`-tables. Exhaustive
+         * over every persona constant; an unknown/null token falls back to
+         * [Dispatcher]. The name-bearing personas ([Dasher] aside) carry the
+         * supplied [name]; callers that have no name (e.g. the rule-engine bubble
+         * verb, whose schema can't produce a Merchant/Customer) pass the default.
+         */
+        fun fromWire(wire: String?, name: String = ""): ChatPersona =
+            when (wire?.uppercase(Locale.ROOT)) {
+                "DISPATCHER" -> Dispatcher
+                "SYSTEM" -> System
+                "DASHER" -> Dasher
+                "MERCHANT" -> Merchant(name)
+                "CUSTOMER" -> Customer(name)
+                "GOOD_OFFER" -> GoodOffer
+                "BAD_OFFER" -> BadOffer
+                "INSPECTOR" -> Inspector
+                "NAVIGATOR" -> Navigator
+                "SHOPPER" -> Shopper
+                "EARNINGS" -> Earnings
+                else -> Dispatcher
+            }
     }
 }

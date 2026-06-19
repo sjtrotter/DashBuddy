@@ -457,7 +457,9 @@ class SideEffectEngine @Inject constructor(
 
     private fun bubbleFromArgs(args: Map<String, String>) {
         val text = args["text"] ?: return
-        val persona = resolvePersona(args["persona"])
+        // Persona parsing is the SSOT ChatPersona.fromWire (#audit-2); the bubble
+        // verb's schema can't carry a Merchant/Customer name, so none is supplied.
+        val persona = ChatPersona.fromWire(args["persona"])
         bubbleManager.postMessage(text, persona)
     }
 
@@ -534,18 +536,6 @@ class SideEffectEngine @Inject constructor(
         }
         // Untracking happens via the job's self-removing completion handler.
         activeTimers[type]?.cancel()
-    }
-
-    private fun resolvePersona(wire: String?): ChatPersona = when (wire?.lowercase()) {
-        "dispatcher" -> ChatPersona.Dispatcher
-        "system" -> ChatPersona.System
-        "earnings" -> ChatPersona.Earnings
-        "inspector" -> ChatPersona.Inspector
-        "navigator" -> ChatPersona.Navigator
-        "shopper" -> ChatPersona.Shopper
-        "good_offer" -> ChatPersona.GoodOffer
-        "bad_offer" -> ChatPersona.BadOffer
-        else -> ChatPersona.Dispatcher
     }
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {
