@@ -43,12 +43,10 @@ class DashboardViewModel @Inject constructor(
         .map { state -> getStatusText(state) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Offline")
 
-    // 3. Session Miles
-    val sessionMiles: StateFlow<String> = odometerRepository.sessionMeters
-        .map { meters ->
-            val miles = meters * 0.000621371
-            "${Formats.decimal(miles)} mi"
-        }
+    // 3. Session Miles — derive from the repository's miles flow (SSOT for the
+    // meters->miles factor); this VM only formats for display.
+    val sessionMiles: StateFlow<String> = odometerRepository.sessionMilesFlow
+        .map { miles -> "${Formats.decimal(miles)} mi" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 mi")
 
     // 4. First Run Check
