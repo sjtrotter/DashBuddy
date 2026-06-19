@@ -2692,25 +2692,69 @@
       "comment": "#462 batch 1 — recognize-only interstitials/menus/surveys so they no longer fall to UNKNOWN. No state.flow (cannot perturb the machine) and no parse (no PII). Keyed on 2+ stable non-PII strings.",
       "id": "doordash.screen.pickup_steps",
       "priority": 104,
+      "branches": [
+        {
+          "comment": "Normal DoorDash pickup steps (receipt photo / confirm pickup) — recognize-only.",
+          "require": {
+            "all": [
+              { "exists": { "hasTextContaining": "Pickup steps" } },
+              { "exists": { "any": [
+                { "hasTextContaining": "Take receipt photo" },
+                { "hasTextContaining": "Confirm pickup" }
+              ] } }
+            ]
+          }
+        },
+        {
+          "comment": "#501 GoPuff (Drive) warehouse bin-scan steps — the batch's at-store pickup workflow ('Scan barcodes on N items' / 'Complete pickup'). The whole warehouse leg is otherwise all-UNKNOWN, so no PICKUP_ARRIVED ever fired; declaring task:pickup:arrived here mints one clean, obs.timestamp-anchored arrival. No parse → no customer PII read (the per-order order_cx_name names are ignored); the flow alone drives the arrival, and EffectMap's null→non-null arrivedAt idempotency prevents any double-mint.",
+          "state": { "flow": "task:pickup:arrived", "modeHint": "online" },
+          "require": {
+            "all": [
+              { "exists": { "hasTextContaining": "Pickup steps" } },
+              { "exists": { "hasTextContaining": "Scan barcodes on" } },
+              { "exists": { "hasTextContaining": "Complete pickup" } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "comment": "#501 GoPuff (Drive) barcode-scan failure sub-screen of the bin-scan workflow ('Enter last 4 characters of barcode'). A bare Compose tree (no doordash widget ids), so keyed on stable text only. Recognize-only (no state) — it's a mid-pickup sub-screen and must not change phase; keeps the bin-scan stretch out of UNKNOWN.",
+      "id": "doordash.screen.pickup_barcode_scan_issue",
+      "priority": 105,
       "require": {
         "all": [
-          { "exists": { "hasTextContaining": "Pickup steps" } },
-          { "exists": { "any": [
-            { "hasTextContaining": "Take receipt photo" },
-            { "hasTextContaining": "Confirm pickup" }
-          ] } }
+          { "exists": { "hasTextContaining": "Enter last 4 characters of barcode" } },
+          { "exists": { "hasTextContaining": "Other issues with this item" } }
         ]
       }
     },
     {
       "id": "doordash.screen.pickup_wait_survey",
       "priority": 88,
-      "require": {
-        "all": [
-          { "exists": { "hasTextContaining": "What's causing your wait" } },
-          { "exists": { "hasTextContaining": "Order still being prepared when I arrived" } }
-        ]
-      }
+      "branches": [
+        {
+          "comment": "Normal DoorDash wait survey.",
+          "require": {
+            "all": [
+              { "exists": { "hasTextContaining": "What's causing your wait" } },
+              { "exists": { "hasTextContaining": "Order still being prepared when I arrived" } }
+            ]
+          }
+        },
+        {
+          "comment": "#501 GoPuff (Drive) at-store wait survey — recognize-only (inherits the parent's no-state), keyed on the GoPuff survey container id + 'Waiting for your order'. Rejects the bin-scan STEPS screen (which also carries pickup_survey_view) so the higher-numbered pickup_steps arrival branch wins it (lower priority = evaluated first, so this 88 must not steal the 104 steps frame).",
+          "reject": [
+            { "exists": { "hasTextContaining": "Pickup steps" } }
+          ],
+          "require": {
+            "all": [
+              { "exists": { "hasIdSuffix": "pickup_survey_view" } },
+              { "exists": { "hasTextContaining": "Waiting for your order" } }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "doordash.screen.pickup_select_issue",

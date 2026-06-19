@@ -2849,6 +2849,12 @@
             "subFlow": "ARRIVED"
         }
     },
+    "pickup_barcode_scan_issue/gopuff_barcode_scan_issue.json": {
+        "ruleId": "doordash.screen.pickup_barcode_scan_issue",
+        "intent": "pickup_barcode_scan_issue",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_navigation/20260128_202522_341_NAVIGATION_VIEW_TO_PICK_UP.json": {
         "ruleId": "doordash.screen.pickup_navigation",
         "intent": "pickup_navigation",
@@ -3773,6 +3779,12 @@
         "shape": null,
         "fields": {}
     },
+    "pickup_steps/gopuff_bin_scan_steps.json": {
+        "ruleId": "doordash.screen.pickup_steps",
+        "intent": "pickup_steps",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_verify_items/2026-06-12_19-58-10__doordash__pickup_verify_items__74398e.json": {
         "ruleId": "doordash.screen.pickup_verify_items",
         "intent": "pickup_verify_items",
@@ -3792,6 +3804,12 @@
         }
     },
     "pickup_wait_survey/2026-06-12__doordash__pickup_wait_survey__d90d0f.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_wait_survey/gopuff_wait_survey.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
         "shape": null,

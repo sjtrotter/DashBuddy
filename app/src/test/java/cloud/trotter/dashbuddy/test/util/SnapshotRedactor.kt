@@ -36,6 +36,9 @@ object SnapshotRedactor {
         "chat_input_text_field", "bottom_sheet_address_line_1", "bottom_sheet_address_line_2",
         "tvTitle", "tvLastMessage",
         "bottom_sheet_instructions", "step_description", "instructions_list", "instruction_text",
+        // GoPuff (DoorDash Drive) batch screens (#501): the per-order customer name on the
+        // bin-scan/pickup-steps screens.
+        "order_cx_name",
     )
 
     /** Text starting with one of these keeps the anchor prefix; the rest (a name/store) is masked. */
