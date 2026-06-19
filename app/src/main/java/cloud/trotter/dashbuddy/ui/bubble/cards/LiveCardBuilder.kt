@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.ui.bubble.cards
 
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
-import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -41,25 +40,12 @@ object LiveCardBuilder {
             Flow.OfferPresented -> {
                 val pending = state.regions.flow.pendingOffer ?: return null
                 val offer = pending.offerFields.parsedOffer
-                FlowCardSnapshot.Offer(
-                    phaseStartedAt = pending.presentedAt,
+                FlowCardSnapshot.Offer.from(
+                    parsedOffer = offer,
+                    evaluation = pending.evaluation,
                     offerHash = pending.offerHash,
-                    payAmount = offer.payAmount,
-                    distanceMiles = offer.distanceMiles,
-                    itemCount = offer.itemCount,
-                    storeNames = offer.orders.map { it.storeName }.distinct(),
-                    evaluationScore = pending.evaluation?.score,
-                    evaluationAction = pending.evaluation?.action?.name,
-                    netPayAmount = pending.evaluation?.netPayAmount,
-                    dollarsPerMile = pending.evaluation?.dollarsPerMile,
-                    dollarsPerHour = pending.evaluation?.dollarsPerHour,
-                    qualityLevel = pending.evaluation?.qualityLevel,
-                    // #461: synthetic SHOP marker from the order type (parity with FlowCardMapper, so
-                    // the LIVE offer card surfaces the [cart N] shop badge while it's on screen).
-                    badges = (offer.badges.map { it.name } +
-                        offer.orders.flatMap { it.badges }.map { it.name } +
-                        if (offer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }) listOf("SHOP") else emptyList()
-                        ).distinct(),
+                    phaseStartedAt = pending.presentedAt,
+                    // Live card derives the countdown anchors so the expiry bar can tick.
                     expiresAt = offer.initialCountdownSeconds?.let { pending.presentedAt + it * 1000L },
                     countdownSeconds = offer.initialCountdownSeconds,
                     outcome = null,
