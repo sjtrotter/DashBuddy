@@ -2367,7 +2367,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=8c66a5d1d7b1abb0eb2a6cc15c22d118a18910237d942d4132ebefc38ee36ecf, itemCount=1, payAmount=9.78, payTextRaw=null, distanceMiles=9.6, distanceTextRaw=null, dueByTimeText=6:00 PM, dueByTimeMillis=1780336800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Peter Piper Pizza, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=8c66a5d1d7b1abb0eb2a6cc15c22d118a18910237d942d4132ebefc38ee36ecf, itemCount=0, payAmount=9.78, payTextRaw=null, distanceMiles=9.6, distanceTextRaw=null, dueByTimeText=6:00 PM, dueByTimeMillis=1780336800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Peter Piper Pizza, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_181353_816_OFFER_POPUP.json": {
@@ -2375,7 +2375,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=557b56c07af05fd45d36f3468acaa7fdc7f7f1d5cc922d8062779b86bebc323b, itemCount=1, payAmount=7.6, payTextRaw=null, distanceMiles=2.9, distanceTextRaw=null, dueByTimeText=6:32 PM, dueByTimeMillis=1780338720000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=True Texas BBQ, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=557b56c07af05fd45d36f3468acaa7fdc7f7f1d5cc922d8062779b86bebc323b, itemCount=0, payAmount=7.6, payTextRaw=null, distanceMiles=2.9, distanceTextRaw=null, dueByTimeText=6:32 PM, dueByTimeMillis=1780338720000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=True Texas BBQ, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182525_934_OFFER_POPUP.json": {
@@ -2399,7 +2399,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=6dfe7dbc4fa70c5bc217f9dbfc76e9203359119daaf871683f66b45f6a17cba1, itemCount=2, payAmount=6.85, payTextRaw=null, distanceMiles=6.4, distanceTextRaw=null, dueByTimeText=7:06 PM, dueByTimeMillis=1780340760000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD]), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Bill Miller BBQ, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=6dfe7dbc4fa70c5bc217f9dbfc76e9203359119daaf871683f66b45f6a17cba1, itemCount=1, payAmount=6.85, payTextRaw=null, distanceMiles=6.4, distanceTextRaw=null, dueByTimeText=7:06 PM, dueByTimeMillis=1780340760000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD]), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Bill Miller BBQ, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182655_860_OFFER_POPUP.json": {
@@ -2407,7 +2407,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=0dda70d10932eba701ef1d2df425fe01b33876a325ebcbfc3e3ed3e4e59e2b3b, itemCount=1, payAmount=5.95, payTextRaw=null, distanceMiles=4.4, distanceTextRaw=null, dueByTimeText=6:46 PM, dueByTimeMillis=1780339560000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Taco Bell, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=0dda70d10932eba701ef1d2df425fe01b33876a325ebcbfc3e3ed3e4e59e2b3b, itemCount=0, payAmount=5.95, payTextRaw=null, distanceMiles=4.4, distanceTextRaw=null, dueByTimeText=6:46 PM, dueByTimeMillis=1780339560000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Taco Bell, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_185925_772_OFFER_POPUP.json": {
@@ -2415,7 +2415,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=bb47312390e65ec432e318298828ec0a671c00ab3aa620a6c8fcb985781ef300, itemCount=1, payAmount=5.45, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=7:23 PM, dueByTimeMillis=1780341780000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Raising Cane's, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=bb47312390e65ec432e318298828ec0a671c00ab3aa620a6c8fcb985781ef300, itemCount=0, payAmount=5.45, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=7:23 PM, dueByTimeMillis=1780341780000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Raising Cane's, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD])], rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_193825_010_OFFER_POPUP.json": {
@@ -2423,7 +2423,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=a7b89a7758c44f9fa0b6316623df9fd1019b7e03135096abe0a019b9dcb68bac, itemCount=2, payAmount=12.15, payTextRaw=null, distanceMiles=10.7, distanceTextRaw=null, dueByTimeText=8:09 PM, dueByTimeMillis=1780344540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Tarka Indian Kitchen, itemCount=1, isItemCountEstimated=true, badges=[]), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Torchy's Tacos, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=a7b89a7758c44f9fa0b6316623df9fd1019b7e03135096abe0a019b9dcb68bac, itemCount=0, payAmount=12.15, payTextRaw=null, distanceMiles=10.7, distanceTextRaw=null, dueByTimeText=8:09 PM, dueByTimeMillis=1780344540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Tarka Indian Kitchen, itemCount=1, isItemCountEstimated=true, badges=[]), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Torchy's Tacos, itemCount=1, isItemCountEstimated=true, badges=[])], rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_202519_909_OFFER_POPUP.json": {
