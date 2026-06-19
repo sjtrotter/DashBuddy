@@ -72,9 +72,17 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   pure-pickup (or pickup stack) shows **no** cart/count. Other badges should render as their icons. If
   a count is off by the number of pickups in a stack, or the shop badge doesn't show live, note the
   offer's order mix.
-  - Confirmed: 1/2 — **2026-06-19 (DoorDash):** the Shop & Deliver shopping chip with the item count
-    inside looks good and is working. (Order mix not noted; needs one more clean sighting — ideally
-    verify the true count on a known-size shop, and that a pure-pickup shows no chip.)
+  - Partially confirmed — **2026-06-19 (DoorDash):**
+    - **Single-order item count: CONFIRMED** — the Shop & Deliver shopping chip with the item count
+      inside looks good and works; across several offers this dash the badge's item count **matched
+      the on-screen count**.
+    - **Stacked offer: STILL AWAITED (the open one).** Need a **stacked** offer where one or both legs
+      are shop-and-deliver, to confirm the badge counts only the **shop-and-deliver item count**, NOT
+      the **number of orders**. The prior bug (2026-06-14 #1) showed the **# of stacked orders** instead
+      of the item count; developer's read this dash: that order-count value looked like a **backup
+      failsafe from the order-parsing system** kicking in when the per-leg item count wasn't resolved.
+      How to tell on the next stack: a 2-order stack with a ~N-item shop leg should read **N**, not
+      **2**. Capture the offer's order mix + the `offer_popup` frame if it still reads the order count.
 
 - **✅ FIX SHIPPED — same-store add-on no longer re-mints the task (#499 / #503 slice 2). CONFIRM ON DASH.**
   The task lifecycle now **resumes a prior subtask** instead of re-minting on a phase switch / after an
