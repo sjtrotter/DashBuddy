@@ -275,7 +275,14 @@ object ParsedFieldsFactory {
             activity = f.str("activity"),
             parsedOffer = ParsedOffer(
                 offerHash = offerHash,
-                itemCount = orders.sumOf { it.itemCount }.coerceAtLeast(1),
+                // #461: the offer's item count is the SHOP item count — sum only the shop orders'
+                // CONFIRMED counts. A pickup order has no items but defaults to itemCount=1
+                // (isItemCountEstimated), so the old `sumOf{itemCount}.coerceAtLeast(1)` added a
+                // phantom +1 per pickup (Sprouts 25 + 1 pickup read 26; a pure-pickup stack read its
+                // order count). 0 here means "no shop items" → the [cart N] badge shows no number.
+                itemCount = orders
+                    .filter { it.orderType == OrderType.SHOP_FOR_ITEMS && !it.isItemCountEstimated }
+                    .sumOf { it.itemCount },
                 payAmount = payAmount,
                 distanceMiles = distance,
                 dueByTimeText = deliveryTimeText,

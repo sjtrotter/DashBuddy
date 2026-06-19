@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.bubble.cards
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -27,6 +29,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.format.formatCountdown
@@ -338,15 +342,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                     Text(secondary, style = AppTheme.num.smNum, color = c.text2, maxLines = 1)
                 }
             }
-            // Item count promoted to the hero tier (#461): Shop & Deliver and
-            // multi-item offers surface the count beside the $/hr hero (the
-            // footer caption was easy to miss), using the space on the right.
-            if (snap.itemCount > 1) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("${snap.itemCount}", style = AppTheme.num.heroNum, color = c.text, maxLines = 1)
-                    Text("items", style = AppTheme.num.smNum, color = c.text2, maxLines = 1)
-                }
-            }
+            // (#461: the item count now rides the [cart N] shop badge below, not the hero tier.)
         }
 
         // Verdict banner — action word + reason + quality chip, tinted by the action.
@@ -386,7 +382,9 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             }
         }
 
-        // Badge pills.
+        // Badge row (#461): icon badges tinted by their brand color; the SHOP badge is co-icon-text
+        // [🛒 N] — the shopping-chat cart + the item count. Badges without a drawable fall back to a
+        // text pill so nothing is dropped.
         if (snap.badges.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -394,7 +392,16 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             ) {
                 snap.badges.forEach { b ->
                     val (label, col) = badgeMeta(b, c)
-                    AppChip(label, color = col, container = c.surface3)
+                    when {
+                        b == "SHOP" -> BadgeIcon(
+                            iconRes = R.drawable.ic_chat_shopping_cart,
+                            label = snap.itemCount.takeIf { it > 0 }?.toString(),
+                            color = col,
+                        )
+                        else -> badgeIcon(b)
+                            ?.let { BadgeIcon(iconRes = it, label = null, color = col) }
+                            ?: AppChip(label, color = col, container = c.surface3)
+                    }
                 }
             }
         }
@@ -419,6 +426,48 @@ private fun OfferCountdownText(expiresAt: Long, countdownSeconds: Int) {
         color = col,
         fontWeight = FontWeight.Bold,
     )
+}
+
+/**
+ * Badge enum name → `ic_badge_*` drawable (#461); null means "no icon, render the text pill". The
+ * SHOP badge is handled by the caller (the shopping-chat cart + the item count, [🛒 N]).
+ */
+@DrawableRes
+private fun badgeIcon(name: String): Int? = when (name) {
+    "HIGH_PAYING" -> R.drawable.ic_badge_dollar_plus
+    "PRIORITY_ACCESS" -> R.drawable.ic_badge_priority_access
+    "COLLECT_CASH" -> R.drawable.ic_badge_collect_cash
+    "RED_CARD" -> R.drawable.ic_badge_red_card
+    "LARGE_ORDER" -> R.drawable.ic_badge_large_order
+    "PIZZA_BAG" -> R.drawable.ic_badge_pizza_bag
+    "ALCOHOL", "INCLUDES_ALCOHOL" -> R.drawable.ic_badge_alcohol
+    "CHECK_RECIPIENT_ID", "AGE_RESTRICTED_18_PLUS", "AGE_RESTRICTED_21_PLUS",
+    "CONTAINS_RESTRICTED_ITEMS" -> R.drawable.ic_badge_id_check
+    else -> null
+}
+
+/**
+ * Icon badge in the [AppChip] pill family (#461): a brand-tinted icon, optionally with a trailing
+ * label — the SHOP badge rides its item count here ([🛒 N]). Mirrors AppChip's chip tokens.
+ */
+@Composable
+private fun BadgeIcon(
+    @DrawableRes iconRes: Int,
+    label: String?,
+    color: Color,
+    container: Color = AppTheme.colors.surface3,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(container)
+            .padding(horizontal = 7.dp, vertical = 4.dp),
+    ) {
+        Icon(painterResource(iconRes), contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+        if (label != null) Text(label, style = AppTheme.num.chip, color = color)
+    }
 }
 
 /** Maps a badge enum name to a short label + brand color for the pill row. */

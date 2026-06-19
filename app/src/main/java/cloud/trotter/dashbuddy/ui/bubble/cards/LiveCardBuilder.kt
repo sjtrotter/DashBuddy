@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.ui.bubble.cards
 
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -53,8 +54,12 @@ object LiveCardBuilder {
                     dollarsPerMile = pending.evaluation?.dollarsPerMile,
                     dollarsPerHour = pending.evaluation?.dollarsPerHour,
                     qualityLevel = pending.evaluation?.qualityLevel,
+                    // #461: synthetic SHOP marker from the order type (parity with FlowCardMapper, so
+                    // the LIVE offer card surfaces the [cart N] shop badge while it's on screen).
                     badges = (offer.badges.map { it.name } +
-                        offer.orders.flatMap { it.badges }.map { it.name }).distinct(),
+                        offer.orders.flatMap { it.badges }.map { it.name } +
+                        if (offer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }) listOf("SHOP") else emptyList()
+                        ).distinct(),
                     expiresAt = offer.initialCountdownSeconds?.let { pending.presentedAt + it * 1000L },
                     countdownSeconds = offer.initialCountdownSeconds,
                     outcome = null,

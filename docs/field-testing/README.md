@@ -63,6 +63,16 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 FIX SHIPPED — offer card icon badges + co-icon-text shop badge [cart N] (#461, PR #531). CONFIRM ON DASH.**
+  The offer card's badges are now **icons** (red card, alcohol, large order, priority, etc., tinted by
+  brand color), and the **Shop & Deliver** badge is the shopping-chat **cart icon + the item count**
+  (`[🛒 N]`) — the count moved off the $/hr hero onto the badge. **Confirm on dash: 0/2 —** on a
+  **shop** offer (e.g. Sprouts/CVS) the card shows the cart badge with the **true item count** (a
+  25-item shop reads **25**, not 26), it shows **while the offer is live** (not just after), and a
+  pure-pickup (or pickup stack) shows **no** cart/count. Other badges should render as their icons. If
+  a count is off by the number of pickups in a stack, or the shop badge doesn't show live, note the
+  offer's order mix.
+
 - **✅ FIX SHIPPED — same-store add-on no longer re-mints the task (#499 / #503 slice 2). CONFIRM ON DASH.**
   The task lifecycle now **resumes a prior subtask** instead of re-minting on a phase switch / after an
   offer interlude (re-match by store for pickups, customer address for dropoffs). **Confirm on dash:
