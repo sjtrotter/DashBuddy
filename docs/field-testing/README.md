@@ -126,6 +126,17 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   offer's). If $/mi shows "—" on a normal offer (that carried a distance), or looks wrong on a stack,
   note the offer's quoted miles + net pay.
 
+- **🔧 FIX SHIPPED — GoPuff (Drive) bin-scan mints the pickup arrival (#501, PR #530). CONFIRM ON DASH.**
+  The warehouse leg used to be all-UNKNOWN with **no `PICKUP_ARRIVED`** (the machine jumped
+  nav→confirmed). Now the GoPuff **bin-scan steps** screen ("Pickup steps" / "Scan barcodes on" /
+  "Complete pickup") is recognized as a branch of `pickup_steps` and declares `task:pickup:arrived`;
+  the wait-survey + barcode-scan screens are recognized too. **Confirm on a GoPuff dash: 0/2 —** the
+  bubble should show the pickup ARRIVING at the warehouse (a Dwell timer at store), exactly **one**
+  pickup arrival for the batch (not zero, not two), and the bin-scan/scan-fail screens shouldn't sit
+  on a stale card. If the arrival never fires or fires twice, capture the bin-scan frame sequence +
+  `app_state_snapshots`. (Still UNKNOWN, deferred to a follow-up: the zone-arrival "Navigate to zone"
+  card and the dropoff multi-order-confirm — those are noise, the arrival is the load-bearing fix.)
+
 - **📸 CAPTURE NEEDED — GoPuff (Drive) screens, to finalize the #501 rules.** The 06-14 deep-dive
   enumerated the GoPuff flow (all inside the DoorDash app — there is no separate GoPuff app) from real
   captures, but three things would help finalize the rules. **On the next GoPuff dash, drop these into
