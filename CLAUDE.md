@@ -341,12 +341,17 @@ The snapshot tests above are **per-frame** (does this screen recognize/parse rig
 To reproduce a **field bug that's emergent across a session** — a ghost offer, a re-mint, doubled
 dropoffs — `SessionReplay` (`app/src/test/.../test/util/SessionReplay.kt`) replays a *chronological
 sequence* of real device `CaptureEnvelope`s: `replayRecognition` (Level A → `List<Observation>` via
-the production rules) and `reduce` (Level B → folds through the real `StateMachine`, returning a
-per-frame trace of `{observation, stateAfter, events}` where events match the db `app_events` shape).
+the production rules), `reduce` (Level B → folds through the real `StateMachine`, returning a
+per-frame trace of `{frame, observation, stateAfter, events}` where events match the db `app_events`
+shape), and `reduceMixed` (Level B with **click + grace-timer injection** — a timestamp-ordered mix of
+real screens, real/synthetic clicks, and synthetic `GRACE_COMMIT` timers folded through one
+`StateMachine` + one classifier wired to both screen and click rulesets).
 The captured session's db `app_events` is a **characterization** oracle (it *encodes* the bug), so
 Level-B assertions are hand-authored correct-behaviour invariants, **never `replay == db`**.
-`GhostOfferReplayTest` is the worked example (red/green for #498). Tracked + roadmapped (on-device
-review tool, verdict export) under epic #505.
+`GhostOfferReplayTest` (Level A/B, #498) and `SingleDeliveryReplayTest` (the click+timer injection
+worked example — accept-click → pickup → dropoff → complete, exactly one dropoff, #498/#503/#518) are
+the worked examples; both are green. Remaining frontier (on-device review tool, verdict export,
+eval-loopback net economics, GoPuff multi-drop repro) is tracked under epic #505.
 
 ## Key Technologies
 
