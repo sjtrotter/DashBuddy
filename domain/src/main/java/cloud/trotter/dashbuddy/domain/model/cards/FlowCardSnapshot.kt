@@ -1,7 +1,10 @@
 package cloud.trotter.dashbuddy.domain.model.cards
 
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 
 /**
@@ -72,6 +75,63 @@ sealed class FlowCardSnapshot {
         val outcome: AppEventType? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "offer:$offerHash"
+
+        companion object {
+            /**
+             * Single owner (SSOT) for assembling an [Offer] card from a
+             * [ParsedOffer] + its [OfferEvaluation]. Both the live builder
+             * (from `AppState`) and the event-log fold call this so the
+             * badge list, store-name derivation, and the parsed/evaluation
+             * field copy can never drift apart again (the #461 SHOP-parity
+             * bug was exactly that divergence). Call-site-specific framing
+             * — `phaseStartedAt`/`phaseEndedAt`, `offerHash`, the live
+             * countdown anchors, and the decided `outcome` — stays a
+             * parameter; only the shared assembly lives here.
+             */
+            fun from(
+                parsedOffer: ParsedOffer,
+                evaluation: OfferEvaluation?,
+                offerHash: String,
+                phaseStartedAt: Long,
+                phaseEndedAt: Long? = null,
+                expiresAt: Long? = null,
+                countdownSeconds: Int? = null,
+                outcome: AppEventType? = null,
+            ): Offer = Offer(
+                phaseStartedAt = phaseStartedAt,
+                phaseEndedAt = phaseEndedAt,
+                offerHash = offerHash,
+                payAmount = parsedOffer.payAmount,
+                distanceMiles = parsedOffer.distanceMiles,
+                itemCount = parsedOffer.itemCount,
+                storeNames = parsedOffer.orders.map { it.storeName }.distinct(),
+                evaluationScore = evaluation?.score,
+                evaluationAction = evaluation?.action?.name,
+                netPayAmount = evaluation?.netPayAmount,
+                dollarsPerMile = evaluation?.dollarsPerMile,
+                dollarsPerHour = evaluation?.dollarsPerHour,
+                qualityLevel = evaluation?.qualityLevel,
+                badges = badgesOf(parsedOffer),
+                expiresAt = expiresAt,
+                countdownSeconds = countdownSeconds,
+                outcome = outcome,
+            )
+
+            /**
+             * The offer + order badge enum names for the pill row, plus a
+             * synthetic `"SHOP"` marker when any order is a Shop & Deliver
+             * (#461) — `orderType` is known at offer time, so the card can be
+             * typed at a glance.
+             */
+            private fun badgesOf(parsedOffer: ParsedOffer): List<String> =
+                (parsedOffer.badges.map { it.name } +
+                    parsedOffer.orders.flatMap { it.badges }.map { it.name } +
+                    if (parsedOffer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }) {
+                        listOf("SHOP")
+                    } else {
+                        emptyList()
+                    }).distinct()
+        }
     }
 
     /**

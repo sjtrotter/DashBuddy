@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.bubble.cards
 
-import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -90,33 +89,13 @@ object FlowCardMapper {
                         completed.add(it.copy(phaseEndedAt = payload.presentedAt))
                         openAwaiting = null
                     }
-                    val storeNames = payload.parsedOffer.orders
-                        .map { it.storeName }
-                        .distinct()
                     completed.add(
-                        FlowCardSnapshot.Offer(
+                        FlowCardSnapshot.Offer.from(
+                            parsedOffer = payload.parsedOffer,
+                            evaluation = payload.evaluation,
+                            offerHash = payload.offerHash,
                             phaseStartedAt = payload.presentedAt,
                             phaseEndedAt = payload.decidedAt,
-                            offerHash = payload.offerHash,
-                            payAmount = payload.parsedOffer.payAmount,
-                            distanceMiles = payload.parsedOffer.distanceMiles,
-                            itemCount = payload.parsedOffer.itemCount,
-                            storeNames = storeNames,
-                            evaluationScore = payload.evaluation?.score,
-                            evaluationAction = payload.evaluation?.action?.name,
-                            netPayAmount = payload.evaluation?.netPayAmount,
-                            dollarsPerMile = payload.evaluation?.dollarsPerMile,
-                            dollarsPerHour = payload.evaluation?.dollarsPerHour,
-                            qualityLevel = payload.evaluation?.qualityLevel,
-                            badges = (payload.parsedOffer.badges.map { it.name } +
-                                payload.parsedOffer.orders.flatMap { it.badges }.map { it.name } +
-                                // Synthetic SHOP badge (#461) so a Shop & Deliver offer is
-                                // typed at a glance — orderType is known at offer time.
-                                if (payload.parsedOffer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }) {
-                                    listOf("SHOP")
-                                } else {
-                                    emptyList()
-                                }).distinct(),
                             outcome = payload.outcome,
                         )
                     )
