@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.Locale
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
 /**
@@ -84,6 +85,37 @@ class PlatformRegionStepper @Inject constructor() {
             startedAt = obs.timestamp,
         )
     }
+
+    /**
+     * #526: pre-create one PICKUP placeholder per **distinct store** an accepted offer covers,
+     * the symmetric counterpart to [preCreatedDropoffs]. Two orders at the *same* store are ONE
+     * combined pickup on DoorDash (the #499 fold-in), so [distinctStoreHints] must already be
+     * de-duplicated — a 2-order same-store offer owns ONE pickup placeholder but two dropoffs.
+     * Each placeholder carries its order's [Task.expectedStoreHint]; the authoritative
+     * [Task.storeName] is filled when a pickup screen resolves onto it. ids are minted at
+     * [startOffset]..[startOffset]+size-1; the caller advances the counter in the same copy().
+     */
+    private fun preCreatedPickups(
+        region: PlatformRegion,
+        obs: Observation,
+        jobId: String,
+        distinctStoreHints: List<String>,
+        startOffset: Long,
+    ): List<Task> = distinctStoreHints.mapIndexed { i, hint ->
+        Task(
+            taskId = mintId("task", region, obs, offset = startOffset + i),
+            jobId = jobId,
+            phase = TaskPhase.PICKUP,
+            expectedStoreHint = hint,
+            storeName = null,
+            startedAt = obs.timestamp,
+        )
+    }
+
+    /** De-duplicate raw offer store hints case-insensitively, preserving first-seen order. */
+    private fun distinctStoreHints(storeHints: List<String>): List<String> =
+        storeHints.map { it.trim() }.filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase(Locale.ROOT) }
 
     fun step(
         prev: PlatformRegion,
@@ -523,14 +555,17 @@ class PlatformRegionStepper @Inject constructor() {
             val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
             val existing = region.activeJob
 
-            // #503 slice 3b: pre-create one dropoff placeholder PER ORDER the offer covers, so a
-            // stack's Job owns ordered dropoffs (not a single drop). Fallback to 1 when the offer
-            // wasn't parsed — the pre-3b behaviour for a single delivery.
+            // #503 slice 3b: one DROPOFF placeholder PER ORDER (each order is its own customer).
+            // #526: one PICKUP placeholder per DISTINCT store (same-store orders are one combined
+            // pickup, #499). Dropoffs fall back to 1 when the offer wasn't parsed (single delivery).
             val dropoffCount = parsedOffer?.orders?.size?.takeIf { it > 0 } ?: 1
+            val offerPickupHints = distinctStoreHints(storeHints)
 
             if (existing == null) {
                 val jobId = mintId("job", region, obs)
-                // job at offset 0; the N dropoff placeholders at offsets 1..N.
+                // job at offset 0; N dropoff placeholders at 1..N; P pickup placeholders at N+1..N+P.
+                val dropoffs = preCreatedDropoffs(region, obs, jobId, dropoffCount, startOffset = 1)
+                val pickups = preCreatedPickups(region, obs, jobId, offerPickupHints, startOffset = (1 + dropoffCount).toLong())
                 return region.copy(
                     activeJob = Job(
                         jobId = jobId,
@@ -538,9 +573,9 @@ class PlatformRegionStepper @Inject constructor() {
                         parentOfferHash = pending?.offerHash,
                         acceptedOffers = listOf(economics),
                         startedAt = obs.timestamp,
-                        tasks = preCreatedDropoffs(region, obs, jobId, dropoffCount, startOffset = 1),
+                        tasks = dropoffs + pickups,
                     ),
-                    mintCounter = region.mintCounter + dropoffCount + 1,
+                    mintCounter = region.mintCounter + 1 + dropoffCount + pickups.size,
                 )
             }
 
@@ -548,16 +583,23 @@ class PlatformRegionStepper @Inject constructor() {
             val alreadyCounted = economics.offerHash != null &&
                 existing.acceptedOffers.any { it.offerHash == economics.offerHash }
             if (alreadyCounted) return region
-            // #503 slice 3b: the add-on offer brings its own dropoff(s) — append a placeholder per
-            // order so a stacked add-on's drops are owned by the job too (offsets 0..N-1, no job mint
-            // this step).
+            // #503 slice 3b: the add-on's own dropoff(s) append (offsets 0..D-1). #526: the add-on's
+            // pickup placeholders append too — but only for stores the job does NOT already own (a
+            // same-store add-on folds into the existing pickup, #499), at offsets D..D+P-1.
+            val existingPickupHints = existing.tasks
+                .filter { it.phase == TaskPhase.PICKUP }
+                .mapNotNull { it.expectedStoreHint?.lowercase(Locale.ROOT) }
+                .toSet()
+            val addOnPickupHints = offerPickupHints.filter { it.lowercase(Locale.ROOT) !in existingPickupHints }
+            val addOnDropoffs = preCreatedDropoffs(region, obs, existing.jobId, dropoffCount, startOffset = 0)
+            val addOnPickups = preCreatedPickups(region, obs, existing.jobId, addOnPickupHints, startOffset = dropoffCount.toLong())
             return region.copy(
                 activeJob = existing.copy(
                     acceptedOffers = existing.acceptedOffers + economics,
                     offerStoreHint = existing.offerStoreHint + storeHints,
-                    tasks = existing.tasks + preCreatedDropoffs(region, obs, existing.jobId, dropoffCount, startOffset = 0),
+                    tasks = existing.tasks + addOnDropoffs + addOnPickups,
                 ),
-                mintCounter = region.mintCounter + dropoffCount,
+                mintCounter = region.mintCounter + dropoffCount + addOnPickups.size,
             )
         }
 
@@ -698,6 +740,56 @@ class PlatformRegionStepper @Inject constructor() {
                         ),
                         recentTasks = (region.recentTasks.filterNot { it.taskId == resumable.taskId } +
                             listOfNotNull(displaced)).takeLast(MAX_RECENT_TASKS),
+                        pendingDestructive = null,
+                    )
+                }
+
+                // #526: resolve a pickup screen onto a pre-created (offer-spawned) PICKUP
+                // placeholder of this job instead of minting — the symmetric counterpart to the
+                // dropoff resolution below. Store hints are unreliable, so prefer the OPEN
+                // placeholder whose hint EXACTLY (case-insensitively) matches the screen's parsed
+                // store; otherwise fall back to the next open placeholder in order. "Open" =
+                // storeName not yet resolved, not completed, not the current/displaced task.
+                // Entry into this branch is still gated by the stacked-pickup heuristic (above),
+                // so this changes which taskId a recognized pickup gets (a stable, offer-owned id),
+                // not WHEN a pickup is recognized — the conservative #526 step. A wrong hint match
+                // can be repaired without re-minting via [Job.withSwappedAccumulation] (the swap
+                // guard); the automatic trigger for it awaits a reliable mis-bind signal (see PR).
+                val expectedPickup = if (taskPhase == TaskPhase.PICKUP) {
+                    val displacedIds = region.recentTasks.mapTo(HashSet()) { it.taskId }
+                    val openPickups = region.activeJob?.tasks.orEmpty().filter { p ->
+                        p.phase == TaskPhase.PICKUP &&
+                            p.storeName == null &&
+                            p.completedAt == null &&
+                            p.taskId != currentTask?.taskId &&
+                            p.taskId !in displacedIds
+                    }
+                    val screenStore = taskFields?.storeName?.trim()?.takeIf { it.isNotEmpty() }
+                    val hintMatch = screenStore?.let { s ->
+                        openPickups.firstOrNull { it.expectedStoreHint?.equals(s, ignoreCase = true) == true }
+                    }
+                    hintMatch ?: openPickups.firstOrNull()
+                } else null
+
+                if (expectedPickup != null) {
+                    val retireSince = region.pendingDestructive
+                        ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
+                    val displaced = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
+                    val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && expectedPickup.arrivedAt == null
+                    return region.copy(
+                        activeTask = expectedPickup.copy(
+                            subPhase = taskSubFlow,
+                            storeName = taskFields?.storeName ?: expectedPickup.storeName,
+                            storeAddress = taskFields?.storeAddress ?: expectedPickup.storeAddress,
+                            deadlineMillis = taskFields?.deadline?.time ?: expectedPickup.deadlineMillis,
+                            activity = taskFields?.activity,
+                            itemsRemaining = taskFields?.itemsRemaining,
+                            itemsShopped = taskFields?.itemsShopped,
+                            redCardTotal = taskFields?.redCardTotal,
+                            startedAt = obs.timestamp,
+                            arrivedAt = if (justArrived) obs.timestamp else expectedPickup.arrivedAt,
+                        ),
+                        recentTasks = (region.recentTasks + listOfNotNull(displaced)).takeLast(MAX_RECENT_TASKS),
                         pendingDestructive = null,
                     )
                 }

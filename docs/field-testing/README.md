@@ -63,6 +63,16 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **⏸️ NOT YET IN BUILD — pickup placeholders + swap guard (#526, branch `refactor/526-pickup-placeholders-swap`, unmerged). VALIDATE AFTER MERGE.**
+  Pickups now get pre-created from the offer like dropoffs do — one pickup task per **distinct store**
+  (two orders at the *same* store stay ONE combined pickup; two *different* stores → two pickups), each
+  resolving onto its offer-owned slot by store hint. **Confirm on a multi-store STACKED dash (after this
+  lands): 0/2 —** a 2-store stack should show **two** pickup tasks each keeping a **stable id** across
+  nav/arrival flicker; a same-store add-on should still **fold into one** pickup (combined item count, no
+  2nd pickup task). Watch for a pickup task bound to the **wrong order** (store-hint mismatch) — note the
+  offer's store names vs the parsed pickup store, since that's the case the swap guard is meant to repair
+  (the auto-trigger is deferred, so a mis-bind may currently persist). Needs a real multi-pickup stack.
+
 - **🔧 FIX SHIPPED — offer card icon badges + co-icon-text shop badge [cart N] (#461, PR #531). CONFIRM ON DASH.**
   The offer card's badges are now **icons** (red card, alcohol, large order, priority, etc., tinted by
   brand color), and the **Shop & Deliver** badge is the shopping-chat **cart icon + the item count**

@@ -12,6 +12,15 @@ data class Task(
     val jobId: String,
     val phase: TaskPhase,
     val subPhase: TaskSubFlow? = null,
+    /**
+     * The offer's store-name **hint** for this order's pickup, stamped when the task is
+     * pre-created from an accepted offer (#526). The hint is *not* authoritative — store
+     * names on the offer card and on the pickup screen routinely differ — so [storeName]
+     * (parsed from the pickup screen) remains the source of truth. The hint exists only to
+     * route a pickup screen to the right pre-created order slot and to detect/repair a
+     * mis-bound slot (the swap guard). Null for non-placeholder tasks and dropoff placeholders.
+     */
+    val expectedStoreHint: String? = null,
     val storeName: String? = null,
     val storeAddress: String? = null,
     val customerNameHash: String? = null,
