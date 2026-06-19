@@ -803,6 +803,54 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
+## 2026-06-19 — DoorDash session (live dash, in-field narration)
+
+- **Platform tested:** DoorDash (Shop & Deliver focus)
+- **Branch under test:** `master` (field build) — exact SHA not captured in-field. Build is
+  **post-#531** (the Shop & Deliver offer-card **cart badge `[🛒 N]`** is present and was confirmed
+  working this dash; see the checklist item).
+- **Field conditions:** narrated live while driving (evening). Recorded for triage —
+  **hypotheses, not concluded fixes.** No code changes this session.
+
+### Bugs
+
+1. **Dollar General drop-off pre-arrival screen ("older format") falls to UNKNOWN.** (~18:28.)
+   On a Dollar General order, the **drop-off pre-arrival** screen is **not getting recognized**. The
+   developer's read: it looks like the **older format** DoorDash used to use — the **same kind of
+   layout as the alcohol delivery screen / the 7-Eleven "Delivery for" arrival card** that the current
+   `dropoff_pre_arrival` arrival branch was modeled after (#462/#460/#463). So the existing branch
+   either needs **refining** or a **new branch** added to cover this variant.
+   - **Likely cause (HYPOTHESIS — needs the capture to confirm).** `doordash.screen.dropoff_pre_arrival`
+     (`core/pipeline/src/main/assets/rules/doordash.json:1313`, priority 73) recognizes a drop-off via
+     **either** of two `require` branches:
+     - **(a) en-route nav card:** (`Deliver to` **OR** `Heading to`) **AND** (`Directions` **OR** `Call`
+       **OR** `Message`) — `doordash.json:1324`.
+     - **(b) arrival detail card:** text **containing** `Delivery for` **AND** the **exact** text
+       `Hand it to recipient` — `doordash.json:1355`. The `Hand it to recipient` literal is the
+       deliberate discriminator (the pickup card also carries "Delivery for", so keying on that alone
+       would steal the pickup card — see the rule's own comment at `doordash.json:1320`).
+     - If the older Dollar General layout neither starts with `Deliver to`/`Heading to` + a
+       Directions/Call/Message control **nor** carries the **exact** `Hand it to recipient` string
+       (an older handoff label could read differently, or the leading label could be `Delivery for`/
+       `Deliver by` with a different button set), **both branches miss → UNKNOWN.** This mirrors the
+       original 7-Eleven miss (first text `Delivery for`/`Deliver by`, neither of which `startsWith
+       "Deliver to"`), which is exactly why branch (b) exists — so this looks like **a sibling variant
+       branch (b) doesn't yet cover**, not a regression.
+   - **What to capture (load-bearing).** Drop the **Dollar General drop-off pre-arrival** screen's UI
+     hierarchy `.json` into `snapshots/INBOX/` so we can see the **exact literals** (the leading label,
+     the handoff-button text, and the action buttons present). That decides whether to **widen branch (b)**
+     (e.g. accept an alternate handoff label) or **add a third branch** for the older layout. Until the
+     real tree is in hand, the exact missing predicate is a guess.
+   - **Privacy note (must hold for any fix).** This is a **customer** drop-off card — per the Pledges,
+     customer name/address are **hashed at the parse**, never blocked, never stored raw. Any new/widened
+     branch must keep the `Delivery for` name read going through the `sha256` parse (as branch (b) does),
+     and must **not** start matching the literal **signature pad** or **license-scan** surfaces, which
+     stay priority-0 sensitive/blocked.
+   - **Status:** Open. Recognition gap — needs the Dollar General drop-off capture to refine
+     `dropoff_pre_arrival` (widen branch (b) or add a branch). Related to #462/#460/#463.
+
+---
+
 ## 2026-06-17 — DoorDash session (live dash, in-field narration)
 
 - **Platform tested:** DoorDash
