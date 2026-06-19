@@ -38,7 +38,7 @@ class PlatformSettingsViewModel @Inject constructor(
             monitorablePlatforms.map { platform ->
                 PlatformUiState(
                     platform = platform,
-                    displayName = platform.displayName(),
+                    displayName = platform.displayName,
                     packageName = platform.packageName!!,
                     isEnabled = platform in enabled,
                     isInstalled = isInstalled(platform),
@@ -58,13 +58,5 @@ class PlatformSettingsViewModel @Inject constructor(
         true
     } catch (_: PackageManager.NameNotFoundException) {
         false
-    }
-
-    private fun Platform.displayName(): String = when (this) {
-        Platform.DoorDash -> "DoorDash"
-        Platform.Uber -> "Uber Driver"
-        Platform.Instacart -> "Instacart Shopper"
-        Platform.WalmartSpark -> "Walmart Spark"
-        Platform.Unknown -> "Unknown"
     }
 }
