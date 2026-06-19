@@ -697,7 +697,7 @@ object RuleCompiler {
 
     private fun compileValidateEntry(obj: JsonObject): (Map<String, Any?>) -> ValidateOutcome {
         val assertName = obj["assert"]!!.jsonPrimitive.content
-        TransformRegistry.validateAssertionName(assertName)
+        ValidateRegistry.validateAssertionName(assertName)
         val onFail = obj["onFail"]?.jsonPrimitive?.content ?: "skip"
         // A typo'd onFail used to coerce silently to "skip" (#362).
         if (onFail !in setOf("skip", "dropParsed")) {
@@ -705,7 +705,7 @@ object RuleCompiler {
         }
 
         return { parsed ->
-            val outcome = TransformRegistry.validate(assertName, obj, parsed)
+            val outcome = ValidateRegistry.validate(assertName, obj, parsed)
             when (outcome) {
                 is ValidateOutcome.Pass -> ValidateOutcome.Pass
                 else -> if (onFail == "dropParsed") ValidateOutcome.DropParsed else ValidateOutcome.Skip
