@@ -53,6 +53,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppGaugeRing
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.cards.TaskEconomics
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.flowPhase
 import cloud.trotter.dashbuddy.domain.state.presentation
@@ -501,7 +502,7 @@ private fun PickupBody(snap: FlowCardSnapshot.Pickup, isActive: Boolean) {
         primary = snap.storeName,
         netPay = snap.netPay,
         estMinutes = snap.estMinutes,
-        distanceMiles = snap.distanceMiles,
+        perMile = snap.perMile,
         confirmedAt = snap.confirmedAt,
         itemsShopped = snap.itemsShopped,
         itemsRemaining = snap.itemsRemaining,
@@ -522,7 +523,7 @@ private fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
         primary = customerDisplayName(snap.customerHash),
         netPay = snap.netPay,
         estMinutes = snap.estMinutes,
-        distanceMiles = snap.distanceMiles,
+        perMile = snap.perMile,
         confirmedAt = null,
         itemsShopped = null,
         itemsRemaining = null,
@@ -549,7 +550,7 @@ private fun TaskBody(
     primary: String,
     netPay: Double?,
     estMinutes: Double?,
-    distanceMiles: Double?,
+    perMile: Double?,
     confirmedAt: Long?,
     itemsShopped: Int?,
     itemsRemaining: Int?,
@@ -560,10 +561,10 @@ private fun TaskBody(
     val arrived = arrivedAt != null
     val verb = if (isDrop) "deliver" else "pickup"
     val overdue = deadlineMillis != null && now > deadlineMillis
-    val hourly = projectedHourly(netPay, estMinutes, deadlineMillis, now)
-    // Fixed $/mi efficiency off the job (#503 deliverable 2) — distance doesn't erode like time,
-    // so it's the steady companion to the realized $/hr; shown as the metric's sub line.
-    val perMile = if (netPay != null && distanceMiles != null && distanceMiles > 0.0) netPay / distanceMiles else null
+    // Live realized $/hr — ticks with `now` (erodes past the deadline), so it is recomputed here
+    // each tick from the snapshot's anchors via the TaskEconomics SSOT, never frozen at reduce
+    // time. The fixed $/mi companion ([perMile]) is precomputed on the snapshot.
+    val hourly = TaskEconomics.projectedHourly(netPay, estMinutes, deadlineMillis, now)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -636,7 +637,7 @@ private fun TaskBody(
         Caption(caption)
 
         // ---- drop-it floor banner: overdue AND the rate has eroded below the floor ----
-        if (isActive && overdue && hourly != null && hourly < DROP_FLOOR_HOURLY) {
+        if (isActive && overdue && hourly != null && TaskEconomics.belowDropFloor(hourly)) {
             Surface(shape = MaterialTheme.shapes.small, color = c.badBg) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
@@ -717,26 +718,15 @@ private fun TaskMetric(
     }
 }
 
-/** The drop-it floor (#460): once overdue and the realized rate falls below
- *  this, the card flags the wait as no longer worth it. */
-private const val DROP_FLOOR_HOURLY = 12.0
-
 /**
- * Live realized $/hr on a task (#460). Pay is fixed; the offer's time estimate
- * has slack up to the deadline — once past it, every extra minute erodes the
- * rate (the drop-it signal). Null when no accepted-offer economics are known.
+ * The $/hr tier → brand Color mapping for the task co-hero (#460). The tier
+ * *classification* (the cutoffs) lives in [TaskEconomics]; the UI keeps only
+ * the color lookup (audit #6).
  */
-private fun projectedHourly(netPay: Double?, estMinutes: Double?, deadlineMillis: Long?, now: Long): Double? {
-    if (netPay == null || estMinutes == null || estMinutes <= 0.0) return null
-    val pastMin = if (deadlineMillis != null) ((now - deadlineMillis) / 60_000.0).coerceAtLeast(0.0) else 0.0
-    return netPay / ((estMinutes + pastMin) / 60.0)
-}
-
-/** $/hr color tiers for the task co-hero (#460): ≥16 good, ≥10 amber, else red. */
-private fun hourlyColor(hourly: Double, c: AppColors): Color = when {
-    hourly >= 16.0 -> c.good
-    hourly >= 10.0 -> c.warn
-    else -> c.bad
+private fun hourlyColor(hourly: Double, c: AppColors): Color = when (TaskEconomics.hourlyTier(hourly)) {
+    TaskEconomics.HourlyTier.GOOD -> c.good
+    TaskEconomics.HourlyTier.WARN -> c.warn
+    TaskEconomics.HourlyTier.POOR -> c.bad
 }
 
 /**

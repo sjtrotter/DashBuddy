@@ -163,6 +163,13 @@ sealed class FlowCardSnapshot {
         val distanceMiles: Double? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "pickup:$taskId"
+
+        /**
+         * Precomputed fixed $/mi efficiency (#503 deliverable 2) — distance
+         * doesn't erode like time, so unlike the live $/hr this is decided once,
+         * off the [TaskEconomics] SSOT, instead of in the composable (audit #6).
+         */
+        val perMile: Double? get() = TaskEconomics.perMile(netPay, distanceMiles)
     }
 
     /**
@@ -190,6 +197,13 @@ sealed class FlowCardSnapshot {
         val distanceMiles: Double? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "delivery:$taskId"
+
+        /**
+         * Precomputed fixed $/mi efficiency (#503 deliverable 2) — distance
+         * doesn't erode like time, so unlike the live $/hr this is decided once,
+         * off the [TaskEconomics] SSOT, instead of in the composable (audit #6).
+         */
+        val perMile: Double? get() = TaskEconomics.perMile(netPay, distanceMiles)
     }
 
     /**
