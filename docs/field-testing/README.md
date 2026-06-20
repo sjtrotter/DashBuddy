@@ -797,6 +797,65 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
+## 2026-06-20 — DoorDash session (live dash, in-field narration)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` (build inferred — developer to correct if running a feature branch).
+- **Field conditions:** Live Saturday dash. Single ACV (alcohol) Shop-&-Deliver offer from **H-E-B**
+  (grocery). Observation narrated from the bubble HUD while the offer/pickup card was on screen; one
+  screenshot captured. **Hypotheses, not concluded fixes.** No code changes from this session.
+
+### Bugs
+
+1. **`$/hr` on the offer/active card is wildly inflated for shop-&-wait offers (~$116/hr on a ~1-hour
+   $30 grocery run).** Screenshot: H-E-B offer, gross **$30.03**, card hero reads **`$116/hr`**, sub-line
+   **`Net $28.89 · 3.2 mi · $9.03/mi`**, score **86 ("AWESOME OFFER")**. The pickup card on the same
+   screen shows **`36:08` to go / pickup by 16:53** — i.e. the *pickup deadline alone* is ~36 min, and
+   the dasher estimates the whole job at **almost an hour**. So the real rate is ~**$30/hr**, not $116.
+   - **The number is internally consistent — the *time model* is the bug (not an arithmetic slip).**
+     The hourly is `netPay / estTimeHours` where
+     `estTimeMinutes = (dist × avgMinutesPerMile) + basePickupMinutes`
+     (`OfferEvaluator.evaluate`, `domain/.../evaluation/OfferEvaluator.kt:24-29`). With the defaults
+     `avgMinutesPerMile = 2.5`, `basePickupMinutes = 7.0`
+     (`UserEconomy.kt:105-106`): `3.2 × 2.5 + 7 = 15.0 min = 0.25 h` → `28.89 / 0.25 = $115.56/hr` →
+     rounds to the `$116/hr` on screen. The estimate is **15 minutes for a job DoorDash itself says is
+     36+ minutes to pickup.**
+   - **Likely root cause (hypothesis): the time estimate is a pure distance heuristic with no
+     shop/wait component and no use of the platform's own timing signals.** `basePickupMinutes` is a
+     single flat 7-min overhead for *both* pickup and dropoff — fine for a hand-it-to-me restaurant
+     bag, badly wrong for a **Shop & Deliver / grocery / alcohol** order where in-store shopping +
+     checkout + ID-check is the dominant time sink and is **independent of drive distance**. A 25-item
+     H-E-B shop and a 1-item McDonald's bag get the *same* 7-min overhead. The model also ignores the
+     real signals already on the offer/pickup screen — the **pickup-by deadline** and (for shops) the
+     **item count** — which we parse and already carry on the cards (`itemsRemaining`/`itemsShopped`,
+     `deadlineMillis` in `FlowCardMapper`).
+   - **This very likely also inflates the offer *score*, confirming the dasher's worry that "the
+     offer logic is off too."** The same `estTimeMinutes` → `activeHourly` feeds the **`ACTIVE_HOURLY`
+     scoring metric** (`OfferEvaluator.kt:140` → `calculateMetricScore` → `:197`,
+     `(hourly / target).coerceIn(0,1)`). A 4–5× inflated hourly will peg that metric at its max for
+     almost any shop offer, dragging the composite score up — plausibly a big part of why a ~$30/hr-real
+     grocery run scored **86 / "AWESOME"**. So this is one model error surfacing in two places (the HUD
+     number *and* the accept/decline verdict), exactly because `dollarsPerHour` is the SSOT for both.
+   - **Open questions to resolve at the desk / next capture:**
+     - Is `offer.distanceMiles` (3.2 mi) the full pickup→dropoff route or just one leg? If it's only
+       the delivery leg, the drive-time term is *also* under-counting (separate from the missing shop
+       time).
+     - Do we already parse a **pickup-by / dropoff-by deadline** off the offer screen (vs only the
+       pickup card)? If a deadline is available at *offer* time, the estimate could anchor on it
+       instead of the distance heuristic. (`deadlineMillis` exists on the pickup card payload — need to
+       check whether it's populated pre-accept.)
+     - Should Shop & Deliver get a distinct time model — e.g. a per-item shop-time term
+       (`itemCount × minutesPerItem`) plus a checkout/ID-check constant — gated on the
+       shop/alcohol recognition we already have? Would need a `minutesPerItem` constant in
+       `UserEconomy` and the parsed item count threaded into `evaluate`.
+     - Would the cleanest near-term anchor be "trust DoorDash's own time": if the offer exposes an
+       estimated active time or a delivery-by window, prefer it and fall back to the heuristic only
+       when absent?
+   - **Status:** Open. Needs desk confirmation of (a) what distance/deadline/item fields are present on
+     the offer at evaluation time, and (b) a decision on the Shop-&-Deliver time model before any change.
+
+---
+
 ## 2026-06-19 — DoorDash session (desk analysis of captured dash data)
 
 - **Platform tested:** DoorDash
