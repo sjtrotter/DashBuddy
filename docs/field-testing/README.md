@@ -803,7 +803,9 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 - **Branch under test:** `master` (build inferred — developer to correct if running a feature branch).
 - **Field conditions:** Live Saturday dash. Single ACV (alcohol) Shop-&-Deliver offer from **H-E-B**
   (grocery). Observation narrated from the bubble HUD while the offer/pickup card was on screen; one
-  screenshot captured. **Hypotheses, not concluded fixes.** No code changes from this session.
+  screenshot captured. Mid-dash, a **real phone power-off at the H-E-B checkout lane (~17:01)** gave a
+  live **crash-recovery** test (item #2). **Hypotheses, not concluded fixes.** No code changes from
+  this session.
 
 ### Bugs
 
@@ -865,6 +867,32 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      this session: recorded only, no code changes. When implemented this needs field re-validation that a
      grocery/ACV shop now reads a realistic `$/hr` and a non-inflated score — add a "Next field test"
      checklist item at that point.
+
+### Verification TODOs — crash recovery held in the field (confirmation 1/2)
+
+2. **Crash recovery survived a real mid-checkout power-off and resumed the dash on the correct phase.**
+   ~17:01, at the **H-E-B checkout lane**, the dasher **dropped the phone and it powered off** mid
+   **checkout/pickup flow** (same H-E-B ACV shop as item #1). On restart, the dasher relaunched
+   DoorDash/DashBuddy and the **bubble HUD came back up, recognized it was still on a pickup, and the
+   prior (pre-crash) dash resumed** — no new dash, no lost session. This is exactly the `StateManagerV2`
+   crash-recovery path (replay observations over the last snapshot) working against a **true cold
+   power-loss** (not a process kill) — the strongest version of the test.
+   - **Why this is a good characterization case:** the crash landed **inside the checkout/pickup
+     confirm window**, which is the phase the dropoff/grace machinery is most sensitive to (the
+     06-17/06-19 phantom-dropoff and double-complete investigations all clustered around
+     pickup-confirm → dropoff transitions). Recovering *onto a pickup* mid-checkout — rather than
+     skipping to dropoff or re-minting the task — is the behavior we want to confirm held.
+   - **Needs end-of-dash cross-reference (why this is 1/2, not done):** the bubble *looked* correct
+     in-field, but the ground truth is the captured data. At desk, check the uploaded
+     `app_state_snapshots` / `app_events` for this dash around 17:01 for: (a) the recovery restored the
+     **same** job/task identity (no re-mint, no new sessionId for the resumed dash); (b) **exactly one**
+     pickup task for the H-E-B shop across the crash boundary (the checkout interruption didn't split or
+     double it); (c) the eventual `DELIVERY_COMPLETED` for this order fires **once** and reconciles into
+     session earnings (this delivery was the second-to-last of the dash). Confirm against the db before
+     marking validated.
+   - **Status:** Open — **1/2 field confirmations** (in-field bubble recovery looked correct, 2026-06-20).
+     Needs the end-of-dash db cross-reference above for the second confirmation. Acting as field-testing
+     agent: recorded only, no code changes.
 
 ---
 
