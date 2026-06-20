@@ -52,6 +52,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var jsonRuleInterpreter: JsonRuleInterpreter
 
+    @Inject
+    lateinit var shadowStoreChainLogger: cloud.trotter.dashbuddy.state.shadow.ShadowStoreChainLogger
+
     // Global Context Accessor (Still useful for Utils, but avoid if possible)
     companion object {
         lateinit var instance: DashBuddyApplication
@@ -112,6 +115,13 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // 3. Initialize State
         stateManagerV2.initialize()
         Timber.i("StateManagerV2 initialized.")
+
+        // 3b. Shadow store-chain projection (#159 / #526 Step 3): debug-only, log-only — observe
+        // completed jobs and log the offer→pickup→dropoff→payout chain so we can verify store
+        // resolution against real dashes and build corpus before a persisting projector exists.
+        if (BuildConfig.DEBUG) {
+            shadowStoreChainLogger.start(applicationScope)
+        }
 
         // 4. Schedule Background Tasks
         scheduleBackgroundWorkers()

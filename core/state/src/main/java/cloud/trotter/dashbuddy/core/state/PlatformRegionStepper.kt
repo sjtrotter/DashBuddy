@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.SessionType
+import cloud.trotter.dashbuddy.domain.state.StoreNameMatch
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
@@ -123,27 +124,12 @@ class PlatformRegionStepper @Inject constructor() {
             pickupStores.isEmpty() -> active.storeName
             else -> {
                 val cand = active.storeName ?: return region
-                val candTokens = storeTokens(cand)
-                pickupStores
-                    .map { it to sharedLeadingTokens(storeTokens(it), candTokens) }
-                    .filter { it.second >= 1 }
-                    .maxByOrNull { it.second }
-                    ?.first
+                // Match the dropoff's candidate to the pickup with the most shared brand tokens
+                // (the SSOT comparison in [StoreNameMatch]); no match → null, never a wrong store.
+                StoreNameMatch.bestMatch(pickupStores, cand)
             }
         }
         return if (resolved == active.storeName) region else region.copy(activeTask = active.copy(storeName = resolved))
-    }
-
-    /** Lowercase alphanumeric tokens of a store name; drops the store-number / punctuation noise that
-     *  differs between the offer/pickup form and the dropoff/payout running-key form. */
-    private fun storeTokens(name: String): List<String> =
-        name.lowercase(Locale.ROOT).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
-
-    /** Count of matching tokens from the start of both lists — how much of the store name they share. */
-    private fun sharedLeadingTokens(a: List<String>, b: List<String>): Int {
-        var i = 0
-        while (i < a.size && i < b.size && a[i] == b[i]) i++
-        return i
     }
 
     /**
