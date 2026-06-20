@@ -781,8 +781,17 @@ class PlatformRegionStepper @Inject constructor() {
                         jobId = jobId,
                         phase = taskPhase,
                         subPhase = taskSubFlow,
-                        storeName = taskFields?.storeName ?: currentTask?.storeName,
-                        storeAddress = taskFields?.storeAddress ?: currentTask?.storeAddress,
+                        // #526: a newly-minted task takes its store from its OWN frame; only inherit
+                        // the displaced task's store on a SAME-phase mint (e.g. a stacked-pickup
+                        // parser flicker). A cross-phase mint (pickup→dropoff) must NOT inherit — the
+                        // dropoff screen carries its own store (`Target (02426)`), and inheriting the
+                        // pickup's store mislabelled a multi-store stack's drop (06-19 Target+Maple).
+                        // A dropoff with no store frame yet stays null and fills in on its own later
+                        // dropoff_pre_arrival frame via the same-phase update path below.
+                        storeName = taskFields?.storeName
+                            ?: currentTask?.storeName?.takeIf { currentTask.phase == taskPhase },
+                        storeAddress = taskFields?.storeAddress
+                            ?: currentTask?.storeAddress?.takeIf { currentTask.phase == taskPhase },
                         customerNameHash = taskFields?.customerNameHash,
                         customerAddressHash = taskFields?.customerAddressHash,
                         deadlineMillis = taskFields?.deadline?.time,
