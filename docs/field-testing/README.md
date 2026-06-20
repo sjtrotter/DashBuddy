@@ -868,7 +868,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      grocery/ACV shop now reads a realistic `$/hr` and a non-inflated score — add a "Next field test"
      checklist item at that point.
 
-### Verification TODOs — crash recovery held in the field (confirmation 1/2)
+### Verification TODOs — crash recovery held in the field (confirmation 2/2)
 
 2. **Crash recovery survived a real mid-checkout power-off and resumed the dash on the correct phase.**
    ~17:01, at the **H-E-B checkout lane**, the dasher **dropped the phone and it powered off** mid
@@ -882,17 +882,21 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      06-17/06-19 phantom-dropoff and double-complete investigations all clustered around
      pickup-confirm → dropoff transitions). Recovering *onto a pickup* mid-checkout — rather than
      skipping to dropoff or re-minting the task — is the behavior we want to confirm held.
-   - **Needs end-of-dash cross-reference (why this is 1/2, not done):** the bubble *looked* correct
-     in-field, but the ground truth is the captured data. At desk, check the uploaded
-     `app_state_snapshots` / `app_events` for this dash around 17:01 for: (a) the recovery restored the
-     **same** job/task identity (no re-mint, no new sessionId for the resumed dash); (b) **exactly one**
-     pickup task for the H-E-B shop across the crash boundary (the checkout interruption didn't split or
-     double it); (c) the eventual `DELIVERY_COMPLETED` for this order fires **once** and reconciles into
-     session earnings (this delivery was the second-to-last of the dash). Confirm against the db before
-     marking validated.
-   - **Status:** Open — **1/2 field confirmations** (in-field bubble recovery looked correct, 2026-06-20).
-     Needs the end-of-dash db cross-reference above for the second confirmation. Acting as field-testing
-     agent: recorded only, no code changes.
+   - **Second confirmation — held through end of dash (2026-06-20).** After recovery the resumed dash
+     stayed intact: the prior dash's history was **all still present**, the dasher **finished the
+     delivery and ended the dash normally**, and everything persisted as expected (no lost session, no
+     duplicate dash). Two independent in-field confirmations: the recovery itself (resumed onto the
+     pickup) and the clean end-of-dash teardown.
+   - **Still want the db cross-reference at desk (not blocking the 2/2 — confirmatory).** Logs will be
+     reviewed anyway; when they are, verify in `app_state_snapshots` / `app_events` around 17:01: (a) the
+     recovery restored the **same** job/task identity (no re-mint, no new sessionId for the resumed
+     dash); (b) **exactly one** pickup task for the H-E-B shop across the crash boundary (the checkout
+     interruption didn't split or double it); (c) the eventual `DELIVERY_COMPLETED` for this order fires
+     **once** and reconciles into session earnings (this delivery was the second-to-last of the dash).
+   - **Status:** **Validated — 2/2 field confirmations** (recovery onto pickup + clean end-of-dash with
+     full history intact, both 2026-06-20). Desk db cross-reference above remains as a confirmatory check
+     during the routine log review, not a blocker. Acting as field-testing agent: recorded only, no code
+     changes.
 
 ---
 
