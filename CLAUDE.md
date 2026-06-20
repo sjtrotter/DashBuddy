@@ -260,6 +260,34 @@ Every new feature or refactor holds to these — they are forefront design input
      apply). Consent UI = #422 PR 3.
    When a change touches recognition, capture, network, or effects, state its security/privacy
    posture in the PR — what's trusted, what's gated, what's scrubbed.
+7. **Semantic, PII-safe logging.** Log levels carry *meaning*, not volume convenience, and the log is
+   two products: an on-device **DEBUG firehose** for us, and an **INFO+ slice a user can export as a
+   bug report** to send to the developer. Pairs with #6 (the export is a privacy surface). The 06-19
+   dash is the receipt: ~110k lines, one Timber tag (`App`), DEBUG 76% / INFO 22% / WARN 1.2% / ERROR
+   0, with per-frame `SCREEN:` spam at INFO and benign tree-mapper noise drowning the real WARN — and
+   raw merchant names already leaking into INFO+ lines (`Pickup: H-E-B`, a TTS line naming two stores).
+   The level taxonomy:
+   - **VERBOSE** — per-frame trace (`SCREEN:` lines, tree-mapper `👻 NULL CHILDREN`). Firehose only;
+     never shipped or exported.
+   - **DEBUG** — single reducer/effect steps (`PROCESSING: <Event>`, grace-resume, gate decisions,
+     capture writes). Firehose only.
+   - **INFO** — user-meaningful milestones (offer received/accepted/declined, delivery completed,
+     crash recovery, periodic `PipelineStats`). This is the **shareable** stream and **must be PII-safe
+     by construction**: economics, counters, state names, `sha256` hashes only — **no raw
+     store/customer/address text** (the dasher's own first + last-initial is fine). Raw third-party UI
+     text lives at DEBUG/VERBOSE only.
+   - **WARN** — a defended invariant fired (a suppressed phantom/ghost, a fail-closed gate denial, a
+     grace timer waking a commit, an unhandled event). Must not be drowned by benign noise — if it's
+     benign and frequent, it's VERBOSE.
+   - **ERROR** — lost data or a crashed subsystem (pipeline restart, snapshot/journal write or decode
+     failure, recovery failure). Always shipped/exported.
+
+   Every component logs under its own **stable tag** (`Timber.tag("Pipeline")`, `"StateMachine"`,
+   `"Effects"`…), never the catch-all `App`. The INFO-must-be-PII-safe rule is **fail-closed and
+   tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a
+   privacy defect of the same class as leaking it to disk — gate the shareable-export sink behind that
+   test, do not trust call-site discipline. When a change adds or moves a log site, state its level and
+   (for INFO+) confirm it carries no raw PII. (Implementation tracked in #551.)
 
 If a change genuinely can't satisfy one of these, say so explicitly in the PR description instead
 of silently violating it.
