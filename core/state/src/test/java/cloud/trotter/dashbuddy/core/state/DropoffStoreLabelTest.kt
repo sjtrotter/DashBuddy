@@ -18,12 +18,15 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * #526 — a dropoff labels its store from its OWN frame (the dropoff card carries it as
- * `Target (02426)` / `Maple Street Biscuit - Alamo Ranch`), and must NOT inherit the prior
- * pickup's store across the phase change. The 06-19 Target+Maple stack mislabelled the Target
- * order's drop "Maple Street" precisely because the cross-phase mint inherited the active pickup's
- * store. Single deliveries (where pickup and dropoff are the same store) are unaffected — the drop
- * just gets the store from its own frame instead of by inheritance.
+ * #526 — a dropoff's store is resolved from the job's PICKUP lineage, not from the dropoff card's
+ * own (per-merchant-variable, often unparseable) text. A dropoff always follows its pickup, and the
+ * job already holds the pickups with their authoritative store names:
+ *  - single pickup store → every dropoff is that store (no dropoff parse; the common 8/9 case);
+ *  - multiple pickup stores → match the dropoff's parsed candidate to a pickup by shared leading
+ *    name tokens, which also validates (garbage candidate → no match → null, never a wrong store).
+ *
+ * This is the proper fix for the 06-19 Target+Maple stack mislabel (the Target drop had inherited
+ * the active Maple pickup's store).
  */
 class DropoffStoreLabelTest {
 
@@ -31,26 +34,27 @@ class DropoffStoreLabelTest {
     private val flowStepper = FlowRegionStepper()
     private val policy = TransitionPolicy()
 
-    private fun region(activeTask: Task?) = PlatformRegion(
+    private fun completedPickup(id: String, store: String) = Task(
+        taskId = id, jobId = "job-1", phase = TaskPhase.PICKUP,
+        storeName = store, arrivedAt = 300L, startedAt = 200L, completedAt = 400L,
+    )
+
+    private fun region(pickups: List<Task>, activeTask: Task? = null) = PlatformRegion(
         platform = Platform.DoorDash,
         mode = Mode.Online,
         session = Session("sess-1", startedAt = 100L),
-        activeJob = Job("job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L),
+        activeJob = Job("job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 150L),
         activeTask = activeTask,
+        recentTasks = pickups,
     )
 
-    private fun pickup(store: String) = Task(
-        taskId = "pick-1", jobId = "job-1", phase = TaskPhase.PICKUP,
-        storeName = store, arrivedAt = 800L, startedAt = 300L,
-    )
-
-    private fun dropoffObs(timestamp: Long, store: String? = null, customer: String? = "cust-1") =
+    private fun dropoffObs(timestamp: Long, store: String? = null, customer: String) =
         Observation.Screen(
             timestamp = timestamp, captureId = null, ruleId = "doordash.screen.dropoff_pre_arrival",
             metadata = ReplayMetadata.EMPTY, flow = Flow.TaskDropoffNavigation, modeHint = Mode.Online,
             parsed = ParsedFields.TaskFields(
                 phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION,
-                storeName = store, customerNameHash = customer, customerAddressHash = "addr-1",
+                storeName = store, customerNameHash = customer, customerAddressHash = "addr-$customer",
             ),
         )
 
@@ -60,38 +64,59 @@ class DropoffStoreLabelTest {
     }
 
     @Test
-    fun `a dropoff takes the store parsed from its own frame`() {
+    fun `single-store job — the dropoff takes the pickup store with no dropoff parse`() {
         val (r, _) = step(
-            region(pickup("Maple Street Biscuit Company")),
-            FlowRegion(flow = Flow.TaskPickupArrived),
+            region(pickups = listOf(completedPickup("pick-1", "H-E-B"))),
+            FlowRegion(flow = Flow.Idle),
+            dropoffObs(1_000L, store = null, customer = "cust-1"),
+        )
+        assertEquals(TaskPhase.DROPOFF, r.activeTask?.phase)
+        assertEquals("a single-pickup job's dropoff is that pickup's store", "H-E-B", r.activeTask?.storeName)
+    }
+
+    @Test
+    fun `single-store job — a dropoff card's running-key form resolves to the canonical pickup store`() {
+        val (r, _) = step(
+            region(pickups = listOf(completedPickup("pick-1", "H-E-B"))),
+            FlowRegion(flow = Flow.Idle),
+            dropoffObs(1_000L, store = "H-E-B plus! #1055", customer = "cust-1"),
+        )
+        assertEquals("the dropoff is canonicalised to the pickup's store name", "H-E-B", r.activeTask?.storeName)
+    }
+
+    @Test
+    fun `multi-store stack — each dropoff matches its own pickup, not the last active one`() {
+        val pickups = listOf(
+            completedPickup("pick-target", "Target"),
+            completedPickup("pick-maple", "Maple Street Biscuit Company"),
+        )
+        val (rTarget, _) = step(
+            region(pickups), FlowRegion(flow = Flow.Idle),
             dropoffObs(1_000L, store = "Target (02426)", customer = "cust-target"),
         )
-        assertEquals(TaskPhase.DROPOFF, r.activeTask?.phase)
-        assertEquals("the drop is labelled by its own store, not the active pickup's", "Target (02426)", r.activeTask?.storeName)
+        assertEquals("the Target drop resolves to Target (not the last pickup, Maple)", "Target", rTarget.activeTask?.storeName)
+
+        val (rMaple, _) = step(
+            region(pickups), FlowRegion(flow = Flow.Idle),
+            dropoffObs(2_000L, store = "Maple Street Biscuit - Alamo Ranch", customer = "cust-maple"),
+        )
+        assertEquals(
+            "the Maple drop resolves to Maple via shared leading tokens (cores differ: '- Alamo Ranch' vs 'Company')",
+            "Maple Street Biscuit Company", rMaple.activeTask?.storeName,
+        )
     }
 
     @Test
-    fun `a dropoff with no store frame does NOT inherit the pickup store (decontamination, #526)`() {
-        // This is the 06-19 mislabel: pickup is Maple, the drop frame carries no store → it must
-        // NOT become "Maple Street Biscuit Company"; it stays null until its own store frame arrives.
+    fun `multi-store stack — a garbage candidate matches no pickup and resolves to null (never a wrong store)`() {
+        val pickups = listOf(
+            completedPickup("pick-target", "Target"),
+            completedPickup("pick-maple", "Maple Street Biscuit Company"),
+        )
         val (r, _) = step(
-            region(pickup("Maple Street Biscuit Company")),
-            FlowRegion(flow = Flow.TaskPickupArrived),
-            dropoffObs(1_000L, store = null, customer = "cust-target"),
+            region(pickups), FlowRegion(flow = Flow.Idle),
+            // A store-absent dropoff frame can yield junk (e.g. an item name); it must NOT be assigned.
+            dropoffObs(1_000L, store = "Horizon Organic Half & Half", customer = "cust-x"),
         )
-        assertEquals(TaskPhase.DROPOFF, r.activeTask?.phase)
-        assertNull("a cross-phase mint must not inherit the pickup's store", r.activeTask?.storeName)
-    }
-
-    @Test
-    fun `the dropoff store sticks once parsed, across later store-less frames`() {
-        val (r1, f1) = step(
-            region(pickup("Target")),
-            FlowRegion(flow = Flow.TaskPickupArrived),
-            dropoffObs(1_000L, store = "Target (02426)", customer = "cust-1"),
-        )
-        // A later same-phase dropoff frame without the store node keeps the resolved store.
-        val (r2, _) = step(r1, f1, dropoffObs(2_000L, store = null, customer = "cust-1"))
-        assertEquals("Target (02426)", r2.activeTask?.storeName)
+        assertNull("an unmatched candidate is rejected, not mis-assigned", r.activeTask?.storeName)
     }
 }

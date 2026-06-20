@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
@@ -91,7 +92,59 @@ class PlatformRegionStepper @Inject constructor() {
         nextFlow: FlowRegion,
         obs: Observation,
         policy: TransitionPolicy,
-    ): PlatformRegion = reconcileJobTasks(stepCore(prev, prevFlow, nextFlow, obs, policy))
+    ): PlatformRegion = reconcileDropoffStore(reconcileJobTasks(stepCore(prev, prevFlow, nextFlow, obs, policy)))
+
+    /**
+     * #526: a dropoff's store is resolved from the job's PICKUP lineage, not from the dropoff card's
+     * own text format (which varies per merchant — `Target (02426)` / `Maple Street Biscuit - Alamo
+     * Ranch` — and can't be reliably parsed, see the rule comment). A dropoff always follows its
+     * pickup, and the job already holds the pickups with their authoritative, screen-parsed store
+     * names, so:
+     *  - **one distinct pickup store** (the common single delivery, and same-store stacks) → every
+     *    dropoff is that store. No dropoff parse needed; zero format risk.
+     *  - **multiple pickup stores** (a multi-store stack) → match the dropoff's parsed store *candidate*
+     *    (the rule's best-effort `storeName`) to the pickup with the most shared leading name tokens.
+     *    The match also VALIDATES: a garbage candidate matches no pickup → resolves to null, never a
+     *    wrong store (a wrong store would silently mis-attribute the order/economics).
+     *  - **no pickup seen yet** → keep the candidate as-is.
+     * The resolved value is the matched pickup's canonical (offer-aligned) store name, so pickup and
+     * dropoff carry a consistent label. The dropoff card's running-key form still lives on the
+     * payout for the post-session store-entity projector (#159).
+     */
+    private fun reconcileDropoffStore(region: PlatformRegion): PlatformRegion {
+        val active = region.activeTask ?: return region
+        if (active.phase != TaskPhase.DROPOFF) return region
+        val pickupStores = region.recentTasks
+            .filter { it.jobId == active.jobId && it.phase == TaskPhase.PICKUP && it.storeName != null }
+            .map { it.storeName!! }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+        val resolved = when {
+            pickupStores.size == 1 -> pickupStores.single()
+            pickupStores.isEmpty() -> active.storeName
+            else -> {
+                val cand = active.storeName ?: return region
+                val candTokens = storeTokens(cand)
+                pickupStores
+                    .map { it to sharedLeadingTokens(storeTokens(it), candTokens) }
+                    .filter { it.second >= 1 }
+                    .maxByOrNull { it.second }
+                    ?.first
+            }
+        }
+        return if (resolved == active.storeName) region else region.copy(activeTask = active.copy(storeName = resolved))
+    }
+
+    /** Lowercase alphanumeric tokens of a store name; drops the store-number / punctuation noise that
+     *  differs between the offer/pickup form and the dropoff/payout running-key form. */
+    private fun storeTokens(name: String): List<String> =
+        name.lowercase(Locale.ROOT).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+
+    /** Count of matching tokens from the start of both lists — how much of the store name they share. */
+    private fun sharedLeadingTokens(a: List<String>, b: List<String>): Int {
+        var i = 0
+        while (i < a.size && i < b.size && a[i] == b[i]) i++
+        return i
+    }
 
     /**
      * Step 1 of the #503 job-container re-model (additive): mirror the active job's task lineage
