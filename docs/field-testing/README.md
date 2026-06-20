@@ -836,23 +836,35 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      almost any shop offer, dragging the composite score up — plausibly a big part of why a ~$30/hr-real
      grocery run scored **86 / "AWESOME"**. So this is one model error surfacing in two places (the HUD
      number *and* the accept/decline verdict), exactly because `dollarsPerHour` is the SSOT for both.
-   - **Open questions to resolve at the desk / next capture:**
-     - Is `offer.distanceMiles` (3.2 mi) the full pickup→dropoff route or just one leg? If it's only
-       the delivery leg, the drive-time term is *also* under-counting (separate from the missing shop
-       time).
-     - Do we already parse a **pickup-by / dropoff-by deadline** off the offer screen (vs only the
-       pickup card)? If a deadline is available at *offer* time, the estimate could anchor on it
-       instead of the distance heuristic. (`deadlineMillis` exists on the pickup card payload — need to
-       check whether it's populated pre-accept.)
-     - Should Shop & Deliver get a distinct time model — e.g. a per-item shop-time term
-       (`itemCount × minutesPerItem`) plus a checkout/ID-check constant — gated on the
-       shop/alcohol recognition we already have? Would need a `minutesPerItem` constant in
-       `UserEconomy` and the parsed item count threaded into `evaluate`.
-     - Would the cleanest near-term anchor be "trust DoorDash's own time": if the offer exposes an
-       estimated active time or a delivery-by window, prefer it and fall back to the heuristic only
-       when absent?
-   - **Status:** Open. Needs desk confirmation of (a) what distance/deadline/item fields are present on
-     the offer at evaluation time, and (b) a decision on the Shop-&-Deliver time model before any change.
+   - **Desk findings + developer-confirmed direction (06-20):**
+     - **Distance is whole-offer.** Developer confirms `offer.distanceMiles` is (should be) the full
+       offer route, not a single leg — so the drive-time term isn't the under-count; the missing
+       **shop/wait time** is.
+     - **We already parse the platform's own deadline — the evaluator just throws it away.**
+       `ParsedOffer` carries `dueByTimeMillis` / `dueByTimeText` (the "Deliver by" time) and it's
+       **populated on real DoorDash offers** (corpus e.g. `dueByTimeMillis=1780333740000`,
+       `dueByTimeText=5:09 PM` in `approved-parse-output.json`). `ParsedOffer` also has
+       `timeToCompleteMinutes`, but that's **only parsed for Uber** (`uber.json:160`) and is **null on
+       every DoorDash offer** (DoorDash doesn't surface a "time to complete"). Yet `OfferEvaluator`
+       reads only `payAmount` / `distanceMiles` / `itemCount` (`OfferEvaluator.kt:12-14`) — it never
+       touches `dueByTimeMillis`. **Direction:** the estimate should parse/anchor on the offer's own
+       deadline (derive a delivery window from `dueByTimeMillis − now` on DoorDash;
+       `timeToCompleteMinutes` directly on Uber) and fall back to our heuristic only when the platform
+       gives us nothing.
+     - **Shops get their own time model, item-rate based — not a flat constant.** Developer: a Shop &
+       Deliver estimate must be distinct from restaurant/retail *pickup* and must be driven by the
+       **dasher's own pick rate (items/minute)**, not a magic number. We already parse the shop
+       `itemCount` (corpus: CVS=4, Dollar General=9, Michaels=11…), so the shop term is roughly
+       `itemCount ÷ itemsPerMinute` (+ a checkout/ID-check overhead), gated on the
+       SHOP_FOR_ITEMS / alcohol recognition we already have. Until we can *measure* a given dasher's
+       items/min, seed a **sensible default** rate and let it be refined once we have real shop-duration
+       data per dasher (an estimated, eventually-learned metric — a new `UserEconomy` field, default
+       now, personalized later).
+   - **Status:** Open — direction agreed (parse offer deadline as the primary/anchor signal + a separate
+     item-rate shop model with a seeded default), implementation deferred. Acting as field-testing agent
+     this session: recorded only, no code changes. When implemented this needs field re-validation that a
+     grocery/ACV shop now reads a realistic `$/hr` and a non-inflated score — add a "Next field test"
+     checklist item at that point.
 
 ---
 
