@@ -107,6 +107,27 @@ class DropoffStoreLabelTest {
     }
 
     @Test
+    fun `multi-store stack — hyphen-code and place-name dropoff forms resolve to their pickup (#557)`() {
+        // The 06-20 Peng's + Little Caesars stack: dropoff cards show running-key forms the broadened
+        // regex now parses — `Little Caesars (0164-0045)` (store-code-hyphen) and a place-name paren.
+        val pickups = listOf(
+            completedPickup("p-lc", "Little Caesars"),
+            completedPickup("p-peng", "Peng's Chinatown Chinese Restaurant"),
+        )
+        val (rLc, _) = step(
+            region(pickups), FlowRegion(flow = Flow.Idle),
+            dropoffObs(1_000L, store = "Little Caesars (0164-0045)", customer = "cust-lc"),
+        )
+        assertEquals("Little Caesars", rLc.activeTask?.storeName)
+
+        val (rPeng, _) = step(
+            region(pickups), FlowRegion(flow = Flow.Idle),
+            dropoffObs(2_000L, store = "Peng's Chinatown Chinese Restaurant (San Antonio)", customer = "cust-peng"),
+        )
+        assertEquals("Peng's Chinatown Chinese Restaurant", rPeng.activeTask?.storeName)
+    }
+
+    @Test
     fun `multi-store stack — a garbage candidate matches no pickup and resolves to null (never a wrong store)`() {
         val pickups = listOf(
             completedPickup("pick-target", "Target"),

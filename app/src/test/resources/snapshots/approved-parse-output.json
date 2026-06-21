@@ -1619,6 +1619,48 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "dropoff_pre_arrival/2026-06-20__doordash__dropoff_pre_arrival_cava__1db1f1.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": "017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d",
+            "deadline": {
+                "text": "8:40 PM",
+                "time": 1780346400000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "CAVA (Sonterra Village)",
+            "subFlow": "NAVIGATION"
+        }
+    },
+    "dropoff_pre_arrival/2026-06-20__doordash__dropoff_pre_arrival_little_caesars_stack__02d48b.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": "017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d",
+            "deadline": {
+                "text": "3:04 PM",
+                "time": 1780326240000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Little Caesars (0164-0045)",
+            "subFlow": "NAVIGATION"
+        }
+    },
     "dropoff_pre_arrival/20260128_180652_578_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_pre_arrival",
         "intent": "dropoff_pre_arrival",
@@ -1846,7 +1888,7 @@
             "phase": "DROPOFF",
             "redCardTotal": null,
             "storeAddress": null,
-            "storeName": null,
+            "storeName": "Tarka Indian Kitchen (Stone Oak)",
             "subFlow": "NAVIGATION"
         }
     },
@@ -1867,7 +1909,7 @@
             "phase": "DROPOFF",
             "redCardTotal": null,
             "storeAddress": null,
-            "storeName": null,
+            "storeName": "Tarka Indian Kitchen (Stone Oak)",
             "subFlow": "NAVIGATION"
         }
     },
