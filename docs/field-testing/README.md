@@ -63,23 +63,24 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **🔧 NEW (branch `feature/159-shadow-store-projector`) — dropoff store recognition + pickup-matched resolution (#526/#553). CONFIRM ON DASH.**
-  A dropoff now shows the **correct store**, resolved from the job's pickups (single delivery → the
-  pickup's store; multi-store stack → matched per drop), not inherited from the last active pickup.
-  **Confirm on dash: 0/2 —** on a normal single delivery the dropoff card should show the **right
-  store** (the one you picked up from). On a **multi-store stack** (the real test), each drop should
-  show its **own** store — e.g. a Target+Maple stack shows the Target drop as Target and the Maple
-  drop as Maple, **not both the same**. If a drop shows the wrong store (especially the *other*
-  stop's), capture the dropoff frame sequence + note the stack's stores.
+- **🔧 MERGED — dropoff store recognition + pickup-matched resolution (#526/#553). CONFIRM ON DASH.**
+  A dropoff shows the store **resolved from the job's pickups** (single → the pickup's store;
+  multi-store stack → matched per drop), not inherited from the last active pickup.
+  - Confirmed: **1/2** (2026-06-20 — singles + **same-store** double stacks resolved correctly
+    [Panda Express, Parry's Pizzeria]; verified in the db + `ShadowProjector` log).
+  - **Still needs a clean MULTI-store stack** (different stores): the 06-20 Peng's+Little Caesars stack
+    left both drops **`None`** (safe, not wrong — the store text wasn't parsed; tracked as **#557**).
+    On a multi-store stack each drop should show its **own** store, **not both the same** and **not the
+    other stop's**. If a drop shows a wrong store, capture the dropoff frames + note the stack's stores.
 
-- **🔬 NEW (debug build) — shadow store-chain projector logs (#159/#554). READ THE LOG AFTER A DASH.**
+- **🔬 MERGED (debug build) — shadow store-chain projector logs (#159/#554). READ THE LOG AFTER A DASH.**
   Debug-only, log-only: after each completed job the log emits a `ShadowProjector` line —
   `job <id> store-chain (N): [Store] offer=… dropoff=… payout=… key=… tip=… custs=[…]` — linking the
-  store across offer→pickup→dropoff→payout. **Confirm: 0/2 —** after a dash, grep the app log for
-  `ShadowProjector` and check each job's chain looks right: the four forms line up to the same store,
-  the `key` is the store number/area, the `tip` matches the receipt, and a **stack shows one line per
-  store**. It must **never** affect on-dash behavior (it's shadow). Note any chain that mis-links or
-  any missing/duplicate line. This is the corpus for the eventual persisting #159 projector.
+  store across offer→pickup→dropoff→payout. **grep the app log for `ShadowProjector`** and sanity-check.
+  - Confirmed: **1/2** (2026-06-20 — all 8 chains accurate vs the db; resolved the multi-store stack's
+    BOTH stores via the **payout** even when the live dropoffs were null; never affected behavior).
+  - Known log-only polish (→ #159): `key=—` for `#NNN` / place-name parens (`CAVA (Sonterra Village)`)
+    / store-code-hyphen (`Little Caesars (0164-0045)`); `tip` shows one item, not the per-store sum.
 
 - **🔧 FIX SHIPPED — offer card icon badges + co-icon-text shop badge [cart N] (#461, PR #531). CONFIRM ON DASH.**
   The offer card's badges are now **icons** (red card, alcohol, large order, priority, etc., tinted by
@@ -122,8 +123,9 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   with no real delivery. If a phantom/duplicate dropoff still shows, capture the dropoff frame sequence
   + the `app_state_snapshots` for that order. (Stacks are still #503 slice 3b — extra dropoffs on a
   multi-drop may still mis-handle, separate from this.)
-  - Confirmed: 1/2 (2026-06-19 desk analysis of the dash db — 0 null-customer/$0.00 dropoffs across
-    248 snapshots; all 9 completions carry a distinct customer hash + non-null pay).
+  - Confirmed: **2/2 ✅ VALIDATED** (2026-06-19 + 2026-06-20 desk analyses — both dashes: 0
+    null-customer/$0.00 dropoffs; every completion has a distinct customer hash + non-null pay).
+    Safe to retire from this checklist.
 
 - **🔧 FIX IN FLIGHT — a delivery can't be logged/counted twice (#518, PRs #520 + #522). CONFIRM ON DASH.**
   Two halves of the spurious-`DELIVERY_COMPLETED` bug: PR #520 stopped a **prior job's** task
@@ -135,9 +137,10 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   real deliveries** (no doubling). Watch especially when the receipt screen is shown, dismissed, and
   re-shown. If a delivery double-counts, capture the `app_events` (`DELIVERY_COMPLETED` rows) +
   `app_state_snapshots` for that order.
-  - Confirmed: 1/2 (2026-06-19 desk analysis — exactly 1 `DELIVERY_COMPLETED` per job for all 9 jobs;
-    9 accepts pair 1:1 with 9 completions; earnings reconcile to the cent; the one stack's 2 drops →
-    1 combined receipt is expected, not a double-count).
+  - Confirmed: **2/2 ✅ VALIDATED** (2026-06-19 + 2026-06-20 — both dashes: exactly 1
+    `DELIVERY_COMPLETED` per job, accepts pair 1:1 with completions, earnings reconcile to the cent
+    (06-20: $130.23 = $130.23); each stack's drops → 1 combined receipt, expected, not a double-count).
+    Safe to retire. (Also covers the #517 ghost-offer guard — all offers carried non-null pay both dashes.)
 
 - **🔧 FIX IN FLIGHT — multi-drop stack: Job owns ordered dropoffs, routed by customer name (#503 slice 3b, PR #523). CONFIRM ON DASH.**
   The structural multi-drop fix: an offer pre-creates **one dropoff placeholder per order**, and each
