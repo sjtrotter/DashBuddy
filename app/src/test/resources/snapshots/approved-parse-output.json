@@ -1556,6 +1556,69 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "dropoff_pre_arrival/2026-06-19__doordash__dropoff_pre_arrival_maple_stack__1af5ba.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": "017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d",
+            "deadline": {
+                "text": "11:04 AM",
+                "time": 1780311840000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Maple Street Biscuit - Alamo Ranch",
+            "subFlow": "NAVIGATION"
+        }
+    },
+    "dropoff_pre_arrival/2026-06-19__doordash__dropoff_pre_arrival_target_stack__0a2d69.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": "017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d",
+            "deadline": {
+                "text": "11:20 AM",
+                "time": 1780312800000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Target (02426)",
+            "subFlow": "NAVIGATION"
+        }
+    },
+    "dropoff_pre_arrival/2026-06-19__doordash__dropoff_pre_arrival_walgreens__6f91ba.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": "017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d",
+            "deadline": {
+                "text": "2:32 PM",
+                "time": 1780324320000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Walgreens (3571)",
+            "subFlow": "NAVIGATION"
+        }
+    },
     "dropoff_pre_arrival/20260128_180652_578_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_pre_arrival",
         "intent": "dropoff_pre_arrival",
@@ -1594,7 +1657,7 @@
             "phase": "DROPOFF",
             "redCardTotal": null,
             "storeAddress": null,
-            "storeName": null,
+            "storeName": "True Texas Bbq (799)",
             "subFlow": "NAVIGATION"
         }
     },
@@ -1615,7 +1678,7 @@
             "phase": "DROPOFF",
             "redCardTotal": null,
             "storeAddress": null,
-            "storeName": null,
+            "storeName": "True Texas Bbq (799)",
             "subFlow": "NAVIGATION"
         }
     },

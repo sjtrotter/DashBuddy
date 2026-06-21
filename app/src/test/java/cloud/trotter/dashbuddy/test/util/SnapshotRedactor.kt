@@ -53,10 +53,28 @@ object SnapshotRedactor {
         """\b\d{1,6}\s+([A-Za-z0-9.'\-]+\s+){0,4}""" +
             """(Rd|Road|St|Street|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Ln|Lane|Way|Ct|Court|""" +
             """Hwy|Highway|Pkwy|Parkway|Pl|Place|Cir|Circle|Trl|Trail|Loop|Ter|Terrace|Pike|""" +
+            """Path|Walk|Pass|Run|Row|Bend|Bnd|Cove|Cv|Crossing|Xing|Square|Sq|Plaza|Plz|""" +
+            """Point|Pt|Alley|Aly|Trace|Trce|Manor|Mnr|Grove|Grv|Ridge|Rdg|Creek|Crk|Hill|Hills|""" +
             """I-\d+|FM\s*\d+|US-?\d+)\b""",
         RegexOption.IGNORE_CASE,
     )
+    /** "City, ST 78254" (incl. ZIP+4) — the city/state/zip line of a dropoff address, often id-less. */
+    private val CITY_STATE_ZIP = Regex("""\b[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3},\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\b""")
+    /**
+     * A full single-line address "7610 Fletchers, San Antonio, TX 78254" — house number + a
+     * (possibly suffix-less) street, then city, ST zip. Masked whole so an unsuffixed street can't
+     * survive ahead of the city/state/zip. Anchored to the ZIP so it can't run away.
+     */
+    private val FULL_ADDRESS = Regex("""\b\d{1,6}\s+[^,]+,\s*[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\b""")
+    /**
+     * A bare street line with no recognized suffix, e.g. "7610 Flecthers" — `<housenum> <Word(s)>`
+     * with the whole string being just that. Anchored to the full value so it can't eat "29 items"
+     * or "$15.15 Guaranteed"; requires a capitalized street word, not a unit/count.
+     */
+    private val BARE_STREET = Regex("""^\d{2,6}\s+[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z0-9.'-]+){0,3}$""")
     private val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
+    /** A quoted free-text customer note, e.g. "Corner House, please leave at door." — customer-entered, mask whole. */
+    private val QUOTED_NOTE = Regex(""""[^"]{6,}"""")
 
     /** Masked payout/debit card on cashout screens, e.g. "Visa ••••6222" or "Debit card ....1234". */
     private val CARD = Regex(
@@ -120,12 +138,18 @@ object SnapshotRedactor {
         for (p in NAME_PREFIXES) {
             if (text.startsWith(p, ignoreCase = true) && text.length > p.length) return text.substring(0, p.length) + MASK
         }
+        // A whole-value bare street line ("7610 Flecthers") with no recognized suffix — mask outright
+        // before the token-level passes, so a residual unsuffixed street can't leak.
+        if (BARE_STREET.matches(text.trim())) return "[address]"
         var t = text
         t = EMAIL.replace(t, "[email]")
         t = PHONE.replace(t, "[phone]")
         t = CARD.replace(t, "[card]")
+        t = QUOTED_NOTE.replace(t, "\"[note]\"")
         t = APT.replace(t) { it.value.substringBefore(it.groupValues[1]) + it.groupValues[1] + " " + MASK }
+        t = FULL_ADDRESS.replace(t, "[address]")
         t = STREET.replace(t, "[address]")
+        t = CITY_STATE_ZIP.replace(t, "[address]")
         return t
     }
 }

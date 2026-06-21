@@ -1448,6 +1448,39 @@
             "separator": ", ",
             "transform": "sha256"
           },
+          "storeName": {
+            "comment": "#526: the dropoff card's merchant label — the same store as the pickup, but in DoorDash's running-key form ('Target (02426)', 'Maple Street Biscuit - Alamo Ranch'), which does NOT string-match the offer/pickup name. The node has no id, so it's anchored by text shape: '<name> (<storeNum>)' (reliable for chains) first, then a strict all-Title-Case '<Name> - <Area>' (so a lowercase delivery instruction can't false-match). Not PII (a merchant name); feeds per-task store self-labelling + the post-session store-entity projector (#159). Null when the card variant doesn't show it.",
+            "coalesce": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "^.{1,60} \\(\\d{2,6}\\)$"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": "trim"
+              },
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "^[A-Z][\\w .'&-]{1,48} - [A-Z][\\w .'&-]{1,48}$"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": "trim"
+              }
+            ]
+          },
           "deadlineText": {
             "find": {
               "hasTextMatchesRegex": "\\bby\\s+\\d{1,2}:\\d{2}"
