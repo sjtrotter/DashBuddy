@@ -63,7 +63,7 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **🔧 NEW (branch `feature/556-shop-time-model`) — realistic $/hr + score on Shop & Deliver offers (#556). CONFIRM ON DASH.**
+- **🔧 MERGED — realistic $/hr + score on Shop & Deliver offers (#556). CONFIRM ON DASH.**
   The time model now estimates a shop by its item count at the dasher's shopping pace (seed 0.8
   items/min, learned from your own completed shops) instead of a flat 7-min overhead — so a grocery
   run no longer reads a wildly inflated `$/hr` / "AWESOME" score. **This is a verdict-mover** (it
