@@ -63,6 +63,24 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 NEW (branch `feature/159-shadow-store-projector`) — dropoff store recognition + pickup-matched resolution (#526/#553). CONFIRM ON DASH.**
+  A dropoff now shows the **correct store**, resolved from the job's pickups (single delivery → the
+  pickup's store; multi-store stack → matched per drop), not inherited from the last active pickup.
+  **Confirm on dash: 0/2 —** on a normal single delivery the dropoff card should show the **right
+  store** (the one you picked up from). On a **multi-store stack** (the real test), each drop should
+  show its **own** store — e.g. a Target+Maple stack shows the Target drop as Target and the Maple
+  drop as Maple, **not both the same**. If a drop shows the wrong store (especially the *other*
+  stop's), capture the dropoff frame sequence + note the stack's stores.
+
+- **🔬 NEW (debug build) — shadow store-chain projector logs (#159/#554). READ THE LOG AFTER A DASH.**
+  Debug-only, log-only: after each completed job the log emits a `ShadowProjector` line —
+  `job <id> store-chain (N): [Store] offer=… dropoff=… payout=… key=… tip=… custs=[…]` — linking the
+  store across offer→pickup→dropoff→payout. **Confirm: 0/2 —** after a dash, grep the app log for
+  `ShadowProjector` and check each job's chain looks right: the four forms line up to the same store,
+  the `key` is the store number/area, the `tip` matches the receipt, and a **stack shows one line per
+  store**. It must **never** affect on-dash behavior (it's shadow). Note any chain that mis-links or
+  any missing/duplicate line. This is the corpus for the eventual persisting #159 projector.
+
 - **🔧 FIX SHIPPED — offer card icon badges + co-icon-text shop badge [cart N] (#461, PR #531). CONFIRM ON DASH.**
   The offer card's badges are now **icons** (red card, alcohol, large order, priority, etc., tinted by
   brand color), and the **Shop & Deliver** badge is the shopping-chat **cart icon + the item count**
