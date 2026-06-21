@@ -829,6 +829,64 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ---
 
+## 2026-06-21 — DoorDash session (live dash, in-field narration)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `claude/field-testing-bubble-notifications-qcaocb` (field-testing build off
+  `master` at `20063db`, post-#299 merge).
+- **Field conditions:** Live Sunday dash. **Double stack: PetSmart + Target** (two stores, two
+  drops). Observation narrated at **~11:38** while transitioning from the completed Target pickup
+  toward the PetSmart pickup. No screenshots; in-field marker only. **Hypotheses, not concluded
+  fixes.** No code changes from this session.
+
+### Bugs
+
+1. **Double-mint of the fly-away bubble notification on the stacked-pickup hand-off — two
+   "Navigator" heads-up flyouts, the first with no icon.** After completing the **Target** pickup
+   and turning toward **PetSmart**, the transient heads-up notification (the little fly-away that
+   pops off the bubble — **not** the in-bubble card) fired **twice**, both showing the sender
+   **"Navigator"**. The first of the two (the one the dasher caught) rendered the **Navigator name
+   but no avatar icon**; tapping into the bubble shows the icon correctly, so the drawable itself
+   resolves — it's the **flyout** that came up icon-less.
+   - **Why "Navigator": it's the heading-to-pickup persona.** `determinePickupPersona`
+     (`core/state/.../EffectMap.kt:938-950`) returns `ChatPersona.Navigator` when a PICKUP task is
+     active but **not arrived, not shopping, not confirmed** — exactly "driving to the next store."
+     So the PetSmart leg correctly wants a Navigator "Pickup: PetSmart" message.
+   - **Likely double-mint cause (hypothesis): two independent `UpdateBubble` emission sites both
+     fire across the consecutive frames of the stacked hand-off, and nothing dedups them.** In
+     `diffTask` there are two Navigator-capable `UpdateBubble("Pickup: …")` sites:
+     - **Site A — new PICKUP task minted** (`EffectMap.kt:563-583`): fires when
+       `prevTask?.taskId != nextTask.taskId` — i.e. the moment the PetSmart pickup becomes the
+       active task after Target.
+     - **Site B — same-task store/activity change** (`EffectMap.kt:672-692`): fires when the store
+       name or activity changes *within* a PICKUP task (`storeChanged || activityChanged`).
+     A plausible sequence: frame N mints the PetSmart pickup task (Site A → "Pickup: …" Navigator),
+     then frame N+1 resolves/changes the PetSmart store text (Site B → "Pickup: PetSmart" Navigator
+     again). Both effects are `AppEffect.UpdateBubble`, both route through
+     `SideEffectEngine.kt:202-204` → `BubbleManager.postMessage` → `showNotification`, and
+     **`UpdateBubble` carries no idempotency key** — the `effects_fired` dedup only guards
+     `LogEvent` (`SideEffectEngine.kt:187-200`), so two `UpdateBubble`s in a row each call
+     `notificationManager.notify(BUBBLE_NOTIFICATION_ID, …)` and each raises its own heads-up
+     flyout. Would need the captured frame sequence around 11:38 to confirm which two sites fired
+     (and whether the two texts were identical "Pickup: PetSmart" or differed by an unresolved
+     store name on the first).
+   - **Likely missing-icon cause (hypothesis): rapid re-`notify` of the same notification id drops
+     the `Person` avatar on the heads-up.** The flyout is a `MessagingStyle` notification whose
+     sender icon is the persona avatar (`BubbleManager.showNotification`, `BubbleManager.kt:180-214`
+     — `ic_chat_navigation` via `getIconResId`, `ChatFormatters.kt:16`). The drawable is valid (the
+     expanded bubble shows it), so this isn't a missing-resource bug. When two notifications hit the
+     **same** `BUBBLE_NOTIFICATION_ID` back-to-back, Android often renders the first heads-up before
+     it has loaded/attached the `Person` icon, showing the name without the avatar — consistent with
+     "first one had no icon, the bubble has it." If the double-mint (above) is fixed, this likely
+     stops being visible; worth confirming whether a single Navigator flyout ever comes up icon-less
+     on its own.
+   - **Status:** Open — **marker only**, awaiting end-of-dash log/capture upload for the desk
+     cross-reference above (which two `UpdateBubble` sites fired, the two texts, the frame
+     timestamps around 11:38). Recorded only, no code changes. Note: this is the live specimen the
+     `claude/field-testing-bubble-notifications-qcaocb` branch exists to chase.
+
+---
+
 ## 2026-06-20 — DoorDash session (evening dash, same-store double stack)
 
 - **Platform tested:** DoorDash
