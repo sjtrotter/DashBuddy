@@ -1119,6 +1119,52 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    - **Status:** Open — **desk-review marker**, awaiting capture upload. Recorded only, no code
      changes; flagged as a likely **new recognition + new task-lifecycle (unassign) frontier**.
 
+8. **Same job got *weirder* (~17:16, continues #7): a Burger King add-on arrived while approaching
+   Smoky Mo's, DoorDash forced BK to be picked up FIRST, the dasher reshuffled — and the closeout
+   shows an erroneous "paid" PostTask and TWO Smoky Mo's pickups.** This is the high-value specimen
+   of the session. Sequence as narrated: stack was Smoky Mo's + (dropped) Sprouts (#7); then a **BK
+   add-on** came in en route to Smoky Mo's; DoorDash **re-ordered the route to pick up BK first**;
+   the dasher did "shenanigans" to move things around. Two concrete defects observed: **(a) an
+   erroneous paid PostTask** (a payout/receipt closeout fired when it shouldn't have), and **(b) two
+   Smoky Mo's pickups** (a duplicated same-store pickup task). "I know it's not handling it perfectly
+   yet." Marker only — recorded, not concluded.
+   - **Why these two are plausible given the code (starting hypotheses for the desk agent):**
+     - **(b) Two Smoky Mo's pickups — the #499 same-store re-match was likely defeated by the
+       reorder.** The pickup re-match ("fold the add-on into the existing same-store task, don't
+       re-mint") only runs **when `!isStackedPickupTransition`** (`PlatformRegionStepper.kt:710-714`):
+       it resumes a `recentTasks` pickup with the same `storeName`. But when DoorDash **re-ordered**
+       the stack (BK inserted *ahead* of Smoky Mo's), the platform very likely signaled a
+       **genuinely-new stacked pickup transition** on returning to Smoky Mo's, so
+       `isStackedPickupTransition` was **true** → the re-match branch is skipped → a **second** Smoky
+       Mo's pickup task mints. The guard is built for "two distinct orders at the same store stay
+       distinct"; a reorder of the *same* order can look identical to that and trip the same path.
+     - **(a) Erroneous paid PostTask — a receipt/closeout fired mid-job during the reshuffle.**
+       `DELIVERY_COMPLETED` is emitted on **leaving PostTask** (`EffectMap.kt:286-…`), carrying the
+       `lastPostTaskFields` pay breakdown (`PlatformRegion.kt:40-65`). The #518 guard keys
+       `DELIVERY_COMPLETED` on the *completed task* to stop a re-entered `PostTask→nav→PostTask`
+       double-count (`AppEffect.kt:34-35`) — but a forced reorder + manual reshuffle is exactly the
+       kind of out-of-order PostTask/nav flapping that stresses that guard. Suspect a **PostTask
+       frame got attributed to the wrong leg** (or fired before a leg was really done), emitting a
+       spurious paid completion. Cross-references the dropoff-attribution issues in #3/#5.
+   - **What the desk agent should pull / check (`app_events` + `app_state_snapshots`, ~17:16
+     onward, DoorDash — same job as #7):**
+     - **Reconstruct the task timeline:** offer/add-on events for BK; how many pickup tasks the job
+       held and their stores (looking for the **duplicate Smoky Mo's**); whether the BK add-on
+       folded in vs minted; the order in which pickups/dropoffs minted and completed.
+     - **The erroneous PostTask:** find every `Flow.PostTask` entry/exit and each `DELIVERY_COMPLETED`
+       — which task each attributed to, the pay on each, and whether one fired for a leg that wasn't
+       actually delivered (or fired twice). Check `lastAnnouncedPostTaskTaskId` / the #518 key.
+     - **`isStackedPickupTransition` at the Smoky Mo's return:** if logged/derivable, confirm whether
+       the reorder set it true and that's what skipped the re-match.
+     - **Net integrity:** did the job's economics / completion count end correct despite the duplicate
+       pickup and erroneous PostTask, or are there phantom/double legs? Reconcile against actual pay.
+     - **Unknown screens:** as with #7, X-Ray the window — the add-on-reorder and reshuffle screens
+       may be UNKNOWN.
+   - **Status:** Open — **desk-review marker**, awaiting capture upload. Recorded only, no code
+     changes. Likely touches the **#499 same-store re-mint guard**, the **#518 PostTask
+     double-count guard**, and the add-on/reorder task-lifecycle frontier (cf. #503/#505); a strong
+     candidate for a `SessionReplay` Level-B repro once the capture is in hand.
+
 ---
 
 ## 2026-06-20 — DoorDash session (evening dash, same-store double stack)
