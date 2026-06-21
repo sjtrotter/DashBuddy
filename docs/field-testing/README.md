@@ -1077,6 +1077,48 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    - **Status:** Open — **conjecture / design note only**, no work item filed, no code changes.
      Recorded to feed a later triage/RFC if the dasher wants to pursue it.
 
+### Verification TODOs — desk-review markers (need captured data)
+
+7. **Partial unassign of a stacked order (~17:16): dasher dropped ONE half of a stack — desk agent,
+   trace this whole window for unknown screens and the effect on job/task tracking.** Advanced
+   maneuver: an accepted stack of **a regular pickup (Smoky Mo's BBQ) + a Shop & Deliver order
+   (Sprouts Farmers Market)**; the dasher **unassigned the Sprouts shopping order** (it was too far)
+   and kept the Smoky Mo's pickup. This exercises a path the app has **almost no model for** — pull
+   the capture and trace it end to end. Marker only; recorded, not concluded.
+   - **Why this is a known-thin area (so the desk review has a starting hypothesis):**
+     - **Recognition: only ONE screen of the unassign flow is known.** The single relevant rule is
+       `doordash.screen.pickup_resolution_options` (`doordash.json:2802-2811`), keyed on
+       `"Resolution options"` + `"Unassign with no pay"`, and it's **recognize-only** (no
+       `state.flow`, no parse). The rest of the unassign sub-flow — the issue picker before it
+       (`pickup_select_issue`), any "which order do you want to unassign?" stack selector, the
+       confirm dialog, and whatever the app shows **after** one order is dropped — is likely
+       **UNKNOWN**. **Expect unknown frames in this window**; the X-Ray report on the capture is the
+       way to find and rule them.
+     - **Task tracking: there is NO unassign/remove-task handling in the state machine.** A repo-wide
+       search for `unassign` / `removeTask` / `dropTask` in `core/state` and `domain` returns
+       **nothing** — the steppers model task *completion* and *re-mint*, not **removal of a still-open
+       task from a multi-task job**. So when the Sprouts task is unassigned, the job very likely still
+       carries it as an open subtask that can **never complete** — a candidate **orphan/phantom task**
+       that could skew the job's task list, its economics (the dropped order's offer pay still folded
+       in?), and any "all drops done?" completion logic. This may also interact with the same-store /
+       dropoff-resolution paths flagged in #3 and #5.
+   - **What the desk agent should pull / check (`app_events` + `app_state_snapshots`, window ~17:16,
+     DoorDash):**
+     - **Unknown screens:** run the capture through the X-Ray / inbox sort for this window; list every
+       UNKNOWN frame in the unassign sub-flow and note its stable non-PII strings/ids so rules can be
+       written (issue picker → resolution options → stack selector → confirm → post-unassign state).
+     - **Job/task tracking effect:** how many tasks did the job hold before vs after the unassign?
+       Did the **Sprouts** shopping task get removed, left open (orphan), or mistakenly marked
+       complete? Did the **Smoky Mo's** pickup survive intact as the sole remaining task? Was there a
+       spurious re-mint or a dropoff phantom (cf. #3/#5)?
+     - **Economics:** was the dropped Sprouts order's pay still counted in the job/session economics
+       after unassign, or correctly removed? ("Unassign with no pay" implies it should contribute
+       nothing.)
+     - **State integrity:** did the machine end the window in a clean single-task state, or in a
+       confused/stuck state (e.g. waiting on a dropoff for the order that no longer exists)?
+   - **Status:** Open — **desk-review marker**, awaiting capture upload. Recorded only, no code
+     changes; flagged as a likely **new recognition + new task-lifecycle (unassign) frontier**.
+
 ---
 
 ## 2026-06-20 — DoorDash session (evening dash, same-store double stack)
