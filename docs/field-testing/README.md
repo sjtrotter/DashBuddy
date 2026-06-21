@@ -885,6 +885,32 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      timestamps around 11:38). Recorded only, no code changes. Note: this is the live specimen the
      `claude/field-testing-bubble-notifications-qcaocb` branch exists to chase.
 
+### Field UX context / Open questions
+
+2. **The PetSmart leg of the stack was a barcode-scan "batch"-style pickup — similar in feel to
+   GoPuff, but not identical.** The dasher had to **scan a barcode several times** during the
+   PetSmart pickup, reminiscent of the GoPuff (Drive) warehouse bin-scan workflow but **not exactly
+   the same** flow. Flagged to **review against the capture corpus** when it comes back — specifically
+   whether PetSmart's scan screens are **recognized or fall to UNKNOWN**.
+   - **Why this matters / hypothesis: the existing barcode-scan recognition is GoPuff-keyed, so
+     PetSmart's screens may not match.** The #501 batch-pickup rules in
+     `core/pipeline/src/main/assets/rules/doordash.json` are keyed on **GoPuff-specific** text/ids:
+     `doordash.screen.pickup_steps` matches `"Scan barcodes on"` and declares
+     `task:pickup:arrived` (it's what mints the only clean PICKUP_ARRIVED for an otherwise
+     all-UNKNOWN warehouse leg), and `pickup_barcode_scan_issue` / the at-store survey lean on the
+     GoPuff Compose container ids. A **PetSmart** batch pickup with different on-screen copy and
+     widget ids likely **won't trip those branches**, so its scan steps could land in UNKNOWN and
+     **no PICKUP_ARRIVED would fire** for the PetSmart leg — the same gap #501 closed for GoPuff,
+     re-opened for a new store. Would need the captured PetSmart frames to confirm what text/ids it
+     actually carries before deciding whether it's the same rule family or a new one.
+   - **What to pull / check at desk (from this dash's capture corpus):** the PetSmart pickup frame
+     sequence — does any frame recognize (intent ≠ UNKNOWN), does a PICKUP_ARRIVED fire for the
+     PetSmart leg, and what stable non-PII strings / view ids do the scan screens expose (so a rule
+     can be keyed on them if they're UNKNOWN)? Compare against the GoPuff #501 corpus to see how much
+     of the workflow is shared vs store-specific.
+   - **Status:** Open — **marker only**, awaiting capture-corpus review. Recorded only, no code
+     changes.
+
 ---
 
 ## 2026-06-20 — DoorDash session (evening dash, same-store double stack)
