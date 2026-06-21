@@ -280,6 +280,17 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.PauseOdometer -> odometerEffectHandler.pause()
             is AppEffect.ResumeOdometer -> odometerEffectHandler.resume()
 
+            is AppEffect.RecordShopRate -> {
+                // #556: learn the dasher's shopping pace. PII-safe (store name is a merchant name).
+                val minutes = effect.shopDurationMs / 60_000.0
+                strategyRepository.recordShopRate(effect.itemsShopped, minutes)
+                Timber.tag("ShopRate").i(
+                    "recorded %d items / %.1f min = %.2f/min (store=%s)",
+                    effect.itemsShopped, minutes,
+                    if (minutes > 0) effect.itemsShopped / minutes else 0.0, effect.storeName ?: "?",
+                )
+            }
+
             is AppEffect.ProcessTipNotification -> tipEffectHandler.process(engineScope, effect)
 
             // --- LOOPBACKS (Produces Events) ---
@@ -547,6 +558,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.StopOdometer,
         is AppEffect.PauseOdometer,
         is AppEffect.ResumeOdometer,
+        is AppEffect.RecordShopRate,
         is AppEffect.StartSession,
         is AppEffect.EndSession,
         is AppEffect.ProcessTipNotification,

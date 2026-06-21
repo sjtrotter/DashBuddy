@@ -20,8 +20,21 @@ class OfferEvaluator() {
         val operatingCost = fuelCost + nonFuelCost
         val netPay = grossPay - operatingCost
 
-        // Time estimate using user-configured constants
-        val estTimeMinutes = (dist * economy.avgMinutesPerMile) + economy.basePickupMinutes
+        // Time estimate = whole-route drive + handling (#556). Handling for a Shop & Deliver order
+        // is its item count at the dasher's effective shopping pace (items/min — already absorbs
+        // in-store + checkout + ID-check + wait), floored at the base overhead so a tiny/unparsed
+        // shop can't under-count; a non-shop leg keeps the flat base. The old flat base for ALL
+        // offers estimated a 25-item grocery run at ~15 min → the ~$116/hr bug.
+        val driveMinutes = dist * economy.avgMinutesPerMile
+        val isShop = offer.orders.any { it.orderType.isShoppingOrder }
+        val handlingMinutes = if (isShop) {
+            val nonShopLegs = offer.orders.count { !it.orderType.isShoppingOrder }
+            maxOf(items / economy.effectiveShopItemsPerMinute, economy.basePickupMinutes) +
+                nonShopLegs * economy.basePickupMinutes
+        } else {
+            economy.basePickupMinutes
+        }
+        val estTimeMinutes = driveMinutes + handlingMinutes
         val estTimeHours = estTimeMinutes / 60.0
 
         // Metrics operate on net pay
