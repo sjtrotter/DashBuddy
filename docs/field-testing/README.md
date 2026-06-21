@@ -885,6 +885,44 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      timestamps around 11:38). Recorded only, no code changes. Note: this is the live specimen the
      `claude/field-testing-bubble-notifications-qcaocb` branch exists to chase.
 
+3. **Walgreens drop-off card cluster: shows "the customer" (unresolved), reads "already arrived",
+   and minted a *fresh* drop-off task the moment navigation started (~12:19).** On a single
+   **Walgreens** drop-off, three things looked wrong at once on the drop-off card:
+   - **a) Card shows "the customer" — the unresolved-recipient sentinel.** "the customer" is
+     `CUSTOMER_FALLBACK` (`domain/.../state/DisplayNames.kt:19`, via `customerDisplayName(null)`),
+     deliberately lowercase to read as "recipient not yet known." Per #503 slice 3 it's expected
+     **briefly** while the dropoff is unresolved, then should resolve to the **6-char hash** once a
+     customer-bearing dropoff frame lands. If it **lingered** on the card, the resolve-onto-subtask
+     step didn't fire — the customer hash never got written onto the active dropoff task.
+   - **b) Card reads "already arrived" when the dasher was just starting to drive there.** A
+     drop-off `arrivedAt` is only meant to be set when a frame comes in as `TaskSubFlow.ARRIVED`
+     (`PlatformRegionStepper.kt:764,778` — `justArrived = subFlow == ARRIVED && arrivedAt == null`).
+     A false "arrived" at nav-start means either (i) an `arrivedAt` was **inherited/carried** onto
+     the new dropoff task from a prior leg, or (ii) a frame was mis-classified as a dropoff
+     **ARRIVED** when it was really a nav/arriving screen.
+   - **c) Starting navigation minted a NEW drop-off task** ("as soon as I started the navigation it
+     minted a new dropoff task; it knows I'm navigating now"). The #503-slice-3 design is to
+     **resolve onto the offer-spawned, customer-TBD dropoff subtask** (`PlatformRegionStepper.kt:744-783`)
+     rather than mint fresh. A new mint at nav-start means the **resolve path's guard didn't match**
+     — `expectedDropoff` (`:749-758`) came back null, so it fell through to the new-task mint
+     (`:805+`). That guard requires a pending dropoff with `customerNameHash == null &&
+     completedAt == null` that isn't the current task and isn't already displaced; if the
+     pre-created dropoff was already consumed/displaced, or didn't exist for this Walgreens job, the
+     fall-through mints a fresh one.
+   - **These three are very likely one cluster, not three bugs.** A fresh-minted dropoff (c) would
+     start with **no customer hash** → renders "the customer" (a), and if that same mint or a
+     following frame mis-set `arrivedAt`, it reads "already arrived" (b). The single question for the
+     capture is: **at nav-start, did the stepper resolve onto the pre-created Walgreens dropoff or
+     mint a new one** — and if it minted, why was `expectedDropoff` null (no offer-spawned dropoff
+     subtask for this job? already displaced? customer hash already non-null on it?).
+   - **What to pull / check at desk (from this dash's `app_events` + `app_state_snapshots` around
+     12:19):** the Walgreens dropoff frame sequence — how many dropoff tasks exist for the job
+     (want exactly one), whether `customerNameHash` ever resolves off null, the `arrivedAt` value at
+     nav-start and which frame set it (a real ARRIVED screen vs nav/arriving), and whether a
+     `DELIVERY_NAV_STARTED` / new-task mint fired at the navigation start. Cross-reference the
+     #503-slice-3 resolve-onto-subtask path.
+   - **Status:** Open — **marker only**, awaiting capture upload. Recorded only, no code changes.
+
 ### Field UX context / Open questions
 
 2. **The PetSmart leg of the stack was a barcode-scan "batch"-style pickup — similar in feel to
