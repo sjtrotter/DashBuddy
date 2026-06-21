@@ -941,6 +941,40 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      anything in the stepper.
    - **Status:** Open — **marker only**, awaiting capture upload. Recorded only, no code changes.
 
+5. **Stacked double (Popeyes + McDonald's, ~15:20): after completing the SECOND pickup, the app
+   never recognized the dasher was on a drop-off.** On a two-store stack, both pickups completed,
+   but the transition into the **drop-off phase didn't register** after the second pickup — no
+   drop-off card / drop-off state. Dasher's read: **"I think it's related to the other one"** (the
+   #3 Walgreens drop-off cluster). Very likely the **same drop-off-recognition family**, surfacing
+   as a *miss* (no drop-off at all) here rather than a *false arrived* there.
+   - **Candidate causes (hypotheses, same family as #3):**
+     - **(i) #498 phantom-dropoff guard suppressing the real drop-off.** A transition into a dropoff
+       whose frame carries **no `customerNameHash` AND no `customerAddressHash`** is treated as a
+       transient confirm/geofence screen and the stepper **returns the region unchanged**
+       (`PlatformRegionStepper.kt:798-803`). If the first drop-off frame after pickup 2 didn't parse
+       a customer (wrong layout, or a rule that recognizes the screen but doesn't parse name/addr),
+       the guard would swallow it and the drop-off never starts. This is the inverse failure mode of
+       #3c — there a fresh dropoff minted with no identity; here the guard eats it.
+     - **(ii) The pickup→dropoff transition never fired because pickup 2 didn't *confirm*.** The
+       `PICKUP_CONFIRMED` → `DELIVERY_NAV_STARTED` hand-off (`EffectMap.kt:601-637`) requires
+       `prevTask.phase == PICKUP && nextTask.phase == DROPOFF`. On a stacked double the second
+       pickup's confirm screen (often a barcode/QR/handoff variant) may not have been recognized as
+       a pickup-confirm, so the task never flipped to DROPOFF — same thin-discriminator risk as the
+       drop-off rules in #3.
+     - **(iii) Stacked-dropoff resolve mismatch.** With two drops queued, the #503-slice-3 resolve
+       (`PlatformRegionStepper.kt:744-783`) picks the first pending customer-TBD dropoff; if both
+       drops' subtasks were already consumed/displaced or the second pickup didn't spawn its dropoff
+       subtask, there's nothing to resolve onto and (combined with the phantom guard) no drop-off
+       surfaces.
+   - **What to pull / check at desk (from this dash's `app_events` + snapshots around 15:20):** the
+     frame sequence right after the second pickup — did a `PICKUP_CONFIRMED` fire for pickup 2, did
+     any frame classify as `task:dropoff:*`, what rule id matched those frames, and did they parse a
+     `customerNameHash`/`customerAddressHash` (if both null, suspect the #498 guard). Compare the
+     Popeyes and McDonald's legs to see if one resolved and the other didn't. This is a **two-store**
+     stack, so it also feeds the multi-store-stack frontier (#557 / the 06-20 markers).
+   - **Status:** Open — **marker only**, awaiting capture upload; likely same root family as #3.
+     Recorded only, no code changes.
+
 ### Field UX context / Open questions
 
 2. **The PetSmart leg of the stack was a barcode-scan "batch"-style pickup — similar in feel to
