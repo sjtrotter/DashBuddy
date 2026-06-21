@@ -63,6 +63,17 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 NEW (branch `feature/556-shop-time-model`) — realistic $/hr + score on Shop & Deliver offers (#556). CONFIRM ON DASH.**
+  The time model now estimates a shop by its item count at the dasher's shopping pace (seed 0.8
+  items/min, learned from your own completed shops) instead of a flat 7-min overhead — so a grocery
+  run no longer reads a wildly inflated `$/hr` / "AWESOME" score. **This is a verdict-mover** (it
+  changes accept/decline rankings, not just the readout). **Confirm on dash: 0/2 —** on a Shop &
+  Deliver / grocery / ACV offer (e.g. H-E-B, Sprouts) the card `$/hr` should look **realistic**
+  (~$25–40/hr range, not $100+), the score should be sane, and a normal restaurant **pickup** offer
+  should read the **same as before** (only shops changed). After a few shop dashes, the learned pace
+  kicks in — grep the log for `ShopRate` to see it recording (`N items / M min = X/min`). If a shop
+  still reads inflated, note the offer's item count + quoted miles + the `$/hr` shown.
+
 - **🔧 MERGED — dropoff store recognition + pickup-matched resolution (#526/#553). CONFIRM ON DASH.**
   A dropoff shows the store **resolved from the job's pickups** (single → the pickup's store;
   multi-store stack → matched per drop), not inherited from the last active pickup.

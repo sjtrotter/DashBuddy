@@ -616,6 +616,22 @@ class EffectMap @Inject constructor() {
                 add(logEffect(sessionId, AppEventType.DELIVERY_NAV_STARTED, obs.timestamp, deliveryStart))
                 add(AppEffect.ResumeOdometer)
 
+                // #556: a completed SHOP pickup feeds the learned items/min. In-store time is
+                // measured arrived→confirmed (the 0.8/min seed basis); the handler floors out noise.
+                val shopItems = prevTask.itemsShopped ?: 0
+                val shopArrivedAt = prevTask.arrivedAt
+                if (prevTask.activity == PickupActivity.SHOPPING && shopItems > 0 && shopArrivedAt != null) {
+                    add(
+                        AppEffect.RecordShopRate(
+                            itemsShopped = shopItems,
+                            shopDurationMs = obs.timestamp - shopArrivedAt,
+                            storeName = prevTask.storeName,
+                            jobId = prevTask.jobId,
+                            taskId = prevTask.taskId,
+                        ),
+                    )
+                }
+
                 val customer = customerDisplayName(customerHash)
                 add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer)))
             }

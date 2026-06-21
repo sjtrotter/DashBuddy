@@ -5,9 +5,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.StrategyPreferences
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
+import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
+import cloud.trotter.dashbuddy.domain.evaluation.ShopRate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.InternalSerializationApi
@@ -41,6 +44,12 @@ class StrategyDataSource @Inject constructor(
         val RULE_LIST_JSON = stringPreferencesKey("rule_list_config_v1")
         val PROTECT_STATS_MODE = booleanPreferencesKey("protect_stats_mode")
         val ALLOW_SHOPPING = booleanPreferencesKey("allow_shopping")
+
+        // #556: learned overall shopping pace (running mean items/min + sample count). Not a
+        // user-set economy field — a measured value, kept here so a vehicle-class reseed never
+        // touches it; folded into the evaluator's UserEconomy by StrategyRepository.
+        val LEARNED_SHOP_RATE = doublePreferencesKey("learned_shop_items_per_min")
+        val SHOP_RATE_SAMPLES = intPreferencesKey("shop_rate_sample_count")
     }
 
     val evidenceMaster: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_MASTER] ?: EvidenceConfig.DEFAULT_MASTER }
@@ -75,6 +84,26 @@ class StrategyDataSource @Inject constructor(
 
     val protectStatsMode: Flow<Boolean> = ds.data.map { it[Keys.PROTECT_STATS_MODE] ?: false }
     val allowShopping: Flow<Boolean> = ds.data.map { it[Keys.ALLOW_SHOPPING] ?: true }
+
+    /** #556: the learned overall shopping pace + how many shops back it (null pace until first sample). */
+    val learnedShopRate: Flow<LearnedShopRate> = ds.data.map {
+        LearnedShopRate(it[Keys.LEARNED_SHOP_RATE], it[Keys.SHOP_RATE_SAMPLES] ?: 0)
+    }
+
+    /**
+     * #556: fold one measured shop ([items] over [minutes] in-store) into the running mean, atomically
+     * (read-modify-write inside one edit, so back-to-back stacked shops can't race). Out-of-band
+     * samples (below the [ShopRate] floors) are no-ops.
+     */
+    suspend fun recordShopRate(items: Int, minutes: Double) {
+        ds.edit { p ->
+            val (avg, n) = ShopRate.fold(p[Keys.LEARNED_SHOP_RATE], p[Keys.SHOP_RATE_SAMPLES] ?: 0, items, minutes)
+            if (avg != null) {
+                p[Keys.LEARNED_SHOP_RATE] = avg
+                p[Keys.SHOP_RATE_SAMPLES] = n
+            }
+        }
+    }
 
     suspend fun setEvidenceMaster(enabled: Boolean) {
         ds.edit { prefs ->

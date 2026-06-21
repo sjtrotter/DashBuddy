@@ -28,6 +28,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
+import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
@@ -662,6 +663,42 @@ class EffectMapTest {
             "Should NOT emit DELIVERY_CONFIRMED on a pickup-leaving transition",
             !effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
         )
+        assertTrue(
+            "a non-shop pickup feeds no shop-rate sample (#556)",
+            effects.none { it is AppEffect.RecordShopRate },
+        )
+    }
+
+    @Test
+    fun `a completed SHOP pickup emits RecordShopRate with measured items and duration (#556)`() {
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val arrivedAt = 100_000L
+        val confirmAt = arrivedAt + 30 * 60_000L  // 30 min in-store → 24 items = 0.8/min
+        val shopPickup = Task(
+            taskId = "task-1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "H-E-B",
+            activity = PickupActivity.SHOPPING, itemsShopped = 24, arrivedAt = arrivedAt, startedAt = 900L,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskPickupArrived),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = shopPickup)),
+        ))
+        val dropoff = Task(taskId = "task-2", jobId = "job-1", phase = TaskPhase.DROPOFF, startedAt = confirmAt)
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = dropoff)),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.TaskDropoffNavigation, timestamp = confirmAt,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION),
+        ))
+
+        val rec = effects.filterIsInstance<AppEffect.RecordShopRate>().single()
+        assertEquals(24, rec.itemsShopped)
+        assertEquals(30 * 60_000L, rec.shopDurationMs)
+        assertEquals("task-1", rec.taskId)
+        assertEquals("the sample is idempotent per pickup task", "shop_rate:task-1", rec.effectKey)
     }
 
     @Test

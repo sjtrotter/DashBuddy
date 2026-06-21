@@ -90,6 +90,21 @@ sealed class AppEffect {
     data object StopOdometer : AppEffect()
     data object PauseOdometer : AppEffect()   // pause GPS while stationary; session total preserved
     data object ResumeOdometer : AppEffect()  // resume GPS after stationary pause
+
+    /**
+     * #556: a Shop & Deliver pickup just completed — fold its measured pace ([itemsShopped] over
+     * [shopDurationMs] in-store) into the learned overall items/min. Idempotent per task so a
+     * re-observed confirm can't double-count (mirrors the #518 DELIVERY_COMPLETED keying).
+     */
+    data class RecordShopRate(
+        val itemsShopped: Int,
+        val shopDurationMs: Long,
+        val storeName: String?,
+        val jobId: String,
+        val taskId: String,
+    ) : AppEffect() {
+        override val effectKey: String get() = "shop_rate:$taskId"
+    }
     /**
      * Evaluate the pending offer. [offerHash] rides the async round-trip so the result
      * can be correlated back — a replaced offer must never inherit the previous offer's

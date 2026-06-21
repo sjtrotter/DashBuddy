@@ -171,15 +171,24 @@ class StrategyRepository @Inject constructor(
         protectStatsMode,
         allowShopping,
         appPreferencesRepository.userEconomy,
-    ) { rules, protect, shop, economy ->
+        dataSource.learnedShopRate,
+    ) { rules, protect, shop, economy, shopRate ->
         EvaluationConfig(
             protectStatsMode = protect,
             rules = rules,
             allowShopping = shop,
-            userEconomy = economy,
+            // #556: fold the learned shopping pace into the economy here (it lives in the strategy
+            // store, not the user-economy store, so it's never reseeded by a vehicle-class change).
+            userEconomy = economy.copy(
+                learnedShopItemsPerMinute = shopRate.itemsPerMin,
+                shopRateSampleCount = shopRate.sampleCount,
+            ),
         )
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
+
+    /** #556: fold a completed shop's measured pace into the learned overall items/min (atomic). */
+    suspend fun recordShopRate(items: Int, minutes: Double) = dataSource.recordShopRate(items, minutes)
 
     suspend fun clearPreferences() {
         Timber.w("Clearing Strategy Preferences")
