@@ -921,6 +921,24 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      nav-start and which frame set it (a real ARRIVED screen vs nav/arriving), and whether a
      `DELIVERY_NAV_STARTED` / new-task mint fired at the navigation start. Cross-reference the
      #503-slice-3 resolve-onto-subtask path.
+   - **Developer hypothesis (post-dash, the likely (b) mechanism): a post-arrival "host" drop-off
+     rule fired where the pre-arrival rule should have — "maybe those rules aren't different
+     enough."** This grounds out in the ruleset. Three drop-off rules key on the generic
+     `drop_off_workflow_host_fragment` container id and all set **`task:dropoff:arrived`** —
+     `dropoff_photo`, `dropoff_pin_entry`, and **`dropoff_handoff`** (`doordash.json:2552/2563/2577`,
+     handoff at **priority 64**, keyed on host fragment + `"hand it to customer"`) — whereas the
+     en-route **`dropoff_pre_arrival`** is **priority 73** and sets `task:dropoff:navigation`
+     (keyed on `"Deliver to"`/`"Delivery for"` + `"Hand it to recipient"`). Rules evaluate
+     **ascending by priority, first match wins** (`Ruleset.kt:22-43`, "lower = evaluated first"), so
+     **64 beats 73**: if an en-route/arriving frame carries the workflow-host fragment *and* trips
+     one of those arrived rules' text, the **arrived** rule wins and flips `arrivedAt` before the
+     dasher is actually there — exactly the false "already arrived." The discriminators are thin
+     ("hand it to **customer**" vs "Hand it to **recipient**"; a host-fragment container that may be
+     present pre-arrival too), which is the "not different enough" the dasher flagged. **Confirm
+     against the capture:** which drop-off rule id matched the nav-start Walgreens frame — if it's a
+     `*_host_fragment` / arrived-flow rule on an en-route screen, that's the bug, and the fix is
+     tightening the arrived rules' discriminators (or rejecting the en-route markers) rather than
+     anything in the stepper.
    - **Status:** Open — **marker only**, awaiting capture upload. Recorded only, no code changes.
 
 ### Field UX context / Open questions
@@ -948,6 +966,42 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      of the workflow is shared vs store-specific.
    - **Status:** Open — **marker only**, awaiting capture-corpus review. Recorded only, no code
      changes.
+
+### Research / design
+
+4. **Offer evaluation: flat per-metric thresholds may be too blunt; the real decision is
+   *conditional* (pay × distance). Conjecture / thinking-out-loud, not a work item.** Dasher's
+   framing: a rule like "decline anything under $5" is a fine rule of thumb on its own, but the
+   actual judgment is **joint** — *"if it's $5, what's the most distance I'll drive for it?"* A $5
+   offer that's 1–2 miles to a fast restaurant is a take; the same $5 at a longer distance isn't. So
+   a single global floor on one dimension throws away the nuance that lives in the **interaction** of
+   pay and distance (and pickup speed). "I feel like there's a lot more nuance we might need to
+   capture in the problem."
+   - **What plumbing already exists (so this is a refinement, not a greenfield build):** the offer
+     engine is already rule-based — `ScoringRule.MetricRule` (sealed type, `metricType` +
+     `targetValue`) over `MetricType.{PAYOUT, DOLLAR_PER_MILE, ACTIVE_HOURLY, MAX_DISTANCE,
+     ITEM_COUNT}` (`domain/.../evaluation/OfferEvaluator.kt:144-220`). Each metric is scored
+     **independently** (`calculateMetricScore`, `:195-220`) and the per-metric scores are folded by
+     **rank weight** into a composite (`:143-158`), then cut at `ACCEPT_THRESHOLD` /
+     `DECLINE_THRESHOLD` (`:164-165`). `DOLLAR_PER_MILE` already encodes a pay/distance *ratio*, but
+     a ratio isn't the same as a conditional curve — $5/1mi and $50/10mi are the same $5/mi yet very
+     different takes.
+   - **The gap (conjecture): there's no way to express a threshold on one dimension that's a
+     *function of* another** — e.g. an acceptance curve `maxMiles = f(payout)` (at $5 → ≤2 mi; at $8
+     → ≤4 mi; …), or a small pay×distance accept/decline table. The current model can weight
+     "distance matters" and "pay matters" separately but can't say "distance only matters *this much*
+     **when** pay is low."
+   - **A couple of directions this could go (purely speculative, dasher decides):** (i) a **guided
+     rule-builder** that nudges the user toward conditional rules — instead of one "min $5" slider,
+     prompt "at $5, what's your max distance? at $8? at $12?" and store the resulting points; (ii)
+     model it as a **pay-vs-distance acceptance curve** (a few user-set anchor points, interpolated)
+     that becomes a new `ScoringRule` variant or a hard accept/decline gate layered on the existing
+     composite. Either would reuse the `ScoringRule` sealed hierarchy and the
+     evaluate/score/threshold pipeline rather than replace it. If this hypothesis holds, the design
+     question is whether conditional logic lives as a richer `ScoringRule` subtype or as a separate
+     gate ahead of the weighted score — to be decided, not concluded here.
+   - **Status:** Open — **conjecture / design note only**, no work item filed, no code changes.
+     Recorded to feed a later triage/RFC if the dasher wants to pursue it.
 
 ---
 
