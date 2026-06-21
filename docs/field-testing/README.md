@@ -975,6 +975,46 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    - **Status:** Open — **marker only**, awaiting capture upload; likely same root family as #3.
      Recorded only, no code changes.
 
+6. **True Texas BBQ offer (~16:19): dasher *declined*, but it was recorded as an `OFFER_TIMEOUT`,
+   not `OFFER_DECLINED`.** A real decline logged as a phantom timeout — a data-fidelity bug in the
+   offer accounting (declines vs timeouts feed accept-rate / offer stats).
+   - **Mechanism (well-grounded in the rules + stepper): a DoorDash decline is two-step, and only
+     the SECOND step counts as a decline — if that confirm-step click isn't captured, the outcome
+     falls through to TIMEOUT.** `OfferIntent.DECLINE` is the literal wire string **`"decline_offer"`**
+     (`domain/.../state/OfferIntent.kt:11`). Only one click rule produces it —
+     **`doordash.click.decline_offer`** (`doordash.json:2999-3008`), gated **`screenIs:
+     offer_popup_confirm_decline`** and requiring a tap on **"Decline offer"** (the confirmation
+     dialog's button). The **first** tap — the X on the offer popup — is
+     `doordash.click.initial_decline` with intent **`"initial_decline"`** (`:2987-2996`), which
+     **does not equal `"decline_offer"`** and so is **never** treated as a decline outcome. Outcome
+     resolution (`EffectMap.kt:918-936`, `resolveOfferOutcome`) checks `prevOffer.lastClickIntent`
+     and the resolving click for `OfferIntent.DECLINE`; finding neither (only an `initial_decline`,
+     or nothing), it returns **`OFFER_TIMEOUT`** as the `else` branch. So when the offer vanished
+     (`prevOffer != null && nextOffer == null`, `EffectMap.kt:172-183`) without a captured
+     `decline_offer` confirm click, a genuine decline was logged as a timeout.
+   - **Why the confirm click was likely missed (hypotheses to check against the capture):**
+     - **(i) The confirm dialog wasn't recognized as `offer_popup_confirm_decline`.** That screen
+       rule keys on `"sure you want to decline"` (`doordash.json:305-313`); the click rule's
+       `screenIs` gate depends on it. If True Texas BBQ's confirm dialog rendered different text or
+       the frame wasn't captured, the `decline_offer` click can't classify → no DECLINE signal.
+     - **(ii) The confirm-tap accessibility click event wasn't emitted/captured** (fast dismissal,
+       debounce, or the popup tore down before the click frame landed).
+     - **(iii) The offer flow went to null off the `initial_decline` step** (or a timeout-looking
+       transition) before the confirm click was processed.
+   - **Design fragility worth flagging regardless of root cause:** a real decline is only counted if
+     the **second-step** confirm click is recognized; a missed confirm silently becomes a phantom
+     timeout. The `initial_decline` intent is captured but deliberately not counted (tapping X then
+     *cancelling* brings the offer back, so it isn't a decline on its own) — but there's **no
+     fallback** for "initial_decline seen, then offer genuinely disappeared," which is exactly a
+     confirmed decline with a dropped confirm frame. Whether to treat `initial_decline`-then-vanish
+     as a decline is a design call (to be decided, not concluded here).
+   - **What to pull / check at desk (`app_events` + snapshots ~16:19, True Texas BBQ):** the click
+     sequence on the offer — was an `initial_decline` click captured? a `decline_offer` click? was
+     the `offer_popup_confirm_decline` screen ever recognized (any frame with "sure you want to
+     decline")? what `lastClickIntent` did the `PendingOffer` carry when it resolved, and what
+     emitted the `OFFER_TIMEOUT`? Confirms which of (i)/(ii)/(iii) it was.
+   - **Status:** Open — **marker only**, awaiting capture upload. Recorded only, no code changes.
+
 ### Field UX context / Open questions
 
 2. **The PetSmart leg of the stack was a barcode-scan "batch"-style pickup — similar in feel to
