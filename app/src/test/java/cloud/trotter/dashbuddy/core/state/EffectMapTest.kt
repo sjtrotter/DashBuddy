@@ -696,6 +696,10 @@ class EffectMapTest {
             "a non-shop pickup feeds no shop-rate sample (#556)",
             effects.none { it is AppEffect.RecordShopRate },
         )
+        // #568: the dropoff bubble is store-flavored (the resolved store's customer), never a hash.
+        val bubble = effects.effectsOfType<AppEffect.UpdateBubble>().first { it.text.startsWith("Heading to") }
+        assertEquals("Heading to Chipotle's customer", bubble.text)
+        assertEquals(ChatPersona.Customer("Chipotle's customer"), bubble.persona)
     }
 
     @Test

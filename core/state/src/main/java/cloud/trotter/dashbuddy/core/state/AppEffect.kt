@@ -53,8 +53,9 @@ sealed class AppEffect {
     // distinct leg at the same store both produce a different key and still fire. One-shot bubbles
     // (offer/session/resume/paused/earnings) leave [dedupeScope] null → effectKey null → never deduped
     // (they may legitimately recur within the effects_fired window). persona.id for a Customer is the
-    // 6-char hash prefix (privacy-safe); merchant names aren't PII; text.hashCode() avoids storing the
-    // literal in the table. NOTE: this reuses the recovery-scoped effects_fired table for a cosmetic UI
+    // store-flavored label ("<store>'s customer", #568), never raw customer text; merchant names
+    // aren't PII; text.hashCode() avoids storing the literal in the table. NOTE: this reuses the
+    // recovery-scoped effects_fired table for a cosmetic UI
     // dedup rather than the in-state lastAnnouncedPostTaskTaskId anchor — a deliberate, lighter trade
     // for a LOW cosmetic bug (UpdateBubble is an external effect, suppressed at the recovery gate
     // before markFired, so recovery replays are unaffected).

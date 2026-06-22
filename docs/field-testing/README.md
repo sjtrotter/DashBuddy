@@ -63,6 +63,15 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 FIX SHIPPED — dropoff customer reads "\<store\>'s customer", not a 6-char hash (#568, PR #575). CONFIRM ON DASH.**
+  The dropoff bubble/card used to show the raw 6-char hash prefix (e.g. "Heading to 45ceda") or "the
+  customer". Now it's store-flavored — "Heading to H-E-B's customer" / the card reads "Maple Street's
+  customer" — which also tells apart a multi-store stack's drops. **Confirm on dash: 0/2 —** on a
+  delivery, the dropoff bubble/card should name the **store's** customer (e.g. "Wendy's customer"),
+  never a hex string; on a multi-store stack each drop should read its **own** store. If the store
+  hasn't resolved yet it falls back to "the customer" (acceptable, brief). Privacy unchanged (still a
+  hash under the hood; the store name isn't customer PII).
+
 - **🔬 FIX SHIPPED (recognize-only) — dropoff-arrived 'Leave it at the door' card now recognized (#549, PR #574). READ THE LOG / WATCH UNKNOWNs.**
   A dropoff-arrival card whose instruction is *not* "Hand it to recipient" (e.g. "Leave it at the
   door", a refined map pin, "Complete delivery steps") was falling to **UNKNOWN** — the state machine
