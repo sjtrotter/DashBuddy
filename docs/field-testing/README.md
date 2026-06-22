@@ -1118,6 +1118,35 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      for the #141 monetization launch; near-term, only ensure economy config is deferred behind
      defaults rather than gating the first dash.
 
+10. **Voice accept/decline of offers — hands-free, on-device. Feasibility / overhead note (dasher
+    asked "what would the overhead be").** Let the driver say "accept" / "decline" instead of
+    reaching for the bubble button while moving. Estimated overhead: **moderate-small for a v1**,
+    because the expensive half is already built.
+    - **Already done (the actuation half):** accept/decline is already an intent SSOT
+      (`OfferIntent.ACCEPT/DECLINE`) with **multiple front-ends** — the bubble buttons and the
+      notification actions both dispatch an `Observation.UiInput` carrying that intent. The app-owned
+      tap path (`RuleAction.ACCEPT_OFFER/DECLINE_OFFER` via `UiInteractionHandler`, the only thing
+      that clicks the third-party app, #425) and the fail-closed action gates (#417: tier check +
+      package-scope + label allowlist + strict click) sit behind it. **Voice is just front-end #3** —
+      a spoken word → `UiInput(intent)` → the exact path the button uses. TTS output already exists
+      (`TtsEffectHandler`), giving the confirmation/readback half for free.
+    - **New work (the input half):** (1) `RECORD_AUDIO` runtime permission (sensitive — same opt-in
+      framing as other capabilities); (2) a **bounded** speech handler — Android on-device
+      `SpeechRecognizer` armed **only during the offer window** (R0 `OfferPresented`) with a 2-word
+      grammar, symmetric to `TtsEffectHandler` (e.g. a `VoiceCommandHandler` that `EffectMap` arms on
+      offer-presented / disarms on offer-resolved); (3) a confirm beat (TTS readback + grace, e.g.
+      "Declining — say cancel to stop") for noisy-car reliability — dovetails with DoorDash's
+      already-two-step decline (cf. this session's #6); (4) trigger classification — a voice accept is
+      a **`USER`** `ActionTrigger` (the dasher spoke = its own consent), which already exists, so it
+      slots into the #417 consent model without change.
+    - **Privacy posture (the real gate, fits the pledges):** on-device recognition only, **no audio
+      leaves the device**, mic live **only** in the bounded offer window, opt-in per-feature.
+      Explicitly **not** always-on/hotword for v1 (battery + wake-word model + privacy review blow up
+      the cost and strain the on-device story); push-to-offer-window keeps it cheap and pledge-clean.
+    - **Status:** Open — **design/feasibility note only**, no work item filed, no code changes. Clean,
+      well-bounded enhancement with a hands-free field-safety win; candidate to file against the
+      effects/offer-action area if the dasher wants to pursue it.
+
 ### Verification TODOs — desk-review markers (need captured data)
 
 7. **Partial unassign of a stacked order (~17:16): dasher dropped ONE half of a stack — desk agent,
