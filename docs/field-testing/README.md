@@ -841,6 +841,48 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   toward the PetSmart pickup. No screenshots; in-field marker only. **Hypotheses, not concluded
   fixes.** No code changes from this session.
 
+### Desk review (2026-06-21, verified against the dash db/captures/source — Claude)
+
+Every claim below independently verified against `dashbuddy-v2.db`, the captures, the rotated logs,
+and current source (ultracode workflow).
+
+- **Merged build HELD.** **#556 shop `$/hr` WORKING** — all 13 offers recompute within $1/hr of the
+  logged bubbles; the two big grocery shops that caused the $116 bug now read **$22/hr** (31 items)
+  and **$13/hr** (38 items). **ShopRate learning WORKING** (6 sane samples 0.27–0.88/min; under the
+  5-sample gate so the 0.8 seed was correctly in force). **#517/#518 WORKING** (0/13 null pay; one
+  real completion/job; sessions 0 & 9 reconcile penny-exact) — **2nd clean confirmation, validated.**
+  **#553/#554** single-store **6/6 correct**; the multi-store `store=''` (seq23/seq70) is the gap
+  **#557 already fixes (now merged)** — not a regression.
+- **Bug #8 (BK add-on) — CONFIRMED, HIGH → filed #564.** seq98 `$0`/null-customer "Smokey Mo's"
+  DELIVERY_COMPLETED is a **NEW class, not a #498 regression**: the BK add-on's loading frame was
+  misrecognized as `delivery_summary_collapsed`, and a **grace-retired, never-picked-up** pickup task
+  was completed via the PostTask-exit path (`EffectMap.kt:304-322`). Smoking gun: TASK_RETIRE
+  `since` == BK offer `presentedAt` == seq98 `completedAt` = `1782080300717`. Fabricated $0 row +
+  −$8.40 under-capture. (#518 taskId-dedup can't stop a *first* spurious completion; #498's guard is
+  in the dropoff-mint path → inapplicable.)
+- **Bug #7 (Sprouts unassign) — CONFIRMED gap → #301.** Sprouts was **unassigned before pickup** and
+  never formed a task (benign here — no orphan), but confirms the state machine has no
+  unassign/remove-task model. Tracked under #301.
+- **Bug #3 (Walgreens) — CONFIRMED, HIGH → filed #565.** An en-route frame matched `dropoff_handoff`
+  (priority 64, ARRIVED, parse-null) over `dropoff_pre_arrival` (73) → "the customer" + false
+  "already arrived" (`arrivedAt` set 4.5 min early) + a **duplicate dropoff task** (job ended with 2).
+  The real arrival frame carries "Complete Delivery"; the peek doesn't — the discriminator no rule keys on.
+- **Bug #5 (Popeyes+McD) — REFUTED (not a bug).** Both restaurants are **one customer** (single hash)
+  → correctly 2 pickups → 1 dropoff → 1 completion (seq70, $10.02). The "never recognized a dropoff"
+  was **~4.5 min HUD staleness** (no dropoff frame captured for minutes) — spun out as #567 (flip the
+  bubble on the transition) + #568 (raw-hash label). seq70 `store=''` is the #557 gap (now merged).
+- **Bug #6 (True Texas BBQ decline → TIMEOUT) — CONFIRMED, MED.** The 2nd-step `decline_offer`
+  confirm click classified as `UNKNOWN click id=null text=null`; the confirm *screen* WAS recognized;
+  `resolveOfferOutcome` else → TIMEOUT (`EffectMap.kt:934`). Design call (decline-confirm fallback) +
+  needs a fresh decline capture with the click frame.
+- **Bug #1 (double Navigator fly-away) — CONFIRMED, LOW → filed #566.** `UpdateBubble` has a null
+  `effectKey` so two consecutive emissions (Site A `EffectMap.kt:582` + Site B `:691`) don't dedup.
+- **INFO PII leak — CONFIRMED, MED.** `ShadowProjector` logs 9 raw merchant names at INFO → folded
+  into #551.
+
+**Top priority: #564** (the only ledger-corrupting bug). Fix in flight (recognition + state guard +
+replay test). Lower: #565 Walgreens, then the design calls (#6 decline fallback, #301 unassign model).
+
 ### Bugs
 
 1. **Double-mint of the fly-away bubble notification on the stacked-pickup hand-off — two
