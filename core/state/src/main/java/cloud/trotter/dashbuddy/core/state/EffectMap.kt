@@ -42,6 +42,7 @@ import javax.inject.Singleton
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 import cloud.trotter.dashbuddy.domain.state.customerDisplayName
+import cloud.trotter.dashbuddy.domain.state.customerLabel
 
 /**
  * Replaces 9 reducers + 8 factories. Diffs each region before/after
@@ -638,7 +639,9 @@ class EffectMap @Inject constructor() {
                     )
                 }
 
-                val customer = customerDisplayName(customerHash)
+                // #568: store-flavored label ("Heading to H-E-B's customer") — friendlier than the
+                // raw 6-char hash and it disambiguates a multi-store stack's drops.
+                val customer = customerLabel(nextTask.storeName)
                 add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer), dedupeScope = nextTask.taskId))
             }
 

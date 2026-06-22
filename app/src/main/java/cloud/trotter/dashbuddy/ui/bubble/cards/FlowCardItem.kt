@@ -62,7 +62,7 @@ import cloud.trotter.dashbuddy.ui.formatters.color
 import cloud.trotter.dashbuddy.ui.formatters.displayLabel
 import cloud.trotter.dashbuddy.ui.formatters.phaseBg
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
-import cloud.trotter.dashbuddy.domain.state.customerDisplayName
+import cloud.trotter.dashbuddy.domain.state.customerLabel
 
 /**
  * A single flow-phase card in the bubble HUD stack (#257).
@@ -227,7 +227,7 @@ private fun pickupSummary(snap: FlowCardSnapshot.Pickup, isActive: Boolean): Str
 
 @Composable
 private fun deliverySummary(snap: FlowCardSnapshot.Delivery, isActive: Boolean): String {
-    val customer = customerDisplayName(snap.customerHash)
+    val customer = customerLabel(snap.storeName)
     val arrivedAt = snap.arrivedAt
     return when {
         isActive -> customer
@@ -520,7 +520,7 @@ private fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
         phaseEndedAt = snap.phaseEndedAt,
         isActive = isActive,
         isDrop = true,
-        primary = customerDisplayName(snap.customerHash),
+        primary = customerLabel(snap.storeName),
         netPay = snap.netPay,
         estMinutes = snap.estMinutes,
         perMile = snap.perMile,

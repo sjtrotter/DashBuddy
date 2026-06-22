@@ -26,4 +26,20 @@ class DisplayNamesTest {
             customerDisplayName(null),
         )
     }
+
+    // #568 — the dropoff display label is store-flavored, never the raw hash.
+
+    @Test
+    fun `customerLabel is store-flavored, never the raw hash (#568)`() {
+        assertEquals("H-E-B's customer", customerLabel("H-E-B"))
+        assertEquals("Maple Street's customer", customerLabel("Maple Street"))
+    }
+
+    @Test
+    fun `customerLabel falls back to the generic when the store is unknown or blank (#568)`() {
+        assertEquals("the customer", customerLabel(null))
+        assertEquals("the customer", customerLabel(""))
+        assertEquals("the customer", customerLabel("   "))
+        assertEquals("the customer", customerLabel(UNKNOWN_STORE))
+    }
 }
