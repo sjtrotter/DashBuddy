@@ -63,6 +63,18 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 FIX SHIPPED — dropoff customer fills in the card instead of re-minting it (#565, PR #571). CONFIRM ON DASH.**
+  06-21 Walgreens: at the dropoff the bubble showed **"the customer"** for a bit, then when you
+  started navigating the card **re-minted** (a fresh card appeared) instead of just filling in the
+  name — leaving a dead blank task behind. Fixed so the customer **resolves onto the same dropoff
+  card**. **Confirm on dash: 0/2 —** on a normal single delivery, when the dropoff begins it may
+  briefly read "the customer" (that's expected until the nav screen carries the name), but it should
+  then **fill in the real customer on the same card** — you should **not** see the card visibly
+  re-create itself. On a genuine multi-customer stack, each customer should still get its **own**
+  card. If you see a re-mint or a leftover "the customer" card that never resolves, note the store +
+  grab the dropoff capture sequence. (Earnings were never affected by this — it was cosmetic/ledger
+  hygiene.)
+
 - **🔧 FIX SHIPPED — add-on offer no longer fabricates a $0 "completion" (#564, PR #570). CONFIRM ON DASH.**
   06-21 seq98: accepting a **mid-stack add-on** offer (a new order added while a pickup was in
   flight) misrecognized the offer's transient frame as a delivery summary and logged a **fake $0,

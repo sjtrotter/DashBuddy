@@ -674,6 +674,16 @@ class PlatformRegionStepper @Inject constructor() {
                 taskPhase == TaskPhase.DROPOFF &&
                 currentTask.arrivedAt != null &&
                 taskSubFlow == TaskSubFlow.NAVIGATION &&
+                // #565: a stacked transition means "arrived at customer A, now navigating to a
+                // DIFFERENT customer B" — which is only possible if the active task ALREADY HAD a
+                // customer. A null→present customer is the FIRST resolution of a customer-TBD
+                // placeholder dropoff (#503 slice 3), not a transition to a new drop. Without this
+                // guard, the customer-bearing frame that finally resolves an active, customer-less
+                // placeholder (a genuine handoff screen activated it customer-less first) was treated
+                // as a stacked transition and fell through to a FRESH mint — orphaning the placeholder
+                // as a dead customer-less husk and re-minting the card (06-21 Walgreens noon: task-11
+                // placeholder → spurious task-13). A present prior customer keeps real stacks distinct.
+                currentTask.customerNameHash != null &&
                 taskFields?.customerAddressHash != null &&
                 taskFields.customerAddressHash != currentTask.customerAddressHash &&
                 // #498 task-path: only a genuinely DIFFERENT customer starts a new stacked dropoff —
