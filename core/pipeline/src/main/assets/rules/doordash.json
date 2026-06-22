@@ -1320,7 +1320,7 @@
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
       },
-      "comment": "Two dropoff layouts (#462/#460): the en-route nav card ('Deliver to <name>' + Directions/Call/Message) and the arrival detail card ('Delivery for' label with the name in a sibling node + 'Hand it to recipient'). The arrival card was dropping to UNKNOWN — its first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' is the dropoff-specific discriminator (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The alcohol variant of the arrival card additionally carries the priority-0 sensitive id/signature banner (#463), so it is blocked before reaching here.",
+      "comment": "Dropoff layouts (#462/#460/#549): (1) the en-route nav card ('Deliver to <name>' + Directions/Call/Message); (2) the arrival detail card with 'Delivery for' + 'Hand it to recipient'; (3) #549: the arrival detail card whose instruction is NOT 'Hand it to recipient' (e.g. 'Leave it at the door'), anchored on 'Delivery for' + the complete_delivery_steps_button id (the third require branch) — it was dropping to UNKNOWN. The arrival card's first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' / complete_delivery_steps_button are the dropoff-specific discriminators (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The arrival card's address nodes carry ids (address_line_1/_2), so customerAddressHash uses a coalesce (id-less shape first, by-id second). The alcohol variant additionally carries the priority-0 sensitive id/signature banner (#463), blocked before reaching here. Recognize-only (flow stays task:dropoff:navigation); the gate-code/instruction node is never parsed.",
       "require": {
         "any": [
           {
@@ -1364,6 +1364,20 @@
               {
                 "exists": {
                   "hasText": "Hand it to recipient"
+                }
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Delivery for"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "complete_delivery_steps_button"
                 }
               }
             ]
@@ -1414,42 +1428,65 @@
             ]
           },
           "customerAddressHash": {
-            "join": [
+            "comment": "#549: two address layouts. The en-route nav card's address is id-LESS (matched by the digit-leading shape, first branch). The arrival detail card's address carries ids (address_line_1/_2), so the id-less branch returns null and the second by-id branch reads it. coalesce picks the first non-null and applies NO top-level transform, so EACH branch hashes its own result — the address is never stored in the clear.",
+            "coalesce": [
               {
-                "find": {
-                  "all": [
-                    {
-                      "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                "join": [
+                  {
+                    "find": {
+                      "all": [
+                        {
+                          "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                        },
+                        {
+                          "hasNoId": true
+                        }
+                      ]
                     },
-                    {
-                      "hasNoId": true
-                    }
-                  ]
-                },
-                "read": "text"
+                    "read": "text"
+                  },
+                  {
+                    "find": {
+                      "all": [
+                        {
+                          "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                        },
+                        {
+                          "hasNoId": true
+                        }
+                      ]
+                    },
+                    "navigate": "sibling(1)",
+                    "rejectIf": {
+                      "not": {
+                        "hasTextMatchesRegex": "\\d{5}$"
+                      }
+                    },
+                    "read": "text"
+                  }
+                ],
+                "separator": ", ",
+                "transform": "sha256"
               },
               {
-                "find": {
-                  "all": [
-                    {
-                      "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                "join": [
+                  {
+                    "find": {
+                      "hasIdSuffix": "address_line_1"
                     },
-                    {
-                      "hasNoId": true
-                    }
-                  ]
-                },
-                "navigate": "sibling(1)",
-                "rejectIf": {
-                  "not": {
-                    "hasTextMatchesRegex": "\\d{5}$"
+                    "read": "text"
+                  },
+                  {
+                    "find": {
+                      "hasIdSuffix": "address_line_2"
+                    },
+                    "read": "text"
                   }
-                },
-                "read": "text"
+                ],
+                "separator": ", ",
+                "transform": "sha256"
               }
-            ],
-            "separator": ", ",
-            "transform": "sha256"
+            ]
           },
           "storeName": {
             "comment": "#526: the dropoff card's merchant label — the same store as the pickup, but in DoorDash's running-key form ('Target (02426)', 'Maple Street Biscuit - Alamo Ranch'), which does NOT string-match the offer/pickup name. The node has no id, so it's anchored by text shape: '<name> (<storeNum>)' (reliable for chains) first, then a strict all-Title-Case '<Name> - <Area>' (so a lowercase delivery instruction can't false-match). Not PII (a merchant name); feeds per-task store self-labelling + the post-session store-entity projector (#159). Null when the card variant doesn't show it.",

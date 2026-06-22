@@ -671,6 +671,17 @@ object RuleCompiler {
     }
 
     private fun compileCoalesce(obj: JsonObject): (UiNode, Bindings) -> Any? {
+        // #549 hardening: coalesce returns the first non-null branch verbatim — it does NOT apply a
+        // top-level transform. Silently dropping one would be a privacy footgun: a PII coalesce whose
+        // sha256 sat at the top level (instead of inside each branch) would emit the RAW value. Reject
+        // it at compile time so the transform must live in each branch (where it actually runs).
+        if ("transform" in obj) {
+            throw RuleCompileException(
+                "coalesce does not apply a top-level 'transform' — put the transform inside each " +
+                    "branch (a top-level transform would be silently dropped, which for a PII field " +
+                    "would leak the raw value)",
+            )
+        }
         val exprs = obj["coalesce"]!!.jsonArray.map { compileParseExpression(it) }
 
         return { tree, bindings ->

@@ -1520,7 +1520,7 @@
         "shape": "task",
         "fields": {
             "arrivalConfirmed": false,
-            "customerAddressHash": null,
+            "customerAddressHash": "7837e58dbff05ad014939819476f3029f3d6b6dc2def2b03f502decbef888e43",
             "customerNameHash": "75adb7969770f4910879f8d929335ac1f2b5c66adc3574bccaa4cdab310f690d",
             "deadline": {
                 "text": "20:04",
@@ -1541,7 +1541,7 @@
         "shape": "task",
         "fields": {
             "arrivalConfirmed": false,
-            "customerAddressHash": null,
+            "customerAddressHash": "7837e58dbff05ad014939819476f3029f3d6b6dc2def2b03f502decbef888e43",
             "customerNameHash": "75adb7969770f4910879f8d929335ac1f2b5c66adc3574bccaa4cdab310f690d",
             "deadline": {
                 "text": "20:04",
@@ -1945,6 +1945,27 @@
             "deadline": {
                 "text": "8:16 PM",
                 "time": 1780344960000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
+    "dropoff_pre_arrival/20260621_151916_dropoff_refined_pin_leave_at_door.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": "7342b159859c4de641357a7c8243c1090043221af131d43681d8443b3e0a7100",
+            "customerNameHash": "017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d",
+            "deadline": {
+                "text": "15:27",
+                "time": 1780327620000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
