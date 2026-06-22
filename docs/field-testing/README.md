@@ -1077,6 +1077,47 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    - **Status:** Open — **conjecture / design note only**, no work item filed, no code changes.
      Recorded to feed a later triage/RFC if the dasher wants to pursue it.
 
+9. **Onboarding / setup-wizard / permissions philosophy — prompted by a Reddit "delete your
+   onboarding" post. Strategic note, not a work item.** A solo dev's post (built on Claude Code,
+   shipped to TestFlight) reported real-user data killing his elaborate onboarding: users walked the
+   tutorial/setup/value-props and **bailed at the sign-in wall before reaching the product**. He tore
+   it out — drop users into the core action free, no account, ask for sign-in only *after* value is
+   felt. Lesson: *"every screen between 'opened the app' and 'felt the value' is a place to lose
+   someone."* (Product referenced: War Table, https://wartable.co/ — "five AIs debate your
+   decision." The original Reddit post URL wasn't locatable via search at log time; quote is
+   paraphrased from the dasher's relay.)
+   - **Why DashBuddy is a different archetype (so "delete the wall" doesn't transfer directly):** the
+     post's exemplars (ChatGPT/Claude/Perplexity/War Table) deliver value the instant you open them,
+     so a sign-in gate is *arbitrary* friction. DashBuddy's permission gate is **load-bearing, not
+     arbitrary** — the core value (reading the DoorDash UI via `AccessibilityService`, mileage via
+     location) is physically impossible without those grants. You can't "drop the user into the
+     value" because the value is recognizing offers on a live dash. So the wall can't simply be
+     deleted; the *principle* still applies, on a different surface.
+   - **The translation that does apply — split capability from scaffolding:**
+     - **Load-bearing (can't defer):** the accessibility-service grant and location permission.
+     - **Scaffolding (the post's real target):** the economy editor (MPG/maintenance/depreciation/
+       gas), vehicle/strategy config, value-prop or tutorial screens. **None of this should stand
+       between "opened" and "saw True Net Profitability."** The code already supports deferring it —
+       `UserEconomy` ships sane defaults (`DEFAULT_GAS_PRICE_PER_GALLON`, `DEFAULT_MINUTES_PER_MILE`,
+       `DEFAULT_BASE_PICKUP_MINUTES`) and tracks `userSetFields` separately, so the economy editor can
+       be **optional refinement**, never a first-run gate. If the wizard currently forces economy
+       config before the first dash, that's exactly the "commit before value" wall and it can come out
+       without touching the data model.
+   - **The one move that *is* the post's lesson, adapted:** sequence value **ahead of** the scary
+     accessibility dialog — let the user feel the bubble HUD + net-profit math on a sample/demo offer
+     first, *then* request the grant, now motivated ("earn the permission"). Same instinct (no
+     commitment before value), applied to a permission that can't be removed.
+   - **Stage check (the most important caveat):** per `CLAUDE.md`, **"exactly one user: the
+     developer."** The post is a **conversion-funnel** lesson — about not losing *acquired strangers*,
+     which DashBuddy doesn't have yet. So building (or tearing out) elaborate onboarding *now* would
+     itself be the over-scaffolding the post warns about. Right-now question: *does the wizard slow the
+     tester down, and does it bury the two permissions that matter?* Optimize the wizard for the
+     tester. **Save the funnel teardown for the first-500 / paid-tier launch (#141)** — that's when
+     "every screen to value is a place to lose someone" becomes literally true with money attached.
+   - **Status:** Open — **strategic/design note only**, no work item filed, no code changes. Bookmark
+     for the #141 monetization launch; near-term, only ensure economy config is deferred behind
+     defaults rather than gating the first dash.
+
 ### Verification TODOs — desk-review markers (need captured data)
 
 7. **Partial unassign of a stacked order (~17:16): dasher dropped ONE half of a stack — desk agent,
