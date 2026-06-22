@@ -129,6 +129,68 @@ class PlatformRegionStepperTest {
     }
 
     // =========================================================================
+    // #565 — DROPOFF placeholder resolution vs genuine stacked dropoff
+    // =========================================================================
+
+    @Test
+    fun `customer-bearing nav resolves onto an active customer-less placeholder dropoff, no re-mint (#565)`() {
+        // A genuine handoff screen activated the pre-created placeholder dropoff customer-less; now the
+        // first customer-bearing nav frame arrives. It MUST fill in the placeholder, not mint a new task.
+        val placeholder = Task(
+            taskId = "task-placeholder", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            customerNameHash = null, customerAddressHash = null,
+            startedAt = 300L, arrivedAt = 800L,
+        )
+        val next = stepper.step(
+            prev = region(activeTask = placeholder),
+            prevFlow = FlowRegion(flow = Flow.TaskDropoffArrived),
+            nextFlow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            obs = screenObs(
+                flow = Flow.TaskDropoffNavigation, storeName = null,
+                phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION,
+                customerNameHash = "cust-real", customerAddressHash = "addr-real",
+            ),
+            policy = policy,
+        )
+        assertEquals(
+            "the customer resolves onto the placeholder, not a fresh mint",
+            "task-placeholder", next.activeTask?.taskId,
+        )
+        assertEquals("cust-real", next.activeTask?.customerNameHash)
+        assertTrue(
+            "no customer-less dropoff husk should be displaced into recentTasks",
+            next.recentTasks.none { it.phase == TaskPhase.DROPOFF && it.customerNameHash == null },
+        )
+    }
+
+    @Test
+    fun `a different real customer dropoff nav still mints a distinct task (#565 keeps genuine stacks)`() {
+        // The guard must not over-suppress: arrived at customer A, now navigating to a DIFFERENT
+        // customer B → still a distinct stacked dropoff.
+        val custA = Task(
+            taskId = "task-A", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            customerNameHash = "cust-A", customerAddressHash = "addr-A",
+            startedAt = 300L, arrivedAt = 800L,
+        )
+        val next = stepper.step(
+            prev = region(activeTask = custA),
+            prevFlow = FlowRegion(flow = Flow.TaskDropoffArrived),
+            nextFlow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            obs = screenObs(
+                flow = Flow.TaskDropoffNavigation, storeName = null,
+                phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION,
+                customerNameHash = "cust-B", customerAddressHash = "addr-B",
+            ),
+            policy = policy,
+        )
+        assertNotEquals(
+            "a genuinely different customer still starts a distinct dropoff",
+            "task-A", next.activeTask?.taskId,
+        )
+        assertEquals("cust-B", next.activeTask?.customerNameHash)
+    }
+
+    // =========================================================================
     // FALSE-POSITIVE GUARDS — these must NOT mint new tasks
     // =========================================================================
 
