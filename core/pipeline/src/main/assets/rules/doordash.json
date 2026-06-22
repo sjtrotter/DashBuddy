@@ -1455,7 +1455,7 @@
                 "find": {
                   "all": [
                     {
-                      "hasTextMatchesRegex": "^.{1,60} \\(\\d{2,6}\\)$"
+                      "hasTextMatchesRegex": "^.{1,60} \\((\\d{2,6}(-\\d{1,6})?|[A-Z][A-Za-z .'&-]+)\\)$"
                     },
                     {
                       "hasNoId": true

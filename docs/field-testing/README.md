@@ -79,10 +79,12 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   multi-store stack → matched per drop), not inherited from the last active pickup.
   - Confirmed: **1/2** (2026-06-20 — singles + **same-store** double stacks resolved correctly
     [Panda Express, Parry's Pizzeria]; verified in the db + `ShadowProjector` log).
-  - **Still needs a clean MULTI-store stack** (different stores): the 06-20 Peng's+Little Caesars stack
-    left both drops **`None`** (safe, not wrong — the store text wasn't parsed; tracked as **#557**).
-    On a multi-store stack each drop should show its **own** store, **not both the same** and **not the
-    other stop's**. If a drop shows a wrong store, capture the dropoff frames + note the stack's stores.
+  - **Multi-store stack** (different stores): the 06-20 Peng's+Little Caesars stack left both drops
+    `None` (safe, not wrong) — **now fixed by #557 (branch `feature/557-multistore-dropoff-store`,
+    pending merge):** the dropoff running-key forms (`Little Caesars (0164-0045)`, place-name parens)
+    now parse + resolve to their pickup. On a multi-store stack each drop should show its **own**
+    store, **not both the same** and **not the other stop's**. If a drop shows a wrong store or `None`,
+    capture the dropoff frames + note the stack's stores. Confirmed: 0/2 for the #557 fix.
 
 - **🔬 MERGED (debug build) — shadow store-chain projector logs (#159/#554). READ THE LOG AFTER A DASH.**
   Debug-only, log-only: after each completed job the log emits a `ShadowProjector` line —
