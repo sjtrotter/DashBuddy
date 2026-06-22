@@ -63,6 +63,18 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 FIX SHIPPED — add-on offer no longer fabricates a $0 "completion" (#564, PR #570). CONFIRM ON DASH.**
+  06-21 seq98: accepting a **mid-stack add-on** offer (a new order added while a pickup was in
+  flight) misrecognized the offer's transient frame as a delivery summary and logged a **fake $0,
+  customer-less completion** of the not-yet-picked-up store — corrupting earnings. Fixed two ways
+  (recognition rejects offer markers; the state machine only completes a task that reached the
+  **dropoff**). **Confirm on dash: 0/2 —** when you **accept an add-on/stacked offer while still at
+  or heading to a store** (esp. a "High paying offer!" add-on), watch that **no** bogus completion
+  pops (no "$0.00" delivery, no premature "delivered" for a store you haven't dropped), the earnings
+  total **doesn't jump then stay wrong**, and the original pickup keeps its identity (no duplicate
+  store task). If a phantom completion still appears, note the add-on's store + the store you were
+  working, and grab the capture sequence around the accept.
+
 - **🔧 MERGED — realistic $/hr + score on Shop & Deliver offers (#556). CONFIRM ON DASH.**
   The time model now estimates a shop by its item count at the dasher's shopping pace (seed 0.8
   items/min, learned from your own completed shops) instead of a flat 7-min overhead — so a grocery
