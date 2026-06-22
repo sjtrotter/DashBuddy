@@ -41,7 +41,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
-import cloud.trotter.dashbuddy.domain.state.customerDisplayName
 import cloud.trotter.dashbuddy.domain.state.customerLabel
 
 /**
@@ -584,7 +583,6 @@ class EffectMap @Inject constructor() {
                         nextTask.activity,
                         nextTask.arrivedAt != null,
                         storeName,
-                        nextTask.customerNameHash,
                     )
                     add(AppEffect.UpdateBubble("Pickup: $storeName", persona, dedupeScope = nextTask.taskId))
                 }
@@ -609,7 +607,6 @@ class EffectMap @Inject constructor() {
             if (prevTask?.phase == TaskPhase.PICKUP &&
                 nextTask?.phase == TaskPhase.DROPOFF
             ) {
-                val customerHash = nextTask.customerNameHash
                 val pickupConfirmed = pickupPayload(
                     task = prevTask,
                     storeName = prevTask.storeName ?: UNKNOWN_STORE,
@@ -695,7 +692,6 @@ class EffectMap @Inject constructor() {
                         nextTask.activity,
                         nextTask.arrivedAt != null,
                         storeName,
-                        nextTask.customerNameHash,
                     )
                     add(AppEffect.UpdateBubble("Pickup: $storeName", persona, dedupeScope = nextTask.taskId))
                 }
@@ -948,11 +944,12 @@ class EffectMap @Inject constructor() {
         activity: String?,
         arrived: Boolean,
         storeName: String,
-        customerHash: String?,
     ): ChatPersona {
         return when {
             activity == PickupActivity.SHOPPING -> ChatPersona.Shopper
-            activity == PickupActivity.CONFIRMED -> ChatPersona.Customer(customerDisplayName(customerHash))
+            // #568: store-flavored, never the raw hash (keeps the "never show the hash" invariant
+            // literal). customerHash stays the identity key; storeName drives display.
+            activity == PickupActivity.CONFIRMED -> ChatPersona.Customer(customerLabel(storeName))
             arrived -> ChatPersona.Merchant(storeName)
             else -> ChatPersona.Navigator
         }
