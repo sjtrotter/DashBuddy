@@ -303,7 +303,13 @@ class EffectMap @Inject constructor() {
                     val completedJobId = p.activeJob?.jobId
                     val completedTask = next.activeTask?.takeIf { it.taskId == p.activeTask?.taskId }
                         ?: next.recentTasks.lastOrNull { completedJobId == null || it.jobId == completedJobId }
-                    if (completedTask != null) {
+                    // #564: a delivery completes a DROPOFF, never a PICKUP. A mid-stack add-on offer
+                    // can grace-retire an in-flight PICKUP task and a transient/misrecognized
+                    // delivery-summary frame then drives this PostTask-exit — fabricating a $0,
+                    // customer-less "completion" of a store that was never delivered (06-21 seq98:
+                    // Smoky Mo's pickup …32 completed at the moment the Burger King add-on was
+                    // accepted). Only a task that actually reached the dropoff phase may complete.
+                    if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF) {
                         val retireSince = p.pendingDestructive
                             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
                         val payload = deliveryCompletedPayload(

@@ -495,6 +495,31 @@ class EffectMapTest {
     }
 
     @Test
+    fun `DELIVERY_COMPLETED does not fire when the retired task is a PICKUP that never reached dropoff (#564)`() {
+        val (platform, base) = stateWithPlatform()
+        val job = Job("job-new", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 1000L)
+        // 06-21 seq98: a mid-stack Burger King add-on offer grace-retires an in-flight PICKUP task
+        // (Smoky Mo's …32, never picked up), and a transient/misrecognized delivery-summary frame
+        // drives this PostTask exit. The retired task is a PICKUP — it never reached the dropoff —
+        // so it must NOT fabricate a $0, customer-less "completion" of a store never delivered.
+        val pickup = Task(
+            taskId = "task-32", jobId = "job-new", phase = TaskPhase.PICKUP,
+            storeName = "Smoky Mo's BBQ", startedAt = 100L, completedAt = null,
+        )
+        val prevRegion = base.copy(activeJob = job, activeTask = pickup, recentTasks = emptyList())
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.PostTask), platforms = mapOf(platform to prevRegion)))
+        // PostTask exit; the PICKUP task is freshly retired into recentTasks (the grace-retire commit).
+        val nextRegion = prevRegion.copy(activeTask = null, recentTasks = listOf(pickup.copy(completedAt = 2000L)))
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskPickupNavigation), platforms = mapOf(platform to nextRegion)))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskPickupNavigation))
+        assertFalse(
+            "a retired PICKUP task that never reached dropoff must not complete (#564 add-on phantom)",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_COMPLETED),
+        )
+    }
+
+    @Test
     fun `stacked pickup transition fires PICKUP_NAV_STARTED and ResumeOdometer for the new task`() {
         // Costa Pacifica pickup completed (moved to recentTasks) and a new
         // Chili's pickup task minted by the stepper. The diff-task gate must
