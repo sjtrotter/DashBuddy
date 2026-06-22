@@ -663,8 +663,18 @@
         },
         {
           "allTextContains": "Start pickup"
+        },
+        {
+          "allTextContains": "Total will be higher"
+        },
+        {
+          "allTextContains": "High paying offer"
+        },
+        {
+          "allTextContains": "Additional"
         }
       ],
+      "comment": "#564: reject the OFFER-only markers above ('Total will be higher'/'High paying offer'/'Additional') — an add-on offer popup carries 'this offer' (in 'priority for this offer') which satisfies require, but it is NOT a delivery summary. Without these rejects a transient offer/loading frame mid-stack masqueraded as a collapsed summary and fabricated a $0 completion (06-21 seq98, Burger King add-on).",
       "parse": {
         "as": "post_task",
         "fields": {
