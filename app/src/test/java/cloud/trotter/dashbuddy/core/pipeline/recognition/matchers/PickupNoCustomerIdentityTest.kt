@@ -33,7 +33,11 @@ class PickupNoCustomerIdentityTest {
         File(TestRulesetFactory.rulesDir).listFiles { f -> f.extension == "json" }?.sortedBy { it.name }
             ?.forEach { file ->
                 val root = Json.parseToJsonElement(file.readText()).jsonObject
-                root["screens"]?.jsonArray?.forEach { collectOffenders(it.jsonObject, file.name, offenders) }
+                // Scan every rule section that can carry a parse block (screens today; notifications/
+                // clicks defensively) so a PICKUP customer parse can't slip in via any surface.
+                for (section in listOf("screens", "notifications", "clicks")) {
+                    root[section]?.jsonArray?.forEach { collectOffenders(it.jsonObject, file.name, offenders) }
+                }
             }
         assertTrue(
             "A PICKUP-phase rule parsed a customer identity — pickups belong to a store, not a " +
