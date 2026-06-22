@@ -34,6 +34,8 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -422,6 +424,41 @@ class SideEffectEngineTest {
 
         verify(bubbleManager, never()).startSession(any(), any())
         verifyBlocking(effectsFiredDao, never()) { markFired(any()) }
+    }
+
+    @Test
+    fun `two identical keyed pickup bubbles post the fly-away exactly once (#566 end-to-end)`() = runTest {
+        // The double fly-away: two EffectMap sites emit the byte-identical per-task bubble on
+        // consecutive frames. With a dedupeScope (taskId) the bubble now carries an effectKey, so the
+        // engine's effects_fired gate collapses the second. Stateful: not-fired on the first call,
+        // fired on the second (as markFired would have recorded between them).
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val bubble = AppEffect.UpdateBubble("Pickup: Petsmart", dedupeScope = "task-1")
+        assertNotNull("the per-task bubble must be keyed for this to work", bubble.effectKey)
+        whenever { effectsFiredDao.hasBeenFired(bubble.effectKey!!) }.thenReturn(false, true)
+
+        engine.process(bubble, recovering = false)
+        runCurrent()
+        engine.process(bubble, recovering = false)
+        runCurrent()
+
+        verify(bubbleManager, times(1)).postMessage(eq("Pickup: Petsmart"), any(), any())
+        verifyBlocking(effectsFiredDao, times(1)) { markFired(any()) }
+    }
+
+    @Test
+    fun `an unkeyed one-shot bubble posts every time (#566 does not over-dedup)`() = runTest {
+        // Offer/session/etc. bubbles have no dedupeScope → null key → the gate never suppresses them.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val bubble = AppEffect.UpdateBubble("Offer Accepted")
+        assertNull("a one-shot bubble must stay unkeyed", bubble.effectKey)
+
+        engine.process(bubble, recovering = false)
+        runCurrent()
+        engine.process(bubble, recovering = false)
+        runCurrent()
+
+        verify(bubbleManager, times(2)).postMessage(eq("Offer Accepted"), any(), any())
     }
 
     @Test
