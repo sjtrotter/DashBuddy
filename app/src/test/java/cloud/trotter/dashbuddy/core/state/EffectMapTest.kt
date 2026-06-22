@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
@@ -34,6 +35,9 @@ import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
@@ -1454,5 +1458,65 @@ class EffectMapTest {
         assertTrue("Should emit StartOdometer", effects.any { it is AppEffect.StartOdometer })
         assertTrue("Should emit StartSession", effects.any { it is AppEffect.StartSession })
         assertTrue("Should emit DASH_START", effects.logEventTypes().contains(AppEventType.DASH_START))
+    }
+
+    // =====================================================================================
+    // #566 — per-task bubble idempotency key (double fly-away on a stacked/new pickup)
+    // =====================================================================================
+
+    @Test
+    fun `a new pickup bubble carries a per-task dedupe key (#566, wiring)`() {
+        // A new pickup (prevTask null → nextTask PICKUP) emits a KEYED UpdateBubble, so the engine's
+        // effects_fired gate can collapse the two-site double emission of "Pickup: <store>".
+        val (platform, base) = stateWithPlatform()
+        val pickup = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "H-E-B", startedAt = 100L)
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.OfferPresented), platforms = mapOf(platform to base)))
+        val nextRegion = base.copy(activeTask = pickup)
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskPickupNavigation), platforms = mapOf(platform to nextRegion)))
+
+        val bubble = effectMap.diff(
+            prev, next,
+            screenObs(
+                flow = Flow.TaskPickupNavigation,
+                parsed = ParsedFields.TaskFields(storeName = "H-E-B", phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION),
+            ),
+        ).effectsOfType<AppEffect.UpdateBubble>().firstOrNull { it.text.contains("Pickup") }
+
+        assertNotNull("a new pickup should emit a bubble", bubble)
+        assertNotNull("the pickup bubble must carry a dedupe key so the double fly-away dedups (#566)", bubble!!.effectKey)
+        assertTrue("the key is scoped to the task id", bubble.effectKey!!.contains("task-1"))
+    }
+
+    @Test
+    fun `the same task switching persona produces different bubble keys, so the activity change still fires (#566)`() {
+        // H-E-B leg: NAVIGATOR (heading to store) → SHOPPER (now shopping). Same task, same text, but
+        // distinct personas → distinct keys → the legitimate re-emit is NOT suppressed.
+        val nav = AppEffect.UpdateBubble("Pickup: H-E-B", ChatPersona.Navigator, dedupeScope = "task-1")
+        val shop = AppEffect.UpdateBubble("Pickup: H-E-B", ChatPersona.Shopper, dedupeScope = "task-1")
+        assertNotEquals("NAVIGATOR→SHOPPER on the same leg must still fire", nav.effectKey, shop.effectKey)
+    }
+
+    @Test
+    fun `the same store on a later distinct leg produces a different bubble key (#566)`() {
+        // Two separate H-E-B pickups in one dash (effects_fired persists ~48h) must each fire.
+        val first = AppEffect.UpdateBubble("Pickup: H-E-B", ChatPersona.Navigator, dedupeScope = "task-1")
+        val later = AppEffect.UpdateBubble("Pickup: H-E-B", ChatPersona.Navigator, dedupeScope = "task-9")
+        assertNotEquals("a later same-store leg must still fire", first.effectKey, later.effectKey)
+    }
+
+    @Test
+    fun `identical task, persona and text produce the same key, so the consecutive double dedups (#566)`() {
+        // The bug: two EffectMap sites emit the byte-identical bubble on consecutive frames of one leg.
+        val a = AppEffect.UpdateBubble("Pickup: Petsmart", ChatPersona.Navigator, dedupeScope = "task-1")
+        val b = AppEffect.UpdateBubble("Pickup: Petsmart", ChatPersona.Navigator, dedupeScope = "task-1")
+        assertEquals("the consecutive identical double must collapse to one", a.effectKey, b.effectKey)
+        assertNotNull(a.effectKey)
+    }
+
+    @Test
+    fun `a one-shot non-task bubble stays unkeyed so it can legitimately recur (#566)`() {
+        // Offer/session/resume/paused/earnings bubbles pass no dedupeScope → null key → never deduped.
+        assertNull("Offer Accepted must stay unkeyed", AppEffect.UpdateBubble("Offer Accepted", ChatPersona.Dispatcher).effectKey)
+        assertNull("a default bubble is unkeyed", AppEffect.UpdateBubble("Dash Paused!").effectKey)
     }
 }

@@ -44,11 +44,29 @@ sealed class AppEffect {
     }
 
     // 2. Update UI (The Bubble)
+    //
+    // #566: per-task bubbles (a pickup/dropoff heads-up) carry a [dedupeScope] = the task id, so the
+    // engine's effects_fired idempotency gate (which only acts on a non-null effectKey) collapses the
+    // double fly-away that fired when two EffectMap sites emitted the same "Pickup: <store>" on
+    // consecutive frames of one leg. The key is scoped to task + persona + content so it does NOT
+    // suppress a legitimate re-emit: the same task switching persona (NAVIGATOR→SHOPPER) or a later,
+    // distinct leg at the same store both produce a different key and still fire. One-shot bubbles
+    // (offer/session/resume/paused/earnings) leave [dedupeScope] null → effectKey null → never deduped
+    // (they may legitimately recur within the effects_fired window). persona.id for a Customer is the
+    // 6-char hash prefix (privacy-safe); merchant names aren't PII; text.hashCode() avoids storing the
+    // literal in the table. NOTE: this reuses the recovery-scoped effects_fired table for a cosmetic UI
+    // dedup rather than the in-state lastAnnouncedPostTaskTaskId anchor — a deliberate, lighter trade
+    // for a LOW cosmetic bug (UpdateBubble is an external effect, suppressed at the recovery gate
+    // before markFired, so recovery replays are unaffected).
     data class UpdateBubble(
         val text: String,
         val persona: ChatPersona = ChatPersona.Dispatcher,
-        val expand: Boolean = false
-    ) : AppEffect()
+        val expand: Boolean = false,
+        val dedupeScope: String? = null,
+    ) : AppEffect() {
+        override val effectKey: String? get() =
+            dedupeScope?.let { "bubble:$it:${persona.id}:${text.hashCode()}" }
+    }
 
     /**
      * Capture an evidence screenshot. [category] is the user-consent bucket
