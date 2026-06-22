@@ -499,6 +499,32 @@ class RuleCompilerTest {
         RuleCompiler.compileTreePred(Json.parseToJsonElement(json))
     }
 
+    @Test(expected = RuleCompileException::class)
+    fun `coalesce with a top-level transform throws - it would be silently dropped (#549)`() {
+        // A coalesce returns the chosen branch verbatim; a top-level transform is NOT applied. For a
+        // PII field (sha256 at the top instead of in each branch) that would leak the raw value, so
+        // the compiler must reject it — the transform has to live inside each branch.
+        val rule = """
+            [{
+              "id": "test.coalesce.toptransform",
+              "priority": 9999,
+              "state": { "flow": "task:dropoff:navigation" },
+              "require": { "exists": { "hasText": "x" } },
+              "parse": {
+                "as": "task",
+                "fields": {
+                  "phase": "DROPOFF",
+                  "customerAddressHash": {
+                    "coalesce": [ { "find": { "hasIdSuffix": "address_line_1" }, "read": "text" } ],
+                    "transform": "sha256"
+                  }
+                }
+              }
+            }]
+        """.trimIndent()
+        RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+    }
+
     // =========================================================================
     // compileEffectEntry — verb validation
     // =========================================================================
