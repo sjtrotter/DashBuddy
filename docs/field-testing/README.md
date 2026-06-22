@@ -63,6 +63,14 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 FIX SHIPPED — a pickup no longer borrows a customer identity (#548, PR #572). CONFIRM ON DASH.**
+  On a **multi-store stack**, a restaurant pickup screen could bleed the *other* drop's customer onto
+  the pickup task (latent — no visible bubble effect, but a data-model defect). The pickup screen no
+  longer parses a customer at all. **Confirm on dash: 0/2 —** on a stacked/multi-store order, the
+  **pickup** bubble should read the **store/merchant** (never a 6-character customer fragment), and no
+  customer should bleed onto the first dropoff. Hard to see directly; mainly verified in the db/log —
+  but flag anything where a pickup card shows a customer-looking label.
+
 - **🔧 FIX SHIPPED — dropoff customer fills in the card instead of re-minting it (#565, PR #571). CONFIRM ON DASH.**
   06-21 Walgreens: at the dropoff the bubble showed **"the customer"** for a bit, then when you
   started navigating the card **re-minted** (a fresh card appeared) instead of just filling in the

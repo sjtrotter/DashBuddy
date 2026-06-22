@@ -1076,13 +1076,6 @@
         "fields": {
           "phase": "PICKUP",
           "subFlow": "ARRIVED",
-          "customerNameHash": {
-            "find": {
-              "hasIdSuffix": "customer_name"
-            },
-            "read": "text",
-            "transform": "sha256"
-          },
           "storeName": {
             "from": "contactView",
             "find": {
