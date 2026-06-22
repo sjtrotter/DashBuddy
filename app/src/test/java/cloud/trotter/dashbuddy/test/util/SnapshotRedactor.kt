@@ -36,6 +36,10 @@ object SnapshotRedactor {
         "chat_input_text_field", "bottom_sheet_address_line_1", "bottom_sheet_address_line_2",
         "tvTitle", "tvLastMessage",
         "bottom_sheet_instructions", "step_description", "instructions_list", "instruction_text",
+        // #549: the dropoff-arrival card's free instruction text carries the customer's gate code +
+        // note ("Leave at my door: Gate code 883423# …") — never parsed by any rule; masked here so
+        // the committed corpus fixture can't leak it.
+        "dasher_instruction_content_collapsed",
         // GoPuff (DoorDash Drive) batch screens (#501): the per-order customer name on the
         // bin-scan/pickup-steps screens.
         "order_cx_name",

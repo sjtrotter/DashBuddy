@@ -63,6 +63,16 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔬 FIX SHIPPED (recognize-only) — dropoff-arrived 'Leave it at the door' card now recognized (#549, PR #574). READ THE LOG / WATCH UNKNOWNs.**
+  A dropoff-arrival card whose instruction is *not* "Hand it to recipient" (e.g. "Leave it at the
+  door", a refined map pin, "Complete delivery steps") was falling to **UNKNOWN** — the state machine
+  got no clean dropoff signal and leaned on the grace window. Now recognized (customer name + address
+  **hashed**; the gate-code/instruction text is never stored). **Confirm: 0/2 —** after a dash with a
+  "leave at door" / gate-code delivery, grep the captures/log: that arrival screen should recognize as
+  a dropoff (not pile into UNKNOWN), and INFO/db must show **no** raw address/gate-code (hashes only).
+  This is recognize-only — it does **not** yet flip an "arrived" state (deferred, needs a fresh
+  capture to decide), so don't expect a behavior change, just cleaner recognition.
+
 - **🔧 FIX SHIPPED — no more double fly-away bubble on a new/stacked pickup (#566, PR #573). CONFIRM ON DASH.**
   When a pickup started (or a stacked pickup handed off), the "Pickup: <store>" heads-up bubble flew
   out **twice** in quick succession (the second often icon-less). Fixed with a per-task dedupe key.
