@@ -585,7 +585,7 @@ class EffectMap @Inject constructor() {
                         storeName,
                         nextTask.customerNameHash,
                     )
-                    add(AppEffect.UpdateBubble("Pickup: $storeName", persona))
+                    add(AppEffect.UpdateBubble("Pickup: $storeName", persona, dedupeScope = nextTask.taskId))
                 }
             }
 
@@ -639,7 +639,7 @@ class EffectMap @Inject constructor() {
                 }
 
                 val customer = customerDisplayName(customerHash)
-                add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer)))
+                add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer), dedupeScope = nextTask.taskId))
             }
 
             // Arrival detection — task subflow changed to ARRIVED
@@ -694,7 +694,7 @@ class EffectMap @Inject constructor() {
                         storeName,
                         nextTask.customerNameHash,
                     )
-                    add(AppEffect.UpdateBubble("Pickup: $storeName", persona))
+                    add(AppEffect.UpdateBubble("Pickup: $storeName", persona, dedupeScope = nextTask.taskId))
                 }
 
                 // Store name resolution — re-emit the pickup payload with the
