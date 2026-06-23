@@ -343,8 +343,14 @@ class SideEffectEngine @Inject constructor(
             }
 
             is AppEffect.CancelOfferNotification -> {
-                // Untracking happens via the job's self-removing completion handler.
+                // Abort a still-pending (delayed) post — untracking is via the job's self-removing
+                // completion handler.
                 pendingOfferNotifications[effect.offerHash ?: "no-hash"]?.cancel()
+                // #457: the offer heads-up is now a SEPARATE notification (its own id), not the
+                // self-replacing bubble — so if it already posted, dismiss it explicitly when the
+                // offer resolves (accept/decline/timeout) so an Accept/Decline banner can't outlive
+                // the offer.
+                bubbleManager.cancelOfferNotification()
             }
 
             // --- TIMING LOGIC (Pure Coroutines) ---

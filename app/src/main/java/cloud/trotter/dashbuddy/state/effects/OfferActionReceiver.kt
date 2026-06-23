@@ -3,8 +3,10 @@ package cloud.trotter.dashbuddy.state.effects
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationManagerCompat
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -32,6 +34,9 @@ class OfferActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.getStringExtra(EXTRA_ACTION) ?: return
         Timber.i("OfferActionReceiver: %s", action)
+        // #457: dismiss the heads-up immediately — the dasher acted. (Offer resolution also fires
+        // CancelOfferNotification, but cancel now so the banner/shade entry doesn't linger.)
+        NotificationManagerCompat.from(context).cancel(BubbleManager.OFFER_NOTIFICATION_ID)
         val deps = EntryPointAccessors.fromApplication(context.applicationContext, Deps::class.java)
         deps.stateManager().dispatch(
             Observation.UiInput(timestamp = System.currentTimeMillis(), action = action),

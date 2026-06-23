@@ -63,6 +63,20 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 FIX SHIPPED — offer Accept/Decline as a separate heads-up notification (#457, PR #576). CONFIRM ON DASH — this one NEEDS the field.**
+  Root cause found: the offer was a **bubble** notification (shown as the chathead, heads-up suppressed),
+  so reaching the buttons meant pulling the **shade** — which makes SystemUI foreground and drops
+  DoorDash from the accessibility live-window set, so the verified click logged "No live windows" and
+  failed (the in-bubble buttons work because the overlay doesn't displace DoorDash). Fix: the offer now
+  posts a **separate, non-bubble heads-up notification** (new `offer_channel`, own id) that pops a banner
+  **over** DoorDash with Accept/Decline. **Confirm on dash: 0/2 —** when an offer arrives, a heads-up
+  banner with Accept/Decline should appear **over DoorDash** (no shade-pull needed); tapping **Accept**
+  or **Decline** there should actually accept/decline the DoorDash offer (watch the next screen + the log:
+  `OfferActionReceiver` then a successful click, **not** "No live windows"). The offer **card** inside the
+  bubble + the chat entry should still appear as before. The banner should dismiss after you act or when
+  the offer resolves. **This is a strong hypothesis but unproven without the device** — if the buttons
+  still do nothing, grab the log around the tap (the `UiInteractionHandler` line says why).
+
 - **🔧 FIX SHIPPED — dropoff customer reads "\<store\>'s customer", not a 6-char hash (#568, PR #575). CONFIRM ON DASH.**
   The dropoff bubble/card used to show the raw 6-char hash prefix (e.g. "Heading to 45ceda") or "the
   customer". Now it's store-flavored — "Heading to H-E-B's customer" / the card reads "Maple Street's
