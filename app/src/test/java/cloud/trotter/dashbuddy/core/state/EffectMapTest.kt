@@ -289,6 +289,24 @@ class EffectMapTest {
     }
 
     @Test
+    fun `an offer replaced by a new offer dismisses the old heads-up (#457)`() {
+        // Separate-id heads-up (#457): when a new offer replaces the old one, the OLD banner must be
+        // dismissed now — else it lingers until the new offer's async eval lands and a tap in that
+        // window would resolve against the NEW offer.
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer.copy(offerHash = "hash-456")),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
+        val cancels = effects.filterIsInstance<AppEffect.CancelOfferNotification>()
+        assertEquals("the old offer's heads-up is dismissed on replace", 1, cancels.size)
+        assertEquals("hash-123", cancels[0].offerHash)
+    }
+
+    @Test
     fun `offer timeout emits OFFER_TIMEOUT log and UpdateBubble`() {
         val prev = AppState(regions = Regions(
             flow = FlowRegion(

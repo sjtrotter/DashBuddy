@@ -413,6 +413,22 @@ class SideEffectEngineTest {
     }
 
     @Test
+    fun `a resolved offer dismisses an already-posted heads-up (#457)`() = runTest {
+        // The offer heads-up is now a SEPARATE notification (own id), not the self-replacing bubble,
+        // so once it has posted, resolution must explicitly dismiss it.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), offerHash = "hash-9"))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        verify(bubbleManager, times(1)).postOfferNotification(any())
+
+        engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
+        runCurrent()
+        verify(bubbleManager, times(1)).cancelOfferNotification()
+    }
+
+    @Test
     fun `keyed effects dedupe on the live path - not just during recovery`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         val effect = AppEffect.StartSession("sess-7", "DoorDash")

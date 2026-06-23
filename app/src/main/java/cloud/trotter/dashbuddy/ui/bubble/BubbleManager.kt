@@ -49,8 +49,17 @@ class BubbleManager @Inject constructor(
 ) {
 
     companion object {
-        /** The single bubble/chat notification id. */
+        /** The persistent bubble/chat (chathead) notification id. */
         const val BUBBLE_NOTIFICATION_ID = 1
+
+        /**
+         * The separate heads-up OFFER notification id (#457). A NORMAL (non-bubble) notification so
+         * the dasher can act from the heads-up banner WITHOUT pulling the shade: pulling the shade
+         * makes SystemUI foreground, which drops DoorDash's offer window from the accessibility
+         * live-window set, failing the fail-closed verified click (the #457 field symptom). A
+         * heads-up banner floats over DoorDash without displacing it, so the click lands.
+         */
+        const val OFFER_NOTIFICATION_ID = 2
 
         /** Bubble expanded-view height (dp). */
         const val BUBBLE_DESIRED_HEIGHT_DP = 600
@@ -58,11 +67,16 @@ class BubbleManager @Inject constructor(
         /** PendingIntent request codes for the offer notification actions (#367). */
         const val REQUEST_CODE_ACCEPT = 10
         const val REQUEST_CODE_DECLINE = 11
+        const val REQUEST_CODE_OFFER_CONTENT = 12
+
+        /** Backstop auto-dismiss for the offer heads-up if a resolution cancel is somehow missed. */
+        const val OFFER_HEADS_UP_TIMEOUT_MS = 90_000L
     }
     // 1. ADDED: CoroutineScope for the suspend database calls
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val channelId = "bubble_channel"
+    private val offerChannelId = "offer_channel"
     private val shortcutId = "DashBuddy_Bubble_Shortcut"
 
     /**
@@ -139,6 +153,18 @@ class BubbleManager @Inject constructor(
             setAllowBubbles(true)
         }
         notificationManager.createNotificationChannel(channel)
+
+        // #457: a SEPARATE, non-bubble channel for the actionable offer heads-up. The bubble channel
+        // allows bubbles, so its notifications render as the chathead and suppress the heads-up banner
+        // — forcing a shade-pull that breaks the Accept/Decline verified click. This channel never
+        // bubbles, so an offer posts as a normal high-importance heads-up over DoorDash.
+        val offerChannel = NotificationChannel(
+            offerChannelId, "Offer Alerts", NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Heads-up offer alerts with Accept / Decline"
+            setAllowBubbles(false)
+        }
+        notificationManager.createNotificationChannel(offerChannel)
     }
 
     private fun pushDynamicShortcut() {
@@ -174,7 +200,6 @@ class BubbleManager @Inject constructor(
         text: CharSequence,
         persona: ChatPersona,
         expand: Boolean,
-        offerActionable: Boolean = false,
     ) {
 
         val senderPerson = Person.Builder()
@@ -224,26 +249,62 @@ class BubbleManager @Inject constructor(
             .setCategory(Notification.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_MAX)
 
-        if (offerActionable) {
-            builder.addAction(offerAction("Decline", OfferIntent.DECLINE, REQUEST_CODE_DECLINE))
-            builder.addAction(offerAction("Accept", OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT))
-        }
-
         notificationManager.notify(BUBBLE_NOTIFICATION_ID, builder.build())
     }
 
     /**
-     * Post the offer evaluation as a heads-up notification with Accept /
-     * Decline action buttons. Formatting (Spannable summary + persona)
-     * happens HERE at the UI edge (#436) — the side-effect engine hands over
-     * the domain evaluation and stays free of Android text types.
+     * Post the offer evaluation. The offer reaches the dasher on three surfaces (#457):
+     *  - the in-bubble offer **card** (state-driven `LiveCardBuilder`, shown when the bubble is open) —
+     *    not touched here;
+     *  - the **chat stream** entry (saved below, the in-bubble history);
+     *  - a **separate heads-up notification** with Accept/Decline ([showOfferHeadsUp]) — the
+     *    actionable surface that pops over DoorDash.
+     *
+     * The actions live on the heads-up, NOT the chathead bubble notification: a bubble notification is
+     * shown as the floating chathead and suppresses the heads-up, forcing a shade-pull that displaces
+     * DoorDash from the accessibility live-window set and fails the verified click (#457).
+     * Formatting happens HERE at the UI edge (#436) — the engine hands over the domain evaluation.
      */
     fun postOfferNotification(evaluation: OfferEvaluation) {
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
         Timber.tag("Chat").i("[${persona.displayName}]: $summary")
         scope.launch { chatRepository.saveMessage(activeSessionId.value, summary.toString(), persona) }
-        showNotification(summary, persona, expand = false, offerActionable = true)
+        showOfferHeadsUp(summary, persona)
+    }
+
+    /**
+     * #457: the actionable offer surface — a separate, **non-bubble** heads-up notification (own
+     * channel + id, no `BubbleMetadata`). A heads-up banner floats over DoorDash without displacing
+     * it, so tapping Accept/Decline fires while the offer window is still live and the verified click
+     * lands — unlike the old bubble notification, whose actions were only reachable via the shade
+     * (which made SystemUI foreground and emptied DoorDash's live-window set). Backstopped by a
+     * timeout; normally dismissed by [cancelOfferNotification] on resolution / when the dasher acts.
+     */
+    private fun showOfferHeadsUp(text: CharSequence, persona: ChatPersona) {
+        val openBubble = Intent(context, BubbleActivity::class.java).apply { action = Intent.ACTION_VIEW }
+        val contentIntent = PendingIntent.getActivity(
+            context, REQUEST_CODE_OFFER_CONTENT, openBubble,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
+        val builder = NotificationCompat.Builder(context, offerChannelId)
+            .setSmallIcon(R.drawable.bag_red_idle)
+            .setContentTitle(persona.displayName)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(contentIntent)
+            .setCategory(Notification.CATEGORY_RECOMMENDATION)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setAutoCancel(true)
+            .setTimeoutAfter(OFFER_HEADS_UP_TIMEOUT_MS)
+            .addAction(offerAction("Decline", OfferIntent.DECLINE, REQUEST_CODE_DECLINE))
+            .addAction(offerAction("Accept", OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT))
+        notificationManager.notify(OFFER_NOTIFICATION_ID, builder.build())
+    }
+
+    /** #457: dismiss the heads-up offer notification — on offer resolution or after the dasher acts. */
+    fun cancelOfferNotification() {
+        notificationManager.cancel(OFFER_NOTIFICATION_ID)
     }
 
     private fun offerAction(label: String, action: String, requestCode: Int): NotificationCompat.Action {

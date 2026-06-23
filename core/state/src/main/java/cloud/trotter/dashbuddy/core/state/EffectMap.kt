@@ -151,6 +151,12 @@ class EffectMap @Inject constructor() {
             val outcome = resolveOfferOutcome(obs, prevOffer)
             add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
 
+            // #457: dismiss the OLD offer's heads-up now. Its Accept/Decline is a separate, persistent
+            // notification (not the self-replacing bubble), so without this the prior banner lingers
+            // until the new offer's async eval lands — and a tap in that window would resolve against
+            // the NEW pending offer. The new offer's heads-up re-posts on eval-landing below.
+            add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
+
             // Evaluate the new offer (notification + spoken read fire on eval-landing below).
             val offer = nextOffer.offerFields
             add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash))
