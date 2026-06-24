@@ -63,7 +63,8 @@ class StrategyRepository @Inject constructor(
         combine(
             dataSource.autoDecline, dataSource.autoDeclineMaxPay, dataSource.autoDeclineMinRatio,
         ) { enabled, maxPay, minRatio -> DeclineHalf(enabled, maxPay, minRatio) },
-    ) { master, accept, decline ->
+        dataSource.quickDeclines,
+    ) { master, accept, decline, quickDeclines ->
         OfferAutomationConfig(
             masterAutoPilotEnabled = master,
             autoAcceptEnabled = accept.enabled,
@@ -72,6 +73,7 @@ class StrategyRepository @Inject constructor(
             autoDeclineEnabled = decline.enabled,
             autoDeclineMaxPay = decline.maxPay,
             autoDeclineMinRatio = decline.minRatio,
+            quickDeclinesEnabled = quickDeclines,
         )
     }
 
@@ -120,6 +122,7 @@ class StrategyRepository @Inject constructor(
     suspend fun setProtectStatsMode(enabled: Boolean) = dataSource.setProtectStatsMode(enabled)
     suspend fun setAllowShopping(allowed: Boolean) = dataSource.setAllowShopping(allowed)
     suspend fun setMasterAutomation(enabled: Boolean) = dataSource.setMasterAutomation(enabled)
+    suspend fun setQuickDeclines(enabled: Boolean) = dataSource.setQuickDeclines(enabled) // #577
 
     // Maps Domain Models to DTOs before saving
     @OptIn(InternalSerializationApi::class)

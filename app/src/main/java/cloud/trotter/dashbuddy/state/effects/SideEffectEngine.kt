@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredEntity
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
+import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
@@ -236,6 +237,16 @@ class SideEffectEngine @Inject constructor(
                         "Denied %s — no granted capability for rule '%s' (fail closed)",
                         effect.action.wire, effect.sourceRuleId,
                     )
+                    return
+                }
+                // #577 quick-decline: the auto-confirm of DoorDash's 2nd ("are you sure?") decline
+                // button fires ONLY when the dasher enabled quick-declines. The setting is the consent;
+                // gating here (not in the pure reducer) keeps EffectMap config-free. Off → no-op, the
+                // dasher confirms manually.
+                if (effect.action == RuleAction.CONFIRM_DECLINE &&
+                    !strategyRepository.automationConfig.first().quickDeclinesEnabled
+                ) {
+                    Timber.i("Skipped %s — quick declines off (dasher confirms manually)", effect.action.wire)
                     return
                 }
                 stampThrottle(throttleKey, now)

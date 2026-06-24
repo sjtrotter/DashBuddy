@@ -38,11 +38,24 @@ enum class RuleAction(
 
     /**
      * Tap the offer screen's initial Decline button. The platform's confirm
-     * dialog (if any) is left to the user — auto-confirm is #110 Stage 2c.
+     * dialog is finished by [CONFIRM_DECLINE] when the dasher opted into
+     * quick-declines (#577); otherwise the dasher confirms it manually.
      */
     DECLINE_OFFER(
         wire = "decline_offer",
         targetBindName = "declineButton",
+        verification = TargetExpectation(labelPattern = Regex("(?i)\\bdecline\\b")),
+    ),
+
+    /**
+     * Tap the SECOND ("are you sure?") decline button on DoorDash's
+     * confirm-decline dialog — the quick-decline auto-confirm (#577). Fired via
+     * AUTOMATION only when the dasher enabled quick-declines; gated at the
+     * engine edge. Label-verified ("decline") + package-scoped like every tap.
+     */
+    CONFIRM_DECLINE(
+        wire = "confirm_decline",
+        targetBindName = "confirmDeclineButton",
         verification = TargetExpectation(labelPattern = Regex("(?i)\\bdecline\\b")),
     ),
 

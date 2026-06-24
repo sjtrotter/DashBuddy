@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.ui.main.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -29,10 +30,19 @@ class SettingsViewModel @Inject constructor(
         .filterNotNull()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EvaluationConfig())
 
+    // #577: the offer-automation flags (only quick-declines is live today).
+    val automationConfig: StateFlow<OfferAutomationConfig> = strategyRepository.automationConfig
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OfferAutomationConfig())
+
     // --- ACTIONS ---
 
     fun toggleProtectStats(enabled: Boolean) = viewModelScope.launch {
         strategyRepository.setProtectStatsMode(enabled)
+    }
+
+    /** #577 quick-declines / single-click declines — auto-confirm DoorDash's 2nd decline button. */
+    fun toggleQuickDeclines(enabled: Boolean) = viewModelScope.launch {
+        strategyRepository.setQuickDeclines(enabled)
     }
 
     fun toggleAllowShopping(allowed: Boolean) = viewModelScope.launch {
