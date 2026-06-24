@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
+import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.state.TimeoutEvent
@@ -424,30 +425,42 @@ class SideEffectEngineTest {
         merchantName = "Chipotle",
     )
 
+    private fun testOfferCard() = FlowCardSnapshot.Offer(
+        phaseStartedAt = 0L,
+        offerHash = "hash-9",
+        payAmount = 7.50,
+        netPayAmount = 7.0,
+        distanceMiles = 3.2,
+        dollarsPerMile = 2.19,
+        dollarsPerHour = 22.0,
+        evaluationScore = 74.0,
+        evaluationAction = "ACCEPT",
+    )
+
     @Test
     fun `a resolved offer cancels the pending notification post`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
 
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), offerHash = "hash-9"))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9"))
         runCurrent()
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, never()).postOfferNotification(any())
+        verify(bubbleManager, never()).postOfferNotification(any(), any())
     }
 
     @Test
     fun `an unresolved offer notification still posts after the settle delay`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
 
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), offerHash = "hash-9"))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9"))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postOfferNotification(any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any())
     }
 
     @Test
@@ -455,11 +468,11 @@ class SideEffectEngineTest {
         // The offer heads-up is now a SEPARATE notification (own id), not the self-replacing bubble,
         // so once it has posted, resolution must explicitly dismiss it.
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), offerHash = "hash-9"))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9"))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any())
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()

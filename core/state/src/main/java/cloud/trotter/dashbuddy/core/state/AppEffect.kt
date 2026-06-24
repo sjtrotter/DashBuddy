@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
@@ -141,6 +142,13 @@ sealed class AppEffect {
      */
     data class PostOfferNotification(
         val evaluation: OfferEvaluation,
+        /**
+         * #578: the rich offer snapshot (badges, score, $/hr/$/mi, expiry anchors) the heads-up
+         * notification renders as a mini offer card — the SAME [FlowCardSnapshot.Offer] the bubble
+         * card uses, so the two can't drift. [evaluation] is still carried for the chat summary +
+         * persona + the BigText fallback.
+         */
+        val offer: FlowCardSnapshot.Offer,
         /** Keys the engine's delayed post so [CancelOfferNotification] can abort it (#436). */
         val offerHash: String?,
     ) : AppEffect()

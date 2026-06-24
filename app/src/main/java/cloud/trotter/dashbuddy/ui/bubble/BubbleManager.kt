@@ -25,6 +25,16 @@ import cloud.trotter.dashbuddy.domain.state.activeSessionId
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId // <-- Your new UI Formatter!
 import cloud.trotter.dashbuddy.ui.formatters.notificationPersona
 import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
+import cloud.trotter.dashbuddy.ui.formatters.displayLabel
+import cloud.trotter.dashbuddy.ui.formatters.offerBadgeIcon
+import cloud.trotter.dashbuddy.ui.formatters.offerVerdictArgb
+import cloud.trotter.dashbuddy.ui.formatters.offerVerdictLabel
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import android.os.SystemClock
+import android.view.View
+import android.widget.RemoteViews
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -265,23 +275,24 @@ class BubbleManager @Inject constructor(
      * DoorDash from the accessibility live-window set and fails the verified click (#457).
      * Formatting happens HERE at the UI edge (#436) — the engine hands over the domain evaluation.
      */
-    fun postOfferNotification(evaluation: OfferEvaluation) {
+    fun postOfferNotification(offer: FlowCardSnapshot.Offer, evaluation: OfferEvaluation) {
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
         Timber.tag("Chat").i("[${persona.displayName}]: $summary")
         scope.launch { chatRepository.saveMessage(activeSessionId.value, summary.toString(), persona) }
-        showOfferHeadsUp(summary, persona)
+        showOfferHeadsUp(offer, summary, persona)
     }
 
     /**
-     * #457: the actionable offer surface — a separate, **non-bubble** heads-up notification (own
-     * channel + id, no `BubbleMetadata`). A heads-up banner floats over DoorDash without displacing
-     * it, so tapping Accept/Decline fires while the offer window is still live and the verified click
-     * lands — unlike the old bubble notification, whose actions were only reachable via the shade
-     * (which made SystemUI foreground and emptied DoorDash's live-window set). Backstopped by a
-     * timeout; normally dismissed by [cancelOfferNotification] on resolution / when the dasher acts.
+     * #457/#578: the actionable offer surface — a separate, **non-bubble** heads-up notification (own
+     * channel + id, no `BubbleMetadata`) that floats over DoorDash so Accept/Decline fire while the
+     * offer window is still live. #578 makes it a rich "mini offer card" via `DecoratedCustomViewStyle`
+     * + custom [RemoteViews] (verdict banner, $/hr, metrics, score, badges, live countdown) instead of
+     * a plain text line. The custom views use ONLY RemoteViews-legal widgets, so they can't fail
+     * inflation and regress the #457 action surface; `setContentText` keeps a text body for surfaces
+     * that don't render custom views (Wear/Auto). Dismissed by [cancelOfferNotification].
      */
-    private fun showOfferHeadsUp(text: CharSequence, persona: ChatPersona) {
+    private fun showOfferHeadsUp(offer: FlowCardSnapshot.Offer, summary: CharSequence, persona: ChatPersona) {
         val openBubble = Intent(context, BubbleActivity::class.java).apply { action = Intent.ACTION_VIEW }
         val contentIntent = PendingIntent.getActivity(
             context, REQUEST_CODE_OFFER_CONTENT, openBubble,
@@ -290,16 +301,99 @@ class BubbleManager @Inject constructor(
         val builder = NotificationCompat.Builder(context, offerChannelId)
             .setSmallIcon(R.drawable.bag_red_idle)
             .setContentTitle(persona.displayName)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentText(summary)
             .setContentIntent(contentIntent)
             .setCategory(Notification.CATEGORY_RECOMMENDATION)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setAutoCancel(true)
             .setTimeoutAfter(OFFER_HEADS_UP_TIMEOUT_MS)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false))
+            .setCustomHeadsUpContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false))
+            .setCustomBigContentView(buildOfferCardView(offer, R.layout.notif_offer_expanded, expanded = true))
             .addAction(offerAction("Decline", OfferIntent.DECLINE, REQUEST_CODE_DECLINE))
             .addAction(offerAction("Accept", OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT))
         notificationManager.notify(OFFER_NOTIFICATION_ID, builder.build())
+    }
+
+    /**
+     * #578: populate a `notif_offer_*` [RemoteViews] from the offer card snapshot. Colors/countdown/
+     * badges are set at runtime (RemoteViews can't use theme attrs — badges would render black
+     * otherwise). Score ring → ProgressBar + number; countdown → a self-ticking [Chronometer].
+     */
+    // Null-safe money/distance for the notification card — "—" when a metric didn't parse.
+    private fun money(d: Double?) = d?.let { Formats.money(it) } ?: "—"
+    private fun money0(d: Double?) = d?.let { Formats.money0(it) } ?: "—"
+    private fun miles(d: Double?) = d?.let { "${Formats.decimal(it)} mi" } ?: "—"
+
+    private fun buildOfferCardView(
+        offer: FlowCardSnapshot.Offer,
+        layoutRes: Int,
+        expanded: Boolean,
+    ): RemoteViews {
+        val rv = RemoteViews(context.packageName, layoutRes)
+        val action = offer.evaluationAction?.let { runCatching { OfferAction.valueOf(it) }.getOrNull() }
+        val verdictArgb = offerVerdictArgb(action)
+
+        rv.setTextViewText(
+            R.id.notif_offer_verdict,
+            if (expanded) offer.qualityLevel?.displayLabel()?.let { "${offerVerdictLabel(action)} · $it" }
+                ?: offerVerdictLabel(action)
+            else offerVerdictLabel(action),
+        )
+        rv.setInt(R.id.notif_offer_verdict, "setBackgroundColor", verdictArgb)
+        rv.setTextViewText(R.id.notif_offer_rate, "${money0(offer.dollarsPerHour)}/hr")
+        if (!expanded) {
+            rv.setTextViewText(
+                R.id.notif_offer_sub,
+                "Net ${money(offer.netPayAmount)} · ${money(offer.dollarsPerMile)}/mi · ${miles(offer.distanceMiles)}",
+            )
+        }
+
+        val expiresAt = offer.expiresAt
+        if (expiresAt != null) {
+            rv.setChronometerCountDown(R.id.notif_offer_countdown, true)
+            rv.setChronometer(
+                R.id.notif_offer_countdown,
+                SystemClock.elapsedRealtime() + (expiresAt - System.currentTimeMillis()),
+                null, true,
+            )
+            rv.setViewVisibility(R.id.notif_offer_countdown, View.VISIBLE)
+        } else {
+            rv.setViewVisibility(R.id.notif_offer_countdown, View.GONE)
+        }
+
+        if (expanded) {
+            val score = offer.evaluationScore?.toInt()
+            rv.setTextViewText(R.id.notif_offer_score, score?.let { "Score $it" } ?: "")
+            rv.setProgressBar(R.id.notif_offer_score_bar, 100, score ?: 0, false)
+            rv.setTextViewText(
+                R.id.notif_offer_metrics,
+                "Net ${money(offer.netPayAmount)} · Gross ${money(offer.payAmount)} · " +
+                    "${miles(offer.distanceMiles)} · ${money(offer.dollarsPerMile)}/mi",
+            )
+            // Badges into fixed slots, tinted with the verdict color so they're visible on any
+            // notification background (theme-attr fills don't resolve in the remote process).
+            val slots = listOf(
+                R.id.notif_badge_0, R.id.notif_badge_1, R.id.notif_badge_2,
+                R.id.notif_badge_3, R.id.notif_badge_4,
+            )
+            val icons = offer.badges.mapNotNull { offerBadgeIcon(it) }.distinct().take(slots.size)
+            slots.forEachIndexed { i, slot ->
+                val icon = icons.getOrNull(i)
+                if (icon != null) {
+                    rv.setImageViewResource(slot, icon)
+                    rv.setInt(slot, "setColorFilter", verdictArgb)
+                    rv.setViewVisibility(slot, View.VISIBLE)
+                } else {
+                    rv.setViewVisibility(slot, View.GONE)
+                }
+            }
+            val stores = offer.storeNames.joinToString(" + ")
+            val items = if (offer.itemCount > 1) " · ${offer.itemCount} items" else ""
+            rv.setTextViewText(R.id.notif_offer_store, (stores + items).trim())
+        }
+        return rv
     }
 
     /** #457: dismiss the heads-up offer notification — on offer resolution or after the dasher acts. */

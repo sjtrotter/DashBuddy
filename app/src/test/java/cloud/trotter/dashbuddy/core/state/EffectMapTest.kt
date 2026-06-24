@@ -228,6 +228,10 @@ class EffectMapTest {
         assertEquals("Carries the landed evaluation", testEvaluation, posts[0].evaluation)
         // Keys the engine's delayed post so an offer-resolved cancel can abort it (#436).
         assertEquals("Carries the offer hash", "hash-123", posts[0].offerHash)
+        // #578: also carries the rich offer card snapshot (same offerHash + the eval's score/action)
+        // so the heads-up renders the mini offer card, not just a text line.
+        assertEquals("Carries the offer card for the rich notification", "hash-123", posts[0].offer.offerHash)
+        assertEquals("Card reflects the landed evaluation's action", "ACCEPT", posts[0].offer.evaluationAction)
         // Spoken read also fires on eval-landing, carrying the same evaluation.
         val spoken = effects.filterIsInstance<AppEffect.SpeakOffer>()
         assertEquals("Exactly one SpeakOffer", 1, spoken.size)

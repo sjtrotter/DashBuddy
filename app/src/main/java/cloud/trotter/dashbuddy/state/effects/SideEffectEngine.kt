@@ -346,7 +346,7 @@ class SideEffectEngine @Inject constructor(
                 pendingOfferNotifications[hashKey]?.cancel()
                 val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
-                    bubbleManager.postOfferNotification(effect.evaluation)
+                    bubbleManager.postOfferNotification(effect.offer, effect.evaluation)
                 }
                 job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, job) }
                 pendingOfferNotifications[hashKey] = job

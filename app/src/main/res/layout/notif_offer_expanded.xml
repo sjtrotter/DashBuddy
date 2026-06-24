@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #578: the full offer card shown when the notification is expanded (shade). RemoteViews-legal
+     widgets only. Score ring → ProgressBar + number (no Canvas in RemoteViews); badges → a fixed
+     row of ImageView slots populated/tinted at runtime. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="2dp"
+    android:paddingBottom="4dp">
+
+    <TextView
+        android:id="@+id/notif_offer_verdict"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:textColor="#FFFFFFFF"
+        android:textStyle="bold"
+        android:textSize="13sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="6dp">
+
+        <TextView
+            android:id="@+id/notif_offer_rate"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+            android:textStyle="bold"
+            android:textSize="20sp" />
+
+        <Chronometer
+            android:id="@+id/notif_offer_countdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/notif_offer_score"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Info" />
+
+    <ProgressBar
+        android:id="@+id/notif_offer_score_bar"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:layout_marginTop="2dp"
+        android:max="100" />
+
+    <TextView
+        android:id="@+id/notif_offer_metrics"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Line2" />
+
+    <LinearLayout
+        android:id="@+id/notif_offer_badges"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="6dp">
+
+        <ImageView android:id="@+id/notif_badge_0" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/notif_badge_1" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/notif_badge_2" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/notif_badge_3" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/notif_badge_4" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/notif_offer_store"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Info" />
+</LinearLayout>
