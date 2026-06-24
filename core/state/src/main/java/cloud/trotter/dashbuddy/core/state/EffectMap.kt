@@ -75,6 +75,7 @@ class EffectMap @Inject constructor() {
     fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
         addAll(diffRuleEffects(obs))
         addAll(diffExpandAction(obs))
+        addAll(diffConfirmDeclineAction(obs, next))
         addAll(diffSettleUiTimeout(obs))
         // Offer-resolution events fire in the FlowRegion handler. They need to
         // be scoped to the active platform's session so AppEventDao queries
@@ -865,6 +866,37 @@ class EffectMap @Inject constructor() {
             ParsedFieldsGate.FieldEquals("isExpanded", false), flowObs.parsed,
         )
         if (!collapsed) return emptyList()
+        return listOf(
+            AppEffect.ScheduleTimeout(
+                durationMs = EXPAND_SETTLE_MS,
+                type = TimeoutType.SETTLE_UI,
+                platform = flowObs.platform.takeIf { it != Platform.Unknown },
+                payload = ObservationPayload.DeferredAction(
+                    action = action.wire,
+                    platform = flowObs.platform.wire,
+                    ruleId = flowObs.ruleId,
+                    target = target,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * #577 quick-decline: when DoorDash's confirm-decline dialog appears during an active offer and
+     * the rule bound a confirm button, schedule the app-owned [RuleAction.CONFIRM_DECLINE] tap behind
+     * the same SETTLE_UI delay as [diffExpandAction] — the dialog animates in and ~half the captured
+     * confirm frames are transitional, so the settle wait lets the button render. PURE: the dasher's
+     * *consent* is the `quickDeclinesEnabled` setting, enforced at the engine edge ([SideEffectEngine]
+     * denies the AUTOMATION fire when off) — here we only emit the deferred intent when the screen +
+     * offer context match. The fire is label-verified ("decline") + package-scoped; a missing/garbage
+     * target fails closed (the dasher confirms manually). The bind exists only on the
+     * confirm-decline rule, so `targets[...]` is the screen gate; `pendingOffer` confirms a live offer.
+     */
+    private fun diffConfirmDeclineAction(obs: Observation, next: AppState): List<AppEffect> {
+        val flowObs = obs as? Observation.Screen ?: return emptyList()
+        val action = RuleAction.CONFIRM_DECLINE
+        val target = flowObs.targets[action.targetBindName] ?: return emptyList()
+        if (next.regions.flow.pendingOffer == null) return emptyList()
         return listOf(
             AppEffect.ScheduleTimeout(
                 durationMs = EXPAND_SETTLE_MS,

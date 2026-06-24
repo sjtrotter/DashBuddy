@@ -51,6 +51,7 @@ fun StrategySettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
+    val automation by viewModel.automationConfig.collectAsStateWithLifecycle() // #577
 
     // Local Sim State
     var simPay by remember { mutableFloatStateOf(6.50f) }
@@ -170,6 +171,12 @@ fun StrategySettingsScreen(
                     subtitle = "If off, Red Card orders are auto-declined",
                     checked = config.allowShopping,
                     onCheckedChange = { viewModel.toggleAllowShopping(it) }
+                )
+                SwitchRow(
+                    label = "⚡ Single-click declines",
+                    subtitle = "Auto-confirm DoorDash's 'are you sure?' so a decline is one tap",
+                    checked = automation.quickDeclinesEnabled,
+                    onCheckedChange = { viewModel.toggleQuickDeclines(it) }
                 )
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
             }

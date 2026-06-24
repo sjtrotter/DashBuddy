@@ -304,9 +304,21 @@
     {
       "id": "doordash.screen.offer_popup_confirm_decline",
       "priority": 19,
+      "comment": "#577 quick-decline: bind the confirm dialog's 'Decline offer' button. Its label is on a child text node (textView_prism_button_title, not itself clickable) — bind the labelled node + 'decline' text so we never grab a sibling Cancel/Go-back; clickNodeStrict walks up to the clickable ancestor. The app-owned CONFIRM_DECLINE tap fires (AUTOMATION) only when the dasher enabled quick-declines.",
       "state": {
         "flow": "offer:presented",
         "modeHint": "online"
+      },
+      "bind": {
+        "confirmDeclineButton": {
+          "find": {
+            "all": [
+              { "hasIdSuffix": "textView_prism_button_title" },
+              { "hasTextContaining": "decline" }
+            ]
+          },
+          "optional": true
+        }
       },
       "require": {
         "exists": {

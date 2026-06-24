@@ -16,6 +16,15 @@ data class OfferAutomationConfig(
     val autoDeclineEnabled: Boolean = DEFAULT_AUTO_DECLINE,
     val autoDeclineMaxPay: Double = DEFAULT_DECLINE_MAX_PAY,
     val autoDeclineMinRatio: Double = DEFAULT_DECLINE_MIN_RATIO,
+
+    /**
+     * #577 "quick declines" / single-click declines: when ON, the second
+     * ("are you sure?") decline button is auto-confirmed so a decline is one
+     * tap/voice command. This is "finish the decline I started," NOT the
+     * economics-driven auto-decline above ("decide for me") — independent of
+     * [masterAutoPilotEnabled]; the setting itself is the dasher's consent.
+     */
+    val quickDeclinesEnabled: Boolean = DEFAULT_QUICK_DECLINES,
 ) {
     companion object {
         // ONE owner for every default (#401): the DataStore fallbacks
@@ -27,5 +36,6 @@ data class OfferAutomationConfig(
         const val DEFAULT_AUTO_DECLINE = false
         const val DEFAULT_DECLINE_MAX_PAY = 3.50
         const val DEFAULT_DECLINE_MIN_RATIO = 0.50
+        const val DEFAULT_QUICK_DECLINES = false
     }
 }

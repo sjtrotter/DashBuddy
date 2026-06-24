@@ -63,6 +63,17 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+- **🔧 FIX SHIPPED — quick-decline / single-click declines (#577, PR #pending). OPT IN + CONFIRM ON DASH.**
+  DoorDash's decline is two-step (Decline → "are you sure?" → Decline again). With **Settings →
+  Strategy → "⚡ Single-click declines"** ON, the app auto-confirms that second button so a decline is
+  one action (closes the 06-21 #6 bug where a decline mis-resolved as TIMEOUT). **Confirm on dash:
+  0/2 —** turn the setting ON, then decline an offer (via the heads-up Decline, or by tapping Decline
+  in DoorDash directly): the "are you sure?" dialog should **auto-dismiss with the offer declined**,
+  no second tap needed; the decline should log `DELIVERY/OFFER_DECLINED`, **not** `OFFER_TIMEOUT`.
+  With the setting OFF, the confirm should still wait for your manual tap (default = off). Watch the
+  log for `Performing confirm_decline` (fired) vs `Skipped confirm_decline — quick declines off`. If
+  it taps the wrong button or fires when off, grab the confirm-screen capture.
+
 - **🔧 FIX SHIPPED — offer Accept/Decline as a separate heads-up notification (#457, PR #576). CONFIRM ON DASH — this one NEEDS the field.**
   Root cause found: the offer was a **bubble** notification (shown as the chathead, heads-up suppressed),
   so reaching the buttons meant pulling the **shade** — which makes SystemUI foreground and drops

@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
+import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
@@ -27,6 +28,7 @@ import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -200,6 +202,42 @@ class SideEffectEngineTest {
         // Second fire inside RULE_ACTION_THROTTLE_MS is swallowed — an
         // app-owned bound on automated taps (#425).
         verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+    }
+
+    // =========================================================================
+    // #577 — quick-decline: the setting is the consent (engine-edge gate)
+    // =========================================================================
+
+    private fun confirmDeclineEffect() = AppEffect.PerformRuleAction(
+        action = RuleAction.CONFIRM_DECLINE,
+        platform = Platform.DoorDash,
+        targetRef = NodeRef(
+            viewIdSuffix = "com.doordash.driverapp:id/textView_prism_button_title",
+            text = null, classNameHint = "android.widget.TextView",
+            boundsInScreen = BoundingBox(0, 100, 200, 150), pathFingerprint = "fp",
+        ),
+        sourceRuleId = "doordash.screen.offer_popup_confirm_decline",
+        trigger = ActionTrigger.AUTOMATION,
+    )
+
+    @Test
+    fun `CONFIRM_DECLINE fires when quick declines is ON (#577)`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        whenever { strategyRepository.automationConfig }
+            .thenReturn(flowOf(OfferAutomationConfig(quickDeclinesEnabled = true)))
+        engine.process(confirmDeclineEffect())
+        runCurrent()
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+    }
+
+    @Test
+    fun `CONFIRM_DECLINE is denied when quick declines is OFF (#577)`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        whenever { strategyRepository.automationConfig }
+            .thenReturn(flowOf(OfferAutomationConfig(quickDeclinesEnabled = false)))
+        engine.process(confirmDeclineEffect())
+        runCurrent()
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any())
     }
 
     // =========================================================================

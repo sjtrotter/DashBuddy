@@ -1085,6 +1085,70 @@ class EffectMapTest {
         )
     }
 
+    // =========================================================================
+    // #577 — quick-decline: deferred CONFIRM_DECLINE on the confirm screen
+    // =========================================================================
+
+    private fun confirmDeclineObs() = screenObs(
+        flow = Flow.OfferPresented,
+        ruleId = "doordash.screen.offer_popup_confirm_decline",
+    ).copy(targets = mapOf("confirmDeclineButton" to testNodeRef("com.doordash.driverapp:id/textView_prism_button_title")))
+
+    private fun offerPresentedState() = AppState(
+        regions = Regions(flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer)),
+    )
+
+    @Test
+    fun `confirm-decline screen with bound target during an offer schedules a deferred CONFIRM_DECLINE (#577)`() {
+        // prev already OfferPresented so no offer-presentation noise; the confirm dialog is mid-offer.
+        val effects = effectMap.diff(offerPresentedState(), offerPresentedState(), confirmDeclineObs())
+        val scheduled = effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+            .filter { it.type == cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.SETTLE_UI }
+        assertEquals(1, scheduled.size)
+        val deferred = scheduled[0].payload as ObservationPayload.DeferredAction
+        assertEquals(RuleAction.CONFIRM_DECLINE.wire, deferred.action)
+        // No direct tap — the engine's quick-declines setting gate decides at fire time.
+        assertTrue(effects.filterIsInstance<AppEffect.PerformRuleAction>().isEmpty())
+    }
+
+    @Test
+    fun `confirm-decline screen WITHOUT a bound target schedules nothing - fail closed (#577)`() {
+        val obs = screenObs(flow = Flow.OfferPresented, ruleId = "doordash.screen.offer_popup_confirm_decline")
+        val effects = effectMap.diff(offerPresentedState(), offerPresentedState(), obs)
+        assertTrue(
+            effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+                .none { it.payload is ObservationPayload.DeferredAction },
+        )
+    }
+
+    @Test
+    fun `confirm-decline screen with NO pending offer schedules nothing (#577)`() {
+        val effects = effectMap.diff(AppState(), AppState(), confirmDeclineObs())
+        assertTrue(
+            effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+                .none { it.payload is ObservationPayload.DeferredAction },
+        )
+    }
+
+    @Test
+    fun `SETTLE_UI routes a deferred CONFIRM_DECLINE to an AUTOMATION PerformRuleAction (#577)`() {
+        val timeoutObs = Observation.Timeout(
+            timestamp = 1000L,
+            type = cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.SETTLE_UI,
+            payload = ObservationPayload.DeferredAction(
+                action = RuleAction.CONFIRM_DECLINE.wire,
+                platform = Platform.DoorDash.wire,
+                ruleId = "doordash.screen.offer_popup_confirm_decline",
+                target = testNodeRef("com.doordash.driverapp:id/textView_prism_button_title"),
+            ),
+        )
+        val actions = effectMap.diff(AppState(), AppState(), timeoutObs)
+            .filterIsInstance<AppEffect.PerformRuleAction>()
+        assertEquals(1, actions.size)
+        assertEquals(RuleAction.CONFIRM_DECLINE, actions[0].action)
+        assertEquals(ActionTrigger.AUTOMATION, actions[0].trigger)
+    }
+
     @Test
     fun `SETTLE_UI timeout emits the deferred action as immediate PerformRuleAction`() {
         val payload = ObservationPayload.DeferredAction(

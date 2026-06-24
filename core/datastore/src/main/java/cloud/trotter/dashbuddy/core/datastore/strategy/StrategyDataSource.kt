@@ -41,6 +41,8 @@ class StrategyDataSource @Inject constructor(
         val AUTO_DECLINE_MAX_PAY = doublePreferencesKey("auto_decline_max_pay")
         val AUTO_DECLINE_MIN_RATIO = doublePreferencesKey("auto_decline_min_ratio")
 
+        val QUICK_DECLINES = booleanPreferencesKey("quick_declines_enabled") // #577
+
         val RULE_LIST_JSON = stringPreferencesKey("rule_list_config_v1")
         val PROTECT_STATS_MODE = booleanPreferencesKey("protect_stats_mode")
         val ALLOW_SHOPPING = booleanPreferencesKey("allow_shopping")
@@ -66,6 +68,7 @@ class StrategyDataSource @Inject constructor(
     val autoDecline: Flow<Boolean> = ds.data.map { it[Keys.AUTO_DECLINE] ?: OfferAutomationConfig.DEFAULT_AUTO_DECLINE }
     val autoDeclineMaxPay: Flow<Double> = ds.data.map { it[Keys.AUTO_DECLINE_MAX_PAY] ?: OfferAutomationConfig.DEFAULT_DECLINE_MAX_PAY }
     val autoDeclineMinRatio: Flow<Double> = ds.data.map { it[Keys.AUTO_DECLINE_MIN_RATIO] ?: OfferAutomationConfig.DEFAULT_DECLINE_MIN_RATIO }
+    val quickDeclines: Flow<Boolean> = ds.data.map { it[Keys.QUICK_DECLINES] ?: OfferAutomationConfig.DEFAULT_QUICK_DECLINES } // #577
 
     @OptIn(InternalSerializationApi::class)
     val scoringRules: Flow<List<ScoringRuleDto>> = ds.data.map { prefs ->
@@ -138,6 +141,10 @@ class StrategyDataSource @Inject constructor(
 
     suspend fun setMasterAutomation(enabled: Boolean) {
         ds.edit { it[Keys.AUTO_MASTER] = enabled }
+    }
+
+    suspend fun setQuickDeclines(enabled: Boolean) { // #577
+        ds.edit { it[Keys.QUICK_DECLINES] = enabled }
     }
 
     suspend fun updateAutomation(
