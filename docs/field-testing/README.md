@@ -63,6 +63,10 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
+_(#577 quick-decline auto-confirm and #457 notification Accept/Decline buttons were **validated**
+on the 2026-06-24 dash — moved to that session's log entry below. #577 carries a follow-up:
+the auto-confirm works but feels slow.)_
+
 - **🔬 FIX SHIPPED — rich offer heads-up notification (mini offer card) (#578, PR #581). CONFIRM ON DASH.**
   The offer heads-up is now a **mini offer card** (custom RemoteViews via DecoratedCustomViewStyle):
   a colored **verdict banner** (ACCEPT/DECLINE/REVIEW), the **$/hr** hero, net/$mi/distance, and a
@@ -98,8 +102,6 @@ _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **bro
   `OfferActionReceiver` then a successful click, **not** "No live windows"). The offer **card** inside the
   bubble + the chat entry should still appear as before. The banner should dismiss after you act or when
   the offer resolves. **This is a strong hypothesis but unproven without the device** — if the buttons
-  still do nothing, grab the log around the tap (the `UiInteractionHandler` line says why).
-
 - **🔧 FIX SHIPPED — dropoff customer reads "\<store\>'s customer", not a 6-char hash (#568, PR #575). CONFIRM ON DASH.**
   The dropoff bubble/card used to show the raw 6-char hash prefix (e.g. "Heading to 45ceda") or "the
   customer". Now it's store-flavored — "Heading to H-E-B's customer" / the card reads "Maple Street's
@@ -925,6 +927,57 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - **Status:** Triaged → tracked as #279 (summary attribution fixed in PR; the
     "summary after the idle screen" ordering was the root cause). Field-validate
     via the #279 checklist item above.
+
+---
+
+## 2026-06-24 — DoorDash session (live dash, in-field narration)
+
+- **Platform tested:** DoorDash
+- **Branch under test:** `master` at `2fc557b` (post-#581 merge — latest, includes #457/#576
+  notification buttons, #577/#580 quick-decline, #578/#581 rich offer notification).
+- **Field conditions:** Live dash, narrated in-field while driving. Offers declined via the
+  heads-up notification + a couple of accepts. No screenshots; in-field markers only.
+  **Hypotheses, not concluded fixes.** No code changes from this session.
+
+### Verification TODOs (confirmations this dash)
+
+1. **✅ #577 / PR #580 — quick-decline auto-confirm of the 2nd ("are you sure?") screen — CONFIRMED 2/2.**
+   With quick-declines ON, declined an offer and the second confirm screen **auto-advanced both
+   times** (validated twice, independently). Validated — moved off the "things to look for"
+   checklist. (Slowness caveat below as item #1.)
+
+2. **✅ #457 / PR #576 — offer Accept/Decline as a separate heads-up notification — CONFIRMED.**
+   The notification buttons **work again**: both **Decline** and **Accept** fired correctly from the
+   heads-up over DoorDash (the decline button was exercised on both auto-decline runs above; accept
+   verified too). Closes the "No live windows" regression that #576 targeted. Moved off the
+   checklist.
+
+### Bugs / Field UX context
+
+1. **Auto-decline second-screen confirm feels slow (#577).** When quick-declines is ON, the dasher's
+   expectation is that the second ("are you sure?") screen is dismissed near-instantly — "if you've
+   said you want to auto-decline the second screen, it should be minimal delay." In the field it
+   advances reliably but with a noticeable lag.
+   - **Light investigation (hypothesis, not a fix).** The auto-tap is deferred behind a fixed settle
+     delay: `EffectMap.diffConfirmDeclineAction` (`core/state/.../EffectMap.kt:908`) schedules the
+     `CONFIRM_DECLINE` tap as a `ScheduleTimeout(SETTLE_UI, EXPAND_SETTLE_MS)` where
+     `EXPAND_SETTLE_MS = 500L` (`EffectMap.kt:72`) — the **same 500ms constant borrowed from the
+     post-delivery `EXPAND_EARNINGS` chevron tap**, whose comment justifies it by "lets the summary
+     finish animating." On top of that 500ms, the confirm dialog first has to be *recognized*: the
+     "are you sure?" frame clears the content-changed debounce (`ContentChangedPipeline.debounceWithTimeout(150L, 300L)`,
+     `core/pipeline/.../content_changed/ContentChangedPipeline.kt:32`) — or the 100ms windows-changed
+     debounce — before it classifies and the effect can even be emitted. So perceived delay ≈
+     ~150–300ms (recognition debounce) + 500ms (settle) + click execution ≈ ~0.7–1s before the tap,
+     before counting DoorDash's own dialog animation.
+   - The `diffConfirmDeclineAction` comment notes the 500ms exists because "~half the captured confirm
+     frames are transitional, so the settle wait lets the button render." So the delay is intentional
+     (avoid tapping a half-rendered button), not a bug — but it's tuned to the earnings-chevron case,
+     not the simpler confirm dialog. **If this hypothesis holds**, one direction *might* be a shorter
+     dedicated settle for `CONFIRM_DECLINE`, or firing as soon as the `declineButton`/confirm target
+     binding is present in the observation (the binding implies the button rendered) rather than
+     waiting a fixed 500ms — **would need a capture of the confirm-frame sequence** to see how many
+     frames are genuinely transitional and how early the binding appears.
+   - **Status:** Open. Behavior is correct (2/2 validation above); only the latency is the concern.
 
 ---
 
