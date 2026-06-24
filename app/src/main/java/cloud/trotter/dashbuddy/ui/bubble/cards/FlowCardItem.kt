@@ -60,6 +60,7 @@ import cloud.trotter.dashbuddy.domain.state.presentation
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.ui.formatters.color
 import cloud.trotter.dashbuddy.ui.formatters.displayLabel
+import cloud.trotter.dashbuddy.ui.formatters.offerBadgeIcon
 import cloud.trotter.dashbuddy.ui.formatters.phaseBg
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.state.customerLabel
@@ -435,20 +436,11 @@ private fun OfferCountdownText(expiresAt: Long, countdownSeconds: Int) {
 /**
  * Badge enum name → `ic_badge_*` drawable (#461); null means "no icon, render the text pill". The
  * SHOP badge is handled by the caller (the shopping-chat cart + the item count, [🛒 N]).
+ * Delegates to the [offerBadgeIcon] SSOT (#578) so the bubble card and the offer notification share
+ * one map and can't drift.
  */
 @DrawableRes
-private fun badgeIcon(name: String): Int? = when (name) {
-    "HIGH_PAYING" -> R.drawable.ic_badge_dollar_plus
-    "PRIORITY_ACCESS" -> R.drawable.ic_badge_priority_access
-    "COLLECT_CASH" -> R.drawable.ic_badge_collect_cash
-    "RED_CARD" -> R.drawable.ic_badge_red_card
-    "LARGE_ORDER" -> R.drawable.ic_badge_large_order
-    "PIZZA_BAG" -> R.drawable.ic_badge_pizza_bag
-    "ALCOHOL", "INCLUDES_ALCOHOL" -> R.drawable.ic_badge_alcohol
-    "CHECK_RECIPIENT_ID", "AGE_RESTRICTED_18_PLUS", "AGE_RESTRICTED_21_PLUS",
-    "CONTAINS_RESTRICTED_ITEMS" -> R.drawable.ic_badge_id_check
-    else -> null
-}
+private fun badgeIcon(name: String): Int? = offerBadgeIcon(name)
 
 /**
  * Icon badge in the [AppChip] pill family (#461): a brand-tinted icon, optionally with a trailing

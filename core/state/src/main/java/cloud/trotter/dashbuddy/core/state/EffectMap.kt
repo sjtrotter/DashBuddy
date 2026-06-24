@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
+import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
@@ -172,7 +173,19 @@ class EffectMap @Inject constructor() {
             prevOffer.offerHash == nextOffer.offerHash &&
             prevOffer.evaluation == null
         ) {
-            add(AppEffect.PostOfferNotification(landedEval, nextOffer.offerHash))
+            // #578: assemble the rich offer card via the same SSOT the bubble card uses
+            // (FlowCardSnapshot.Offer.from), so the heads-up notification renders the same data.
+            val parsedOffer = nextOffer.offerFields.parsedOffer
+            val expiresAt = parsedOffer.initialCountdownSeconds?.let { nextOffer.presentedAt + it * 1000L }
+            val offerCard = FlowCardSnapshot.Offer.from(
+                parsedOffer = parsedOffer,
+                evaluation = landedEval,
+                offerHash = nextOffer.offerHash,
+                phaseStartedAt = nextOffer.presentedAt,
+                expiresAt = expiresAt,
+                countdownSeconds = parsedOffer.initialCountdownSeconds,
+            )
+            add(AppEffect.PostOfferNotification(landedEval, offerCard, nextOffer.offerHash))
             add(AppEffect.SpeakOffer(landedEval))
         }
 

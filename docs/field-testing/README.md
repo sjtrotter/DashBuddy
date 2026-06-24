@@ -63,7 +63,19 @@ immediately (no second pass needed) so it gets triaged.
 _(The #110 Stage 2a auto-expand + Stage 2b Accept/Decline items were found **broken** on the
 2026-06-09 dash — moved to that session's log entry below for triage.)_
 
-- **🔧 FIX SHIPPED — quick-decline / single-click declines (#577, PR #pending). OPT IN + CONFIRM ON DASH.**
+- **🔬 FIX SHIPPED — rich offer heads-up notification (mini offer card) (#578, PR #581). CONFIRM ON DASH.**
+  The offer heads-up is now a **mini offer card** (custom RemoteViews via DecoratedCustomViewStyle):
+  a colored **verdict banner** (ACCEPT/DECLINE/REVIEW), the **$/hr** hero, net/$mi/distance, and a
+  **live countdown** that ticks; the expanded (shade-pull) view adds the **score bar + number**,
+  full metrics, **badges** (red card/alcohol/large-order/etc.), and the store. Accept/Decline still
+  fire (the #457 path is untouched). **Confirm on dash: 0/2 —** when an offer arrives, the heads-up
+  over DoorDash should show the verdict + $/hr + a ticking countdown (not just a text line), and
+  expanding it shows the full card with badges; Accept/Decline must still work. **Watch for:** badges
+  rendering **black** (tint bug) instead of colored; the notification **not appearing at all** (a
+  RemoteViews failure → would mean it fell back / regressed #457 — grab the log); the countdown not
+  ticking. If anything looks off, screenshot the notification (collapsed + expanded).
+
+- **🔧 FIX SHIPPED — quick-decline / single-click declines (#577, PR #580). OPT IN + CONFIRM ON DASH.**
   DoorDash's decline is two-step (Decline → "are you sure?" → Decline again). With **Settings →
   Strategy → "⚡ Single-click declines"** ON, the app auto-confirms that second button so a decline is
   one action (closes the 06-21 #6 bug where a decline mis-resolved as TIMEOUT). **Confirm on dash:

@@ -7,12 +7,52 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import androidx.compose.ui.graphics.toArgb
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
+
+/**
+ * SSOT (#578) for the offer verdict word + color, shared by [toNotificationSummary], the rich offer
+ * notification's custom views, and (the intent is) the bubble offer card — so the verdict can't drift
+ * between surfaces.
+ */
+fun offerVerdictLabel(action: OfferAction?): String = when (action) {
+    OfferAction.ACCEPT -> "ACCEPT"
+    OfferAction.DECLINE -> "DECLINE"
+    OfferAction.MANUAL_REVIEW -> "REVIEW"
+    else -> "OFFER"
+}
+
+/** Verdict color as an ARGB int (RemoteViews can't use Compose Color / theme attrs). */
+fun offerVerdictArgb(action: OfferAction?): Int = darkAppColors().let { c ->
+    when (action) {
+        OfferAction.ACCEPT -> c.good
+        OfferAction.DECLINE -> c.bad
+        OfferAction.MANUAL_REVIEW -> c.warn
+        else -> c.warn
+    }
+}.toArgb()
+
+/**
+ * SSOT (#461/#578) badge enum name → `ic_badge_*` drawable, shared by the bubble offer card and the
+ * rich offer notification. null = no icon (the SHOP cart + item count is handled by each caller).
+ */
+fun offerBadgeIcon(name: String): Int? = when (name) {
+    "HIGH_PAYING" -> R.drawable.ic_badge_dollar_plus
+    "PRIORITY_ACCESS" -> R.drawable.ic_badge_priority_access
+    "COLLECT_CASH" -> R.drawable.ic_badge_collect_cash
+    "RED_CARD" -> R.drawable.ic_badge_red_card
+    "LARGE_ORDER" -> R.drawable.ic_badge_large_order
+    "PIZZA_BAG" -> R.drawable.ic_badge_pizza_bag
+    "ALCOHOL", "INCLUDES_ALCOHOL" -> R.drawable.ic_badge_alcohol
+    "CHECK_RECIPIENT_ID", "AGE_RESTRICTED_18_PLUS", "AGE_RESTRICTED_21_PLUS",
+    "CONTAINS_RESTRICTED_ITEMS" -> R.drawable.ic_badge_id_check
+    else -> null
+}
 
 /** The persona that voices an offer verdict's notification (moved from the engine, #436). */
 fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {
@@ -38,19 +78,8 @@ fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {
  * it. `toString()` yields the plain text used for chat storage.
  */
 fun OfferEvaluation.toNotificationSummary(): CharSequence {
-    val colors = darkAppColors()
-    val verdict = when (action) {
-        OfferAction.ACCEPT -> "ACCEPT"
-        OfferAction.DECLINE -> "DECLINE"
-        OfferAction.MANUAL_REVIEW -> "REVIEW"
-        else -> "OFFER"
-    }
-    val verdictColor = when (action) {
-        OfferAction.ACCEPT -> colors.good
-        OfferAction.DECLINE -> colors.bad
-        OfferAction.MANUAL_REVIEW -> colors.warn
-        else -> colors.warn
-    }.toArgb()
+    val verdict = offerVerdictLabel(action)
+    val verdictColor = offerVerdictArgb(action)
 
     return SpannableStringBuilder().apply {
         val start = length
