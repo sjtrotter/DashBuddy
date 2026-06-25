@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
@@ -33,6 +34,19 @@ fun offerVerdictArgb(action: OfferAction?): Int = darkAppColors().let { c ->
         OfferAction.ACCEPT -> c.good
         OfferAction.DECLINE -> c.bad
         OfferAction.MANUAL_REVIEW -> c.warn
+        else -> c.warn
+    }
+}.toArgb()
+
+/**
+ * Score-band color as an ARGB int for the notification gauge ring (#583) — mirrors the bubble offer
+ * card's ring color (`OfferBody`): the evaluator's real decision boundaries (#400). good ≥ ACCEPT,
+ * bad ≤ DECLINE, warn in between.
+ */
+fun offerScoreArgb(score: Double): Int = darkAppColors().let { c ->
+    when {
+        score >= OfferEvaluator.ACCEPT_THRESHOLD -> c.good
+        score <= OfferEvaluator.DECLINE_THRESHOLD -> c.bad
         else -> c.warn
     }
 }.toArgb()

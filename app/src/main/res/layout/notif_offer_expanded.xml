@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- #578: the full offer card shown when the notification is expanded (shade). RemoteViews-legal
-     widgets only. Score ring → ProgressBar + number (no Canvas in RemoteViews); badges → a fixed
-     row of ImageView slots populated/tinted at runtime. -->
+<!-- #583: full offer card (expanded ~252dp) — verdict banner + score gauge (bitmap) + $/hr + live
+     countdown + metrics + badges + store + brand-styled Accept/Decline. RemoteViews-legal only. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -27,6 +26,12 @@
         android:gravity="center_vertical"
         android:layout_marginTop="6dp">
 
+        <ImageView
+            android:id="@+id/notif_offer_gauge"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="10dp" />
+
         <TextView
             android:id="@+id/notif_offer_rate"
             android:layout_width="0dp"
@@ -43,21 +48,6 @@
             android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
             android:textStyle="bold" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/notif_offer_score"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textAppearance="@style/TextAppearance.Compat.Notification.Info" />
-
-    <ProgressBar
-        android:id="@+id/notif_offer_score_bar"
-        style="@android:style/Widget.ProgressBar.Horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="6dp"
-        android:layout_marginTop="2dp"
-        android:max="100" />
 
     <TextView
         android:id="@+id/notif_offer_metrics"
@@ -88,4 +78,39 @@
         android:ellipsize="end"
         android:maxLines="1"
         android:textAppearance="@style/TextAppearance.Compat.Notification.Info" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/notif_btn_decline"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/notif_btn_decline"
+            android:gravity="center"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="Decline"
+            android:textColor="#E6EDF3"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/notif_btn_accept"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/notif_btn_accept"
+            android:gravity="center"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="Accept"
+            android:textColor="#0B0F14"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 </LinearLayout>
