@@ -67,17 +67,31 @@ _(#577 quick-decline auto-confirm and #457 notification Accept/Decline buttons w
 on the 2026-06-24 dash — moved to that session's log entry below. #577 carries a follow-up:
 the auto-confirm works but feels slow.)_
 
+- **🔬 FIX SHIPPED — rich notification: score gauge ring + brand-styled buttons (#583, PR #584). CONFIRM ON DASH.**
+  Follow-up to #578: the offer heads-up's score is now a **circular gauge ring** (a Canvas-drawn
+  bitmap — band-colored sweep + centered number, matching the bubble HUD's `AppGaugeRing`) on **both**
+  the collapsed heads-up and the expanded card, and **Accept/Decline are now brand-styled buttons
+  drawn inside the card** (green Accept / muted Decline) wired via `setOnClickPendingIntent` — the
+  system action row is gone (the two can't coexist without doubling the buttons). **Confirm on dash:
+  0/2 —** when an offer arrives, the heads-up over DoorDash should show a **filled circular score
+  ring** (not a flat bar) plus the green/muted in-card buttons; **tapping those in-card buttons must
+  actually Accept/Decline** the DoorDash offer (watch the log: `OfferActionReceiver` → successful
+  click, not "No live windows"). **Watch for (the field gate):** the **in-card buttons not firing
+  from the floating heads-up** (if they only work after a shade-pull, the custom-button approach is
+  wrong for the heads-up → revert to the system action row); the **gauge rendering blank/garbled**
+  (bitmap inflation failure); the gauge **missing** when an offer scored. Screenshot collapsed +
+  expanded if anything's off.
+
 - **🔬 FIX SHIPPED — rich offer heads-up notification (mini offer card) (#578, PR #581). CONFIRM ON DASH.**
-  The offer heads-up is now a **mini offer card** (custom RemoteViews via DecoratedCustomViewStyle):
+  The offer heads-up is a **mini offer card** (custom RemoteViews via DecoratedCustomViewStyle):
   a colored **verdict banner** (ACCEPT/DECLINE/REVIEW), the **$/hr** hero, net/$mi/distance, and a
-  **live countdown** that ticks; the expanded (shade-pull) view adds the **score bar + number**,
-  full metrics, **badges** (red card/alcohol/large-order/etc.), and the store. Accept/Decline still
-  fire (the #457 path is untouched). **Confirm on dash: 0/2 —** when an offer arrives, the heads-up
-  over DoorDash should show the verdict + $/hr + a ticking countdown (not just a text line), and
-  expanding it shows the full card with badges; Accept/Decline must still work. **Watch for:** badges
-  rendering **black** (tint bug) instead of colored; the notification **not appearing at all** (a
-  RemoteViews failure → would mean it fell back / regressed #457 — grab the log); the countdown not
-  ticking. If anything looks off, screenshot the notification (collapsed + expanded).
+  **live countdown** that ticks; the expanded (shade-pull) view adds the **score** (now a gauge ring,
+  see #583), full metrics, **badges** (red card/alcohol/large-order/etc.), and the store. **Confirm on
+  dash: 0/2 —** when an offer arrives, the heads-up over DoorDash should show the verdict + $/hr + a
+  ticking countdown (not just a text line), and expanding it shows the full card with badges. **Watch
+  for:** badges rendering **black** (tint bug) instead of colored; the notification **not appearing at
+  all** (a RemoteViews failure → would mean it fell back / regressed #457 — grab the log); the
+  countdown not ticking. If anything looks off, screenshot the notification (collapsed + expanded).
 
 - **🔧 FIX SHIPPED — quick-decline / single-click declines (#577, PR #580). OPT IN + CONFIRM ON DASH.**
   DoorDash's decline is two-step (Decline → "are you sure?" → Decline again). With **Settings →

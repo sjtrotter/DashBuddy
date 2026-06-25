@@ -1,55 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- #578: the glanceable offer card that floats over DoorDash (heads-up + collapsed). Only
-     RemoteViews-legal widgets (TextView/LinearLayout/Chronometer). Colors/countdown set at runtime;
-     text uses the notification text appearances so it stays readable on any notification theme. -->
+<!-- #583: the glanceable offer card over DoorDash (heads-up ~88dp) — score gauge (bitmap) + $/hr +
+     live countdown, with brand-styled Accept/Decline as clickable TextViews (setOnClickPendingIntent).
+     RemoteViews-legal widgets only. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
+    android:orientation="vertical"
     android:paddingTop="2dp"
     android:paddingBottom="2dp">
 
-    <TextView
-        android:id="@+id/notif_offer_verdict"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        android:paddingTop="3dp"
-        android:paddingBottom="3dp"
-        android:textColor="#FFFFFFFF"
-        android:textStyle="bold"
-        android:textSize="12sp" />
-
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_marginStart="8dp"
-        android:orientation="vertical">
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/notif_offer_rate"
+        <ImageView
+            android:id="@+id/notif_offer_gauge"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/notif_offer_rate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/notif_offer_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="@style/TextAppearance.Compat.Notification.Line2" />
+        </LinearLayout>
+
+        <Chronometer
+            android:id="@+id/notif_offer_countdown"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
             android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/notif_offer_sub"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textAppearance="@style/TextAppearance.Compat.Notification.Line2" />
     </LinearLayout>
 
-    <Chronometer
-        android:id="@+id/notif_offer_countdown"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-        android:textStyle="bold" />
+        android:orientation="horizontal"
+        android:layout_marginTop="6dp">
+
+        <TextView
+            android:id="@+id/notif_btn_decline"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/notif_btn_decline"
+            android:gravity="center"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:text="Decline"
+            android:textColor="#E6EDF3"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/notif_btn_accept"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/notif_btn_accept"
+            android:gravity="center"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:text="Accept"
+            android:textColor="#0B0F14"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 </LinearLayout>

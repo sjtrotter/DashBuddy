@@ -27,6 +27,7 @@ import cloud.trotter.dashbuddy.ui.formatters.notificationPersona
 import cloud.trotter.dashbuddy.ui.formatters.toNotificationSummary
 import cloud.trotter.dashbuddy.ui.formatters.displayLabel
 import cloud.trotter.dashbuddy.ui.formatters.offerBadgeIcon
+import cloud.trotter.dashbuddy.ui.formatters.offerScoreArgb
 import cloud.trotter.dashbuddy.ui.formatters.offerVerdictArgb
 import cloud.trotter.dashbuddy.ui.formatters.offerVerdictLabel
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
@@ -311,15 +312,19 @@ class BubbleManager @Inject constructor(
             .setCustomContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false))
             .setCustomHeadsUpContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false))
             .setCustomBigContentView(buildOfferCardView(offer, R.layout.notif_offer_expanded, expanded = true))
-            .addAction(offerAction("Decline", OfferIntent.DECLINE, REQUEST_CODE_DECLINE))
-            .addAction(offerAction("Accept", OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT))
+        // #583: Accept/Decline are now brand-styled TextViews INSIDE the custom card
+        // (wired via setOnClickPendingIntent in buildOfferCardView), not the system action row —
+        // the two can't coexist without doubling the buttons. Field-gated: if a dash shows the
+        // in-card buttons don't fire from the floating heads-up, revert to addAction(offerAction(…)).
         notificationManager.notify(OFFER_NOTIFICATION_ID, builder.build())
     }
 
     /**
-     * #578: populate a `notif_offer_*` [RemoteViews] from the offer card snapshot. Colors/countdown/
-     * badges are set at runtime (RemoteViews can't use theme attrs — badges would render black
-     * otherwise). Score ring → ProgressBar + number; countdown → a self-ticking [Chronometer].
+     * #578/#583: populate a `notif_offer_*` [RemoteViews] from the offer card snapshot. Colors/
+     * countdown/badges/gauge are set at runtime (RemoteViews can't use theme attrs — badges would
+     * render black otherwise). Score → a Canvas-drawn ring [scoreGaugeBitmap] pushed via
+     * `setImageViewBitmap` (RemoteViews can't draw an arc); countdown → a self-ticking
+     * [Chronometer]; Accept/Decline → brand-styled `TextView`s wired with `setOnClickPendingIntent`.
      */
     // Null-safe money/distance for the notification card — "—" when a metric didn't parse.
     private fun money(d: Double?) = d?.let { Formats.money(it) } ?: "—"
@@ -335,13 +340,16 @@ class BubbleManager @Inject constructor(
         val action = offer.evaluationAction?.let { runCatching { OfferAction.valueOf(it) }.getOrNull() }
         val verdictArgb = offerVerdictArgb(action)
 
-        rv.setTextViewText(
-            R.id.notif_offer_verdict,
-            if (expanded) offer.qualityLevel?.displayLabel()?.let { "${offerVerdictLabel(action)} · $it" }
-                ?: offerVerdictLabel(action)
-            else offerVerdictLabel(action),
-        )
-        rv.setInt(R.id.notif_offer_verdict, "setBackgroundColor", verdictArgb)
+        // Verdict banner is expanded-only by design; the collapsed heads-up conveys the verdict
+        // through the gauge ring color (the compact layout has no verdict view).
+        if (expanded) {
+            rv.setTextViewText(
+                R.id.notif_offer_verdict,
+                offer.qualityLevel?.displayLabel()?.let { "${offerVerdictLabel(action)} · $it" }
+                    ?: offerVerdictLabel(action),
+            )
+            rv.setInt(R.id.notif_offer_verdict, "setBackgroundColor", verdictArgb)
+        }
         rv.setTextViewText(R.id.notif_offer_rate, "${money0(offer.dollarsPerHour)}/hr")
         if (!expanded) {
             rv.setTextViewText(
@@ -363,10 +371,32 @@ class BubbleManager @Inject constructor(
             rv.setViewVisibility(R.id.notif_offer_countdown, View.GONE)
         }
 
+        // Score gauge ring — drawn to a bitmap (RemoteViews can't draw an arc). Sized to the slot
+        // (larger on the expanded card); hidden when the offer didn't score.
+        val scoreValue = offer.evaluationScore
+        if (scoreValue != null) {
+            val gaugeDp = if (expanded) 56 else 40
+            val gaugePx = (gaugeDp * context.resources.displayMetrics.density).toInt()
+            rv.setImageViewBitmap(
+                R.id.notif_offer_gauge,
+                scoreGaugeBitmap(scoreValue.toInt(), offerScoreArgb(scoreValue), gaugePx),
+            )
+            rv.setViewVisibility(R.id.notif_offer_gauge, View.VISIBLE)
+        } else {
+            rv.setViewVisibility(R.id.notif_offer_gauge, View.GONE)
+        }
+
+        // Brand-styled Accept/Decline (both layouts) — fire the same broadcast as the old action row.
+        rv.setOnClickPendingIntent(
+            R.id.notif_btn_decline,
+            offerActionPendingIntent(OfferIntent.DECLINE, REQUEST_CODE_DECLINE),
+        )
+        rv.setOnClickPendingIntent(
+            R.id.notif_btn_accept,
+            offerActionPendingIntent(OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT),
+        )
+
         if (expanded) {
-            val score = offer.evaluationScore?.toInt()
-            rv.setTextViewText(R.id.notif_offer_score, score?.let { "Score $it" } ?: "")
-            rv.setProgressBar(R.id.notif_offer_score_bar, 100, score ?: 0, false)
             rv.setTextViewText(
                 R.id.notif_offer_metrics,
                 "Net ${money(offer.netPayAmount)} · Gross ${money(offer.payAmount)} · " +
@@ -401,15 +431,15 @@ class BubbleManager @Inject constructor(
         notificationManager.cancel(OFFER_NOTIFICATION_ID)
     }
 
-    private fun offerAction(label: String, action: String, requestCode: Int): NotificationCompat.Action {
+    /** #583: the Accept/Decline broadcast, wired onto the in-card buttons via setOnClickPendingIntent. */
+    private fun offerActionPendingIntent(action: String, requestCode: Int): PendingIntent {
         val intent = Intent(context, OfferActionReceiver::class.java).apply {
             this.action = OfferActionReceiver.ACTION
             putExtra(OfferActionReceiver.EXTRA_ACTION, action)
         }
-        val pi = PendingIntent.getBroadcast(
+        return PendingIntent.getBroadcast(
             context, requestCode, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Action.Builder(0, label, pi).build()
     }
 }
