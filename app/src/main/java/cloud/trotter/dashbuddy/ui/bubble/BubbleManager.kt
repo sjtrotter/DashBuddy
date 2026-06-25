@@ -340,13 +340,16 @@ class BubbleManager @Inject constructor(
         val action = offer.evaluationAction?.let { runCatching { OfferAction.valueOf(it) }.getOrNull() }
         val verdictArgb = offerVerdictArgb(action)
 
-        rv.setTextViewText(
-            R.id.notif_offer_verdict,
-            if (expanded) offer.qualityLevel?.displayLabel()?.let { "${offerVerdictLabel(action)} · $it" }
-                ?: offerVerdictLabel(action)
-            else offerVerdictLabel(action),
-        )
-        rv.setInt(R.id.notif_offer_verdict, "setBackgroundColor", verdictArgb)
+        // Verdict banner is expanded-only by design; the collapsed heads-up conveys the verdict
+        // through the gauge ring color (the compact layout has no verdict view).
+        if (expanded) {
+            rv.setTextViewText(
+                R.id.notif_offer_verdict,
+                offer.qualityLevel?.displayLabel()?.let { "${offerVerdictLabel(action)} · $it" }
+                    ?: offerVerdictLabel(action),
+            )
+            rv.setInt(R.id.notif_offer_verdict, "setBackgroundColor", verdictArgb)
+        }
         rv.setTextViewText(R.id.notif_offer_rate, "${money0(offer.dollarsPerHour)}/hr")
         if (!expanded) {
             rv.setTextViewText(
@@ -370,13 +373,13 @@ class BubbleManager @Inject constructor(
 
         // Score gauge ring — drawn to a bitmap (RemoteViews can't draw an arc). Sized to the slot
         // (larger on the expanded card); hidden when the offer didn't score.
-        val score = offer.evaluationScore?.toInt()
-        if (score != null) {
+        val scoreValue = offer.evaluationScore
+        if (scoreValue != null) {
             val gaugeDp = if (expanded) 56 else 40
             val gaugePx = (gaugeDp * context.resources.displayMetrics.density).toInt()
             rv.setImageViewBitmap(
                 R.id.notif_offer_gauge,
-                scoreGaugeBitmap(score, offerScoreArgb(offer.evaluationScore ?: 0.0), gaugePx),
+                scoreGaugeBitmap(scoreValue.toInt(), offerScoreArgb(scoreValue), gaugePx),
             )
             rv.setViewVisibility(R.id.notif_offer_gauge, View.VISIBLE)
         } else {
