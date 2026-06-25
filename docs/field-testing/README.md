@@ -67,7 +67,7 @@ _(#577 quick-decline auto-confirm and #457 notification Accept/Decline buttons w
 on the 2026-06-24 dash — moved to that session's log entry below. #577 carries a follow-up:
 the auto-confirm works but feels slow.)_
 
-- **🔬 FIX SHIPPED — rich notification: score gauge ring + brand-styled buttons (#583, PR #585). CONFIRM ON DASH.**
+- **🔬 FIX SHIPPED — rich notification: score gauge ring + brand-styled buttons (#583, PR #584). CONFIRM ON DASH.**
   Follow-up to #578: the offer heads-up's score is now a **circular gauge ring** (a Canvas-drawn
   bitmap — band-colored sweep + centered number, matching the bubble HUD's `AppGaugeRing`) on **both**
   the collapsed heads-up and the expanded card, and **Accept/Decline are now brand-styled buttons
