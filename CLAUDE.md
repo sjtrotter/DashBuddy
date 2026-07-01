@@ -288,9 +288,23 @@ Every new feature or refactor holds to these — they are forefront design input
    privacy defect of the same class as leaking it to disk — gate the shareable-export sink behind that
    test, do not trust call-site discipline. When a change adds or moves a log site, state its level and
    (for INFO+) confirm it carries no raw PII. (Implementation tracked in #551.)
+8. **Platform-agnostic core.** The recognition→state→effects spine never encodes a specific gig
+   platform. Recognition is data (per-platform rulesets), not code; platform identity resolves
+   only through the `Platform` registry (`fromRuleId`/`fromPackage`/`fromWire`) — never a literal
+   `== Platform.DoorDash`, hardcoded package name, or wire string gating logic. Anything that
+   varies by platform — vocabulary, required parse fields, effect-bearing intents, grace timing,
+   offer slots, lifecycle-edge anchors, learned rate models — is either ruleset data validated at
+   load or state keyed by `Platform`, never a global tuned to whichever platform we field-test
+   most. New rule↔state vocabulary goes through the enumerated, load-validated contract
+   (`StateMachineContract` + `REQUIRED_FIELDS_BY_SHAPE`), not a magic string consumed by a Kotlin
+   `when`. The acceptance test: adding a platform means shipping a ruleset + corpus with **zero**
+   `:core:state` / `:core:pipeline` / `:domain` edits. DoorDash-heavy field testing *masks*
+   violations (a global slot never collides while only one platform runs), so this is enforced at
+   PR-review time — see *Every PR gets a design-goal review* under Git Workflow, and the drift
+   catalog in #585 (+ the per-platform ownership pack #438) for the known seams and receipts.
 
 If a change genuinely can't satisfy one of these, say so explicitly in the PR description instead
-of silently violating it.
+of silently violating it. The design-goal review below exists to catch exactly that before merge.
 
 ## Reactive UI Principles
 
@@ -455,6 +469,26 @@ apply to remote/MCP merges, which cannot.)
 
 A PR that skips these is incomplete — future agents inherit their entire context from these
 two places.
+
+**Every PR gets a design-goal review — no exceptions.** After CI is green and before
+`gh pr merge`, review the **full diff** against the Development Principles and record the result
+in the PR description under a `### Design-goal review` heading (append it if the PR was opened
+without one):
+
+1. Walk principles 1–8 (UDF, MAD, single responsibility, Kotlin/Android practices, SSOT,
+   security & privacy, semantic logging, platform-agnostic core) — plus the Reactive UI rules for
+   UI-touching diffs. For each goal the diff **touches**, write one line: how the change conforms,
+   or the explicit, justified violation (never silent). Goals the diff doesn't touch need no line.
+2. The platform-agnosticism check (principle 8) applies to **every** PR touching `:core:state`,
+   `:core:pipeline`, `:domain`, or rule JSON: no new platform literals in logic; new vocabulary
+   goes through the enumerated, load-validated contract (never a magic string + a Kotlin `when`);
+   per-platform values are keyed by `Platform`, not stored as globals.
+3. Fix in-PR what can be fixed in-PR. A violation that legitimately can't be fixed there is
+   filed as an issue (labels + board, per the sections below) and linked from the review block —
+   a PR never merges with an unrecorded violation.
+
+The audits keep finding drift that PR review could have caught (the #356 SSOT family; the #585
+platform-coupling catalog). This loop moves detection from post-hoc audit to merge time.
 
 **Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
 `build-and-test` job when the **PR description (body)** contains the literal
