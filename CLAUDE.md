@@ -490,6 +490,29 @@ without one):
 The audits keep finding drift that PR review could have caught (the #356 SSOT family; the #585
 platform-coupling catalog). This loop moves detection from post-hoc audit to merge time.
 
+**Then an adversarial review — an independent reviewer, not self-attestation (#589).** The
+design-goal review above is the *author* walking their own diff, and self-review shares the
+author's blind spots (exactly how the #356 and #585 drift slipped in). So after it, and before
+`gh pr merge`, spawn a **separate** reviewer to attack the diff — reuse the existing skills, don't
+build parallel machinery: run `/code-review` (already multi-agent/adversarial) and, for anything
+touching untrusted input or the Pledges, `/security-review`. The adversary works three axes it must
+**not** take the author's framing on:
+
+1. **Correctness** — bugs, edge cases, reuse/simplification (`/code-review`'s default).
+2. **Design principles** — walk principles 1–8 + the Reactive UI rules hunting for violations the
+   author *missed or rationalized away*. **Platform-agnosticism (#8) is mandatory** for any diff
+   touching `:core:state` / `:core:pipeline` / `:domain` / rule JSON.
+3. **Security** — `/security-review` the branch; for diffs touching the untrusted-input boundaries
+   (rule compile/ingest, accessibility-tree mapping, regex, PII/sensitive handling, capture/effects)
+   confirm the fail-closed + bounded-ingestion + no-plaintext-leak properties still hold, backed by
+   the security property/fuzz suite (#590).
+
+**Same-tier rule:** the adversarial reviewer runs at the **session model tier** (Mythos/Fable
+class) — never downgraded to a lower tier. An adversary weaker than the author is theater; this is
+the Subagent Model Policy applied to review. Record the outcome in a `### Adversarial review` block
+in the PR description; fix findings in-PR or file + link them. A PR merges only once the adversarial
+pass is clean or its findings are triaged.
+
 **Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
 `build-and-test` job when the **PR description (body)** contains the literal
 string **`[skip ci]`** (`if: ${{ !contains(github.event.pull_request.body, '[skip ci]') }}`).
