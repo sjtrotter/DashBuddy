@@ -1,0 +1,314 @@
+// Section: Offer — the incoming-offer popup + its accept/decline/confirm-decline actuation targets.
+{
+  "$schema": "../../../docs/rules.fragment.schema.json",
+  "screens": [
+    {
+      "id": "doordash.screen.offer_popup_confirm_decline",
+      "priority": 19,
+      "comment": "#577 quick-decline: bind the confirm dialog's 'Decline offer' button. Its label is on a child text node (textView_prism_button_title, not itself clickable) — bind the labelled node + 'decline' text so we never grab a sibling Cancel/Go-back; clickNodeStrict walks up to the clickable ancestor. The app-owned CONFIRM_DECLINE tap fires (AUTOMATION) only when the dasher enabled quick-declines.",
+      "state": {
+        "flow": "offer:presented",
+        "modeHint": "online"
+      },
+      "bind": {
+        "confirmDeclineButton": {
+          "find": {
+            "all": [
+              {
+                "hasIdSuffix": "textView_prism_button_title"
+              },
+              {
+                "hasTextContaining": "decline"
+              }
+            ]
+          },
+          "optional": true
+        }
+      },
+      "require": {
+        "exists": {
+          "hasTextContaining": "sure you want to decline"
+        }
+      }
+    },
+    {
+      "comment": "#595: the require block demands at least one STORE leg (the display_name family the orders parse extracts, excluding 'Customer dropoff'/'Business handoff'). DoorDash's post-accept teardown frame (and arrival pre-render) keeps pay/distance/Accept/Decline chrome but drops the store rows — that frame re-parsed as a NEW degenerate offer (orders=[], itemCount=0, different offerHash) which REPLACED the just-accepted one: ghost accept/timeout, 06-28 seq 141/142 + 06-30 seq 241/242. A frame with no store leg is not an actionable offer; it now classifies UNKNOWN and is never forwarded. Verified against all 43 real offer frames on file (28 device + 15 corpus): every real render carries a store leg.",
+      "id": "doordash.screen.offer_popup",
+      "priority": 20,
+      "state": {
+        "flow": "offer:presented",
+        "modeHint": "online"
+      },
+      "bind": {
+        "acceptButton": {
+          "find": {
+            "hasIdSuffix": "accept_button"
+          },
+          "optional": true
+        },
+        "declineButton": {
+          "find": {
+            "hasIdSuffix": "secondary_action_button_dash_plus"
+          },
+          "optional": true
+        }
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasText": "Decline"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasText": "Accept"
+                },
+                {
+                  "hasText": "Add to route"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "accept_button"
+                },
+                {
+                  "hasIdSuffix": "accept_decline_footer_container"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "display_name"
+                },
+                {
+                  "hasTextMatchesRegex": "\\S"
+                },
+                {
+                  "not": {
+                    "hasText": "Customer dropoff"
+                  }
+                },
+                {
+                  "not": {
+                    "hasText": "Business handoff"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "offer",
+        "fields": {
+          "payAmount": {
+            "coalesce": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "text_field"
+                    },
+                    {
+                      "hasTextContaining": "$"
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
+                  "hasTextContaining": "$"
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              }
+            ]
+          },
+          "distance": {
+            "find": {
+              "hasTextMatchesRegex": "\\d[\\d.]*\\s*(mi|ft)"
+            },
+            "read": "text",
+            "transform": "parseDistance"
+          },
+          "deliveryTimeText": {
+            "find": {
+              "hasTextStartsWith": "Deliver by"
+            },
+            "read": "text",
+            "transform": {
+              "stripPrefix": "Deliver by "
+            }
+          },
+          "deliveryTime": {
+            "find": {
+              "hasTextStartsWith": "Deliver by"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          },
+          "orders": {
+            "each": {
+              "all": [
+                {
+                  "hasIdSuffix": "display_name"
+                },
+                {
+                  "not": {
+                    "hasText": "Customer dropoff"
+                  }
+                },
+                {
+                  "not": {
+                    "hasText": "Business handoff"
+                  }
+                }
+              ]
+            },
+            "scope": "ancestor(2)",
+            "extract": {
+              "storeName": {
+                "find": {
+                  "hasIdSuffix": "display_name"
+                },
+                "read": "text"
+              },
+              "orderType": {
+                "conditionalEnum": [
+                  {
+                    "if": {
+                      "exists": {
+                        "all": [
+                          {
+                            "hasIdSuffix": "work_unit_type"
+                          },
+                          {
+                            "hasTextContaining": "Shop for items"
+                          }
+                        ]
+                      }
+                    },
+                    "then": "SHOP_FOR_ITEMS"
+                  },
+                  {
+                    "else": "PICKUP"
+                  }
+                ]
+              },
+              "itemCount": {
+                "find": {
+                  "hasIdSuffix": "display_name_secondary"
+                },
+                "read": "text",
+                "transform": "parseItemCount"
+              },
+              "isRedCard": {
+                "presence": {
+                  "exists": {
+                    "all": [
+                      {
+                        "hasIdSuffix": "tag"
+                      },
+                      {
+                        "hasTextContaining": "Red Card"
+                      }
+                    ]
+                  }
+                }
+              },
+              "isLargeOrder": {
+                "presence": {
+                  "exists": {
+                    "hasTextContaining": "Large Order"
+                  }
+                }
+              },
+              "hasAlcohol": {
+                "presence": {
+                  "exists": {
+                    "hasTextContaining": "alcohol"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "validate": [
+        {
+          "assert": "fieldNotNull",
+          "field": "payAmount",
+          "onFail": "skip"
+        }
+      ],
+      "effects": [
+        {
+          "screenshot": {
+            "prefix": "Offer - {payAmount}",
+            "category": "offer"
+          },
+          "dedupeKey": "offer-ss-{parsedHash}",
+          "throttleMs": 60000
+        },
+        {
+          "log": {
+            "type": "OFFER_RECEIVED",
+            "payload": "pay={payAmount} dist={distance}"
+          },
+          "dedupeKey": "offer-log-{parsedHash}",
+          "throttleMs": 60000
+        }
+      ]
+    }
+  ],
+  "clicks": [
+    {
+      "id": "doordash.click.accept_offer",
+      "priority": 10,
+      "screenIs": "offer_popup",
+      "intent": "accept_offer",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "hasIdSuffix": "accept_button"
+      }
+    },
+    {
+      "id": "doordash.click.initial_decline",
+      "priority": 15,
+      "screenIs": "offer_popup",
+      "intent": "initial_decline",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "hasIdSuffix": "secondary_action_button_dash_plus"
+      }
+    },
+    {
+      "id": "doordash.click.decline_offer",
+      "priority": 20,
+      "screenIs": "offer_popup_confirm_decline",
+      "intent": "decline_offer",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "hasAnyText": "Decline offer"
+      }
+    }
+  ]
+}

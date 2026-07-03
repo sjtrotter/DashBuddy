@@ -1,0 +1,136 @@
+// Section: App chrome — side menu, earnings, help, promos, notifications view, camera-capture (recognized+redacted).
+{
+  "$schema": "../../../docs/rules.fragment.schema.json",
+  "screens": [
+    {
+      "id": "doordash.screen.camera_capture",
+      "priority": 86,
+      "comment": "#598 F1: the id-bearing 'bottom_instruction' node embeds customer PII ('...name: <name>', '...Apt/Suite: <apt>'); mask it whole (the 'title' label stays). The bare-name regex catches a stale bin-scan-overlay customer name (e.g. 'Kris K') among id-less product rows without touching those products; single-token all-caps bare names remain a structural residual (#623/#624).",
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "bottom_instruction"
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasNoId": true
+              },
+              {
+                "hasTextMatchesRegex": "^[A-Za-z]{2,}( [A-Z]\\.?){1,2}$"
+              }
+            ]
+          }
+        }
+      ],
+      "require": {
+        "exists": {
+          "any": [
+            {
+              "hasIdSuffix": "camera_preview"
+            },
+            {
+              "hasIdSuffix": "image_capture_view"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.earnings",
+      "priority": 93,
+      "require": {
+        "all": [
+          {
+            "allTextContainsAll": [
+              "earnings",
+              "this week"
+            ]
+          },
+          {
+            "allTextContainsAny": [
+              "past weeks",
+              "balance",
+              "crimson"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.help",
+      "priority": 94,
+      "require": {
+        "allTextContainsAll": [
+          "doordash dasher",
+          "close webview",
+          "safety resources",
+          "additional resources",
+          "chat with support"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.help_menu",
+      "priority": 122,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Get an account checkup"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Dashing FAQs"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.notifications_view",
+      "priority": 96,
+      "reject": [
+        {
+          "allTextContains": "battery"
+        }
+      ],
+      "require": {
+        "allTextContains": "notifications"
+      }
+    },
+    {
+      "id": "doordash.screen.promos",
+      "priority": 97,
+      "require": {
+        "allTextContainsAll": [
+          "navigate up",
+          "promotions"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.side_nav_drawer",
+      "priority": 200,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "side_nav_content_container"
+            }
+          },
+          {
+            "allTextContainsAll": [
+              "ratings",
+              "promos",
+              "preferences"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

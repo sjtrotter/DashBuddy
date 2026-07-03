@@ -1,0 +1,849 @@
+// Section: Pickup — navigation, arrival, shopping, item verification, issue/resolution sub-screens.
+{
+  "$schema": "../../../docs/rules.fragment.schema.json",
+  "screens": [
+    {
+      "id": "doordash.screen.pickup_navigation",
+      "priority": 60,
+      "state": {
+        "flow": "task:pickup:navigation",
+        "modeHint": "online"
+      },
+      "reject": [
+        {
+          "exists": {
+            "all": [
+              {
+                "hasIdSuffix": "bottom_sheet_task_title"
+              },
+              {
+                "hasTextContaining": "Deliver to"
+              }
+            ]
+          }
+        },
+        {
+          "exists": {
+            "all": [
+              {
+                "hasIdSuffix": "bottom_sheet_task_arrive_by"
+              },
+              {
+                "hasTextContaining": "Deliver by"
+              }
+            ]
+          }
+        }
+      ],
+      "require": {
+        "exists": {
+          "hasIdSuffix": "bottom_sheet_task_title"
+        }
+      },
+      "parse": {
+        "as": "task",
+        "fields": {
+          "phase": "PICKUP",
+          "subFlow": "NAVIGATION",
+          "storeName": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_title"
+            },
+            "read": "text",
+            "transform": {
+              "stripPrefixes": [
+                "Heading to ",
+                "Pick up at "
+              ]
+            }
+          },
+          "storeAddress": {
+            "join": [
+              {
+                "find": {
+                  "hasIdSuffix": "bottom_sheet_address_line_1"
+                },
+                "read": "text"
+              },
+              {
+                "find": {
+                  "hasIdSuffix": "bottom_sheet_address_line_2"
+                },
+                "read": "text"
+              }
+            ],
+            "separator": ", "
+          },
+          "deadlineText": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_arrive_by"
+            },
+            "read": "text",
+            "transform": "stripDeadlinePrefix"
+          },
+          "deadlineMillis": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_arrive_by"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_arrival",
+      "priority": 70,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          }
+        }
+      ],
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "bind": {
+        "contactView": {
+          "find": {
+            "hasIdSuffix": "mx_contact_view"
+          },
+          "optional": true
+        }
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "customer_name_label"
+                },
+                {
+                  "hasTextContaining": "Order for"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_prism_button_title"
+                },
+                {
+                  "any": [
+                    {
+                      "hasTextContaining": "Confirm"
+                    },
+                    {
+                      "hasTextContaining": "Continue"
+                    },
+                    {
+                      "hasTextContaining": "Start"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "task",
+        "fields": {
+          "phase": "PICKUP",
+          "subFlow": "ARRIVED",
+          "storeName": {
+            "from": "contactView",
+            "find": {
+              "hasIdSuffix": "instructions_title"
+            },
+            "read": "text"
+          },
+          "deadlineText": {
+            "find": {
+              "hasTextStartsWith": "Pick up by"
+            },
+            "read": "text",
+            "transform": "stripDeadlinePrefix"
+          },
+          "deadlineMillis": {
+            "find": {
+              "hasTextStartsWith": "Pick up by"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          },
+          "itemCount": {
+            "find": {
+              "hasIdSuffix": "items_title_v2"
+            },
+            "read": "text",
+            "transform": "parseLeadingInt"
+          },
+          "redCardTotal": {
+            "find": {
+              "hasIdSuffix": "banner_label"
+            },
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "arrivalConfirmed": {
+            "literal": true
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_pre_arrival",
+      "priority": 71,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "user_name"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          }
+        }
+      ],
+      "state": {
+        "flow": "task:pickup:navigation",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "user_name_label"
+                },
+                {
+                  "hasTextContaining": "Pickup from"
+                }
+              ]
+            }
+          },
+          {
+            "any": [
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "textView_prism_button_title"
+                    },
+                    {
+                      "any": [
+                        {
+                          "hasText": "Directions"
+                        },
+                        {
+                          "hasText": "Arrived at store"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "bottom_sheet_container"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "parse": {
+        "as": "task",
+        "fields": {
+          "phase": "PICKUP",
+          "subFlow": "NAVIGATION",
+          "storeName": {
+            "find": {
+              "hasIdSuffix": "user_name"
+            },
+            "read": "text",
+            "transform": {
+              "stripPrefixes": [
+                "Pickup from ",
+                "Heading to ",
+                "Pick up at "
+              ]
+            }
+          },
+          "storeAddress": {
+            "join": [
+              {
+                "find": {
+                  "hasIdSuffix": "address_line_1"
+                },
+                "read": "text"
+              },
+              {
+                "find": {
+                  "hasIdSuffix": "address_line_2"
+                },
+                "read": "text"
+              }
+            ],
+            "separator": ", "
+          },
+          "deadlineText": {
+            "find": {
+              "hasTextStartsWith": "Pick up by"
+            },
+            "read": "text",
+            "transform": "stripDeadlinePrefix"
+          },
+          "deadlineMillis": {
+            "find": {
+              "hasTextStartsWith": "Pick up by"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          },
+          "itemCount": {
+            "find": {
+              "hasIdSuffix": "items_title_v2"
+            },
+            "read": "text",
+            "transform": "parseLeadingInt"
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_shopping",
+      "priority": 72,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasText": "Shop and Deliver"
+            }
+          },
+          {
+            "any": [
+              {
+                "exists": {
+                  "hasIdSuffix": "tab_layout"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextStartsWith": "To shop"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "parse": {
+        "as": "task",
+        "fields": {
+          "activity": "shopping",
+          "phase": "PICKUP",
+          "subFlow": "ARRIVED",
+          "itemsRemaining": {
+            "find": {
+              "hasTextMatchesRegex": "To shop \\((\\d+)\\)"
+            },
+            "read": "text",
+            "transform": {
+              "regex": {
+                "pattern": "\\((\\d+)\\)",
+                "group": 1,
+                "then": "toInt"
+              }
+            }
+          },
+          "itemsShopped": {
+            "find": {
+              "hasTextMatchesRegex": "Done \\((\\d+)\\)"
+            },
+            "read": "text",
+            "transform": {
+              "regex": {
+                "pattern": "\\((\\d+)\\)",
+                "group": 1,
+                "then": "toInt"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_verify_items",
+      "priority": 76,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "order_verification_checklist_title"
+          },
+          "keepPrefix": [
+            "Verify items for "
+          ]
+        }
+      ],
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Verify items for"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "Do not open sealed bags"
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "task",
+        "fields": {
+          "phase": "PICKUP",
+          "subFlow": "ARRIVED"
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_wait_survey",
+      "priority": 88,
+      "branches": [
+        {
+          "comment": "Normal DoorDash wait survey.",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "What's causing your wait"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Order still being prepared when I arrived"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "comment": "#501 GoPuff (Drive) at-store wait survey — recognize-only (inherits the parent's no-state), keyed on the GoPuff survey container id + 'Waiting for your order'. Rejects the bin-scan STEPS screen (which also carries pickup_survey_view) so the higher-numbered pickup_steps arrival branch wins it (lower priority = evaluated first, so this 88 must not steal the 104 steps frame).",
+          "reject": [
+            {
+              "exists": {
+                "hasTextContaining": "Pickup steps"
+              }
+            }
+          ],
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "pickup_survey_view"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Waiting for your order"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.screen.pickup_issue_menu",
+      "priority": 87,
+      "require": {
+        "exists": {
+          "hasTextContaining": "what pickup issues can we help with"
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_picked_up",
+      "priority": 98,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "require": {
+        "allTextContainsAll": [
+          "confirm pickup",
+          "loading"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_post_arrival_multi",
+      "priority": 99,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "reject": [
+        {
+          "allTextContains": "confirm at store"
+        },
+        {
+          "allTextContains": "customer"
+        }
+      ],
+      "require": {
+        "allTextContainsAll": [
+          "pick up",
+          "orders",
+          "you have",
+          "orders to pick up at",
+          "pick up each one to continue"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_pre_arrival_multi",
+      "priority": 100,
+      "state": {
+        "flow": "task:pickup:navigation",
+        "modeHint": "online"
+      },
+      "require": {
+        "allTextContainsAll": [
+          "confirm at store",
+          "orders",
+          "you have",
+          "orders to pick up at",
+          "pick up each one to continue"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_verify",
+      "priority": 101,
+      "state": {
+        "flow": "task:pickup:arrived",
+        "modeHint": "online"
+      },
+      "reject": [
+        {
+          "allTextContains": "pick up by"
+        }
+      ],
+      "require": {
+        "allTextContainsAll": [
+          "verify order",
+          "order for",
+          "confirm pickup",
+          "can't verify order"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_select_issue",
+      "priority": 102,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Select an issue"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Order already picked up"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "Deeper than pickup_select_issue — the resolution panel reached after picking an issue. Keyed on its own distinctive strings so it never overlaps the issue list.",
+      "id": "doordash.screen.pickup_resolution_options",
+      "priority": 103,
+      "redact": [
+        {
+          "find": {
+            "hasTextStartsWith": "For "
+          },
+          "keepPrefix": [
+            "For "
+          ]
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Resolution options"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Unassign with no pay"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#462 batch 1 — recognize-only interstitials/menus/surveys so they no longer fall to UNKNOWN. No state.flow (cannot perturb the machine) and no parse (no PII). Keyed on 2+ stable non-PII strings.",
+      "id": "doordash.screen.pickup_steps",
+      "priority": 104,
+      "branches": [
+        {
+          "comment": "Normal DoorDash pickup steps (receipt photo / confirm pickup) — recognize-only.",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Pickup steps"
+                }
+              },
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasTextContaining": "Take receipt photo"
+                    },
+                    {
+                      "hasTextContaining": "Confirm pickup"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "comment": "#501 GoPuff (Drive) warehouse bin-scan steps — the batch's at-store pickup workflow ('Scan barcodes on N items' / 'Complete pickup'). The whole warehouse leg is otherwise all-UNKNOWN, so no PICKUP_ARRIVED ever fired; declaring task:pickup:arrived here mints one clean, obs.timestamp-anchored arrival. No parse → no customer PII read (the per-order order_cx_name names are ignored); the flow alone drives the arrival, and EffectMap's null→non-null arrivedAt idempotency prevents any double-mint.",
+          "state": {
+            "flow": "task:pickup:arrived",
+            "modeHint": "online"
+          },
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Pickup steps"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Scan barcodes on"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Complete pickup"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "comment": "#501 GoPuff (Drive) barcode-scan failure sub-screen of the bin-scan workflow ('Enter last 4 characters of barcode'). A bare Compose tree (no doordash widget ids), so keyed on stable text only. Recognize-only (no state) — it's a mid-pickup sub-screen and must not change phase; keeps the bin-scan stretch out of UNKNOWN.",
+      "id": "doordash.screen.pickup_barcode_scan_issue",
+      "priority": 105,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Enter last 4 characters of barcode"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Other issues with this item"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.pickup_qr_confirm",
+      "priority": 53,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Confirm that the code was scanned"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Scan code again"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_item",
+      "priority": 75,
+      "state": {
+        "flow": "task:pickup:arrived"
+      },
+      "require": {
+        "exists": {
+          "hasIdSuffix": "fragmentContainerView_shopDeliver"
+        }
+      },
+      "reject": [
+        {
+          "exists": {
+            "hasText": "Shop and Deliver"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.screen.shopping_checkout",
+      "priority": 78,
+      "state": {
+        "flow": "task:pickup:arrived"
+      },
+      "require": {
+        "any": [
+          {
+            "exists": {
+              "hasIdSuffix": "fragmentContainerView_genericCheckout"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "go to any cashier lane"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "take a receipt photo"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_intro_message",
+      "priority": 79,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Send this intro"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Don't send"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_item_status",
+      "priority": 83,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Found empty shelf"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Can't find item location"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.shopping_wrong_item",
+      "priority": 66,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Wrong item scanned"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Scan again"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "clicks": [
+    {
+      "id": "doordash.click.arrived_at_store",
+      "priority": 30,
+      "screenIs": "pickup_arrival",
+      "intent": "arrived_at_store",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "hasIdSuffix": "primary_action_button"
+          },
+          {
+            "any": [
+              {
+                "hasText": "Arrived at store"
+              },
+              {
+                "hasText": "Arrived"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.click.arrived_at_store_pre_arrival",
+      "priority": 36,
+      "screenIs": "pickup_pre_arrival",
+      "intent": "arrived_at_store",
+      "require": {
+        "all": [
+          {
+            "hasIdSuffix": "primary_action_button"
+          },
+          {
+            "hasAnyText": "Arrived at store"
+          }
+        ]
+      }
+    }
+  ]
+}

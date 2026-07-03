@@ -1,0 +1,8 @@
+// DoorDash ruleset manifest — metadata only (format_version + platform_id).
+// Surface rules live in the sibling *.json5 files; the canonicalizer merges them
+// (sorted by name, _manifest excepted) into one canonical assets/rules/doordash.json.
+{
+  "$schema": "../../../docs/rules.schema.json",
+  "format_version": 2,
+  "platform_id": "doordash.driver"
+}

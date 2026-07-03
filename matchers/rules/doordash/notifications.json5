@@ -1,0 +1,432 @@
+// Section: Notifications.
+{
+  "$schema": "../../../docs/rules.fragment.schema.json",
+  "notifications": [
+    {
+      "id": "doordash.notification.additional_tip",
+      "priority": 10,
+      "intent": "additional_tip",
+      "require": {
+        "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
+      },
+      "parse": {
+        "as": "notification",
+        "fields": {
+          "amount": {
+            "from": "fullString",
+            "find": "\\$(\\d+\\.\\d{2})",
+            "group": 1,
+            "transform": "parseCurrency"
+          },
+          "storeName": {
+            "from": "fullString",
+            "find": "past (.+?) order delivered",
+            "group": 1,
+            "transform": "trim"
+          },
+          "deliveredAt": {
+            "from": "fullString",
+            "find": "delivered at (.+)",
+            "group": 1,
+            "transform": "trim"
+          }
+        }
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TIP_ADDED: ${amount} {storeName}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.new_order",
+      "priority": 20,
+      "require": {
+        "any": [
+          {
+            "titleContains": "new order"
+          },
+          {
+            "channelIdEquals": "dasher-notification-channel-new-order-v2"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "NEW_ORDER"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.scheduled_dash_expired",
+      "priority": 30,
+      "require": {
+        "all": [
+          {
+            "anyFieldContains": "scheduled"
+          },
+          {
+            "anyFieldContains": "expired"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "SCHEDULED_DASH_EXPIRED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.demand_nudge",
+      "priority": 50,
+      "require": {
+        "any": [
+          {
+            "titleContains": "Dash now"
+          },
+          {
+            "all": [
+              {
+                "channelIdContains": "dash-update"
+              },
+              {
+                "anyFieldContains": "is busy for"
+              }
+            ]
+          }
+        ]
+      },
+      "intent": "demand_nudge",
+      "parse": {
+        "as": "notification"
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "DEMAND_NUDGE"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.peak_pay_promo",
+      "priority": 60,
+      "require": {
+        "titleContains": "Incentives Update"
+      },
+      "intent": "peak_pay_promo",
+      "parse": {
+        "as": "notification"
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "PEAK_PAY_PROMO"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.customer_message",
+      "priority": 22,
+      "intent": "customer_message",
+      "require": {
+        "any": [
+          {
+            "channelIdEquals": "dasher-notification-channel-inapp-chat"
+          },
+          {
+            "titleContains": "Message from"
+          }
+        ]
+      },
+      "redact": {
+        "title": {
+          "keepPrefix": [
+            "Message from "
+          ]
+        },
+        "text": {},
+        "bigText": {},
+        "tickerText": {}
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "CUSTOMER_MESSAGE"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.missed_delivery",
+      "priority": 23,
+      "intent": "missed_delivery",
+      "require": {
+        "all": [
+          {
+            "channelIdContains": "delivery-update"
+          },
+          {
+            "titleContains": "Missed Delivery"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "MISSED_DELIVERY"
+          }
+        }
+      ]
+    },
+    {
+      "comment": "The order-ready push arrives on either the delivery-update channel OR the generic dasher-notification-background channel (#462, 2026-06-12 log). The 'ready for pickup' body is the real discriminator; the channelId is a coarse gate. Logs a constant ORDER_READY signal — the customer name in the body is never parsed.",
+      "id": "doordash.notification.order_ready",
+      "priority": 24,
+      "intent": "order_ready_for_pickup",
+      "require": {
+        "all": [
+          {
+            "any": [
+              {
+                "channelIdContains": "delivery-update"
+              },
+              {
+                "channelIdContains": "dasher-notification-background"
+              }
+            ]
+          },
+          {
+            "anyFieldContains": "ready for pickup"
+          }
+        ]
+      },
+      "redact": {
+        "text": {
+          "match": "^(.+?)'s order is ready for pickup at ",
+          "maskGroup": 1
+        },
+        "bigText": {
+          "match": "^(.+?)'s order is ready for pickup at ",
+          "maskGroup": 1
+        },
+        "tickerText": {
+          "match": "^(.+?)'s order is ready for pickup at ",
+          "maskGroup": 1
+        }
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "ORDER_READY"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.earnings_deposit",
+      "priority": 26,
+      "intent": "earnings_deposit",
+      "require": {
+        "all": [
+          {
+            "channelIdEquals": "dasher-notification-messages"
+          },
+          {
+            "anyFieldContains": "have been deposited"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "EARNINGS_DEPOSIT"
+          }
+        }
+      ]
+    },
+    {
+      "comment": "#599: the dasher's Crimson/DasherDirect BALANCE is pledge-blocked (banking — never parsed or stored). Sensitive parse -> the shared content gate (#399) drops it before capture and the state machine; priority 0 so nothing can outrank the block. Deliberately NO channel predicate (adversarial F1): DoorDash routes Crimson notifications over multiple channels (appboy incl.), and a channel-scoped block would let a rerouted balance push classify as a channel-only catch-all (marketing_promo) and capture raw — a block rule gains nothing from a channel key. TEXT predicates stay narrow (savings jar / building momentum): earnings_deposit notifications also say 'DoorDash Crimson account' and their fate is a separate dev call (#599).",
+      "id": "doordash.notification.crimson_balance",
+      "priority": 0,
+      "overrideable": false,
+      "intent": "sensitive.crimson_balance",
+      "require": {
+        "any": [
+          {
+            "anyFieldContains": "savings jar"
+          },
+          {
+            "anyFieldContains": "building momentum"
+          }
+        ]
+      },
+      "parse": {
+        "as": "sensitive"
+      }
+    },
+    {
+      "id": "doordash.notification.transfer_complete",
+      "priority": 32,
+      "intent": "transfer_complete",
+      "require": {
+        "all": [
+          {
+            "channelIdEquals": "com_appboy_default_notification_channel"
+          },
+          {
+            "anyFieldContains": "transfer complete"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "TRANSFER_COMPLETE"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.severe_weather",
+      "priority": 33,
+      "intent": "severe_weather",
+      "require": {
+        "all": [
+          {
+            "channelIdEquals": "com_appboy_default_notification_channel"
+          },
+          {
+            "anyFieldContains": "severe weather"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "SEVERE_WEATHER"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.arrived_in_zone",
+      "priority": 40,
+      "intent": "arrived_in_zone",
+      "require": {
+        "all": [
+          {
+            "channelIdContains": "dash-update"
+          },
+          {
+            "titleEquals": "You have arrived"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "ARRIVED_IN_ZONE"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.order_verification_warning",
+      "priority": 41,
+      "intent": "order_verification_warning",
+      "require": {
+        "all": [
+          {
+            "channelIdContains": "dash-update"
+          },
+          {
+            "titleContains": "Confirm you have the right order"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "ORDER_VERIFICATION_WARNING"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.dash_status_ongoing",
+      "priority": 45,
+      "intent": "dash_status_ongoing",
+      "require": {
+        "all": [
+          {
+            "channelIdEquals": "dasher-notification-channel-status"
+          },
+          {
+            "anyFieldContains": "still dashing"
+          }
+        ]
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "DASH_STATUS_ONGOING"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.insight_achievement",
+      "priority": 55,
+      "intent": "insight_achievement",
+      "require": {
+        "channelIdEquals": "dasher-notification-channel-new-insight"
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "INSIGHT_ACHIEVEMENT"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.notification.marketing_promo",
+      "priority": 70,
+      "intent": "marketing_promo",
+      "require": {
+        "channelIdEquals": "com_appboy_default_notification_channel"
+      },
+      "effects": [
+        {
+          "log": {
+            "type": "NOTIFICATION_RECEIVED",
+            "payload": "MARKETING_PROMO"
+          }
+        }
+      ]
+    }
+  ]
+}
