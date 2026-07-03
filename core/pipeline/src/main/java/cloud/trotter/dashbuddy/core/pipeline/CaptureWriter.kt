@@ -111,7 +111,12 @@ class CaptureWriter @Inject constructor(
             classification = obs.target,
             platform = platform,
             envelopeJson = capture.envelopeJson,
-            contentHash = capture.contentHash,
+            // #597: clicks are NEVER deduped at the bus. The bus's seen-set lives as
+            // long as the a11y process (days), and a repeat tap on the same button
+            // hashes identically — dedup here decayed click forensics to zero within
+            // a week. Clicks are human-bounded (one envelope per physical tap), so
+            // every one persists; the envelope keeps its contentHash for replay.
+            contentHash = null,
         )
         Timber.d(
             "Captured click: target=%s  ruleId=%s  captured=%s",

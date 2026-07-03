@@ -50,18 +50,27 @@ internal class FrameGate(
             return true
         }
         if (contentHash == null) return true
-        return unknownSuppressor.shouldCapture(contentHash)
+        return unknownSuppressor.shouldCapture(contentHash, obs.timestamp)
     }
 }
 
 /**
- * Rolling LRU seen-set + per-process cap for UNKNOWN captures (#360).
+ * Rolling LRU seen-set + burst-window cap for UNKNOWN captures (#360/#597).
  * Re-seeing a recent hash refreshes its recency, so an animation alternating
  * between two frames suppresses both after the first sighting of each.
+ *
+ * The cap defends against a *flood* (a pathological screen producing endless
+ * distinct hashes) — it is NOT a lifetime budget. The a11y process lives for
+ * days, so a per-process cap quietly became "blind for the rest of the week"
+ * (#597: hit 25 min into a dash, suppressed triage ~4 h incl. a whole support
+ * flow). A flood by definition has no quiet gaps, so a [quietGapMs] stretch
+ * with no UNKNOWN frames means the flood is over and the cap re-arms. Driven
+ * by `obs.timestamp` (event time), never a wall clock.
  */
 internal class UnknownSuppressor(
     private val capacity: Int = 32,
-    private val processCap: Int = 200,
+    private val burstCap: Int = 200,
+    private val quietGapMs: Long = 30 * 60 * 1000L,
 ) {
     private val seen = object : LinkedHashMap<Int, Unit>(capacity, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Unit>): Boolean =
@@ -69,20 +78,30 @@ internal class UnknownSuppressor(
     }
     private var captured = 0
     private var capLogged = false
+    private var lastAttemptMs = 0L
 
     @Synchronized
-    fun shouldCapture(contentHash: Int): Boolean {
+    fun shouldCapture(contentHash: Int, nowMs: Long = 0L): Boolean {
+        if (lastAttemptMs != 0L && nowMs - lastAttemptMs > quietGapMs && captured > 0) {
+            Timber.d(
+                "UNKNOWN capture cap re-armed after %d min quiet (%d captured last burst)",
+                (nowMs - lastAttemptMs) / 60_000, captured,
+            )
+            captured = 0
+            capLogged = false
+        }
+        lastAttemptMs = nowMs
         if (seen.containsKey(contentHash)) {
             seen[contentHash] = Unit // refresh recency
             return false
         }
-        if (captured >= processCap) {
-            // No silent truncation: say so, once.
+        if (captured >= burstCap) {
+            // No silent truncation: say so, once per burst.
             if (!capLogged) {
                 capLogged = true
                 Timber.w(
-                    "UNKNOWN capture cap (%d) reached — suppressing further unknown captures this process",
-                    processCap,
+                    "UNKNOWN capture cap (%d) reached — suppressing until a %d-min quiet gap",
+                    burstCap, quietGapMs / 60_000,
                 )
             }
             return false

@@ -73,6 +73,18 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🔧 FIX SHIPPED — click captures record every tap + UNKNOWN cap re-arms after quiet (#597). READ THE PULL AFTER A DASH.**
+  The week-long a11y process turned two per-process guards into forever-guards: click captures
+  deduped to zero by day 3 (repeat taps hash identically), and the UNKNOWN cap (200) went blind
+  for the rest of the week once hit. Now: clicks are **never** deduped (every physical tap
+  persists an envelope), and the cap is **per burst**, re-arming after a 30-min gap with no
+  UNKNOWN frames. **Confirm on next pull: 0/2 —** `captures/doordash/accessibility.click/`
+  should contain envelopes for that day's accepts/declines/confirms (`captured=true` on the
+  `Captured click:` log lines), even for buttons tapped on prior days; if an UNKNOWN-flood day
+  happens, later dashes should still capture UNKNOWNs (`UNKNOWN capture cap re-armed` DEBUG
+  line). Broken = `captured=false` on a first-of-day click, or a capped day staying blind on
+  the next dash.
+
 - **👁 VISUAL-ONLY — rich offer notification looks right: gauge ring, countdown, badges (#578/#583). CONFIRM BY EYE.**
   The mechanical halves are validated (buttons fire from the floating heads-up; the card posts
   with live PendingIntents; zero RemoteViews errors across a full week) — what desk data cannot
