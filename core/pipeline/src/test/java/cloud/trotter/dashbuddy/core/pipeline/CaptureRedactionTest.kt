@@ -136,16 +136,57 @@ class CaptureRedactionTest {
     }
 
     @Test
-    fun `recognized screen without a redact block persists the tree unchanged`() {
+    fun `recognized screen without a redact block persists non-PII text unchanged`() {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
             .thenReturn("cap-1")
-        val tree = UiNode(children = listOf(UiNode(text = "Deliver to Jane Q. Doe")))
+        // Non-PII text (no customer marker) → nothing to mask, backstop is inert.
+        val tree = UiNode(children = listOf(UiNode(text = "Nearby high pay")))
         // Source returns null for this ruleId → no redaction.
         writer(sourceFor("some.other.rule", dropoffRedact))
             .captureScreen(recognizedObs("doordash.screen.idle_map", "idle_map"), screenEvent(tree))
 
         val json = capturedEnvelope()
-        assertTrue("no redact declared → raw text persists", json.contains("Deliver to Jane Q. Doe"))
+        assertTrue("no redact + no marker → text persists", json.contains("Nearby high pay"))
+    }
+
+    @Test
+    fun `recognized frame whose rule forgot to redact a customer marker is scrubbed by the backstop`() {
+        // #624: a RECOGNIZED frame carrying "Deliver to <name>" whose rule declared
+        // NO redact block (redactFor returns null) — the customer-marker backstop is
+        // the only thing between the raw name and disk. It scrubs the node.
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
+            .thenReturn("cap-1")
+        val tree = UiNode(
+            children = listOf(
+                UiNode(text = "Deliver to Jane Q. Doe"),
+                UiNode(text = "Directions"),
+            ),
+        )
+        writer(sourceFor("some.other.rule", dropoffRedact))
+            .captureScreen(
+                recognizedObs("doordash.screen.dropoff_navigation", "dropoff_navigation"),
+                screenEvent(tree),
+            )
+
+        val json = capturedEnvelope()
+        assertFalse("leaked customer name scrubbed by backstop", json.contains("Jane Q. Doe"))
+        assertTrue("scrubbed node became [redacted]", json.contains("[redacted]"))
+        assertTrue("non-PII node intact", json.contains("Directions"))
+        assertEquals(1L, stats.redactBackstopScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN frame is not scrubbed by the recognized-frame backstop`() {
+        // The #624 backstop only guards RECOGNIZED frames; UNKNOWN frames route
+        // through the SensitiveTextMarkers drop path instead. A benign UNKNOWN
+        // marker-shaped string must not trip the recognized-frame scrub.
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
+            .thenReturn("cap-1")
+        val tree = UiNode(children = listOf(UiNode(text = "Order for pickup nearby")))
+        val obs = recognizedObs(UNKNOWN_TARGET, UNKNOWN_TARGET).copy(ruleId = null)
+        writer(sourceFor("x", dropoffRedact)).captureScreen(obs, screenEvent(tree))
+        assertTrue(capturedEnvelope().contains("Order for pickup nearby"))
+        assertEquals(0L, stats.redactBackstopScrubCount)
     }
 
     @Test

@@ -207,6 +207,22 @@ class JsonRuleInterpreter @Inject constructor(
 
             val formatVersion = root["format_version"]?.jsonPrimitive?.int
 
+            // #624 (VET V4): reject a FILE whose OWN rule ids collide within a rule
+            // type. Ruleset.byId is last-wins, so two same-id rules would let the
+            // capture-redaction lookup (redactFor/notifRedactFor) resolve to the
+            // WRONG rule's block. Skip the offending file per the malformed-file-skip
+            // policy — other platforms still load; NEVER throw into Ruleset.init,
+            // which would blind ALL sensing behind the #432 fail-closed gate.
+            val dupId = firstDuplicateId(screens) ?: firstDuplicateId(clicks) ?: firstDuplicateId(notifications)
+            if (dupId != null) {
+                Timber.e(
+                    "JsonRuleInterpreter: rejected '%s': duplicate rule id '%s' — ids must be unique " +
+                        "per rule type (byId redact lookup would resolve to the wrong rule, #624)",
+                    source, dupId,
+                )
+                return null
+            }
+
             Timber.i(
                 "JsonRuleInterpreter: compiled '$source' " +
                     "(screens=${screens.size}, clicks=${clicks.size}, notifications=${notifications.size})"
@@ -260,6 +276,10 @@ class JsonRuleInterpreter @Inject constructor(
             Timber.e(e, "JsonRuleInterpreter: capability reconcile failed — automation taps stay denied")
         }
     }
+
+    /** The first rule id that appears more than once in [rules], or null (#624). */
+    private fun <T> firstDuplicateId(rules: List<CompiledRule<T>>): String? =
+        rules.groupingBy { it.id }.eachCount().entries.firstOrNull { it.value > 1 }?.key
 
     /** Result of compiling a single rule file. */
     data class CompiledRuleBundle(

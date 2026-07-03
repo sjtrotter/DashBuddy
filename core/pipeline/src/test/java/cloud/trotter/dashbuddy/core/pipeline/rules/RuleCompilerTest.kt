@@ -983,4 +983,45 @@ class RuleCompilerTest {
         assertEquals(1000L, effect.throttleMs)
         assertEquals("k", effect.dedupeKey)
     }
+
+    // =========================================================================
+    // redact block placement (#624 VET V3)
+    // =========================================================================
+
+    @Test(expected = RuleCompileException::class)
+    fun `a redact block inside a branches entry is rejected (#624)`() {
+        // compileBranch never reads `redact` — a branch-level redact would silently
+        // no-op, so the author's PII would ship raw. Reject at compile time.
+        val rule = """
+            [{
+              "id": "doordash.screen.branch_redact",
+              "priority": 9001,
+              "branches": [
+                {
+                  "require": { "exists": { "hasText": "x" } },
+                  "redact": [ { "find": { "hasTextStartsWith": "Deliver to " }, "keepPrefix": [ "Deliver to " ] } ]
+                }
+              ]
+            }]
+        """.trimIndent()
+        RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+    }
+
+    @Test
+    fun `a top-level redact on a branched rule still compiles (#624)`() {
+        // The reject is scoped to branches[] entries; a whole-rule top-level redact
+        // is the #598 mechanism and must keep compiling.
+        val rule = """
+            [{
+              "id": "doordash.screen.toplevel_redact",
+              "priority": 9002,
+              "redact": [ { "find": { "hasTextStartsWith": "Deliver to " }, "keepPrefix": [ "Deliver to " ] } ],
+              "branches": [
+                { "require": { "exists": { "hasText": "x" } } }
+              ]
+            }]
+        """.trimIndent()
+        val compiled = RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+        assertFalse("top-level redact must compile onto the rule", compiled.single().redact.isEmpty())
+    }
 }

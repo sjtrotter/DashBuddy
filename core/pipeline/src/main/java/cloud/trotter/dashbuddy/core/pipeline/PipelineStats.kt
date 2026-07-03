@@ -34,6 +34,7 @@ class PipelineStats @Inject constructor() {
     private val forwarded = AtomicLong()
     private val droppedAwaitingRules = AtomicLong()
     private val scrubbedUnknownCaptures = AtomicLong()
+    private val redactBackstopScrubs = AtomicLong()
 
     val droppedSensitiveCount: Long get() = droppedSensitive.get()
     val droppedNoiseCount: Long get() = droppedNoise.get()
@@ -45,6 +46,7 @@ class PipelineStats @Inject constructor() {
     val forwardedCount: Long get() = forwarded.get()
     val droppedAwaitingRulesCount: Long get() = droppedAwaitingRules.get()
     val scrubbedUnknownCaptureCount: Long get() = scrubbedUnknownCaptures.get()
+    val redactBackstopScrubCount: Long get() = redactBackstopScrubs.get()
 
     /** A frame the shared content gate dropped (sensitive or noise, #399). */
     fun onContentGateDrop(parsed: ParsedFields) {
@@ -85,6 +87,12 @@ class PipelineStats @Inject constructor() {
         scrubbedUnknownCaptures.incrementAndGet()
     }
 
+    /** A RECOGNIZED frame whose rule shipped an un-redacted customer marker; the
+     *  node was scrubbed in the envelope by the #624 defense-in-depth backstop. */
+    fun onRedactBackstopScrub() {
+        redactBackstopScrubs.incrementAndGet()
+    }
+
     /** The supervised upstream crashed and is resubscribing. Returns the restart ordinal. */
     fun onPipelineRestart(): Long = restarts.incrementAndGet()
 
@@ -108,6 +116,7 @@ class PipelineStats @Inject constructor() {
             " mappingFailures=${mappingFailures.get()}" +
             " awaitingRulesDropped=${droppedAwaitingRules.get()}" +
             " unknownScrubbed=${scrubbedUnknownCaptures.get()}" +
+            " redactBackstopScrubs=${redactBackstopScrubs.get()}" +
             " restarts=${restarts.get()}"
 
     companion object {

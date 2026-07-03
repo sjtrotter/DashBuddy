@@ -114,6 +114,24 @@ class CaptureRedactionCorpusTest {
     }
 
     @Test
+    fun `dropoff_reminder redact masks the address after the marker (#624)`() {
+        // The live leak #624 fixes: "Deliver to door of <address>" had no hash and
+        // no redact, so the #598 sha256 gate never fired and the raw address shipped.
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_reminder")!!
+        assertTrue("dropoff_reminder must now carry a redact block", !rule.redact.isEmpty())
+
+        val node = UiNode(text = "Deliver to door of 4B, 123 Real Street").restoreParents()
+        val masked = serialize(rule.redact.apply(node))
+
+        assertFalse("street address must not persist", masked.contains("123 Real Street"))
+        assertFalse("apt must not persist", masked.contains("4B"))
+        assertTrue(
+            "marker kept, address masked",
+            Regex("""Deliver to door of \[redacted:[0-9a-f]{4}\]""").containsMatchIn(masked),
+        )
+    }
+
+    @Test
     fun `every screen rule that hashes PII declares a redact block`() {
         var checked = 0
         rulesDir.listFiles { f -> f.extension == "json" }?.forEach { file ->

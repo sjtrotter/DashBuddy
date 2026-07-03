@@ -149,8 +149,22 @@ object RuleCompiler {
         }
 
         val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
-            obj["branches"]!!.jsonArray.map {
-                compileBranch(it.jsonObject, context, ruleState.flow, ruleState.modeHint,
+            obj["branches"]!!.jsonArray.map { branchElement ->
+                val branchObj = branchElement.jsonObject
+                // #624 (VET V3): `redact` is a WHOLE-RULE directive — compileBranch
+                // never reads it, so a `redact` inside a branches[] entry would
+                // silently no-op and a rule author would believe their branch masks
+                // capture PII when it does not. Reject at compile time. This is
+                // enforced ONLY for branches[] entries, NOT the branchless whole-rule
+                // compileBranch call below, which legitimately carries top-level redact.
+                if ("redact" in branchObj) {
+                    throw RuleCompileException(
+                        "Rule '$id': a `redact` block inside a branches[] entry is not supported — " +
+                            "redact masks capture-envelope nodes for the ENTIRE recognized frame, " +
+                            "not per-branch. Move it to the rule's top level.",
+                    )
+                }
+                compileBranch(branchObj, context, ruleState.flow, ruleState.modeHint,
                     ruleOutcomes = ruleState.outcomes, ruleId = id,
                     ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj)
             }
