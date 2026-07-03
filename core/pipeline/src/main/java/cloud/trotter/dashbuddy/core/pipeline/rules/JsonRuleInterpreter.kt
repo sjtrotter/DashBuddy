@@ -23,6 +23,9 @@ import javax.inject.Singleton
  * On [loadDefaults], scans the `assets/rules/` directory for per-platform JSON files,
  * validates and compiles each independently, then merges them into the combined rulesets.
  * A malformed file is logged and skipped — it does not prevent other platforms from loading.
+ * A file that re-declares a rule id an earlier-loaded file already claimed is likewise
+ * skipped whole ([acceptNonCollidingFiles], #633) so a later file can't shadow the
+ * byId redact lookup across files.
  *
  * Security checks applied before parsing:
  * - File size ≤ [MAX_FILE_BYTES] (1 MB) per file
@@ -91,6 +94,7 @@ class JsonRuleInterpreter @Inject constructor(
         try {
             val files = context.assets.list(RULES_DIR)
                 ?.filter { it.endsWith(".json") }
+                ?.sorted() // deterministic load order so the #633 first-file-wins collision policy is reproducible (assets.list ordering is not a documented contract)
                 ?: emptyList()
 
             if (files.isEmpty()) {
@@ -98,33 +102,30 @@ class JsonRuleInterpreter @Inject constructor(
                 return
             }
 
-            val allScreens = mutableListOf<CompiledRule<UiNode>>()
-            val allClicks = mutableListOf<CompiledRule<UiNode>>()
-            val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
-            val perFile = mutableListOf<Pair<String, CompiledRuleBundle>>() // path → bundle
-            val seenRuleIds = mutableMapOf<String, String>() // ruleId → first source path
-            var lastFormatVersion: Int? = null
-
+            val perFile = mutableListOf<Pair<String, CompiledRuleBundle>>() // path → bundle, load order
             for (fileName in files) {
                 val path = "$RULES_DIR/$fileName"
                 val json = context.assets.open(path).bufferedReader().readText()
                 val result = loadSingle(json, source = path) ?: continue
                 perFile += path to result
+            }
 
-                // Collision detection (C3): warn if any rule ID appears in multiple files
-                val newIds = result.screens.map { it.id } +
-                    result.clicks.map { it.id } +
-                    result.notifications.map { it.id }
-                for (id in newIds) {
-                    val existingSource = seenRuleIds.put(id, path)
-                    if (existingSource != null) {
-                        Timber.w(
-                            "JsonRuleInterpreter: rule ID '%s' declared in both '%s' and '%s'",
-                            id, existingSource, path,
-                        )
-                    }
-                }
+            // Cross-file rule-id collision policy (C3, #633): drop any LATER file that
+            // re-declares an id an EARLIER file already claimed, BEFORE the merge.
+            // Ruleset.byId is last-wins, so merging the later file would shadow the
+            // capture-redaction lookup (redactFor/notifRedactFor) across files while
+            // priority-ordered matchFirst still recognizes with the earlier rule — the
+            // wrong rule's redact could resolve and ship an id-keyed customer-PII node
+            // raw. Skips the offending file WHOLE (malformed-file-skip policy),
+            // complementing the within-file dup-id reject (#624). Earlier files keep
+            // every rule; other platforms are unaffected (no outage behind #432).
+            val accepted = acceptNonCollidingFiles(perFile)
 
+            val allScreens = mutableListOf<CompiledRule<UiNode>>()
+            val allClicks = mutableListOf<CompiledRule<UiNode>>()
+            val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
+            var lastFormatVersion: Int? = null
+            for ((_, result) in accepted) {
                 allScreens += result.screens
                 allClicks += result.clicks
                 allNotifications += result.notifications
@@ -154,7 +155,7 @@ class JsonRuleInterpreter @Inject constructor(
             // check must not have its capabilities granted either. Source is
             // stamped per file so provenance survives the merge.
             reconcileCapabilities(
-                perFile.flatMap { (path, bundle) ->
+                accepted.flatMap { (path, bundle) ->
                     val liveScreens =
                         bundle.screens.filterNot { Platform.fromRuleId(it.id) in uncovered }
                     RuleCompiler.enumerateCapabilities(
@@ -174,7 +175,7 @@ class JsonRuleInterpreter @Inject constructor(
             Timber.i(
                 "JsonRuleInterpreter: loaded %d file(s) from %s/ " +
                     "(screens=%d, clicks=%d, notifications=%d)",
-                files.size, RULES_DIR, allScreens.size, allClicks.size, allNotifications.size,
+                accepted.size, RULES_DIR, allScreens.size, allClicks.size, allNotifications.size,
             )
         } catch (e: Exception) {
             Timber.e(e, "JsonRuleInterpreter: failed to load rules directory")
@@ -316,4 +317,52 @@ fun missingSensitivePlatforms(screens: List<CompiledRule<UiNode>>): Set<Platform
             rules.none { r -> r.branches.any { it.shape == "sensitive" } }
         }
         .keys
+}
+
+/**
+ * Cross-file rule-id collision policy (C3, #633). Given per-file compiled bundles in
+ * LOAD ORDER, return only the files whose top-level rule ids don't collide with an id
+ * an EARLIER-accepted file already claimed; a colliding file is SKIPPED WHOLE and
+ * logged at ERROR (lost coverage), never merged.
+ *
+ * Why skip the LATER file, not the earlier one: [Ruleset]'s `byId` is last-wins, so a
+ * later file re-declaring an id would SHADOW the byId redact lookup
+ * ([JsonRuleInterpreter.redactFor] / [JsonRuleInterpreter.notifRedactFor]) the capture
+ * stage uses, while priority-ordered [Ruleset.matchFirst] still recognizes with a
+ * DIFFERENT rule — the wrong rule's `redact` block resolves and an id-keyed customer-PII
+ * node (no marker prefix, invisible to the #624 screen backstop) could ship raw. Keeping
+ * the earlier file's rules makes byId and matchFirst agree on that id.
+ *
+ * ids come from top-level [CompiledRule.id] only — branches share the parent id and are
+ * NOT in `byId`, so a branch never triggers a collision. Impossible with the current
+ * prefix-namespaced asset bundles (`doordash.` / `uber.`), so this is a no-op today; it
+ * hardens the future multi-file subrepo (#639) + untrusted CDN/fork rule path (#192/#416).
+ *
+ * Pure + top-level so it's unit-testable without an Android Context. The ERROR log names
+ * the colliding id + both file paths ONLY — no rule text / no PII (Principle 7).
+ *
+ * @param files compiled bundles in LOAD ORDER (earlier entries win a collision).
+ */
+fun acceptNonCollidingFiles(
+    files: List<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>>,
+): List<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>> {
+    val claimedBy = HashMap<String, String>() // ruleId → first-claiming file path
+    val accepted = mutableListOf<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>>()
+    for ((path, bundle) in files) {
+        val ids = bundle.screens.map { it.id } +
+            bundle.clicks.map { it.id } +
+            bundle.notifications.map { it.id }
+        val collision = ids.firstOrNull { it in claimedBy }
+        if (collision != null) {
+            Timber.e(
+                "JsonRuleInterpreter: rule id '%s' in '%s' already claimed by '%s' — skipping the " +
+                    "later file (cross-file byId redact-lookup shadow, #633)",
+                collision, path, claimedBy.getValue(collision),
+            )
+            continue
+        }
+        for (id in ids) claimedBy[id] = path
+        accepted += path to bundle
+    }
+    return accepted
 }
