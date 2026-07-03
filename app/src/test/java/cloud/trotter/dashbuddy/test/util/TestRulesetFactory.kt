@@ -20,17 +20,30 @@ import java.io.File
  */
 object TestRulesetFactory {
 
-    /** Resolved at first access relative to the Gradle working directory. */
+    /**
+     * Resolved at first access relative to the Gradle working directory.
+     *
+     * The rules are no longer committed under `assets/rules/` — they are
+     * GENERATED (#635) by `:core:pipeline:importMatchersRules`, which
+     * canonicalizes the matchers JSON5 rule sources into the module's build
+     * output. Unit tests do NOT run AGP asset merge, so `:app:testDebugUnitTest`
+     * declares `dependsOn(":core:pipeline:importMatchersRules")` (see
+     * app/build.gradle.kts) to make sure this directory is populated first.
+     * `addGeneratedSourceDirectory` names the output dir after the task, so the
+     * path below is the stable AGP location for that generated assets root.
+     */
     val rulesDir: String by lazy {
+        val generated = "core/pipeline/build/generated/assets/importMatchersRules/rules"
         val candidates = listOf(
-            "core/pipeline/src/main/assets/rules",       // project root
-            "../core/pipeline/src/main/assets/rules",     // from app/
-            "src/main/assets/rules",                      // from core/pipeline/
+            "../$generated", // from app/ (the unit-test working dir)
+            generated,       // from repo root
         )
         candidates.firstOrNull { File(it).isDirectory }
             ?: error(
-                "Cannot find rules directory. Working dir: ${File(".").absolutePath}\n" +
-                    "Searched: ${candidates.joinToString { File(it).absolutePath }}"
+                "Cannot find GENERATED rules directory. Working dir: ${File(".").absolutePath}\n" +
+                    "Searched: ${candidates.joinToString { File(it).absolutePath }}\n" +
+                    "Run ':core:pipeline:importMatchersRules' first (canonicalizes matchers/rules/*.json5); " +
+                    "':app:testDebugUnitTest' declares this as a dependency."
             )
     }
 

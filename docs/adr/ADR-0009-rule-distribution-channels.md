@@ -1,6 +1,11 @@
 # ADR-0009: Rule Distribution Channels and the Single Local Dev Loop
 
-**Status:** Proposed (spike-validated)
+**Status:** Accepted — in-repo canonicalize pipeline landed (N1/#635). The guarded #634 spike is
+now the production default: `matchers/rules/*.json5` is the SOLE rule source, canonicalized by the
+included `matchers` build (kotlinx-serialization, replacing the spike text-stripper) into
+**generated** `assets/rules/*.json` consumed by both the APK and the tests. The composite build is
+un-guarded (no `-PuseLocalMatchers`); the committed `assets/rules/*.json` are deleted. Milestone 2
+(OTA/CDN) remains greenfield.
 **Issue:** Sub-RFC of Epic #192 (matchers split); gated on #246 (licensing)
 **Date:** 2026-07-03
 **Builds on:** ADR-0001 (matcher rule format), ADR-0003 (versioning and API contracts)
@@ -209,20 +214,26 @@ loop into the actual test corpus is migration work, not spike work.
 
 ## Migration path
 
-1. **In-repo canonicalize first (pre-split).** Before the repo exists, land canonicalization as
-   an in-repo step (Option B shape): JSON5 sources live in the app repo, a Gradle task
-   canonicalizes them into the assets. This is the correct first move because there is no separate
-   build to include yet.
+1. **In-repo canonicalize first (pre-split). — DONE (N1/#635).** `matchers/rules/*.json5` is the
+   sole source; the included `matchers` build canonicalizes it (kotlinx-serialization) into
+   generated `assets/rules/*.json` that the APK and tests consume. Note this landed as **Option A
+   shape** (composite build, un-guarded) rather than the Option B shape this step originally
+   anticipated — the spike proved Option A has no friction, so there was no reason to carry the
+   Option B canonicalizer-copy through the pre-split phase. The generated assets land at the
+   AGP-Variant-API-managed `build/generated/assets/importMatchersRules/rules/` (AGP names the
+   output dir; the plan's assumed `build/generated/matchers/assets/rules` is not what
+   `addGeneratedSourceDirectory` produces).
 2. **Create the public Apache-2.0 matchers repo.** **Gated on #246** (the Apache-2.0 relicense /
    counsel decision) — this is the pacing item, not code.
 3. **Submodule + composite-build consumption.** Nest the matchers repo as a submodule; wire
    `includeBuild("matchers")` (Option A) for the local loop, with the pinned published artifact as
    the production path.
-4. **Decouple `TestRulesetFactory` and lock corpus↔rules versions.** `TestRulesetFactory`
-   currently hardcodes `core/pipeline/src/main/assets/rules` filesystem paths; point it at the
-   canonical artifact (generated dir) instead. Establish a **version lock** so the snapshot corpus
-   (`app/src/test/resources/snapshots/`) is always tested against the rules SHA it was captured
-   for (per ADR-0003 compatibility checks).
+4. **Decouple `TestRulesetFactory` and lock corpus↔rules versions.** `TestRulesetFactory` no
+   longer hardcodes the source-tree `assets/rules` path — it reads the generated canonical dir
+   (`build/generated/assets/importMatchersRules/rules`), with `:app:testDebugUnitTest dependsOn`
+   the import task so it is populated first (**DONE, N1/#635**). The remaining piece — a **version
+   lock** so the snapshot corpus (`app/src/test/resources/snapshots/`) is always tested against the
+   rules SHA it was captured for (per ADR-0003) — is **deferred to N5/#638**.
 5. **Resolve the `doordash.json` per-platform partition in the subrepo** (tracked separately; the
    ~104 KB monolith is split in the matchers repo, not before).
 6. **Milestone 2 — OTA/CDN.** Signature verification before compile (#416), capability
