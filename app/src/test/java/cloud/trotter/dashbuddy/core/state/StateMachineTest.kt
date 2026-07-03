@@ -21,6 +21,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -752,6 +753,108 @@ class StateMachineTest {
         assertNotNull(result.session) // session preserved during grace
         assertNotNull(result.pendingDestructive)
         assertEquals(DestructiveKind.SESSION_END, result.pendingDestructive?.kind)
+    }
+
+    // =========================================================================
+    // PAUSE → ONLINE RESUME GRACE (#605)
+    // =========================================================================
+
+    private fun dd(state: AppState) = state.regions.platforms[Platform.DoorDash]!!
+
+    private fun pauseFrame(remainingText: String = "5:00", remainingMillis: Long = 300_000) = screenObs(
+        modeHint = Mode.Paused,
+        parsed = ParsedFields.PausedFields(remainingText = remainingText, remainingMillis = remainingMillis),
+    )
+
+    @Test
+    fun `#605 — screen-implied resume out of Paused is graced, a paused frame within grace cancels it`() {
+        var state = AppState()
+        // Online (a live delivery), then Paused.
+        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
+        state = machine.step(state, pauseFrame()).newState
+        assertEquals(Mode.Paused, dd(state).mode)
+
+        // An online-implying receipt frame while Paused must NOT flip immediately — it arms the grace.
+        state = machine.step(state, screenObs(modeHint = Mode.Online)).newState
+        assertEquals("an online frame while Paused must not flip immediately", Mode.Paused, dd(state).mode)
+        assertNotNull("resume grace armed", dd(state).pendingModeResume)
+
+        // A Paused frame within the grace window CANCELS the pending — the modal is still up.
+        state = machine.step(state, pauseFrame(remainingText = "4:00", remainingMillis = 240_000)).newState
+        assertEquals(Mode.Paused, dd(state).mode)
+        assertNull("a paused frame cancels the resume grace", dd(state).pendingModeResume)
+    }
+
+    @Test
+    fun `#605 — sustained online past the grace commits the resume once via MODE_RESUME_COMMIT`() {
+        var state = AppState()
+        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
+        val sessionId = dd(state).session!!.sessionId
+        state = machine.step(state, pauseFrame()).newState
+        assertEquals(Mode.Paused, dd(state).mode)
+
+        // Online frame arms the grace and schedules a MODE_RESUME_COMMIT wake timer (NOT GRACE_COMMIT).
+        val arm = machine.step(state, screenObs(modeHint = Mode.Online))
+        state = arm.newState
+        assertEquals(Mode.Paused, dd(state).mode)
+        val pend = dd(state).pendingModeResume!!
+        assertTrue("arm schedules a MODE_RESUME_COMMIT timer", arm.effects.any {
+            it is AppEffect.ScheduleTimeout && it.type == TimeoutType.MODE_RESUME_COMMIT
+        })
+        assertFalse("arm does NOT schedule a GRACE_COMMIT (would cross-cancel a destructive grace)", arm.effects.any {
+            it is AppEffect.ScheduleTimeout && it.type == TimeoutType.GRACE_COMMIT
+        })
+
+        // The wake timer fires past the deadline → lazy expiry commits the resume, exactly once.
+        val fire = machine.step(state, timeoutObs(
+            type = TimeoutType.MODE_RESUME_COMMIT,
+            timestamp = pend.deadline + 1,
+            targetPlatform = Platform.DoorDash,
+        ))
+        state = fire.newState
+        assertEquals("resume commits to Online", Mode.Online, dd(state).mode)
+        assertNull(dd(state).pendingModeResume)
+        assertEquals("same session resumes, not a new one", sessionId, dd(state).session!!.sessionId)
+        assertTrue("emits the resume card once", fire.effects.any {
+            it is AppEffect.UpdateBubble && it.text.contains("resumed")
+        })
+    }
+
+    @Test
+    fun `#605 — an OfferPresented screen commits the resume immediately (offer proves online)`() {
+        var state = AppState()
+        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
+        state = machine.step(state, pauseFrame()).newState
+        assertEquals(Mode.Paused, dd(state).mode)
+
+        // A fresh offer while Paused is authoritative online evidence — flip immediately, no grace.
+        state = machine.step(state, screenObs(
+            flow = Flow.OfferPresented, parsed = offerFields(hash = "hash-2"),
+        )).newState
+        assertEquals("an offer while Paused flips immediately", Mode.Online, dd(state).mode)
+        assertNull("no lingering resume grace after an instant commit", dd(state).pendingModeResume)
+    }
+
+    @Test
+    fun `#605 — the pause safety timeout out of a graced Paused clears the pending resume`() {
+        val stepper = PlatformRegionStepper()
+        val policy = TransitionPolicy()
+        val pausedRegion = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Paused,
+            session = cloud.trotter.dashbuddy.domain.state.Session("sess-1", startedAt = 100L),
+            // Grace still un-expired at the timeout instant (deadline in the future) so the
+            // safety-timeout path — not lazy expiry — resolves the pending.
+            pendingModeResume = cloud.trotter.dashbuddy.domain.state.PendingModeResume(since = 4_000L, deadline = 12_000L),
+        )
+        val flow = FlowRegion(flow = Flow.Idle)
+        val result = stepper.step(
+            pausedRegion, flow, flow,
+            timeoutObs(type = TimeoutType.SESSION_PAUSED_SAFETY, timestamp = 5_000L),
+            policy,
+        )
+        assertEquals(Mode.Offline, result.mode)
+        assertNull("a committed transition out of Paused clears the resume grace", result.pendingModeResume)
     }
 
     // =========================================================================

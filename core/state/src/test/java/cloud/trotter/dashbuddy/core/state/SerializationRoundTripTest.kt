@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
+import cloud.trotter.dashbuddy.domain.state.PendingModeResume
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
@@ -152,6 +153,7 @@ class SerializationRoundTripTest {
                         pendingDestructive = PendingDestructive(
                             DestructiveKind.TASK_RETIRE, since = 800L, deadline = 1_000L,
                         ),
+                        pendingModeResume = PendingModeResume(since = 700L, deadline = 8_700L),
                         ratings = RatingsSnapshot(customerRating = 4.97, capturedAt = 900L),
                         lastPostTaskFields = ParsedFields.PostTaskFields(totalPay = 9.75),
                         mintCounter = 3L,

@@ -347,6 +347,7 @@ class EffectMap @Inject constructor() {
         return buildList {
             addAll(diffMode(p, next, obs))
             addAll(diffGraceTimer(p, next, obs))
+            addAll(diffModeResumeTimer(p, next, obs))
             addAll(diffTask(p, next, prevFlow, nextFlow, obs))
             addAll(diffPostTask(p, next, nextFlow, obs))
             addAll(diffNotification(obs))
@@ -680,6 +681,38 @@ class EffectMap @Inject constructor() {
                 )
             prevPend != null && nextPend == null ->
                 listOf(AppEffect.CancelTimeout(TimeoutType.GRACE_COMMIT))
+            else -> emptyList()
+        }
+    }
+
+    /**
+     * Schedule/cancel the wake-up timer for a graced screen-implied resume out of
+     * Paused (#605) — the [PlatformRegion.pendingModeResume] mirror of
+     * [diffGraceTimer]. A SEPARATE [TimeoutType.MODE_RESUME_COMMIT] (not a shared
+     * GRACE_COMMIT) because SideEffectEngine.activeTimers is keyed by TimeoutType
+     * alone: a resume-grace GRACE_COMMIT would cross-cancel a live destructive grace
+     * timer. Arm (or a re-arm with a new deadline) schedules; a cancel (paused frame
+     * within the window, or the resume committing) cancels. A commit lands in the
+     * cancel branch too — harmless, the timer has already fired or no-ops.
+     */
+    private fun diffModeResumeTimer(
+        prev: PlatformRegion,
+        next: PlatformRegion,
+        obs: Observation,
+    ): List<AppEffect> {
+        val prevPend = prev.pendingModeResume
+        val nextPend = next.pendingModeResume
+        return when {
+            nextPend != null && (prevPend == null || prevPend.deadline != nextPend.deadline) ->
+                listOf(
+                    AppEffect.ScheduleTimeout(
+                        durationMs = (nextPend.deadline - obs.timestamp).coerceAtLeast(1L),
+                        type = TimeoutType.MODE_RESUME_COMMIT,
+                        platform = next.platform,
+                    ),
+                )
+            prevPend != null && nextPend == null ->
+                listOf(AppEffect.CancelTimeout(TimeoutType.MODE_RESUME_COMMIT))
             else -> emptyList()
         }
     }
