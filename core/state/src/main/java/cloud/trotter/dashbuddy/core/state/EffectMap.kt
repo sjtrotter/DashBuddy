@@ -219,7 +219,7 @@ class EffectMap @Inject constructor() {
             val fields = flowObs.parsed as? ParsedFields.ClickFields
             // #594: the decline-commit latch set on a prior confirm click (survives on this
             // click's next.pendingOffer, or prev's if the pop is concurrent).
-            val declineCommitted = next.pendingOffer?.declineCommittedAt ?: prevOffer?.declineCommittedAt
+            val declineCommitted = (next.pendingOffer ?: prevOffer)?.declineCommittedAt
             when (fields?.intent) {
                 OfferIntent.ACCEPT ->
                     if (declineCommitted != null) {

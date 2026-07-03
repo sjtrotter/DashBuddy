@@ -37,13 +37,14 @@ data class FlowRegion(
  *   action is unavailable on this platform.
  * @param sourceRuleId The rule that matched the offer screen and supplied
  *   [targets] — consent-gate provenance (#422/#417).
- * @param declineCommittedAt Set (once) when a DECLINE-intent click is observed — the
- *   confirm-sheet commit, which is screen-scoped to `offer_popup_confirm_decline` so it can
- *   only come from the server-side confirmation. Once set, the offer's outcome is DECLINED
- *   regardless of any later click, because the platform has already processed the decline
- *   server-side — a "Review offer"→Accept race after that point cannot un-decline it (#594).
- *   [lastClickIntent] keeps recording the literal last click for forensics; this latch, not
- *   [lastClickIntent], decides the outcome.
+ * @param declineCommittedAt Set (once) when a DECLINE-intent click is observed. CONTRACT: a
+ *   ruleset must only emit `intent = decline_offer` for the control that COMMITS the decline
+ *   server-side (DoorDash: the confirm sheet's button — its click rule is screen-scoped to
+ *   `offer_popup_confirm_decline`; the offer card's first decline is the separate
+ *   `initial_decline` intent). Once set, the offer's outcome is DECLINED regardless of any
+ *   later click — the platform has already processed the decline, so a "Review offer"→Accept
+ *   race cannot un-decline it (#594). [lastClickIntent] keeps recording the literal last click
+ *   for forensics; this latch, not [lastClickIntent], decides the outcome.
  */
 @Serializable
 data class PendingOffer(
