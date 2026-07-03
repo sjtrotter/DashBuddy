@@ -557,37 +557,53 @@ Rules of thumb:
 
 ## Claude Subagent Model Policy
 
-**Fable is the scarce resource — reserve it.** The developer is on a usage-limited plan and
-fable-tier capacity is the binding constraint (the 2026-06-25 mid-workflow session-limit
-collapse — 36 agents dead, all spend wasted — is the receipt). Never dip into usage credits
-or pay-by-token on the developer's behalf. Rules, in precedence order:
+**The intended shape of substantial work is a three-phase pipeline: PLAN AND VET AT FABLE →
+BUILD WITH LOWER TIERS → VALIDATE AT FABLE.** The developer deliberately pays the fable cost
+at both ends: idea-building, design, and vetting happen rich and up front (waiting out a
+usage reset is an accepted side effect — the developer prefers spending more on initial
+planning over cheap plans), and the PR checks close the loop at the top tier. The two ends
+justify the middle: a well-vetted plan with sharp boundaries is precisely what makes the
+build safely delegable, and the fable check is what makes a cheap build trustworthy.
+**"Reserve fable" therefore means one thing: don't burn the scarce tier on mechanical
+execution in the middle.** It does NOT mean skimping on planning, design, vetting, or
+review. Never dip into usage credits or pay-by-token on the developer's behalf (the
+2026-06-25 mid-workflow session-limit collapse — 36 agents dead, all spend wasted — is the
+receipt for budget awareness).
+
+Rules, in precedence order:
 
 1. **PR checks are ALWAYS fable-tier.** The adversarial pre-merge review (the #589/#591
    loop), `/code-review`, `/security-review`, and any verdict that gates a merge run on the
    top tier, no exceptions. The reviewer is the safety net for everything built below it,
    and it has repeatedly caught author-missed defects (PRs #609/#610/#611). Save budget on
    the builder, never on the reviewer.
-2. **The default subagent tier is opus — set `model` explicitly at every spawn.** Do NOT
-   omit the model to "inherit the parent": when the session itself runs fable, omission
-   silently burns the scarce tier on work opus handles. (This deliberately replaces the old
-   "prefer the exact same model" guidance.)
-3. **Delegating BELOW opus is allowed only for building well-bounded implementations**, and
-   only when confident the smaller model can execute: named files, an explicit expected
-   change shape, and cheap verification (existing tests and/or the fable PR check will catch
-   a failure inexpensively — boundedness is what makes verification cheap, which is what
-   makes the delegation actually save anything). Sonnet is the bounded-build workhorse;
-   haiku only for trivially mechanical scans. Never hand a lower tier open-ended research,
-   design, root-cause analysis, or judgment work — boundedness is the control that limits
-   hallucinations and expansive errors.
-4. **A fable subagent outside a PR check needs a specific, stated reason** (e.g. final
-   adjudication of conflicting evidence, a pledge/security-critical verdict) — and first
-   consider whether the main loop, already fable, should just do that work inline instead
-   of spawning a second fable context.
+2. **Planning, design, and vetting run at fable by design.** Usually that is the main loop
+   itself; fable *subagents* are also legitimate in this phase — adversarial design vetting,
+   judge panels, final adjudication of conflicting evidence, pledge/security-critical
+   verdicts — name the phase when spawning one. The deliverable of this phase is a plan
+   bounded enough to hand down: named files, the expected change shape, acceptance criteria,
+   and what the tests/review must prove.
+3. **The default subagent tier for everything else is opus — set `model` explicitly at
+   every spawn.** Do NOT omit the model to "inherit the parent": when the session itself
+   runs fable, omission silently burns the scarce tier on work opus handles. (This
+   deliberately replaces the old "prefer the exact same model" guidance.)
+4. **Delegating BELOW opus is allowed only for building well-bounded implementations from
+   an already-vetted plan**, and only when confident the smaller model can execute: named
+   files, an explicit expected change shape, and cheap verification (existing tests and/or
+   the fable PR check will catch a failure inexpensively — boundedness is what makes
+   verification cheap, which is what makes the delegation actually save anything). Sonnet
+   is the bounded-build workhorse; haiku only for trivially mechanical scans. Never hand a
+   lower tier open-ended research, design, root-cause analysis, or judgment work —
+   boundedness is the control that limits hallucinations and expansive errors. If the plan
+   isn't bounded enough to delegate, that is a phase-2 gap: sharpen the plan at fable, don't
+   promote the builder.
 5. **Weigh the usage limit at the moment of delegation.** There is no meter to read, so:
    treat fable scarcity as a standing assumption, not a measurement; if limit errors have
    appeared this session, or the developer has signaled they need their usage (e.g. about
-   to dash), shrink the fan-out, defer it, or ask before launching — a workflow that dies
-   mid-fan-out wastes everything it already spent.
+   to dash), shrink or defer the work, or ask before launching — a workflow that dies
+   mid-fan-out wastes everything it already spent. When the budget is tight, **economize in
+   the middle phase**: the plan/vet and validate ends keep fable priority (the developer
+   prefers waiting for a reset over cheap planning or cheap review).
 
 ## Field Testing Logs
 
