@@ -9,8 +9,11 @@ import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
+import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -66,6 +69,16 @@ class AppEventRepo @Inject constructor(
     fun getEventsInTimeRange(startTime: Long, endTime: Long): Flow<List<AppEvent>> =
         dao.getEventsInTimeRange(startTime, endTime).map { rows -> rows.map { it.toDomain() } }
 
+    /**
+     * A page of [SequencedAppEvent]s after [after] (exclusive), oldest-first, for
+     * the analytics projector's paged fold (#314). Unlike the other reads, this
+     * carries the entity `sequenceId` and decoded [EventMetadata] the fold needs.
+     * Malformed payload OR metadata degrades to null at this edge (WARN), never a
+     * throw — same fail-null contract as [toDomain].
+     */
+    suspend fun getEventsAfter(after: Long, limit: Int): List<SequencedAppEvent> =
+        dao.getEventsAfter(after, limit).map { it.toSequenced() }
+
     // ── Entity ↔ domain mapping ─────────────────────────────────────────
 
     private fun AppEvent.toEntity(metadataJson: String?) = AppEventEntity(
@@ -89,4 +102,28 @@ class AppEventRepo @Inject constructor(
             null
         },
     )
+
+    private fun AppEventEntity.toSequenced() = SequencedAppEvent(
+        sequenceId = sequenceId,
+        event = toDomain(),
+        metadata = metadata?.let { decodeMetadata(it, eventType) },
+    )
+
+    /**
+     * Decode a metadata JSON blob written by Gson (`{"odometer":…}` or the
+     * test-mode `{"test_mode":true}` shape). `ignoreUnknownKeys` + all-default
+     * fields make both shapes parse; a malformed blob fails to null (WARN), never
+     * a throw — a missing odometer must not sink the whole fold batch.
+     */
+    private fun decodeMetadata(json: String, eventType: AppEventType): EventMetadata? =
+        try {
+            metadataJson.decodeFromString<EventMetadata>(json)
+        } catch (e: Exception) {
+            Timber.w(e, "AppEventRepo: failed to decode %s metadata", eventType)
+            null
+        }
+
+    private companion object {
+        private val metadataJson = Json { ignoreUnknownKeys = true }
+    }
 }

@@ -166,6 +166,11 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)
     testImplementation(libs.kotlinx.coroutines.test)
+    // #314 — Robolectric DAO round-trip tests build an in-memory DashBuddyDatabase;
+    // Room's builder API is only transitively runtime-visible via :core:database
+    // (implementation), so surface it on the test compile classpath. room-ktx (the
+    // suspend/Flow DAO runtime) is already transitive on the test runtime classpath.
+    testImplementation(libs.androidx.room.runtime)
 }
 
 kotlin {

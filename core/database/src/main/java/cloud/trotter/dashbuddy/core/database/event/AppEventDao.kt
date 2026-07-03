@@ -49,4 +49,20 @@ interface AppEventDao {
      */
     @Query("SELECT * FROM app_events WHERE occurredAt BETWEEN :startTime AND :endTime ORDER BY occurredAt ASC")
     fun getEventsInTimeRange(startTime: Long, endTime: Long): Flow<List<AppEventEntity>>
+
+    /**
+     * A page of events after [after] (exclusive), oldest-first, capped at [limit].
+     * The analytics projector's paged fold input (#314): it walks the log forward
+     * from its watermark in bounded batches, so memory stays flat over a long log.
+     */
+    @Query("SELECT * FROM app_events WHERE sequenceId > :after ORDER BY sequenceId ASC LIMIT :limit")
+    suspend fun getEventsAfter(after: Long, limit: Int): List<AppEventEntity>
+
+    /**
+     * The highest sequenceId in the log, or null when the log is empty. The
+     * analytics projector's trigger (#314): Room invalidation re-emits this on
+     * every insert, so a rising max wakes the catch-up fold.
+     */
+    @Query("SELECT MAX(sequenceId) FROM app_events")
+    fun maxSequenceId(): Flow<Long?>
 }

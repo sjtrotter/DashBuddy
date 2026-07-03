@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.database.di
 import android.content.Context
 import androidx.room.Room
 import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
+import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.chat.ChatDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
@@ -54,6 +55,11 @@ object DatabaseModule {
     @Provides
     fun provideObservationDao(db: DashBuddyDatabase): ObservationDao {
         return db.observationDao()
+    }
+
+    @Provides
+    fun provideAnalyticsDao(db: DashBuddyDatabase): AnalyticsDao {
+        return db.analyticsDao()
     }
 
 }
