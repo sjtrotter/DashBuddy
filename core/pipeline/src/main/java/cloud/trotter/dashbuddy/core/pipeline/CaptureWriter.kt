@@ -94,6 +94,19 @@ class CaptureWriter @Inject constructor(
         event: PipelineEvent.Click,
         screenTarget: String?,
     ): Observation.Click {
+        // Same fail-closed backstop as captureScreen (#432), added with #597:
+        // an UNKNOWN click envelope carries the raw tapped node, and a tap on
+        // an unruled sensitive surface must not persist its text. (Rule-matched
+        // clicks are app-vocabulary buttons — Accept/Decline/confirm — whose
+        // labels carry no PII.)
+        if (obs.target == UNKNOWN_TARGET) {
+            val marker = SensitiveTextMarkers.findMarker(event.node)
+            if (marker != null) {
+                stats.onScrubbedUnknownCapture()
+                Timber.w("Capture scrubbed: UNKNOWN click hit sensitive marker '%s'", marker)
+                return obs
+            }
+        }
         val platform = Platform.fromPackage(event.packageName).wire
         val capture = EnvelopeBuilder.build(
             pipelineId = AccessibilityPipeline.CLICK_PIPELINE_ID,
@@ -111,11 +124,14 @@ class CaptureWriter @Inject constructor(
             classification = obs.target,
             platform = platform,
             envelopeJson = capture.envelopeJson,
-            // #597: clicks are NEVER deduped at the bus. The bus's seen-set lives as
-            // long as the a11y process (days), and a repeat tap on the same button
-            // hashes identically — dedup here decayed click forensics to zero within
-            // a week. Clicks are human-bounded (one envelope per physical tap), so
-            // every one persists; the envelope keeps its contentHash for replay.
+            // #597: rule-matched clicks are NEVER deduped at the bus. The bus's
+            // seen-set lives as long as the a11y process (days), and a repeat tap
+            // on the same button hashes identically — dedup here decayed click
+            // forensics to zero within a week. Rule-matched clicks are
+            // human-bounded (one envelope per physical tap), so every one
+            // persists; the envelope keeps its contentHash for replay. (UNKNOWN
+            // clicks are separately bounded by FrameGate's UnknownSuppressor
+            // before this method is reached.)
             contentHash = null,
         )
         Timber.d(

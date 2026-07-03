@@ -81,7 +81,7 @@ internal class UnknownSuppressor(
     private var lastAttemptMs = 0L
 
     @Synchronized
-    fun shouldCapture(contentHash: Int, nowMs: Long = 0L): Boolean {
+    fun shouldCapture(contentHash: Int, nowMs: Long): Boolean {
         if (lastAttemptMs != 0L && nowMs - lastAttemptMs > quietGapMs && captured > 0) {
             Timber.d(
                 "UNKNOWN capture cap re-armed after %d min quiet (%d captured last burst)",
@@ -90,7 +90,11 @@ internal class UnknownSuppressor(
             captured = 0
             capLogged = false
         }
-        lastAttemptMs = nowMs
+        // Never regress the anchor: notification postTime is not monotonic
+        // (reposts/group summaries), and an out-of-order frame that pulled
+        // lastAttemptMs backwards would fake a quiet gap mid-flood (adversarial
+        // F1 on #597).
+        lastAttemptMs = maxOf(lastAttemptMs, nowMs)
         if (seen.containsKey(contentHash)) {
             seen[contentHash] = Unit // refresh recency
             return false

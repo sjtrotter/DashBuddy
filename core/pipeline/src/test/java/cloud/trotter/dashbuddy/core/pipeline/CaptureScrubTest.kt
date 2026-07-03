@@ -12,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
@@ -76,5 +77,46 @@ class CaptureScrubTest {
 
         verify(captureBus, times(1)).offer(any(), any(), any(), any(), any(), any())
         assertTrue(stats.scrubbedUnknownCaptureCount == 0L)
+    }
+
+    // #597: clicks now always persist (no bus dedup) — so the click path needs
+    // the same fail-closed backstop: an UNKNOWN click on an unruled sensitive
+    // surface must never persist the tapped node's text.
+
+    private fun unknownClickObs() = Observation.Click(
+        timestamp = 1_000L,
+        captureId = null,
+        ruleId = null,
+        metadata = ReplayMetadata.EMPTY,
+        flow = null,
+        modeHint = null,
+        parsed = ParsedFields.None,
+        target = UNKNOWN_TARGET,
+    )
+
+    @Test
+    fun `UNKNOWN click with sensitive text is never offered to the capture bus`() {
+        val toxic = UiNode(text = "Available balance: \$152.10", isClickable = true)
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = toxic, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+        )
+
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `benign UNKNOWN click still captures for triage`() {
+        val benign = UiNode(text = "Some new button", isClickable = true)
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = benign, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+        )
+
+        verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
     }
 }
