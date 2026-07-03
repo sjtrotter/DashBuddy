@@ -38,7 +38,9 @@ jobs:
         run: ./gradlew :app:assembleDebug
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest
+        # :domain is pure-JVM — its task is `test`, which the Android aggregate does NOT
+        # include; without it every :domain test is CI-invisible (#617 review / #590 gap).
+        run: ./gradlew testDebugUnitTest :domain:test
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
