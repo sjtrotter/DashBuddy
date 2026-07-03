@@ -557,11 +557,37 @@ Rules of thumb:
 
 ## Claude Subagent Model Policy
 
-When a Claude agent fans out subagents (Agent tool / workflows), every subagent must run on a
-model **at most one tier below** the spawning agent's own model — and **prefer the exact same
-model** unless there is a specific, stated reason to downgrade (e.g. a trivially mechanical
-search). Never let subagents silently fall to a lower default tier: set the model explicitly at
-spawn time.
+**Fable is the scarce resource — reserve it.** The developer is on a usage-limited plan and
+fable-tier capacity is the binding constraint (the 2026-06-25 mid-workflow session-limit
+collapse — 36 agents dead, all spend wasted — is the receipt). Never dip into usage credits
+or pay-by-token on the developer's behalf. Rules, in precedence order:
+
+1. **PR checks are ALWAYS fable-tier.** The adversarial pre-merge review (the #589/#591
+   loop), `/code-review`, `/security-review`, and any verdict that gates a merge run on the
+   top tier, no exceptions. The reviewer is the safety net for everything built below it,
+   and it has repeatedly caught author-missed defects (PRs #609/#610/#611). Save budget on
+   the builder, never on the reviewer.
+2. **The default subagent tier is opus — set `model` explicitly at every spawn.** Do NOT
+   omit the model to "inherit the parent": when the session itself runs fable, omission
+   silently burns the scarce tier on work opus handles. (This deliberately replaces the old
+   "prefer the exact same model" guidance.)
+3. **Delegating BELOW opus is allowed only for building well-bounded implementations**, and
+   only when confident the smaller model can execute: named files, an explicit expected
+   change shape, and cheap verification (existing tests and/or the fable PR check will catch
+   a failure inexpensively — boundedness is what makes verification cheap, which is what
+   makes the delegation actually save anything). Sonnet is the bounded-build workhorse;
+   haiku only for trivially mechanical scans. Never hand a lower tier open-ended research,
+   design, root-cause analysis, or judgment work — boundedness is the control that limits
+   hallucinations and expansive errors.
+4. **A fable subagent outside a PR check needs a specific, stated reason** (e.g. final
+   adjudication of conflicting evidence, a pledge/security-critical verdict) — and first
+   consider whether the main loop, already fable, should just do that work inline instead
+   of spawning a second fable context.
+5. **Weigh the usage limit at the moment of delegation.** There is no meter to read, so:
+   treat fable scarcity as a standing assumption, not a measurement; if limit errors have
+   appeared this session, or the developer has signaled they need their usage (e.g. about
+   to dash), shrink the fan-out, defer it, or ask before launching — a workflow that dies
+   mid-fan-out wastes everything it already spent.
 
 ## Field Testing Logs
 
