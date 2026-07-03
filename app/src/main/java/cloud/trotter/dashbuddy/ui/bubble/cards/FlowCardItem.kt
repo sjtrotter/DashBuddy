@@ -58,6 +58,7 @@ import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.flowPhase
 import cloud.trotter.dashbuddy.domain.state.presentation
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.pay.displayLabel
 import cloud.trotter.dashbuddy.ui.formatters.color
 import cloud.trotter.dashbuddy.ui.formatters.displayLabel
 import cloud.trotter.dashbuddy.ui.formatters.offerBadgeIcon
@@ -743,7 +744,7 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
                     BreakdownRow(item.type, Formats.money(item.amount))
                 }
                 pay.customerTips.forEach { tip ->
-                    BreakdownRow("tip · ${tip.type}", Formats.money(tip.amount))
+                    BreakdownRow("tip · ${tip.displayLabel}", Formats.money(tip.amount))
                 }
             }
         }

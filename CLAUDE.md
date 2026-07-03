@@ -59,8 +59,8 @@ academic federation RFC #194.
 # Build the app
 ./gradlew :app:build
 
-# Run all unit tests (across all modules)
-./gradlew testDebugUnitTest
+# Run all unit tests (across all modules — :domain is pure-JVM, its task is `test`)
+./gradlew testDebugUnitTest :domain:test
 
 # Run ONLY the ruleset/recognition regressions (fast pre-PR check — no state
 # machine / DB / UI). Side-effect-free; does NOT sort INBOX or re-triage UNKNOWN.
