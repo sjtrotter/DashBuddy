@@ -33,6 +33,66 @@ class FrameGateTest {
     private fun unknown(t: Long = 1_000L) =
         screen(target = "UNKNOWN", ruleId = null, t = t)
 
+    private fun notification(target: String, ruleId: String? = "doordash.notification.$target", t: Long = 1_000L) =
+        Observation.Notification(
+            timestamp = t,
+            captureId = null,
+            ruleId = ruleId,
+            metadata = ReplayMetadata.EMPTY,
+            flow = Flow.Idle,
+            modeHint = Mode.Online,
+            parsed = ParsedFields.None,
+            target = target,
+        )
+
+    // #619: parse-less notification rules (e.g. `new_order`) have a CONSTANT
+    // identity (target + fieldsHash(null fields) + modeHint never change), so
+    // two observably-distinct arrivals back-to-back collapsed into one at the
+    // identity-dedup layer. FrameGate now mixes the notification content hash
+    // into the comparison — but ONLY for notifications (V1), never screens
+    // (V2), and callers can opt a specific notification out of the mixing
+    // entirely (V3, e.g. an ongoing heartbeat notification whose body may
+    // churn per repost).
+
+    @Test
+    fun `recognized notifications with same identity but different content BOTH admit (#619 fix)`() {
+        val gate = FrameGate()
+        assertTrue(gate.admit(notification("new_order"), contentHash = 111))
+        assertTrue(gate.admit(notification("new_order"), contentHash = 222))
+    }
+
+    @Test
+    fun `recognized notifications with same identity and same content still dedup (re-render preserved)`() {
+        val gate = FrameGate()
+        assertTrue(gate.admit(notification("new_order"), contentHash = 111))
+        assertFalse(gate.admit(notification("new_order"), contentHash = 111))
+    }
+
+    @Test
+    fun `a notification with no content hash falls back to pure identity dedup`() {
+        val gate = FrameGate()
+        assertTrue(gate.admit(notification("new_order"), contentHash = null))
+        assertFalse(gate.admit(notification("new_order"), contentHash = null))
+    }
+
+    @Test
+    fun `V2 - recognized SCREEN with same identity but different content STILL dedups (screens unaffected)`() {
+        val gate = FrameGate()
+        assertTrue(gate.admit(screen("main_map_idle"), contentHash = 111))
+        assertFalse(gate.admit(screen("main_map_idle"), contentHash = 222))
+    }
+
+    @Test
+    fun `V3 - a notification opted out of content-mixing keeps pure identity dedup, e-g an ongoing heartbeat`() {
+        val gate = FrameGate()
+        assertTrue(
+            gate.admit(notification("dash_status_ongoing"), contentHash = 111, mixNotificationContent = false),
+        )
+        assertFalse(
+            gate.admit(notification("dash_status_ongoing"), contentHash = 222, mixNotificationContent = false),
+        )
+    }
+
     @Test
     fun `identical UNKNOWN frames capture exactly once`() {
         val gate = FrameGate()
