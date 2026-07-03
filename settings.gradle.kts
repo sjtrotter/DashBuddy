@@ -19,6 +19,15 @@ dependencyResolutionManagement {
     }
 }
 
+// SPIKE (#192) — guarded composite build (Option A). OFF by default so the
+// default build is byte-for-byte unchanged; opt in with `-PuseLocalMatchers`.
+// When present, the local `matchers/` build is substituted for the
+// `cloud.trotter.matchers:matchers` coordinates the app would otherwise resolve
+// from a repo. See docs/adr/ADR-0009-rule-distribution-channels.md.
+if (providers.gradleProperty("useLocalMatchers").isPresent) {
+    includeBuild("matchers")
+}
+
 rootProject.name = "DashBuddy"
 include(":app")
 include(":domain")
