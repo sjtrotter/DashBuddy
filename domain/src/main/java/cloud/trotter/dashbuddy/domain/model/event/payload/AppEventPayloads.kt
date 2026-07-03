@@ -161,6 +161,13 @@ data class SessionPausedPayload(
     val pausedAt: Long,
     val remainingText: String? = null,
     val remainingMillis: Long? = null,
+    /**
+     * The platform's enum name (e.g. "DoorDash"), stamped at the mint site (#314). Hardens the
+     * log so a session-scoped fold can resolve platform without a prior DASH_START in the same
+     * batch — the projector still prefers the session context, this is a self-contained fallback.
+     * JSON-only field: adding it needs no Room migration (`AppEventEntity.eventPayload` is text).
+     */
+    val platform: String? = null,
 ) : AppEventPayload
 
 /** Wire values for [SessionStopPayload.source]. Kept as strings on the payload
@@ -191,4 +198,11 @@ data class SessionStopPayload(
     val offersAccepted: Int? = null,
     val offersTotal: Int? = null,
     val weeklyEarnings: Double? = null,
+    /**
+     * The platform's enum name (e.g. "DoorDash"), stamped at the mint site (#314). Recovers the
+     * session-miles capture gap's platform half for a session whose DASH_START predates the fold
+     * watermark — a self-contained fallback; the projector still prefers the session context.
+     * JSON-only field: adding it needs no Room migration (`AppEventEntity.eventPayload` is text).
+     */
+    val platform: String? = null,
 ) : AppEventPayload

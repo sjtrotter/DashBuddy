@@ -1,0 +1,390 @@
+package cloud.trotter.dashbuddy.domain.analytics
+
+import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.state.Platform
+
+/** Provenance of a delivery's realized pay (#314) — mirrors the DB column, owned here as SSOT. */
+object PayBasis {
+    /** The drop's apportioned share of a combined receipt (`DropPayApportioner`, #528). */
+    const val DROP_SHARE = "DROP_SHARE"
+    /** The whole receipt total, stamped on this drop (single-drop / collapsed-receipt shape). */
+    const val RECEIPT_TOTAL = "RECEIPT_TOTAL"
+    /** No pay signal on the completion (receipt-skipped #596). */
+    const val NONE = "NONE"
+}
+
+/**
+ * Provenance of a delivery's frozen operating-cost-per-mile (#314) — an IMMUTABLE fact, never
+ * re-costed when the economy editor changes. Owned here as the SSOT the fold and the DB share.
+ */
+object CostBasis {
+    /**
+     * From a closing offer's frozen `OfferEvaluation.operatingCostPerMile` in the same session.
+     * Correlated at **session** granularity (not a per-job offer↔delivery join, which the event log
+     * cannot express): operating-cost-per-mile derives from the one `UserEconomy` a session runs
+     * under, so every offer in the session shares it and it is the correct basis for any delivery.
+     */
+    const val OFFER_FROZEN = "OFFER_FROZEN"
+
+    /** Stamped self-contained into the completion event (reserved; no live source stamps it yet). */
+    const val CAPTURED = "CAPTURED"
+
+    /**
+     * No offer basis available (a delivery in an offer-less/healed session, or one whose offer
+     * predates the fold watermark) — the current economy's cpm was used. Honestly flagged; NOT
+     * rebuild-stable (a later refold re-stamps it with that day's economy).
+     */
+    const val CURRENT_FALLBACK = "CURRENT_FALLBACK"
+
+    /** Neither an offer basis nor a current economy — no net computable. */
+    const val NONE = "NONE"
+}
+
+/**
+ * A delivery read-model row as produced by the pure fold — the `:domain` shape the projector maps
+ * 1:1 onto `DeliveryRecordEntity` at the transaction edge (`:domain` cannot see `:core:database`).
+ */
+data class DeliveryFold(
+    val eventSequenceId: Long,
+    val sessionId: String?,
+    val platform: String,
+    val jobId: String,
+    val taskId: String,
+    val storeName: String?,
+    val customerHash: String?,
+    val addressHash: String?,
+    val phaseStartedAt: Long,
+    val arrivedAt: Long?,
+    val completedAt: Long,
+    val deadlineMillis: Long?,
+    val realizedPay: Double?,
+    val payBasis: String,
+    val tip: Double?,
+    val basePay: Double?,
+    val odometerAtCompletion: Double?,
+    val realizedMiles: Double?,
+    val realizedMinutes: Double?,
+    val frozenCostPerMile: Double?,
+    val netProfit: Double?,
+    val costBasis: String,
+)
+
+/** An offer read-model row as produced by the pure fold — mapped 1:1 onto `OfferRecordEntity`. */
+data class OfferFold(
+    val eventSequenceId: Long,
+    val sessionId: String?,
+    val platform: String,
+    val offerHash: String,
+    val outcome: String,
+    val presentedAt: Long,
+    val decidedAt: Long,
+    val payAmount: Double?,
+    val distanceMiles: Double?,
+    val itemCount: Int,
+    val merchantName: String?,
+    val score: Double?,
+    val action: String?,
+    val quality: String?,
+    val estNetPay: Double?,
+    val estDollarsPerHour: Double?,
+    val estDollarsPerMile: Double?,
+    val estTimeMinutes: Double?,
+    val estOperatingCostPerMile: Double?,
+)
+
+/**
+ * The result of folding ONE event: the updated session [context] (null when the event carries no
+ * sessionId and so touches no session), any [delivery]/[offer] record it produced, and — for a
+ * DASH_START whose session was not previously known — [freshSession] so the orchestrator can run
+ * the inferred-close of prior open sessions. [skip] names why an event produced nothing (a null/
+ * malformed payload), so the projector can count + WARN per batch.
+ */
+data class FoldOutcome(
+    val context: SessionFoldContext? = null,
+    val delivery: DeliveryFold? = null,
+    val offer: OfferFold? = null,
+    val freshSession: Boolean = false,
+    val skip: String? = null,
+)
+
+/**
+ * The pure event-sourced fold (#314): `(event, session context, current cpm) → record deltas`.
+ *
+ * No Android, no DB, no wall clock — driven only by the event's own timestamps and metadata, so a
+ * backfill from watermark 0 and an incremental catch-up fold are byte-identical, and a
+ * `projectorVersion` rebuild reproduces the same rows. The orchestrator owns everything impure:
+ * paging, context hydration from the record tables, the inferred-close DB query, and the
+ * records+watermark transaction.
+ *
+ * [currentCostPerMile] is the live economy's operating cost-per-mile, supplied by the orchestrator
+ * only for the [CostBasis.CURRENT_FALLBACK] path (a delivery with no offer basis); it never
+ * overrides an [CostBasis.OFFER_FROZEN] basis, so an economy edit cannot move a frozen row that has
+ * one.
+ */
+object RecordFolds {
+
+    fun foldEvent(
+        event: SequencedAppEvent,
+        context: SessionFoldContext?,
+        currentCostPerMile: Double?,
+    ): FoldOutcome {
+        val e = event.event
+        val sid = e.sessionId
+        val odo = event.metadata?.odometer
+        return when (e.type) {
+            AppEventType.DASH_START -> foldDashStart(event, context)
+            AppEventType.OFFER_ACCEPTED,
+            AppEventType.OFFER_DECLINED,
+            AppEventType.OFFER_TIMEOUT -> foldOffer(event, context)
+            AppEventType.DELIVERY_COMPLETED -> foldDeliveryCompleted(event, context, currentCostPerMile)
+            AppEventType.DASH_STOP -> foldDashStop(event, context)
+            // Every other session-attributed event just advances the liveness/odometer anchors so
+            // the open-session duration and lastOdometer stay honest; the watermark still moves past
+            // them. Events with no session touch nothing.
+            else -> {
+                if (sid == null) return FoldOutcome(context = context)
+                val ctx = resolveContext(context, sid, e.occurredAt)
+                FoldOutcome(context = ctx.advance(e.occurredAt, odo))
+            }
+        }
+    }
+
+    private fun foldDashStart(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? SessionStartPayload
+            ?: return FoldOutcome(context = context, skip = "DASH_START: missing/malformed payload")
+        val sid = e.sessionId ?: p.sessionId
+            ?: return FoldOutcome(context = context, skip = "DASH_START: no sessionId")
+        val platform = Platform.fromName(p.platform) ?: Platform.Unknown
+        val odo = event.metadata?.odometer
+        // A RECOVERY (or any duplicate) re-start of a session ALREADY STARTED must NOT clobber the
+        // original startedAt/platform/startOdometer — keep the earlier anchor, only fill a still-null
+        // odometer and advance liveness. Not a fresh session ⇒ no inferred-close.
+        if (context != null && context.sessionId == sid && context.started) {
+            return FoldOutcome(
+                context = context.copy(
+                    startOdometer = context.startOdometer ?: odo,
+                    lastEventAt = maxOf(context.lastEventAt, e.occurredAt),
+                    lastOdometer = odo ?: context.lastOdometer,
+                ),
+            )
+        }
+        // A placeholder synthesized for a session-scoped event ordered just ahead of DASH_START is
+        // UPGRADED here with the real platform/startedAt/startOdometer; its accumulated counters and
+        // liveness carry over. This still counts as a fresh session (its first true start).
+        if (context != null && context.sessionId == sid) {
+            return FoldOutcome(
+                context = context.copy(
+                    platform = platform,
+                    startedAt = p.startedAt,
+                    startOdometer = context.startOdometer ?: odo,
+                    lastEventAt = maxOf(context.lastEventAt, e.occurredAt),
+                    lastOdometer = odo ?: context.lastOdometer,
+                    started = true,
+                ),
+                freshSession = true,
+            )
+        }
+        return FoldOutcome(
+            context = SessionFoldContext(
+                sessionId = sid,
+                platform = platform,
+                startedAt = p.startedAt,
+                lastEventAt = e.occurredAt,
+                startOdometer = odo,
+                lastOdometer = odo,
+                started = true,
+            ),
+            freshSession = true,
+        )
+    }
+
+    private fun foldOffer(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? OfferPayload
+            ?: return FoldOutcome(context = context, skip = "${e.type}: missing/malformed payload")
+        val sid = e.sessionId
+        val ctx = sid?.let { resolveContext(context, it, e.occurredAt) }
+        val platformWire = ctx?.platform?.wire ?: Platform.Unknown.wire
+        val eval = p.evaluation
+        val parsed = p.parsedOffer
+        val offer = OfferFold(
+            eventSequenceId = event.sequenceId,
+            sessionId = sid,
+            platform = platformWire,
+            offerHash = p.offerHash,
+            outcome = e.type.name,
+            presentedAt = p.presentedAt,
+            decidedAt = p.decidedAt,
+            payAmount = parsed.payAmount,
+            distanceMiles = parsed.distanceMiles,
+            itemCount = parsed.itemCount,
+            merchantName = eval?.merchantName ?: parsed.orders.firstOrNull()?.storeName,
+            score = eval?.score,
+            action = eval?.action?.name,
+            quality = eval?.qualityLevel?.name,
+            estNetPay = eval?.netPayAmount,
+            estDollarsPerHour = eval?.dollarsPerHour,
+            estDollarsPerMile = eval?.dollarsPerMile,
+            estTimeMinutes = eval?.estimatedTimeMinutes,
+            estOperatingCostPerMile = eval?.operatingCostPerMile,
+        )
+        val newCtx = ctx?.let {
+            it.advance(e.occurredAt, event.metadata?.odometer)
+                .bumpOutcome(e.type)
+                // Capture the session-uniform frozen cpm from any closing offer that carries an
+                // evaluation (accepted/declined/timeout all reflect the same economy).
+                .copy(lastEvaluatedCostPerMile = eval?.operatingCostPerMile ?: it.lastEvaluatedCostPerMile)
+        }
+        return FoldOutcome(context = newCtx, offer = offer)
+    }
+
+    private fun foldDeliveryCompleted(
+        event: SequencedAppEvent,
+        context: SessionFoldContext?,
+        currentCostPerMile: Double?,
+    ): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? DeliveryPayload
+            ?: return FoldOutcome(context = context, skip = "DELIVERY_COMPLETED: missing/malformed payload")
+        val sid = e.sessionId
+        val ctx = sid?.let { resolveContext(context, it, e.occurredAt) }
+        val platformWire = ctx?.platform?.wire ?: Platform.Unknown.wire
+        val odo = event.metadata?.odometer
+        val completedAt = p.completedAt ?: e.occurredAt
+
+        // Pay + basis. dropRealizedPay is a per-drop share (possibly of a multi-drop receipt);
+        // its absence with a bare totalPay means the whole receipt landed on this one drop.
+        val realizedPay = p.dropRealizedPay ?: p.totalPay
+        val payBasis = when {
+            p.dropRealizedPay != null -> PayBasis.DROP_SHARE
+            p.totalPay != null -> PayBasis.RECEIPT_TOTAL
+            else -> PayBasis.NONE
+        }
+        // tip/basePay only when this drop IS the job's sole drop — i.e. it carries the WHOLE receipt.
+        // The apportioner stamps `dropRealizedPay` even on a single drop (its share == the total), so
+        // a null-drop bare receipt OR a share equal to the receipt total is the sole-drop signal; a
+        // smaller share is a stacked drop, which has no per-drop tip split yet (→ null).
+        val receipt = p.parsedPay
+        val soleDrop = receipt != null &&
+            (p.dropRealizedPay == null || kotlin.math.abs(p.dropRealizedPay - receipt.total) < 0.005)
+        val tip = if (soleDrop) receipt?.totalTip else null
+        val basePay = if (soleDrop) receipt?.totalBasePay else null
+
+        // Partition deltas. Anchor = the previous completion (or DASH_START) in the same session.
+        val prevOdo = ctx?.prevDropOdometer ?: ctx?.startOdometer
+        val realizedMiles = if (odo != null && prevOdo != null) odo - prevOdo else null
+        val prevAt = ctx?.prevDropAt ?: ctx?.startedAt
+        val realizedMinutes = if (prevAt != null) (completedAt - prevAt) / 60_000.0 else null
+
+        // Frozen economy — immutable historical fact.
+        val (frozenCpm, costBasis) = when {
+            ctx?.lastEvaluatedCostPerMile != null -> ctx.lastEvaluatedCostPerMile to CostBasis.OFFER_FROZEN
+            currentCostPerMile != null -> currentCostPerMile to CostBasis.CURRENT_FALLBACK
+            else -> null to CostBasis.NONE
+        }
+        val netProfit = if (frozenCpm != null && realizedPay != null && realizedMiles != null) {
+            NetProfit.net(realizedPay, realizedMiles, frozenCpm)
+        } else {
+            null
+        }
+
+        val delivery = DeliveryFold(
+            eventSequenceId = event.sequenceId,
+            sessionId = sid,
+            platform = platformWire,
+            jobId = p.jobId,
+            taskId = p.taskId,
+            storeName = p.storeName,
+            customerHash = p.customerHash,
+            addressHash = p.addressHash,
+            phaseStartedAt = p.phaseStartedAt,
+            arrivedAt = p.arrivedAt,
+            completedAt = completedAt,
+            deadlineMillis = p.deadlineMillis,
+            realizedPay = realizedPay,
+            payBasis = payBasis,
+            tip = tip,
+            basePay = basePay,
+            odometerAtCompletion = odo,
+            realizedMiles = realizedMiles,
+            realizedMinutes = realizedMinutes,
+            frozenCostPerMile = frozenCpm,
+            netProfit = netProfit,
+            costBasis = costBasis,
+        )
+
+        val newCtx = ctx?.copy(
+            deliveries = ctx.deliveries + 1,
+            deliveredJobIds = ctx.deliveredJobIds + p.jobId,
+            // Advance the miles anchor only when this drop had an odometer, so a null-odometer drop
+            // folds its miles into the next drop instead of resetting the partition; the time anchor
+            // always advances (time is always known).
+            prevDropOdometer = odo ?: ctx.prevDropOdometer,
+            prevDropAt = completedAt,
+            lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
+            lastOdometer = odo ?: ctx.lastOdometer,
+        )
+        return FoldOutcome(context = newCtx, delivery = delivery)
+    }
+
+    private fun foldDashStop(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? SessionStopPayload
+            ?: return FoldOutcome(context = context, skip = "DASH_STOP: missing/malformed payload")
+        val sid = e.sessionId ?: p.sessionId
+            ?: return FoldOutcome(context = context, skip = "DASH_STOP: no sessionId")
+        val ctx = resolveContext(context, sid, e.occurredAt, platformName = p.platform)
+        val odo = event.metadata?.odometer
+        return FoldOutcome(
+            context = ctx.copy(
+                endedAt = p.endedAt,
+                endSource = p.source,
+                reportedEarnings = p.totalEarnings ?: ctx.reportedEarnings,
+                reportedDurationMillis = p.sessionDurationMillis ?: ctx.reportedDurationMillis,
+                lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
+                lastOdometer = odo ?: ctx.lastOdometer,
+            ),
+        )
+    }
+
+    /**
+     * The in-memory/hydrated context for [sid], or a synthesized `_unknown`-platform context when a
+     * session-scoped event has no known DASH_START (fold started mid-session past the watermark, or
+     * a lost start). A synthesized session degrades to a null-odometer / _unknown-platform row —
+     * never a wrong one. [platformName] refines the synthesized platform when the event itself
+     * carries one (DASH_STOP's #314 stamp).
+     */
+    private fun resolveContext(
+        context: SessionFoldContext?,
+        sid: String,
+        occurredAt: Long,
+        platformName: String? = null,
+    ): SessionFoldContext =
+        context?.takeIf { it.sessionId == sid }
+            ?: SessionFoldContext(
+                sessionId = sid,
+                platform = platformName?.let { Platform.fromName(it) } ?: Platform.Unknown,
+                startedAt = occurredAt,
+                lastEventAt = occurredAt,
+            )
+
+    private fun SessionFoldContext.advance(occurredAt: Long, odometer: Double?): SessionFoldContext =
+        copy(
+            lastEventAt = maxOf(lastEventAt, occurredAt),
+            lastOdometer = odometer ?: lastOdometer,
+        )
+
+    private fun SessionFoldContext.bumpOutcome(type: AppEventType): SessionFoldContext = when (type) {
+        AppEventType.OFFER_ACCEPTED -> copy(offersAccepted = offersAccepted + 1)
+        AppEventType.OFFER_DECLINED -> copy(offersDeclined = offersDeclined + 1)
+        AppEventType.OFFER_TIMEOUT -> copy(offersTimeout = offersTimeout + 1)
+        else -> this
+    }
+}
