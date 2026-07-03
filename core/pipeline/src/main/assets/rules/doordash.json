@@ -535,7 +535,7 @@
       "effects": [
         {
           "screenshot": {
-            "prefix": "Offer - {storeName}",
+            "prefix": "Offer - {payAmount}",
             "category": "offer"
           },
           "dedupeKey": "offer-ss-{parsedHash}",

@@ -457,6 +457,16 @@ class EffectMapTest {
         assertTrue("Should emit DASH_STOP", effects.logEventTypes().contains(AppEventType.DASH_STOP))
         assertTrue("Should emit StopOdometer", effects.any { it is AppEffect.StopOdometer })
         assertTrue("Should emit EndSession", effects.any { it is AppEffect.EndSession })
+        // #606: the dash_summary RULE effect (deduped + throttled, fires on
+        // recognition) already owns the DashSummary screenshot. EffectMap's
+        // own SESSION_ENDED commit used to ALSO fire one — effectKey null,
+        // so it bypassed both effects_fired and the throttle — producing two
+        // "DashSummary - <earnings>" captures ~2.5s apart (the
+        // AUTHORITATIVE_GRACE_MS window) for one session end.
+        assertTrue(
+            "Should NOT emit CaptureScreenshot — the dash_summary rule owns it (#606)",
+            effects.none { it is AppEffect.CaptureScreenshot },
+        )
     }
 
     @Test

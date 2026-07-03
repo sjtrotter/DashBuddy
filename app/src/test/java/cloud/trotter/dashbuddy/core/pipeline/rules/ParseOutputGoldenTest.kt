@@ -292,6 +292,97 @@ class ParseOutputGoldenTest {
     }
 
     // =========================================================================
+    // 4. Effect-arg {field} template lint (the #606 class)
+    // =========================================================================
+
+    /**
+     * Effect-arg templates already known to leave a literal `{field}` in the
+     * saved string on at least one corpus frame (ratchet — may only shrink,
+     * same pattern as [knownDeadDedupeTemplates] above).
+     *
+     * Semantics (differs from the dedupeKey lint's wording): effect args are
+     * scanned POST-resolution — a `{token}` survives in the value ONLY on a
+     * frame where that field parsed null and so did not interpolate. So a key
+     * lands here iff its template failed to interpolate on ≥1 corpus frame,
+     * which is the right bar for a filename (a `Delivery - {totalPay}.png` on
+     * ANY frame is a broken name on that frame).
+     *
+     * - `doordash.screen.delivery_summary_collapsed:totalPay` — the collapsed
+     *   receipt parses `totalPay` non-null on most frames (it's usually behind
+     *   the expand but present on the collapsed card too), yet a couple of
+     *   corpus frames lack it, and each of THOSE saves a literal
+     *   `Delivery - {totalPay}.png` at runtime — real #606-class instances.
+     *   Pre-existing; out of scope for #606 (which only touches `offer_popup`'s
+     *   prefix and the EffectMap double-fire). The `{totalPay}` parse is NOT
+     *   dead — do not delete it as cleanup; fix by making the collapsed prefix
+     *   use a field the rule parses on every frame, when the summary rules are
+     *   next touched.
+     * (`doordash.screen.offer_popup:storeName` was the #606 bug itself —
+     * `storeName` lives inside the per-order `orders[]` array, never at the
+     * rule's top level where template resolution reads from, so
+     * `"Offer - {storeName}"` saved every offer screenshot as the literal
+     * filename `Offer - {storeName}.png`. Fixed by switching to `{payAmount}`,
+     * a field the rule guarantees non-null via its `fieldNotNull` validator.)
+     * Entries are "ruleId:field".
+     */
+    private val knownDeadArgTemplates = setOf(
+        "doordash.screen.delivery_summary_collapsed:totalPay",
+    )
+
+    @Test
+    fun `effect arg templates reference fields the rule actually parses`() {
+        val template = Regex("\\{(\\w+)}")
+        // A (ruleId, field) whose {token} SURVIVED resolution in an effect arg
+        // on ≥1 corpus frame — i.e. the template failed to interpolate there and
+        // the saved string would carry a literal `{field}`. Args are scanned
+        // post-resolution, so a surviving token IS the failure (no non-null
+        // frame can leave the token behind). Mirrors the dedupeKey lint but
+        // scans every effect ARG value (screenshot prefix, bubble text, log
+        // payload, …) — the #606 bug (`"Offer - {storeName}"`) lived in a
+        // `prefix` arg the dedupeKey-only lint never looked at.
+        val dead = mutableSetOf<Pair<String, String>>()
+        val exampleArg = mutableMapOf<Pair<String, String>, String>()
+
+        val base = File("src/test/resources/snapshots")
+        val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
+            ?.sortedBy { it.name } ?: emptyList()
+        for (dir in dirs) {
+            for ((_, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+                val result = TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
+                    screenRuleset.matchFirst(node)
+                } ?: continue
+                for (effect in result.effects) {
+                    for (argValue in effect.args.values) {
+                        for (m in template.findAll(argValue)) {
+                            // Any surviving token is a violation. Reserved tokens
+                            // (DedupeTokens, #427) resolve for dedupeKey but NOT
+                            // for args — a `{parsedHash}` in a prefix would ship
+                            // literal, so it must be flagged here, not skipped.
+                            val field = m.groupValues[1]
+                            val key = result.ruleId to field
+                            dead += key
+                            exampleArg.putIfAbsent(key, argValue)
+                        }
+                    }
+                }
+            }
+        }
+
+        val deadStrings = dead
+            .map { (rule, field) -> "$rule:$field" }
+            .toSet()
+        assertEquals(
+            "Dead effect-arg {field} templates changed (a screenshot/bubble/log template that " +
+                "left a literal {field} in the saved string on ≥1 corpus frame — i.e. failed to " +
+                "interpolate, the #606 class). Fixed one? Remove it from " +
+                "knownDeadArgTemplates. Introduced one? Fix the rule.\n" +
+                deadStrings.joinToString("\n") { "  $it (e.g. '${exampleArg[it.split(":").let { p -> p[0] to p[1] }]}')" },
+            knownDeadArgTemplates,
+            deadStrings,
+        )
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
