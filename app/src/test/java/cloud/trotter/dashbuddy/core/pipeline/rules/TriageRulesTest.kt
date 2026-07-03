@@ -406,11 +406,31 @@ class TriageRulesTest {
     fun `navigation_generic — does not steal an offer popup (offer_popup wins)`() {
         // A real offer popup carries the DoorDash accept_button structure (not just the button
         // labels) AND a pay amount — the require demands the structure so our own overlay can't
-        // masquerade as an offer (#4), and the validate demands a parsed payAmount so a blank,
-        // chrome-only frame isn't recognized as an offer (#498).
+        // masquerade as an offer (#4), the validate demands a parsed payAmount so a blank,
+        // chrome-only frame isn't recognized as an offer (#498), and since #595 it must carry a
+        // STORE leg (display_name) so the post-accept teardown frame can't re-mint a ghost.
         assertEquals(
             "offer_popup",
-            screen(tree(node(text = "Decline"), node(text = "Accept"), node(id = "accept_button"), node(text = "$8.50"), node(id = "maneuverView"))),
+            screen(tree(node(text = "Decline"), node(text = "Accept"), node(id = "accept_button"), node(text = "$8.50"), node(id = "display_name", text = "Chipotle"), node(id = "maneuverView"))),
+        )
+    }
+
+    @Test
+    fun `offer_popup — teardown frame with no store leg is NOT an offer (#595)`() {
+        // The post-accept transitional render: pay/distance/Accept/Decline chrome persist, the
+        // store rows are gone — only the 'Customer dropoff' display_name leg remains (plus a raw
+        // UUID in assignment_id_text). Re-parsing this as a new offer REPLACED the real accept
+        // (ghost accept→timeout, 06-28 seq 141/142 + 06-30 seq 241/242). No store leg → UNKNOWN.
+        assertNull(
+            screen(
+                tree(
+                    node(text = "Decline"), node(text = "Accept"), node(id = "accept_button"),
+                    node(id = "assignment_id_text", text = "0f487bb4-c8a8-46b1-8533-c2a0311f9133"),
+                    node(text = "$26.75  Guaranteed (incl. tips)"), node(text = "7.6 mi"),
+                    node(id = "display_name", text = "Customer dropoff"),
+                    node(text = "Items can be added before checkout"),
+                )
+            ),
         )
     }
 
