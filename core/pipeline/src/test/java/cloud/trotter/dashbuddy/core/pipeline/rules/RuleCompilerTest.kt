@@ -820,6 +820,108 @@ class RuleCompilerTest {
     }
 
     // =========================================================================
+    // redact block + sha256⇒redact enforcement (#598)
+    // =========================================================================
+
+    @Test(expected = RuleCompileException::class)
+    fun `screen rule with sha256 transform but no redact block fails compile`() {
+        val ruleJson = """[{
+            "id": "doordash.screen.leaky",
+            "priority": 10,
+            "require": { "exists": { "hasTextStartsWith": "Deliver to" } },
+            "parse": {
+                "as": "task",
+                "fields": {
+                    "customerNameHash": {
+                        "find": { "hasTextStartsWith": "Deliver to" },
+                        "read": "text",
+                        "transform": [ { "stripPrefixes": ["Deliver to "] }, "sha256" ]
+                    }
+                }
+            }
+        }]"""
+        RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
+        )
+    }
+
+    @Test
+    fun `screen rule with sha256 and a redact block compiles and carries the redact`() {
+        val ruleJson = """[{
+            "id": "doordash.screen.safe",
+            "priority": 10,
+            "require": { "exists": { "hasTextStartsWith": "Deliver to" } },
+            "redact": [
+                { "find": { "hasTextStartsWith": "Deliver to" }, "keepPrefix": ["Deliver to "] }
+            ],
+            "parse": {
+                "as": "task",
+                "fields": {
+                    "customerNameHash": {
+                        "find": { "hasTextStartsWith": "Deliver to" },
+                        "read": "text",
+                        "transform": [ { "stripPrefixes": ["Deliver to "] }, "sha256" ]
+                    }
+                }
+            }
+        }]"""
+        val rules = RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
+        )
+        assertEquals(1, rules.size)
+        assertFalse(rules[0].redact.isEmpty())
+    }
+
+    @Test
+    fun `redact masks matched node text keeping the declared prefix`() {
+        val ruleJson = """[{
+            "id": "doordash.screen.dropoff",
+            "priority": 10,
+            "require": { "exists": { "hasTextStartsWith": "Deliver to" } },
+            "redact": [
+                { "find": { "hasTextStartsWith": "Deliver to" }, "keepPrefix": ["Deliver to "] },
+                { "find": { "hasIdSuffix": "address_line_1" } }
+            ]
+        }]"""
+        val rule = RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
+        )[0]
+        val tree = UiNode(
+            children = listOf(
+                UiNode(text = "Deliver to Jane Q. Doe"),
+                UiNode(viewIdResourceName = "com.x:id/address_line_1", text = "123 Secret St"),
+                UiNode(text = "Directions"),
+            ),
+        )
+        val redacted = rule.redact.apply(tree)
+        assertEquals("Deliver to [redacted]", redacted.children[0].text)
+        assertEquals("[redacted]", redacted.children[1].text)
+        assertEquals("Directions", redacted.children[2].text)
+        // Original tree is untouched.
+        assertEquals("Deliver to Jane Q. Doe", tree.children[0].text)
+    }
+
+    @Test
+    fun `notification rule with sha256 does not require a redact block`() {
+        // Enforcement is scoped to SCREEN; the notification-envelope redaction is
+        // tracked as a separate follow-up (#598 body).
+        val ruleJson = """[{
+            "id": "doordash.notification.customer_message",
+            "priority": 10,
+            "require": { "channelIdContains": "message" },
+            "parse": {
+                "fields": {
+                    "senderHash": { "from": "title", "transform": "sha256" }
+                }
+            }
+        }]"""
+        val rules = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+        assertEquals(1, rules.size)
+    }
+
+    // =========================================================================
     // enumeratePermissions
     // =========================================================================
 

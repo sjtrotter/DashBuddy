@@ -73,6 +73,11 @@ data class CompiledBranch<TInput>(
  * Single-target rules normalise to a one-element [branches] list.
  * Rules are sorted ascending by [priority] (lower = evaluated first).
  * Rule-level [bindings] are shared across all branches and resolved once per rule.
+ *
+ * [redact] carries the rule-declared capture-redaction directives (#598) — a
+ * screen-rule concept only. It is applied at capture time to the SERIALIZED
+ * envelope; recognition, parse, and the state machine always run on the
+ * original tree.
  */
 data class CompiledRule<TInput>(
     val id: String,
@@ -80,7 +85,68 @@ data class CompiledRule<TInput>(
     val overrideable: Boolean = true,
     val bindings: List<Binding> = emptyList(),
     val branches: List<CompiledBranch<TInput>>,
+    val redact: CompiledRedact = CompiledRedact.EMPTY,
 )
+
+/**
+ * A single compiled `redact` directive (#598). When [find] matches a node, that
+ * node's `text` and `contentDescription` are masked in the serialized capture
+ * envelope only. [keepPrefix] preserves a leading marker label so a replayed
+ * redacted capture still recognizes — e.g. "Deliver to <name>" is masked to
+ * "Deliver to [redacted]", keeping the "Deliver to " require anchor while the
+ * customer name is dropped. An address node (no marker) takes no keepPrefix and
+ * is masked whole.
+ */
+data class CompiledRedactEntry(
+    val find: (UiNode) -> Boolean,
+    val keepPrefix: List<String> = emptyList(),
+)
+
+/**
+ * The compiled `redact` block for a screen rule (#598) — "recognition is data"
+ * extended to privacy. The mechanism is DECLARED, not inferred from bindings:
+ * most PII-bearing screens (dropoff_handoff, pickup_arrival) bind nothing that
+ * could drive masking, so the rule states which nodes carry customer PII.
+ *
+ * [apply] returns a masked COPY of the tree for envelope serialization; the
+ * original tree is never mutated (parent back-references are dropped on the
+ * copy, which serialization ignores). The rebuild is top-down via
+ * [UiNode.copy]; recognition, parse, and the dedup contentHash all run on the
+ * original tree.
+ */
+data class CompiledRedact(
+    val entries: List<CompiledRedactEntry>,
+) {
+    fun isEmpty(): Boolean = entries.isEmpty()
+
+    /** Return a redacted copy of [tree] with matched node text/desc masked. */
+    fun apply(tree: UiNode): UiNode = maskNode(tree)
+
+    private fun maskNode(node: UiNode): UiNode {
+        val match = entries.firstOrNull { it.find(node) }
+        val maskedText =
+            if (match != null) mask(node.text, match.keepPrefix) else node.text
+        val maskedDesc =
+            if (match != null) mask(node.contentDescription, match.keepPrefix) else node.contentDescription
+        return node.copy(
+            text = maskedText,
+            contentDescription = maskedDesc,
+            children = node.children.map { maskNode(it) },
+        )
+    }
+
+    private fun mask(value: String?, keepPrefix: List<String>): String? {
+        if (value == null) return null
+        val prefix = keepPrefix.firstOrNull { value.startsWith(it, ignoreCase = true) }
+        return if (prefix != null) prefix + REDACTED else REDACTED
+    }
+
+    companion object {
+        /** Masked text written in place of redacted customer PII. */
+        const val REDACTED = "[redacted]"
+        val EMPTY = CompiledRedact(emptyList())
+    }
+}
 
 /**
  * Unified result of matching any rule type (screen, click, or notification).

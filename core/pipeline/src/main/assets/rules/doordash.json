@@ -113,6 +113,18 @@
     {
       "id": "doordash.screen.timeline",
       "priority": 10,
+      "redact": [
+        {
+          "find": {
+            "any": [
+              { "hasTextStartsWith": "Pickup for " },
+              { "hasTextStartsWith": "Deliver to " },
+              { "hasTextStartsWith": "Pickup from " }
+            ]
+          },
+          "keepPrefix": [ "Pickup for ", "Deliver to ", "Pickup from " ]
+        }
+      ],
       "state": {
         "modeHint": "online"
       },
@@ -917,6 +929,12 @@
     {
       "id": "doordash.screen.dropoff_navigation",
       "priority": 61,
+      "redact": [
+        { "find": { "hasIdSuffix": "bottom_sheet_task_title" }, "keepPrefix": [ "Deliver to ", "Heading to " ] },
+        { "find": { "hasIdSuffix": "bottom_sheet_address_line_1" } },
+        { "find": { "hasIdSuffix": "bottom_sheet_address_line_2" } },
+        { "find": { "hasIdSuffix": "bottom_sheet_instructions" } }
+      ],
       "state": {
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
@@ -1046,6 +1064,9 @@
     {
       "id": "doordash.screen.pickup_arrival",
       "priority": 70,
+      "redact": [
+        { "find": { "hasIdSuffix": "customer_name" } }
+      ],
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -1339,6 +1360,16 @@
     {
       "id": "doordash.screen.dropoff_pre_arrival",
       "priority": 73,
+      "redact": [
+        { "find": { "any": [ { "hasTextStartsWith": "Deliver to" }, { "hasTextStartsWith": "Heading to" } ] }, "keepPrefix": [ "Deliver to ", "Heading to " ] },
+        { "find": { "hasIdSuffix": "user_name" } },
+        { "find": { "hasIdSuffix": "address_line_1" } },
+        { "find": { "hasIdSuffix": "address_line_2" } },
+        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S" }, { "hasNoId": true } ] } },
+        { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
+        { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
+        { "find": { "hasTextStartsWith": "\"" } }
+      ],
       "state": {
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
@@ -1564,6 +1595,13 @@
     {
       "id": "doordash.screen.dropoff_pre_arrival_completion",
       "priority": 74,
+      "redact": [
+        { "find": { "any": [ { "hasTextStartsWith": "Deliver to" }, { "hasTextStartsWith": "Heading to" } ] }, "keepPrefix": [ "Deliver to ", "Heading to " ] },
+        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S" }, { "hasNoId": true } ] } },
+        { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
+        { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
+        { "find": { "hasTextStartsWith": "\"" } }
+      ],
       "state": {
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
@@ -2639,6 +2677,13 @@
     {
       "id": "doordash.screen.dropoff_handoff",
       "priority": 64,
+      "redact": [
+        { "find": { "any": [ { "hasTextStartsWith": "Deliver to" }, { "hasTextStartsWith": "Heading to" } ] }, "keepPrefix": [ "Deliver to ", "Heading to " ] },
+        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S" }, { "hasNoId": true } ] } },
+        { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
+        { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
+        { "find": { "hasTextStartsWith": "\"" } }
+      ],
       "state": { "flow": "task:dropoff:arrived" },
       "require": {
         "all": [
@@ -2866,6 +2911,9 @@
       "comment": "Deeper than pickup_select_issue — the resolution panel reached after picking an issue. Keyed on its own distinctive strings so it never overlaps the issue list.",
       "id": "doordash.screen.pickup_resolution_options",
       "priority": 103,
+      "redact": [
+        { "find": { "hasTextStartsWith": "For " }, "keepPrefix": [ "For " ] }
+      ],
       "require": {
         "all": [
           { "exists": { "hasTextContaining": "Resolution options" } },

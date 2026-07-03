@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.core.pipeline.rules.NoRedaction
 import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -28,7 +29,7 @@ import org.mockito.kotlin.whenever
 class ClickCaptureNoDedupTest {
 
     private val captureBus: CaptureBus = mock()
-    private val writer = CaptureWriter(captureBus, PipelineStats())
+    private val writer = CaptureWriter(captureBus, PipelineStats(), NoRedaction)
 
     private fun clickObs(t: Long) = Observation.Click(
         timestamp = t,

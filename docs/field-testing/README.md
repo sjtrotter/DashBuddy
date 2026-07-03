@@ -121,6 +121,22 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   — not hang or silently succeed. Broken = a shade-tapped action failing closed despite the window
   returning within the budget, or the retry firing/looping on a genuinely-gone app.
 
+- **🔒 FIX SHIPPED — recognized capture envelopes now redact customer PII at the device edge (#598).**
+  Pre-#598 the recognized-screen captures on disk carried raw `Deliver to ‹name›`, full street
+  addresses, and gate codes (`dropoff_handoff` / `dropoff_navigation` / `dropoff_pre_arrival`,
+  `Order for ‹name›` on `pickup_arrival`, `For ‹name› • ‹store›` on `pickup_resolution_options`) —
+  PII was hashed only in the parse output, raw on disk. Now rules DECLARE a `redact` block and the
+  capture stage masks those node texts in the serialized envelope only (recognition/parse/state
+  unchanged); a screen rule that hashes PII (`sha256`) fails compile without a `redact` block.
+  **Confirm on next pull: 0/2 —** pull the on-device captures after a dash with real deliveries and
+  grep the `dropoff_*` / `pickup_arrival` / `pickup_resolution_options` envelope JSON: every customer
+  name reads `Deliver to [redacted]` / `Order for` + a separate `[redacted]` name node, addresses
+  and gate codes read `[redacted]`, and NO raw recipient name/street/gate-code survives. Markers
+  (`Deliver to `, `Order for`, `Delivery for`, `Hand it to customer`) must remain so recognition is
+  unchanged — verify the same screens still classify + drive state exactly as before (offers,
+  pickups, dropoffs, completions behave identically). Broken = any raw customer name/address/gate
+  code in a recognized envelope, OR a dropoff/pickup screen that stopped recognizing. (UNKNOWN
+  captures are a documented exception — the `SensitiveTextMarkers` backstop, not name redaction.)
 - **🔧 FIX SHIPPED — receipt-skipped deliveries still close + log a completion, and the next offer starts a NEW job (#596).**
   DoorDash routinely skips the post-delivery receipt (the next offer chains straight over the drop);
   pre-#596 that was the machine's ONLY job-exit, so the delivery never logged `DELIVERY_COMPLETED`
