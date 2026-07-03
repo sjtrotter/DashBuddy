@@ -192,10 +192,22 @@ class EffectMap @Inject constructor() {
         // Offer resolved (accepted/declined/timeout)
         if (prevOffer != null && nextOffer == null) {
             val outcome = resolveOfferOutcome(obs, prevOffer)
+            // #594: when the latch forced DECLINED but the last literal click was an ACCEPT, the
+            // dasher hit "Review offer"→Accept after the decline was already committed — record
+            // that the decline stood, for the forensic payload.
+            val raceDescription = if (
+                outcome == AppEventType.OFFER_DECLINED &&
+                prevOffer.declineCommittedAt != null &&
+                prevOffer.lastClickIntent == OfferIntent.ACCEPT
+            ) {
+                "Accept clicked after decline was already committed — decline stands (#594)"
+            } else {
+                null
+            }
             // Abort a notification still waiting out its post delay (#436) —
             // an Accept/Decline heads-up must not land after the offer is gone.
             add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
-            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp)))
+            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, raceDescription)))
 
             if (outcome == AppEventType.OFFER_TIMEOUT) {
                 add(AppEffect.UpdateBubble("Offer Timed Out!", persona = ChatPersona.Dispatcher))
@@ -205,10 +217,29 @@ class EffectMap @Inject constructor() {
         // Click feedback for offer accept/decline
         if (flowObs is Observation.Click && prev.flow == Flow.OfferPresented) {
             val fields = flowObs.parsed as? ParsedFields.ClickFields
+            // #594: the decline-commit latch set on a prior confirm click (survives on this
+            // click's next.pendingOffer, or prev's if the pop is concurrent).
+            val declineCommitted = next.pendingOffer?.declineCommittedAt ?: prevOffer?.declineCommittedAt
             when (fields?.intent) {
-                OfferIntent.ACCEPT -> add(
-                    AppEffect.UpdateBubble("Offer Accepted", persona = ChatPersona.Dispatcher)
-                )
+                OfferIntent.ACCEPT ->
+                    if (declineCommitted != null) {
+                        // The decline was already committed server-side; this Accept (the
+                        // "Review offer"→Accept race) won't take. Say so instead of the
+                        // contradictory "Offer Accepted", and count the defended invariant
+                        // (Principle 7: WARN = a defended invariant fired; no PII in the line).
+                        Timber.w(
+                            "Accept click ignored (#594): decline already committed at %d — decline stands",
+                            declineCommitted,
+                        )
+                        add(
+                            AppEffect.UpdateBubble(
+                                "Decline already submitted — Accept won't take",
+                                persona = ChatPersona.Dispatcher,
+                            )
+                        )
+                    } else {
+                        add(AppEffect.UpdateBubble("Offer Accepted", persona = ChatPersona.Dispatcher))
+                    }
                 OfferIntent.DECLINE -> add(
                     AppEffect.UpdateBubble("Offer Declined", persona = ChatPersona.Dispatcher)
                 )
@@ -972,6 +1003,11 @@ class EffectMap @Inject constructor() {
     // =========================================================================
 
     private fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
+        // 0. Decline-commit latch (#594): a DECLINE-intent click already committed this offer's
+        //    decline server-side. That decision is final — a later "Review offer"→Accept click
+        //    cannot un-decline it — so the latch wins over lastClickIntent AND the direct-click
+        //    fallback below.
+        if (prevOffer?.declineCommittedAt != null) return AppEventType.OFFER_DECLINED
         // 1. Stored click intent on PendingOffer — covers the common case where
         //    the click was observed first and the resolving obs is a Screen
         when (prevOffer?.lastClickIntent) {

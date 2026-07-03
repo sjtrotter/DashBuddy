@@ -37,6 +37,13 @@ data class FlowRegion(
  *   action is unavailable on this platform.
  * @param sourceRuleId The rule that matched the offer screen and supplied
  *   [targets] — consent-gate provenance (#422/#417).
+ * @param declineCommittedAt Set (once) when a DECLINE-intent click is observed — the
+ *   confirm-sheet commit, which is screen-scoped to `offer_popup_confirm_decline` so it can
+ *   only come from the server-side confirmation. Once set, the offer's outcome is DECLINED
+ *   regardless of any later click, because the platform has already processed the decline
+ *   server-side — a "Review offer"→Accept race after that point cannot un-decline it (#594).
+ *   [lastClickIntent] keeps recording the literal last click for forensics; this latch, not
+ *   [lastClickIntent], decides the outcome.
  */
 @Serializable
 data class PendingOffer(
@@ -48,4 +55,5 @@ data class PendingOffer(
     val lastClickIntent: String? = null,
     val targets: Map<String, cloud.trotter.dashbuddy.domain.pipeline.NodeRef> = emptyMap(),
     val sourceRuleId: String? = null,
+    val declineCommittedAt: Long? = null,
 )

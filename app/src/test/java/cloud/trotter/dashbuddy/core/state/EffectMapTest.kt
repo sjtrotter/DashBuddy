@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -270,6 +271,61 @@ class EffectMapTest {
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_DECLINED))
+    }
+
+    @Test
+    fun `the decline-commit latch beats a later ACCEPT lastClickIntent (#594)`() {
+        // The dasher committed the decline (confirm sheet) then hit Review offer→Accept: the latch is
+        // set and lastClickIntent is the racing accept. The outcome must still be OFFER_DECLINED — the
+        // latch wins over lastClickIntent — and the payload records the race for forensics.
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(
+                    declineCommittedAt = 900L,
+                    lastClickIntent = "accept_offer",
+                ),
+            ),
+        ))
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        assertTrue(
+            "a committed decline resolves DECLINED even when the last click was ACCEPT",
+            effects.logEventTypes().contains(AppEventType.OFFER_DECLINED),
+        )
+        assertFalse(
+            "the racing Accept must not log OFFER_ACCEPTED",
+            effects.logEventTypes().contains(AppEventType.OFFER_ACCEPTED),
+        )
+        val declined = effects.logEvents().first { it.event.type == AppEventType.OFFER_DECLINED }
+        val payload = declined.event.payload as OfferPayload
+        assertTrue(
+            "payload describes the accept-after-decline race",
+            payload.description?.contains("decline stands") == true,
+        )
+    }
+
+    @Test
+    fun `an ACCEPT click after a committed decline shows the race bubble, not Offer Accepted (#594)`() {
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(declineCommittedAt = 900L),
+            ),
+        ))
+        // A click doesn't change flow by itself; the latch survives on the pending offer.
+        val next = prev
+
+        val effects = effectMap.diff(prev, next, clickObs(intent = "accept_offer"))
+        assertTrue(
+            "the accept race is surfaced honestly",
+            effects.any { it is AppEffect.UpdateBubble && it.text == "Decline already submitted — Accept won't take" },
+        )
+        assertFalse(
+            "the contradictory Offer Accepted bubble must not fire",
+            effects.any { it is AppEffect.UpdateBubble && it.text == "Offer Accepted" },
+        )
     }
 
     @Test
