@@ -744,7 +744,9 @@ class EffectMap @Inject constructor() {
                 add(logEffect(sessionId, AppEventType.DELIVERY_CONFIRMED, obs.timestamp, deliveryConfirmed))
             }
 
-            // Task phase changed — pickup → dropoff (pickup confirmed)
+            // Task phase changed — pickup → dropoff (pickup confirmed): the
+            // FIRST leg of a delivery. The stacked leg-2+ case (dropoff→dropoff /
+            // null→dropoff) is handled by the branch just below.
             if (prevTask?.phase == TaskPhase.PICKUP &&
                 nextTask?.phase == TaskPhase.DROPOFF
             ) {
@@ -753,13 +755,8 @@ class EffectMap @Inject constructor() {
                     storeName = prevTask.storeName ?: UNKNOWN_STORE,
                     confirmedAt = obs.timestamp,
                 )
-                val deliveryStart = deliveryPhasePayload(
-                    task = nextTask,
-                    phaseStartedAt = obs.timestamp,
-                )
                 add(logEffect(sessionId, AppEventType.PICKUP_CONFIRMED, obs.timestamp, pickupConfirmed))
-                add(logEffect(sessionId, AppEventType.DELIVERY_NAV_STARTED, obs.timestamp, deliveryStart))
-                add(AppEffect.ResumeOdometer)
+                addAll(deliveryNavStartedEffects(sessionId, nextTask, obs))
 
                 // #556: a completed SHOP pickup feeds the learned items/min. In-store time is
                 // measured arrived→confirmed (the 0.8/min seed basis); the handler floors out noise.
@@ -776,11 +773,27 @@ class EffectMap @Inject constructor() {
                         ),
                     )
                 }
+            }
 
-                // #568: store-flavored label ("Heading to H-E-B's customer") — friendlier than the
-                // raw 6-char hash and it disambiguates a multi-store stack's drops.
-                val customer = customerLabel(nextTask.storeName)
-                add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer), dedupeScope = nextTask.taskId))
+            // New dropoff leg — the active task became a DIFFERENT dropoff (#603).
+            // The pickup→dropoff branch above only mints DELIVERY_NAV_STARTED on
+            // the first leg; a stacked leg-2 (or later) drop arrives as
+            // dropoff→dropoff, or as null→dropoff once leg-1 has been
+            // grace-retired. Without this the second drop was silent — no nav
+            // event, no odometer resume, no "Heading to" bubble.
+            // Guards:
+            //  - a genuinely new task (taskId changed),
+            //  - that started on THIS frame (fresh mint AND placeholder-resolve
+            //    both stamp startedAt = obs.timestamp; a RESUMED task keeps its
+            //    old startedAt, so a replay/re-sight can't re-fire the nav),
+            //  - whose predecessor was NOT a pickup (the pickup→dropoff case is
+            //    already handled above — this keeps the two branches disjoint).
+            if (nextTask?.phase == TaskPhase.DROPOFF &&
+                nextTask.taskId != prevTask?.taskId &&
+                nextTask.startedAt == obs.timestamp &&
+                prevTask?.phase != TaskPhase.PICKUP
+            ) {
+                addAll(deliveryNavStartedEffects(sessionId, nextTask, obs))
             }
 
             // Arrival detection — task subflow changed to ARRIVED
@@ -857,6 +870,39 @@ class EffectMap @Inject constructor() {
                 add(AppEffect.ResumeOdometer)
             }
         }
+    }
+
+    /**
+     * The "delivery nav started" effect trio emitted when a NEW dropoff task
+     * becomes the active task: the DELIVERY_NAV_STARTED log event (phase clock
+     * stamped to this frame), the odometer resume, and the store-flavored
+     * "Heading to <customer>" bubble. Shared by the first-leg pickup→dropoff
+     * transition and the stacked leg-2 dropoff→dropoff / null→dropoff transition
+     * (#603) so a stacked drop gets the exact same driver-facing treatment as
+     * the first — one silent-second-drop bug, not two code paths that can drift.
+     *
+     * [task]'s storeName may be null on a leg-2 drop the dropoff screen didn't
+     * carry a store for; [customerLabel] then falls back to the generic
+     * recipient (never the hash). Leg-2 store re-attribution is #526's scope.
+     */
+    private fun deliveryNavStartedEffects(
+        sessionId: String?,
+        task: Task,
+        obs: Observation,
+    ): List<AppEffect> = buildList {
+        add(
+            logEffect(
+                sessionId,
+                AppEventType.DELIVERY_NAV_STARTED,
+                obs.timestamp,
+                deliveryPhasePayload(task = task, phaseStartedAt = obs.timestamp),
+            ),
+        )
+        add(AppEffect.ResumeOdometer)
+        // #568: store-flavored label ("Heading to H-E-B's customer") — friendlier
+        // than the raw 6-char hash, and it disambiguates a multi-store stack's drops.
+        val customer = customerLabel(task.storeName)
+        add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer), dedupeScope = task.taskId))
     }
 
     /**
