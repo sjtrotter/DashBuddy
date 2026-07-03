@@ -949,13 +949,22 @@ class EffectMap @Inject constructor() {
      * [AppEffect.RequestEffect] for each that passes its gate.
      * Runs at top level — NOT inside any region stepper. All rule effects
      * are observational/app-internal (#425) — actuation never rides here.
+     *
+     * A [Observation.Notification] is a discrete arrival, not an
+     * install-once fact (#604): its effects get `keySuffix = timestamp`
+     * (postTime — event time, replay-stable) so each arrival keys its own
+     * `effects_fired` row instead of every notification of that intent
+     * colliding on one global key. Screens keep `keySuffix = null` — their
+     * cross-frame dedup (e.g. `offer-ss-{parsedHash}`) is intended and must
+     * not be disturbed.
      */
     private fun diffRuleEffects(obs: Observation): List<AppEffect> {
         val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
         if (flowObs.effects.isEmpty()) return emptyList()
+        val keySuffix = (obs as? Observation.Notification)?.timestamp?.toString()
         return flowObs.effects
             .filter { evaluateGate(it.onlyIf, flowObs.parsed) }
-            .map { AppEffect.RequestEffect(it) }
+            .map { AppEffect.RequestEffect(it, keySuffix = keySuffix) }
     }
 
     /**

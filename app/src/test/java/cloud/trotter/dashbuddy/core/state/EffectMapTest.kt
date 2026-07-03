@@ -79,8 +79,10 @@ class EffectMapTest {
         deliveredAt: String? = null,
         rawText: String? = null,
         ruleId: String = "doordash.notification.test",
+        timestamp: Long = 1000L,
+        effects: List<RequestedEffect> = emptyList(),
     ) = Observation.Notification(
-        timestamp = 1000L,
+        timestamp = timestamp,
         captureId = null,
         ruleId = ruleId,
         metadata = ReplayMetadata.EMPTY,
@@ -93,6 +95,7 @@ class EffectMapTest {
             deliveredAt = deliveredAt,
             rawText = rawText,
         ),
+        effects = effects,
     )
 
     private fun clickObs(
@@ -1418,6 +1421,92 @@ class EffectMapTest {
         val effects = effectMap.diff(state, state, notificationObs(intent = "new_order"))
         // No hardcoded log effects — logging comes from rule-declared effects
         assertTrue("Should produce no hardcoded effects for new_order", effects.isEmpty())
+    }
+
+    // =========================================================================
+    // PER-NOTIFICATION EFFECT KEYS (#604)
+    //
+    // A notification is a discrete arrival, not an install-once fact: a
+    // rule-declared log effect with no dedupeKey must key per-arrival
+    // (postTime), not "once ever" — otherwise the second `new_order`
+    // notification of the dash silently no-ops against `effects_fired`
+    // (the #604 bug). Screen observations are deliberately NOT suffixed —
+    // their cross-frame dedup (e.g. offer-ss-{parsedHash}) is intended.
+    // =========================================================================
+
+    @Test
+    fun `two notifications with the same rule effect but different timestamps get distinct effectKeys`() {
+        val (platform, onlineRegion) = stateWithPlatform()
+        val state = AppState(regions = Regions(platforms = mapOf(platform to onlineRegion)))
+        val logEffect = listOf(makeRequestedEffect(EffectVerb.LOG, ruleId = "doordash.notification.new_order"))
+
+        val firstArrival = effectMap.diff(
+            state, state,
+            notificationObs(intent = "new_order", timestamp = 1000L, effects = logEffect),
+        ).filterIsInstance<AppEffect.RequestEffect>()
+        val secondArrival = effectMap.diff(
+            state, state,
+            notificationObs(intent = "new_order", timestamp = 2000L, effects = logEffect),
+        ).filterIsInstance<AppEffect.RequestEffect>()
+
+        assertEquals(1, firstArrival.size)
+        assertEquals(1, secondArrival.size)
+        assertNotEquals(
+            "Distinct notification arrivals must not share an idempotency key",
+            firstArrival[0].effectKey,
+            secondArrival[0].effectKey,
+        )
+    }
+
+    @Test
+    fun `two notifications with the same rule effect and same timestamp share an effectKey`() {
+        val (platform, onlineRegion) = stateWithPlatform()
+        val state = AppState(regions = Regions(platforms = mapOf(platform to onlineRegion)))
+        val logEffect = listOf(makeRequestedEffect(EffectVerb.LOG, ruleId = "doordash.notification.new_order"))
+
+        val first = effectMap.diff(
+            state, state,
+            notificationObs(intent = "new_order", timestamp = 1000L, effects = logEffect),
+        ).filterIsInstance<AppEffect.RequestEffect>()
+        val repost = effectMap.diff(
+            state, state,
+            notificationObs(intent = "new_order", timestamp = 1000L, effects = logEffect),
+        ).filterIsInstance<AppEffect.RequestEffect>()
+
+        assertEquals(1, first.size)
+        assertEquals(1, repost.size)
+        assertEquals(
+            "An identical repost (same postTime) must still dedup",
+            first[0].effectKey,
+            repost[0].effectKey,
+        )
+    }
+
+    @Test
+    fun `a Screen observation's rule effect key is unsuffixed - exact string regression pin`() {
+        val logEffect = RequestedEffect(
+            verb = EffectVerb.LOG,
+            ruleId = "doordash.screen.test",
+        )
+        val obs = Observation.Screen(
+            timestamp = 1000L,
+            captureId = "cap-1000",
+            ruleId = "doordash.screen.test",
+            metadata = ReplayMetadata.EMPTY,
+            flow = null,
+            modeHint = null,
+            parsed = ParsedFields.None,
+            effects = listOf(logEffect),
+        )
+
+        val effects = effectMap.diff(AppState(), AppState(), obs).filterIsInstance<AppEffect.RequestEffect>()
+
+        assertEquals(1, effects.size)
+        assertEquals(
+            "Screen rule-effect keys are unsuffixed — cross-frame dedup is intended behavior",
+            "effect:doordash.screen.test:log",
+            effects[0].effectKey,
+        )
     }
 
     // =========================================================================

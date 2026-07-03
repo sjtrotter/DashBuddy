@@ -73,6 +73,19 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🔧 FIX SHIPPED — rule effects from notifications key per-arrival, not per-install (#604). CONFIRM ON DASH.**
+  A rule-declared log effect attached to a notification with no `dedupeKey` (e.g.
+  `doordash.notification.new_order`) built its `effects_fired` idempotency key from the rule id
+  alone — a GLOBAL forever-key. The first `new_order` notification of the week fired it; every
+  later `new_order` notification all week silently no-opped as "already fired" (the throttle map
+  is only pruned at engine init, so a long-lived process never recovered). The key now includes
+  the notification's own timestamp (postTime, replay-stable), so each distinct arrival gets its
+  own key; an identical repost (same postTime) still dedups correctly. Screen-effect dedup is
+  unchanged (intended cross-frame behavior, e.g. `offer-ss-{parsedHash}`).
+  **Confirm on dash: 0/2 —** trigger at least two separate `new_order` notifications in one dash,
+  then check the db `app_events` for a `NOTIFICATION_RECEIVED`/`NEW_ORDER` log for **each**
+  arrival, and confirm no "Skipping already-fired effect" DEBUG line for the notification's log
+  effect on the second (or later) arrival. Broken = a later arrival's log effect silently skipped.
 - **🔧 FIX SHIPPED — receipt-skipped deliveries still close + log a completion, and the next offer starts a NEW job (#596).**
   DoorDash routinely skips the post-delivery receipt (the next offer chains straight over the drop);
   pre-#596 that was the machine's ONLY job-exit, so the delivery never logged `DELIVERY_COMPLETED`

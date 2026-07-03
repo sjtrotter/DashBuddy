@@ -182,10 +182,25 @@ sealed class AppEffect {
         val trigger: ActionTrigger,
     ) : AppEffect()
 
-    /** A rule-originated side effect. */
-    data class RequestEffect(val effect: RequestedEffect) : AppEffect() {
+    /**
+     * A rule-originated side effect.
+     *
+     * [keySuffix] disambiguates otherwise-identical effects across discrete
+     * occurrences of the same rule (#604): a notification's rule-declared
+     * effects have no per-arrival identity of their own (no dedupeKey), so
+     * without a suffix every arrival of e.g. `doordash.notification.new_order`
+     * collapses onto one global `effects_fired` key — the first notification
+     * fires it, every later one silently no-ops as "already fired". Screen
+     * observations pass `null` here: their cross-frame dedup (e.g.
+     * `offer-ss-{parsedHash}`) is intended and must NOT be suffixed.
+     */
+    data class RequestEffect(
+        val effect: RequestedEffect,
+        val keySuffix: String? = null,
+    ) : AppEffect() {
         override val effectKey: String
-            get() = "effect:${effect.ruleId}:${effect.dedupeKey ?: effect.verb.wire}"
+            get() = "effect:${effect.ruleId}:${effect.dedupeKey ?: effect.verb.wire}" +
+                keySuffix?.let { ":$it" }.orEmpty()
     }
 
     data class StartSession(val sessionId: String, val platformName: String) : AppEffect() {
