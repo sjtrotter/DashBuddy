@@ -89,6 +89,17 @@ data class PendingDestructive(
      */
     val authoritative: Boolean = false,
     /**
+     * The [Flow] this pending was armed *toward* — the destination screen whose
+     * appearance armed the transition (#596). Recorded only for `TASK_RETIRE`:
+     * the idle/offer arm stamps the flow it left the task for (`Idle`,
+     * `OfferPresented`), the receipt arm stamps `PostTask`. A physically-complete
+     * job is allowed to close on a retire commit (#596 T1/T2) **only when this is
+     * not [Flow.OfferPresented]** — a retire armed by the dasher deliberating on a
+     * mid-route add-on offer must NOT false-complete the still-undelivered final
+     * drop; that accept is an add-on, not an independent job.
+     */
+    val armedFromFlow: Flow? = null,
+    /**
      * The summary screen's parsed fields, stashed at arm time (#431) so the
      * deferred commit's DASH_STOP payload keeps full fidelity (earnings,
      * duration, offer counts) even though the committing observation is a

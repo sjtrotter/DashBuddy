@@ -567,20 +567,50 @@ class PlatformRegionStepper @Inject constructor() {
             // wasn't parsed — the pre-3b behaviour for a single delivery.
             val dropoffCount = parsedOffer?.orders?.size?.takeIf { it > 0 } ?: 1
 
-            if (existing == null) {
-                val jobId = mintId("job", region, obs)
-                // job at offset 0; the N dropoff placeholders at offsets 1..N.
-                return region.copy(
+            // Mint a fresh Job: jobId at offset 0, the N customer-TBD dropoff placeholders at
+            // offsets 1..N off the mint counter, which the copy() advances past. Shared by the
+            // first accept of a job and by #596 T2 (an accept over a physically-complete job).
+            fun startFreshJob(base: PlatformRegion): PlatformRegion {
+                val jobId = mintId("job", base, obs)
+                return base.copy(
                     activeJob = Job(
                         jobId = jobId,
                         offerStoreHint = storeHints,
                         parentOfferHash = pending?.offerHash,
                         acceptedOffers = listOf(economics),
                         startedAt = obs.timestamp,
-                        tasks = preCreatedDropoffs(region, obs, jobId, dropoffCount, startOffset = 1),
+                        tasks = preCreatedDropoffs(base, obs, jobId, dropoffCount, startOffset = 1),
                     ),
-                    mintCounter = region.mintCounter + dropoffCount + 1,
+                    mintCounter = base.mintCounter + dropoffCount + 1,
                 )
+            }
+
+            if (existing == null) return startFreshJob(region)
+
+            // #596 T2: an accept while the active job is already physically complete is an
+            // INDEPENDENT offer, not an add-on — do NOT fold it into a never-closed job (the 06-30
+            // job-61 case: one never-closed job swallowed three offers, $19 of $45.75 unattributed).
+            // Close the old job and mint a fresh one. At accept time the final drop may still be
+            // inside its TASK_RETIRE grace (activeTask not yet retired); commit that retire inline
+            // first (honest completion = pend.since, matching retireActiveTask) so the completeness
+            // check sees the finished drop. Skipped when the retire was armed by deliberating on THIS
+            // add-on offer (armedFromFlow == OfferPresented) — that drop isn't delivered, so it folds.
+            run {
+                val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
+                if (pend?.armedFromFlow == Flow.OfferPresented) return@run
+                val justRetired = if (pend != null) region.activeTask?.copy(completedAt = pend.since) else null
+                val recentForCheck =
+                    if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
+                if (isJobPhysicallyComplete(existing, recentForCheck, justRetired)) {
+                    val committed = if (justRetired != null) {
+                        region.copy(
+                            activeTask = null,
+                            recentTasks = recentForCheck.takeLast(MAX_RECENT_TASKS),
+                            pendingDestructive = null,
+                        )
+                    } else region
+                    return startFreshJob(completeActiveJob(committed))
+                }
             }
 
             // Add-on into the active job — append unless this offer was already counted.
@@ -894,10 +924,14 @@ class PlatformRegionStepper @Inject constructor() {
             val pend = if (existing?.kind == DestructiveKind.TASK_RETIRE) {
                 // Already armed (idle-grace, or an earlier receipt frame) —
                 // tighten to the short window; the earliest destructive signal
-                // stays the honest completion time.
+                // stays the honest completion time. The receipt is an authoritative
+                // completion, so re-anchor the provenance to PostTask (#596): a drop
+                // finished at a real receipt is closeable even if an earlier
+                // offer-deliberation had armed the original retire.
                 existing.copy(
                     deadline = minOf(existing.deadline, newDeadline),
                     authoritative = true,
+                    armedFromFlow = Flow.PostTask,
                 )
             } else {
                 PendingDestructive(
@@ -905,6 +939,7 @@ class PlatformRegionStepper @Inject constructor() {
                     since = obs.timestamp,
                     deadline = newDeadline,
                     authoritative = true,
+                    armedFromFlow = Flow.PostTask,
                 )
             }
             return region.copy(pendingDestructive = pend)
@@ -923,6 +958,11 @@ class PlatformRegionStepper @Inject constructor() {
                         since = obs.timestamp,
                         // Through the injected policy (#406): the static constant ignored overrides.
                         deadline = obs.timestamp + policy.gracePeriodMs,
+                        // #596: record where the task was left FOR. A retire armed by the dasher
+                        // deliberating on a mid-route add-on offer (`OfferPresented`) must NOT let
+                        // T1/T2 close-out fire on the still-undelivered final drop; an idle/waiting
+                        // arm (`Idle`) is a genuine receipt-skip and IS closeable.
+                        armedFromFlow = nextFlowVal,
                     ),
                 )
             }
@@ -950,15 +990,34 @@ class PlatformRegionStepper @Inject constructor() {
      * Retire the active task when its retire-grace deadline lazily expires
      * (a sustained idle/offer mid-task). Completes it into recentTasks. Unlike
      * [endSession], the session and job live on — only the task is closed.
+     *
+     * #596 T1: a retire that leaves the job *physically complete* (every dropoff
+     * delivered, nothing outstanding) also closes the job — DoorDash routinely
+     * skips the post-delivery receipt (the pre-#596 machine's only job-exit), so
+     * without this the job never closes and later independent offers get absorbed
+     * into it. Gated on provenance: a retire armed by deliberating on a mid-route
+     * add-on offer ([Flow.OfferPresented]) does NOT close (that drop isn't
+     * delivered — the accept is an add-on).
      */
     private fun retireActiveTask(region: PlatformRegion, timestamp: Long): PlatformRegion {
+        val armedFromFlow = region.pendingDestructive
+            ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.armedFromFlow
         val completed = region.activeTask?.copy(completedAt = timestamp)
             ?: return region.copy(pendingDestructive = null)
-        return region.copy(
+        val recentTasks = (region.recentTasks + completed).takeLast(MAX_RECENT_TASKS)
+        val retired = region.copy(
             activeTask = null,
-            recentTasks = (region.recentTasks + completed).takeLast(MAX_RECENT_TASKS),
+            recentTasks = recentTasks,
             pendingDestructive = null,
         )
+        val job = retired.activeJob
+        return if (job != null && armedFromFlow != Flow.OfferPresented &&
+            isJobPhysicallyComplete(job, recentTasks, justRetired = completed)
+        ) {
+            completeActiveJob(retired)
+        } else {
+            retired
+        }
     }
 
     private fun endSession(region: PlatformRegion, timestamp: Long): PlatformRegion {
@@ -987,6 +1046,59 @@ class PlatformRegionStepper @Inject constructor() {
             lastPostTaskFields = null,
         )
     }
+}
+
+/**
+ * #596: is [job] *physically complete* — every dropoff delivered, nothing outstanding — so it may
+ * close on its next exit signal even when DoorDash skips the post-delivery receipt (the only
+ * job-exit the pre-#596 machine had)?
+ *
+ * Completion truth is computed from [recentTasks] + [justRetired], **never** [Job.tasks]: the
+ * `Job.tasks` mirror re-runs after `stepCore`, so at the moment a retire/accept consults it, its
+ * copy of the just-finished drop is stale (`completedAt` still null — amdt #6). The mirror is used
+ * only for the *placeholder set* (which dropoffs the job owns — reliable, since offer-spawned
+ * placeholders persist there until resolved+completed).
+ *
+ * Complete ⇔ every DROPOFF placeholder the job owns is accounted — its taskId appears in
+ * [recentTasks] with `completedAt != null`, or it IS [justRetired] — with no unresolved
+ * customer-TBD placeholder outstanding, and at least one dropoff actually finished. A zero-dropoff
+ * job never qualifies (a healed pickup-only job, or a job whose drops haven't rendered yet).
+ *
+ * Accounted additionally requires ARRIVAL evidence (`arrivedAt != null`, #615 review): a
+ * grace-stamped `completedAt` alone is not delivery proof — a drop retired EN ROUTE (a transient
+ * idle flash → offer → accept inside the grace window, or a mid-route cancel) must never read as
+ * delivered, close the job, and mint a false completion. Fail direction is safe: a missed ARRIVED
+ * frame keeps the job open (the old, lesser bug — absorption), never fabricates a delivery.
+ */
+internal fun isJobPhysicallyComplete(
+    job: Job,
+    recentTasks: List<Task>,
+    justRetired: Task?,
+): Boolean {
+    val completedDropoffIds = recentTasks
+        .filter {
+            it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
+                it.completedAt != null && it.arrivedAt != null
+        }
+        .mapTo(HashSet()) { it.taskId }
+    val retiredDropoffId = justRetired
+        ?.takeIf {
+            it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
+                it.completedAt != null && it.arrivedAt != null
+        }
+        ?.taskId
+
+    // Every dropoff the job owns must be accounted; any outstanding (incl. a customer-TBD
+    // placeholder that never resolved) → not complete, so a later independent offer can't fold in.
+    val allDropoffsAccounted = job.tasks
+        .filter { it.phase == TaskPhase.DROPOFF }
+        .all { it.taskId in completedDropoffIds || it.taskId == retiredDropoffId }
+    if (!allDropoffsAccounted) return false
+
+    // …and at least one dropoff actually finished (guards zero-dropoff jobs).
+    val finished = completedDropoffIds.size +
+        (if (retiredDropoffId != null && retiredDropoffId !in completedDropoffIds) 1 else 0)
+    return finished >= 1
 }
 
 // =========================================================================
