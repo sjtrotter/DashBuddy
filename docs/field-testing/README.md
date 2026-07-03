@@ -89,6 +89,17 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   re-armed` DEBUG line fires after any burst, capped or not — it alone doesn't mean the cap was
   hit.
 
+- **🔒 FIX SHIPPED — Crimson Savings Jar balance notification is now pledge-BLOCKED (#599). READ THE PULL AFTER A DASH.**
+  The dasher's Crimson/DasherDirect balance notification was being recognized and captured raw
+  (9 files found on the 06-25→30 pull — deleted from the device). The rule is now sensitive
+  (priority 0, `parse: sensitive`) — the shared content gate drops it before capture and the
+  state machine. **Confirm on next pull: 0/2 —** after a dash where the Savings Jar notification
+  arrived: `captures/doordash/notification/` must contain **no** `crimson_balance` (or
+  `sensitive.*`) folder/files, and the log shows `Sensitive gate: dropped sensitive.crimson_balance`
+  at DEBUG. Broken = any capture file containing "Savings Jar balance". (Note: `earnings_deposit`
+  and `transfer_complete` notifications still capture — their sensitive-vs-keep fate is an open
+  dev call on #599's siblings.)
+
 - **👁 VISUAL-ONLY — rich offer notification looks right: gauge ring, countdown, badges (#578/#583). CONFIRM BY EYE.**
   The mechanical halves are validated (buttons fire from the floating heads-up; the card posts
   with live PendingIntents; zero RemoteViews errors across a full week) — what desk data cannot

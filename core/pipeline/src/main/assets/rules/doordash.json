@@ -3379,23 +3379,18 @@
       ]
     },
     {
+      "comment": "#599: the dasher's Crimson/DasherDirect BALANCE is pledge-blocked (banking — never parsed or stored). Sensitive parse -> the shared content gate (#399) drops it before capture and the state machine; priority 0 so nothing can outrank the block. Deliberately NO channel predicate (adversarial F1): DoorDash routes Crimson notifications over multiple channels (appboy incl.), and a channel-scoped block would let a rerouted balance push classify as a channel-only catch-all (marketing_promo) and capture raw — a block rule gains nothing from a channel key. TEXT predicates stay narrow (savings jar / building momentum): earnings_deposit notifications also say 'DoorDash Crimson account' and their fate is a separate dev call (#599).",
       "id": "doordash.notification.crimson_balance",
-      "priority": 27,
-      "intent": "crimson_balance",
+      "priority": 0,
+      "overrideable": false,
+      "intent": "sensitive.crimson_balance",
       "require": {
-        "all": [
-          { "channelIdEquals": "dasher-notification-messages" },
-          {
-            "any": [
-              { "anyFieldContains": "savings jar" },
-              { "anyFieldContains": "building momentum" }
-            ]
-          }
+        "any": [
+          { "anyFieldContains": "savings jar" },
+          { "anyFieldContains": "building momentum" }
         ]
       },
-      "effects": [
-        { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "CRIMSON_BALANCE" } }
-      ]
+      "parse": { "as": "sensitive" }
     },
     {
       "id": "doordash.notification.transfer_complete",
