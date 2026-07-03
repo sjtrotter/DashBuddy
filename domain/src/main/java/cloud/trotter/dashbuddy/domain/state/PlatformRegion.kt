@@ -63,6 +63,39 @@ data class PlatformRegion(
      * starts (its taskId differs from this stored value).
      */
     val lastAnnouncedPostTaskTaskId: String? = null,
+    /**
+     * A graced screen-implied resume out of [Mode.Paused] (#605), provisional
+     * until committed. See [PendingModeResume]. Default-null so existing
+     * snapshots deserialize unchanged. Distinct from [pendingDestructive]
+     * because during the field flap that pending is BUSY holding the
+     * just-completed delivery's `TASK_RETIRE` grace — the two slots cannot share.
+     */
+    val pendingModeResume: PendingModeResume? = null,
+)
+
+/**
+ * A provisional screen-implied resume out of [Mode.Paused], pending confirmation
+ * (#605). DoorDash's pause sheet is a `BottomSheetModal` on top of the just-
+ * completed delivery summary, so accessibility frames alternate paused ↔ online;
+ * flipping mode on the first online frame re-mints `DASH_PAUSED` and a spurious
+ * "resumed" card on every edge. Instead, an online-implying **Screen** while
+ * Paused arms this pending and stays Paused: a Paused-implying frame inside the
+ * window CANCELS it (the modal is still up — the 06-28 case, receipt visible
+ * ~4.3s < grace), sustained online past [deadline] COMMITS the resume once (lazy
+ * expiry + a `MODE_RESUME_COMMIT` wake timer), and an `OfferPresented` screen
+ * commits immediately (an offer is authoritative online evidence, structurally
+ * absent from the flap).
+ *
+ * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
+ * resolution is driven by `obs.timestamp`, never a wall clock, keeping the
+ * reducer pure.
+ */
+@Serializable
+data class PendingModeResume(
+    /** The obs.timestamp of the first online frame that armed it. */
+    val since: Long,
+    /** Once an observation's timestamp passes this, the resume is committed. */
+    val deadline: Long,
 )
 
 /**

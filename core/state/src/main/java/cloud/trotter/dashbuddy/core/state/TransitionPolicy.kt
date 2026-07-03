@@ -29,11 +29,23 @@ class TransitionPolicy @Inject constructor() {
          * short enough that real session ends commit promptly.
          */
         const val AUTHORITATIVE_GRACE_MS = 2_500L
+
+        /**
+         * Grace for a screen-implied resume out of [Mode.Paused] (#605). Must
+         * exceed the observed ~4.3s under-modal receipt-flap window with margin
+         * (DoorDash's pause sheet sits on the just-completed delivery summary,
+         * so frames flap paused ↔ online) yet stay short enough that a real
+         * resume's card/log lands promptly — the resume is not glance-critical,
+         * so a ≤8s lag after the dasher taps Resume is acceptable.
+         */
+        const val PAUSE_RESUME_GRACE_MS = 8_000L
     }
 
     val gracePeriodMs: Long = DEFAULT_GRACE_MS
 
     val authoritativeGraceMs: Long = AUTHORITATIVE_GRACE_MS
+
+    val pauseResumeGraceMs: Long = PAUSE_RESUME_GRACE_MS
 
     /**
      * Determine what mode a flow + modeHint combination implies.

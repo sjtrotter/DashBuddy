@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
+import cloud.trotter.dashbuddy.domain.state.PendingModeResume
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.SessionType
@@ -177,6 +178,20 @@ class PlatformRegionStepper @Inject constructor() {
             }
         }
 
+        // #605: lazy expiry of a graced screen-implied resume out of Paused. A
+        // sustained online past the deadline (no intervening paused frame cancelled
+        // it) commits the resume once — flip Paused→Online. Runs BEFORE the timeout
+        // branch so the MODE_RESUME_COMMIT wake timer (a non-flow observation) can
+        // commit an overdue resume, exactly like the destructive lazy expiry above.
+        // Driven by obs.timestamp (never a wall clock) so crash-recovery replay
+        // matches. Independent of pendingDestructive: during the field flap that slot
+        // is BUSY holding the just-completed delivery's TASK_RETIRE grace.
+        current.pendingModeResume?.let { pend ->
+            if (obs.timestamp > pend.deadline) {
+                current = commitModeResume(current, obs, policy)
+            }
+        }
+
         // Handle timeout-driven transitions
         if (obs is Observation.Timeout) return handleTimeout(current, obs, policy)
 
@@ -203,14 +218,39 @@ class PlatformRegionStepper @Inject constructor() {
             // No mode signal
             impliedMode == null -> current.copy(lastObservedAt = obs.timestamp)
 
-            // Same mode — confirmed
+            // Same mode — confirmed. A Paused-implying frame also CANCELS any armed
+            // resume grace (#605): the modal is still up, the online flap was noise.
             impliedMode == current.mode -> current.copy(
                 lastObservedAt = obs.timestamp,
                 lastTransitionKind = TransitionKind.Confirmed,
+                pendingModeResume = if (impliedMode == Mode.Paused) null else current.pendingModeResume,
             )
 
             // Click — records user intent, does NOT drive mode
             flowObs is Observation.Click -> current.copy(lastObservedAt = obs.timestamp)
+
+            // #605: a screen-implied resume OUT of Paused is GRACED, not immediate.
+            // DoorDash's pause sheet sits on the just-completed delivery summary, so
+            // frames flap paused ↔ online; flipping on the first online frame re-mints
+            // DASH_PAUSED and a spurious resume card on every edge. Arm a short pending
+            // (keeping the original `since` so repeated online frames don't push the
+            // deadline out) and STAY Paused: a paused frame cancels it (above), sustained
+            // online past the deadline commits it (lazy expiry / MODE_RESUME_COMMIT timer),
+            // and an OfferPresented screen — authoritative online evidence, structurally
+            // absent from the flap — commits immediately (excluded here → falls to the
+            // authoritative else). Screen-only: notifications carry no mode hints (verified),
+            // and keeping the grace to the screen channel matches the observed defect.
+            current.mode == Mode.Paused && impliedMode == Mode.Online &&
+                obs is Observation.Screen && flowObs.flow != Flow.OfferPresented -> {
+                val since = current.pendingModeResume?.since ?: obs.timestamp
+                current.copy(
+                    lastObservedAt = obs.timestamp,
+                    pendingModeResume = PendingModeResume(
+                        since = since,
+                        deadline = since + policy.pauseResumeGraceMs,
+                    ),
+                )
+            }
 
             // Screen or Notification — authoritative, apply immediately
             else -> {
@@ -297,8 +337,30 @@ class PlatformRegionStepper @Inject constructor() {
             }
         }
 
+        // #605: any COMMITTED mode transition out of Paused resolves a graced
+        // screen-implied resume — clear the pending. Covers all three exits: a
+        // sustained-online commit (Paused→Online), an instant OfferPresented commit
+        // (Paused→Online), and the pause-safety timeout (Paused→Offline).
+        if (prev.mode == Mode.Paused && newMode != Mode.Paused) {
+            region = region.copy(pendingModeResume = null)
+        }
+
         return region
     }
+
+    /**
+     * Commit a graced screen-implied resume out of [Mode.Paused] (#605) — the grace
+     * lapsed sustained-online (lazy expiry / `MODE_RESUME_COMMIT` wake timer) or an
+     * `OfferPresented` screen proved online. Mirrors [applyModeTransition]'s
+     * Paused→Online path (same-session grace-resume vs. fresh-session logic); that
+     * function also nulls [PendingModeResume] on any transition out of Paused.
+     */
+    private fun commitModeResume(
+        region: PlatformRegion,
+        obs: Observation,
+        policy: TransitionPolicy,
+    ): PlatformRegion =
+        applyModeTransition(region, Mode.Online, obs, TransitionKind.Expected, policy)
 
     /**
      * When an unexpected transition fires (e.g., app launched mid-pickup),

@@ -232,6 +232,11 @@ object SessionReplay {
     fun graceCommit(atMs: Long, platform: Platform = Platform.DoorDash): TimeoutInput =
         TimeoutInput(TimeoutType.GRACE_COMMIT, platform, atMs)
 
+    /** A `MODE_RESUME_COMMIT` timeout scoped to [platform], at [atMs] (#605) — must be strictly
+     *  greater than the armed resume-grace deadline so lazy expiry commits the Paused→Online resume. */
+    fun modeResumeCommit(atMs: Long, platform: Platform = Platform.DoorDash): TimeoutInput =
+        TimeoutInput(TimeoutType.MODE_RESUME_COMMIT, platform, atMs)
+
     /**
      * Level B, heterogeneous — fold a timestamp-ordered mix of real screen/click captures and
      * synthetic click/timeout observations through the REAL [StateMachine]. ONE classifier instance

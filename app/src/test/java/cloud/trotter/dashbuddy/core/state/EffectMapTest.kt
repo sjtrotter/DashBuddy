@@ -672,6 +672,75 @@ class EffectMapTest {
     }
 
     // =========================================================================
+    // PAUSE-FLAP EDGE ELIMINATION (#605)
+    // =========================================================================
+
+    /**
+     * The 06-28 receipt: DoorDash's pause sheet is a modal on top of the just-completed
+     * delivery summary, so accessibility frames alternate `dash_paused` ↔
+     * `delivery_summary_collapsed` (modeHint online) for a few seconds. Before #605 each
+     * online→paused edge re-minted `DASH_PAUSED` + "Dash Paused!" and each paused→online edge
+     * fired a spurious "Session resumed (grace)" card while the dasher was still paused.
+     *
+     * Driven through the REAL state machine (the fix is edge-flap elimination in the stepper, so
+     * hand-built diff pairs can't exercise it): the whole flap must collapse to exactly ONE
+     * DASH_PAUSED, ONE "Dash Paused!", and ZERO resume cards.
+     */
+    @Test
+    fun `#605 the 06-28 pause-flap collapses to one DASH_PAUSED and no spurious resume card`() {
+        val machine = StateMachine(
+            flowStepper = FlowRegionStepper(),
+            platformStepper = PlatformRegionStepper(),
+            crossPlatformStepper = CrossPlatformRegionStepper(),
+            transitionPolicy = TransitionPolicy(),
+            effectMap = EffectMap(),
+        )
+        var state = AppState()
+        val all = mutableListOf<AppEffect>()
+        var ts = 1_000_000L
+        fun feed(obs: Observation) {
+            val t = machine.step(state, obs)
+            state = t.newState
+            all += t.effects
+        }
+        fun at() = (ts + 1000L).also { ts = it }
+
+        // A live delivery (online) right before the pause.
+        feed(screenObs(flow = Flow.OfferPresented, parsed = testOfferFields, timestamp = at()))
+        // The ONE real pause.
+        feed(screenObs(
+            modeHint = Mode.Paused,
+            parsed = ParsedFields.PausedFields(remainingText = "5:00", remainingMillis = 300_000),
+            timestamp = at(),
+        ))
+        // The flap — receipt (delivery_summary, online) ↔ pause, all inside the 8s grace.
+        repeat(2) {
+            feed(screenObs(
+                flow = Flow.PostTask, modeHint = Mode.Online,
+                parsed = ParsedFields.PostTaskFields(totalPay = 0.0), timestamp = at(),
+            ))
+            feed(screenObs(
+                modeHint = Mode.Paused,
+                parsed = ParsedFields.PausedFields(remainingText = "4:00", remainingMillis = 240_000),
+                timestamp = at(),
+            ))
+        }
+
+        assertEquals(
+            "exactly one DASH_PAUSED across the whole flap",
+            1, all.logEventTypes().count { it == AppEventType.DASH_PAUSED },
+        )
+        assertEquals(
+            "exactly one 'Dash Paused!' card",
+            1, all.count { it is AppEffect.UpdateBubble && it.text.contains("Dash Paused!") },
+        )
+        assertFalse(
+            "no spurious 'Session resumed (grace)' card while the pause sheet is up",
+            all.any { it is AppEffect.UpdateBubble && it.text.contains("resumed") },
+        )
+    }
+
+    // =========================================================================
     // TASK EFFECTS
     // =========================================================================
 
