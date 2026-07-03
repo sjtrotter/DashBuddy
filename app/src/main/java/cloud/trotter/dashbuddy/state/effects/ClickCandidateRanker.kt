@@ -82,10 +82,29 @@ object ClickCandidateRanker {
     fun rank(ref: NodeRef, candidates: List<CandidateFacts>): Ranked {
         require(candidates.isNotEmpty()) { "ClickCandidateRanker.rank called with no candidates" }
 
+        // Blank ref text is NOT evidence (#618 review F5): an empty stored text
+        // would "exactly match" any empty-text candidate and short-circuit the
+        // bounds tier on zero information.
         val refText = ref.text
-        if (refText != null) {
-            val exactTextIndex = candidates.indexOfFirst { it.text?.take(50) == refText }
-            if (exactTextIndex >= 0) return Ranked(exactTextIndex, Tier.EXACT_TEXT)
+        if (!refText.isNullOrBlank()) {
+            val tied = candidates.withIndex().filter { it.value.text?.take(50) == refText }
+            when {
+                tied.size == 1 -> return Ranked(tied.single().index, Tier.EXACT_TEXT)
+                tied.size > 1 -> {
+                    // Two windows can each render an identical-text node (a
+                    // transition double-render). Break the text tie by bounds
+                    // overlap AMONG THE TIED subset (#618 review F4); a still-
+                    // unbroken tie falls through as unresolved evidence.
+                    var bestIndex = -1
+                    var bestIoU = 0.0
+                    for ((i, c) in tied) {
+                        val overlap = boundsIoU(ref.boundsInScreen, c.bounds)
+                        if (overlap > bestIoU) { bestIoU = overlap; bestIndex = i }
+                    }
+                    if (bestIoU > 0.0) return Ranked(bestIndex, Tier.EXACT_TEXT)
+                    return Ranked(tied.first().index, Tier.UNRESOLVED)
+                }
+            }
         }
 
         var bestIndex = 0

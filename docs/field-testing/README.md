@@ -100,7 +100,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   landing right only by luck of enumeration order. Now it ranks by exact stored text first, then max
   bounds overlap (IoU) — the WARN only fires on a genuine unresolvable tie. **Confirm on dash: 0/2 —**
   after an automated Accept/Decline/quick-decline-confirm tap, the log should show a DEBUG
-  `Resolved click target for … via EXACT_TEXT/BOUNDS_OVERLAP tier` line, **not** the old
+  `Resolved click target for … via EXACT_TEXT/BOUNDS_OVERLAP tier` line **or**
+  `Single verified candidate … clicking it` (a 1-candidate pool — also success), **not** the old
   `No exact bounds match … — clicking first` WARN on every fire; the tap should still land on the
   correct button (behavioral no-change on the happy path). Broken = the WARN reappearing on routine
   taps, or a tap landing on the wrong control (e.g. Accept firing when Decline was intended).

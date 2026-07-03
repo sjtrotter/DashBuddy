@@ -179,7 +179,7 @@ class SideEffectEngineTest {
 
         engine.process(effect, recovering = true)
         runCurrent()
-        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any())
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any(), any())
 
         engine.process(effect, recovering = false)
         runCurrent()
@@ -188,6 +188,7 @@ class SideEffectEngineTest {
             eq(Platform.DoorDash.packageName),
             eq(RuleAction.ACCEPT_OFFER.verification),
             any(),
+            eq(false), // AUTOMATION trigger → no retry (#618 F2: retry is USER-taps only)
         )
     }
 
@@ -202,7 +203,7 @@ class SideEffectEngineTest {
 
         // Second fire inside RULE_ACTION_THROTTLE_MS is swallowed — an
         // app-owned bound on automated taps (#425).
-        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
     }
 
     // =========================================================================
@@ -228,7 +229,7 @@ class SideEffectEngineTest {
             .thenReturn(flowOf(OfferAutomationConfig(quickDeclinesEnabled = true)))
         engine.process(confirmDeclineEffect())
         runCurrent()
-        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
     }
 
     @Test
@@ -238,7 +239,7 @@ class SideEffectEngineTest {
             .thenReturn(flowOf(OfferAutomationConfig(quickDeclinesEnabled = false)))
         engine.process(confirmDeclineEffect())
         runCurrent()
-        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any())
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any(), any())
     }
 
     // =========================================================================
@@ -254,7 +255,7 @@ class SideEffectEngineTest {
         engine.process(acceptActionEffect(trigger = ActionTrigger.AUTOMATION))
         runCurrent()
 
-        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any())
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any(), any())
     }
 
     @Test
@@ -264,7 +265,7 @@ class SideEffectEngineTest {
         engine.process(acceptActionEffect(trigger = ActionTrigger.AUTOMATION))
         runCurrent()
 
-        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
         verifyBlocking(capabilityGrants) {
             isActionGranted(eq("doordash.screen.offer_popup"), eq(RuleAction.ACCEPT_OFFER))
         }
@@ -279,7 +280,7 @@ class SideEffectEngineTest {
         engine.process(acceptActionEffect(trigger = ActionTrigger.USER))
         runCurrent()
 
-        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any())
+        verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
         verifyBlocking(capabilityGrants, never()) { isActionGranted(anyOrNull(), any()) }
     }
 
@@ -291,7 +292,7 @@ class SideEffectEngineTest {
         engine.process(acceptActionEffect(trigger = ActionTrigger.USER))
         runCurrent()
 
-        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any())
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any(), any())
     }
 
     @Test

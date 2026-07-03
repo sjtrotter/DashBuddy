@@ -70,6 +70,7 @@ class UiInteractionHandler @Inject constructor(
         expectedPackage: String?,
         expectation: TargetExpectation,
         description: String,
+        allowRetry: Boolean = false,
     ): Boolean {
         Timber.i("UiInteractionHandler: attempting verified click (%s)", description)
 
@@ -82,10 +83,16 @@ class UiInteractionHandler @Inject constructor(
         // foreground — the platform window reappears roughly 0.5-1s later
         // when the shade collapses. Retry the read (bounded) before failing
         // closed; nothing else in this function is retried.
-        val roots = awaitLiveRoots(expectedPackage) {
+        // #602: the bounded retry exists for USER-triggered taps (a notification
+        // press races the shade collapse). AUTOMATION fires follow a live-screen
+        // recognition milliseconds earlier — an empty enumeration there means the
+        // window genuinely left; retrying could resolve against whatever screen
+        // returns (#618 review F2). Single fail-closed read for AUTOMATION.
+        val rootsSource = {
             accessibilitySource.getLiveWindowRoots()
                 .filter { it.packageName?.toString() == expectedPackage }
         }
+        val roots = if (allowRetry) awaitLiveRoots(expectedPackage, source = rootsSource) else rootsSource()
         if (roots.isEmpty()) {
             Timber.w(
                 "No live windows for package %s after %d retries over %dms — cannot click (%s)",
@@ -136,10 +143,15 @@ class UiInteractionHandler @Inject constructor(
         val ranked = ClickCandidateRanker.rank(ref, facts)
         val target = verified[ranked.index]
         when {
-            ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1 -> Timber.w(
-                "No decisive match among %d verified candidates for: %s — clicking first (labels seen: %s)",
-                verified.size, description, facts.map { it.labels },
-            )
+            ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1 -> {
+                // WARN carries counts only — raw third-party UI text is DEBUG-tier
+                // by Principle 7 (the WARN slice is user-exportable), #618 review F1.
+                Timber.w(
+                    "No decisive match among %d verified candidates for: %s — clicking first",
+                    verified.size, description,
+                )
+                Timber.d("Unresolved-tie candidate labels for %s: %s", description, facts.map { it.labels })
+            }
             verified.size == 1 -> Timber.d("Single verified candidate for %s — clicking it", description)
             else -> Timber.d(
                 "Resolved click target for %s via %s tier (%d candidate(s))",
