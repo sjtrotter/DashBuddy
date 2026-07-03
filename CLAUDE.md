@@ -178,7 +178,7 @@ registry (`:domain`) consumes — see `docs/design/rule-capability-consent.md`.
 
 Observations reduce into `AppState(regions)` (`:domain`): **`FlowRegion`** (R0 — ground-truth
 screen interpretation; holds the pending offer), one **`PlatformRegion`** per platform
-(session/task lifecycle; unified grace via `pendingDestructive` — destructive commits are graced, incl. short authoritative windows for the dash summary AND the delivery receipt, and woken by `GRACE_COMMIT` timers, #431), and **`CrossPlatformRegion`**
+(session/task lifecycle; unified grace via `pendingDestructive` — destructive commits are graced, incl. short authoritative windows for the dash summary AND the delivery receipt, and woken by `GRACE_COMMIT` timers, #431 — plus a separate `pendingModeResume`/`MODE_RESUME_COMMIT` grace that debounces a screen-implied Paused→Online *resume* so a pause-sheet-over-receipt can't flap `DASH_PAUSED`, #605), and **`CrossPlatformRegion`**
 (derived aggregates). The steppers (`FlowRegionStepper`, `PlatformRegionStepper`,
 `CrossPlatformRegionStepper`) are pure and driven by `obs.timestamp` — never a wall clock — so
 crash recovery can replay observations over the last snapshot. `StateManagerV2` hosts the
