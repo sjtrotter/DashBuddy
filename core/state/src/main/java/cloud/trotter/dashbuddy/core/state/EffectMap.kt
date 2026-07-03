@@ -235,7 +235,12 @@ class EffectMap @Inject constructor() {
         // Declined" independently of resolveOfferOutcome — two code paths that only agreed
         // because handleOfferClick happened to thread the same intent into both, with no
         // structural guarantee they couldn't desync.
-        if (flowObs is Observation.Click && prev.flow == Flow.OfferPresented) {
+        // The ack is click-time feedback that a decision is IN FLIGHT — so skip it when this
+        // same click also popped the offer (nextOffer == null): the resolution block above
+        // already emitted the committed outcome card this step, and a trailing "Accepting…"
+        // would be a never-resolving contradiction (#625 review — unreachable with today's
+        // flow-less click rules, but cheap to guard).
+        if (flowObs is Observation.Click && prev.flow == Flow.OfferPresented && nextOffer != null) {
             val fields = flowObs.parsed as? ParsedFields.ClickFields
             // #594: the decline-commit latch set on a prior confirm click (survives on this
             // click's next.pendingOffer, or prev's if the pop is concurrent).
@@ -1131,7 +1136,15 @@ class EffectMap @Inject constructor() {
         AppEventType.OFFER_ACCEPTED -> "Offer Accepted"
         AppEventType.OFFER_DECLINED -> "Offer Declined"
         AppEventType.OFFER_TIMEOUT -> "Offer Timed Out!"
-        else -> throw IllegalArgumentException("Not an offer outcome: $outcome")
+        // Fail OPEN on display text, never on the reducer loop (#625 review): EffectMap
+        // is diffed inside StateManagerV2's event loop, which has no try/catch — a throw
+        // here would freeze the state machine and let the unbounded observation buffer
+        // grow until restart. A neutral string is a harmless card; today the only caller
+        // passes resolveOfferOutcome output, so this is a future-proofing floor.
+        else -> {
+            Timber.e("outcomeCardText got a non-outcome type: %s — using neutral text", outcome)
+            "Offer resolved"
+        }
     }
 
     private fun determinePickupPersona(

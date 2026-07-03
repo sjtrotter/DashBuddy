@@ -88,8 +88,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **Deliberate UX cost:** the outcome card now pops ~seconds after the tap (BK field timings put the
   resolution frame ~7-8s behind the click) instead of instantly — evaluate whether that delay feels
   acceptable on-dash. **Confirm on dash: 0/2 —** tap Accept: "Accepting…" should show instantly, then
-  "Offer Accepted" when the screen actually advances past the offer. Tap Decline similarly
-  ("Declining…" → "Offer Declined"). Re-run the #594 race (decline → confirm → "Review offer" →
+  "Offer Accepted" when the screen actually advances past the offer. On Decline, the ack appears
+  at the **confirm-sheet** tap (the first Decline tap classifies as `initial_decline` and is
+  silent by design — don't score that as broken): confirm-sheet tap → "Declining…" → "Offer
+  Declined" at resolution. Re-run the #594 race (decline → confirm → "Review offer" →
   Accept): the race warning ("Decline already submitted — Accept won't take") should show at tap
   time (not "Accepting…"), then "Offer Declined" at resolution. Broken = an ack that never resolves
   into a matching outcome card, or any card text that doesn't match what the db logs for that offer.
