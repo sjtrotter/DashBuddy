@@ -25,7 +25,12 @@ import javax.inject.Singleton
  *    the action's [TargetExpectation] (e.g. DECLINE_OFFER only taps a node
  *    labeled "Decline"). Platform buttons usually label via a child TextView,
  *    so collection walks a bounded subtree.
- * 3. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
+ * 3. **Evidence-ranked disambiguation** (#600) — when more than one live node
+ *    survives label verification, [ClickCandidateRanker] picks the strongest
+ *    match (exact stored text, then max bounds overlap) instead of a
+ *    since-abandoned exact-bounds `==` comparison that broke under an
+ *    animating sheet's temporal drift.
+ * 4. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
  *    fallback is deliberately absent here: the verified node's sibling can be
  *    the opposite button (Accept sits beside Decline in the offer footer).
  *
@@ -78,8 +83,15 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        val verified = candidates.filter { expectation.matchesLabels(collectLabels(it)) }
-        if (verified.isEmpty()) {
+        // Label-verify once and keep each surviving node's labels alongside it —
+        // the ranker below wants them too (for WARN diagnostics), so this avoids
+        // walking each candidate's subtree twice (collectLabels is bounded but
+        // not free).
+        val labeledCandidates = candidates.mapNotNull { node ->
+            val labels = collectLabels(node)
+            if (expectation.matchesLabels(labels)) node to labels else null
+        }
+        if (labeledCandidates.isEmpty()) {
             Timber.w(
                 "%d candidate(s) for %s but NONE passed label verification (%s) — refusing to click",
                 candidates.size, description, expectation.labelPattern,
@@ -87,17 +99,31 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        // Disambiguate: prefer the exact stored-bounds match, else first verified.
-        val exactMatch = verified.find { node ->
+        // Disambiguate (#600): rank the label-verified survivors by evidence —
+        // exact stored text, then max bounds overlap — instead of exact-bounds
+        // `==`, which dies to the temporal drift of an animating sheet (see
+        // ClickCandidateRanker's KDoc for the full grounding).
+        val verified = labeledCandidates.map { it.first }
+        val facts = labeledCandidates.map { (node, labels) ->
             val liveBounds = Rect()
             node.getBoundsInScreen(liveBounds)
-            liveBounds.toBoundingBox() == ref.boundsInScreen
+            ClickCandidateRanker.CandidateFacts(
+                text = node.text?.toString(),
+                labels = labels,
+                bounds = liveBounds.toBoundingBox(),
+            )
         }
-        val target = exactMatch ?: verified.first()
-        if (exactMatch == null && verified.size > 1) {
-            Timber.w(
-                "No exact bounds match among %d verified candidates for: %s — clicking first",
-                verified.size, description,
+        val ranked = ClickCandidateRanker.rank(ref, facts)
+        val target = verified[ranked.index]
+        when {
+            ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1 -> Timber.w(
+                "No decisive match among %d verified candidates for: %s — clicking first (labels seen: %s)",
+                verified.size, description, facts.map { it.labels },
+            )
+            verified.size == 1 -> Timber.d("Single verified candidate for %s — clicking it", description)
+            else -> Timber.d(
+                "Resolved click target for %s via %s tier (%d candidate(s))",
+                description, ranked.tier, verified.size,
             )
         }
         return AccNodeUtils.clickNodeStrict(target)
