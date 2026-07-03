@@ -1,8 +1,14 @@
 package cloud.trotter.dashbuddy.core.database
 
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
+import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
+import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.chat.ChatDao
 import cloud.trotter.dashbuddy.core.database.chat.ChatMessageEntity
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
@@ -21,9 +27,19 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         ChatMessageEntity::class,
         EffectsFiredEntity::class,
         ObservationEntity::class,
+        // Analytics read-model (#314) — purely additive; folded from app_events.
+        DeliveryRecordEntity::class,
+        SessionRecordEntity::class,
+        OfferRecordEntity::class,
+        AnalyticsProjectionStateEntity::class,
     ],
-    version = 8,
-    exportSchema = true
+    version = 9,
+    exportSchema = true,
+    // v8→v9 adds only new tables (the analytics read-model). AutoMigration is a
+    // no-op for existing tables, so it CANNOT wipe app_events (unlike the
+    // destructive fallback, which is left untouched — the auto-migration provides
+    // the path so the fallback never fires on this upgrade).
+    autoMigrations = [AutoMigration(from = 8, to = 9)],
 )
 @TypeConverters(DataTypeConverters::class)
 abstract class DashBuddyDatabase : RoomDatabase() {
@@ -34,5 +50,6 @@ abstract class DashBuddyDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
     abstract fun effectsFiredDao(): EffectsFiredDao
     abstract fun observationDao(): ObservationDao
+    abstract fun analyticsDao(): AnalyticsDao
 
 }
