@@ -24,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
@@ -54,12 +55,28 @@ class MainActivity : ComponentActivity() {
                         // --- MAIN DASHBOARD ---
                         composable(Screen.Dashboard.route) {
                             DashboardScreen(
+                                onNavigate = { route -> navController.navigate(route) },
                                 onNavigateToSettings = {
                                     navController.navigate(Screen.SettingsHome.route)
                                 },
                                 onNavigateToWizard = { // <-- UPDATED CALLBACK
                                     navController.navigate(Screen.Wizard.route)
                                 }
+                            )
+                        }
+
+                        // --- RATINGS (#316) ---
+                        composable(Screen.Ratings.route) {
+                            RatingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // --- ANALYTICS HUB (Phase 4, #315) — placeholder for now ---
+                        composable(Screen.Analytics.route) {
+                            PlaceholderScreen(
+                                title = "Analytics",
+                                onBack = { navController.popBackStack() }
                             )
                         }
 
