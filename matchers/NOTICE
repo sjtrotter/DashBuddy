@@ -1,0 +1,11 @@
+DashBuddy Matchers
+Copyright 2026 Stephen Trotter
+
+This product includes the DashBuddy recognition ruleset (JSON5 rule source +
+canonicalizer), licensed under the Apache License, Version 2.0.
+
+The ruleset is empirical measurement of the visible offer surface of gig-delivery
+platform apps — the information a driver already sees on their own screen, encoded
+as data so DashBuddy can present it back to the driver. It is not, and must not be
+described as, reverse-engineering, model recovery, or algorithm characterization of
+any platform.

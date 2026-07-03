@@ -212,5 +212,7 @@ architecture, refactoring, and the data-driven recognition engine.
 ## License
 
 The application is licensed under [PolyForm Shield 1.0.0](LICENSE) — Copyright 2026 Stephen
-Trotter. The recognition rules are intended to ship under Apache-2.0 as a separate, forkable layer
-(see [#192](https://github.com/sjtrotter/DashBuddy/issues/192)).
+Trotter. The recognition ruleset in [`matchers/`](matchers/) is **separately licensed under
+[Apache-2.0](matchers/LICENSE)** — a forkable recognition layer (Pillar 2; see
+[#192](https://github.com/sjtrotter/DashBuddy/issues/192)) that can move to its own repo
+unencumbered. It is empirical measurement of the visible offer surface, published as data.

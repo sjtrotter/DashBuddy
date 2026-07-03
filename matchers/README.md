@@ -2,8 +2,8 @@
 
 This directory owns the **single source of truth for DashBuddy recognition rules**. It is an
 in-repo stand-in for the future separate, forkable, Apache-2.0 **matchers repo** (Pillar 2 /
-Epic #192) — same Gradle topology, so when the repo splits out (gated on the #246 licensing
-decision) this becomes a git **submodule** with no consumer-side change. See
+Epic #192) — same Gradle topology, so when the repo splits out (licensing settled Apache-2.0 per
+#246) this becomes a git **submodule** with no consumer-side change. See
 [`docs/adr/ADR-0009-rule-distribution-channels.md`](../docs/adr/ADR-0009-rule-distribution-channels.md).
 
 It is a self-contained plain-JVM Gradle build (`includeBuild`-ed by the app's root
@@ -52,3 +52,19 @@ The runtime OTA/CDN channel — signed JSON fetched, verified (#416), capability
 survival across the swap (#419), CDN infra + signing — is greenfield. The bundled baseline here
 remains the first-run seed, the offline fallback, and the fail-closed fallback when signature
 verification fails.
+
+## License
+
+This ruleset is licensed under the **[Apache License 2.0](LICENSE)** (see [`NOTICE`](NOTICE)) —
+separately from the DashBuddy application, which is source-available under PolyForm Shield 1.0.0.
+The Apache-2.0 boundary is deliberate (Pillar 2 / Epic #192): the recognition layer is meant to be
+**forkable** so that if an upstream source is compromised, drivers can switch to another via
+configuration. Keeping the ruleset Apache-2.0 while in this monorepo lets it move to its own repo
+(gated on nothing now that the licensing is settled) with no relicensing step.
+
+**Framing (non-negotiable, per the project framing discipline).** This ruleset is **empirical
+measurement of the visible offer surface** — it encodes the information a driver already sees on
+their own screen so DashBuddy can present it back to them on-device. It is **not** reverse-
+engineering, model recovery, or algorithm characterization of any platform, and public-facing
+descriptions of it must never suggest otherwise (the DoorDash ICA §15.4 prohibits reverse-
+engineering; DashBuddy does not do that).
