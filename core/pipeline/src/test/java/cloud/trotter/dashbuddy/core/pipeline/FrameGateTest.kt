@@ -83,34 +83,93 @@ class FrameGateTest {
 
     @Test
     fun `rolling capacity evicts oldest - an evicted hash can capture again`() {
-        val suppressor = UnknownSuppressor(capacity = 2, processCap = 1_000)
-        assertTrue(suppressor.shouldCapture(1))
-        assertTrue(suppressor.shouldCapture(2))
-        assertTrue(suppressor.shouldCapture(3)) // evicts 1
-        assertTrue(suppressor.shouldCapture(1)) // 1 was evicted → captures again
-        assertFalse(suppressor.shouldCapture(3)) // still resident
+        val suppressor = UnknownSuppressor(capacity = 2, burstCap = 1_000)
+        assertTrue(suppressor.shouldCapture(1, nowMs = 1_000L))
+        assertTrue(suppressor.shouldCapture(2, nowMs = 2_000L))
+        assertTrue(suppressor.shouldCapture(3, nowMs = 3_000L)) // evicts 1
+        assertTrue(suppressor.shouldCapture(1, nowMs = 4_000L)) // 1 was evicted → captures again
+        assertFalse(suppressor.shouldCapture(3, nowMs = 5_000L)) // still resident
     }
 
     @Test
     fun `re-seeing a hash refreshes its recency`() {
-        val suppressor = UnknownSuppressor(capacity = 2, processCap = 1_000)
-        assertTrue(suppressor.shouldCapture(1))
-        assertTrue(suppressor.shouldCapture(2))
-        assertFalse(suppressor.shouldCapture(1)) // touch 1 → 2 is now eldest
-        assertTrue(suppressor.shouldCapture(3))  // evicts 2, not 1
-        assertFalse(suppressor.shouldCapture(1))
-        assertTrue(suppressor.shouldCapture(2))  // 2 was evicted
+        val suppressor = UnknownSuppressor(capacity = 2, burstCap = 1_000)
+        assertTrue(suppressor.shouldCapture(1, nowMs = 1_000L))
+        assertTrue(suppressor.shouldCapture(2, nowMs = 2_000L))
+        assertFalse(suppressor.shouldCapture(1, nowMs = 3_000L)) // touch 1 → 2 is now eldest
+        assertTrue(suppressor.shouldCapture(3, nowMs = 4_000L))  // evicts 2, not 1
+        assertFalse(suppressor.shouldCapture(1, nowMs = 5_000L))
+        assertTrue(suppressor.shouldCapture(2, nowMs = 6_000L))  // 2 was evicted
     }
 
     @Test
-    fun `process cap stops captures but suppression of seen hashes continues`() {
-        val suppressor = UnknownSuppressor(capacity = 8, processCap = 2)
-        assertTrue(suppressor.shouldCapture(1))
-        assertTrue(suppressor.shouldCapture(2))
-        assertFalse(suppressor.shouldCapture(3)) // cap reached
-        assertFalse(suppressor.shouldCapture(1)) // seen — still suppressed
+    fun `burst cap stops captures but suppression of seen hashes continues`() {
+        val suppressor = UnknownSuppressor(capacity = 8, burstCap = 2)
+        assertTrue(suppressor.shouldCapture(1, nowMs = 1_000L))
+        assertTrue(suppressor.shouldCapture(2, nowMs = 2_000L))
+        assertFalse(suppressor.shouldCapture(3, nowMs = 3_000L)) // cap reached
+        assertFalse(suppressor.shouldCapture(1, nowMs = 4_000L)) // seen — still suppressed
         var capped = 0
-        for (h in 10..20) if (!suppressor.shouldCapture(h)) capped++
+        var t = 5_000L
+        for (h in 10..20) { if (!suppressor.shouldCapture(h, nowMs = t)) capped++; t += 1_000L }
         assertEquals(11, capped)
+    }
+
+    // #597: the cap is per burst-window, re-armed by a quiet gap — the a11y
+    // process lives for days, so a lifetime cap meant days of triage blindness.
+
+    @Test
+    fun `cap re-arms after a quiet gap - a later dash gets a fresh budget`() {
+        val gapMs = 30 * 60 * 1000L
+        val suppressor = UnknownSuppressor(capacity = 8, burstCap = 2, quietGapMs = gapMs)
+        assertTrue(suppressor.shouldCapture(1, nowMs = 1_000L))
+        assertTrue(suppressor.shouldCapture(2, nowMs = 2_000L))
+        assertFalse(suppressor.shouldCapture(3, nowMs = 3_000L)) // cap reached mid-burst
+        // 31 minutes of silence — flood over; new distinct unknowns capture again.
+        val later = 3_000L + gapMs + 60_000L
+        assertTrue(suppressor.shouldCapture(4, nowMs = later))
+        assertTrue(suppressor.shouldCapture(5, nowMs = later + 1_000L))
+        assertFalse(suppressor.shouldCapture(6, nowMs = later + 2_000L)) // fresh cap holds
+    }
+
+    @Test
+    fun `no re-arm during a continuous flood`() {
+        val gapMs = 30 * 60 * 1000L
+        val suppressor = UnknownSuppressor(capacity = 8, burstCap = 2, quietGapMs = gapMs)
+        assertTrue(suppressor.shouldCapture(1, nowMs = 0L))
+        assertTrue(suppressor.shouldCapture(2, nowMs = 1_000L))
+        // A flood ticking every minute for hours: gap never exceeds quietGapMs.
+        var t = 2_000L
+        for (h in 100..400) {
+            assertFalse(suppressor.shouldCapture(h, nowMs = t))
+            t += 60_000L
+        }
+    }
+
+    @Test
+    fun `an out-of-order timestamp cannot fake a quiet gap mid-flood`() {
+        // Notification postTime is not monotonic (reposts/group summaries). A
+        // backwards frame must not regress the anchor and re-arm the cap
+        // (adversarial F1 on #597).
+        val gapMs = 30 * 60 * 1000L
+        val suppressor = UnknownSuppressor(capacity = 8, burstCap = 2, quietGapMs = gapMs)
+        assertTrue(suppressor.shouldCapture(1, nowMs = 1_000L))
+        assertTrue(suppressor.shouldCapture(2, nowMs = 2_000L))
+        assertFalse(suppressor.shouldCapture(3, nowMs = 3_000L)) // capped
+        // A frame stamped 45 min in the PAST arrives out of order…
+        assertFalse(suppressor.shouldCapture(4, nowMs = 3_000L - 45 * 60 * 1000L))
+        // …the next in-order frame must still be capped (no fake quiet gap).
+        assertFalse(suppressor.shouldCapture(5, nowMs = 4_000L))
+    }
+
+    @Test
+    fun `re-arm resets the cap, not the seen-set - known hashes stay suppressed`() {
+        val gapMs = 30 * 60 * 1000L
+        val suppressor = UnknownSuppressor(capacity = 8, burstCap = 2, quietGapMs = gapMs)
+        assertTrue(suppressor.shouldCapture(1, nowMs = 1_000L))
+        assertTrue(suppressor.shouldCapture(2, nowMs = 2_000L))
+        val later = 2_000L + gapMs + 60_000L
+        assertFalse(suppressor.shouldCapture(1, nowMs = later)) // seen — still deduped
+        assertTrue(suppressor.shouldCapture(3, nowMs = later + 1_000L)) // new hash captures
     }
 }
