@@ -775,6 +775,9 @@
       "parse": {
         "as": "notification"
       },
+      "redact": {
+        "title": {}
+      },
       "effects": [
         {
           "log": {
@@ -793,6 +796,9 @@
       "intent": "trip_at_dropoff",
       "parse": {
         "as": "notification"
+      },
+      "redact": {
+        "title": { "keepPrefix": [ "Leave the order at ", "Meet at door for " ] }
       },
       "effects": [
         {

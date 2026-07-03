@@ -156,8 +156,12 @@ data class CompiledNotifRedact(
     }
 
     private fun maskGroup(value: String, regex: Regex, group: Int): String {
-        val match = regex.find(value) ?: return value
-        val g = match.groups[group] ?: return value
+        // FAIL CLOSED (#620 review F2b): if the capture regex drifts from the
+        // require gate (the rule matched but this pattern doesn't, or the group is
+        // absent), masking the group would ship the RAW field. A recognized frame
+        // must never ship raw PII, so mask the WHOLE field instead.
+        val match = regex.find(value) ?: return CompiledRedact.REDACTED
+        val g = match.groups[group] ?: return CompiledRedact.REDACTED
         // Reuse the SSOT mask (no keepPrefix — the group IS the token to hash).
         val masked = CompiledRedact.mask(g.value, emptyList()) ?: CompiledRedact.REDACTED
         return value.replaceRange(g.range, masked)

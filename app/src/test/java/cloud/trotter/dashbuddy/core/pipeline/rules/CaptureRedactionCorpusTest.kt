@@ -224,6 +224,29 @@ class CaptureRedactionCorpusTest {
         assertTrue("new_order carries no customer PII → no redact", rule.notifRedact.isEmpty())
     }
 
+    @Test
+    fun `production uber trip_en_route_dropoff masks the address title (#620 F1)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("uber.notification.trip_en_route_dropoff")!!
+        assertTrue("trip_en_route_dropoff must carry a notif redact block", !rule.notifRedact.isEmpty())
+        // The title IS the customer address ("Going to <address>"); mask the whole field.
+        val masked = rule.notifRedact.apply(notif(title = "Going to 1600 Amphitheatre Pkwy"))
+        assertFalse("street name gone", masked.title!!.contains("Amphitheatre"))
+        assertFalse("house number gone", masked.title!!.contains("1600"))
+        assertTrue(Regex("""^\[redacted:[0-9a-f]{4}\]$""").matches(masked.title!!))
+    }
+
+    @Test
+    fun `production uber trip_at_dropoff masks the address or name, keeps the lead-in (#620 F1)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("uber.notification.trip_at_dropoff")!!
+        assertTrue("trip_at_dropoff must carry a notif redact block", !rule.notifRedact.isEmpty())
+        val leave = rule.notifRedact.apply(notif(title = "Leave the order at 1600 Amphitheatre Pkwy"))
+        assertFalse("address gone", leave.title!!.contains("Amphitheatre"))
+        assertTrue(Regex("""^Leave the order at \[redacted:[0-9a-f]{4}\]$""").matches(leave.title!!))
+        val meet = rule.notifRedact.apply(notif(title = "Meet at door for Jane Doe"))
+        assertFalse("customer name gone", meet.title!!.contains("Jane"))
+        assertTrue(Regex("""^Meet at door for \[redacted:[0-9a-f]{4}\]$""").matches(meet.title!!))
+    }
+
     private fun jsonUsesSha256(element: kotlinx.serialization.json.JsonElement): Boolean = when (element) {
         is kotlinx.serialization.json.JsonPrimitive -> element.isString && element.content == "sha256"
         is kotlinx.serialization.json.JsonObject -> element.values.any { jsonUsesSha256(it) }

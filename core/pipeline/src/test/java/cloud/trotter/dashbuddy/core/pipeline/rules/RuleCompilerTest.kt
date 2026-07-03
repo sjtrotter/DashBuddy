@@ -978,6 +978,55 @@ class RuleCompilerTest {
         )
     }
 
+    @Test
+    fun `notification regex-capture mask fails CLOSED when the pattern does not match (F2b)`() {
+        // The require gate admitted the notification but the capture regex drifted
+        // and does not match — masking the group would ship the RAW field. It must
+        // mask the WHOLE field instead.
+        val ruleJson = """[{
+            "id": "doordash.notification.order_ready",
+            "priority": 10,
+            "require": { "anyFieldContains": "ready" },
+            "redact": { "text": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 } }
+        }]"""
+        val rule = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        ).single()
+        val masked = rule.notifRedact.apply(raw(text = "Your order is ready!"))
+        assertEquals("whole field masked when the capture regex misses", "[redacted]", masked.text)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `notification redact rejects an out-of-range maskGroup (F3)`() {
+        // Pattern has 2 capturing groups; maskGroup 5 would throw
+        // IndexOutOfBoundsException at capture — reject at COMPILE (fail closed).
+        val ruleJson = """[{
+            "id": "doordash.notification.bad_group",
+            "priority": 12,
+            "require": { "channelIdContains": "chat" },
+            "redact": { "text": { "match": "(foo)(bar)", "maskGroup": 5 } }
+        }]"""
+        RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a redact on a CLICK rule is rejected (F5)`() {
+        // redact compiles only for SCREEN, notifRedact only for NOTIFICATION — a
+        // CLICK-context redact silently vanishes, so reject it at compile.
+        val ruleJson = """[{
+            "id": "doordash.click.some_button",
+            "priority": 99,
+            "screenIs": "offer_popup",
+            "require": { "hasText": "Accept" },
+            "redact": [ { "find": { "hasTextStartsWith": "Deliver to " } } ]
+        }]"""
+        RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.CLICK,
+        )
+    }
+
     // =========================================================================
     // enumeratePermissions
     // =========================================================================

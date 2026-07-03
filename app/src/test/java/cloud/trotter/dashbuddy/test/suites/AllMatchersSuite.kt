@@ -1,8 +1,10 @@
 package cloud.trotter.dashbuddy.test.suites
 
+import cloud.trotter.dashbuddy.core.pipeline.CaptureBackstopCorpusTest
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.view.clicked.ClickClassifierTest
 import cloud.trotter.dashbuddy.core.pipeline.notification.NotificationClassifierTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.GoldenSnapshotRegressionTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
@@ -39,6 +41,10 @@ import org.junit.runners.Suite
  * - [TriageRulesTest] — synthetic fixtures for rules added from capture triage.
  * - [DefaultRulesIntegrationTest] — end-to-end rule compilation/wiring.
  * - [NotificationClassifierTest] / [ClickClassifierTest] — classifier behavior.
+ * - [CaptureRedactionCorpusTest] — the #598/#620 redact predicates mask injected
+ *   PII across the corpus + notification redact blocks mask name/body, keep store.
+ * - [CaptureBackstopCorpusTest] — the #624 recognized-frame customer-marker
+ *   backstop finds ZERO leaks over the redacted corpus (false-positive pin).
  */
 @RunWith(Suite::class)
 @Suite.SuiteClasses(
@@ -51,5 +57,7 @@ import org.junit.runners.Suite
     DefaultRulesIntegrationTest::class,
     NotificationClassifierTest::class,
     ClickClassifierTest::class,
+    CaptureRedactionCorpusTest::class,
+    CaptureBackstopCorpusTest::class,
 )
 class AllMatchersSuite

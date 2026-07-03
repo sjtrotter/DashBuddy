@@ -140,6 +140,17 @@ object RuleCompiler {
             obj["redact"]?.jsonObject?.let { compileNotifRedactBlock(it) } ?: CompiledNotifRedact.EMPTY
         } else CompiledNotifRedact.EMPTY
 
+        // #620 review F5: a `redact` on a CLICK-context rule silently vanishes —
+        // `redact` compiles only for SCREEN, `notifRedact` only for NOTIFICATION —
+        // the same silent-no-op class we reject for branch-level redact (VET V3).
+        // Reject it (click envelopes carry app-vocabulary button labels, no PII).
+        if (context == RuleContext.CLICK && "redact" in obj) {
+            throw RuleCompileException(
+                "Rule '$id': `redact` is not supported on CLICK rules — a click envelope carries " +
+                    "app-vocabulary button labels, not customer PII. Remove the redact block.",
+            )
+        }
+
         // #598 fail-closed: a screen rule that hashes customer PII in its parse
         // (`sha256` transform) MUST declare a non-empty `redact` block. The hash
         // side (parse output) and the disk side (envelope) can't drift — a rule
@@ -205,6 +216,17 @@ object RuleCompiler {
             val masker: NotifFieldMask = if (matchPattern != null) {
                 val regex = compileRegex(matchPattern)
                 val group = specObj["maskGroup"]?.jsonPrimitive?.intOrNull ?: 1
+                // #620 review F3: bound maskGroup at COMPILE time. An out-of-range
+                // group would throw IndexOutOfBoundsException at capture (inside the
+                // supervised upstream) → a crash/restart loop, once per matching
+                // notification arrival. Group 0 is the whole match; 1..N the captures.
+                val groupCount = regex.toPattern().matcher("").groupCount()
+                if (group < 0 || group > groupCount) {
+                    throw RuleCompileException(
+                        "notification redact: field '$fieldName' maskGroup $group is out of range " +
+                            "(pattern '$matchPattern' has $groupCount capturing group(s); valid 0..$groupCount)",
+                    )
+                }
                 NotifFieldMask.RegexGroup(regex, group)
             } else {
                 val keepPrefix = specObj["keepPrefix"]?.jsonArray?.map { it.jsonPrimitive.content }
