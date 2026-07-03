@@ -91,6 +91,36 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `NOTIFICATION_RECEIVED`/`NEW_ORDER` log for each such arrival. Broken = a later arrival
   missing **and** a "Skipping already-fired effect" line for it; missing with no skip-line is
   the FrameGate layer (follow-up issue), not a #604 regression.
+- **🔧 FIX SHIPPED — automated taps now rank click candidates by evidence instead of a dead exact-bounds check (#600).**
+  Every automated Accept/Decline/Confirm tap re-resolves its target against the live accessibility
+  tree, then disambiguates among label-verified candidates. The old disambiguator compared
+  `getBoundsInScreen()` for exact equality against the bounds captured at recognition time — that
+  match died to TEMPORAL drift (an animating confirm sheet moves between recognition and re-resolve),
+  so it silently fell back to "clicking first" on effectively every automated click (~40+/week),
+  landing right only by luck of enumeration order. Now it ranks by exact stored text first, then max
+  bounds overlap (IoU) — the WARN only fires on a genuine unresolvable tie. **Confirm on dash: 0/2 —**
+  after an automated Accept/Decline/quick-decline-confirm tap, the log should show a DEBUG
+  `Resolved click target for … via EXACT_TEXT/BOUNDS_OVERLAP tier` line **or**
+  `Single verified candidate … clicking it` (a 1-candidate pool — also success), **not** the old
+  `No exact bounds match … — clicking first` WARN on every fire; the tap should still land on the
+  correct button (behavioral no-change on the happy path). Broken = the WARN reappearing on routine
+  taps, or a tap landing on the wrong control (e.g. Accept firing when Decline was intended).
+
+- **🔧 FIX SHIPPED — a shade-tapped Accept/Decline now retries instead of dying on "No live windows" (#602).**
+  A notification-action tap (heads-up Accept/Decline) can reach the click handler while a SystemUI
+  takeover (notification shade, lock screen) is still covering DoorDash — the field receipt showed
+  a tap landing ~16ms after the press, with the window reappearing ~0.5-1s later once the shade
+  collapsed. The old code failed closed on the very first empty read (1 of 18 receiver taps died
+  this way, a $13.50 near-miss). Now that one read is retried up to 3 times over delays of 300/500/700ms
+  (≤1.5s total) before giving up — every other check (candidates found, label verification) is still
+  single-pass, not retried. **Confirm on dash: 0/2 —** tap a heads-up Accept/Decline while the
+  notification shade is open or the screen just woke: the action should still land within ~1.5s (log
+  shows a DEBUG `Live window for … reappeared after a …ms retry` line), no manual tap needed. **Watch
+  the control case:** a tap while DoorDash is genuinely closed/backgrounded for real (not a transient
+  shade) should still fail closed with the WARN (`No live windows for package … after 3 retries …`)
+  — not hang or silently succeed. Broken = a shade-tapped action failing closed despite the window
+  returning within the budget, or the retry firing/looping on a genuinely-gone app.
+
 - **🔧 FIX SHIPPED — receipt-skipped deliveries still close + log a completion, and the next offer starts a NEW job (#596).**
   DoorDash routinely skips the post-delivery receipt (the next offer chains straight over the drop);
   pre-#596 that was the machine's ONLY job-exit, so the delivery never logged `DELIVERY_COMPLETED`

@@ -251,12 +251,27 @@ class SideEffectEngine @Inject constructor(
                 }
                 stampThrottle(throttleKey, now)
                 Timber.i("Performing %s on %s", effect.action.wire, effect.platform.wire)
+                // #602: performVerifiedClick is suspend because it bounded-retries a
+                // transient "no live windows" read (a SystemUI shade/lock takeover
+                // between a notification tap and the re-resolve). We're already inside
+                // this engine's suspend serialized worker, so the inline delay (<=1.5s,
+                // only on that one branch) just stalls the effect queue rather than
+                // reordering effects vs. subsequent state — the simpler choice over
+                // detaching, which the engine's "detach long waits" guidance means for
+                // genuinely multi-second waits, not this. Retry is USER-taps only
+                // (#618 F2): an AUTOMATION fire follows a live recognition ms earlier,
+                // so an empty enumeration there is a real departure, not a race.
                 val clicked = uiInteractionHandler.performVerifiedClick(
                     ref = effect.targetRef,
                     expectedPackage = effect.platform.packageName,
                     expectation = effect.action.verification,
                     description = "${effect.action.wire} on ${effect.platform.wire} [${effect.sourceRuleId}]",
+                    allowRetry = effect.trigger == ActionTrigger.USER,
                 )
+                // #618 F3: the retry can stretch stamp→dispatch to ~1.5s, which would
+                // let a queued duplicate fire ~100ms after a late-landing tap. Re-stamp
+                // at completion so the 1000ms spacing anchors to the actual dispatch.
+                stampThrottle(throttleKey, System.currentTimeMillis())
                 if (!clicked) {
                     Timber.w(
                         "%s did not fire — target failed resolution/verification (fail closed, user acts manually)",

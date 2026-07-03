@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toBoundingBox
 import cloud.trotter.dashbuddy.util.AccNodeUtils
+import kotlinx.coroutines.delay
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,11 +26,20 @@ import javax.inject.Singleton
  *    the action's [TargetExpectation] (e.g. DECLINE_OFFER only taps a node
  *    labeled "Decline"). Platform buttons usually label via a child TextView,
  *    so collection walks a bounded subtree.
- * 3. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
+ * 3. **Evidence-ranked disambiguation** (#600) — when more than one live node
+ *    survives label verification, [ClickCandidateRanker] picks the strongest
+ *    match (exact stored text, then max bounds overlap) instead of a
+ *    since-abandoned exact-bounds `==` comparison that broke under an
+ *    animating sheet's temporal drift.
+ * 4. **Strict click** — self-or-ancestor only. The old clickable-*sibling*
  *    fallback is deliberately absent here: the verified node's sibling can be
  *    the opposite button (Accept sits beside Decline in the offer footer).
  *
  * Any check failing skips the tap and logs — the user acts manually instead.
+ * The one exception is a transient **no-live-windows** read (#602): a
+ * notification-action tap can reach this handler while a SystemUI takeover
+ * (shade/lock) is still covering the platform app, so the very first read
+ * finding no window is often just early, not wrong — see [awaitLiveRoots].
  */
 @Singleton
 class UiInteractionHandler @Inject constructor(
@@ -48,13 +58,19 @@ class UiInteractionHandler @Inject constructor(
      * Re-resolve [ref] in the live tree (scoped to [expectedPackage]), verify
      * the node against [expectation], and click it.
      *
+     * `suspend` since #602: the initial no-live-windows read is retried with
+     * a bounded backoff (see [awaitLiveRoots]) before failing closed — every
+     * other check here (candidates, label verification) is still a single
+     * pass, not retried.
+     *
      * @return true if a click action was dispatched to a verified node.
      */
-    fun performVerifiedClick(
+    suspend fun performVerifiedClick(
         ref: NodeRef,
         expectedPackage: String?,
         expectation: TargetExpectation,
         description: String,
+        allowRetry: Boolean = false,
     ): Boolean {
         Timber.i("UiInteractionHandler: attempting verified click (%s)", description)
 
@@ -62,10 +78,26 @@ class UiInteractionHandler @Inject constructor(
             Timber.w("No package scope for %s — refusing to click (fail closed)", description)
             return false
         }
-        val roots = accessibilitySource.getLiveWindowRoots()
-            .filter { it.packageName?.toString() == expectedPackage }
+        // #602: a notification-action tap can land here ~tens of ms after the
+        // tap, while a SystemUI takeover (shade/lock) still owns the
+        // foreground — the platform window reappears roughly 0.5-1s later
+        // when the shade collapses. Retry the read (bounded) before failing
+        // closed; nothing else in this function is retried.
+        // #602: the bounded retry exists for USER-triggered taps (a notification
+        // press races the shade collapse). AUTOMATION fires follow a live-screen
+        // recognition milliseconds earlier — an empty enumeration there means the
+        // window genuinely left; retrying could resolve against whatever screen
+        // returns (#618 review F2). Single fail-closed read for AUTOMATION.
+        val rootsSource = {
+            accessibilitySource.getLiveWindowRoots()
+                .filter { it.packageName?.toString() == expectedPackage }
+        }
+        val roots = if (allowRetry) awaitLiveRoots(expectedPackage, source = rootsSource) else rootsSource()
         if (roots.isEmpty()) {
-            Timber.w("No live windows for package %s — cannot click (%s)", expectedPackage, description)
+            Timber.w(
+                "No live windows for package %s after %d retries over %dms — cannot click (%s)",
+                expectedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
+            )
             return false
         }
 
@@ -78,8 +110,15 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        val verified = candidates.filter { expectation.matchesLabels(collectLabels(it)) }
-        if (verified.isEmpty()) {
+        // Label-verify once and keep each surviving node's labels alongside it —
+        // the ranker below wants them too (for WARN diagnostics), so this avoids
+        // walking each candidate's subtree twice (collectLabels is bounded but
+        // not free).
+        val labeledCandidates = candidates.mapNotNull { node ->
+            val labels = collectLabels(node)
+            if (expectation.matchesLabels(labels)) node to labels else null
+        }
+        if (labeledCandidates.isEmpty()) {
             Timber.w(
                 "%d candidate(s) for %s but NONE passed label verification (%s) — refusing to click",
                 candidates.size, description, expectation.labelPattern,
@@ -87,17 +126,36 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
 
-        // Disambiguate: prefer the exact stored-bounds match, else first verified.
-        val exactMatch = verified.find { node ->
+        // Disambiguate (#600): rank the label-verified survivors by evidence —
+        // exact stored text, then max bounds overlap — instead of exact-bounds
+        // `==`, which dies to the temporal drift of an animating sheet (see
+        // ClickCandidateRanker's KDoc for the full grounding).
+        val verified = labeledCandidates.map { it.first }
+        val facts = labeledCandidates.map { (node, labels) ->
             val liveBounds = Rect()
             node.getBoundsInScreen(liveBounds)
-            liveBounds.toBoundingBox() == ref.boundsInScreen
+            ClickCandidateRanker.CandidateFacts(
+                text = node.text?.toString(),
+                labels = labels,
+                bounds = liveBounds.toBoundingBox(),
+            )
         }
-        val target = exactMatch ?: verified.first()
-        if (exactMatch == null && verified.size > 1) {
-            Timber.w(
-                "No exact bounds match among %d verified candidates for: %s — clicking first",
-                verified.size, description,
+        val ranked = ClickCandidateRanker.rank(ref, facts)
+        val target = verified[ranked.index]
+        when {
+            ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1 -> {
+                // WARN carries counts only — raw third-party UI text is DEBUG-tier
+                // by Principle 7 (the WARN slice is user-exportable), #618 review F1.
+                Timber.w(
+                    "No decisive match among %d verified candidates for: %s — clicking first",
+                    verified.size, description,
+                )
+                Timber.d("Unresolved-tie candidate labels for %s: %s", description, facts.map { it.labels })
+            }
+            verified.size == 1 -> Timber.d("Single verified candidate for %s — clicking it", description)
+            else -> Timber.d(
+                "Resolved click target for %s via %s tier (%d candidate(s))",
+                description, ranked.tier, verified.size,
             )
         }
         return AccNodeUtils.clickNodeStrict(target)
@@ -176,4 +234,50 @@ class UiInteractionHandler @Inject constructor(
             findNodeByBounds(child, targetBounds, className, out)
         }
     }
+}
+
+/**
+ * Bounded re-resolve delays for the [UiInteractionHandler.performVerifiedClick]
+ * no-live-windows branch (#602). Total budget is 1500ms (<=1.5s per the build
+ * plan) across <=3 retries — chosen to cover a SystemUI shade/lock takeover
+ * collapsing (observed ~0.5-1s in the field) without stalling the side-effect
+ * worker for long.
+ */
+private val RETRY_DELAYS_MS = longArrayOf(300L, 500L, 700L)
+
+/**
+ * Re-polls [source] — which must already return **package-scoped** live
+ * window roots — retrying across [RETRY_DELAYS_MS] when a read comes back
+ * empty, and returning as soon as one doesn't (#602).
+ *
+ * This wraps ONLY the "is the window there at all" read. It is intentionally
+ * a free function taking the source as a lambda (not a method reaching for
+ * [UiInteractionHandler]'s own [AccessibilitySource]) so it stays unit
+ * testable without Robolectric or a live accessibility tree: the caller
+ * (`performVerifiedClick`) decides what "package-scoped" means and supplies
+ * it as [source]; the retry itself doesn't need to know.
+ *
+ * Retrying is correct here because an empty read right after a notification
+ * tap is a **timing** artifact (the platform window hasn't been restored
+ * yet), not a correctness denial — unlike label-verification failure or an
+ * empty candidate list on an already-live window, which stay single-pass and
+ * fail closed immediately (a live window with no matching node is a real
+ * "the ruleset's target isn't there" case, not a race).
+ */
+internal suspend fun awaitLiveRoots(
+    expectedPackage: String,
+    source: () -> List<AccessibilityNodeInfo>,
+): List<AccessibilityNodeInfo> {
+    val first = source()
+    if (first.isNotEmpty()) return first
+
+    for (delayMs in RETRY_DELAYS_MS) {
+        delay(delayMs)
+        val roots = source()
+        if (roots.isNotEmpty()) {
+            Timber.d("Live window for %s reappeared after a %dms retry", expectedPackage, delayMs)
+            return roots
+        }
+    }
+    return emptyList()
 }
