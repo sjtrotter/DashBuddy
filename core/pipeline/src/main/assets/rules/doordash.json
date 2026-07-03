@@ -2700,6 +2700,7 @@
     },
     {
       "id": "doordash.screen.dropoff_handoff",
+      "comment": "#603: the 'hand it to customer' instruction is present the ENTIRE drive (en-route AND at-door), so keying on it alone fired a FALSE task:dropoff:arrived the moment nav started. The completion CTA ('Continue'/'Complete Delivery'/'Mark as delivered'/complete_delivery_steps_button) only appears once the dasher is actually at the door, so it is the real arrival discriminator. The en-route workflow-sheet frame (which lacks the CTA) then falls through to dropoff_pre_arrival (priority 73). KEEP THIS CTA SET IN SYNC with dropoff_navigation's reject and dropoff_pre_arrival_completion's require — all three describe the same 'delivery can be completed now' signal.",
       "priority": 64,
       "redact": [
         { "find": { "any": [ { "hasTextStartsWith": "Deliver to" }, { "hasTextStartsWith": "Heading to" } ] }, "keepPrefix": [ "Deliver to ", "Heading to " ] },
@@ -2713,7 +2714,18 @@
       "require": {
         "all": [
           { "exists": { "hasIdSuffix": "drop_off_workflow_host_fragment" } },
-          { "exists": { "hasTextContaining": "hand it to customer" } }
+          { "exists": { "hasTextContaining": "hand it to customer" } },
+          {
+            "exists": {
+              "any": [
+                { "hasText": "Continue" },
+                { "hasText": "Complete Delivery" },
+                { "hasText": "Mark as delivered" },
+                { "hasIdSuffix": "complete_delivery_steps_button" },
+                { "hasIdSuffix": "steps_screen_content" }
+              ]
+            }
+          }
         ]
       }
     },

@@ -1034,6 +1034,80 @@ class EffectMapTest {
     }
 
     @Test
+    fun `stacked leg-2 dropoff (dropoff to a new dropoff) mints DELIVERY_NAV_STARTED, ResumeOdometer, and a Heading-to bubble (#603)`() {
+        // A multi-drop stack: leg-1's drop is retired and leg-2's drop becomes active — a
+        // different taskId, freshly minted on THIS frame (startedAt == obs.timestamp). Both
+        // sides are DROPOFF, so the pickup→dropoff branch never sees it; before #603 leg-2 was
+        // a silent drop (no nav event, no odometer resume, no bubble).
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val leg1 = Task(
+            taskId = "drop-A", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            storeName = "Panera Bread", startedAt = 800L,
+        )
+        val leg2 = Task(
+            taskId = "drop-B", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            storeName = "Panera Bread", startedAt = 1000L,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffArrived),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = leg1)),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = leg2)),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.TaskDropoffNavigation, timestamp = 1000L,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION),
+        ))
+
+        assertTrue("leg-2 must mint DELIVERY_NAV_STARTED", effects.logEventTypes().contains(AppEventType.DELIVERY_NAV_STARTED))
+        assertTrue("leg-2 must resume the odometer for its drive", effects.any { it is AppEffect.ResumeOdometer })
+        assertTrue(
+            "leg-1's drop is confirmed as the active task moves on",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
+        )
+        // #568: the leg-2 bubble is store-flavored (never the raw hash).
+        val bubble = effects.effectsOfType<AppEffect.UpdateBubble>().first { it.text.startsWith("Heading to") }
+        assertEquals("Heading to Panera Bread's customer", bubble.text)
+        assertEquals(ChatPersona.Customer("Panera Bread's customer"), bubble.persona)
+    }
+
+    @Test
+    fun `a RESUMED dropoff (startedAt predates the frame) does NOT re-mint DELIVERY_NAV_STARTED (#603)`() {
+        // The new-leg branch is guarded on startedAt == obs.timestamp, so a replay / re-sight of
+        // an already-running drop (which keeps its original startedAt) can't re-fire the nav trio.
+        // Here a null active task is replaced by a dropoff whose startedAt predates this frame — a
+        // resume, not a fresh leg.
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val resumed = Task(
+            taskId = "drop-B", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            storeName = "Panera Bread", startedAt = 500L,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = null)),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = resumed)),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.TaskDropoffNavigation, timestamp = 1000L,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION),
+        ))
+
+        assertFalse(
+            "a resumed (not freshly-minted) drop must not re-fire the nav trio",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_NAV_STARTED),
+        )
+    }
+
+    @Test
     fun `arrival at pickup emits PauseOdometer and PICKUP_ARRIVED`() {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)

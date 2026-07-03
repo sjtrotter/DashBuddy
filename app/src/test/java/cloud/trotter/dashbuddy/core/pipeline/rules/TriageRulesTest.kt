@@ -264,11 +264,62 @@ class TriageRulesTest {
     }
 
     @Test
-    fun `dropoff_handoff`() {
+    fun `dropoff_handoff — at-door frame WITH the completion CTA classifies as handoff (#603)`() {
+        // The genuine at-door handoff carries the completion CTA ("Mark as delivered" et al.)
+        // on top of the persistent "Hand it to customer" instruction — the CTA is what makes
+        // it a real arrival (task:dropoff:arrived).
         assertEquals(
             "dropoff_handoff",
-            screen(tree(node(id = "drop_off_workflow_host_fragment"), node(text = "Hand it to customer"))),
+            screen(
+                tree(
+                    node(id = "drop_off_workflow_host_fragment"),
+                    node(text = "Hand it to customer"),
+                    node(text = "Mark as delivered"),
+                ),
+            ),
         )
+    }
+
+    @Test
+    fun `dropoff_handoff — the ID-check steps screen is an at-door handoff (#603 review F1)`() {
+        // The ID-check / barcode-scan handoff STEPS screen is a true at-door surface but uses
+        // its own CTA vocabulary ("Start scanning"/"Verify"/"Recipient signature") — none of the
+        // text CTAs. It carries the arrival-only `steps_screen_content` container, so that id is a
+        // valid completion-CTA discriminator (grounded arrival-only in
+        // docs/capture-analysis/2026-06-dropoff-arrival-signals.md). Without this it fell to
+        // UNKNOWN and the arrival edge could be lost.
+        assertEquals(
+            "dropoff_handoff",
+            screen(
+                tree(
+                    node(id = "drop_off_workflow_host_fragment"),
+                    node(text = "Hand it to customer"),
+                    node(id = "steps_screen_content", text = "Verify recipient's identity"),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `dropoff_handoff — en-route frame WITHOUT a CTA is pre-arrival, not a handoff (#603)`() {
+        // "Hand it to customer" is present the ENTIRE drive, so keying on it alone fired a
+        // FALSE task:dropoff:arrived the instant nav started. With no completion CTA the frame
+        // is still en-route and must fall through to dropoff_pre_arrival (the "Deliver to <name>"
+        // + Directions/Call/Message nav card), NOT masquerade as an at-door handoff.
+        val enRoute = tree(
+            node(id = "drop_off_workflow_host_fragment"),
+            node(text = "Hand it to customer"),
+            node(text = "Deliver to Sample C"),
+            node(text = "Directions"),
+            node(text = "Call"),
+            node(text = "Message"),
+        )
+        assertNotEquals(
+            "an en-route frame (no completion CTA) must not classify as an at-door handoff",
+            "dropoff_handoff",
+            screen(enRoute),
+        )
+        assertEquals("dropoff_pre_arrival", screen(enRoute))
     }
 
     @Test

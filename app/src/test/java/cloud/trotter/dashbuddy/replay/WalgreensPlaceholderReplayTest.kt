@@ -17,10 +17,14 @@ import org.junit.Test
  *                            + a customer-TBD placeholder DROPOFF.
  *  2. `pickup_navigation`  — job + placeholder formed; pickup active.
  *  3. `pickup_pre_arrival` — pickup updates.
- *  4. `dropoff_handoff`    — a GENUINE "hand it to customer" handoff screen whose customer name is a
- *                            bare TextView (no resource id) → unparseable → the placeholder dropoff is
- *                            activated **customer-less** (the bubble shows the "the customer" fallback).
- *  5. `dropoff_navigation` — the first frame that parses the customer.
+ *  4. `04_dropoff_handoff.json` — this frame lacks a completion CTA, so since #603 it classifies
+ *                            `dropoff_pre_arrival` (not `dropoff_handoff`) and now DOES parse the
+ *                            customer. The customer-less-activation path this test originally
+ *                            exercised is therefore no longer hit through this fixture; the #565
+ *                            guard it protects is independently covered by the synthetic,
+ *                            classification-independent `PlatformRegionStepperTest` cases. Kept as a
+ *                            green end-to-end regression; the assertions below still hold.
+ *  5. `dropoff_navigation` — a later dropoff frame.
  *
  * The bug: at frame 5 the customer-less placeholder is already the *active* task, so the slice-3
  * resolve path (which excludes the active task) and the resume path (which needs a name match a null
