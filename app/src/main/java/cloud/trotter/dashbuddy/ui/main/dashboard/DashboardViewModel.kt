@@ -1,57 +1,79 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
+import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.AppState
-import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import cloud.trotter.dashbuddy.domain.format.Formats
 
+/**
+ * State holder for the home (Dashboard) screen. Exposes one immutable
+ * [DashboardUiState] (Principle 1 — UDF) assembled reactively from:
+ *  - [StateManagerV2] `AppState` — session running earnings + mode + status,
+ *  - [OdometerRepository] session miles (GPS),
+ *  - [AppPreferencesRepository.userEconomy] — operating cost/mi, the SAME economy
+ *    the offer verdict scores against (so live True Net uses identical cost math),
+ *  - [AppStateRepository.isFirstRun] — the setup gate.
+ *
+ * The focused platform is resolved through the [Platform] registry (flow's active
+ * platform, else most-recent activity) — never a `== DoorDash` literal (Principle 8).
+ */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    application: Application,
     private val appStateRepository: AppStateRepository,
     odometerRepository: OdometerRepository,
+    appPreferencesRepository: AppPreferencesRepository,
     stateManager: StateManagerV2,
     private val bubbleManager: BubbleManager,
-) : AndroidViewModel(application) {
+) : ViewModel() {
 
-    // 1. Am I Dashing?
-    val isInSession: StateFlow<Boolean> = stateManager.state
-        .map { state ->
-            val dd = state.regions.platforms[Platform.DoorDash]
-            dd != null && dd.mode != Mode.Offline
+    val uiState: StateFlow<DashboardUiState> = combine(
+        stateManager.state,
+        odometerRepository.sessionMilesFlow,
+        appPreferencesRepository.userEconomy,
+        appStateRepository.isFirstRun,
+    ) { state, sessionMiles, economy, firstRun ->
+        val region = focusedRegion(state)
+        val inSession = region != null && region.mode != Mode.Offline
+        val session = region?.session
+
+        val glance = if (inSession && session != null) {
+            DashGlance.live(
+                trueNet = NetProfit.net(
+                    grossPay = session.runningEarnings,
+                    miles = sessionMiles,
+                    costPerMile = economy.operatingCostPerMile,
+                ),
+                miles = sessionMiles,
+                startedAt = session.startedAt,
+            )
+        } else {
+            DashGlance.EMPTY
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    // 2. Current Status Text
-    val statusText: StateFlow<String> = stateManager.state
-        .map { state -> getStatusText(state) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Offline")
-
-    // 3. Session Miles — derive from the repository's miles flow (SSOT for the
-    // meters->miles factor); this VM only formats for display.
-    val sessionMiles: StateFlow<String> = odometerRepository.sessionMilesFlow
-        .map { miles -> "${Formats.decimal(miles)} mi" }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 mi")
-
-    // 4. First Run Check
-    val isFirstRun: StateFlow<Boolean> = appStateRepository.isFirstRun
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        DashboardUiState(
+            isFirstRun = firstRun,
+            statusText = statusText(state.regions.flow.flow, region?.mode),
+            isInSession = inSession,
+            glance = glance,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
 
     fun completeSetup() = viewModelScope.launch {
         appStateRepository.setFirstRunComplete()
@@ -59,23 +81,27 @@ class DashboardViewModel @Inject constructor(
 
     fun showWelcomeBubble() {
         bubbleManager.postMessage(
-            text = "DashBuddy is ready. Open DoorDash and start a dash — I'll track everything from here.",
+            text = "DashBuddy is ready. Open your platform and start a dash — I'll track everything from here.",
             ChatPersona.Dispatcher,
             expand = true
         )
     }
 
-    private fun getStatusText(state: AppState): String {
-        val dd = state.regions.platforms[Platform.DoorDash]
-        val flow = state.regions.flow.flow
+    /** The platform the home glance attributes to — registry-resolved, not a literal. */
+    private fun focusedRegion(state: AppState): PlatformRegion? {
+        val platform: Platform? = state.regions.flow.activePlatform
+            ?: state.regions.crossPlatform.mostRecentActivityPlatform
+        return platform?.let { state.regions.platforms[it] }
+    }
 
-        if (dd == null || dd.mode == Mode.Offline) {
+    private fun statusText(flow: Flow, mode: Mode?): String {
+        if (mode == null || mode == Mode.Offline) {
             return when (flow) {
                 Flow.SessionEnded -> "Dash Complete"
                 else -> "Ready to Dash"
             }
         }
-        if (dd.mode == Mode.Paused) return "Paused"
+        if (mode == Mode.Paused) return "Paused"
 
         return when (flow) {
             Flow.Idle -> "Looking for offers..."

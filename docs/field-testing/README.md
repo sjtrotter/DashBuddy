@@ -106,6 +106,20 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   to redact — if you see a `redactBackstopScrubs=` count climb in the PipelineStats log line, note
   which screen tripped it.
   - Confirmed: 0/2
+- **✨ NEW — the home screen now shows a live "This dash" glance + entry tiles (#320/#316).**
+  Open the DashBuddy main app (not the bubble) **while a dash is running**. **Working looks like:**
+  the "Ready to Dash" area shows three stat tiles — **True Net** (green when positive), **Net/hr**,
+  **Miles** — and the Net/hr + its sub-timer **tick up every second** without needing a state change
+  (that's the reactive glance). True Net should equal session earnings minus miles × your operating
+  cost/mi (same math as an offer's net verdict), and Miles should track the GPS session odometer.
+  Below the tiles is a 2×2 grid — **Analytics · Ratings · Strategy · Economy**: tapping **Ratings**
+  opens a screen showing your real customer-rating / on-time / completion gauges + acceptance /
+  delivery-count / shopping-quality tiles (empty-state message if you haven't opened the platform's
+  Ratings screen yet this run); **Strategy** and **Economy** open their existing editors; **Analytics**
+  is a "Construction Area" placeholder for now. Broken = frozen Net/hr (doesn't tick), True Net that
+  disagrees with the offer-card net math, a Ratings screen that's blank when the platform ratings
+  screen was seen, or a tile that navigates nowhere.
+  - Confirmed: 0/2
 - **🔧 FIX SHIPPED — offer outcome cards now derive from the committed outcome, not the tap (#601).
   DELIBERATE UX CHANGE — CONFIRM ON DASH.**
   Before, tapping Accept/Decline printed "Offer Accepted"/"Offer Declined" immediately, from the

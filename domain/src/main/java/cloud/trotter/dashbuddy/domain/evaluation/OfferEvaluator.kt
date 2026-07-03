@@ -14,11 +14,14 @@ class OfferEvaluator() {
         val items = offer.itemCount.toDouble()
 
         // Operating cost — full breakdown (fuel + tires + oil + brakes + fluids +
-        // misc + depreciation + amortized fixed costs + phone) and net pay
+        // misc + depreciation + amortized fixed costs + phone) and net pay. Net pay
+        // routes through the NetProfit SSOT (#5) so the live home-screen glance and
+        // this verdict share one definition; the fuel/non-fuel split is kept for the
+        // OfferEvaluation breakdown fields.
         val fuelCost = dist * economy.fuelCostPerMile
         val nonFuelCost = dist * economy.nonFuelCostPerMile
         val operatingCost = fuelCost + nonFuelCost
-        val netPay = grossPay - operatingCost
+        val netPay = NetProfit.net(grossPay, dist, economy.operatingCostPerMile)
 
         // Time estimate = whole-route drive + handling (#556). Handling for a Shop & Deliver order
         // is its item count at the dasher's effective shopping pace (items/min — already absorbs
@@ -37,9 +40,10 @@ class OfferEvaluator() {
         val estTimeMinutes = driveMinutes + handlingMinutes
         val estTimeHours = estTimeMinutes / 60.0
 
-        // Metrics operate on net pay
-        val dpm = if (dist > 0) netPay / dist else 0.0
-        val activeHourly = if (estTimeHours > 0) netPay / estTimeHours else 0.0
+        // Metrics operate on net pay (same NetProfit SSOT; 0.0 when the
+        // denominator is undefined, preserving the prior scoring behavior).
+        val dpm = NetProfit.perMile(netPay, dist) ?: 0.0
+        val activeHourly = NetProfit.perHour(netPay, estTimeHours) ?: 0.0
 
         val joinedStores: String = offer.orders
             .map { order: ParsedOrder -> order.storeName }

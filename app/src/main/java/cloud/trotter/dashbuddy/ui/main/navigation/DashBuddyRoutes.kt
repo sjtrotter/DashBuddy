@@ -5,6 +5,11 @@ sealed class Screen(val route: String) {
     data object Dashboard : Screen("dashboard")
     data object Wizard : Screen("wizard")
 
+    // Analytics surfaces (home-screen entry tiles, epic #320)
+    data object Ratings : Screen("ratings")
+    // Analytics hub is Phase 4 (#315) — routes to the placeholder for now.
+    data object Analytics : Screen("analytics")
+
     // Settings Hierarchy
     // Note: We use "settings/home" as the landing page for settings
     data object SettingsHome : Screen("settings/home")
