@@ -980,7 +980,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      another is latching "decline submitted" once auto-confirm fires. Separately, #577's ~0.55 s
      speed forecloses the change-of-mind window the confirm sheet exists to provide — a product
      posture question beyond the state bug.
-   - **Status:** Open.
+   - **Status:** Open — filed **#594** (2026-07-02 triage).
 2. **Ghost offer re-mint at accept — the remembered ghost, pinned twice (06-28 seq 141/142,
    06-30 seq 241/242).** After a real accept of a SHOP offer, the post-accept transitional
    `offer_popup` frame (order rows/store gone; one frame carries a raw UUID in the store slot;
@@ -1000,7 +1000,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      with empty orders / UUID-shaped store text when a same-pay/same-distance offer was decided
      <2 s earlier — needs a settle/validity design call. (This is the post-accept trigger
      predicted in the 06-15 checklist note under the old #498 item.)
-   - **Status:** Open.
+   - **Status:** Open — filed **#595**.
 3. **Receipt-skipped completions: 6 of 21 confirmed dropoffs never got DELIVERY_COMPLETED
    (verified 21 vs 15 week-wide), and the never-closed job absorbs later offers.** 06-29 job-42
    (Sally Beauty + Panda Express, $15.40): both drops DELIVERY_CONFIRMED, **zero** completions.
@@ -1017,7 +1017,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      add-ons. One direction might be a job close-out on `waiting_for_offer` / fresh-store
      accept. Beyond the known #528 scope (zero-completion jobs and cross-offer absorption are
      new); touches #527 job-lifetime.
-   - **Status:** Open.
+   - **Status:** Open — filed **#596** (blocks #528).
 4. **Order unassignment/swap is unmodeled — and can confirm the wrong pickup.** 06-26 Petsmart:
    the order was unassigned-with-no-pay at the store (resolution-sheet capture shows "Unassign
    with no pay / Completion Rate will drop to 97%"), but at the dropoff transition the stepper
@@ -1032,7 +1032,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      terminal for an accepted order, and the issue/resolution screens are recognize-only with
      no state transition; the pickup-confirm inference fires for the *active* task at phase-flip
      regardless of which order was physically abandoned.
-   - **Status:** Open.
+   - **Status:** Open — routed to existing **#301** (scope widened with this evidence).
 5. **#583 in-card Accept failed once, fail-closed ("No live windows") — 06-25 16:44:38, $13.50
    H-E-B.** The only receiver-path failure of the week (~1/18). The receiver fired
    (`app_log_rotated_20260625_173549.log:7881–7887`) but window enumeration found no DoorDash
@@ -1042,7 +1042,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    a near-miss on losing the offer to timeout.
    - **Hypothesis:** one possibility is a short bounded re-resolve retry (~1–2 s) after the
      shade collapses; the fail-closed denial itself behaved correctly.
-   - **Status:** Open.
+   - **Status:** Open — filed **#602**.
 6. **Verified-click bounds pinning never matches — every automated click rides the tie-break.**
    ~40+ WARNs `No exact bounds match among N verified candidates — clicking first` across
    confirm_decline (21–24×), decline_offer, expand_earnings; bounds pinning matched **zero**
@@ -1056,7 +1056,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
      confirm sheet's Button also has no own text (label lives in a child TextView), making
      candidate enumeration ambiguous. Also a frequent-benign WARN drowning the channel
      (#551/Principle 7 concern).
-   - **Status:** Open.
+   - **Status:** Open — filed **#600**.
 7. **Raw customer PII persists in capture envelopes (the event/log path is clean).** Recognized
    dropoff captures (`dropoff_handoff`, `dropoff_navigation`, `dropoff_pre_arrival`, 06-29/06-30)
    hold plaintext "Deliver to ‹customer name›" + full street address + one gate code; a pickup
@@ -1067,7 +1067,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    strings (personas read "H-E-B's customer"/"the customer"). Debug-only capture binding (#346)
    limits exposure to the dev device, but the pledge is hashed-at-edge-before-persistence —
    today it is hashed-in-parse-while-raw-on-disk.
-   - **Status:** Open. (Trips the #462/#460 checklist item's broken-criterion — moved here.)
+   - **Status:** Open — filed **#598**. (Trips the #462/#460 checklist item's broken-criterion — moved here.)
 8. **Dasher-banking pledge hole: `doordash.notification.crimson_balance` recognizes and stores
    the Crimson/DasherDirect Savings Jar balance raw** — "…balance is now $‹amount›", 9 capture
    files spanning 06-03→06-28. The pledge blocks the dasher's banking/DasherDirect balances at
@@ -1075,14 +1075,14 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
    `earnings_deposit` is the borderline sibling (stores transfer notifications raw).
    - **Hypothesis:** likely added to name/suppress the notification as noise without marking it
      sensitive; the notification capture path stores whatever a rule recognizes.
-   - **Status:** Open.
+   - **Status:** Open — filed **#599**.
 9. **Chat/bubble outcome cards are click-driven, not committed-outcome-driven (SSOT
    divergence on the trust surface).** "Offer Declined" → "Offer Accepted" 1.2 s apart (Bug #1);
    "Offer Accepted" → "Offer Timed Out!" 1–2 s apart (Bug #2, both instances). The bubble feed
    contradicted itself in every incident window this week.
    - **Hypothesis:** chat effects fire eagerly on click/resolution observations instead of
      deriving from the single committed outcome event (Principle 5).
-   - **Status:** Open.
+   - **Status:** Open — filed **#601**.
 10. **Smaller items:** (a) stacked 2-pickup jobs: only the **last** store gets PICKUP_CONFIRMED
     (3/3 stacks; N−1 stranded at "arrived" — fully explains 06-26's 5-arrived/3-confirmed
     aggregate); (b) `dropoff_handoff` matches en-route "Deliver to …" frames → false-early
@@ -1098,7 +1098,9 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
     (`customerTips[{type:'799'|'618'}]` — stray UI tokens; amounts correct); (g) the UNKNOWN
     capture cap (200) was hit 25 min into 06-28, suppressing triage captures for ~4 h including
     the entire support-chat flow.
-    - **Status:** Open (each).
+    - **Status:** Open — filed/routed 2026-07-02: (a) → existing **#526** (comment); (b) → **#603**;
+      (c) → **#605**; (d) → **#604**; (e) → **#606**; (f) → **#607**; (g) → **#597** (with the
+      click-capture starvation below).
 
 ### Field UX context
 
@@ -1130,7 +1132,11 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 5. 06-28 DoorDash summary "2/4 accepted": does the platform count the swapped order as a
    decline, or exclude it? Affects what an unassign/supersede terminal should reconcile against.
 6. Click envelopes were not persisted this week (`captured=false` on click lines) — intended?
-   It cost forensic corroboration for both headline incidents.
+   It cost forensic corroboration for both headline incidents. **RESOLVED 07-02: not intended**
+   (dev: clicks should record on debug builds). Root cause found at desk: `DiskCaptureBus`
+   in-memory contentHash dedup + the a11y process living for days → repeat-tap clicks dedupe
+   forever (37→17→1→2→0 captures across the week); same family as `FrameGate`'s per-process
+   UNKNOWN cap (200). Filed **#597**.
 7. #583 gauge ring and #578 countdown/badge **visuals**: desk data can't see them — developer
    eyes or screenshots next dash (the checklist items are now visual-only).
 
