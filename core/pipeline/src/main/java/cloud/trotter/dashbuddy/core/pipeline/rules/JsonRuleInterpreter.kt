@@ -94,6 +94,7 @@ class JsonRuleInterpreter @Inject constructor(
         try {
             val files = context.assets.list(RULES_DIR)
                 ?.filter { it.endsWith(".json") }
+                ?.sorted() // deterministic load order so the #633 first-file-wins collision policy is reproducible (assets.list ordering is not a documented contract)
                 ?: emptyList()
 
             if (files.isEmpty()) {
