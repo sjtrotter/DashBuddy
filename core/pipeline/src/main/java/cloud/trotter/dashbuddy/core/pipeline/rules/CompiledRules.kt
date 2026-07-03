@@ -93,9 +93,9 @@ data class CompiledRule<TInput>(
  * node's `text` and `contentDescription` are masked in the serialized capture
  * envelope only. [keepPrefix] preserves a leading marker label so a replayed
  * redacted capture still recognizes — e.g. "Deliver to <name>" is masked to
- * "Deliver to [redacted]", keeping the "Deliver to " require anchor while the
- * customer name is dropped. An address node (no marker) takes no keepPrefix and
- * is masked whole.
+ * "Deliver to [redacted:<4hex>]", keeping the "Deliver to " require anchor while
+ * the customer name is dropped. An address node (no marker) takes no keepPrefix
+ * and is masked whole. The `<4hex>` distinctness suffix is #623 — see [mask].
  */
 data class CompiledRedactEntry(
     val find: (UiNode) -> Boolean,
@@ -135,16 +135,45 @@ data class CompiledRedact(
         )
     }
 
-    private fun mask(value: String?, keepPrefix: List<String>): String? {
-        if (value == null) return null
-        val prefix = keepPrefix.firstOrNull { value.startsWith(it, ignoreCase = true) }
-        return if (prefix != null) prefix + REDACTED else REDACTED
-    }
-
     companion object {
-        /** Masked text written in place of redacted customer PII. */
+        /**
+         * Fail-closed mask written when the distinctness hash can't be computed
+         * (#362/#623): a redacted node still ships redacted, never the raw value.
+         */
         const val REDACTED = "[redacted]"
         val EMPTY = CompiledRedact(emptyList())
+
+        /**
+         * Mask [value], preserving a leading [keepPrefix] marker (#598), and
+         * append a per-customer distinctness suffix (#623): the masked portion
+         * becomes `[redacted:<4hex>]`, where `<4hex>` is the first four hex chars
+         * of the sha256 of the keepPrefix-STRIPPED, TRIMMED token.
+         *
+         * Frame-invariance: the token hashed is the customer string itself (after
+         * stripping the marker prefix and trimming), NOT the whole node text — so
+         * the SAME customer under different frame prefixes ("Deliver to X" vs
+         * "Heading to X" vs "Verify items for X") redacts to the SAME suffix, and
+         * two DIFFERENT customers redact to DIFFERENT suffixes. The strip+trim
+         * mirrors the parse's `stripPrefixes`/`trim`/`sha256` chain, so the suffix
+         * equals the first 4 hex of the `customerNameHash` the parse already
+         * persists — 16 bits of an already-one-way hash, no new information (#623).
+         *
+         * FAIL CLOSED (#362): if [sha256OrNull] returns null, emit the plain
+         * [REDACTED] constant — never the raw [value]. The "[redacted" prefix is
+         * kept so any `contains("[redacted")`/`startsWith` check (the #624
+         * backstop, any test scanner) still classifies the output as redacted.
+         *
+         * `internal` (not private) so the #620 notification per-field maskers
+         * reuse this ONE definition (SSOT) instead of copying it.
+         */
+        internal fun mask(value: String?, keepPrefix: List<String>): String? {
+            if (value == null) return null
+            val prefix = keepPrefix.firstOrNull { value.startsWith(it, ignoreCase = true) }
+            val token = if (prefix != null) value.substring(prefix.length).trim() else value.trim()
+            val hex = sha256OrNull(token)?.take(4)
+            val masked = if (hex != null) "[redacted:$hex]" else REDACTED
+            return if (prefix != null) prefix + masked else masked
+        }
     }
 }
 

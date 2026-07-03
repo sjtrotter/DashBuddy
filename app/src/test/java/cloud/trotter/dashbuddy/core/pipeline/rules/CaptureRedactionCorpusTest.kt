@@ -46,7 +46,71 @@ class CaptureRedactionCorpusTest {
         val redactedJson = serialize(rule.redact.apply(injected))
 
         assertFalse("injected customer name must not persist", redactedJson.contains("Testname Q"))
-        assertTrue("marker kept, name masked", redactedJson.contains("Deliver to [redacted]"))
+        // #623: the masked portion carries a `[redacted:<4hex>]` distinctness suffix.
+        assertTrue(
+            "marker kept, name masked",
+            Regex("""Deliver to \[redacted:[0-9a-f]{4}\]""").containsMatchIn(redactedJson),
+        )
+    }
+
+    /**
+     * #623 frame-invariance ACROSS RULES (VET V5): the SAME customer token, seen
+     * under three different production redact blocks (each with a different marker
+     * prefix / node predicate), must redact to the SAME 4hex distinctness suffix —
+     * and a DIFFERENT customer to a DIFFERENT suffix. This is what makes
+     * multi-customer replay possible without persisting raw PII: the suffix is a
+     * stable 16-bit fingerprint of the customer token, aligned with the parse's
+     * strip+trim+sha256, not a per-frame value.
+     */
+    @Test
+    fun `same customer redacts to the same 4hex across dropoff_navigation, timeline, and pickup_verify_items`() {
+        val suffix = Regex("""\[redacted:([0-9a-f]{4})\]""")
+        fun hexOf(masked: String): String =
+            suffix.find(masked)!!.groupValues[1]
+
+        // dropoff_navigation: id-keyed title node, keepPrefix "Deliver to ".
+        val navRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
+        val navHex = hexOf(
+            navRule.redact.apply(
+                UiNode(
+                    viewIdResourceName = "com.dd:id/bottom_sheet_task_title",
+                    text = "Deliver to Jane Q Doe",
+                ),
+            ).text!!,
+        )
+
+        // timeline: text-keyed node, keepPrefix "Deliver to " (also "Pickup for ").
+        val timelineRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.timeline")!!
+        val timelineHex = hexOf(
+            timelineRule.redact.apply(UiNode(text = "Deliver to Jane Q Doe")).text!!,
+        )
+
+        // pickup_verify_items: different marker ("Verify items for ") + different id.
+        val verifyRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_verify_items")!!
+        val verifyHex = hexOf(
+            verifyRule.redact.apply(
+                UiNode(
+                    viewIdResourceName = "com.dd:id/order_verification_checklist_title",
+                    text = "Verify items for Jane Q Doe",
+                ),
+            ).text!!,
+        )
+
+        assertEquals("same customer must redact to the same 4hex across rules", navHex, timelineHex)
+        assertEquals("same customer must redact to the same 4hex across rules", navHex, verifyHex)
+
+        // The suffix equals the first 4 hex of sha256(token) — the same hash the parse persists.
+        val expected = java.security.MessageDigest.getInstance("SHA-256")
+            .digest("Jane Q Doe".toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+            .take(4)
+        assertEquals("suffix must be first 4 hex of sha256(token)", expected, navHex)
+
+        // A DIFFERENT customer must produce a DIFFERENT suffix (distinctness).
+        val otherHex = hexOf(
+            timelineRule.redact.apply(UiNode(text = "Deliver to John Smith")).text!!,
+        )
+        assertFalse("different customers must redact to different 4hex", otherHex == navHex)
     }
 
     @Test

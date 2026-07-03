@@ -104,10 +104,17 @@ class CaptureRedactionTest {
 
         val json = capturedEnvelope()
         // PII gone, marker kept, address masked whole, unrelated node intact.
+        // #623: the masked portion carries a `[redacted:<4hex>]` distinctness suffix.
         assertFalse("customer name must not persist", json.contains("Jane Q. Doe"))
         assertFalse("street address must not persist", json.contains("123 Secret St"))
-        assertTrue("marker + redacted name", json.contains("Deliver to [redacted]"))
-        assertTrue("address masked whole", json.contains("\"text\": \"[redacted]\""))
+        assertTrue(
+            "marker + redacted name",
+            Regex("""Deliver to \[redacted:[0-9a-f]{4}\]""").containsMatchIn(json),
+        )
+        assertTrue(
+            "address masked whole",
+            Regex(""""text": "\[redacted:[0-9a-f]{4}\]"""").containsMatchIn(json),
+        )
         assertTrue("non-PII node intact", json.contains("Directions"))
     }
 

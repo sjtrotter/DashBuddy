@@ -894,8 +894,15 @@ class RuleCompilerTest {
             ),
         )
         val redacted = rule.redact.apply(tree)
-        assertEquals("Deliver to [redacted]", redacted.children[0].text)
-        assertEquals("[redacted]", redacted.children[1].text)
+        // #623: masked portion carries a `[redacted:<4hex>]` distinctness suffix.
+        assertTrue(
+            "marker kept, name masked with distinctness suffix",
+            Regex("""^Deliver to \[redacted:[0-9a-f]{4}\]$""").matches(redacted.children[0].text!!),
+        )
+        assertTrue(
+            "address masked whole with distinctness suffix",
+            Regex("""^\[redacted:[0-9a-f]{4}\]$""").matches(redacted.children[1].text!!),
+        )
         assertEquals("Directions", redacted.children[2].text)
         // Original tree is untouched.
         assertEquals("Deliver to Jane Q. Doe", tree.children[0].text)
