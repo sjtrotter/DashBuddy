@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.state.CrossPlatformRegion
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
@@ -448,6 +449,9 @@ class EffectMapPayloadTest {
             platform = Platform.DoorDash,
             mode = Mode.Online,
             session = Session("s1", startedAt = 500L, runningEarnings = 47.50),
+            // #596: a real receipt exit has the job still active going in (scoped completion path);
+            // the amdt-2 unscoped-fallback gate suppresses a job-less exit (nothing to complete).
+            activeJob = Job("J6", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 400L),
             recentTasks = listOf(completedTask),
             lastPostTaskFields = postFields,
         )

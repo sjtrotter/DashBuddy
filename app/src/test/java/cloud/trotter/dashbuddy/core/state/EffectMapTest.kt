@@ -865,14 +865,19 @@ class EffectMapTest {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
         val completedTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L, completedAt = 950L)
+        // #596: a real receipt exit has the job still ACTIVE going in (it closes on this same step),
+        // so completedJobId is non-null → the SCOPED fallback finds the task. The unscoped (job-less)
+        // fallback is now gated when there's genuinely nothing to complete (job already closed, no
+        // active task, no retire pending) — see the amdt-2 unscoped-fallback gate.
+        val job = Job("job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 100L)
         val prev = AppState(regions = Regions(
             flow = FlowRegion(flow = Flow.PostTask),
-            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, recentTasks = listOf(completedTask))),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeJob = job, recentTasks = listOf(completedTask))),
         ))
 
         val next = AppState(regions = Regions(
             flow = FlowRegion(flow = Flow.Idle),
-            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, recentTasks = listOf(completedTask))),
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeJob = job, recentTasks = listOf(completedTask))),
         ))
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))

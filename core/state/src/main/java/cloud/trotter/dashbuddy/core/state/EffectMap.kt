@@ -334,6 +334,9 @@ class EffectMap @Inject constructor() {
             // has `completedTask` non-null. Skip the rest — without this guard,
             // non-owning platforms emit a degenerate DELIVERY_COMPLETED row via
             // deliveryCompletedPayload's "unknown" fallback.
+            // Task ids the PostTask-exit block emits a DELIVERY_COMPLETED for this step — the #596
+            // close-out block below must NOT re-emit them (dual-mint exclusivity, amdt #2).
+            val emittedThisStep = mutableSetOf<String>()
             if (prevFlow.flow == Flow.PostTask && nextFlow.flow != Flow.PostTask) {
                 val taskCompletedOverride = triggerOverrideEffects(obs, TransitionTrigger.TASK_COMPLETED)
                 if (taskCompletedOverride != null) {
@@ -352,8 +355,18 @@ class EffectMap @Inject constructor() {
                     // is no active job to scope by, keep the prior unscoped behaviour (the payload's
                     // jobId would be null regardless).
                     val completedJobId = p.activeJob?.jobId
+                    // #596 amdt 2: when there's genuinely nothing being completed on this exit —
+                    // job already closed (by T1 on a prior step), no active task, no retire pending —
+                    // the unscoped (job-less) fallback must NOT grab a stale recentTask and re-fire a
+                    // completion the close-out block already minted. The scoped arm (job present) is
+                    // unaffected.
+                    val allowUnscopedFallback =
+                        !(p.activeJob == null && p.activeTask == null &&
+                            p.pendingDestructive?.kind != DestructiveKind.TASK_RETIRE)
                     val completedTask = next.activeTask?.takeIf { it.taskId == p.activeTask?.taskId }
-                        ?: next.recentTasks.lastOrNull { completedJobId == null || it.jobId == completedJobId }
+                        ?: next.recentTasks.lastOrNull {
+                            if (completedJobId == null) allowUnscopedFallback else it.jobId == completedJobId
+                        }
                     // #564: a delivery completes a DROPOFF, never a PICKUP. A mid-stack add-on offer
                     // can grace-retire an in-flight PICKUP task and a transient/misrecognized
                     // delivery-summary frame then drives this PostTask-exit — fabricating a $0,
@@ -379,7 +392,58 @@ class EffectMap @Inject constructor() {
                                 effectKeyOverride = "log:${AppEventType.DELIVERY_COMPLETED}:${completedTask.taskId}",
                             )
                         )
+                        emittedThisStep.add(completedTask.taskId)
                     }
+                }
+            }
+
+            // #596 close-out: a physically-complete job closed WITHOUT the post-delivery receipt
+            // (the stepper's T1/T2 cleared activeJob) still owes a DELIVERY_COMPLETED for each
+            // delivered dropoff — the pre-#596 machine minted that ONLY on a PostTask exit (above),
+            // so a receipt-skip (routine on DoorDash: the next offer chains straight over the drop)
+            // silently lost the completion AND left the job open to absorb later offers. This fires
+            // when the job goes null or is swapped for a new jobId this step. The shared idempotency
+            // key ("log:DELIVERY_COMPLETED:<taskId>") makes a double-mint impossible under the live
+            // engine's effects_fired dedup — if the receipt already completed the task, this is
+            // skipped; if it never rendered, this is the only emission.
+            val closedJob = p.activeJob
+            if (closedJob != null && next.activeJob?.jobId != closedJob.jobId) {
+                val sessionId = next.session?.sessionId ?: p.session?.sessionId
+                val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
+                for (task in next.recentTasks) {
+                    if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
+                    val completedAt = task.completedAt ?: continue
+                    // #498 identity firewall (guardrail): never complete an identity-less phantom.
+                    if (task.customerNameHash == null && task.customerAddressHash == null) continue
+                    // amdt #2 exclusivity: the PostTask-exit block already minted this one.
+                    if (task.taskId in emittedThisStep) continue
+                    // amdt #5: qualify ONLY (a) a task already completed BEFORE this step, or (b) the
+                    // active task just retired under a TASK_RETIRE grace. This excludes exactly
+                    // endSession's force-stamp of an active, UNDELIVERED task (T3 false-completion
+                    // guard) — that task carries no TASK_RETIRE pending, so neither arm matches.
+                    val alreadyCompleted =
+                        p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null }
+                    val justRetiredUnderGrace = retirePending && p.activeTask?.taskId == task.taskId
+                    if (!alreadyCompleted && !justRetiredUnderGrace) continue
+                    // amdt #3: attach the receipt's pay ONLY when the receipt was announced for THIS
+                    // task (mirror the PostTask path's per-task pinning). A receipt-less completion
+                    // naturally gets null pay (#528's job), never a normal receipted delivery's pay.
+                    val postTaskFields = p.lastPostTaskFields
+                        ?.takeIf { p.lastAnnouncedPostTaskTaskId == task.taskId }
+                    val payload = deliveryCompletedPayload(
+                        task = task,
+                        jobId = closedJob.jobId,
+                        completedAt = completedAt,
+                        postTaskFields = postTaskFields,
+                        sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
+                    )
+                    add(
+                        logEffect(
+                            sessionId, AppEventType.DELIVERY_COMPLETED, obs.timestamp, payload,
+                            effectKeyOverride = "log:${AppEventType.DELIVERY_COMPLETED}:${task.taskId}",
+                        )
+                    )
+                    emittedThisStep.add(task.taskId)
                 }
             }
         }
