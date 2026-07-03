@@ -152,6 +152,16 @@ class EffectMap @Inject constructor() {
             // Log resolution of old offer with full context.
             val outcome = resolveOfferOutcome(obs, prevOffer)
             add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
+            // #601: the ledger records an outcome for the replaced offer even though no card
+            // popped for it before — surface it now (SSOT: same outcome→text table as the
+            // resolution block below), suffixed so it reads as the OLD offer's disposition,
+            // not a claim about the new one on screen.
+            add(
+                AppEffect.UpdateBubble(
+                    "${outcomeCardText(outcome)} (offer replaced)",
+                    persona = ChatPersona.Dispatcher,
+                )
+            )
 
             // #457: dismiss the OLD offer's heads-up now. Its Accept/Decline is a separate, persistent
             // notification (not the self-replacing bubble), so without this the prior banner lingers
@@ -209,12 +219,22 @@ class EffectMap @Inject constructor() {
             add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
             add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, raceDescription)))
 
-            if (outcome == AppEventType.OFFER_TIMEOUT) {
-                add(AppEffect.UpdateBubble("Offer Timed Out!", persona = ChatPersona.Dispatcher))
-            }
+            // #601: the outcome card is derived from the SAME `outcome` value just logged above —
+            // one committed fact, one card. The click-feedback block below no longer claims an
+            // outcome at tap time (it only acks the intent); this is the single place the chat
+            // states what actually happened, so it can never desync from the ledger.
+            add(AppEffect.UpdateBubble(outcomeCardText(outcome), persona = ChatPersona.Dispatcher))
         }
 
         // Click feedback for offer accept/decline
+        //
+        // #601: this is an ACK, not an outcome claim — the dasher gets instant feedback that the
+        // tap registered, but the card that states what actually happened (Accepted/Declined/
+        // Timed Out) fires from the resolution block above, off the SAME `outcome` value that's
+        // logged to the ledger. Before this, a click here printed "Offer Accepted"/"Offer
+        // Declined" independently of resolveOfferOutcome — two code paths that only agreed
+        // because handleOfferClick happened to thread the same intent into both, with no
+        // structural guarantee they couldn't desync.
         if (flowObs is Observation.Click && prev.flow == Flow.OfferPresented) {
             val fields = flowObs.parsed as? ParsedFields.ClickFields
             // #594: the decline-commit latch set on a prior confirm click (survives on this
@@ -225,7 +245,7 @@ class EffectMap @Inject constructor() {
                     if (declineCommitted != null) {
                         // The decline was already committed server-side; this Accept (the
                         // "Review offer"→Accept race) won't take. Say so instead of the
-                        // contradictory "Offer Accepted", and count the defended invariant
+                        // contradictory "Accepting…", and count the defended invariant
                         // (Principle 7: WARN = a defended invariant fired; no PII in the line).
                         Timber.w(
                             "Accept click ignored (#594): decline already committed at %d — decline stands",
@@ -238,10 +258,10 @@ class EffectMap @Inject constructor() {
                             )
                         )
                     } else {
-                        add(AppEffect.UpdateBubble("Offer Accepted", persona = ChatPersona.Dispatcher))
+                        add(AppEffect.UpdateBubble("Accepting…", persona = ChatPersona.Dispatcher))
                     }
                 OfferIntent.DECLINE -> add(
-                    AppEffect.UpdateBubble("Offer Declined", persona = ChatPersona.Dispatcher)
+                    AppEffect.UpdateBubble("Declining…", persona = ChatPersona.Dispatcher)
                 )
             }
         }
@@ -1099,6 +1119,19 @@ class EffectMap @Inject constructor() {
             OfferIntent.DECLINE -> AppEventType.OFFER_DECLINED
             else -> AppEventType.OFFER_TIMEOUT
         }
+    }
+
+    /**
+     * #601: the SSOT for what an offer outcome card says. Both the resolution-block card
+     * (the offer that just pop'd) and the replaced-offer card (the OLD offer, suffixed by the
+     * caller) route through this ONE table, keyed on the exact [AppEventType] that gets logged
+     * to the ledger — so the chat can never claim an outcome the ledger doesn't record.
+     */
+    private fun outcomeCardText(outcome: AppEventType): String = when (outcome) {
+        AppEventType.OFFER_ACCEPTED -> "Offer Accepted"
+        AppEventType.OFFER_DECLINED -> "Offer Declined"
+        AppEventType.OFFER_TIMEOUT -> "Offer Timed Out!"
+        else -> throw IllegalArgumentException("Not an offer outcome: $outcome")
     }
 
     private fun determinePickupPersona(

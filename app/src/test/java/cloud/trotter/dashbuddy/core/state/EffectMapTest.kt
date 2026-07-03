@@ -389,7 +389,10 @@ class EffectMapTest {
     }
 
     @Test
-    fun `click accept during offer emits UpdateBubble`() {
+    fun `click accept during offer emits an instant ack, not an outcome claim (#601)`() {
+        // #601: a click is a tap acknowledgement, not an outcome — the card that says what
+        // actually happened fires from the resolution pop (see the #601 tests below), off the
+        // same outcome value logged to the ledger.
         val prev = AppState(regions = Regions(
             flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
         ))
@@ -397,22 +400,177 @@ class EffectMapTest {
         val next = prev
 
         val effects = effectMap.diff(prev, next, clickObs(intent = "accept_offer"))
-        assertTrue(effects.any {
+        assertTrue("the tap acks instantly", effects.any {
+            it is AppEffect.UpdateBubble && it.text == "Accepting…"
+        })
+        assertFalse("a click must never claim the outcome (#601)", effects.any {
             it is AppEffect.UpdateBubble && it.text == "Offer Accepted"
         })
     }
 
     @Test
-    fun `click decline during offer emits UpdateBubble`() {
+    fun `click decline during offer emits an instant ack, not an outcome claim (#601)`() {
         val prev = AppState(regions = Regions(
             flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
         ))
         val next = prev
 
         val effects = effectMap.diff(prev, next, clickObs(intent = "decline_offer"))
-        assertTrue(effects.any {
+        assertTrue("the tap acks instantly", effects.any {
+            it is AppEffect.UpdateBubble && it.text == "Declining…"
+        })
+        assertFalse("a click must never claim the outcome (#601)", effects.any {
             it is AppEffect.UpdateBubble && it.text == "Offer Declined"
         })
+    }
+
+    // =========================================================================
+    // #601 — outcome cards derive from the committed outcome (SSOT)
+    // =========================================================================
+
+    // ONE function used by every outcome-card assertion below, so a new test can't drift by
+    // hardcoding a fresh string per outcome. Deliberately reimplements (rather than imports)
+    // production's private EffectMap.outcomeCardText table, so a divergence between the two
+    // still fails a test instead of being tautologically hidden.
+    private fun expectedOutcomeCard(outcome: AppEventType, replaced: Boolean = false): String {
+        val base = when (outcome) {
+            AppEventType.OFFER_ACCEPTED -> "Offer Accepted"
+            AppEventType.OFFER_DECLINED -> "Offer Declined"
+            AppEventType.OFFER_TIMEOUT -> "Offer Timed Out!"
+            else -> error("not an offer outcome: $outcome")
+        }
+        return if (replaced) "$base (offer replaced)" else base
+    }
+
+    @Test
+    fun `accept click acks instantly, then the resolution pop shows the matching outcome card (#601)`() {
+        // Step 1 — click: instant ack, no outcome claim yet.
+        val prevAtClick = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
+        ))
+        val clickEffects = effectMap.diff(prevAtClick, prevAtClick, clickObs(intent = "accept_offer"))
+        assertTrue("instant ack at click time", clickEffects.any {
+            it is AppEffect.UpdateBubble && it.text == "Accepting…"
+        })
+
+        // Step 2 — pop: the offer resolves (screen transition) carrying the click intent the
+        // state machine already recorded from step 1. The card must equal
+        // expectedOutcomeCard(loggedOutcome) — card==ledger by construction, not two hand-kept
+        // strings that happen to agree.
+        val prevAtPop = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(lastClickIntent = OfferIntent.ACCEPT),
+            ),
+        ))
+        val nextAtPop = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskPickupNavigation)))
+        val popEffects = effectMap.diff(prevAtPop, nextAtPop, screenObs(flow = Flow.TaskPickupNavigation))
+
+        val outcome = popEffects.logEvents().first { it.event.type == AppEventType.OFFER_ACCEPTED }.event.type
+        assertTrue(
+            "the pop card equals expectedOutcomeCard(loggedOutcome)",
+            popEffects.any { it is AppEffect.UpdateBubble && it.text == expectedOutcomeCard(outcome) },
+        )
+    }
+
+    @Test
+    fun `decline-latch race (#594)- click shows the race warning not an ack, pop logs and shows Declined (#601)`() {
+        // The dasher's decline already committed server-side; a later Accept click races it.
+        val prevAtClick = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(declineCommittedAt = 900L),
+            ),
+        ))
+        val clickEffects = effectMap.diff(prevAtClick, prevAtClick, clickObs(intent = "accept_offer"))
+        assertTrue("the race warning fires instead of an ack", clickEffects.any {
+            it is AppEffect.UpdateBubble && it.text == "Decline already submitted — Accept won't take"
+        })
+        assertFalse("no Accepting… ack when the decline already committed", clickEffects.any {
+            it is AppEffect.UpdateBubble && it.text == "Accepting…"
+        })
+
+        // Pop: the latch wins — OFFER_DECLINED is what's logged and shown, regardless of the
+        // racing Accept click recorded as lastClickIntent.
+        val prevAtPop = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(
+                    declineCommittedAt = 900L,
+                    lastClickIntent = OfferIntent.ACCEPT,
+                ),
+            ),
+        ))
+        val nextAtPop = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
+        val popEffects = effectMap.diff(prevAtPop, nextAtPop, screenObs(flow = Flow.Idle))
+
+        assertTrue(popEffects.logEventTypes().contains(AppEventType.OFFER_DECLINED))
+        assertTrue(
+            "card==ledger: OFFER_DECLINED shows the Declined card even though the last click was Accept",
+            popEffects.any {
+                it is AppEffect.UpdateBubble && it.text == expectedOutcomeCard(AppEventType.OFFER_DECLINED)
+            },
+        )
+    }
+
+    @Test
+    fun `no click, timeout pop shows only the outcome card — no ack ever fired (#601)`() {
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
+        ))
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+
+        assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_TIMEOUT))
+        val bubbles = effects.filterIsInstance<AppEffect.UpdateBubble>()
+        assertEquals("exactly one card — no click means no ack ever fired", 1, bubbles.size)
+        assertEquals(expectedOutcomeCard(AppEventType.OFFER_TIMEOUT), bubbles[0].text)
+    }
+
+    @Test
+    fun `a replaced offer with a stored ACCEPT intent surfaces the OLD offer's outcome card, suffixed (#601)`() {
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(lastClickIntent = OfferIntent.ACCEPT),
+            ),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer.copy(offerHash = "hash-456")),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
+
+        assertTrue(
+            "the old offer's OFFER_ACCEPTED is logged even though it was silently replaced",
+            effects.logEventTypes().contains(AppEventType.OFFER_ACCEPTED),
+        )
+        assertTrue(
+            "the card is faithful to the ledger — suffixed so it reads as the OLD offer's fate",
+            effects.any {
+                it is AppEffect.UpdateBubble &&
+                    it.text == expectedOutcomeCard(AppEventType.OFFER_ACCEPTED, replaced = true)
+            },
+        )
+    }
+
+    @Test
+    fun `a replaced offer with no click intent logs and shows OFFER_TIMEOUT, suffixed — no 4th outcome string (#601 vet amdt 1)`() {
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer.copy(offerHash = "hash-456")),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
+
+        assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_TIMEOUT))
+        assertTrue(
+            "faithful to the ledger's OFFER_TIMEOUT — no invented 4th outcome string",
+            effects.any { it is AppEffect.UpdateBubble && it.text == "Offer Timed Out! (offer replaced)" },
+        )
     }
 
     // =========================================================================
