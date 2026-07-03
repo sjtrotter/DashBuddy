@@ -110,6 +110,23 @@ data class DeliveryPayload(
     val totalPay: Double? = null,
     /** Itemized pay breakdown — populated on COMPLETED. */
     val parsedPay: ParsedPay? = null,
+    /**
+     * This drop's attributed share of the job's combined receipt (#528 Slice A) — the exact
+     * per-store tip matched to this drop plus an **equal-split** share of the lump base. The base
+     * split is an honest v1 estimate (neither offer nor receipt breaks out per-order base); the
+     * tip is exact when the drops map 1:1 onto the receipt's tip lines, else the whole receipt is
+     * split evenly. Under the fielded one-receipt-per-job shape (DoorDash settles a stack with a
+     * single end-of-job receipt), a stacked job's DELIVERY_COMPLETED rows sum EXACTLY to the receipt
+     * total ([cloud.trotter.dashbuddy.domain.model.pay.ParsedPay.total]) in integer cents — within a
+     * single [cloud.trotter.dashbuddy.domain.state.DropPayApportioner.apportion] call the last drop
+     * absorbs the rounding remainder, and no drop double-counts the combined receipt. A platform that
+     * exposes a *mid-stack* receipt (a partial or per-drop receipt that changes between completions)
+     * can under-attribute — the sum degrades below the final total, never above it (tracked as a
+     * #528 follow-up). Null when there is no itemized receipt to attribute (a receipt-skipped #596
+     * completion, or a collapsed bare-total receipt). Computed by
+     * [cloud.trotter.dashbuddy.domain.state.DropPayApportioner].
+     */
+    val dropRealizedPay: Double? = null,
     /** Session running total at the moment of completion. */
     val sessionEarningsAtCompletion: Double? = null,
 ) : AppEventPayload

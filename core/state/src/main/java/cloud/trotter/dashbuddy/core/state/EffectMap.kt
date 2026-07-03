@@ -25,6 +25,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
+import cloud.trotter.dashbuddy.domain.state.DropPayApportioner
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -402,12 +403,21 @@ class EffectMap @Inject constructor() {
                     if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF) {
                         val retireSince = p.pendingDestructive
                             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
+                        // #528: attribute this drop's share of the combined receipt. Read the
+                        // receipt from the PREV region's lastPostTaskFields (the singular job
+                        // receipt) directly — NOT the per-task pinning — so every drop of a stack
+                        // gets a share, not just the announced one.
+                        val dropShare = DropPayApportioner.apportion(
+                            parsedPay = p.lastPostTaskFields?.parsedPay,
+                            dropoffTasks = jobDropoffTasks(next, p.activeJob?.jobId),
+                        )[completedTask.taskId]
                         val payload = deliveryCompletedPayload(
                             task = completedTask,
                             jobId = p.activeJob?.jobId,
                             completedAt = completedTask.completedAt ?: retireSince ?: obs.timestamp,
                             postTaskFields = p.lastPostTaskFields,
                             sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
+                            dropRealizedPay = dropShare,
                         )
                         // #518: scope idempotency to the completed task, not obs.timestamp, so a
                         // re-entered PostTask receipt can't re-fire (and double-count) the same
@@ -436,6 +446,13 @@ class EffectMap @Inject constructor() {
             if (closedJob != null && next.activeJob?.jobId != closedJob.jobId) {
                 val sessionId = next.session?.sessionId ?: p.session?.sessionId
                 val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
+                // #528: split the combined receipt across the job's delivered drops once, so each
+                // close-out completion carries its own share (the receipt-skip null rows and the
+                // one over-full row become per-drop shares that sum to the receipt total).
+                val dropShares = DropPayApportioner.apportion(
+                    parsedPay = p.lastPostTaskFields?.parsedPay,
+                    dropoffTasks = jobDropoffTasks(next, closedJob.jobId),
+                )
                 for (task in next.recentTasks) {
                     if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
                     val completedAt = task.completedAt ?: continue
@@ -462,6 +479,7 @@ class EffectMap @Inject constructor() {
                         completedAt = completedAt,
                         postTaskFields = postTaskFields,
                         sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
+                        dropRealizedPay = dropShares[task.taskId],
                     )
                     add(
                         logEffect(
@@ -1327,6 +1345,7 @@ class EffectMap @Inject constructor() {
         completedAt: Long,
         postTaskFields: ParsedFields.PostTaskFields?,
         sessionEarnings: Double?,
+        dropRealizedPay: Double? = null,
     ): DeliveryPayload = DeliveryPayload(
         jobId = jobId ?: task?.jobId ?: "unknown",
         taskId = task?.taskId ?: "unknown",
@@ -1341,7 +1360,25 @@ class EffectMap @Inject constructor() {
         deadlineMillis = task?.deadlineMillis,
         totalPay = postTaskFields?.totalPay,
         parsedPay = postTaskFields?.parsedPay,
+        dropRealizedPay = dropRealizedPay,
         sessionEarningsAtCompletion = sessionEarnings,
     )
 
+    /**
+     * The job's delivered dropoff tasks — the completion rows the [DropPayApportioner] splits the
+     * receipt across (#528). Sourced from the region records at the mint step (`recentTasks` +
+     * the active task, deduped by id), scoped to [jobId] and the DROPOFF phase, and restricted to
+     * identity-bearing drops so it mirrors the close-out's #498 identity firewall — an identity-
+     * less phantom that never mints a completion must not inflate the split denominator.
+     */
+    private fun jobDropoffTasks(region: PlatformRegion, jobId: String?): List<Task> {
+        if (jobId == null) return emptyList()
+        return (region.recentTasks + listOfNotNull(region.activeTask))
+            .filter {
+                it.jobId == jobId &&
+                    it.phase == TaskPhase.DROPOFF &&
+                    (it.customerNameHash != null || it.customerAddressHash != null)
+            }
+            .distinctBy { it.taskId }
+    }
 }
