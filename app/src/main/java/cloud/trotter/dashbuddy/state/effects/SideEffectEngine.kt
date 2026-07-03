@@ -251,6 +251,15 @@ class SideEffectEngine @Inject constructor(
                 }
                 stampThrottle(throttleKey, now)
                 Timber.i("Performing %s on %s", effect.action.wire, effect.platform.wire)
+                // #602: performVerifiedClick is suspend because it bounded-retries a
+                // transient "no live windows" read (a SystemUI shade/lock takeover
+                // between a notification tap and the re-resolve). We're already inside
+                // this engine's suspend serialized worker, so the inline delay (<=1.5s,
+                // only on that one branch) just stalls the effect queue rather than
+                // reordering effects vs. subsequent state — the simpler choice over
+                // detaching, which the engine's "detach long waits" guidance means for
+                // genuinely multi-second waits, not this. The throttle above is already
+                // stamped, so a retry here can't re-stamp or re-queue.
                 val clicked = uiInteractionHandler.performVerifiedClick(
                     ref = effect.targetRef,
                     expectedPackage = effect.platform.packageName,

@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toBoundingBox
 import cloud.trotter.dashbuddy.util.AccNodeUtils
+import kotlinx.coroutines.delay
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,6 +36,10 @@ import javax.inject.Singleton
  *    the opposite button (Accept sits beside Decline in the offer footer).
  *
  * Any check failing skips the tap and logs — the user acts manually instead.
+ * The one exception is a transient **no-live-windows** read (#602): a
+ * notification-action tap can reach this handler while a SystemUI takeover
+ * (shade/lock) is still covering the platform app, so the very first read
+ * finding no window is often just early, not wrong — see [awaitLiveRoots].
  */
 @Singleton
 class UiInteractionHandler @Inject constructor(
@@ -53,9 +58,14 @@ class UiInteractionHandler @Inject constructor(
      * Re-resolve [ref] in the live tree (scoped to [expectedPackage]), verify
      * the node against [expectation], and click it.
      *
+     * `suspend` since #602: the initial no-live-windows read is retried with
+     * a bounded backoff (see [awaitLiveRoots]) before failing closed — every
+     * other check here (candidates, label verification) is still a single
+     * pass, not retried.
+     *
      * @return true if a click action was dispatched to a verified node.
      */
-    fun performVerifiedClick(
+    suspend fun performVerifiedClick(
         ref: NodeRef,
         expectedPackage: String?,
         expectation: TargetExpectation,
@@ -67,10 +77,20 @@ class UiInteractionHandler @Inject constructor(
             Timber.w("No package scope for %s — refusing to click (fail closed)", description)
             return false
         }
-        val roots = accessibilitySource.getLiveWindowRoots()
-            .filter { it.packageName?.toString() == expectedPackage }
+        // #602: a notification-action tap can land here ~tens of ms after the
+        // tap, while a SystemUI takeover (shade/lock) still owns the
+        // foreground — the platform window reappears roughly 0.5-1s later
+        // when the shade collapses. Retry the read (bounded) before failing
+        // closed; nothing else in this function is retried.
+        val roots = awaitLiveRoots(expectedPackage) {
+            accessibilitySource.getLiveWindowRoots()
+                .filter { it.packageName?.toString() == expectedPackage }
+        }
         if (roots.isEmpty()) {
-            Timber.w("No live windows for package %s — cannot click (%s)", expectedPackage, description)
+            Timber.w(
+                "No live windows for package %s after %d retries over %dms — cannot click (%s)",
+                expectedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
+            )
             return false
         }
 
@@ -202,4 +222,50 @@ class UiInteractionHandler @Inject constructor(
             findNodeByBounds(child, targetBounds, className, out)
         }
     }
+}
+
+/**
+ * Bounded re-resolve delays for the [UiInteractionHandler.performVerifiedClick]
+ * no-live-windows branch (#602). Total budget is 1500ms (<=1.5s per the build
+ * plan) across <=3 retries — chosen to cover a SystemUI shade/lock takeover
+ * collapsing (observed ~0.5-1s in the field) without stalling the side-effect
+ * worker for long.
+ */
+private val RETRY_DELAYS_MS = longArrayOf(300L, 500L, 700L)
+
+/**
+ * Re-polls [source] — which must already return **package-scoped** live
+ * window roots — retrying across [RETRY_DELAYS_MS] when a read comes back
+ * empty, and returning as soon as one doesn't (#602).
+ *
+ * This wraps ONLY the "is the window there at all" read. It is intentionally
+ * a free function taking the source as a lambda (not a method reaching for
+ * [UiInteractionHandler]'s own [AccessibilitySource]) so it stays unit
+ * testable without Robolectric or a live accessibility tree: the caller
+ * (`performVerifiedClick`) decides what "package-scoped" means and supplies
+ * it as [source]; the retry itself doesn't need to know.
+ *
+ * Retrying is correct here because an empty read right after a notification
+ * tap is a **timing** artifact (the platform window hasn't been restored
+ * yet), not a correctness denial — unlike label-verification failure or an
+ * empty candidate list on an already-live window, which stay single-pass and
+ * fail closed immediately (a live window with no matching node is a real
+ * "the ruleset's target isn't there" case, not a race).
+ */
+internal suspend fun awaitLiveRoots(
+    expectedPackage: String,
+    source: () -> List<AccessibilityNodeInfo>,
+): List<AccessibilityNodeInfo> {
+    val first = source()
+    if (first.isNotEmpty()) return first
+
+    for (delayMs in RETRY_DELAYS_MS) {
+        delay(delayMs)
+        val roots = source()
+        if (roots.isNotEmpty()) {
+            Timber.d("Live window for %s reappeared after a %dms retry", expectedPackage, delayMs)
+            return roots
+        }
+    }
+    return emptyList()
 }
