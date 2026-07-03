@@ -2721,7 +2721,8 @@
                 { "hasText": "Continue" },
                 { "hasText": "Complete Delivery" },
                 { "hasText": "Mark as delivered" },
-                { "hasIdSuffix": "complete_delivery_steps_button" }
+                { "hasIdSuffix": "complete_delivery_steps_button" },
+                { "hasIdSuffix": "steps_screen_content" }
               ]
             }
           }
