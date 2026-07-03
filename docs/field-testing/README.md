@@ -104,12 +104,14 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   resolve, so it never interpolated. The prefix now uses `{payAmount}` (a top-level, always-parsed
   field), so filenames read e.g. `Offer - 26.75.png`. A new lint (`ParseOutputGoldenTest`, the
   #433 family) now catches this whole class going forward: any `{field}` template in a rule's
-  screenshot/bubble/log effect args that never resolves non-null anywhere in that rule's corpus
-  fails the build. **Confirm on dash: 0/2 —** after a session ends, `Pictures/DashBuddy` should
-  contain exactly **one** `DashSummary - <earnings>.png` for that end (not two ~2.5s apart), and
-  offer screenshots from that dash should be named `Offer - <pay>.png` (a dollar amount), never
-  the literal `Offer - {storeName}.png`. Broken = a duplicate dash-summary pair, or any offer
-  screenshot with a literal `{storeName}` in the filename.
+  screenshot/bubble/log effect args that leaves a literal `{field}` in the saved string on ≥1
+  corpus frame (i.e. fails to interpolate) fails the build. **Confirm on dash: 0/2 —** after a
+  session ends, `Pictures/DashBuddy` should contain exactly **one** `DashSummary - <earnings>.png`
+  for that end (not two ~2.5s apart), and offer screenshots from that dash should be named
+  `Offer - <pay>.png` (a dollar amount), never the literal `Offer - {storeName}.png`. (Trailing
+  zeros drop — `Offer - 26.7.png` for a $26.70 offer, `Offer - 5.0.png` for $5.00, is correct;
+  only a literal `{storeName}`/`{payAmount}` token is broken.) Broken = a duplicate dash-summary
+  pair, or any offer screenshot with a literal `{storeName}` in the filename.
 - **🔧 FIX SHIPPED — automated taps now rank click candidates by evidence instead of a dead exact-bounds check (#600).**
   Every automated Accept/Decline/Confirm tap re-resolves its target against the live accessibility
   tree, then disambiguates among label-verified candidates. The old disambiguator compared
