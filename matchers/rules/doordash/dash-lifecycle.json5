@@ -1,6 +1,6 @@
 // Section: Dash lifecycle — start / pause / resume / end, scheduling, idle & waiting-for-offer, the end-of-dash summary.
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
       "id": "doordash.screen.timeline",

@@ -1,6 +1,6 @@
 // Section: Ratings & feedback.
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
       "id": "doordash.screen.delivery_feedback",

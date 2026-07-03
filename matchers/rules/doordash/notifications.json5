@@ -1,6 +1,6 @@
 // Section: Notifications.
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "notifications": [
     {
       "id": "doordash.notification.additional_tip",

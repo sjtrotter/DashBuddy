@@ -1,6 +1,6 @@
 {
   // DashBuddy matchers JSON5 source — this comment + the trailing comma below prove JSON5-ness (stripped on canonicalize)
-  "$schema": "../../../../docs/rules.schema.json",
+  "$schema": "../../docs/rules.schema.json",
   "format_version": 2,
   "platform_id": "uber.driver",
   "screens": [

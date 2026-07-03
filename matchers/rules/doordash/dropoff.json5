@@ -1,6 +1,6 @@
 // Section: Dropoff — navigation, arrival/handoff, photo & PIN, delivery receipt/summary, alcohol-ID recognition surfaces.
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
       "comment": "#462 batch 2 — recognize-only idle/lifecycle + pickup/dropoff dialogs that shipped no viewIds and fell to UNKNOWN. No state.flow, no parse.",

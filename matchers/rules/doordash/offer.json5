@@ -1,6 +1,6 @@
 // Section: Offer — the incoming-offer popup + its accept/decline/confirm-decline actuation targets.
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
       "id": "doordash.screen.offer_popup_confirm_decline",

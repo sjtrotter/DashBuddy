@@ -1,6 +1,6 @@
 // Section: Navigation & customer comms — generic navigation + chat.
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
       "id": "doordash.screen.nav_arriving",

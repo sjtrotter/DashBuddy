@@ -203,8 +203,10 @@ merged asset would make the loader SKIP the whole platform behind the #432 gate)
 `notifications` `$ref` the main schema's `$defs`, so a partial file shows no false "missing
 format_version" error); the manifest, `uber.json5`, and the merged output keep the strict full schema.
 Order is behaviorally inert (every rule has a unique priority within its section, so `matchFirst`'s
-stable-sort tie-break is never exercised) — the split is a pure repartition, proven byte-identical to
-canonicalizing the pre-split flat file. `:core:pipeline:importMatchersRules` imports the canonical
+stable-sort tie-break is never exercised) — so the split is a pure repartition: canonicalizing the
+pre-split flat file vs the post-split directory yields byte-identical output once each rule array is
+sorted by `id` (they differ only in rule grouping order + the dropped top-level `$schema`, both inert),
+and `ParseOutputGoldenTest` stays green with no regen. `:core:pipeline:importMatchersRules` imports the canonical
 output into **generated** `assets/rules/*.json` (`build/generated/assets/importMatchersRules/rules/`),
 which both the APK (AGP Variant-API asset merge) and the unit tests (`:app:testDebugUnitTest dependsOn`
 it; `TestRulesetFactory` reads the generated dir) consume — the app loader/tests/runtime are unchanged,

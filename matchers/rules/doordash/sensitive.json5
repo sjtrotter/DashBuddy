@@ -1,6 +1,6 @@
 // Section: Sensitive — dasher banking/identity + document-image capture surfaces (blocked at the matcher layer; the load-time sensitive-coverage guard requires the two sensitive-shaped rules to live here).
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
       "id": "doordash.screen.sensitive.known",

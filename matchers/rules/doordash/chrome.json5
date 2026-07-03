@@ -1,6 +1,6 @@
 // Section: App chrome — side menu, earnings, help, promos, notifications view, camera-capture (recognized+redacted).
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
       "id": "doordash.screen.camera_capture",

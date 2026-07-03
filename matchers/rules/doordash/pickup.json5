@@ -1,6 +1,6 @@
 // Section: Pickup — navigation, arrival, shopping, item verification, issue/resolution sub-screens.
 {
-  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
       "id": "doordash.screen.pickup_navigation",
