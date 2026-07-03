@@ -1164,6 +1164,11 @@
     {
       "id": "doordash.screen.pickup_pre_arrival",
       "priority": 71,
+      "redact": [
+        { "find": { "hasIdSuffix": "user_name" } },
+        { "find": { "hasIdSuffix": "address_line_1" } },
+        { "find": { "hasIdSuffix": "address_line_2" } }
+      ],
       "state": {
         "flow": "task:pickup:navigation",
         "modeHint": "online"
@@ -1274,6 +1279,9 @@
     {
       "id": "doordash.screen.pickup_verify_items",
       "priority": 76,
+      "redact": [
+        { "find": { "hasIdSuffix": "order_verification_checklist_title" }, "keepPrefix": [ "Verify items for " ] }
+      ],
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -1368,7 +1376,8 @@
         { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S" }, { "hasNoId": true } ] } },
         { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
         { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
-        { "find": { "hasTextStartsWith": "\"" } }
+        { "find": { "hasTextStartsWith": "\"" } },
+        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
       ],
       "state": {
         "flow": "task:dropoff:navigation",
@@ -1600,7 +1609,8 @@
         { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S" }, { "hasNoId": true } ] } },
         { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
         { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
-        { "find": { "hasTextStartsWith": "\"" } }
+        { "find": { "hasTextStartsWith": "\"" } },
+        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
       ],
       "state": {
         "flow": "task:dropoff:navigation",
@@ -2217,6 +2227,9 @@
     {
       "id": "doordash.screen.waiting_for_offer",
       "priority": 120,
+      "redact": [
+        { "find": { "hasIdSuffix": "user_name" } }
+      ],
       "state": {
         "flow": "idle",
         "modeHint": "online"
@@ -2652,6 +2665,11 @@
     {
       "id": "doordash.screen.dropoff_photo",
       "priority": 62,
+      "comment": "#598 F1: the customer instruction fields on this screen are all id-less free text — the handoff summary, a free-form delivery note (gate codes, custom directions), and the unit line ('Apt/Suite <n>'). None have a stable id or prefix, so the only complete mask is all id-less text (the require anchors — drop_off_workflow_host_fragment + the 'photo of drop-off' step_title — are id-bearing, so recognition on replay is unchanged). The 'Apt/Suite ' label is preserved for debug context; the standard handoff summary and any structural counters are masked too (accepted, capture-only).",
+      "redact": [
+        { "find": { "hasTextStartsWith": "Apt/Suite" }, "keepPrefix": [ "Apt/Suite " ] },
+        { "find": { "hasNoId": true } }
+      ],
       "state": { "flow": "task:dropoff:arrived" },
       "require": {
         "all": [
@@ -2682,7 +2700,8 @@
         { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S" }, { "hasNoId": true } ] } },
         { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
         { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
-        { "find": { "hasTextStartsWith": "\"" } }
+        { "find": { "hasTextStartsWith": "\"" } },
+        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
       ],
       "state": { "flow": "task:dropoff:arrived" },
       "require": {
@@ -2743,6 +2762,11 @@
     {
       "id": "doordash.screen.dropoff_geofence_warning",
       "priority": 84,
+      "redact": [
+        { "find": { "hasIdSuffix": "address_line_1" } },
+        { "find": { "hasIdSuffix": "address_line_2" } },
+        { "find": { "hasIdSuffix": "address_subpremise_line" } }
+      ],
       "require": {
         "exists": { "hasTextContaining": "far away from the customer" }
       }
@@ -2750,6 +2774,9 @@
     {
       "id": "doordash.screen.nav_arriving",
       "priority": 69,
+      "redact": [
+        { "find": { "hasIdSuffix": "arriving_at_title" } }
+      ],
       "require": {
         "any": [
           { "exists": { "hasIdSuffix": "arriving_at_subtitle" } },
@@ -2774,6 +2801,11 @@
     {
       "id": "doordash.screen.camera_capture",
       "priority": 86,
+      "comment": "#598 F1: the id-bearing 'bottom_instruction' node embeds customer PII ('...name: <name>', '...Apt/Suite: <apt>'); mask it whole (the 'title' label stays). The bare-name regex catches a stale bin-scan-overlay customer name (e.g. 'Kris K') among id-less product rows without touching those products; single-token all-caps bare names remain a structural residual (#623/#624).",
+      "redact": [
+        { "find": { "hasIdSuffix": "bottom_instruction" } },
+        { "find": { "all": [ { "hasNoId": true }, { "hasTextMatchesRegex": "^[A-Za-z]{2,}( [A-Z]\\.?){1,2}$" } ] } }
+      ],
       "require": {
         "exists": { "any": [
           { "hasIdSuffix": "camera_preview" },
@@ -2791,6 +2823,12 @@
     {
       "id": "doordash.screen.chat_conversation",
       "priority": 89,
+      "redact": [
+        { "find": { "hasIdSuffix": "textView_navBar_title" } },
+        { "find": { "hasIdSuffix": "message_self_message" } },
+        { "find": { "hasIdSuffix": "message_other_message" } },
+        { "find": { "hasIdSuffix": "admin_message_text" } }
+      ],
       "require": {
         "exists": { "any": [
           { "hasIdSuffix": "ddchat_holder_base" },
