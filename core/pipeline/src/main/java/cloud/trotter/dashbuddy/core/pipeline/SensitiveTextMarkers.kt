@@ -37,6 +37,7 @@ object SensitiveTextMarkers {
         "Emergency contact details",
         // doordash.screen.sensitive.catchall
         "Crimson",
+        "DasherDirect",
         "Biometric",
         "Available Balance",
         "Tax Form",
