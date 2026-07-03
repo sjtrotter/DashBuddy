@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.pay.displayLabel
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
@@ -876,7 +877,7 @@ class EffectMap @Inject constructor() {
             buildString {
                 append("Saved: ${Formats.money(payData.total)}")
                 payData.customerTips.forEach { item ->
-                    append("\nTip: ${item.type} • ${Formats.money(item.amount)}")
+                    append("\nTip: ${item.displayLabel} • ${Formats.money(item.amount)}")
                 }
             }
         } else {

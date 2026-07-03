@@ -1138,6 +1138,37 @@ class EffectMapTest {
         assertTrue("Bubble should contain store name", bubbles[0].text.contains("Chipotle"))
     }
 
+    @Test
+    fun `expanded PostTask with a bare-number tip label renders as Store number - #607`() {
+        val (platform, _) = stateWithPlatform()
+        val session = Session("sess-1", startedAt = 100L)
+        val task = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "618", startedAt = 900L, completedAt = 1000L)
+        val region = PlatformRegion(
+            platform, mode = Mode.Online, session = session, recentTasks = listOf(task),
+            lastAnnouncedPostTaskTaskId = null,
+        )
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.PostTask), platforms = mapOf(platform to region)))
+        val next = prev
+        val parsedPay = cloud.trotter.dashbuddy.domain.model.pay.ParsedPay(
+            appPayComponents = listOf(cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem("DoorDash pay", 8.00)),
+            customerTips = listOf(cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem("618", 10.00)),
+        )
+        val effects = effectMap.diff(prev, next, screenObs(
+            flow = Flow.PostTask,
+            parsed = ParsedFields.PostTaskFields(totalPay = 18.00, parsedPay = parsedPay),
+        ))
+        val bubbles = effects.filterIsInstance<AppEffect.UpdateBubble>()
+        assertEquals(1, bubbles.size)
+        assertTrue(
+            "Bare-number tip label should render as 'Store #618', not the raw digits",
+            bubbles[0].text.contains("Tip: Store #618 • \$10.00"),
+        )
+        assertFalse(
+            "The raw bare-digit label alone must not appear unqualified",
+            bubbles[0].text.contains("Tip: 618 •"),
+        )
+    }
+
     // =========================================================================
     // APP-OWNED ACTIONS (#425): expand decision + deferred-action round-trip +
     // UiInput accept/decline aimed by rule-bound targets
