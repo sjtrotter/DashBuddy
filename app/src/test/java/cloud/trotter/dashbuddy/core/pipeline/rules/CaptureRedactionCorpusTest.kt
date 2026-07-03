@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
@@ -165,6 +166,62 @@ class CaptureRedactionCorpusTest {
             val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
             assertFalse("$id must carry a redact block", rule.redact.isEmpty())
         }
+    }
+
+    // =========================================================================
+    // #620 — production notification redact blocks
+    // =========================================================================
+
+    private fun notif(
+        title: String? = null,
+        text: String? = null,
+        bigText: String? = null,
+        tickerText: String? = null,
+        channelId: String? = null,
+    ) = RawNotificationData(
+        title = title, text = text, bigText = bigText, tickerText = tickerText,
+        packageName = "com.doordash.driverapp", postTime = 0L, isClearable = true,
+        channelId = channelId,
+    )
+
+    @Test
+    fun `production customer_message redact masks the sender and body (#620)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("doordash.notification.customer_message")!!
+        assertTrue("customer_message must carry a notif redact block", !rule.notifRedact.isEmpty())
+        val masked = rule.notifRedact.apply(
+            notif(
+                title = "Message from Jennifer",
+                text = "The gate code is 4412",
+                tickerText = "The gate code is 4412",
+                channelId = "dasher-notification-channel-inapp-chat",
+            ),
+        )
+        assertFalse("sender name gone", masked.title!!.contains("Jennifer"))
+        assertTrue(Regex("""Message from \[redacted:[0-9a-f]{4}\]""").containsMatchIn(masked.title!!))
+        assertFalse("body gone (text)", masked.text!!.contains("4412"))
+        assertFalse("body gone (tickerText)", masked.tickerText!!.contains("4412"))
+    }
+
+    @Test
+    fun `production order_ready redact masks the customer name but keeps the store (#620)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("doordash.notification.order_ready")!!
+        assertTrue("order_ready must carry a notif redact block", !rule.notifRedact.isEmpty())
+        val masked = rule.notifRedact.apply(
+            notif(
+                title = "Delivery Update",
+                text = "Adam's order is ready for pickup at 7-Eleven.",
+                channelId = "dasher-notification-channel-delivery-update",
+            ),
+        )
+        assertFalse("customer name gone", masked.text!!.contains("Adam"))
+        assertTrue("store kept — merchants are not PII", masked.text!!.contains("7-Eleven"))
+        assertEquals("title (non-PII) untouched", "Delivery Update", masked.title)
+    }
+
+    @Test
+    fun `a benign notification rule declares no notif redact (#620)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("doordash.notification.new_order")!!
+        assertTrue("new_order carries no customer PII → no redact", rule.notifRedact.isEmpty())
     }
 
     private fun jsonUsesSha256(element: kotlinx.serialization.json.JsonElement): Boolean = when (element) {

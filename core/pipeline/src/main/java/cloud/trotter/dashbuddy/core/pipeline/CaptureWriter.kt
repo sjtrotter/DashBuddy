@@ -191,14 +191,25 @@ class CaptureWriter @Inject constructor(
             }
         }
         val platform = Platform.fromPackage(raw.packageName).wire
+        // #620: rule-declared notification-envelope redaction. A recognized
+        // notification (customer chat, order-ready) carries customer PII in its
+        // flat fields; a rule's `redact` block masks the customer name/body in the
+        // serialized envelope only. The masked copy is envelope-only — recognition
+        // and parse ran on the ORIGINAL raw, and its contentHash is the dedup
+        // identity, captured BEFORE masking (a masked .copy() recomputes a
+        // DIFFERENT hash). UNKNOWN notifications have no ruleId and are governed by
+        // the SensitiveTextMarkers backstop above instead.
+        val originalContentHash = raw.contentHash
+        val notifRedact = obs.ruleId?.let { redactionSource.notifRedactFor(it) }
+        val payloadRaw = notifRedact?.apply(raw) ?: raw
         val capture = EnvelopeBuilder.build(
             pipelineId = NotificationPipeline.PIPELINE_ID,
             schema = RawNotificationSchema,
             platform = platform,
             ruleId = obs.ruleId,
             classificationName = obs.target,
-            payload = raw,
-            contentHash = raw.contentHash,
+            payload = payloadRaw,
+            contentHash = originalContentHash,
             metadata = obs.metadata,
         )
         val captureId = captureBus.offer(

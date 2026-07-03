@@ -64,6 +64,14 @@ class JsonRuleInterpreter @Inject constructor(
         current.screens?.ruleById(ruleId)?.redact?.takeUnless { it.isEmpty() }
 
     /**
+     * #620: the compiled notification `redact` block for a recognized notification
+     * rule, read off the live bundle (volatile). Null when the rule declares no
+     * redaction, so the capture stage skips masking entirely.
+     */
+    override fun notifRedactFor(ruleId: String): CompiledNotifRedact? =
+        current.notifications?.ruleById(ruleId)?.notifRedact?.takeUnless { it.isEmpty() }
+
+    /**
      * True once a ruleset bundle has been published. The pipelines drop (not
      * capture) every frame until this flips (#432): the sensitive-screen gate
      * is rule-driven, so a frame classified before rules load would bypass it

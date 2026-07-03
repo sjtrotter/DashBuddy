@@ -3446,6 +3446,12 @@
           { "titleContains": "Message from" }
         ]
       },
+      "redact": {
+        "title": { "keepPrefix": [ "Message from " ] },
+        "text": {},
+        "bigText": {},
+        "tickerText": {}
+      },
       "effects": [
         { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "CUSTOMER_MESSAGE" } }
       ]
@@ -3477,6 +3483,11 @@
           ] },
           { "anyFieldContains": "ready for pickup" }
         ]
+      },
+      "redact": {
+        "text": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 },
+        "bigText": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 },
+        "tickerText": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 }
       },
       "effects": [
         { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "ORDER_READY" } }

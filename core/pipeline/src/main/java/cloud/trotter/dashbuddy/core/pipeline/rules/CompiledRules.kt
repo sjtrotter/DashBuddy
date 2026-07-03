@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -86,7 +87,86 @@ data class CompiledRule<TInput>(
     val bindings: List<Binding> = emptyList(),
     val branches: List<CompiledBranch<TInput>>,
     val redact: CompiledRedact = CompiledRedact.EMPTY,
+    val notifRedact: CompiledNotifRedact = CompiledNotifRedact.EMPTY,
 )
+
+/** The notification fields a [CompiledNotifRedact] can mask (#620). */
+enum class NotifField(val wire: String) {
+    TITLE("title"),
+    TEXT("text"),
+    BIG_TEXT("bigText"),
+    TICKER_TEXT("tickerText"),
+    SUB_TEXT("subText"),
+    ;
+
+    companion object {
+        fun fromWire(wire: String): NotifField? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/**
+ * A per-field notification redact masker (#620). Notifications are flat strings
+ * (no tree), so masking is keyed by field name rather than a node predicate.
+ */
+sealed interface NotifFieldMask {
+    /** Mask the whole field value, preserving an optional leading [keepPrefix]. */
+    data class Whole(val keepPrefix: List<String> = emptyList()) : NotifFieldMask
+
+    /**
+     * Mask only the [group] capture of [regex] within the field, keeping the
+     * rest — e.g. the STORE in "<name>'s order is ready for pickup at <store>"
+     * (merchants are not PII).
+     */
+    data class RegexGroup(val regex: Regex, val group: Int) : NotifFieldMask
+}
+
+/**
+ * The compiled `redact` block for a notification rule (#620) — the flat-string
+ * analogue of [CompiledRedact]. Masks recognized customer PII (chat title/body,
+ * order-ready customer name) in the serialized notification envelope only; the
+ * ORIGINAL [RawNotificationData] drove recognition/parse and owns the dedup
+ * `contentHash`. Reuses [CompiledRedact.mask] so notification masks get the same
+ * `[redacted:<4hex>]` distinctness + fail-closed contract as screen redaction.
+ */
+data class CompiledNotifRedact(
+    val fields: Map<NotifField, NotifFieldMask>,
+) {
+    fun isEmpty(): Boolean = fields.isEmpty()
+
+    /**
+     * Return a masked COPY of [raw] for envelope serialization. The original is
+     * never mutated; callers must read the dedup `contentHash` off the ORIGINAL
+     * (a masked copy recomputes a different hash).
+     */
+    fun apply(raw: RawNotificationData): RawNotificationData = raw.copy(
+        title = maskField(NotifField.TITLE, raw.title),
+        text = maskField(NotifField.TEXT, raw.text),
+        bigText = maskField(NotifField.BIG_TEXT, raw.bigText),
+        tickerText = maskField(NotifField.TICKER_TEXT, raw.tickerText),
+        subText = maskField(NotifField.SUB_TEXT, raw.subText),
+    )
+
+    private fun maskField(field: NotifField, value: String?): String? {
+        if (value == null) return null
+        return when (val m = fields[field]) {
+            null -> value
+            is NotifFieldMask.Whole -> CompiledRedact.mask(value, m.keepPrefix)
+            is NotifFieldMask.RegexGroup -> maskGroup(value, m.regex, m.group)
+        }
+    }
+
+    private fun maskGroup(value: String, regex: Regex, group: Int): String {
+        val match = regex.find(value) ?: return value
+        val g = match.groups[group] ?: return value
+        // Reuse the SSOT mask (no keepPrefix — the group IS the token to hash).
+        val masked = CompiledRedact.mask(g.value, emptyList()) ?: CompiledRedact.REDACTED
+        return value.replaceRange(g.range, masked)
+    }
+
+    companion object {
+        val EMPTY = CompiledNotifRedact(emptyMap())
+    }
+}
 
 /**
  * A single compiled `redact` directive (#598). When [find] matches a node, that

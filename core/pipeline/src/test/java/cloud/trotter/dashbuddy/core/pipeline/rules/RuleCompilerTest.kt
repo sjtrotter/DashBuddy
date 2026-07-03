@@ -910,8 +910,8 @@ class RuleCompilerTest {
 
     @Test
     fun `notification rule with sha256 does not require a redact block`() {
-        // Enforcement is scoped to SCREEN; the notification-envelope redaction is
-        // tracked as a separate follow-up (#598 body).
+        // The sha256->redact compile gate is SCREEN-scoped. Notification-envelope
+        // redaction is opt-in `redact` vocabulary (#620), not compiler-enforced.
         val ruleJson = """[{
             "id": "doordash.notification.customer_message",
             "priority": 10,
@@ -926,6 +926,56 @@ class RuleCompilerTest {
             Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
         )
         assertEquals(1, rules.size)
+    }
+
+    // =========================================================================
+    // notification redact block (#620)
+    // =========================================================================
+
+    @Test
+    fun `notification redact compiles both whole-field and regex-capture maskers`() {
+        val ruleJson = """[{
+            "id": "doordash.notification.customer_message",
+            "priority": 10,
+            "require": { "channelIdContains": "chat" },
+            "redact": {
+                "title": { "keepPrefix": [ "Message from " ] },
+                "text": {},
+                "bigText": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 }
+            }
+        }]"""
+        val rule = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        ).single()
+        assertFalse("notif redact must compile onto the rule", rule.notifRedact.isEmpty())
+
+        val masked = rule.notifRedact.apply(
+            raw(title = "Message from Jennifer", text = "gate code is 4412", bigText = "Adam's order is ready for pickup at 7-Eleven"),
+        )
+        // Whole-field with keepPrefix: marker kept, name masked.
+        assertTrue(Regex("""^Message from \[redacted:[0-9a-f]{4}\]$""").matches(masked.title!!))
+        // Whole-field: body fully masked.
+        assertTrue(Regex("""^\[redacted:[0-9a-f]{4}\]$""").matches(masked.text!!))
+        // Regex-capture: name masked, store kept.
+        assertFalse("customer name gone", masked.bigText!!.contains("Adam"))
+        assertTrue("store kept", masked.bigText!!.contains("7-Eleven"))
+        assertTrue(
+            Regex("""^\[redacted:[0-9a-f]{4}\]'s order is ready for pickup at 7-Eleven$""")
+                .matches(masked.bigText!!),
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `notification redact rejects an unknown field`() {
+        val ruleJson = """[{
+            "id": "doordash.notification.bad_field",
+            "priority": 11,
+            "require": { "channelIdContains": "chat" },
+            "redact": { "notAField": {} }
+        }]"""
+        RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
     }
 
     // =========================================================================

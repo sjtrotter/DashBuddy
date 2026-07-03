@@ -14,4 +14,11 @@ interface ScreenRedactionSource {
      * backstop instead.
      */
     fun redactFor(ruleId: String): CompiledRedact?
+
+    /**
+     * The compiled notification `redact` block for [ruleId] (#620), or null when
+     * the rule declares none. The notification analogue of [redactFor]; defaulted
+     * to null so screen-only stubs need not implement it.
+     */
+    fun notifRedactFor(ruleId: String): CompiledNotifRedact? = null
 }

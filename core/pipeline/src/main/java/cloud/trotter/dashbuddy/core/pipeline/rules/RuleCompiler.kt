@@ -129,10 +129,16 @@ object RuleCompiler {
         val ruleParseObj = obj["parse"]?.jsonObject
         val ruleParseAs = ruleParseObj?.get("as")?.jsonPrimitive?.content
 
-        // Rule-level redact directives (screen rules only, #598).
+        // Rule-level redact directives. Screen rules use a `redact` ARRAY of node
+        // predicates (#598); notification rules use a `redact` OBJECT keyed by
+        // field (#620). Compiled into distinct carriers so neither context can
+        // read the other's shape.
         val redact = if (context == RuleContext.SCREEN) {
             obj["redact"]?.jsonArray?.let { compileRedactBlock(it) } ?: CompiledRedact.EMPTY
         } else CompiledRedact.EMPTY
+        val notifRedact = if (context == RuleContext.NOTIFICATION) {
+            obj["redact"]?.jsonObject?.let { compileNotifRedactBlock(it) } ?: CompiledNotifRedact.EMPTY
+        } else CompiledNotifRedact.EMPTY
 
         // #598 fail-closed: a screen rule that hashes customer PII in its parse
         // (`sha256` transform) MUST declare a non-empty `redact` block. The hash
@@ -173,7 +179,41 @@ object RuleCompiler {
                 ruleOutcomes = ruleState.outcomes, ruleId = id))
         }
 
-        return CompiledRule(id, priority, overrideable, ruleBindings, branches, redact)
+        return CompiledRule(id, priority, overrideable, ruleBindings, branches, redact, notifRedact)
+    }
+
+    /**
+     * Compile a notification rule's `redact` OBJECT (#620), keyed by field name
+     * (title/text/bigText/tickerText/subText). Each value is either a whole-field
+     * spec (optional `keepPrefix`) or a regex-capture spec (`match` + `maskGroup`,
+     * default group 1). Regexes go through the bounded [compileRegex]/[RegexSafety]
+     * guard — notification rules are untrusted input on the #192 CDN path too.
+     */
+    private fun compileNotifRedactBlock(obj: JsonObject): CompiledNotifRedact {
+        val fields = obj.entries.associate { (fieldName, spec) ->
+            val field = NotifField.fromWire(fieldName)
+                ?: throw RuleCompileException(
+                    "notification redact: unknown field '$fieldName' " +
+                        "(expected one of ${NotifField.entries.map { it.wire }})",
+                )
+            val specObj = spec as? JsonObject
+                ?: throw RuleCompileException(
+                    "notification redact: field '$fieldName' must be an object " +
+                        "({ \"keepPrefix\": [...] } or { \"match\": <regex>, \"maskGroup\": <int> })",
+                )
+            val matchPattern = specObj["match"]?.jsonPrimitive?.content
+            val masker: NotifFieldMask = if (matchPattern != null) {
+                val regex = compileRegex(matchPattern)
+                val group = specObj["maskGroup"]?.jsonPrimitive?.intOrNull ?: 1
+                NotifFieldMask.RegexGroup(regex, group)
+            } else {
+                val keepPrefix = specObj["keepPrefix"]?.jsonArray?.map { it.jsonPrimitive.content }
+                    ?: emptyList()
+                NotifFieldMask.Whole(keepPrefix)
+            }
+            field to masker
+        }
+        return CompiledNotifRedact(fields)
     }
 
     // ==========================================================================
