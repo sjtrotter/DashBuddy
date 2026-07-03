@@ -73,10 +73,20 @@ class NotificationPipeline @Inject constructor(
             if (!allowed) stats.onDisabledPlatformDrop()
             allowed
         }
-        // Dedup + Capture: known notifications dedup by identity; UNKNOWN by
-        // content hash in a rolling seen-set (#360).
+        // Dedup + Capture: known notifications dedup by identity, mixed with
+        // content hash so two distinct arrivals sharing a parse-less rule's
+        // constant identity aren't collapsed into one (#619); UNKNOWN by
+        // content hash in a rolling seen-set (#360). `isOngoing` notifications
+        // (e.g. `dash_status_ongoing`, the persistent "still dashing" status
+        // heartbeat) opt OUT of content-mixing (#619 V3 precaution): it
+        // reposts constantly and whether its body churns per repost (e.g. a
+        // live counter) is unconfirmed against real captures — mixing there
+        // could turn a benign repost into per-repost NOTIFICATION_RECEIVED
+        // spam, so it keeps the old pure-identity dedup instead. This does
+        // NOT affect UNKNOWN suppression, which always reads `raw.contentHash`
+        // directly regardless of `isOngoing`.
         .mapNotNull { (obs, raw) ->
-            if (!frameGate.admit(obs, raw.contentHash)) {
+            if (!frameGate.admit(obs, raw.contentHash, mixNotificationContent = !raw.isOngoing)) {
                 stats.onDuplicateSuppressed()
                 return@mapNotNull null
             }

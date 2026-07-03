@@ -31,22 +31,54 @@ internal class FrameGate(
     private var lastIdentity: ObservationIdentity? = null
 
     /**
+     * Content hash of the last admitted *notification* sharing [lastIdentity]
+     * (#619). Only ever set/read for [Observation.Notification] — screens
+     * never touch it, so their dedup stays pure-identity.
+     */
+    private var lastNotificationContentHash: Int? = null
+
+    /**
      * @param contentHash content-bearing hash for UNKNOWN frames (null = no
      *   content available; the frame is then admitted — never silently lose a
-     *   triage-able capture for want of a hash).
+     *   triage-able capture for want of a hash) AND, for a recognized
+     *   notification, the identity-dedup content discriminator (#619, see
+     *   [mixNotificationContent]).
+     * @param mixNotificationContent (#619) Parse-less notification rules
+     *   (e.g. `new_order`) have a CONSTANT [ObservationIdentity] — target +
+     *   `fieldsHash` (a hash of always-null fields) + modeHint never change —
+     *   so two observably-distinct arrivals back-to-back (e.g. two
+     *   different-store `new_order` pushes with nothing recognized between)
+     *   collapsed into one at this layer. When true (the default) and [obs]
+     *   is an [Observation.Notification], [contentHash] is mixed into the
+     *   identity comparison so a distinct content hash still admits even
+     *   when the identity is unchanged; an identical repost (same
+     *   [contentHash]) still dedups. Screens are NEVER mixed — their
+     *   identity is already content-bearing via the tree `stableHash` path
+     *   upstream, so pure-identity dedup is unchanged for them. Callers can
+     *   pass false to opt a specific notification out entirely (e.g. an
+     *   ongoing heartbeat notification whose body may churn on every
+     *   repost, where mixing would turn a benign repost into per-repost
+     *   spam) — it then keeps the old pure-identity dedup.
      * @return true if the frame should be captured (and, for known targets,
      *   forwarded onward).
      */
-    fun admit(obs: Observation, contentHash: Int?): Boolean {
+    fun admit(obs: Observation, contentHash: Int?, mixNotificationContent: Boolean = true): Boolean {
         // Null identity = never dedup (#366: clicks). It still CLEARS
         // lastIdentity below, preserving the old behavior where a click's
         // unique hash reset screen dedup (same screen re-forwards after it).
         val identity = obs.identity()
-        if (identity != null && identity == lastIdentity) return false
+        val isMixableNotification = mixNotificationContent && obs is Observation.Notification
+        if (identity != null && identity == lastIdentity) {
+            val contentChanged = isMixableNotification &&
+                contentHash != null &&
+                contentHash != lastNotificationContentHash
+            if (!contentChanged) return false
+        }
 
         val target = (obs as? Observation.FlowObservation)?.target
         if (target != UNKNOWN_TARGET) {
             lastIdentity = identity
+            lastNotificationContentHash = if (isMixableNotification) contentHash else null
             return true
         }
         if (contentHash == null) return true
