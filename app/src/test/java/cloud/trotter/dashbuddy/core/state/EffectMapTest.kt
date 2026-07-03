@@ -577,6 +577,56 @@ class EffectMapTest {
     }
 
     @Test
+    fun `session end does NOT mint a completion for an undelivered active drop (#596 amdt-5, kills M6)`() {
+        // endSession force-stamps completedAt on whatever task is active. The close-out sweep's
+        // qualification rule (already-completed-before-this-step OR active-under-TASK_RETIRE)
+        // must exclude exactly that force-stamp — otherwise ending the dash mid-delivery
+        // fabricates a DELIVERY_COMPLETED for an order still in the car (#518/#564 phantom class).
+        val (platform, base) = stateWithPlatform()
+        val job = Job("job-open", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 1000L)
+        val active = Task(
+            taskId = "task-undelivered", jobId = "job-open", phase = TaskPhase.DROPOFF,
+            customerNameHash = "abc123", startedAt = 100L, arrivedAt = null, completedAt = null,
+        )
+        // prev: open job, active identity-carrying dropoff, NO retire pending.
+        val prevRegion = base.copy(activeJob = job, activeTask = active, recentTasks = emptyList())
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskDropoffNavigation), platforms = mapOf(platform to prevRegion)))
+        // next: endSession applied — session/job/task null, the drop force-stamped into recentTasks.
+        val nextRegion = prevRegion.copy(
+            session = null, activeJob = null, activeTask = null,
+            recentTasks = listOf(active.copy(completedAt = 5_000L)),
+        )
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle), platforms = mapOf(platform to nextRegion)))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        assertFalse(
+            "ending the session mid-delivery must not fabricate a completion",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_COMPLETED),
+        )
+    }
+
+    @Test
+    fun `PostTask exit with nothing in flight does NOT re-fire a stale completed task (#596 amdt-2, kills M5)`() {
+        // The job was already closed by T1 on a PRIOR step (its completion minted then). A later
+        // PostTask exit with no job, no active task, and no retire pending must not let the
+        // job-less fallback grab the stale completed recentTask and re-emit its key.
+        val (platform, base) = stateWithPlatform()
+        val stale = Task(
+            taskId = "task-done-earlier", jobId = "job-closed", phase = TaskPhase.DROPOFF,
+            customerNameHash = "abc123", startedAt = 100L, arrivedAt = 150L, completedAt = 200L,
+        )
+        val region = base.copy(activeJob = null, activeTask = null, recentTasks = listOf(stale), pendingDestructive = null)
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.PostTask), platforms = mapOf(platform to region)))
+        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle), platforms = mapOf(platform to region)))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        assertFalse(
+            "a job-less PostTask exit with nothing being completed must not re-fire a stale completion",
+            effects.logEventTypes().contains(AppEventType.DELIVERY_COMPLETED),
+        )
+    }
+
+    @Test
     fun `DELIVERY_COMPLETED does not fire when the retired task is a PICKUP that never reached dropoff (#564)`() {
         val (platform, base) = stateWithPlatform()
         val job = Job("job-new", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 1000L)

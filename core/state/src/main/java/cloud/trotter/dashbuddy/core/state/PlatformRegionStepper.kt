@@ -1063,6 +1063,12 @@ class PlatformRegionStepper @Inject constructor() {
  * [recentTasks] with `completedAt != null`, or it IS [justRetired] — with no unresolved
  * customer-TBD placeholder outstanding, and at least one dropoff actually finished. A zero-dropoff
  * job never qualifies (a healed pickup-only job, or a job whose drops haven't rendered yet).
+ *
+ * Accounted additionally requires ARRIVAL evidence (`arrivedAt != null`, #615 review): a
+ * grace-stamped `completedAt` alone is not delivery proof — a drop retired EN ROUTE (a transient
+ * idle flash → offer → accept inside the grace window, or a mid-route cancel) must never read as
+ * delivered, close the job, and mint a false completion. Fail direction is safe: a missed ARRIVED
+ * frame keeps the job open (the old, lesser bug — absorption), never fabricates a delivery.
  */
 internal fun isJobPhysicallyComplete(
     job: Job,
@@ -1070,10 +1076,16 @@ internal fun isJobPhysicallyComplete(
     justRetired: Task?,
 ): Boolean {
     val completedDropoffIds = recentTasks
-        .filter { it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF && it.completedAt != null }
+        .filter {
+            it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
+                it.completedAt != null && it.arrivedAt != null
+        }
         .mapTo(HashSet()) { it.taskId }
     val retiredDropoffId = justRetired
-        ?.takeIf { it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF && it.completedAt != null }
+        ?.takeIf {
+            it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
+                it.completedAt != null && it.arrivedAt != null
+        }
         ?.taskId
 
     // Every dropoff the job owns must be accounted; any outstanding (incl. a customer-TBD
