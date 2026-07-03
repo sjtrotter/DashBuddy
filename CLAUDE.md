@@ -156,7 +156,10 @@ order-ready customer name via a per-field notif `redact`; store names kept). A r
 **recognized-frame** backstop (`CustomerTextMarkers`, #624 — distinct from `SensitiveTextMarkers`,
 which drops the dasher's banking screens) scrubs a node that ships a customer-PII marker
 ("Deliver to " etc.) a rule forgot to redact; the compiler rejects branch-level `redact` and skips
-a file with duplicate rule ids. UNKNOWN frames and UNKNOWN clicks remain the documented
+a file with duplicate rule ids (#624), and the multi-file loader skips a later file that re-declares
+an id an earlier file already claimed (#633 — cross-file `byId` redact-lookup shadow, fail-closed;
+a no-op on today's prefix-namespaced assets, hardening the #192/#639 multi-file + CDN path).
+UNKNOWN frames and UNKNOWN clicks remain the documented
 debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers`
 backstop); the id-less building-name line residual is still tracked. `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
 all collectors, so side effects (captures, dedup state) can never double-run (#361). The merged
