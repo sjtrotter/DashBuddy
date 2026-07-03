@@ -933,6 +933,7 @@
         { "find": { "hasIdSuffix": "bottom_sheet_task_title" }, "keepPrefix": [ "Deliver to ", "Heading to " ] },
         { "find": { "hasIdSuffix": "bottom_sheet_address_line_1" } },
         { "find": { "hasIdSuffix": "bottom_sheet_address_line_2" } },
+        { "find": { "hasIdSuffix": "bottom_sheet_subpremise_line" }, "keepPrefix": [ "Apt/Suite: " ] },
         { "find": { "hasIdSuffix": "bottom_sheet_instructions" } }
       ],
       "state": {
@@ -1373,11 +1374,14 @@
         { "find": { "hasIdSuffix": "user_name" } },
         { "find": { "hasIdSuffix": "address_line_1" } },
         { "find": { "hasIdSuffix": "address_line_2" } },
+        { "find": { "hasIdSuffix": "address_subpremise_line" }, "keepPrefix": [ "Apt/Suite: " ] },
+        { "find": { "hasIdSuffix": "dasher_instruction_content_collapsed" } },
+        { "find": { "hasIdSuffix": "dasher_instruction_content_expanded" } },
         { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S" }, { "hasNoId": true } ] } },
         { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
         { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
         { "find": { "hasTextStartsWith": "\"" } },
-        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
+        { "find": { "all": [ { "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
       ],
       "state": {
         "flow": "task:dropoff:navigation",
@@ -1610,7 +1614,7 @@
         { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
         { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
         { "find": { "hasTextStartsWith": "\"" } },
-        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
+        { "find": { "all": [ { "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
       ],
       "state": {
         "flow": "task:dropoff:navigation",
@@ -2228,7 +2232,9 @@
       "id": "doordash.screen.waiting_for_offer",
       "priority": 120,
       "redact": [
-        { "find": { "hasIdSuffix": "user_name" } }
+        { "find": { "hasIdSuffix": "user_name" } },
+        { "find": { "hasIdSuffix": "address_line_1" } },
+        { "find": { "hasIdSuffix": "address_line_2" } }
       ],
       "state": {
         "flow": "idle",
@@ -2701,7 +2707,7 @@
         { "find": { "all": [ { "hasTextMatchesRegex": "\\d{5}" }, { "hasNoId": true } ] } },
         { "find": { "hasTextStartsWith": "Apt " }, "keepPrefix": [ "Apt " ] },
         { "find": { "hasTextStartsWith": "\"" } },
-        { "find": { "all": [ { "hasTextMatchesRegex": "^\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
+        { "find": { "all": [ { "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$" }, { "hasNoId": true } ] } }
       ],
       "state": { "flow": "task:dropoff:arrived" },
       "require": {
