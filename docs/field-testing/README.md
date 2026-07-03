@@ -90,6 +90,22 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   them should equal the combined receipt total (the `parsedPay.total` on the announced row).
   Broken = a drop with null `dropRealizedPay` on a receipted stack, or the per-drop shares not
   summing to the receipt total.
+- **🔒 PLEDGE FIX — recognized-notification captures now mask customer PII (#620).**
+  Send yourself a customer chat ("Message from ‹name›" + a message body) and trigger an order-ready
+  push ("‹name›'s order is ready for pickup at ‹store›"), then pull the capture envelopes off-device.
+  **Working looks like:** the chat capture shows the sender masked (`Message from [redacted:‹4hex›]`)
+  and NO message body; the order-ready capture shows the customer name masked (`[redacted:‹4hex›]`)
+  but **keeps the store name** (merchants aren't PII). If any raw customer name/body survives in a
+  notification envelope, it's broken.
+  - Confirmed: 0/2
+- **🔒 PLEDGE FIX — dropoff-reminder screen capture now masks the address (#624).**
+  Hit the "Deliver to door of ‹address›" reminder card on a dropoff and capture it. **Working looks
+  like:** the envelope shows `Deliver to door of [redacted:‹4hex›]` — the street/apt gone. (This was
+  a live raw-address leak the #598 sha256 gate couldn't catch.) A defense-in-depth backstop also
+  scrubs any recognized screen that ships a "Deliver to "/"Order for " customer line a rule forgot
+  to redact — if you see a `redactBackstopScrubs=` count climb in the PipelineStats log line, note
+  which screen tripped it.
+  - Confirmed: 0/2
 - **🔧 FIX SHIPPED — offer outcome cards now derive from the committed outcome, not the tap (#601).
   DELIBERATE UX CHANGE — CONFIRM ON DASH.**
   Before, tapping Accept/Decline printed "Offer Accepted"/"Offer Declined" immediately, from the

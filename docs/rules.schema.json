@@ -279,6 +279,7 @@
           "description": "Positive match condition. Must pass for the rule to match."
         },
         "parse": { "$ref": "#/$defs/notificationParseBlock" },
+        "redact": { "$ref": "#/$defs/notifRedactBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
@@ -341,7 +342,7 @@
 
     "redactBlock": {
       "type": "array",
-      "description": "Rule-declared capture redaction (#598). At CAPTURE time, any node matching an entry's 'find' predicate has its text/contentDescription masked to '[redacted]' in the SERIALIZED envelope only — recognition, parse, the state machine, and the dedup contentHash all run on the ORIGINAL tree. FAIL-CLOSED: any screen rule whose parse uses the 'sha256' transform MUST declare a non-empty redact block (the hash side and the disk side cannot drift). Mask the same customer name/address nodes the parse hashes.",
+      "description": "Rule-declared capture redaction for SCREEN rules (#598). At CAPTURE time, any node matching an entry's 'find' predicate has its text/contentDescription masked to '[redacted:<4hex>]' in the SERIALIZED envelope only — recognition, parse, the state machine, and the dedup contentHash all run on the ORIGINAL tree. The '<4hex>' suffix (#623) is the first four hex of the sha256 of the keepPrefix-stripped, trimmed token, so two different customers redact distinctly (per-customer replay fidelity) without persisting raw PII; a hash failure falls back to plain '[redacted]' (fail-closed). FAIL-CLOSED: any screen rule whose parse uses the 'sha256' transform MUST declare a non-empty redact block (the hash side and the disk side cannot drift). A 'redact' inside a branches[] entry is REJECTED at compile time (#624) — redact is a whole-rule directive.",
       "items": { "$ref": "#/$defs/redactEntry" }
     },
 
@@ -356,8 +357,42 @@
         },
         "keepPrefix": {
           "type": "array",
-          "description": "Optional leading marker labels to PRESERVE. If the node text starts with one (case-insensitive), the mask is 'prefix + [redacted]' (e.g. 'Deliver to ' → 'Deliver to [redacted]'), keeping the require anchor so a replayed redacted capture still recognizes; otherwise the whole node is masked. Address nodes take no keepPrefix.",
+          "description": "Optional leading marker labels to PRESERVE. If the node text starts with one (case-insensitive), the mask is 'prefix + [redacted:<4hex>]' (e.g. 'Deliver to ' → 'Deliver to [redacted:ab12]'), keeping the require anchor so a replayed redacted capture still recognizes; otherwise the whole node is masked. Address nodes take no keepPrefix.",
           "items": { "type": "string" }
+        }
+      }
+    },
+
+    "notifRedactBlock": {
+      "type": "object",
+      "description": "Rule-declared capture redaction for NOTIFICATION rules (#620). Notifications are flat strings (no tree), so redaction is keyed by field name; each value is either a whole-field mask (optional 'keepPrefix') or a regex-capture mask ('match' + 'maskGroup'). Masks customer PII (chat title/body, order-ready customer name) in the SERIALIZED envelope only — recognition, parse, and the dedup contentHash run on the ORIGINAL notification. Same '[redacted:<4hex>]' distinctness + fail-closed contract as screen redaction. Store/merchant names are NOT PII and should be kept (use 'maskGroup' to mask only the name).",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "$ref": "#/$defs/notifRedactField" },
+        "text": { "$ref": "#/$defs/notifRedactField" },
+        "bigText": { "$ref": "#/$defs/notifRedactField" },
+        "tickerText": { "$ref": "#/$defs/notifRedactField" },
+        "subText": { "$ref": "#/$defs/notifRedactField" }
+      }
+    },
+
+    "notifRedactField": {
+      "type": "object",
+      "description": "A per-field notification mask: whole-field ('keepPrefix') OR regex-capture ('match' + 'maskGroup').",
+      "properties": {
+        "keepPrefix": {
+          "type": "array",
+          "description": "Whole-field mask: preserve a leading marker (e.g. 'Message from ') and mask the rest. Omit to mask the whole field.",
+          "items": { "type": "string" }
+        },
+        "match": {
+          "type": "string",
+          "description": "Regex-capture mask: mask only capture group 'maskGroup' of this pattern, keeping the rest of the field (e.g. mask the name in \"<name>'s order is ready ... at <store>\", keeping the store). Bounded by RegexSafety."
+        },
+        "maskGroup": {
+          "type": "integer",
+          "description": "The capture group of 'match' to mask. Default 1.",
+          "minimum": 0
         }
       }
     },

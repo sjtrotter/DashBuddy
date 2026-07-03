@@ -3074,6 +3074,9 @@
       "comment": "#462 batch 2 — recognize-only idle/lifecycle + pickup/dropoff dialogs that shipped no viewIds and fell to UNKNOWN. No state.flow, no parse.",
       "id": "doordash.screen.dropoff_reminder",
       "priority": 51,
+      "redact": [
+        { "find": { "hasTextStartsWith": "Deliver to door of" }, "keepPrefix": [ "Deliver to door of " ] }
+      ],
       "require": {
         "all": [
           { "exists": { "hasTextStartsWith": "Deliver to door of" } },
@@ -3443,6 +3446,12 @@
           { "titleContains": "Message from" }
         ]
       },
+      "redact": {
+        "title": { "keepPrefix": [ "Message from " ] },
+        "text": {},
+        "bigText": {},
+        "tickerText": {}
+      },
       "effects": [
         { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "CUSTOMER_MESSAGE" } }
       ]
@@ -3474,6 +3483,11 @@
           ] },
           { "anyFieldContains": "ready for pickup" }
         ]
+      },
+      "redact": {
+        "text": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 },
+        "bigText": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 },
+        "tickerText": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 }
       },
       "effects": [
         { "log": { "type": "NOTIFICATION_RECEIVED", "payload": "ORDER_READY" } }

@@ -129,10 +129,27 @@ object RuleCompiler {
         val ruleParseObj = obj["parse"]?.jsonObject
         val ruleParseAs = ruleParseObj?.get("as")?.jsonPrimitive?.content
 
-        // Rule-level redact directives (screen rules only, #598).
+        // Rule-level redact directives. Screen rules use a `redact` ARRAY of node
+        // predicates (#598); notification rules use a `redact` OBJECT keyed by
+        // field (#620). Compiled into distinct carriers so neither context can
+        // read the other's shape.
         val redact = if (context == RuleContext.SCREEN) {
             obj["redact"]?.jsonArray?.let { compileRedactBlock(it) } ?: CompiledRedact.EMPTY
         } else CompiledRedact.EMPTY
+        val notifRedact = if (context == RuleContext.NOTIFICATION) {
+            obj["redact"]?.jsonObject?.let { compileNotifRedactBlock(it) } ?: CompiledNotifRedact.EMPTY
+        } else CompiledNotifRedact.EMPTY
+
+        // #620 review F5: a `redact` on a CLICK-context rule silently vanishes —
+        // `redact` compiles only for SCREEN, `notifRedact` only for NOTIFICATION —
+        // the same silent-no-op class we reject for branch-level redact (VET V3).
+        // Reject it (click envelopes carry app-vocabulary button labels, no PII).
+        if (context == RuleContext.CLICK && "redact" in obj) {
+            throw RuleCompileException(
+                "Rule '$id': `redact` is not supported on CLICK rules — a click envelope carries " +
+                    "app-vocabulary button labels, not customer PII. Remove the redact block.",
+            )
+        }
 
         // #598 fail-closed: a screen rule that hashes customer PII in its parse
         // (`sha256` transform) MUST declare a non-empty `redact` block. The hash
@@ -149,8 +166,22 @@ object RuleCompiler {
         }
 
         val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
-            obj["branches"]!!.jsonArray.map {
-                compileBranch(it.jsonObject, context, ruleState.flow, ruleState.modeHint,
+            obj["branches"]!!.jsonArray.map { branchElement ->
+                val branchObj = branchElement.jsonObject
+                // #624 (VET V3): `redact` is a WHOLE-RULE directive — compileBranch
+                // never reads it, so a `redact` inside a branches[] entry would
+                // silently no-op and a rule author would believe their branch masks
+                // capture PII when it does not. Reject at compile time. This is
+                // enforced ONLY for branches[] entries, NOT the branchless whole-rule
+                // compileBranch call below, which legitimately carries top-level redact.
+                if ("redact" in branchObj) {
+                    throw RuleCompileException(
+                        "Rule '$id': a `redact` block inside a branches[] entry is not supported — " +
+                            "redact masks capture-envelope nodes for the ENTIRE recognized frame, " +
+                            "not per-branch. Move it to the rule's top level.",
+                    )
+                }
+                compileBranch(branchObj, context, ruleState.flow, ruleState.modeHint,
                     ruleOutcomes = ruleState.outcomes, ruleId = id,
                     ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj)
             }
@@ -159,7 +190,52 @@ object RuleCompiler {
                 ruleOutcomes = ruleState.outcomes, ruleId = id))
         }
 
-        return CompiledRule(id, priority, overrideable, ruleBindings, branches, redact)
+        return CompiledRule(id, priority, overrideable, ruleBindings, branches, redact, notifRedact)
+    }
+
+    /**
+     * Compile a notification rule's `redact` OBJECT (#620), keyed by field name
+     * (title/text/bigText/tickerText/subText). Each value is either a whole-field
+     * spec (optional `keepPrefix`) or a regex-capture spec (`match` + `maskGroup`,
+     * default group 1). Regexes go through the bounded [compileRegex]/[RegexSafety]
+     * guard — notification rules are untrusted input on the #192 CDN path too.
+     */
+    private fun compileNotifRedactBlock(obj: JsonObject): CompiledNotifRedact {
+        val fields = obj.entries.associate { (fieldName, spec) ->
+            val field = NotifField.fromWire(fieldName)
+                ?: throw RuleCompileException(
+                    "notification redact: unknown field '$fieldName' " +
+                        "(expected one of ${NotifField.entries.map { it.wire }})",
+                )
+            val specObj = spec as? JsonObject
+                ?: throw RuleCompileException(
+                    "notification redact: field '$fieldName' must be an object " +
+                        "({ \"keepPrefix\": [...] } or { \"match\": <regex>, \"maskGroup\": <int> })",
+                )
+            val matchPattern = specObj["match"]?.jsonPrimitive?.content
+            val masker: NotifFieldMask = if (matchPattern != null) {
+                val regex = compileRegex(matchPattern)
+                val group = specObj["maskGroup"]?.jsonPrimitive?.intOrNull ?: 1
+                // #620 review F3: bound maskGroup at COMPILE time. An out-of-range
+                // group would throw IndexOutOfBoundsException at capture (inside the
+                // supervised upstream) → a crash/restart loop, once per matching
+                // notification arrival. Group 0 is the whole match; 1..N the captures.
+                val groupCount = regex.toPattern().matcher("").groupCount()
+                if (group < 0 || group > groupCount) {
+                    throw RuleCompileException(
+                        "notification redact: field '$fieldName' maskGroup $group is out of range " +
+                            "(pattern '$matchPattern' has $groupCount capturing group(s); valid 0..$groupCount)",
+                    )
+                }
+                NotifFieldMask.RegexGroup(regex, group)
+            } else {
+                val keepPrefix = specObj["keepPrefix"]?.jsonArray?.map { it.jsonPrimitive.content }
+                    ?: emptyList()
+                NotifFieldMask.Whole(keepPrefix)
+            }
+            field to masker
+        }
+        return CompiledNotifRedact(fields)
     }
 
     // ==========================================================================

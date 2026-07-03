@@ -64,6 +64,14 @@ class JsonRuleInterpreter @Inject constructor(
         current.screens?.ruleById(ruleId)?.redact?.takeUnless { it.isEmpty() }
 
     /**
+     * #620: the compiled notification `redact` block for a recognized notification
+     * rule, read off the live bundle (volatile). Null when the rule declares no
+     * redaction, so the capture stage skips masking entirely.
+     */
+    override fun notifRedactFor(ruleId: String): CompiledNotifRedact? =
+        current.notifications?.ruleById(ruleId)?.notifRedact?.takeUnless { it.isEmpty() }
+
+    /**
      * True once a ruleset bundle has been published. The pipelines drop (not
      * capture) every frame until this flips (#432): the sensitive-screen gate
      * is rule-driven, so a frame classified before rules load would bypass it
@@ -207,6 +215,22 @@ class JsonRuleInterpreter @Inject constructor(
 
             val formatVersion = root["format_version"]?.jsonPrimitive?.int
 
+            // #624 (VET V4): reject a FILE whose OWN rule ids collide within a rule
+            // type. Ruleset.byId is last-wins, so two same-id rules would let the
+            // capture-redaction lookup (redactFor/notifRedactFor) resolve to the
+            // WRONG rule's block. Skip the offending file per the malformed-file-skip
+            // policy — other platforms still load; NEVER throw into Ruleset.init,
+            // which would blind ALL sensing behind the #432 fail-closed gate.
+            val dupId = firstDuplicateId(screens) ?: firstDuplicateId(clicks) ?: firstDuplicateId(notifications)
+            if (dupId != null) {
+                Timber.e(
+                    "JsonRuleInterpreter: rejected '%s': duplicate rule id '%s' — ids must be unique " +
+                        "per rule type (byId redact lookup would resolve to the wrong rule, #624)",
+                    source, dupId,
+                )
+                return null
+            }
+
             Timber.i(
                 "JsonRuleInterpreter: compiled '$source' " +
                     "(screens=${screens.size}, clicks=${clicks.size}, notifications=${notifications.size})"
@@ -260,6 +284,10 @@ class JsonRuleInterpreter @Inject constructor(
             Timber.e(e, "JsonRuleInterpreter: capability reconcile failed — automation taps stay denied")
         }
     }
+
+    /** The first rule id that appears more than once in [rules], or null (#624). */
+    private fun <T> firstDuplicateId(rules: List<CompiledRule<T>>): String? =
+        rules.groupingBy { it.id }.eachCount().entries.firstOrNull { it.value > 1 }?.key
 
     /** Result of compiling a single rule file. */
     data class CompiledRuleBundle(

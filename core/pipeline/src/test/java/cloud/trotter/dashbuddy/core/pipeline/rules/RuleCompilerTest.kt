@@ -894,8 +894,15 @@ class RuleCompilerTest {
             ),
         )
         val redacted = rule.redact.apply(tree)
-        assertEquals("Deliver to [redacted]", redacted.children[0].text)
-        assertEquals("[redacted]", redacted.children[1].text)
+        // #623: masked portion carries a `[redacted:<4hex>]` distinctness suffix.
+        assertTrue(
+            "marker kept, name masked with distinctness suffix",
+            Regex("""^Deliver to \[redacted:[0-9a-f]{4}\]$""").matches(redacted.children[0].text!!),
+        )
+        assertTrue(
+            "address masked whole with distinctness suffix",
+            Regex("""^\[redacted:[0-9a-f]{4}\]$""").matches(redacted.children[1].text!!),
+        )
         assertEquals("Directions", redacted.children[2].text)
         // Original tree is untouched.
         assertEquals("Deliver to Jane Q. Doe", tree.children[0].text)
@@ -903,8 +910,8 @@ class RuleCompilerTest {
 
     @Test
     fun `notification rule with sha256 does not require a redact block`() {
-        // Enforcement is scoped to SCREEN; the notification-envelope redaction is
-        // tracked as a separate follow-up (#598 body).
+        // The sha256->redact compile gate is SCREEN-scoped. Notification-envelope
+        // redaction is opt-in `redact` vocabulary (#620), not compiler-enforced.
         val ruleJson = """[{
             "id": "doordash.notification.customer_message",
             "priority": 10,
@@ -919,6 +926,105 @@ class RuleCompilerTest {
             Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
         )
         assertEquals(1, rules.size)
+    }
+
+    // =========================================================================
+    // notification redact block (#620)
+    // =========================================================================
+
+    @Test
+    fun `notification redact compiles both whole-field and regex-capture maskers`() {
+        val ruleJson = """[{
+            "id": "doordash.notification.customer_message",
+            "priority": 10,
+            "require": { "channelIdContains": "chat" },
+            "redact": {
+                "title": { "keepPrefix": [ "Message from " ] },
+                "text": {},
+                "bigText": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 }
+            }
+        }]"""
+        val rule = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        ).single()
+        assertFalse("notif redact must compile onto the rule", rule.notifRedact.isEmpty())
+
+        val masked = rule.notifRedact.apply(
+            raw(title = "Message from Jennifer", text = "gate code is 4412", bigText = "Adam's order is ready for pickup at 7-Eleven"),
+        )
+        // Whole-field with keepPrefix: marker kept, name masked.
+        assertTrue(Regex("""^Message from \[redacted:[0-9a-f]{4}\]$""").matches(masked.title!!))
+        // Whole-field: body fully masked.
+        assertTrue(Regex("""^\[redacted:[0-9a-f]{4}\]$""").matches(masked.text!!))
+        // Regex-capture: name masked, store kept.
+        assertFalse("customer name gone", masked.bigText!!.contains("Adam"))
+        assertTrue("store kept", masked.bigText!!.contains("7-Eleven"))
+        assertTrue(
+            Regex("""^\[redacted:[0-9a-f]{4}\]'s order is ready for pickup at 7-Eleven$""")
+                .matches(masked.bigText!!),
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `notification redact rejects an unknown field`() {
+        val ruleJson = """[{
+            "id": "doordash.notification.bad_field",
+            "priority": 11,
+            "require": { "channelIdContains": "chat" },
+            "redact": { "notAField": {} }
+        }]"""
+        RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+    }
+
+    @Test
+    fun `notification regex-capture mask fails CLOSED when the pattern does not match (F2b)`() {
+        // The require gate admitted the notification but the capture regex drifted
+        // and does not match — masking the group would ship the RAW field. It must
+        // mask the WHOLE field instead.
+        val ruleJson = """[{
+            "id": "doordash.notification.order_ready",
+            "priority": 10,
+            "require": { "anyFieldContains": "ready" },
+            "redact": { "text": { "match": "^(.+?)'s order is ready for pickup at ", "maskGroup": 1 } }
+        }]"""
+        val rule = RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        ).single()
+        val masked = rule.notifRedact.apply(raw(text = "Your order is ready!"))
+        assertEquals("whole field masked when the capture regex misses", "[redacted]", masked.text)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `notification redact rejects an out-of-range maskGroup (F3)`() {
+        // Pattern has 2 capturing groups; maskGroup 5 would throw
+        // IndexOutOfBoundsException at capture — reject at COMPILE (fail closed).
+        val ruleJson = """[{
+            "id": "doordash.notification.bad_group",
+            "priority": 12,
+            "require": { "channelIdContains": "chat" },
+            "redact": { "text": { "match": "(foo)(bar)", "maskGroup": 5 } }
+        }]"""
+        RuleCompiler.compileRules<RawNotificationData>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.NOTIFICATION,
+        )
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `a redact on a CLICK rule is rejected (F5)`() {
+        // redact compiles only for SCREEN, notifRedact only for NOTIFICATION — a
+        // CLICK-context redact silently vanishes, so reject it at compile.
+        val ruleJson = """[{
+            "id": "doordash.click.some_button",
+            "priority": 99,
+            "screenIs": "offer_popup",
+            "require": { "hasText": "Accept" },
+            "redact": [ { "find": { "hasTextStartsWith": "Deliver to " } } ]
+        }]"""
+        RuleCompiler.compileRules<UiNode>(
+            Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.CLICK,
+        )
     }
 
     // =========================================================================
@@ -975,5 +1081,46 @@ class RuleCompilerTest {
         val effect = RuleCompiler.compileEffectEntry(obj)
         assertEquals(1000L, effect.throttleMs)
         assertEquals("k", effect.dedupeKey)
+    }
+
+    // =========================================================================
+    // redact block placement (#624 VET V3)
+    // =========================================================================
+
+    @Test(expected = RuleCompileException::class)
+    fun `a redact block inside a branches entry is rejected (#624)`() {
+        // compileBranch never reads `redact` — a branch-level redact would silently
+        // no-op, so the author's PII would ship raw. Reject at compile time.
+        val rule = """
+            [{
+              "id": "doordash.screen.branch_redact",
+              "priority": 9001,
+              "branches": [
+                {
+                  "require": { "exists": { "hasText": "x" } },
+                  "redact": [ { "find": { "hasTextStartsWith": "Deliver to " }, "keepPrefix": [ "Deliver to " ] } ]
+                }
+              ]
+            }]
+        """.trimIndent()
+        RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+    }
+
+    @Test
+    fun `a top-level redact on a branched rule still compiles (#624)`() {
+        // The reject is scoped to branches[] entries; a whole-rule top-level redact
+        // is the #598 mechanism and must keep compiling.
+        val rule = """
+            [{
+              "id": "doordash.screen.toplevel_redact",
+              "priority": 9002,
+              "redact": [ { "find": { "hasTextStartsWith": "Deliver to " }, "keepPrefix": [ "Deliver to " ] } ],
+              "branches": [
+                { "require": { "exists": { "hasText": "x" } } }
+              ]
+            }]
+        """.trimIndent()
+        val compiled = RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+        assertFalse("top-level redact must compile onto the rule", compiled.single().redact.isEmpty())
     }
 }

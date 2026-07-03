@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
@@ -46,7 +47,89 @@ class CaptureRedactionCorpusTest {
         val redactedJson = serialize(rule.redact.apply(injected))
 
         assertFalse("injected customer name must not persist", redactedJson.contains("Testname Q"))
-        assertTrue("marker kept, name masked", redactedJson.contains("Deliver to [redacted]"))
+        // #623: the masked portion carries a `[redacted:<4hex>]` distinctness suffix.
+        assertTrue(
+            "marker kept, name masked",
+            Regex("""Deliver to \[redacted:[0-9a-f]{4}\]""").containsMatchIn(redactedJson),
+        )
+    }
+
+    /**
+     * #623 frame-invariance ACROSS RULES (VET V5): the SAME customer token, seen
+     * under three different production redact blocks (each with a different marker
+     * prefix / node predicate), must redact to the SAME 4hex distinctness suffix —
+     * and a DIFFERENT customer to a DIFFERENT suffix. This is what makes
+     * multi-customer replay possible without persisting raw PII: the suffix is a
+     * stable 16-bit fingerprint of the customer token, aligned with the parse's
+     * strip+trim+sha256, not a per-frame value.
+     */
+    @Test
+    fun `same customer redacts to the same 4hex across dropoff_navigation, timeline, and pickup_verify_items`() {
+        val suffix = Regex("""\[redacted:([0-9a-f]{4})\]""")
+        fun hexOf(masked: String): String =
+            suffix.find(masked)!!.groupValues[1]
+
+        // dropoff_navigation: id-keyed title node, keepPrefix "Deliver to ".
+        val navRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_navigation")!!
+        val navHex = hexOf(
+            navRule.redact.apply(
+                UiNode(
+                    viewIdResourceName = "com.dd:id/bottom_sheet_task_title",
+                    text = "Deliver to Jane Q Doe",
+                ),
+            ).text!!,
+        )
+
+        // timeline: text-keyed node, keepPrefix "Deliver to " (also "Pickup for ").
+        val timelineRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.timeline")!!
+        val timelineHex = hexOf(
+            timelineRule.redact.apply(UiNode(text = "Deliver to Jane Q Doe")).text!!,
+        )
+
+        // pickup_verify_items: different marker ("Verify items for ") + different id.
+        val verifyRule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_verify_items")!!
+        val verifyHex = hexOf(
+            verifyRule.redact.apply(
+                UiNode(
+                    viewIdResourceName = "com.dd:id/order_verification_checklist_title",
+                    text = "Verify items for Jane Q Doe",
+                ),
+            ).text!!,
+        )
+
+        assertEquals("same customer must redact to the same 4hex across rules", navHex, timelineHex)
+        assertEquals("same customer must redact to the same 4hex across rules", navHex, verifyHex)
+
+        // The suffix equals the first 4 hex of sha256(token) — the same hash the parse persists.
+        val expected = java.security.MessageDigest.getInstance("SHA-256")
+            .digest("Jane Q Doe".toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+            .take(4)
+        assertEquals("suffix must be first 4 hex of sha256(token)", expected, navHex)
+
+        // A DIFFERENT customer must produce a DIFFERENT suffix (distinctness).
+        val otherHex = hexOf(
+            timelineRule.redact.apply(UiNode(text = "Deliver to John Smith")).text!!,
+        )
+        assertFalse("different customers must redact to different 4hex", otherHex == navHex)
+    }
+
+    @Test
+    fun `dropoff_reminder redact masks the address after the marker (#624)`() {
+        // The live leak #624 fixes: "Deliver to door of <address>" had no hash and
+        // no redact, so the #598 sha256 gate never fired and the raw address shipped.
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_reminder")!!
+        assertTrue("dropoff_reminder must now carry a redact block", !rule.redact.isEmpty())
+
+        val node = UiNode(text = "Deliver to door of 4B, 123 Real Street").restoreParents()
+        val masked = serialize(rule.redact.apply(node))
+
+        assertFalse("street address must not persist", masked.contains("123 Real Street"))
+        assertFalse("apt must not persist", masked.contains("4B"))
+        assertTrue(
+            "marker kept, address masked",
+            Regex("""Deliver to door of \[redacted:[0-9a-f]{4}\]""").containsMatchIn(masked),
+        )
     }
 
     @Test
@@ -83,6 +166,85 @@ class CaptureRedactionCorpusTest {
             val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
             assertFalse("$id must carry a redact block", rule.redact.isEmpty())
         }
+    }
+
+    // =========================================================================
+    // #620 — production notification redact blocks
+    // =========================================================================
+
+    private fun notif(
+        title: String? = null,
+        text: String? = null,
+        bigText: String? = null,
+        tickerText: String? = null,
+        channelId: String? = null,
+    ) = RawNotificationData(
+        title = title, text = text, bigText = bigText, tickerText = tickerText,
+        packageName = "com.doordash.driverapp", postTime = 0L, isClearable = true,
+        channelId = channelId,
+    )
+
+    @Test
+    fun `production customer_message redact masks the sender and body (#620)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("doordash.notification.customer_message")!!
+        assertTrue("customer_message must carry a notif redact block", !rule.notifRedact.isEmpty())
+        val masked = rule.notifRedact.apply(
+            notif(
+                title = "Message from Jennifer",
+                text = "The gate code is 4412",
+                tickerText = "The gate code is 4412",
+                channelId = "dasher-notification-channel-inapp-chat",
+            ),
+        )
+        assertFalse("sender name gone", masked.title!!.contains("Jennifer"))
+        assertTrue(Regex("""Message from \[redacted:[0-9a-f]{4}\]""").containsMatchIn(masked.title!!))
+        assertFalse("body gone (text)", masked.text!!.contains("4412"))
+        assertFalse("body gone (tickerText)", masked.tickerText!!.contains("4412"))
+    }
+
+    @Test
+    fun `production order_ready redact masks the customer name but keeps the store (#620)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("doordash.notification.order_ready")!!
+        assertTrue("order_ready must carry a notif redact block", !rule.notifRedact.isEmpty())
+        val masked = rule.notifRedact.apply(
+            notif(
+                title = "Delivery Update",
+                text = "Adam's order is ready for pickup at 7-Eleven.",
+                channelId = "dasher-notification-channel-delivery-update",
+            ),
+        )
+        assertFalse("customer name gone", masked.text!!.contains("Adam"))
+        assertTrue("store kept — merchants are not PII", masked.text!!.contains("7-Eleven"))
+        assertEquals("title (non-PII) untouched", "Delivery Update", masked.title)
+    }
+
+    @Test
+    fun `a benign notification rule declares no notif redact (#620)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("doordash.notification.new_order")!!
+        assertTrue("new_order carries no customer PII → no redact", rule.notifRedact.isEmpty())
+    }
+
+    @Test
+    fun `production uber trip_en_route_dropoff masks the address title (#620 F1)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("uber.notification.trip_en_route_dropoff")!!
+        assertTrue("trip_en_route_dropoff must carry a notif redact block", !rule.notifRedact.isEmpty())
+        // The title IS the customer address ("Going to <address>"); mask the whole field.
+        val masked = rule.notifRedact.apply(notif(title = "Going to 1600 Amphitheatre Pkwy"))
+        assertFalse("street name gone", masked.title!!.contains("Amphitheatre"))
+        assertFalse("house number gone", masked.title!!.contains("1600"))
+        assertTrue(Regex("""^\[redacted:[0-9a-f]{4}\]$""").matches(masked.title!!))
+    }
+
+    @Test
+    fun `production uber trip_at_dropoff masks the address or name, keeps the lead-in (#620 F1)`() {
+        val rule = TestRulesetFactory.notificationRuleset.ruleById("uber.notification.trip_at_dropoff")!!
+        assertTrue("trip_at_dropoff must carry a notif redact block", !rule.notifRedact.isEmpty())
+        val leave = rule.notifRedact.apply(notif(title = "Leave the order at 1600 Amphitheatre Pkwy"))
+        assertFalse("address gone", leave.title!!.contains("Amphitheatre"))
+        assertTrue(Regex("""^Leave the order at \[redacted:[0-9a-f]{4}\]$""").matches(leave.title!!))
+        val meet = rule.notifRedact.apply(notif(title = "Meet at door for Jane Doe"))
+        assertFalse("customer name gone", meet.title!!.contains("Jane"))
+        assertTrue(Regex("""^Meet at door for \[redacted:[0-9a-f]{4}\]$""").matches(meet.title!!))
     }
 
     private fun jsonUsesSha256(element: kotlinx.serialization.json.JsonElement): Boolean = when (element) {
