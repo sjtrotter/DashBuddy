@@ -292,6 +292,83 @@ class ParseOutputGoldenTest {
     }
 
     // =========================================================================
+    // 4. Effect-arg {field} template lint (the #606 class)
+    // =========================================================================
+
+    /**
+     * Dead effect-arg templates already known (ratchet — may only shrink, same
+     * pattern as [knownDeadDedupeTemplates] above):
+     * - `doordash.screen.delivery_summary_collapsed:totalPay` — the mirror
+     *   image of the dead `delivery_summary_collapsed:totalPay` dedupeKey
+     *   entry above: the collapsed receipt never parses `totalPay` non-null
+     *   in the corpus (it's behind the expand), so its
+     *   `"Delivery - {totalPay}"` screenshot-prefix template never
+     *   interpolates either. Pre-existing; out of scope for #606 (which only
+     *   touches `offer_popup`'s prefix and the EffectMap double-fire) — clean
+     *   up when the summary rules are next touched.
+     * (`doordash.screen.offer_popup:storeName` was the #606 bug itself —
+     * `storeName` lives inside the per-order `orders[]` array, never at the
+     * rule's top level where template resolution reads from, so
+     * `"Offer - {storeName}"` saved every offer screenshot as the literal
+     * filename `Offer - {storeName}.png`. Fixed by switching to `{payAmount}`,
+     * a field the rule guarantees non-null via its `fieldNotNull` validator.)
+     * Entries are "ruleId:field".
+     */
+    private val knownDeadArgTemplates = setOf(
+        "doordash.screen.delivery_summary_collapsed:totalPay",
+    )
+
+    @Test
+    fun `effect arg templates reference fields the rule actually parses`() {
+        val template = Regex("\\{(\\w+)}")
+        // (ruleId, field) → did ANY corpus match of that rule parse it
+        // non-null? Mirrors the dedupeKey lint above, but scans every effect
+        // ARG value (screenshot prefix, bubble text, log payload, …) instead
+        // of just dedupeKey — the #606 bug (`"Offer - {storeName}"` never
+        // interpolating) lived in a `prefix` arg, which the dedupeKey-only
+        // lint never looked at.
+        val seen = mutableMapOf<Pair<String, String>, Boolean>()
+        val exampleArg = mutableMapOf<Pair<String, String>, String>()
+
+        val base = File("src/test/resources/snapshots")
+        val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
+            ?.sortedBy { it.name } ?: emptyList()
+        for (dir in dirs) {
+            for ((_, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+                val result = TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
+                    screenRuleset.matchFirst(node)
+                } ?: continue
+                for (effect in result.effects) {
+                    for (argValue in effect.args.values) {
+                        for (m in template.findAll(argValue)) {
+                            val field = m.groupValues[1]
+                            // Reserved tokens resolve post-factory in the
+                            // classifier (DedupeTokens, #427) — never raw fields.
+                            if (field in DedupeTokens.RESERVED_FIELD_NAMES) continue
+                            val key = result.ruleId to field
+                            seen[key] = (seen[key] ?: false) || (result.fields[field] != null)
+                            exampleArg.putIfAbsent(key, argValue)
+                        }
+                    }
+                }
+            }
+        }
+
+        val dead = seen.filterValues { !it }.keys
+            .map { (rule, field) -> "$rule:$field" }
+            .toSet()
+        assertEquals(
+            "Dead effect-arg {field} templates changed (fields that never parse non-null " +
+                "anywhere in the rule's corpus — a screenshot/bubble/log template that never " +
+                "interpolates, the #606 class). Fixed one? Remove it from " +
+                "knownDeadArgTemplates. Introduced one? Fix the rule.\n" +
+                dead.joinToString("\n") { "  $it (e.g. '${exampleArg[it.split(":").let { p -> p[0] to p[1] }]}')" },
+            knownDeadArgTemplates,
+            dead,
+        )
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

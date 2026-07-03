@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
-import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
@@ -514,12 +513,13 @@ class EffectMap @Inject constructor() {
                         )
                         add(AppEffect.StopOdometer)
                         add(AppEffect.UpdateBubble("Session Ended. Total: $earnings", ChatPersona.Dispatcher))
-                        add(
-                            AppEffect.CaptureScreenshot(
-                                "DashSummary - ${endParsed.totalEarnings}",
-                                category = EvidenceCategory.SESSION_SUMMARY,
-                            ),
-                        )
+                        // #606: no CaptureScreenshot here — the dash_summary
+                        // rule effect (doordash.json) already owns the
+                        // DashSummary screenshot (deduped + throttled, fires
+                        // on recognition). This commit-side add had a null
+                        // effectKey, bypassing both effects_fired and the
+                        // throttle, so a session end double-fired the shot
+                        // ~2.5s apart (the AUTHORITATIVE_GRACE_MS window).
                     } else {
                         add(
                             logEffect(
