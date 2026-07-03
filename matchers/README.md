@@ -2,8 +2,8 @@
 
 This directory owns the **single source of truth for DashBuddy recognition rules**. It is an
 in-repo stand-in for the future separate, forkable, Apache-2.0 **matchers repo** (Pillar 2 /
-Epic #192) — same Gradle topology, so when the repo splits out (gated on the #246 licensing
-decision) this becomes a git **submodule** with no consumer-side change. See
+Epic #192) — same Gradle topology, so when the repo splits out (licensing settled Apache-2.0 per
+#246) this becomes a git **submodule** with no consumer-side change. See
 [`docs/adr/ADR-0009-rule-distribution-channels.md`](../docs/adr/ADR-0009-rule-distribution-channels.md).
 
 It is a self-contained plain-JVM Gradle build (`includeBuild`-ed by the app's root
