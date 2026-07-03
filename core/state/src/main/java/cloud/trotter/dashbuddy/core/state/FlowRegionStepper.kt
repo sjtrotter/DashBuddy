@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import javax.inject.Inject
@@ -124,10 +125,21 @@ class FlowRegionStepper @Inject constructor() {
         val offer = prev.pendingOffer ?: return prev
         if (prev.flow != Flow.OfferPresented) return prev
         val fields = obs.parsed as? ParsedFields.ClickFields
+        // A DECLINE-intent click is the confirm-sheet commit (the decline_offer click rule is
+        // screen-scoped to offer_popup_confirm_decline), so the platform has already processed
+        // the decline server-side. Latch it — first commit wins, idempotent on repeat confirm
+        // echoes — so a later "Review offer"→Accept race can't override it (#594). lastClickIntent
+        // still records the literal last click for forensics; the latch is the authority.
+        val declineCommittedAt =
+            if (fields?.intent == OfferIntent.DECLINE) offer.declineCommittedAt ?: obs.timestamp
+            else offer.declineCommittedAt
         // Store intent on PendingOffer so EffectMap can resolve outcome
         // even when the resolving observation is a Screen (not a Click)
         return prev.copy(
-            pendingOffer = offer.copy(lastClickIntent = fields?.intent ?: offer.lastClickIntent),
+            pendingOffer = offer.copy(
+                lastClickIntent = fields?.intent ?: offer.lastClickIntent,
+                declineCommittedAt = declineCommittedAt,
+            ),
             lastObservedAt = obs.timestamp,
         )
     }
