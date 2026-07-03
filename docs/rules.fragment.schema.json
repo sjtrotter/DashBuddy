@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sjtrotter/dashbuddy-matchers/rules.fragment.schema.json",
+  "title": "DashBuddy rules FRAGMENT (surface sub-file)",
+  "description": "Editor schema for a partial per-surface rule sub-file under matchers/rules/<platform>/ (e.g. doordash/pickup.json5). A fragment carries ONLY a slice of screens/clicks/notifications; the platform metadata (format_version, platform_id) lives in _manifest.json5, and the canonicalizer MERGES every sub-file into one canonical assets/rules/<platform>.json that validates against the full rules.schema.json. This fragment schema therefore drops the top-level `required` (format_version/platform_id) so a partial file shows no false 'missing key' error, while still validating each individual rule against the SAME $defs the full schema uses (no duplication).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "screens": {
+      "type": "array",
+      "items": { "$ref": "rules.schema.json#/$defs/screenRule" }
+    },
+    "clicks": {
+      "type": "array",
+      "items": { "$ref": "rules.schema.json#/$defs/clickRule" }
+    },
+    "notifications": {
+      "type": "array",
+      "items": { "$ref": "rules.schema.json#/$defs/notificationRule" }
+    }
+  }
+}

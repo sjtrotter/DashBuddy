@@ -1,0 +1,1342 @@
+// Section: Dropoff — navigation, arrival/handoff, photo & PIN, delivery receipt/summary, alcohol-ID recognition surfaces.
+{
+  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "screens": [
+    {
+      "comment": "#462 batch 2 — recognize-only idle/lifecycle + pickup/dropoff dialogs that shipped no viewIds and fell to UNKNOWN. No state.flow, no parse.",
+      "id": "doordash.screen.dropoff_reminder",
+      "priority": 51,
+      "redact": [
+        {
+          "find": {
+            "hasTextStartsWith": "Deliver to door of"
+          },
+          "keepPrefix": [
+            "Deliver to door of "
+          ]
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextStartsWith": "Deliver to door of"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "Got it"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_navigation",
+      "priority": 61,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "bottom_sheet_task_title"
+          },
+          "keepPrefix": [
+            "Deliver to ",
+            "Heading to "
+          ]
+        },
+        {
+          "find": {
+            "hasIdSuffix": "bottom_sheet_address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "bottom_sheet_address_line_2"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "bottom_sheet_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: "
+          ]
+        },
+        {
+          "find": {
+            "hasIdSuffix": "bottom_sheet_instructions"
+          }
+        }
+      ],
+      "state": {
+        "flow": "task:dropoff:navigation",
+        "modeHint": "online"
+      },
+      "reject": [
+        {
+          "exists": {
+            "any": [
+              {
+                "hasText": "Continue"
+              },
+              {
+                "hasText": "Complete Delivery"
+              },
+              {
+                "hasText": "Mark as delivered"
+              },
+              {
+                "hasIdSuffix": "complete_delivery_steps_button"
+              }
+            ]
+          }
+        }
+      ],
+      "branches": [
+        {
+          "require": {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "bottom_sheet_task_title"
+                },
+                {
+                  "hasTextContaining": "Deliver to"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "bottom_sheet_task_title"
+                    },
+                    {
+                      "hasTextContaining": "Heading to"
+                    }
+                  ]
+                }
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "bottom_sheet_task_arrive_by"
+                    },
+                    {
+                      "hasTextContaining": "Deliver by"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "parse": {
+        "as": "task",
+        "fields": {
+          "phase": "DROPOFF",
+          "subFlow": "NAVIGATION",
+          "customerNameHash": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_title"
+            },
+            "read": "text",
+            "transform": [
+              {
+                "stripPrefixes": [
+                  "Deliver to ",
+                  "Heading to "
+                ]
+              },
+              "trim",
+              "sha256"
+            ]
+          },
+          "customerAddressHash": {
+            "join": [
+              {
+                "find": {
+                  "hasIdSuffix": "bottom_sheet_address_line_1"
+                },
+                "read": "text"
+              },
+              {
+                "find": {
+                  "hasIdSuffix": "bottom_sheet_address_line_2"
+                },
+                "read": "text"
+              }
+            ],
+            "separator": ", ",
+            "transform": "sha256"
+          },
+          "deadlineText": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_arrive_by"
+            },
+            "read": "text",
+            "transform": "stripDeadlinePrefix"
+          },
+          "deadlineMillis": {
+            "find": {
+              "hasIdSuffix": "bottom_sheet_task_arrive_by"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_photo",
+      "priority": 62,
+      "comment": "#598 F1: the customer instruction fields on this screen are all id-less free text — the handoff summary, a free-form delivery note (gate codes, custom directions), and the unit line ('Apt/Suite <n>'). None have a stable id or prefix, so the only complete mask is all id-less text (the require anchors — drop_off_workflow_host_fragment + the 'photo of drop-off' step_title — are id-bearing, so recognition on replay is unchanged). The 'Apt/Suite ' label is preserved for debug context; the standard handoff summary and any structural counters are masked too (accepted, capture-only).",
+      "redact": [
+        {
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite "
+          ]
+        },
+        {
+          "find": {
+            "hasNoId": true
+          }
+        }
+      ],
+      "state": {
+        "flow": "task:dropoff:arrived"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "drop_off_workflow_host_fragment"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "photo of drop-off"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_pin_entry",
+      "priority": 63,
+      "state": {
+        "flow": "task:dropoff:arrived"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "drop_off_workflow_host_fragment"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "collect pin from customer"
+                },
+                {
+                  "hasTextContaining": "ask the customer for the unique"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_handoff",
+      "comment": "#603: the 'hand it to customer' instruction is present the ENTIRE drive (en-route AND at-door), so keying on it alone fired a FALSE task:dropoff:arrived the moment nav started. The completion CTA ('Continue'/'Complete Delivery'/'Mark as delivered'/complete_delivery_steps_button) only appears once the dasher is actually at the door, so it is the real arrival discriminator. The en-route workflow-sheet frame (which lacks the CTA) then falls through to dropoff_pre_arrival (priority 73). KEEP THIS CTA SET IN SYNC with dropoff_navigation's reject and dropoff_pre_arrival_completion's require — all three describe the same 'delivery can be completed now' signal.",
+      "priority": 64,
+      "redact": [
+        {
+          "find": {
+            "any": [
+              {
+                "hasTextStartsWith": "Deliver to"
+              },
+              {
+                "hasTextStartsWith": "Heading to"
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Deliver to ",
+            "Heading to "
+          ]
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ]
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        }
+      ],
+      "state": {
+        "flow": "task:dropoff:arrived"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "drop_off_workflow_host_fragment"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "hand it to customer"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasText": "Continue"
+                },
+                {
+                  "hasText": "Complete Delivery"
+                },
+                {
+                  "hasText": "Mark as delivered"
+                },
+                {
+                  "hasIdSuffix": "complete_delivery_steps_button"
+                },
+                {
+                  "hasIdSuffix": "steps_screen_content"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_completed_confirm",
+      "priority": 65,
+      "state": {
+        "flow": "task:dropoff:arrived"
+      },
+      "require": {
+        "exists": {
+          "any": [
+            {
+              "hasTextContaining": "Confirm order was completed"
+            },
+            {
+              "hasTextContaining": "Confirm delivery was completed"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_pre_arrival",
+      "priority": 73,
+      "redact": [
+        {
+          "find": {
+            "any": [
+              {
+                "hasTextStartsWith": "Deliver to"
+              },
+              {
+                "hasTextStartsWith": "Heading to"
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Deliver to ",
+            "Heading to "
+          ]
+        },
+        {
+          "find": {
+            "hasIdSuffix": "user_name"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: "
+          ]
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_collapsed"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_expanded"
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ]
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        }
+      ],
+      "state": {
+        "flow": "task:dropoff:navigation",
+        "modeHint": "online"
+      },
+      "comment": "Dropoff layouts (#462/#460/#549): (1) the en-route nav card ('Deliver to <name>' + Directions/Call/Message); (2) the arrival detail card with 'Delivery for' + 'Hand it to recipient'; (3) #549: the arrival detail card whose instruction is NOT 'Hand it to recipient' (e.g. 'Leave it at the door'), anchored on 'Delivery for' + the complete_delivery_steps_button id (the third require branch) — it was dropping to UNKNOWN. The arrival card's first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' / complete_delivery_steps_button are the dropoff-specific discriminators (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The arrival card's address nodes carry ids (address_line_1/_2), so customerAddressHash uses a coalesce (id-less shape first, by-id second). The alcohol variant additionally carries the priority-0 sensitive id/signature banner (#463), blocked before reaching here. Recognize-only (flow stays task:dropoff:navigation); the gate-code/instruction node is never parsed.",
+      "require": {
+        "any": [
+          {
+            "all": [
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasTextStartsWith": "Deliver to"
+                    },
+                    {
+                      "hasTextStartsWith": "Heading to"
+                    }
+                  ]
+                }
+              },
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasText": "Directions"
+                    },
+                    {
+                      "hasText": "Call"
+                    },
+                    {
+                      "hasText": "Message"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Delivery for"
+                }
+              },
+              {
+                "exists": {
+                  "hasText": "Hand it to recipient"
+                }
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Delivery for"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "complete_delivery_steps_button"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "parse": {
+        "as": "task",
+        "fields": {
+          "phase": "DROPOFF",
+          "subFlow": "NAVIGATION",
+          "customerNameHash": {
+            "coalesce": [
+              {
+                "find": {
+                  "any": [
+                    {
+                      "hasTextStartsWith": "Deliver to"
+                    },
+                    {
+                      "hasTextStartsWith": "Heading to"
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": [
+                  {
+                    "stripPrefixes": [
+                      "Deliver to ",
+                      "Heading to "
+                    ]
+                  },
+                  "trim",
+                  "sha256"
+                ]
+              },
+              {
+                "find": {
+                  "hasTextContaining": "Delivery for"
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": [
+                  "trim",
+                  "sha256"
+                ]
+              }
+            ]
+          },
+          "customerAddressHash": {
+            "comment": "#549: two address layouts. The en-route nav card's address is id-LESS (matched by the digit-leading shape, first branch). The arrival detail card's address carries ids (address_line_1/_2), so the id-less branch returns null and the second by-id branch reads it. coalesce picks the first non-null and applies NO top-level transform, so EACH branch hashes its own result — the address is never stored in the clear.",
+            "coalesce": [
+              {
+                "join": [
+                  {
+                    "find": {
+                      "all": [
+                        {
+                          "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                        },
+                        {
+                          "hasNoId": true
+                        }
+                      ]
+                    },
+                    "read": "text"
+                  },
+                  {
+                    "find": {
+                      "all": [
+                        {
+                          "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                        },
+                        {
+                          "hasNoId": true
+                        }
+                      ]
+                    },
+                    "navigate": "sibling(1)",
+                    "rejectIf": {
+                      "not": {
+                        "hasTextMatchesRegex": "\\d{5}$"
+                      }
+                    },
+                    "read": "text"
+                  }
+                ],
+                "separator": ", ",
+                "transform": "sha256"
+              },
+              {
+                "join": [
+                  {
+                    "find": {
+                      "hasIdSuffix": "address_line_1"
+                    },
+                    "read": "text"
+                  },
+                  {
+                    "find": {
+                      "hasIdSuffix": "address_line_2"
+                    },
+                    "read": "text"
+                  }
+                ],
+                "separator": ", ",
+                "transform": "sha256"
+              }
+            ]
+          },
+          "storeName": {
+            "comment": "#526: the dropoff card's merchant label — the same store as the pickup, but in DoorDash's running-key form ('Target (02426)', 'Maple Street Biscuit - Alamo Ranch'), which does NOT string-match the offer/pickup name. The node has no id, so it's anchored by text shape: '<name> (<storeNum>)' (reliable for chains) first, then a strict all-Title-Case '<Name> - <Area>' (so a lowercase delivery instruction can't false-match). Not PII (a merchant name); feeds per-task store self-labelling + the post-session store-entity projector (#159). Null when the card variant doesn't show it.",
+            "coalesce": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "^.{1,60} \\((\\d{2,6}(-\\d{1,6})?|[A-Z][A-Za-z .'&-]+)\\)$"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": "trim"
+              },
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "^[A-Z][\\w .'&-]{1,48} - [A-Z][\\w .'&-]{1,48}$"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": "trim"
+              }
+            ]
+          },
+          "deadlineText": {
+            "find": {
+              "hasTextMatchesRegex": "\\bby\\s+\\d{1,2}:\\d{2}"
+            },
+            "read": "text",
+            "transform": "stripDeadlinePrefix"
+          },
+          "deadlineMillis": {
+            "find": {
+              "hasTextMatchesRegex": "\\bby\\s+\\d{1,2}:\\d{2}"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_pre_arrival_completion",
+      "priority": 74,
+      "redact": [
+        {
+          "find": {
+            "any": [
+              {
+                "hasTextStartsWith": "Deliver to"
+              },
+              {
+                "hasTextStartsWith": "Heading to"
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Deliver to ",
+            "Heading to "
+          ]
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "\\d{5}"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Apt "
+          },
+          "keepPrefix": [
+            "Apt "
+          ]
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "\""
+          }
+        },
+        {
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^#?\\s?\\d{1,4}[A-Za-z]?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        }
+      ],
+      "state": {
+        "flow": "task:dropoff:navigation",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasTextStartsWith": "Deliver to"
+                },
+                {
+                  "hasTextStartsWith": "Heading to"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasText": "Continue"
+                },
+                {
+                  "hasText": "Complete Delivery"
+                },
+                {
+                  "hasText": "Mark as delivered"
+                },
+                {
+                  "hasIdSuffix": "complete_delivery_steps_button"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "task",
+        "fields": {
+          "phase": "DROPOFF",
+          "subFlow": "NAVIGATION",
+          "customerNameHash": {
+            "find": {
+              "any": [
+                {
+                  "hasTextStartsWith": "Deliver to"
+                },
+                {
+                  "hasTextStartsWith": "Heading to"
+                }
+              ]
+            },
+            "read": "text",
+            "transform": [
+              {
+                "stripPrefixes": [
+                  "Deliver to ",
+                  "Heading to "
+                ]
+              },
+              "trim",
+              "sha256"
+            ]
+          },
+          "customerAddressHash": {
+            "join": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                },
+                "read": "text"
+              },
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasTextMatchesRegex": "^\\d{1,5}\\s+\\S"
+                    },
+                    {
+                      "hasNoId": true
+                    }
+                  ]
+                },
+                "navigate": "sibling(1)",
+                "rejectIf": {
+                  "not": {
+                    "hasTextMatchesRegex": "\\d{5}$"
+                  }
+                },
+                "read": "text"
+              }
+            ],
+            "separator": ", ",
+            "transform": "sha256"
+          },
+          "deadlineText": {
+            "find": {
+              "hasTextMatchesRegex": "\\bby\\s+\\d{1,2}:\\d{2}"
+            },
+            "read": "text",
+            "transform": "stripDeadlinePrefix"
+          },
+          "deadlineMillis": {
+            "find": {
+              "hasTextMatchesRegex": "\\bby\\s+\\d{1,2}:\\d{2}"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_geofence_warning",
+      "priority": 84,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_subpremise_line"
+          }
+        }
+      ],
+      "require": {
+        "exists": {
+          "hasTextContaining": "far away from the customer"
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.delivery_summary_expanded",
+      "priority": 30,
+      "state": {
+        "flow": "post:task",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "allTextContainsAny": [
+              "this offer",
+              "delivery complete"
+            ]
+          },
+          {
+            "allTextContainsAll": [
+              "doordash pay",
+              "customer tips"
+            ]
+          }
+        ]
+      },
+      "reject": [
+        {
+          "allTextContains": "pause orders"
+        }
+      ],
+      "parse": {
+        "as": "post_task",
+        "fields": {
+          "totalPay": {
+            "find": {
+              "hasIdSuffix": "final_value"
+            },
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "appPay": {
+            "find": {
+              "hasTextContaining": "DoorDash pay"
+            },
+            "navigate": "sibling(1)",
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "customerTips": {
+            "find": {
+              "hasTextContaining": "Customer tips"
+            },
+            "navigate": "sibling(1)",
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "payLineItems": {
+            "each": {
+              "hasIdSuffix": "pay_line_item_title"
+            },
+            "scope": "ancestor(1)",
+            "extract": {
+              "type": {
+                "find": {
+                  "hasIdSuffix": "pay_line_item_title"
+                },
+                "read": "text"
+              },
+              "amount": {
+                "find": {
+                  "hasIdSuffix": "pay_line_item_value"
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              }
+            }
+          },
+          "isExpanded": {
+            "literal": true
+          },
+          "sessionEarnings": {
+            "find": {
+              "hasIdSuffix": "earnings_ticker"
+            },
+            "read": "allText",
+            "transform": "parseCurrency"
+          }
+        }
+      },
+      "validate": [
+        {
+          "assert": "sumApproxEquals",
+          "fields": [
+            "appPay",
+            "customerTips"
+          ],
+          "target": "totalPay",
+          "tolerance": 0.02,
+          "onFail": "skip"
+        }
+      ],
+      "effects": [
+        {
+          "screenshot": {
+            "prefix": "DeliveryBreakdown - {totalPay}",
+            "category": "delivery_summary"
+          },
+          "dedupeKey": "delivery-ss-expanded-{totalPay}-{sessionEarnings}",
+          "throttleMs": 60000
+        }
+      ]
+    },
+    {
+      "id": "doordash.screen.delivery_summary_collapsed",
+      "priority": 31,
+      "state": {
+        "flow": "post:task",
+        "modeHint": "online"
+      },
+      "require": {
+        "allTextContainsAny": [
+          "this offer",
+          "delivery complete"
+        ]
+      },
+      "reject": [
+        {
+          "allTextContains": "pause orders"
+        },
+        {
+          "allTextContains": "Pickup from"
+        },
+        {
+          "allTextContains": "Arrived at store"
+        },
+        {
+          "allTextContains": "Start pickup"
+        },
+        {
+          "allTextContains": "Total will be higher"
+        },
+        {
+          "allTextContains": "High paying offer"
+        },
+        {
+          "allTextContains": "Additional"
+        }
+      ],
+      "comment": "#564: reject the OFFER-only markers above ('Total will be higher'/'High paying offer'/'Additional') — an add-on offer popup carries 'this offer' (in 'priority for this offer') which satisfies require, but it is NOT a delivery summary. Without these rejects a transient offer/loading frame mid-stack masqueraded as a collapsed summary and fabricated a $0 completion (06-21 seq98, Burger King add-on).",
+      "parse": {
+        "as": "post_task",
+        "fields": {
+          "totalPay": {
+            "find": {
+              "hasIdSuffix": "final_value"
+            },
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "isExpanded": {
+            "literal": false
+          },
+          "expandButtonId": {
+            "coalesce": [
+              {
+                "find": {
+                  "hasIdSuffix": "expandable_view"
+                },
+                "read": "viewIdResourceName"
+              },
+              {
+                "find": {
+                  "hasIdSuffix": "expandable_layout"
+                },
+                "read": "viewIdResourceName"
+              }
+            ]
+          },
+          "sessionEarnings": {
+            "find": {
+              "hasIdSuffix": "earnings_ticker"
+            },
+            "read": "allText",
+            "transform": "parseCurrency"
+          }
+        }
+      },
+      "bind": {
+        "expandButton": {
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "expandable_view"
+              },
+              {
+                "hasIdSuffix": "expandable_layout"
+              }
+            ]
+          },
+          "optional": true
+        }
+      },
+      "effects": [
+        {
+          "screenshot": {
+            "prefix": "Delivery - {totalPay}",
+            "category": "delivery_summary"
+          },
+          "dedupeKey": "delivery-ss-collapsed-{totalPay}-{sessionEarnings}",
+          "throttleMs": 60000
+        }
+      ]
+    },
+    {
+      "id": "doordash.screen.dropoff_alcohol_id_intro",
+      "priority": 68,
+      "state": {
+        "flow": "task:dropoff:navigation"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "Scan and verify the recipient"
+                },
+                {
+                  "hasTextContaining": "Verifying that the recipient is 21"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Agree and continue"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dropoff_alcohol_id_scan",
+      "priority": 67,
+      "state": {
+        "flow": "task:dropoff:arrived"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "ID barcode scan"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Start scan"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "Alcohol ID-verify instruction CHECKLIST — no recipient PII, no capture surface, so it is recognized as a flow step (deliberately distinct from the priority-0 sensitive id-verification capture screens, #463).",
+      "id": "doordash.screen.alcohol_verify_checklist",
+      "priority": 54,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Verify recipient's identity"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Do NOT hand over items until ID has been verified"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "Alcohol ID-CHECK instruction screen (step 2 of 4) — the dasher visually verifies the recipient's ID matches and they aren't intoxicated. Instruction text only (NO recipient PII, NO document image), so it is recognized as a flow step, not blocked. Keyed on the recipient-specific text so it can't match a dasher's own identity screen (#463 reversal).",
+      "id": "doordash.screen.alcohol_id_check",
+      "priority": 55,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Identity verification"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "matches the recipient"
+                },
+                {
+                  "hasTextContaining": "aren't intoxicated"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "Alcohol verification complete (step 4 of 4) — non-sensitive completion prompt.",
+      "id": "doordash.screen.alcohol_verify_complete",
+      "priority": 56,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Hand order to recipient"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "4 of 4"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "clicks": [
+    {
+      "id": "doordash.click.start_navigation",
+      "priority": 50,
+      "intent": "start_navigation",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "any": [
+          {
+            "hasIdSuffix": "directions_button"
+          },
+          {
+            "hasIdSuffix": "navigate_button"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.click.complete_delivery",
+      "priority": 60,
+      "screenIs": "dropoff_pre_arrival_completion",
+      "intent": "complete_delivery",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "any": [
+          {
+            "hasIdSuffix": "complete_delivery_steps_button"
+          },
+          {
+            "hasText": "Complete Delivery"
+          },
+          {
+            "hasText": "Mark as delivered"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.click.complete_delivery_nav",
+      "priority": 62,
+      "screenIs": "dropoff_navigation",
+      "intent": "complete_delivery",
+      "require": {
+        "any": [
+          {
+            "hasIdSuffix": "complete_delivery_steps_button"
+          },
+          {
+            "hasIdSuffix": "complete_delivery"
+          },
+          {
+            "hasIdSuffix": "received_order_button"
+          },
+          {
+            "hasAnyText": "Complete delivery"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.click.submit_photo",
+      "priority": 70,
+      "screenIs": "dropoff_pre_arrival",
+      "intent": "submit_photo",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "hasIdSuffix": "submit_button"
+      }
+    },
+    {
+      "id": "doordash.click.take_photo",
+      "priority": 35,
+      "intent": "take_photo",
+      "require": {
+        "hasIdSuffix": "capture_button"
+      }
+    }
+  ]
+}

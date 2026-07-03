@@ -1,0 +1,293 @@
+// Section: Sensitive — dasher banking/identity + document-image capture surfaces (blocked at the matcher layer; the load-time sensitive-coverage guard requires the two sensitive-shaped rules to live here).
+{
+  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "screens": [
+    {
+      "id": "doordash.screen.sensitive.known",
+      "priority": 0,
+      "overrideable": false,
+      "parse": {
+        "as": "sensitive"
+      },
+      "branches": [
+        {
+          "intent": "sensitive.dasher_direct",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "dasher_direct_auth"
+                },
+                {
+                  "hasIdSuffix": "dasher_direct_payout_config_compose_view"
+                },
+                {
+                  "hasTextContaining": "DoorDash Crimson"
+                },
+                {
+                  "hasText": "Crimson"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "intent": "sensitive.card_details",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasText": "CVV"
+                }
+              },
+              {
+                "exists": {
+                  "hasText": "Expiry"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "intent": "sensitive.balance",
+          "require": {
+            "exists": {
+              "hasText": "Available Balance"
+            }
+          }
+        },
+        {
+          "intent": "sensitive.withdraw",
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasText": "Withdraw"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "available"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "intent": "sensitive.transfer",
+          "require": {
+            "exists": {
+              "hasTextContaining": "transfer was initiated"
+            }
+          }
+        },
+        {
+          "intent": "sensitive.savings",
+          "require": {
+            "any": [
+              {
+                "exists": {
+                  "hasTextContaining": "Savings jar"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "You transferred"
+                }
+              },
+              {
+                "all": [
+                  {
+                    "exists": {
+                      "hasText": "Transfer in"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasTextContaining": "available"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "comment": "Blocks only the document-CAPTURE surfaces of the alcohol-ID flow — the license-scan camera (an image of a government ID) and the signature pad/handoff. The instruction screens (the ID-check 'verify the ID matches the recipient' and the alcohol arrival card) are NOT blocked: they carry no document image and only customer name/address, which the dropoff parse hashes (we hash customers, we don't block them). See alcohol_id_check + dropoff_pre_arrival.",
+          "intent": "sensitive.id_verification",
+          "require": {
+            "any": [
+              {
+                "exists": {
+                  "hasTextContaining": "Scan barcode on the back"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Driver's License"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "provide their signature"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "ready to start verification"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "A recipient signature is required"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "intent": "sensitive.otp",
+          "require": {
+            "exists": {
+              "hasTextContaining": "Enter the code we sent"
+            }
+          }
+        },
+        {
+          "intent": "sensitive.linked_accounts",
+          "require": {
+            "exists": {
+              "hasText": "Linked accounts"
+            }
+          }
+        },
+        {
+          "intent": "sensitive.statements",
+          "require": {
+            "exists": {
+              "hasText": "Statements & documents"
+            }
+          }
+        },
+        {
+          "intent": "sensitive.payout_settings",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasText": "Payout details"
+                },
+                {
+                  "hasTextContaining": "Change payout method"
+                },
+                {
+                  "hasTextContaining": "Recent payout history"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "intent": "sensitive.biometric",
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "Fingerprint sensor"
+                },
+                {
+                  "hasTextContaining": "Touch the fingerprint"
+                },
+                {
+                  "hasTextContaining": "to secure your account"
+                },
+                {
+                  "hasText": "Use PIN"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "intent": "sensitive.account_pii",
+          "require": {
+            "any": [
+              {
+                "all": [
+                  {
+                    "exists": {
+                      "hasText": "Personal information"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasText": "First name"
+                    }
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "exists": {
+                      "hasTextContaining": "Manage Account"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasTextContaining": "Marketing Choices"
+                    }
+                  }
+                ]
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Request account data"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Request data archive"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.screen.sensitive.catchall",
+      "priority": 999,
+      "overrideable": false,
+      "require": {
+        "allTextContainsAny": [
+          "Bank Account",
+          "Routing Number",
+          "Social Security",
+          "Account number",
+          "Verify Identity",
+          "Debit card",
+          "Card status",
+          "Lock card",
+          "View card details",
+          "Linked accounts",
+          "Statements & documents",
+          "Emergency contact details",
+          "Crimson",
+          "Biometric",
+          "Available Balance",
+          "Direct deposit",
+          "Withdraw",
+          "Expiry",
+          "CVV",
+          "Enter the code we sent",
+          "transfer was initiated",
+          "t=completed_view"
+        ]
+      },
+      "parse": {
+        "as": "sensitive"
+      }
+    }
+  ]
+}

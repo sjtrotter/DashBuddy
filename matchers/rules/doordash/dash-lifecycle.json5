@@ -1,0 +1,985 @@
+// Section: Dash lifecycle — start / pause / resume / end, scheduling, idle & waiting-for-offer, the end-of-dash summary.
+{
+  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "screens": [
+    {
+      "id": "doordash.screen.timeline",
+      "priority": 10,
+      "redact": [
+        {
+          "find": {
+            "any": [
+              {
+                "hasTextStartsWith": "Pickup for "
+              },
+              {
+                "hasTextStartsWith": "Deliver to "
+              },
+              {
+                "hasTextStartsWith": "Pickup from "
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Pickup for ",
+            "Deliver to ",
+            "Pickup from "
+          ]
+        }
+      ],
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "any": [
+          {
+            "allTextContainsAll": [
+              "dash ends at",
+              "pause orders"
+            ]
+          },
+          {
+            "allTextContainsAll": [
+              "current dash",
+              "current task"
+            ]
+          }
+        ]
+      },
+      "parse": {
+        "as": "timeline",
+        "fields": {
+          "sessionEarnings": {
+            "textAfterLabel": "This dash",
+            "offset": 1,
+            "transform": "parseCurrency"
+          },
+          "offerEarnings": {
+            "textAfterLabel": "This offer",
+            "offset": 1,
+            "transform": "parseCurrency"
+          },
+          "endsAtText": {
+            "find": {
+              "hasTextStartsWith": "Dash ends at"
+            },
+            "read": "text",
+            "transform": {
+              "stripPrefix": "Dash ends at "
+            }
+          },
+          "endsAtMillis": {
+            "find": {
+              "hasTextStartsWith": "Dash ends at"
+            },
+            "read": "text",
+            "transform": "parseDeadline"
+          },
+          "tasks": {
+            "each": {
+              "any": [
+                {
+                  "hasTextStartsWith": "Pickup for "
+                },
+                {
+                  "hasTextStartsWith": "Deliver to "
+                },
+                {
+                  "hasTextStartsWith": "Pickup from "
+                }
+              ]
+            },
+            "extract": {
+              "taskType": {
+                "conditionalEnum": [
+                  {
+                    "if": {
+                      "exists": {
+                        "hasTextStartsWith": "Deliver to "
+                      }
+                    },
+                    "then": "Deliver to"
+                  },
+                  {
+                    "if": {
+                      "exists": {
+                        "hasTextStartsWith": "Pickup from "
+                      }
+                    },
+                    "then": "Pickup from"
+                  },
+                  {
+                    "else": "Pickup for"
+                  }
+                ]
+              },
+              "nameHash": {
+                "find": {
+                  "any": [
+                    {
+                      "hasTextStartsWith": "Pickup for "
+                    },
+                    {
+                      "hasTextStartsWith": "Deliver to "
+                    },
+                    {
+                      "hasTextStartsWith": "Pickup from "
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": [
+                  {
+                    "stripPrefixes": [
+                      "Pickup for ",
+                      "Deliver to ",
+                      "Pickup from "
+                    ]
+                  },
+                  "trim",
+                  "sha256"
+                ]
+              },
+              "deadlineText": {
+                "find": {
+                  "any": [
+                    {
+                      "hasTextStartsWith": "Pickup for "
+                    },
+                    {
+                      "hasTextStartsWith": "Deliver to "
+                    },
+                    {
+                      "hasTextStartsWith": "Pickup from "
+                    }
+                  ]
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": {
+                  "extractBefore": " • "
+                }
+              },
+              "deadlineMillis": {
+                "find": {
+                  "any": [
+                    {
+                      "hasTextStartsWith": "Pickup for "
+                    },
+                    {
+                      "hasTextStartsWith": "Deliver to "
+                    },
+                    {
+                      "hasTextStartsWith": "Pickup from "
+                    }
+                  ]
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": [
+                  {
+                    "extractBefore": " • "
+                  },
+                  "parseDeadline"
+                ]
+              },
+              "storeHint": {
+                "find": {
+                  "any": [
+                    {
+                      "hasTextStartsWith": "Pickup for "
+                    },
+                    {
+                      "hasTextStartsWith": "Deliver to "
+                    },
+                    {
+                      "hasTextStartsWith": "Pickup from "
+                    }
+                  ]
+                },
+                "navigate": "sibling(1)",
+                "read": "text",
+                "transform": {
+                  "extractAfter": " • "
+                }
+              },
+              "isCurrent": {
+                "presence": {
+                  "exists": {
+                    "hasTextContaining": "Current task"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.app_startup",
+      "priority": 40,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "progress_message"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "image_logo"
+                },
+                {
+                  "hasIdSuffix": "cancel_button"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dash_paused",
+      "priority": 50,
+      "state": {
+        "modeHint": "paused"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasText": "Dash Paused"
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "resumeButton"
+                },
+                {
+                  "hasDesc": "Resume dash"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "progress_number"
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "paused",
+        "fields": {
+          "remainingText": {
+            "find": {
+              "hasIdSuffix": "progress_number"
+            },
+            "read": "text",
+            "fallback": "35:00"
+          },
+          "remainingMillis": {
+            "find": {
+              "hasIdSuffix": "progress_number"
+            },
+            "read": "text",
+            "transform": "parseDuration",
+            "fallback": 2100000
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.end_dash_confirm",
+      "priority": 52,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "prism_sheet"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "End your current dash"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.schedule",
+      "priority": 80,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasText": "Schedule"
+                },
+                {
+                  "hasClassName": "android.widget.TextView"
+                }
+              ]
+            }
+          },
+          {
+            "any": [
+              {
+                "exists": {
+                  "hasText": "Available"
+                }
+              },
+              {
+                "exists": {
+                  "hasText": "Scheduled"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dash_time_picker",
+      "priority": 81,
+      "require": {
+        "allTextContainsAny": [
+          "choose start time",
+          "choose end time"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dash_schedule",
+      "priority": 82,
+      "require": {
+        "allTextContainsAny": [
+          "schedule your dash for later",
+          "this zone's full right now",
+          "you scheduled a dash"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.dash_schedule_picker",
+      "priority": 85,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasText": "Start time"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "End Time"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "Schedule"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.on_dash_map",
+      "priority": 110,
+      "state": {
+        "modeHint": "online"
+      },
+      "reject": [
+        {
+          "exists": {
+            "hasDesc": "Earnings Mode Switcher"
+          }
+        },
+        {
+          "exists": {
+            "any": [
+              {
+                "hasTextContaining": "looking for offers"
+              },
+              {
+                "hasTextContaining": "finding offers"
+              }
+            ]
+          }
+        }
+      ],
+      "require": {
+        "exists": {
+          "hasText": "Return to dash"
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.dash_along_the_way",
+      "priority": 111,
+      "state": {
+        "flow": "idle",
+        "modeHint": "online"
+      },
+      "comment": "Repositioning-to-zone while online (idle, no offer yet). The id form is the bottom-sheet variant; the text form (#462) is the full-screen 'Navigate to zone / We'll look for orders along the way / Spot saved until …' card, which ships no viewIds.",
+      "require": {
+        "any": [
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "navigate_button"
+                }
+              },
+              {
+                "any": [
+                  {
+                    "exists": {
+                      "hasIdSuffix": "bottom_view_info_ctd_v2_title"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasIdSuffix": "bottom_view_info_title"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "We'll look for orders along the way"
+                }
+              },
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasTextContaining": "Navigate to zone"
+                    },
+                    {
+                      "hasTextContaining": "Spot saved until"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "parse": {
+        "as": "idle",
+        "fields": {
+          "isHeadingBackToZone": {
+            "literal": false
+          },
+          "spotSaveDeadline": {
+            "coalesce": [
+              {
+                "find": {
+                  "all": [
+                    {
+                      "any": [
+                        {
+                          "hasIdSuffix": "bottom_view_info_ctd_v2_title"
+                        },
+                        {
+                          "hasIdSuffix": "bottom_view_info_title"
+                        }
+                      ]
+                    },
+                    {
+                      "hasTextContaining": "Spot saved until"
+                    }
+                  ]
+                },
+                "read": "text",
+                "transform": "parseDeadline"
+              },
+              {
+                "find": {
+                  "hasTextContaining": "Spot saved until"
+                },
+                "read": "text",
+                "transform": "parseDeadline"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.waiting_for_offer",
+      "priority": 120,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "user_name"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          }
+        }
+      ],
+      "state": {
+        "flow": "idle",
+        "modeHint": "online"
+      },
+      "reject": [
+        {
+          "exists": {
+            "hasDesc": "Earnings Mode Switcher"
+          }
+        },
+        {
+          "exists": {
+            "hasText": "Return to dash"
+          }
+        },
+        {
+          "exists": {
+            "hasTextContaining": "look for orders along the way"
+          }
+        }
+      ],
+      "require": {
+        "any": [
+          {
+            "exists": {
+              "hasIdSuffix": "looking_for_order_progress_bar"
+            }
+          },
+          {
+            "exists": {
+              "hasText": "Looking for offers"
+            }
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Finding offers"
+                }
+              },
+              {
+                "any": [
+                  {
+                    "exists": {
+                      "hasTextContaining": "Zone offer wait"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasIdSuffix": "running_total_pay"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "parse": {
+        "as": "idle",
+        "fields": {
+          "sessionPay": {
+            "find": {
+              "hasIdSuffix": "running_total_pay"
+            },
+            "read": "text",
+            "transform": "parseCurrency"
+          },
+          "waitTimeEstimate": {
+            "coalesce": [
+              {
+                "find": {
+                  "hasTextContaining": "Zone offer wait"
+                },
+                "navigate": "sibling(1)",
+                "read": "text"
+              },
+              {
+                "find": {
+                  "hasIdSuffix": "wait_time_button"
+                },
+                "navigate": "findDescendant(textView_prism_button_title)",
+                "read": "text",
+                "transform": {
+                  "stripPrefix": "est. "
+                }
+              }
+            ]
+          },
+          "isHeadingBackToZone": {
+            "presence": {
+              "exists": {
+                "hasIdSuffix": "cross_sp_title"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.account_checkup",
+      "priority": 121,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "You're all set to receive offers"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "No account issues"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.set_dash_end_time",
+      "priority": 130,
+      "state": {
+        "flow": "idle",
+        "modeHint": "offline"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "starting_point_name"
+            }
+          },
+          {
+            "any": [
+              {
+                "exists": {
+                  "hasTextContaining": "Select end time"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "end_time_description"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "parse": {
+        "as": "idle",
+        "fields": {
+          "zoneName": {
+            "find": {
+              "hasIdSuffix": "starting_point_name"
+            },
+            "read": "text"
+          },
+          "startingSession": {
+            "literal": true
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.idle_scheduled_dash_ready",
+      "priority": 135,
+      "state": {
+        "flow": "idle",
+        "modeHint": "offline"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Start your scheduled dash"
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "idle",
+        "fields": {
+          "startingSession": {
+            "literal": true
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.idle_map",
+      "priority": 140,
+      "state": {
+        "flow": "idle",
+        "modeHint": "offline"
+      },
+      "reject": [
+        {
+          "exists": {
+            "hasText": "Return to dash"
+          }
+        },
+        {
+          "exists": {
+            "any": [
+              {
+                "hasTextContaining": "looking for offers"
+              },
+              {
+                "hasTextContaining": "finding offers"
+              }
+            ]
+          }
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasDesc": "Earnings Mode Switcher"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "side_nav_compose_view"
+                },
+                {
+                  "hasDesc": "Side Menu"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "idle",
+        "fields": {
+          "sessionType": {
+            "conditionalEnum": [
+              {
+                "if": {
+                  "exists": {
+                    "hasDescContaining": "Time mode off"
+                  }
+                },
+                "then": "PerOffer"
+              },
+              {
+                "if": {
+                  "exists": {
+                    "hasDescContaining": "Time mode on"
+                  }
+                },
+                "then": "ByTime"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.dash_summary",
+      "priority": 150,
+      "state": {
+        "flow": "session:ended",
+        "modeHint": "offline"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasText": "Dash summary"
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_prism_button_title"
+                },
+                {
+                  "hasText": "Done"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "parse": {
+        "as": "session_ended",
+        "fields": {
+          "totalEarnings": {
+            "coalesce": [
+              {
+                "find": {
+                  "hasIdSuffix": "header_pay"
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              },
+              {
+                "find": {
+                  "hasTextMatchesRegex": "^\\$[\\d,]+\\.\\d{2}$"
+                },
+                "read": "text",
+                "transform": "parseCurrency"
+              }
+            ]
+          },
+          "sessionDurationMillis": {
+            "find": {
+              "all": [
+                {
+                  "hasIdSuffix": "name"
+                },
+                {
+                  "hasTextContaining": "Total online time"
+                }
+              ]
+            },
+            "navigate": "sibling(1)",
+            "read": "text",
+            "transform": "parseHrMin",
+            "fallback": 0
+          },
+          "offersAccepted": {
+            "find": {
+              "all": [
+                {
+                  "hasIdSuffix": "name"
+                },
+                {
+                  "hasTextContaining": "Offers accepted"
+                }
+              ]
+            },
+            "navigate": "sibling(1)",
+            "read": "text",
+            "transform": {
+              "regex": {
+                "pattern": "(\\d+)\\s*out of",
+                "group": 1,
+                "then": "toInt"
+              }
+            },
+            "fallback": 0
+          },
+          "offersTotal": {
+            "find": {
+              "all": [
+                {
+                  "hasIdSuffix": "name"
+                },
+                {
+                  "hasTextContaining": "Offers accepted"
+                }
+              ]
+            },
+            "navigate": "sibling(1)",
+            "read": "text",
+            "transform": {
+              "regex": {
+                "pattern": "out of\\s*(\\d+)",
+                "group": 1,
+                "then": "toInt"
+              }
+            },
+            "fallback": 0
+          },
+          "weeklyEarnings": {
+            "find": {
+              "all": [
+                {
+                  "hasIdSuffix": "name"
+                },
+                {
+                  "hasTextContaining": "Earnings this week"
+                }
+              ]
+            },
+            "navigate": "sibling(1)",
+            "read": "text",
+            "transform": "parseCurrency"
+          }
+        }
+      },
+      "validate": [
+        {
+          "assert": "fieldsLe",
+          "field": "totalEarnings",
+          "le": "weeklyEarnings",
+          "tolerance": 0.02,
+          "onFail": "dropParsed"
+        }
+      ],
+      "effects": [
+        {
+          "screenshot": {
+            "prefix": "DashSummary - {totalEarnings}",
+            "category": "dash_summary"
+          },
+          "dedupeKey": "dash-summary-ss-{totalEarnings}-{sessionDurationMillis}",
+          "throttleMs": 60000
+        }
+      ]
+    }
+  ],
+  "clicks": [
+    {
+      "id": "doordash.click.start_dash_set_end_time",
+      "priority": 5,
+      "screenIs": "set_dash_end_time",
+      "intent": "start_dash_set_end_time",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "hasIdSuffix": "end_time_container"
+      }
+    },
+    {
+      "id": "doordash.click.end_dash",
+      "priority": 6,
+      "screenIs": "timeline",
+      "intent": "end_dash",
+      "state": {
+        "modeHint": "offline"
+      },
+      "require": {
+        "hasText": "End dash"
+      }
+    },
+    {
+      "id": "doordash.click.resume_dash",
+      "priority": 40,
+      "screenIs": "dash_paused",
+      "intent": "resume_dash",
+      "state": {
+        "modeHint": "online"
+      },
+      "require": {
+        "hasIdSuffix": "resumeButton"
+      }
+    }
+  ]
+}

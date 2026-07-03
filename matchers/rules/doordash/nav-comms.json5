@@ -1,0 +1,173 @@
+// Section: Navigation & customer comms — generic navigation + chat.
+{
+  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "screens": [
+    {
+      "id": "doordash.screen.nav_arriving",
+      "priority": 69,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        }
+      ],
+      "require": {
+        "any": [
+          {
+            "exists": {
+              "hasIdSuffix": "arriving_at_subtitle"
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "arriving_at_title"
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "bottom_sheet_arrived_header_v2"
+            }
+          }
+        ]
+      },
+      "reject": [
+        {
+          "exists": {
+            "hasIdSuffix": "bottom_sheet_task_title"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.screen.navigation_generic",
+      "priority": 95,
+      "branches": [
+        {
+          "state": {
+            "flow": "idle",
+            "modeHint": "online"
+          },
+          "reject": [
+            {
+              "allTextContains": "accept"
+            },
+            {
+              "allTextContains": "decline"
+            }
+          ],
+          "require": {
+            "all": [
+              {
+                "allTextContainsAll": [
+                  "min",
+                  "exit"
+                ]
+              },
+              {
+                "allTextContainsAny": [
+                  "mi",
+                  "ft"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "state": {
+            "modeHint": "online"
+          },
+          "reject": [
+            {
+              "allTextContains": "accept"
+            },
+            {
+              "allTextContains": "decline"
+            }
+          ],
+          "require": {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "maneuverView"
+                },
+                {
+                  "hasIdSuffix": "mainManeuverLayout"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "doordash.screen.chat",
+      "priority": 92,
+      "reject": [
+        {
+          "allTextContains": "folder"
+        }
+      ],
+      "require": {
+        "allTextContainsAll": [
+          "dasher",
+          "messages"
+        ]
+      }
+    },
+    {
+      "id": "doordash.screen.chat_conversation",
+      "priority": 89,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "textView_navBar_title"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "message_self_message"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "message_other_message"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "admin_message_text"
+          }
+        }
+      ],
+      "require": {
+        "exists": {
+          "any": [
+            {
+              "hasIdSuffix": "ddchat_holder_base"
+            },
+            {
+              "hasIdSuffix": "inputChannelView"
+            },
+            {
+              "hasIdSuffix": "message_recycler_view"
+            },
+            {
+              "hasIdSuffix": "message_self_message"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "clicks": [
+    {
+      "id": "doordash.click.open_chat",
+      "priority": 45,
+      "intent": "open_chat",
+      "require": {
+        "hasIdSuffix": "chat_button_internal"
+      }
+    }
+  ]
+}

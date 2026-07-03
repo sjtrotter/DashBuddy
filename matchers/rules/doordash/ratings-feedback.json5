@@ -1,0 +1,216 @@
+// Section: Ratings & feedback.
+{
+  "$schema": "../../../../../docs/rules.fragment.schema.json",
+  "screens": [
+    {
+      "id": "doordash.screen.delivery_feedback",
+      "priority": 57,
+      "require": {
+        "exists": {
+          "hasTextContaining": "How did this delivery go"
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.safety_feedback",
+      "priority": 58,
+      "require": {
+        "exists": {
+          "any": [
+            {
+              "hasTextContaining": "Feedback about your safety"
+            },
+            {
+              "hasTextContaining": "How safe did you feel on this delivery"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.ratings",
+      "priority": 90,
+      "require": {
+        "allTextContainsAll": [
+          "ratings",
+          "acceptance rate",
+          "completion rate",
+          "overall"
+        ]
+      },
+      "parse": {
+        "as": "ratings",
+        "fields": {
+          "acceptanceRate": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Acceptance"
+                }
+              ]
+            },
+            "transform": "parsePercent"
+          },
+          "completionRate": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Completion"
+                }
+              ]
+            },
+            "transform": "parsePercent"
+          },
+          "onTimeRate": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "On-time"
+                }
+              ]
+            },
+            "transform": "parsePercent"
+          },
+          "customerRating": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Customer rating"
+                }
+              ]
+            },
+            "transform": "toDouble"
+          },
+          "deliveriesLast30Days": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Deliveries (last 30 days)"
+                }
+              ]
+            },
+            "transform": "toInt"
+          },
+          "lifetimeDeliveries": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Lifetime deliveries"
+                }
+              ]
+            },
+            "transform": "toInt"
+          },
+          "originalItemsFoundRate": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Original items found"
+                }
+              ]
+            },
+            "transform": "parsePercent"
+          },
+          "totalItemsFoundRate": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Total items found"
+                }
+              ]
+            },
+            "transform": "parsePercent"
+          },
+          "substitutionIssuesRate": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Substitution issues"
+                }
+              ]
+            },
+            "transform": "parsePercent"
+          },
+          "itemsWithQualityIssuesRate": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Items with quality issues"
+                }
+              ]
+            },
+            "transform": "parsePercent"
+          },
+          "itemsWrongOrMissingRate": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Items wrong or missing"
+                }
+              ]
+            },
+            "transform": "parsePercent"
+          },
+          "lifetimeShoppingOrders": {
+            "siblingOf": {
+              "all": [
+                {
+                  "hasIdSuffix": "textView_title"
+                },
+                {
+                  "hasTextContaining": "Lifetime shopping orders"
+                }
+              ]
+            },
+            "transform": "toInt"
+          }
+        }
+      }
+    },
+    {
+      "id": "doordash.screen.safety",
+      "priority": 91,
+      "require": {
+        "allTextContainsAll": [
+          "safedash",
+          "safety tools",
+          "report safety issue",
+          "share your location"
+        ]
+      }
+    }
+  ]
+}

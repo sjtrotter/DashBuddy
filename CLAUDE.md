@@ -130,12 +130,20 @@ matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:
   TTS, tips), Hilt DI wiring, and the `DashBuddyApplication` entry point.
 - **`matchers/`** — the recognition **ruleset** source, as a self-contained **included Gradle build**
   (`includeBuild("matchers")` in the root `settings.gradle.kts`), NOT a `:core:*` project module. Owns the
-  per-platform **JSON5 rule source** (`matchers/rules/*.json5`) and the kotlinx-serialization canonicalizer;
-  `:core:pipeline:importMatchersRules` imports its canonical output into generated `assets/rules/*.json`
-  (there are no committed `assets/rules/*.json`). See §"JSON Rule Engine" below + ADR-0009. It is **licensed
+  per-platform **JSON5 rule source** and the kotlinx-serialization canonicalizer. A platform source is
+  EITHER a flat `matchers/rules/<platform>.json5` file (uber) OR a `matchers/rules/<platform>/` **directory of
+  human-readable surface sub-files** (doordash — `_manifest.json5` metadata + `offer.json5`/`pickup.json5`/
+  `dropoff.json5`/… + `notifications.json5`) that the canonicalizer **merges** (sub-files sorted by name,
+  arrays concatenated) into ONE canonical `assets/rules/<platform>.json` (#639); the merge fails the build
+  loud on a duplicate rule id across sub-files (the canonicalize-time analog of the runtime #624/#633 rejects).
+  `:core:pipeline:importMatchersRules` imports the canonical output into generated `assets/rules/*.json` — the
+  app loader/tests/runtime are unchanged, still one file per platform (there are no committed `assets/rules/*.json`).
+  See §"JSON Rule Engine" below + ADR-0009. It is **licensed
   Apache-2.0** (`matchers/LICENSE`, dual-licensed against the app's PolyForm Shield) so the eventual split to
   a separate forkable repo needs no relicensing — but that split (#192/#637) is **deferred; the ruleset is
-  kept in-tree for now** (2026-07-03 decision) and developed directly from `matchers/rules/*.json5`.
+  kept in-tree for now** (2026-07-03 decision) and developed directly from the JSON5 source. The in-tree
+  canonicalizer is exactly the tooling the old "don't split doordash.json" constraint waited on, so splitting
+  doordash into a directory is now a readability refactor decoupled from the deferred repo creation (#637).
 
 ## Architecture: Recognition Pipeline + State Machine
 
@@ -179,17 +187,31 @@ and restart (periodic summary log line).
 
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
-Recognition is **data, not code**. The rule SOURCE is now per-platform **JSON5** files under
-`matchers/rules/*.json5` (`doordash.json5`, `uber.json5` — spec in ADR-0001, editor schema
-`docs/rules.schema.json`), owned by the included `matchers` Gradle build (#635/#192, the
-foundation of the matchers split; ADR-0009). That build canonicalizes JSON5 → streamlined JSON
-via kotlinx-serialization; `:core:pipeline:importMatchersRules` imports the canonical output into
-**generated** `assets/rules/*.json` (`build/generated/assets/importMatchersRules/rules/`), which
-both the APK (AGP Variant-API asset merge) and the unit tests (`:app:testDebugUnitTest dependsOn`
-it; `TestRulesetFactory` reads the generated dir) consume. There are **no committed**
-`assets/rules/*.json` — editing a `matchers/rules/*.json5` value flows straight into recognition
-tests with no publish step (the local dev loop is the default). The corpus↔rules SHA version pin
-is deferred to N5/#638. The canonical files are compiled by `RuleCompiler` and matched by `ObservationClassifier`.
+Recognition is **data, not code**. The rule SOURCE is per-platform **JSON5** under `matchers/rules/`
+(spec in ADR-0001, editor schema `docs/rules.schema.json`), owned by the included `matchers` Gradle
+build (#635/#192, the foundation of the matchers split; ADR-0009). A platform is EITHER a flat
+`<platform>.json5` file (`uber.json5`) OR a `<platform>/` **directory of surface sub-files**
+(`doordash/` — a `_manifest.json5` holding only `format_version`/`platform_id` + per-surface files
+`sensitive`/`offer`/`dash-lifecycle`/`pickup`/`dropoff`/`nav-comms`/`ratings-feedback`/`chrome` +
+`notifications.json5`, #639). For a directory the canonicalizer **merges** first — manifest metadata,
+then every other `*.json5` (sorted by name) with its `screens`/`clicks`/`notifications` arrays
+concatenated in fixed key order — into one combined element, then runs the SAME deterministic
+serializer as the flat path; a **duplicate rule id across sub-files fails the build loud** (the
+canonicalize-time analog of the runtime #624/#633 rejects — better here, since a dup that reached the
+merged asset would make the loader SKIP the whole platform behind the #432 gate). Sub-files reference
+`docs/rules.fragment.schema.json` (a `required`-free fragment schema whose `screens`/`clicks`/
+`notifications` `$ref` the main schema's `$defs`, so a partial file shows no false "missing
+format_version" error); the manifest, `uber.json5`, and the merged output keep the strict full schema.
+Order is behaviorally inert (every rule has a unique priority within its section, so `matchFirst`'s
+stable-sort tie-break is never exercised) — the split is a pure repartition, proven byte-identical to
+canonicalizing the pre-split flat file. `:core:pipeline:importMatchersRules` imports the canonical
+output into **generated** `assets/rules/*.json` (`build/generated/assets/importMatchersRules/rules/`),
+which both the APK (AGP Variant-API asset merge) and the unit tests (`:app:testDebugUnitTest dependsOn`
+it; `TestRulesetFactory` reads the generated dir) consume — the app loader/tests/runtime are unchanged,
+still ONE file per platform. There are **no committed** `assets/rules/*.json` — editing a JSON5 value
+flows straight into recognition tests with no publish step (the local dev loop is the default). The
+corpus↔rules SHA version pin is deferred to N5/#638. The canonical files are compiled by `RuleCompiler`
+and matched by `ObservationClassifier`.
 Rules carry a `priority` (sensitive rules are priority 0 and `overrideable: false`, blocking all
 further processing of banking/identity screens), `require` predicates, `bind` blocks, `parse`
 blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
@@ -392,8 +414,9 @@ Tests are data-driven using captured UI hierarchy JSON files under
 2. Run `InboxProcessorTest` — it auto-sorts recognized screens into category folders, fails on PII,
    and prints an X-Ray report for unknowns.
 3. For **unknown screens**: read the X-Ray report, add or broaden a rule in the platform's JSON5
-   source `matchers/rules/<platform>.json5` (canonicalized into generated assets by
-   `:core:pipeline:importMatchersRules`; #635), re-run.
+   source — the flat `matchers/rules/<platform>.json5` (uber) or the matching surface sub-file under
+   `matchers/rules/<platform>/` (doordash, e.g. `pickup.json5`) — canonicalized/merged into generated
+   assets by `:core:pipeline:importMatchersRules` (#635/#639), re-run.
 4. For **sensitive screens**: manually redact the JSON, move to `snapshots/SENSITIVE/`, verify with
    `AllMatchersSuite` (the golden guard asserts every `SENSITIVE/` snapshot is caught by a
    sensitive rule or flagged toxic by `SnapshotSecurityScanner`).
@@ -403,8 +426,10 @@ Tests are data-driven using captured UI hierarchy JSON files under
 
 **Adding or changing a recognition rule** (there are no matcher classes to register — rules are data):
 
-1. Edit the platform's JSON5 rule source `matchers/rules/<platform>.json5` (`$schema` gives editor
-   autocomplete/validation against `docs/rules.schema.json`). Golden-corpus folder name == expected intent.
+1. Edit the platform's JSON5 rule source — the flat `matchers/rules/<platform>.json5` (uber) or the
+   relevant surface sub-file under `matchers/rules/<platform>/` (doordash); `$schema` gives editor
+   autocomplete/validation (the full `docs/rules.schema.json`, or `docs/rules.fragment.schema.json` for a
+   sub-file). Golden-corpus folder name == expected intent.
 2. Tests compile the **canonicalized production** rule files via `TestRulesetFactory` (which reads the
    generated `assets/rules/`, populated by `:core:pipeline:importMatchersRules`) — nothing else to wire up.
 3. Run `InboxProcessorTest` (sorting) and then `AllMatchersSuite` (golden guard + parse-output
