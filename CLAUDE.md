@@ -92,6 +92,8 @@ The project uses modular Clean Architecture with a strict dependency graph:
 :core:network → :domain
 :core:location → :domain
 :core:datastore → :domain
+
+matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:pipeline consumes as generated assets
 ```
 
 - **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
@@ -126,6 +128,14 @@ The project uses modular Clean Architecture with a strict dependency graph:
   data-in/lambdas-out components live here.
 - **`:app`** — UI (Compose + overlays), side effect handlers (SideEffectEngine, odometer, screenshots,
   TTS, tips), Hilt DI wiring, and the `DashBuddyApplication` entry point.
+- **`matchers/`** — the recognition **ruleset** source, as a self-contained **included Gradle build**
+  (`includeBuild("matchers")` in the root `settings.gradle.kts`), NOT a `:core:*` project module. Owns the
+  per-platform **JSON5 rule source** (`matchers/rules/*.json5`) and the kotlinx-serialization canonicalizer;
+  `:core:pipeline:importMatchersRules` imports its canonical output into generated `assets/rules/*.json`
+  (there are no committed `assets/rules/*.json`). See §"JSON Rule Engine" below + ADR-0009. It is **licensed
+  Apache-2.0** (`matchers/LICENSE`, dual-licensed against the app's PolyForm Shield) so the eventual split to
+  a separate forkable repo needs no relicensing — but that split (#192/#637) is **deferred; the ruleset is
+  kept in-tree for now** (2026-07-03 decision) and developed directly from `matchers/rules/*.json5`.
 
 ## Architecture: Recognition Pipeline + State Machine
 
