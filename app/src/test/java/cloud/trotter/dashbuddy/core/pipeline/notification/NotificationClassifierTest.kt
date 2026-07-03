@@ -40,11 +40,13 @@ class NotificationClassifierTest {
         text: String? = null,
         bigText: String? = null,
         tickerText: String? = null,
+        channelId: String? = null,
     ) = RawNotificationData(
         title = title,
         text = text,
         tickerText = tickerText,
         bigText = bigText,
+        channelId = channelId,
         packageName = "com.doordash.driverapp",
         postTime = System.currentTimeMillis(),
         isClearable = true,
@@ -56,6 +58,30 @@ class NotificationClassifierTest {
     /** Extract [ParsedFields.NotificationFields] from a classification result. */
     private fun Observation.Notification.notifFields(): ParsedFields.NotificationFields =
         parsed as ParsedFields.NotificationFields
+
+    // =========================================================================
+    // Sensitive block — #599
+    // =========================================================================
+
+    @Test
+    fun `crimson balance notification parses SENSITIVE — pledge-blocked, never captured or forwarded`() {
+        // Synthetic text (fabricated amount) shaped like the real Savings Jar
+        // notification. The parse MUST be SensitiveFields: that is what the
+        // shared content gate (#399) keys on to drop the observation before
+        // capture and before the state machine.
+        val result = classifyNotification(
+            raw(
+                channelId = "dasher-notification-messages",
+                title = "You're building momentum!",
+                text = "Your DoorDash Crimson Savings Jar balance is now \$12.34",
+            )
+        )
+        assertEquals("sensitive.crimson_balance", result.target)
+        assertTrue(
+            "banking notification must parse as SensitiveFields, got ${result.parsed::class.simpleName}",
+            result.parsed is ParsedFields.SensitiveFields,
+        )
+    }
 
     // =========================================================================
     // AdditionalTip

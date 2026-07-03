@@ -103,8 +103,11 @@ class TriageRulesTest {
             "earnings_deposit",
             notif(raw(channelId = "dasher-notification-messages", title = "Dasher", text = "your dasher earnings for \$40 have been deposited to your DoorDash Crimson account.")),
         )
+        // #599: the balance notification is pledge-blocked — it must classify as the
+        // SENSITIVE intent (whose parse drops it at the shared content gate), never
+        // the old recognize+capture intent.
         assertEquals(
-            "crimson_balance",
+            "sensitive.crimson_balance",
             notif(raw(channelId = "dasher-notification-messages", title = "You're building momentum", text = "your DoorDash Crimson savings jar balance is now \$100")),
         )
     }
