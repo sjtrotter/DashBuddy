@@ -1,0 +1,93 @@
+package cloud.trotter.dashbuddy.core.pipeline.rules
+
+import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.test.util.TestResourceLoader
+import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+
+/**
+ * #598 corpus-level guard — the teeth. Runs the PRODUCTION redact predicates
+ * over a real (already-redacted) dropoff fixture with a synthetic customer name
+ * injected, and pins the fail-closed invariant that every screen rule which
+ * hashes PII (`sha256`) also declares a `redact` block. Redaction is
+ * capture-only, so this asserts on the SERIALIZED envelope payload, never on
+ * recognition (the goldens stay byte-identical).
+ */
+class CaptureRedactionCorpusTest {
+
+    private val rulesDir = File(TestRulesetFactory.rulesDir)
+
+    private fun serialize(tree: UiNode): String = UiNodeSchema.serialize(tree)
+
+    @Test
+    fun `dropoff redact masks an injected customer name but keeps the Deliver to marker`() {
+        // A real, already-redacted en-route dropoff card from the committed corpus.
+        val fixture = File("src/test/resources/snapshots/dropoff_pre_arrival")
+            .listFiles { _, n -> n.endsWith(".json") }!!
+            .sorted().first()
+        val real = TestResourceLoader.loadNode(fixture)
+
+        // Inject a synthetic PII node the way a live (un-redacted) capture would carry it.
+        val injected = UiNode(
+            text = "Deliver to Testname Q",
+            children = real.children,
+        ).restoreParents()
+
+        val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_pre_arrival")!!
+        val redactedJson = serialize(rule.redact.apply(injected))
+
+        assertFalse("injected customer name must not persist", redactedJson.contains("Testname Q"))
+        assertTrue("marker kept, name masked", redactedJson.contains("Deliver to [redacted]"))
+    }
+
+    @Test
+    fun `every screen rule that hashes PII declares a redact block`() {
+        var checked = 0
+        rulesDir.listFiles { f -> f.extension == "json" }?.forEach { file ->
+            val root = Json.parseToJsonElement(file.readText()).jsonObject
+            root["screens"]?.jsonArray?.forEach { screen ->
+                val obj = screen.jsonObject
+                if (jsonUsesSha256(obj)) {
+                    checked++
+                    val redact = obj["redact"]?.jsonArray
+                    assertTrue(
+                        "screen rule '${obj["id"]?.jsonPrimitive?.content}' hashes PII (sha256) " +
+                            "but declares no non-empty redact block (#598)",
+                        redact != null && redact.isNotEmpty(),
+                    )
+                }
+            }
+        }
+        // Guard the guard: the 4 known sha256 dropoff/timeline rules must be seen.
+        assertTrue("expected at least the 4 known sha256 screen rules", checked >= 4)
+    }
+
+    @Test
+    fun `the four known sha256 rules expose a redact block via ruleById`() {
+        val ids = listOf(
+            "doordash.screen.timeline",
+            "doordash.screen.dropoff_navigation",
+            "doordash.screen.dropoff_pre_arrival",
+            "doordash.screen.dropoff_pre_arrival_completion",
+        )
+        for (id in ids) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(id)!!
+            assertFalse("$id must carry a redact block", rule.redact.isEmpty())
+        }
+    }
+
+    private fun jsonUsesSha256(element: kotlinx.serialization.json.JsonElement): Boolean = when (element) {
+        is kotlinx.serialization.json.JsonPrimitive -> element.isString && element.content == "sha256"
+        is kotlinx.serialization.json.JsonObject -> element.values.any { jsonUsesSha256(it) }
+        is kotlinx.serialization.json.JsonArray -> element.any { jsonUsesSha256(it) }
+    }
+}

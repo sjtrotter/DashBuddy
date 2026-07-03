@@ -39,7 +39,7 @@ import javax.inject.Singleton
 class JsonRuleInterpreter @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val capabilityGrants: RuleCapabilityGrants,
-) {
+) : ScreenRedactionSource {
 
     /**
      * The loaded rulesets as ONE immutable bundle behind a single volatile
@@ -54,6 +54,14 @@ class JsonRuleInterpreter @Inject constructor(
     val clickRuleset: Ruleset<UiNode>? get() = current.clicks
     val notificationRuleset: Ruleset<RawNotificationData>? get() = current.notifications
     val loadedFormatVersion: Int? get() = current.formatVersion
+
+    /**
+     * #598: the compiled `redact` block for a recognized screen rule, read off
+     * the live bundle (volatile). Null when the rule declares no redaction, so
+     * the capture stage skips the tree copy entirely.
+     */
+    override fun redactFor(ruleId: String): CompiledRedact? =
+        current.screens?.ruleById(ruleId)?.redact?.takeUnless { it.isEmpty() }
 
     /**
      * True once a ruleset bundle has been published. The pipelines drop (not

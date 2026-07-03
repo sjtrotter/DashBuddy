@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline
 
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.AccessibilityPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
+import cloud.trotter.dashbuddy.core.pipeline.rules.NoRedaction
 import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -27,7 +28,7 @@ class CaptureScrubTest {
 
     private val captureBus: CaptureBus = mock()
     private val stats = PipelineStats()
-    private val writer = CaptureWriter(captureBus, stats)
+    private val writer = CaptureWriter(captureBus, stats, NoRedaction)
 
     private fun screenEvent(tree: UiNode) = PipelineEvent.Screen(
         timestamp = 1_000L,

@@ -65,6 +65,7 @@
         },
         "state": { "$ref": "#/$defs/stateBlock" },
         "bind": { "$ref": "#/$defs/bindBlock" },
+        "redact": { "$ref": "#/$defs/redactBlock" },
         "reject": {
           "type": "array",
           "description": "Phase 2: Fail-fast negative checks. Any match skips this rule/branch.",
@@ -334,6 +335,29 @@
           "type": "boolean",
           "description": "If true, null result doesn't disqualify the rule. Default: false.",
           "default": false
+        }
+      }
+    },
+
+    "redactBlock": {
+      "type": "array",
+      "description": "Rule-declared capture redaction (#598). At CAPTURE time, any node matching an entry's 'find' predicate has its text/contentDescription masked to '[redacted]' in the SERIALIZED envelope only — recognition, parse, the state machine, and the dedup contentHash all run on the ORIGINAL tree. FAIL-CLOSED: any screen rule whose parse uses the 'sha256' transform MUST declare a non-empty redact block (the hash side and the disk side cannot drift). Mask the same customer name/address nodes the parse hashes.",
+      "items": { "$ref": "#/$defs/redactEntry" }
+    },
+
+    "redactEntry": {
+      "type": "object",
+      "description": "A single redaction directive.",
+      "required": ["find"],
+      "properties": {
+        "find": {
+          "$ref": "#/$defs/nodePredicate",
+          "description": "Node predicate selecting nodes whose text/contentDescription to mask."
+        },
+        "keepPrefix": {
+          "type": "array",
+          "description": "Optional leading marker labels to PRESERVE. If the node text starts with one (case-insensitive), the mask is 'prefix + [redacted]' (e.g. 'Deliver to ' → 'Deliver to [redacted]'), keeping the require anchor so a replayed redacted capture still recognizes; otherwise the whole node is masked. Address nodes take no keepPrefix.",
+          "items": { "type": "string" }
         }
       }
     },

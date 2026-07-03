@@ -145,7 +145,14 @@ gate, #399), then **disabled-platform** (defense-in-depth), then **UNKNOWN** (ca
 triage, never forwarded to the state machine). Snapshots are attributed to the window's *real* package (not the event's), so
 our own overlay is dropped (#4 / PR #334). Frame admission is `FrameGate` (identity dedup +
 content-hash rolling suppression of UNKNOWN frames, #360); envelope assembly is the shared
-`CaptureWriter` (#361); `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
+`CaptureWriter` (#361), which also applies **rule-declared capture redaction** — a recognized
+rule's `redact` block masks customer name/address/gate-code node text in the serialized envelope
+only, so recognized captures are PII-hashed-at-edge on disk (#598). Coverage now spans the
+recognized offer/pickup/dropoff/chat/nav/camera customer surfaces (customer name, street/apt/
+gate-code lines, chat message bodies); UNKNOWN frames and UNKNOWN clicks remain the documented
+debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers`
+backstop), and the id-less building-name line + replay-identity residuals are tracked (#623/#624/
+#620). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds
 all collectors, so side effects (captures, dedup state) can never double-run (#361). The merged
 upstream is supervised — a crash logs + counts a restart and resubscribes with backoff instead of
 silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping failure,
@@ -157,8 +164,11 @@ Recognition is **data, not code**. Per-platform rule files
 (`core/pipeline/src/main/assets/rules/doordash.json`, `uber.json` — spec in ADR-0001, editor schema
 `docs/rules.schema.json`) are compiled by `RuleCompiler` and matched by `ObservationClassifier`.
 Rules carry a `priority` (sensitive rules are priority 0 and `overrideable: false`, blocking all
-further processing of banking/identity screens), `require` predicates, `bind` blocks, and `parse`
-blocks that produce typed fields via `ParsedFieldsFactory`. There are no Kotlin matcher classes —
+further processing of banking/identity screens), `require` predicates, `bind` blocks, `parse`
+blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
+(#598) — node predicates whose matched text is masked in the capture envelope (a screen rule
+that hashes PII via the `sha256` transform MUST declare a non-empty `redact`, enforced at compile;
+the mask keeps a `keepPrefix` marker so recognition on replay is unchanged). There are no Kotlin matcher classes —
 changing recognition means editing rule JSON plus corpus tests. **Rules cannot declare actuation**
 (#425): the compiler rejects `click`/gesture effect verbs; rules instead expose well-known *target
 bindings* (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction`

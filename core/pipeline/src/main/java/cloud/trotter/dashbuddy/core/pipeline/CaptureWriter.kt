@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.AccessibilityPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.clickDedupHash
 import cloud.trotter.dashbuddy.core.pipeline.notification.NotificationPipeline
+import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import cloud.trotter.dashbuddy.domain.capture.EnvelopeBuilder
 import cloud.trotter.dashbuddy.domain.capture.WindowContextDto
@@ -31,6 +32,7 @@ import javax.inject.Singleton
 class CaptureWriter @Inject constructor(
     private val captureBus: CaptureBus,
     private val stats: PipelineStats,
+    private val redactionSource: ScreenRedactionSource,
 ) {
 
     fun captureScreen(
@@ -63,13 +65,22 @@ class CaptureWriter @Inject constructor(
                 totalWindowCount = wc.totalWindowCount,
             )
         }
+        // #598: rule-declared capture redaction. A recognized screen persists its
+        // full tree for corpus building, but a rule that RECOGNIZES customer PII
+        // must MASK it in the serialized envelope. The redacted copy is
+        // envelope-only — recognition, parse, the state machine, and the dedup
+        // contentHash all ran / run on the ORIGINAL tree (event.tree). UNKNOWN
+        // frames have no ruleId and are governed by the SensitiveTextMarkers
+        // backstop above instead.
+        val redact = obs.ruleId?.let { redactionSource.redactFor(it) }
+        val payloadTree = redact?.apply(event.tree) ?: event.tree
         val capture = EnvelopeBuilder.build(
             pipelineId = AccessibilityPipeline.SCREEN_PIPELINE_ID,
             schema = UiNodeSchema,
             platform = platform,
             ruleId = obs.ruleId,
             classificationName = obs.target,
-            payload = event.tree,
+            payload = payloadTree,
             contentHash = event.tree.stableHash,
             metadata = obs.metadata,
             windowContext = winCtx,

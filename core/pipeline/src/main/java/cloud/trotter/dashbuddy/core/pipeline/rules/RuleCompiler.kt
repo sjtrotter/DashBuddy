@@ -129,6 +129,25 @@ object RuleCompiler {
         val ruleParseObj = obj["parse"]?.jsonObject
         val ruleParseAs = ruleParseObj?.get("as")?.jsonPrimitive?.content
 
+        // Rule-level redact directives (screen rules only, #598).
+        val redact = if (context == RuleContext.SCREEN) {
+            obj["redact"]?.jsonArray?.let { compileRedactBlock(it) } ?: CompiledRedact.EMPTY
+        } else CompiledRedact.EMPTY
+
+        // #598 fail-closed: a screen rule that hashes customer PII in its parse
+        // (`sha256` transform) MUST declare a non-empty `redact` block. The hash
+        // side (parse output) and the disk side (envelope) can't drift — a rule
+        // that hashes a name but ships the raw text in the capture is the exact
+        // #598 bug. Scoped to SCREEN so a notification sha256 doesn't trip it.
+        if (context == RuleContext.SCREEN && redact.isEmpty() && jsonUsesSha256(obj)) {
+            throw RuleCompileException(
+                "Screen rule '$id' uses the sha256 transform but declares no 'redact' block " +
+                    "(#598): a rule that hashes customer PII in its parse must redact the same raw " +
+                    "nodes from the capture envelope, or the plaintext ships to disk. Add a " +
+                    "top-level \"redact\": [ { \"find\": <nodePred>, \"keepPrefix\": [ ... ] } ].",
+            )
+        }
+
         val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
             obj["branches"]!!.jsonArray.map {
                 compileBranch(it.jsonObject, context, ruleState.flow, ruleState.modeHint,
@@ -140,7 +159,38 @@ object RuleCompiler {
                 ruleOutcomes = ruleState.outcomes, ruleId = id))
         }
 
-        return CompiledRule(id, priority, overrideable, ruleBindings, branches)
+        return CompiledRule(id, priority, overrideable, ruleBindings, branches, redact)
+    }
+
+    // ==========================================================================
+    //  Redact block compiler (#598)
+    // ==========================================================================
+
+    /**
+     * Compile a rule's top-level `redact` array. Each entry is an OBJECT:
+     * `{ "find": <nodePred>, "keepPrefix": [ ... ]? }`. The predicate reuses the
+     * exact node-predicate vocabulary of `require`/`bind`; masking happens at
+     * capture time (see [CompiledRedact]).
+     */
+    private fun compileRedactBlock(array: JsonArray): CompiledRedact {
+        val entries = array.map { element ->
+            val obj = element as? JsonObject
+                ?: throw RuleCompileException("redact entry must be an object with a 'find' predicate")
+            val findSpec = obj["find"]
+                ?: throw RuleCompileException("redact entry has no 'find' predicate")
+            val find = compileNodePred(findSpec)
+            val keepPrefix = obj["keepPrefix"]?.jsonArray?.map { it.jsonPrimitive.content }
+                ?: emptyList()
+            CompiledRedactEntry(find, keepPrefix)
+        }
+        return CompiledRedact(entries)
+    }
+
+    /** Recursively scan raw rule JSON for a `"sha256"` transform value (#598). */
+    private fun jsonUsesSha256(element: JsonElement): Boolean = when (element) {
+        is JsonPrimitive -> element.isString && element.content == "sha256"
+        is JsonObject -> element.values.any { jsonUsesSha256(it) }
+        is JsonArray -> element.any { jsonUsesSha256(it) }
     }
 
     @Suppress("UNCHECKED_CAST")

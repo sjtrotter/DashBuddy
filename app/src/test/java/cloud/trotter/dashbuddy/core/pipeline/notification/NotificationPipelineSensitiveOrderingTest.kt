@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.core.pipeline.CaptureWriter
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.dashbuddy.core.pipeline.notification.input.NotificationSource
 import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
@@ -66,7 +67,10 @@ class NotificationPipelineSensitiveOrderingTest {
         source = source,
         filter = NotificationFilter(platformPrefs),
         classifier = classifier,
-        captureWriter = CaptureWriter(captureBus, PipelineStats()),
+        captureWriter = CaptureWriter(
+            captureBus, PipelineStats(),
+            object : ScreenRedactionSource { override fun redactFor(ruleId: String) = null },
+        ),
         platformPreferences = platformPrefs,
         stats = PipelineStats(),
     )

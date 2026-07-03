@@ -21,7 +21,14 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
 
     private val sorted: List<CompiledRule<TInput>> = rules.sortedBy { it.priority }
 
+    /** Rule lookup by id (#598) — the capture-redaction seam fetches a
+     *  recognized rule's compiled `redact` block without exposing the list. */
+    private val byId: Map<String, CompiledRule<TInput>> = sorted.associateBy { it.id }
+
     val ruleCount: Int get() = sorted.size
+
+    /** The compiled rule with this id, or null if none. */
+    fun ruleById(id: String): CompiledRule<TInput>? = byId[id]
 
     /**
      * Evaluate the sorted rules against [input] and return the first match,
