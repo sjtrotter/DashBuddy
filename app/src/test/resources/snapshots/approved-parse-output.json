@@ -1661,6 +1661,27 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "dropoff_pre_arrival/2026-06-30__doordash__dropoff_pre_arrival_bjs_enroute__ff724f.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": null,
+            "customerNameHash": "017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d",
+            "deadline": {
+                "text": "5:02 PM",
+                "time": 1780333320000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
     "dropoff_pre_arrival/20260128_180652_578_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_pre_arrival",
         "intent": "dropoff_pre_arrival",

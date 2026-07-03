@@ -264,11 +264,42 @@ class TriageRulesTest {
     }
 
     @Test
-    fun `dropoff_handoff`() {
+    fun `dropoff_handoff — at-door frame WITH the completion CTA classifies as handoff (#603)`() {
+        // The genuine at-door handoff carries the completion CTA ("Mark as delivered" et al.)
+        // on top of the persistent "Hand it to customer" instruction — the CTA is what makes
+        // it a real arrival (task:dropoff:arrived).
         assertEquals(
             "dropoff_handoff",
-            screen(tree(node(id = "drop_off_workflow_host_fragment"), node(text = "Hand it to customer"))),
+            screen(
+                tree(
+                    node(id = "drop_off_workflow_host_fragment"),
+                    node(text = "Hand it to customer"),
+                    node(text = "Mark as delivered"),
+                ),
+            ),
         )
+    }
+
+    @Test
+    fun `dropoff_handoff — en-route frame WITHOUT a CTA is pre-arrival, not a handoff (#603)`() {
+        // "Hand it to customer" is present the ENTIRE drive, so keying on it alone fired a
+        // FALSE task:dropoff:arrived the instant nav started. With no completion CTA the frame
+        // is still en-route and must fall through to dropoff_pre_arrival (the "Deliver to <name>"
+        // + Directions/Call/Message nav card), NOT masquerade as an at-door handoff.
+        val enRoute = tree(
+            node(id = "drop_off_workflow_host_fragment"),
+            node(text = "Hand it to customer"),
+            node(text = "Deliver to Sample C"),
+            node(text = "Directions"),
+            node(text = "Call"),
+            node(text = "Message"),
+        )
+        assertNotEquals(
+            "an en-route frame (no completion CTA) must not classify as an at-door handoff",
+            "dropoff_handoff",
+            screen(enRoute),
+        )
+        assertEquals("dropoff_pre_arrival", screen(enRoute))
     }
 
     @Test
