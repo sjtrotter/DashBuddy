@@ -1,3 +1,11 @@
+import java.io.File
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.hilt)
@@ -50,59 +58,83 @@ dependencies {
 }
 
 // ===========================================================================
-// SPIKE (#192) — rule-distribution local dev loop. ALL of this is guarded by
-// `-PuseLocalMatchers` (or omitted entirely); the default build is unchanged.
+// #192 / N1 (#635) — rule-distribution: matchers/rules/*.json5 is the SOLE rule
+// source. The included `matchers` build canonicalizes it; this module imports
+// the canonical output as GENERATED assets/rules/, consumed by BOTH the APK
+// (via the AGP Variant API asset-merge wiring below) and the unit tests (which
+// skip asset merge — see :app testDebugUnitTest dependsOn importMatchersRules).
+// There are NO committed assets/rules/*.json anymore. Off-by-default guarding is
+// gone: the composite build is the production default.
 // See docs/adr/ADR-0009-rule-distribution-channels.md.
 // ===========================================================================
-if (providers.gradleProperty("useLocalMatchers").isPresent) {
 
-    // ---- OPTION A (composite build / dependency substitution) probe --------
-    // Resolve the canonicalized rules from the included `matchers` build via a
-    // custom attribute-matched configuration. Substituted by `includeBuild`.
-    val matchersRules: Configuration by configurations.creating {
-        isCanBeResolved = true
-        isCanBeConsumed = false
-        attributes {
-            attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category::class.java, "matchers-rules"))
-        }
+// Resolve the canonicalized rules from the included `matchers` build via a
+// custom attribute-matched configuration. `includeBuild("matchers")` (root
+// settings) substitutes the local build for these coordinates. The custom
+// Category attribute keeps AGP variant attributes out of the request, so a
+// plain-JVM producer resolves without a "no matching variant" clash.
+val matchersRules: Configuration by configurations.creating {
+    isCanBeResolved = true
+    isCanBeConsumed = false
+    attributes {
+        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category::class.java, "matchers-rules"))
     }
-    dependencies {
-        add(matchersRules.name, "cloud.trotter.matchers:matchers:0.0.0-local")
-    }
-    val importDir = layout.buildDirectory.dir("generated/matchers-optionA/rules")
-    val importMatchers = tasks.register<Sync>("importMatchersOptionA") {
-        group = "matchers"
-        description = "OPTION A probe: import canonicalized rules resolved from the included matchers build."
-        from(matchersRules)
-        into(importDir)
-    }
+}
+dependencies {
+    add(matchersRules.name, "cloud.trotter.matchers:matchers:0.0.0-local")
+}
 
-    // ---- Faithful-canonicalization PROOF (re-runnable) ---------------------
-    // Assert the canonicalized artifact the app would CONSUME is byte-identical
-    // to the committed baseline asset. This is the spike's strongest claim:
-    // JSON5 source (uber.json5, with a comment + trailing comma) canonicalizes
-    // back to the exact committed uber.json.
-    tasks.register("verifyMatchersCanonical") {
-        group = "matchers"
-        description = "PROOF: canonicalized uber.json == committed assets/rules/uber.json (byte-identical)."
-        dependsOn(importMatchers)
-        val committed = layout.projectDirectory.file("src/main/assets/rules/uber.json")
-        val generated = importDir.map { it.file("uber.json") }
-        inputs.file(committed)
-        inputs.file(generated)
-        doLast {
-            val a = generated.get().asFile.readBytes()
-            val b = committed.asFile.readBytes()
-            if (!a.contentEquals(b)) {
-                throw GradleException(
-                    "Canonicalized uber.json (${a.size} bytes) does NOT match committed " +
-                        "assets/rules/uber.json (${b.size} bytes) — canonicalization is not faithful.",
-                )
+// Custom task (DirectoryProperty output — required so the AGP Variant API can
+// wire it into asset merge; a Sync's File output cannot feed
+// addGeneratedSourceDirectory). Copies the resolved canonical rules into
+// <outDir>/rules/ so they land at assets/rules/ after merge.
+abstract class ImportMatchersRules : DefaultTask() {
+    @get:InputFiles
+    abstract val source: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outDir: DirectoryProperty
+
+    @TaskAction
+    fun run() {
+        val rulesOut = outDir.get().dir("rules").asFile
+        rulesOut.deleteRecursively()
+        rulesOut.mkdirs()
+        var count = 0
+        source.files.forEach { f ->
+            when {
+                f.isDirectory ->
+                    f.listFiles { c -> c.isFile && c.extension == "json" }?.forEach { j ->
+                        j.copyTo(File(rulesOut, j.name), overwrite = true); count++
+                    }
+                f.isFile && f.extension == "json" -> {
+                    f.copyTo(File(rulesOut, f.name), overwrite = true); count++
+                }
             }
-            logger.lifecycle(
-                "PROOF OK: canonicalized uber.json is byte-identical to committed " +
-                    "assets/rules/uber.json (${a.size} bytes).",
+        }
+        if (count == 0) {
+            throw GradleException(
+                "importMatchersRules resolved no rules/*.json from the matchers build " +
+                    "(source: ${source.files}). The generated assets/rules/ would be empty.",
             )
         }
+        logger.lifecycle("importMatchersRules: imported $count rule file(s) -> ${rulesOut.absolutePath}")
+    }
+}
+
+val importMatchersRules = tasks.register<ImportMatchersRules>("importMatchersRules") {
+    group = "matchers"
+    description = "Import canonicalized rules from the matchers build into generated assets/rules/."
+    source.from(matchersRules)
+}
+
+// APK path: register the generated dir as an assets source for every variant so
+// AGP merges rules/*.json into the APK and orders the import task before merge.
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            importMatchersRules,
+            ImportMatchersRules::outDir,
+        )
     }
 }

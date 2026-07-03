@@ -19,14 +19,13 @@ dependencyResolutionManagement {
     }
 }
 
-// SPIKE (#192) — guarded composite build (Option A). OFF by default so the
-// default build is byte-for-byte unchanged; opt in with `-PuseLocalMatchers`.
-// When present, the local `matchers/` build is substituted for the
-// `cloud.trotter.matchers:matchers` coordinates the app would otherwise resolve
-// from a repo. See docs/adr/ADR-0009-rule-distribution-channels.md.
-if (providers.gradleProperty("useLocalMatchers").isPresent) {
-    includeBuild("matchers")
-}
+// #192 / N1 (#635) — composite build (Option A), the production default. The
+// local `matchers/` build owns the JSON5 rule source and is substituted for the
+// `cloud.trotter.matchers:matchers` coordinates the app resolves; `:core:pipeline`
+// canonicalizes it into GENERATED assets that both the APK and the tests consume.
+// (When the matchers repo splits out — #192, gated on #246 — this becomes a git
+// submodule.) See docs/adr/ADR-0009-rule-distribution-channels.md.
+includeBuild("matchers")
 
 rootProject.name = "DashBuddy"
 include(":app")

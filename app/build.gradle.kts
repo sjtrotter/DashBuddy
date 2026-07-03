@@ -177,3 +177,13 @@ kotlin {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
+
+// #635 — recognition rules are GENERATED (matchers/rules/*.json5 canonicalized by
+// :core:pipeline:importMatchersRules), not committed under assets/rules/. JVM unit
+// tests read them off the filesystem via TestRulesetFactory and do NOT run AGP
+// asset merge, so make the generate task an explicit predecessor of every unit-test
+// task (testDebugUnitTest / testReleaseUnitTest). Without this the generated dir can
+// be absent/stale on a clean build and TestRulesetFactory would fail fast.
+tasks.withType<Test>().configureEach {
+    dependsOn(":core:pipeline:importMatchersRules")
+}

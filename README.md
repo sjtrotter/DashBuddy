@@ -89,9 +89,10 @@ screen" into something a rule can be written against immediately.
 screens with data-driven rules, not hand-written code. If you can read JSON, you can teach it to
 recognize a new screen or fix one it gets wrong.
 
-* The rules live in
-  [`core/pipeline/src/main/assets/rules/`](core/pipeline/src/main/assets/rules/) — one file per
-  platform (`doordash.json`, `uber.json`; new platforms get their own).
+* The rule source lives in [`matchers/rules/`](matchers/rules/) as JSON5 — one file per platform
+  (`doordash.json5`, `uber.json5`; new platforms get their own). The `matchers` build canonicalizes
+  it to the streamlined JSON the app consumes (generated into `assets/rules/` at build time; #635 /
+  ADR-0009), so there are no hand-maintained committed JSON assets.
 * Each file points at [`docs/rules.schema.json`](docs/rules.schema.json) via its `$schema` field,
   so an editor like VS Code gives you autocomplete and live validation as you type.
 * The rule format (predicates, field parsing, priorities) is documented in

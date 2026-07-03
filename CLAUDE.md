@@ -167,11 +167,19 @@ upstream is supervised — a crash logs + counts a restart and resubscribes with
 silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping failure,
 and restart (periodic summary log line).
 
-### 2. JSON Rule Engine (`core/pipeline/.../rules/` + `assets/rules/`)
+### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
-Recognition is **data, not code**. Per-platform rule files
-(`core/pipeline/src/main/assets/rules/doordash.json`, `uber.json` — spec in ADR-0001, editor schema
-`docs/rules.schema.json`) are compiled by `RuleCompiler` and matched by `ObservationClassifier`.
+Recognition is **data, not code**. The rule SOURCE is now per-platform **JSON5** files under
+`matchers/rules/*.json5` (`doordash.json5`, `uber.json5` — spec in ADR-0001, editor schema
+`docs/rules.schema.json`), owned by the included `matchers` Gradle build (#635/#192, the
+foundation of the matchers split; ADR-0009). That build canonicalizes JSON5 → streamlined JSON
+via kotlinx-serialization; `:core:pipeline:importMatchersRules` imports the canonical output into
+**generated** `assets/rules/*.json` (`build/generated/assets/importMatchersRules/rules/`), which
+both the APK (AGP Variant-API asset merge) and the unit tests (`:app:testDebugUnitTest dependsOn`
+it; `TestRulesetFactory` reads the generated dir) consume. There are **no committed**
+`assets/rules/*.json` — editing a `matchers/rules/*.json5` value flows straight into recognition
+tests with no publish step (the local dev loop is the default). The corpus↔rules SHA version pin
+is deferred to N5/#638. The canonical files are compiled by `RuleCompiler` and matched by `ObservationClassifier`.
 Rules carry a `priority` (sensitive rules are priority 0 and `overrideable: false`, blocking all
 further processing of banking/identity screens), `require` predicates, `bind` blocks, `parse`
 blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
@@ -373,8 +381,9 @@ Tests are data-driven using captured UI hierarchy JSON files under
 1. Drop raw UI hierarchy `.json` files into `snapshots/INBOX/` (gitignored).
 2. Run `InboxProcessorTest` — it auto-sorts recognized screens into category folders, fails on PII,
    and prints an X-Ray report for unknowns.
-3. For **unknown screens**: read the X-Ray report, add or broaden a rule in
-   `core/pipeline/src/main/assets/rules/<platform>.json`, re-run.
+3. For **unknown screens**: read the X-Ray report, add or broaden a rule in the platform's JSON5
+   source `matchers/rules/<platform>.json5` (canonicalized into generated assets by
+   `:core:pipeline:importMatchersRules`; #635), re-run.
 4. For **sensitive screens**: manually redact the JSON, move to `snapshots/SENSITIVE/`, verify with
    `AllMatchersSuite` (the golden guard asserts every `SENSITIVE/` snapshot is caught by a
    sensitive rule or flagged toxic by `SnapshotSecurityScanner`).
@@ -384,9 +393,10 @@ Tests are data-driven using captured UI hierarchy JSON files under
 
 **Adding or changing a recognition rule** (there are no matcher classes to register — rules are data):
 
-1. Edit the platform's rule JSON (`$schema` gives editor autocomplete/validation against
-   `docs/rules.schema.json`). Golden-corpus folder name == expected intent.
-2. Tests compile the **production** rule files via `TestRulesetFactory` — nothing else to wire up.
+1. Edit the platform's JSON5 rule source `matchers/rules/<platform>.json5` (`$schema` gives editor
+   autocomplete/validation against `docs/rules.schema.json`). Golden-corpus folder name == expected intent.
+2. Tests compile the **canonicalized production** rule files via `TestRulesetFactory` (which reads the
+   generated `assets/rules/`, populated by `:core:pipeline:importMatchersRules`) — nothing else to wire up.
 3. Run `InboxProcessorTest` (sorting) and then `AllMatchersSuite` (golden guard + parse-output
    golden + ruleset + classifier regressions) to verify.
 4. If the change legitimately alters **parse output** (`ParseOutputGoldenTest` fails, #433):
