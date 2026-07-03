@@ -78,7 +78,7 @@ This automation bot performs three actions:
 
 To recognize a new screen type:
 
-1. **Add a rule** to `app/src/main/assets/rules.default.json` under the `screens` array.
+1. **Add a rule** to the platform's JSON5 source `matchers/rules/<platform>.json5` (#635) under the `screens` array.
 2. **Add a `Screen` enum entry** in `domain/.../model/accessibility/Screen.kt` if needed.
 3. **Test:** Run `InboxProcessorTest` to verify it now picks up previously "Unknown" files.
 

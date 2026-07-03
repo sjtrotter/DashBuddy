@@ -106,7 +106,7 @@ val canonicalizeRules = tasks.register("canonicalizeRules") {
         sources.forEach { f ->
             val canon = canonicalizeJson5(f.readText(Charsets.UTF_8))
             File(out, f.nameWithoutExtension + ".json").writeText(canon, Charsets.UTF_8)
-            logger.lifecycle("canonicalized ${f.name} -> ${f.nameWithoutExtension}.json (${canon.length} bytes)")
+            logger.lifecycle("canonicalized ${f.name} -> ${f.nameWithoutExtension}.json (${canon.toByteArray().size} bytes)")
         }
     }
 }
@@ -133,13 +133,13 @@ tasks.register("verifyMatchersCanonical") {
             if (once != twice) {
                 throw GradleException(
                     "canonicalize is NOT idempotent for ${f.name} " +
-                        "(${once.length} vs ${twice.length} bytes) — not a fixed point.",
+                        "(${once.toByteArray().size} vs ${twice.toByteArray().size} bytes) — not a fixed point.",
                 )
             }
             structuralReject(once, required)?.let { reason ->
                 throw GradleException("canonical ${f.nameWithoutExtension}.json fails schema check: $reason")
             }
-            logger.lifecycle("PROOF OK: ${f.name} canonicalizes idempotently to schema-valid JSON (${once.length} bytes).")
+            logger.lifecycle("PROOF OK: ${f.name} canonicalizes idempotently to schema-valid JSON (${once.toByteArray().size} bytes).")
         }
     }
 }

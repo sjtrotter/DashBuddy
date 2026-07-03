@@ -249,7 +249,9 @@ loop into the actual test corpus is migration work, not spike work.
   one canonicalizer, not two.
 - The bundle and OTA channels consume the *same* artifact, so a rule behaves identically however
   it was delivered.
-- The mechanism is provably off by default — zero impact on the default build or CI until opted in.
+- The mechanism is deterministic and idempotent — the same JSON5 source always canonicalizes to the
+  same rules, asserted in-build by `verifyMatchersCanonical` and behaviorally by `ParseOutputGoldenTest`.
+  (It graduated from the opt-in spike to the default build in #635.)
 
 ### Negative / Tradeoffs
 

@@ -53,7 +53,8 @@ object TestRulesetFactory {
         val allClicks = mutableListOf<CompiledRule<UiNode>>()
         val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
 
-        dir.listFiles { f -> f.extension == "json" }?.forEach { file ->
+        // sorted for deterministic merge order, mirroring the runtime loader's sorted-first-wins (#633/#642)
+        dir.listFiles { f -> f.extension == "json" }?.sortedBy { it.name }?.forEach { file ->
             val root = Json.parseToJsonElement(file.readText()).jsonObject
             root["screens"]?.jsonArray
                 ?.let { allScreens += RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
