@@ -2,9 +2,11 @@ package cloud.trotter.dashbuddy.ui.main.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -29,7 +31,9 @@ import javax.inject.Inject
  *  - [OdometerRepository] session miles (GPS),
  *  - [AppPreferencesRepository.userEconomy] — operating cost/mi, the SAME economy
  *    the offer verdict scores against (so live True Net uses identical cost math),
- *  - [AppStateRepository.isFirstRun] — the setup gate.
+ *  - [AppStateRepository.isFirstRun] — the setup gate,
+ *  - [AnalyticsRepository.periodEconomics] — the real **Today** totals from the durable
+ *    read model (frozen net, re-emits as the projector folds each delivery + at midnight).
  *
  * The focused platform is resolved through the [Platform] registry (flow's active
  * platform, else most-recent activity) — never a `== DoorDash` literal (Principle 8).
@@ -40,6 +44,7 @@ class DashboardViewModel @Inject constructor(
     odometerRepository: OdometerRepository,
     appPreferencesRepository: AppPreferencesRepository,
     stateManager: StateManagerV2,
+    analyticsRepository: AnalyticsRepository,
     private val bubbleManager: BubbleManager,
 ) : ViewModel() {
 
@@ -48,7 +53,8 @@ class DashboardViewModel @Inject constructor(
         odometerRepository.sessionMilesFlow,
         appPreferencesRepository.userEconomy,
         appStateRepository.isFirstRun,
-    ) { state, sessionMiles, economy, firstRun ->
+        analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY),
+    ) { state, sessionMiles, economy, firstRun, today ->
         val region = focusedRegion(state)
         val inSession = region != null && region.mode != Mode.Offline
         val session = region?.session
@@ -72,6 +78,7 @@ class DashboardViewModel @Inject constructor(
             statusText = statusText(state.regions.flow.flow, region?.mode),
             isInSession = inSession,
             glance = glance,
+            today = today,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
 

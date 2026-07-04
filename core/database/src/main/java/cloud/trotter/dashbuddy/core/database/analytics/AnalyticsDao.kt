@@ -59,6 +59,7 @@ interface AnalyticsDao {
 
     @Query(
         """SELECT COALESCE(SUM(realizedPay), 0) AS pay,
+                  COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries,
                   COUNT(DISTINCT jobId) AS jobs
            FROM delivery_records
@@ -69,6 +70,7 @@ interface AnalyticsDao {
     @Query(
         """SELECT platform,
                   COALESCE(SUM(realizedPay), 0) AS pay,
+                  COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries,
                   COUNT(DISTINCT jobId) AS jobs
            FROM delivery_records
@@ -80,6 +82,7 @@ interface AnalyticsDao {
     @Query(
         """SELECT storeName,
                   COALESCE(SUM(realizedPay), 0) AS pay,
+                  COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries
            FROM delivery_records
            WHERE completedAt >= :start AND completedAt < :end
@@ -105,6 +108,58 @@ interface AnalyticsDao {
            GROUP BY platform"""
     )
     fun sessionTotalsByPlatform(start: Long, end: Long): Flow<List<PlatformSessionTotalsRow>>
+
+    /**
+     * Reported-authoritative gross + unattributed delta for a period (#314 PR3), bucketed by
+     * session `startedAt`. Per session: gross = the summary-screen `reportedEarnings` when present,
+     * else that session's Σ delivered pay; unattributed = `reportedEarnings − deliveredPay` when
+     * reported exceeds delivered (bonuses/adjustments/a missed capture — never negative). The
+     * delivered-pay subquery sums each session's full realized pay (no period filter — a session's
+     * own pay against its own reported total), joined to the in-period sessions.
+     */
+    @Query(
+        """SELECT COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0)), 0) AS gross,
+                  COALESCE(SUM(
+                    CASE WHEN s.reportedEarnings IS NOT NULL
+                              AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
+                         THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
+                         ELSE 0 END), 0) AS unattributed
+           FROM session_records s
+           LEFT JOIN (
+             SELECT sessionId, SUM(realizedPay) AS deliveredPay
+             FROM delivery_records GROUP BY sessionId
+           ) d ON d.sessionId = s.sessionId
+           WHERE s.startedAt >= :start AND s.startedAt < :end"""
+    )
+    fun grossAndUnattributed(start: Long, end: Long): Flow<GrossTotalsRow>
+
+    @Query(
+        """SELECT s.platform AS platform,
+                  COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0)), 0) AS gross,
+                  COALESCE(SUM(
+                    CASE WHEN s.reportedEarnings IS NOT NULL
+                              AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
+                         THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
+                         ELSE 0 END), 0) AS unattributed
+           FROM session_records s
+           LEFT JOIN (
+             SELECT sessionId, SUM(realizedPay) AS deliveredPay
+             FROM delivery_records GROUP BY sessionId
+           ) d ON d.sessionId = s.sessionId
+           WHERE s.startedAt >= :start AND s.startedAt < :end
+           GROUP BY s.platform"""
+    )
+    fun grossAndUnattributedByPlatform(start: Long, end: Long): Flow<List<PlatformGrossTotalsRow>>
+
+    // ── Drill-down list reads (future hub / #650) ────────────────────────
+
+    /** Most recent sessions, newest first — the "recent dashes" list. */
+    @Query("SELECT * FROM session_records ORDER BY startedAt DESC LIMIT :limit")
+    fun recentSessions(limit: Int): Flow<List<SessionRecordEntity>>
+
+    /** Every delivery in a session, in completion order — the per-dash breakdown. */
+    @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId ORDER BY completedAt ASC")
+    fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecordEntity>>
 
     // ── Projector support: restart-correct context hydration (PR2) ───────
 

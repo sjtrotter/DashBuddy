@@ -1,20 +1,28 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
+import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 
 /**
  * Immutable state for the home (Dashboard) screen (Principle 1 — UDF). Bundles the
- * first-run / status gate with a live "this dash" economics [glance]. Permissions
- * stay a composable-local OS re-check (they must be re-read on every `ON_RESUME`),
- * so they are intentionally NOT modelled here.
+ * first-run / status gate with the [today] read-model economics (the primary glance)
+ * and the live "this dash" [glance] (shown while online). Permissions stay a
+ * composable-local OS re-check (re-read on every `ON_RESUME`), so they are
+ * intentionally NOT modelled here.
+ *
+ * [today] comes from `AnalyticsRepository.periodEconomics(TODAY)` and re-emits as the
+ * projector folds each completed delivery (Room invalidation) and at midnight rollover
+ * — frozen net, never recomputed against the live economy. [glance] is the live,
+ * per-second ticking this-dash view (#320).
  */
 data class DashboardUiState(
     val isFirstRun: Boolean = true,
     val statusText: String = "Offline",
     val isInSession: Boolean = false,
     val glance: DashGlance = DashGlance.EMPTY,
+    val today: PeriodEconomics = PeriodEconomics.EMPTY,
 )
 
 /**

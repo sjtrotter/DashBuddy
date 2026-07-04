@@ -46,6 +46,8 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
+import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.dashbuddy.util.PermissionUtils
@@ -131,7 +133,8 @@ fun DashboardScreen(
                     ) { Text("Skip for now") }
                 }
 
-                // CASE 3: Ready — status card, live "this dash" glance, entry tiles.
+                // CASE 3: Ready — status card, real "Today" glance (read-model),
+                // the live "this dash" glance while online, then entry tiles.
                 else -> {
                     StatusCard(
                         title = uiState.statusText,
@@ -140,7 +143,11 @@ fun DashboardScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    ThisDashGlance(glance = uiState.glance)
+                    TodayGlance(today = uiState.today)
+                    if (uiState.isInSession) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ThisDashGlance(glance = uiState.glance)
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
 
                     EntryTileGrid(onNavigate = onNavigate)
@@ -153,6 +160,41 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * The primary home glance — real **Today** economics from the durable read model:
+ * True Net · Net $/hr · Miles. Frozen net (Σ each delivery's net against its accepted
+ * cost basis + unattributed pay), so an economy edit never rewrites past days. It
+ * re-renders without a state transition (Reactive UI rule 4): the `today` flow
+ * re-emits on every projector commit (Room invalidation) and at midnight rollover.
+ */
+@Composable
+private fun TodayGlance(today: PeriodEconomics) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AppStatTile(
+            label = "True Net",
+            value = Formats.money(today.netProfit),
+            sub = "Today",
+            valueColor = if (today.netProfit >= 0.0) AppTheme.colors.good else AppTheme.colors.bad,
+            modifier = Modifier.weight(1f),
+        )
+        AppStatTile(
+            label = "Net/hr",
+            value = today.netPerHour?.let { Formats.money(it) } ?: DashGlance.EMPTY_VALUE,
+            sub = "Today",
+            modifier = Modifier.weight(1f),
+        )
+        AppStatTile(
+            label = "Miles",
+            value = Formats.decimal(today.totals.miles),
+            sub = "Today",
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

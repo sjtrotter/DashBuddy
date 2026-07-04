@@ -7,9 +7,14 @@ package cloud.trotter.dashbuddy.core.database.analytics
  * repository (`:core:data`, PR3) folds economy in on top.
  */
 
-/** Cross-platform delivery totals for a period. */
+/**
+ * Cross-platform delivery totals for a period. [net] is Σ **frozen** per-delivery net
+ * (the projector's `netProfit`, costed against each accepted offer's basis) — an economy
+ * edit never re-costs it (#314 PR3).
+ */
 data class DeliveryTotalsRow(
     val pay: Double,
+    val net: Double,
     val deliveries: Int,
     val jobs: Int,
 )
@@ -18,6 +23,7 @@ data class DeliveryTotalsRow(
 data class PlatformDeliveryTotalsRow(
     val platform: String,
     val pay: Double,
+    val net: Double,
     val deliveries: Int,
     val jobs: Int,
 )
@@ -26,7 +32,26 @@ data class PlatformDeliveryTotalsRow(
 data class StoreTotalsRow(
     val storeName: String?,
     val pay: Double,
+    val net: Double,
     val deliveries: Int,
+)
+
+/**
+ * Reported-authoritative gross + the unattributed delta for a period (#314 PR3).
+ * Computed per session (reported summary total when present, else that session's Σ
+ * delivered pay), then summed. [unattributed] is the excess of reported over delivered
+ * — bonuses/adjustments/a missed capture; a review flag (#650).
+ */
+data class GrossTotalsRow(
+    val gross: Double,
+    val unattributed: Double,
+)
+
+/** Per-platform gross + unattributed (GROUP BY platform). */
+data class PlatformGrossTotalsRow(
+    val platform: String,
+    val gross: Double,
+    val unattributed: Double,
 )
 
 /** Cross-platform session totals for a period: miles = Σ odo delta, onlineMillis = Σ duration. */
