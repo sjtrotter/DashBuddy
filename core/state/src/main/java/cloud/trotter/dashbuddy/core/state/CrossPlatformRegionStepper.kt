@@ -30,13 +30,13 @@ class CrossPlatformRegionStepper @Inject constructor() {
         val mostRecent = nextPlatforms.entries
             .maxByOrNull { it.value.lastObservedAt }
 
+        // Period totals are NOT aggregated here — they are history, owned by the
+        // read side (AnalyticsRepository, #314). A pure stepper never reads the DB.
         return prev.copy(
             anyPlatformOnline = anyOnline,
             activeSessionCount = activeSessions,
             mostRecentActivityAt = mostRecent?.value?.lastObservedAt ?: prev.mostRecentActivityAt,
             mostRecentActivityPlatform = mostRecent?.key,
-            // totalsToday/Week/Lifetime are computed from DB aggregation,
-            // not from in-memory state. They remain unchanged here.
         )
     }
 }

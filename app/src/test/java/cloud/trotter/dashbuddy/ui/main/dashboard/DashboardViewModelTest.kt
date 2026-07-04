@@ -1,9 +1,12 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
+import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
+import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -30,6 +33,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
@@ -45,7 +50,13 @@ class DashboardViewModelTest {
     private val odometerRepository: OdometerRepository = mock()
     private val appPreferencesRepository: AppPreferencesRepository = mock()
     private val stateManager: StateManagerV2 = mock()
+    private val analyticsRepository: AnalyticsRepository = mock()
     private val bubbleManager: BubbleManager = mock()
+
+    /** Stub the read-model Today flow; defaults to empty so a test opts in to real totals. */
+    private fun stubToday(today: PeriodEconomics = PeriodEconomics.EMPTY) {
+        whenever(analyticsRepository.periodEconomics(any(), anyOrNull())).thenReturn(flowOf(today))
+    }
 
     /** $3.00/gal ÷ 30 mpg = $0.10/mi fuel; every non-fuel cost defaults to 0 → $0.10/mi total. */
     private val tenCentsPerMile = UserEconomy(
@@ -76,6 +87,7 @@ class DashboardViewModelTest {
         odometerRepository = odometerRepository,
         appPreferencesRepository = appPreferencesRepository,
         stateManager = stateManager,
+        analyticsRepository = analyticsRepository,
         bubbleManager = bubbleManager,
     )
 
@@ -91,6 +103,7 @@ class DashboardViewModelTest {
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(8.0))
         whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(tenCentsPerMile))
         whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+        stubToday()
 
         val viewModel = buildViewModel()
         val job = launch { viewModel.uiState.collect {} }
@@ -129,6 +142,7 @@ class DashboardViewModelTest {
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
         whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(tenCentsPerMile))
         whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+        stubToday()
 
         val viewModel = buildViewModel()
         val job = launch { viewModel.uiState.collect {} }
@@ -139,6 +153,39 @@ class DashboardViewModelTest {
         assertFalse(ui.glance.isInSession)
         assertEquals(DashGlance.EMPTY_VALUE, ui.glance.trueNetText)
         assertEquals("Ready to Dash", ui.statusText)
+        job.cancel()
+    }
+
+    @Test
+    fun `today read-model economics flow maps into the glance state`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val startedAt = 1_000_000L
+        whenever(stateManager.state)
+            .thenReturn(MutableStateFlow(appStateOnline(startedAt, earnings = 20.0)))
+        whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(8.0))
+        whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(tenCentsPerMile))
+        whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+
+        // Real "Today" totals: frozen net independent of the live economy above.
+        val todayEconomics = PeriodEconomics(
+            totals = PeriodTotals(earnings = 60.0, miles = 20.0, deliveries = 4, jobs = 3, onlineDuration = 7_200_000L),
+            grossEarnings = 72.0,
+            netProfit = 55.0,
+            unattributedPay = 12.0,
+            netPerHour = 27.5,
+            netPerMile = 2.75,
+        )
+        stubToday(todayEconomics)
+
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+
+        // The read-model Today is exposed verbatim (frozen net, not the live-economy net).
+        assertEquals(todayEconomics, viewModel.uiState.value.today)
+        assertEquals(55.0, viewModel.uiState.value.today.netProfit, 1e-9)
+        // The live "this dash" glance still computes its own separate net against the live economy.
+        assertEquals(19.20, viewModel.uiState.value.glance.trueNet, 1e-9)
         job.cancel()
     }
 }

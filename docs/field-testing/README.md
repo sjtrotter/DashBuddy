@@ -88,6 +88,21 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   (#314 PR2 — projector/backfill/frozen-economy.)
   - Confirmed: 0/2
 
+- **🆕 NEW — the home screen's top glance is now REAL "Today" totals from the read model (#314 PR3, completes #314).**
+  Open the DashBuddy main app (not the bubble). **Working looks like:** the top row of three stat
+  tiles — **True Net · Net/hr · Miles**, each sub-labelled **"Today"** — shows your **whole day's**
+  frozen net (Σ each completed delivery's frozen net + any unattributed pay), not just the current
+  dash, and it **grows within a few seconds of each delivery receipt** (the projector folds the
+  completed delivery → Room re-emits the flow → the tile updates, no app restart, no state
+  transition). While a dash is running a second **"This dash"** row appears below it (the live
+  per-second ticking glance from #320). How to tell it's right: at end of day the Today **True Net**
+  ≈ your DoorDash app's earnings for the day minus your operating costs, and **editing the Economy
+  settings (gas price etc.) must NOT change a past day's Today number** — historical net is frozen.
+  At local **midnight** the Today figures should reset to the new day without reopening the app.
+  Broken = a Today that only reflects the current dash, a number that changes when you edit economy,
+  a Today that never grows after a delivery completes, or one that doesn't roll over at midnight.
+  - Confirmed: 0/2
+
 - **🔧 FIX SHIPPED — a stacked job's DELIVERY_COMPLETED rows now carry per-drop realized pay (#528 Slice A). READ THE DB AFTER A DASH.**
   Before, on a multi-store/multi-drop stack, the single combined receipt was attached to just ONE
   drop (it absorbed the whole total) and every other drop's `DELIVERY_COMPLETED` row recorded null
