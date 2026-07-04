@@ -283,6 +283,22 @@ class RecordFoldsTest {
     }
 
     @Test
+    fun `a mid-session odometer reset floors the per-drop miles at zero (never negative)`() {
+        val s = "S6b"
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                delivery(s, 2_000, "J1", "T1", totalPay = 5.0, odo = 105.0), // +5
+                delivery(s, 3_000, "J2", "T2", totalPay = 5.0, odo = 90.0),  // odometer reset: −15 → 0
+                delivery(s, 4_000, "J3", "T3", totalPay = 5.0, odo = 95.0),  // re-anchored: 95 − 90 = 5
+            ),
+        )
+        assertEquals(5.0, outcomes[1].delivery!!.realizedMiles!!, 1e-9)
+        assertEquals("negative delta floored, never inflates netProfit", 0.0, outcomes[2].delivery!!.realizedMiles!!, 1e-9)
+        assertEquals(5.0, outcomes[3].delivery!!.realizedMiles!!, 1e-9)
+    }
+
+    @Test
     fun `a malformed payload is skipped and reported, not folded`() {
         val s = "S7"
         val bad = SequencedAppEvent(

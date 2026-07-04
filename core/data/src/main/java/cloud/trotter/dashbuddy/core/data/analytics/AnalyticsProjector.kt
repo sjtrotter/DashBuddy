@@ -15,9 +15,12 @@ import cloud.trotter.dashbuddy.domain.analytics.OfferFold
 import cloud.trotter.dashbuddy.domain.analytics.RecordFolds
 import cloud.trotter.dashbuddy.domain.analytics.SessionFoldContext
 import cloud.trotter.dashbuddy.domain.state.Platform
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -34,9 +37,11 @@ import javax.inject.Singleton
  * refolds the whole log (rebuild ≡ backfill).
  *
  * **Exactly-once:** each batch writes its records AND advances the watermark in ONE
- * `db.withTransaction`, so a crash rolls the whole batch back and it re-folds cleanly. The record
- * PKs are the source event's `sequenceId` with `REPLACE`, so even a re-run is a byte-identical
- * no-op.
+ * `db.withTransaction`, so a crash rolls the whole batch back and it re-folds cleanly. That atomic
+ * watermark is what makes it exactly-once: a committed batch is never re-folded. (The seq-PK
+ * `REPLACE` on delivery/offer rows makes re-writing THOSE idempotent, but the session counters are
+ * folded increments — re-folding a committed batch would double them, which the watermark prevents;
+ * idempotency does not rest on the PKs alone.)
  *
  * **Purity boundary:** all fold arithmetic lives in `:domain` [RecordFolds] (pure, `:domain:test`);
  * this orchestrator owns only the impure edges — paging, restart-correct context hydration from the
@@ -59,20 +64,39 @@ class AnalyticsProjector @Inject constructor(
     /** Started from `DashBuddyApplication.onCreate` (NOT debug-gated). */
     fun start(scope: CoroutineScope) {
         scope.launch {
-            rebuildIfVersionChanged()
+            var backoffMs = INITIAL_BACKOFF_MS
+            // Supervise the projection (#430 pattern): a transient failure (SQLite IO, disk pressure)
+            // must not silence the projector for the rest of the process. The atomic watermark kept
+            // the committed state intact through any rolled-back batch, so on a crash we log ERROR,
+            // back off, and resubscribe — resuming from where the watermark left off.
+            while (isActive) {
+                try {
+                    rebuildIfVersionChanged()
 
-            // The first drain from watermark 0 is the backfill/rebuild; log ONE INFO milestone.
-            val backfillFrom = currentWatermark()
-            val backfill = drain()
-            if (backfillFrom == 0L && backfill.events > 0) {
-                Timber.tag(TAG).i(
-                    "Analytics backfill complete: %d events → %d deliveries, %d sessions, %d offers",
-                    backfill.events, backfill.deliveries, backfill.sessions, backfill.offers,
-                )
+                    // The first drain from watermark 0 is the backfill/rebuild; log ONE INFO milestone.
+                    val backfillFrom = currentWatermark()
+                    val backfill = drain()
+                    if (backfillFrom == 0L && backfill.events > 0) {
+                        Timber.tag(TAG).i(
+                            "Analytics backfill complete: %d events → %d deliveries, %d sessions, %d offers",
+                            backfill.events, backfill.deliveries, backfill.sessions, backfill.offers,
+                        )
+                    }
+
+                    backoffMs = INITIAL_BACKOFF_MS // healthy — reset the backoff before steady state
+                    // Steady state: every new max wakes an incremental drain (per-batch DEBUG only).
+                    // collect() only returns on cancellation, so control leaves this block only via a
+                    // throw (caught below) or cancellation (rethrown).
+                    appEventDao.maxSequenceId().conflate().collect { drain() }
+                    return@launch
+                } catch (e: CancellationException) {
+                    throw e // cooperative cancellation — never swallow it
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "Analytics projector crashed; resubscribing in %d ms", backoffMs)
+                    delay(backoffMs)
+                    backoffMs = (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
+                }
             }
-
-            // Steady state: every new max wakes an incremental drain (per-batch DEBUG only).
-            appEventDao.maxSequenceId().conflate().collect { drain() }
         }
     }
 
@@ -276,7 +300,11 @@ class AnalyticsProjector @Inject constructor(
         prevDropOdometer = prevDropOdometer,
         prevDropAt = prevDropAt,
         lastEvaluatedCostPerMile = lastEvaluatedCostPerMile,
-        started = true, // a persisted session_record was already started
+        // A persisted row with a REAL platform is a started session (a RECOVERY re-start must not
+        // clobber it). A still-`_unknown` row is a placeholder persisted before its DASH_START landed
+        // (they arrive in separate 1-event drains at steady state) — NOT started, so the DASH_START
+        // that lands in a later batch upgrades it with the real platform/startedAt (F1).
+        started = Platform.fromWire(platform)?.let { it != Platform.Unknown } ?: false,
     )
 
     private fun DeliveryFold.toEntity() = DeliveryRecordEntity(
@@ -330,6 +358,10 @@ class AnalyticsProjector @Inject constructor(
         private const val TAG = "Analytics"
         private const val BATCH_SIZE = 500
         private const val INFERRED = "inferred"
+
+        /** Supervised-restart backoff bounds after a drain crash (#430 pattern). */
+        private const val INITIAL_BACKOFF_MS = 1_000L
+        private const val MAX_BACKOFF_MS = 60_000L
 
         /** Fold-logic version — bump to wipe records + refold the whole log on next start. */
         private const val PROJECTOR_VERSION = 1

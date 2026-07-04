@@ -274,4 +274,71 @@ class AnalyticsProjectorTest {
         assertEquals("A's endedAt is its last event", 2_000L, a.endedAt)
         assertNull("the live session B stays open", analyticsDao.sessionRecord("B")!!.endedAt)
     }
+
+    @Test
+    fun `a placeholder session folded before DASH_START in an earlier batch is upgraded, not left _unknown (F1)`() = runBlocking {
+        // A session-scoped event (OFFER_ACCEPTED) ordered just ahead of DASH_START — the live steady
+        // state, where each app_events insert wakes a 1-event drain, so the two same-timestamp rows
+        // routinely land in SEPARATE batches (also: app killed between them).
+        insert(
+            AppEventType.OFFER_ACCEPTED, "S1", 1_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.30), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 970, decidedAt = 1_000, returnFlow = Flow.Idle,
+            ),
+        )
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+
+        // Batch 1 folds the offer → persists an `_unknown` placeholder session_record.
+        projector().processBatch(limit = 1)
+        assertEquals("the offer-before-DASH_START synthesized an _unknown placeholder", "_unknown", analyticsDao.sessionRecord("S1")!!.platform)
+
+        // Batch 2 is a FRESH projector instance → it HYDRATES the placeholder from the DB (the F1
+        // locus). Against the old `started = true` hydration this took the RECOVERY non-clobber arm
+        // and the session stayed `_unknown` forever; the fix upgrades it with the real platform +
+        // startedAt (a still-`_unknown` hydrated row is NOT "started").
+        projector().processBatch(limit = 1)
+
+        val s = analyticsDao.sessionRecord("S1")!!
+        assertEquals("DASH_START in a later batch upgrades the placeholder platform", "doordash", s.platform)
+        assertEquals("and adopts the real startedAt", 1_000L, s.startedAt)
+        assertEquals("and the real start odometer", 100.0, s.startOdometer!!, 1e-9)
+    }
+
+    @Test
+    fun `inferred-close of a crash-orphaned session works across a batch boundary via the openSessions DB arm (F6)`() = runBlocking {
+        // Session A never gets a DASH_STOP (crash); it is fully folded in batch 1 by a projector
+        // instance that is then discarded, so A's context survives only in the DB.
+        insert(
+            AppEventType.DASH_START, "A", 1_000,
+            SessionStartPayload("A", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 10.0,
+        )
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "A", 2_000,
+            DeliveryPayload(jobId = "J1", taskId = "T1", storeName = "S", phaseStartedAt = 1_500, totalPay = 5.0),
+            odometer = 14.0,
+        )
+        projector().processBatch(limit = 2)
+
+        // Session B's DASH_START lands in a LATER batch — A is only in the DB, so the inferred-close
+        // must find it via `openSessions` (the DB-row arm), not an in-memory context.
+        insert(
+            AppEventType.DASH_START, "B", 9_000,
+            SessionStartPayload("B", Platform.DoorDash.name, 9_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 20.0,
+        )
+        projector().processBatch(limit = 100)
+
+        val a = analyticsDao.sessionRecord("A")!!
+        assertEquals("orphaned session A is inferred-closed across the batch boundary", "inferred", a.endSource)
+        assertEquals("A's endedAt is its last event", 2_000L, a.endedAt)
+        assertNull("the live session B stays open", analyticsDao.sessionRecord("B")!!.endedAt)
+    }
 }

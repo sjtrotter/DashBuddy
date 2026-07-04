@@ -117,10 +117,13 @@ data class FoldOutcome(
  * The pure event-sourced fold (#314): `(event, session context, current cpm) → record deltas`.
  *
  * No Android, no DB, no wall clock — driven only by the event's own timestamps and metadata, so a
- * backfill from watermark 0 and an incremental catch-up fold are byte-identical, and a
- * `projectorVersion` rebuild reproduces the same rows. The orchestrator owns everything impure:
- * paging, context hydration from the record tables, the inferred-close DB query, and the
- * records+watermark transaction.
+ * backfill from watermark 0 and an incremental catch-up fold produce the same rows, and a
+ * `projectorVersion` rebuild reproduces them. The orchestrator owns everything impure: paging,
+ * context hydration from the record tables, the inferred-close DB query, and the records+watermark
+ * transaction — and that transaction is what makes the fold **exactly-once**: delivery/offer rows
+ * are keyed by source `sequenceId` (REPLACE-idempotent), but the folded session *counters* are not,
+ * so re-processing an already-folded event WOULD double them — which the atomic watermark prevents
+ * (a re-run over a drained log folds nothing; only new events past the watermark are ever folded).
  *
  * [currentCostPerMile] is the live economy's operating cost-per-mile, supplied by the orchestrator
  * only for the [CostBasis.CURRENT_FALLBACK] path (a delivery with no offer basis); it never
@@ -163,10 +166,14 @@ object RecordFolds {
             ?: return FoldOutcome(context = context, skip = "DASH_START: no sessionId")
         val platform = Platform.fromName(p.platform) ?: Platform.Unknown
         val odo = event.metadata?.odometer
-        // A RECOVERY (or any duplicate) re-start of a session ALREADY STARTED must NOT clobber the
-        // original startedAt/platform/startOdometer — keep the earlier anchor, only fill a still-null
-        // odometer and advance liveness. Not a fresh session ⇒ no inferred-close.
-        if (context != null && context.sessionId == sid && context.started) {
+        // A RECOVERY (or any duplicate) re-start of a session that was ALREADY STARTED WITH A REAL
+        // PLATFORM must NOT clobber the original startedAt/platform/startOdometer — keep the earlier
+        // anchor, only fill a still-null odometer and advance liveness. Not a fresh session ⇒ no
+        // inferred-close. The `platform != Unknown` guard is load-bearing: a `_unknown` placeholder
+        // (synthesized for a pre-DASH_START event, possibly PERSISTED and rehydrated across a batch
+        // boundary and thus carrying started=true) must fall through to the upgrade arm below, or the
+        // real platform/startedAt would be discarded and the session would stay `_unknown` forever.
+        if (context != null && context.sessionId == sid && context.started && context.platform != Platform.Unknown) {
             return FoldOutcome(
                 context = context.copy(
                     startOdometer = context.startOdometer ?: odo,
@@ -175,9 +182,10 @@ object RecordFolds {
                 ),
             )
         }
-        // A placeholder synthesized for a session-scoped event ordered just ahead of DASH_START is
-        // UPGRADED here with the real platform/startedAt/startOdometer; its accumulated counters and
-        // liveness carry over. This still counts as a fresh session (its first true start).
+        // A placeholder synthesized for a session-scoped event ordered just ahead of DASH_START (in
+        // the same batch OR persisted and rehydrated in a later one) is UPGRADED here with the real
+        // platform/startedAt/startOdometer; its accumulated counters and liveness carry over. This
+        // still counts as a fresh session (its first true start).
         if (context != null && context.sessionId == sid) {
             return FoldOutcome(
                 context = context.copy(
@@ -278,8 +286,11 @@ object RecordFolds {
         val basePay = if (soleDrop) receipt?.totalBasePay else null
 
         // Partition deltas. Anchor = the previous completion (or DASH_START) in the same session.
+        // Floor the per-row delta at 0 like the session-level SUM (MAX(…,0)): a mid-session odometer
+        // reset yields a NEGATIVE delta, which would otherwise INFLATE this row's netProfit
+        // (pay − negativeMiles × cpm). The next drop re-anchors off this (lower) reading naturally.
         val prevOdo = ctx?.prevDropOdometer ?: ctx?.startOdometer
-        val realizedMiles = if (odo != null && prevOdo != null) odo - prevOdo else null
+        val realizedMiles = if (odo != null && prevOdo != null) (odo - prevOdo).coerceAtLeast(0.0) else null
         val prevAt = ctx?.prevDropAt ?: ctx?.startedAt
         val realizedMinutes = if (prevAt != null) (completedAt - prevAt) / 60_000.0 else null
 
