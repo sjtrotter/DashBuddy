@@ -247,6 +247,30 @@ Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `Tts
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
 
+### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
+
+Analytics is a **CQRS read-model** projected from the durable `app_events` log — the event log is the
+source of truth; the read-model tables are a rebuildable cache. `AnalyticsProjector` (`:core:data`, started
+from `DashBuddyApplication`, runs every launch off-main + supervised) folds `app_events` → three Room v9
+tables (`delivery_records`/`session_records`/`offer_records`) via the pure `RecordFolds`/`SessionFoldContext`
+(`:domain`). The fold is **exactly-once** — records + a watermark advance in one `db.withTransaction`, record
+PKs are the source `sequenceId` (REPLACE-idempotent) — so the **one-time backfill is just the first drain from
+watermark 0**, and a `projectorVersion` bump wipes + refolds the whole log (rebuild ≡ backfill). Realized
+inputs come from the log: pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528), miles from
+`metadata.odometer` partition deltas, time from timestamps. **Economics are FROZEN per record, never
+recomputed** (dev decision): each `delivery_record` stores `netProfit` + `frozenCostPerMile` + `costBasis`
+computed at projection time against the offer's own frozen `OfferEvaluation.operatingCostPerMile` (session
+granularity — the offer→delivery `jobId` link is absent in the log, but cpm is session-uniform), so editing
+economy settings only affects **future** evaluations — a record is an immutable historical fact. `NetProfit`
+(`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
+`AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
+immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =
+reported-total authoritative + the unattributed review flag; per-store; Monday-week boundaries via
+`PeriodBounds`, midnight-reactive) as Room-invalidation Flows to the home glance + the future Analytics hub
+(#315). Period totals are **read-side only** — they never re-enter the pure state machine (the dead
+`CrossPlatformRegion.PeriodTotals` fields were deleted). Follow-ups: #650 (drill-down + user corrections as
+`MANUAL_DELIVERY`/`PAY_ADJUSTMENT` events the projector folds — non-destructive, auditable), #653/#655.
+
 ## Development Principles
 
 Every new feature or refactor holds to these — they are forefront design inputs, not afterthoughts:
