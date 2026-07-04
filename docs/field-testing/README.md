@@ -73,6 +73,16 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
+  Open the app **after a dash** (not while on a task): the **Today** tiles (True Net / Net $/hr /
+  Miles) should already reflect the just-completed dash with no manual refresh (the read-model folds
+  each delivery as it completes). Tap the **Today / This week / Lifetime** selector and confirm the
+  three tiles switch to each window's totals. The old live "This dash" ticking hero is **gone** —
+  there should be **no** per-second $/hr counter on this screen. While you're online, a slim
+  "🟢 Dashing — tap for the bubble" row appears above the tiles; tapping it should re-show the bubble.
+  How to tell it's broken: tiles frozen/stale after a dash, the segmented selector not changing the
+  numbers, a live ticking counter still present, or the dashing row showing while offline.
+  - Confirmed: 0/2
 - **🆕 NEW — the analytics read-model projector now folds `app_events` into durable records (#314 PR2). READ THE DB / LOG AFTER THE FIRST DASH POST-UPDATE.**
   The projector runs on `DashBuddyApplication` startup (not debug-gated) and event-sources the
   `app_events` log into `delivery_records` / `session_records` / `offer_records`. On the **first

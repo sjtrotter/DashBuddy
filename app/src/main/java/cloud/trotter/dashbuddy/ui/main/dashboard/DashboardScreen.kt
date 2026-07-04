@@ -43,9 +43,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
+import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
-import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
@@ -133,21 +134,27 @@ fun DashboardScreen(
                     ) { Text("Skip for now") }
                 }
 
-                // CASE 3: Ready — status card, real "Today" glance (read-model),
-                // the live "this dash" glance while online, then entry tiles.
+                // CASE 3: Ready — status card, a slim "tap for the bubble" pointer while
+                // dashing, then the read-model period review (the primary economics), the
+                // entry tiles, and a manual bubble trigger.
                 else -> {
                     StatusCard(
                         title = uiState.statusText,
-                        subtitle = if (uiState.isInSession) "You're on the clock." else "All systems go.",
+                        subtitle = if (uiState.isDashing) "You're on the clock." else "All systems go.",
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    TodayGlance(today = uiState.today)
-                    if (uiState.isInSession) {
+                    if (uiState.isDashing) {
+                        DashingStatusRow(onTap = { viewModel.showWelcomeBubble() })
                         Spacer(modifier = Modifier.height(12.dp))
-                        ThisDashGlance(glance = uiState.glance)
                     }
+
+                    PeriodReview(
+                        selectedPeriod = uiState.selectedPeriod,
+                        economics = uiState.economics,
+                        onSelectPeriod = viewModel::setPeriod,
+                    )
                     Spacer(modifier = Modifier.height(16.dp))
 
                     EntryTileGrid(onNavigate = onNavigate)
@@ -163,75 +170,83 @@ fun DashboardScreen(
     }
 }
 
+/** Placeholder shown for a rate figure that has no measurable denominator yet. */
+private const val EMPTY_VALUE = "—"
+
+/** The review windows offered by the period selector, in display order. */
+private data class PeriodOption(val period: AnalyticsPeriod, val label: String)
+
+private val PERIOD_OPTIONS = listOf(
+    PeriodOption(AnalyticsPeriod.TODAY, "Today"),
+    PeriodOption(AnalyticsPeriod.THIS_WEEK, "This week"),
+    PeriodOption(AnalyticsPeriod.LIFETIME, "Lifetime"),
+)
+
+private fun periodLabel(period: AnalyticsPeriod): String =
+    PERIOD_OPTIONS.first { it.period == period }.label
+
 /**
- * The primary home glance — real **Today** economics from the durable read model:
- * True Net · Net $/hr · Miles. Frozen net (Σ each delivery's net against its accepted
- * cost basis + unattributed pay), so an economy edit never rewrites past days. It
- * re-renders without a state transition (Reactive UI rule 4): the `today` flow
- * re-emits on every projector commit (Room invalidation) and at midnight rollover.
+ * Slim online pointer (#657): while a dash is active the review surface just points
+ * back to the bubble (the live glance the bubble owns) — it does not mirror it. Tapping
+ * re-shows the bubble via the existing Show-Bubble action.
  */
 @Composable
-private fun TodayGlance(today: PeriodEconomics) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        AppStatTile(
-            label = "True Net",
-            value = Formats.money(today.netProfit),
-            sub = "Today",
-            valueColor = if (today.netProfit >= 0.0) AppTheme.colors.good else AppTheme.colors.bad,
-            modifier = Modifier.weight(1f),
-        )
-        AppStatTile(
-            label = "Net/hr",
-            value = today.netPerHour?.let { Formats.money(it) } ?: DashGlance.EMPTY_VALUE,
-            sub = "Today",
-            modifier = Modifier.weight(1f),
-        )
-        AppStatTile(
-            label = "Miles",
-            value = Formats.decimal(today.totals.miles),
-            sub = "Today",
-            modifier = Modifier.weight(1f),
+private fun DashingStatusRow(onTap: () -> Unit) {
+    AppCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onTap)) {
+        Text(
+            text = "🟢 Dashing — tap for the bubble",
+            style = MaterialTheme.typography.titleMedium,
+            color = AppTheme.colors.text,
         )
     }
 }
 
 /**
- * The live "this dash" glance — True Net · Net $/hr · Miles. $/hr and the online
- * timer tick off a `rememberNow()` clock (Reactive UI rules 2/3): the composable
- * derives them from the session anchors so they stay fresh without a state
- * transition. True Net / Miles update reactively through their own state flows.
+ * The primary home economics (#657): a Today / This week / Lifetime selector over the
+ * read-model True Net · Net $/hr · Miles tiles. Frozen net (Σ each delivery's net against
+ * its accepted cost basis + unattributed pay), so an economy edit never rewrites a past
+ * period. Reactive but **not** live-ticking: the `economics` flow re-emits on each
+ * projector commit (Room invalidation) and at midnight/week rollover, so the screen is
+ * fresh-on-open without a `rememberNow()` clock — a historical period's $/hr is a fixed
+ * value, so there is nothing to tick.
  */
 @Composable
-private fun ThisDashGlance(glance: DashGlance) {
-    val now by rememberNow()
+private fun PeriodReview(
+    selectedPeriod: AnalyticsPeriod,
+    economics: PeriodEconomics,
+    onSelectPeriod: (AnalyticsPeriod) -> Unit,
+) {
+    val selectedLabel = periodLabel(selectedPeriod)
+    AppSegmented(
+        options = PERIOD_OPTIONS.map { it.label },
+        selected = selectedLabel,
+        onSelect = { label ->
+            PERIOD_OPTIONS.firstOrNull { it.label == label }?.let { onSelectPeriod(it.period) }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(modifier = Modifier.height(12.dp))
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AppStatTile(
             label = "True Net",
-            value = glance.trueNetText,
-            sub = "This dash",
-            valueColor = when {
-                !glance.isInSession -> AppTheme.colors.text
-                glance.isPositiveNet -> AppTheme.colors.good
-                else -> AppTheme.colors.bad
-            },
+            value = Formats.money(economics.netProfit),
+            sub = selectedLabel,
+            valueColor = if (economics.netProfit >= 0.0) AppTheme.colors.good else AppTheme.colors.bad,
             modifier = Modifier.weight(1f),
         )
         AppStatTile(
             label = "Net/hr",
-            value = glance.netPerHourText(now),
-            sub = glance.onlineDurationText(now).takeIf { glance.isInSession },
+            value = economics.netPerHour?.let { Formats.money(it) } ?: EMPTY_VALUE,
+            sub = selectedLabel,
             modifier = Modifier.weight(1f),
         )
         AppStatTile(
             label = "Miles",
-            value = glance.milesText,
-            sub = "miles",
+            value = Formats.decimal(economics.totals.miles),
+            sub = selectedLabel,
             modifier = Modifier.weight(1f),
         )
     }

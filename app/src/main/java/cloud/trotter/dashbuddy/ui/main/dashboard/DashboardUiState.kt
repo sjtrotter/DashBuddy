@@ -1,85 +1,36 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
-import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
-import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.domain.format.formatDuration
 
 /**
- * Immutable state for the home (Dashboard) screen (Principle 1 — UDF). Bundles the
- * first-run / status gate with the [today] read-model economics (the primary glance)
- * and the live "this dash" [glance] (shown while online). Permissions stay a
- * composable-local OS re-check (re-read on every `ON_RESUME`), so they are
- * intentionally NOT modelled here.
+ * Immutable state for the home (Dashboard) screen (Principle 1 — UDF).
  *
- * [today] comes from `AnalyticsRepository.periodEconomics(TODAY)` and re-emits as the
- * projector folds each completed delivery (Room invalidation) and at midnight rollover
- * — frozen net, never recomputed against the live economy. [glance] is the live,
- * per-second ticking this-dash view (#320).
+ * The dashboard is a **review / configure** surface, not a live-while-dashing mirror of
+ * the bubble HUD (#657): the bubble owns the strictly-live glance while on a task; the
+ * main app is opened between shifts (parked, on break, planning) to review history and
+ * configure. So the primary economics are the read-model [economics] for the selected
+ * [selectedPeriod] (Today / This week / Lifetime) — reactive to projector commits (Room
+ * invalidation) and midnight/week rollover, but **not** a per-second tick surface: a
+ * historical period's $/hr is a fixed computed value, so the screen is fresh-on-open
+ * without a `rememberNow()` clock.
+ *
+ * [isDashing] only drives a slim "tap for the bubble" pointer shown while a dash is
+ * active; it never brings back the live glance the bubble already owns.
+ *
+ * Permissions stay a composable-local OS re-check (re-read on every `ON_RESUME`), so
+ * they are intentionally NOT modelled here.
  */
 data class DashboardUiState(
     val isFirstRun: Boolean = true,
     val statusText: String = "Offline",
-    val isInSession: Boolean = false,
-    val glance: DashGlance = DashGlance.EMPTY,
-    val today: PeriodEconomics = PeriodEconomics.EMPTY,
-)
-
-/**
- * The live "this dash" glance. Holds the *anchors* (net, miles, session start),
- * not frozen display values — the composable derives the ticking figures ($/hr,
- * online duration) from these + a `rememberNow()` tick so they stay fresh without
- * a state-machine transition (Reactive UI rules 1–3). `trueNet`/`miles` update
- * reactively through their own Flows; only the time-derived rates need the ticker.
- *
- * Labelled "This dash" (not "Today") on purpose: this is the current online
- * session only. Real Today/Week/Lifetime totals arrive with the read-model (#314),
- * out of scope here.
- */
-data class DashGlance(
-    val isInSession: Boolean,
-    /** Net profit so far this dash: session gross − session miles × operating cost/mi. */
-    val trueNet: Double,
-    val miles: Double,
-    /** Session start anchor for the online-duration / $-per-hour derivations; null when idle. */
-    val startedAt: Long?,
-) {
-    val isPositiveNet: Boolean get() = trueNet >= 0.0
-
-    /** True Net as money, or an em dash when not dashing. */
-    val trueNetText: String get() = if (isInSession) Formats.money(trueNet) else EMPTY_VALUE
-
-    /** Session miles with one decimal, or an em dash when not dashing. */
-    val milesText: String get() = if (isInSession) Formats.decimal(miles) else EMPTY_VALUE
-
-    /** Online hours elapsed at [now]; null when idle. Floors at 0 (never negative). */
-    private fun onlineHoursAt(now: Long): Double? =
-        startedAt?.let { (now - it).coerceAtLeast(0L) / 3_600_000.0 }
-
     /**
-     * Net $/hr at wall-clock [now] — the denominator (online time) grows every
-     * second, so this is derived in the composable from a ticker, never frozen in
-     * state. `null` until a measurable slice of time has elapsed.
+     * True while a dash session is active (focused region present, mode != Offline),
+     * registry-resolved (never a `== DoorDash` literal). Drives the bubble pointer only.
      */
-    fun netPerHourAt(now: Long): Double? =
-        onlineHoursAt(now)?.let { NetProfit.perHour(trueNet, it) }
-
-    /** Net $/hr as money at [now], or an em dash when undefined / idle. */
-    fun netPerHourText(now: Long): String =
-        netPerHourAt(now)?.let { Formats.money(it) } ?: EMPTY_VALUE
-
-    /** Online duration string at [now] via the TimeFormats SSOT; em dash when idle. */
-    fun onlineDurationText(now: Long): String =
-        startedAt?.let { formatDuration(now - it) } ?: EMPTY_VALUE
-
-    companion object {
-        /** Placeholder shown for every glance figure when not in a session. */
-        const val EMPTY_VALUE = "—"
-
-        val EMPTY = DashGlance(isInSession = false, trueNet = 0.0, miles = 0.0, startedAt = null)
-
-        /** Build a live glance from the current session's anchors. */
-        fun live(trueNet: Double, miles: Double, startedAt: Long): DashGlance =
-            DashGlance(isInSession = true, trueNet = trueNet, miles = miles, startedAt = startedAt)
-    }
-}
+    val isDashing: Boolean = false,
+    /** The review window the tiles aggregate over; default [AnalyticsPeriod.TODAY]. */
+    val selectedPeriod: AnalyticsPeriod = AnalyticsPeriod.TODAY,
+    /** Frozen-net read-model economics for [selectedPeriod]; fresh-on-open, not live-ticking. */
+    val economics: PeriodEconomics = PeriodEconomics.EMPTY,
+)
