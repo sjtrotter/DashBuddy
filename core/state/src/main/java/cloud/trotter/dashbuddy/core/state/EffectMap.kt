@@ -552,6 +552,7 @@ class EffectMap @Inject constructor() {
                                     offersAccepted = endParsed.offersAccepted,
                                     offersTotal = endParsed.offersTotal,
                                     weeklyEarnings = endParsed.weeklyEarnings,
+                                    platform = prev.platform.name, // #314 capture-gap: harden the log
                                 ),
                             ),
                         )
@@ -575,6 +576,7 @@ class EffectMap @Inject constructor() {
                                     endedAt = endedAt,
                                     source = SessionEndSource.EARLY_OFFLINE,
                                     totalEarnings = prevSession.runningEarnings,
+                                    platform = prev.platform.name, // #314 capture-gap: harden the log
                                 ),
                             ),
                         )
@@ -653,6 +655,7 @@ class EffectMap @Inject constructor() {
                             pausedAt = obs.timestamp,
                             remainingText = pausedFields?.remainingText,
                             remainingMillis = pausedFields?.remainingMillis,
+                            platform = next.platform.name, // #314 capture-gap: harden the log
                         )
                         add(logEffect(sessionId, AppEventType.DASH_PAUSED, obs.timestamp, pausePayload))
                         add(

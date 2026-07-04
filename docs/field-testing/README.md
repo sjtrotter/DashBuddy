@@ -73,6 +73,21 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — the analytics read-model projector now folds `app_events` into durable records (#314 PR2). READ THE DB / LOG AFTER THE FIRST DASH POST-UPDATE.**
+  The projector runs on `DashBuddyApplication` startup (not debug-gated) and event-sources the
+  `app_events` log into `delivery_records` / `session_records` / `offer_records`. On the **first
+  launch after installing this build** it backfills the entire existing log; watch the INFO log for a
+  single line tagged `Analytics`: `Analytics backfill complete: N events → D deliveries, S sessions,
+  O offers` (counts only — it must carry **no** store/customer names). How to tell it's working:
+  after a dash, read the db — `delivery_records` should have one row per completed delivery with
+  `realizedPay`, `realizedMiles` (odometer partition delta), `frozenCostPerMile`/`costBasis`
+  (`OFFER_FROZEN` when the offer was evaluated, else `CURRENT_FALLBACK`), and `netProfit`;
+  `session_records` should have one row per dash whose `deliveries`/`jobsCompleted`/offer counts and
+  `lastOdometer − startOdometer` miles match your memory of the dash. Editing the economy settings
+  must **not** change any already-stored `frozenCostPerMile`/`netProfit` (they're immutable facts).
+  (#314 PR2 — projector/backfill/frozen-economy.)
+  - Confirmed: 0/2
+
 - **🔧 FIX SHIPPED — a stacked job's DELIVERY_COMPLETED rows now carry per-drop realized pay (#528 Slice A). READ THE DB AFTER A DASH.**
   Before, on a multi-store/multi-drop stack, the single combined receipt was attached to just ONE
   drop (it absorbed the whole total) and every other drop's `DELIVERY_COMPLETED` row recorded null

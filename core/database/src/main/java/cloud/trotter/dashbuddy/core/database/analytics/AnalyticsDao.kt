@@ -118,4 +118,25 @@ interface AnalyticsDao {
     /** Still-live sessions for a platform — the next DASH_START infers their close. */
     @Query("SELECT * FROM session_records WHERE platform = :platform AND endedAt IS NULL")
     suspend fun openSessions(platform: String): List<SessionRecordEntity>
+
+    /**
+     * The distinct delivered jobIds already recorded for a session — rehydrates the fold's
+     * distinct-job set on a mid-session restart so `jobsCompleted` counts a stacked job once even
+     * across a process death (PR2).
+     */
+    @Query("SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id")
+    suspend fun deliveredJobIdsInSession(id: String): List<String>
+
+    /**
+     * The most recent closing offer's frozen operating-cost-per-mile in a session — rehydrates the
+     * fold's session-uniform frozen-economy basis on a mid-session restart so a delivery folded
+     * after the restart still resolves `OFFER_FROZEN` (PR2). Prefers offer provenance, never a
+     * prior delivery's possibly-fallback cpm.
+     */
+    @Query(
+        """SELECT estOperatingCostPerMile FROM offer_records
+           WHERE sessionId = :id AND estOperatingCostPerMile IS NOT NULL
+           ORDER BY eventSequenceId DESC LIMIT 1"""
+    )
+    suspend fun lastOfferCostPerMileInSession(id: String): Double?
 }

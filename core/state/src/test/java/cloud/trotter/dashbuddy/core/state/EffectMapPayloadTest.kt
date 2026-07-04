@@ -539,6 +539,7 @@ class EffectMapPayloadTest {
         assertEquals(5, payload.offersAccepted)
         assertEquals(8, payload.offersTotal)
         assertEquals(6000L, payload.endedAt)
+        assertEquals("DoorDash", payload.platform) // #314 capture-gap stamp
     }
 
     @Test
@@ -559,6 +560,7 @@ class EffectMapPayloadTest {
         val payload = (logs[0].event.payload as SessionStopPayload)
         assertEquals("early_offline", payload.source)
         assertEquals(30.0, payload.totalEarnings!!, 0.001)
+        assertEquals("DoorDash", payload.platform) // #314 capture-gap stamp
     }
 
     @Test
@@ -653,5 +655,6 @@ class EffectMapPayloadTest {
         assertEquals(4000L, payload.pausedAt)
         assertEquals(29 * 60 * 1000L, payload.remainingMillis)
         assertEquals("29:42", payload.remainingText)
+        assertEquals("DoorDash", payload.platform) // #314 capture-gap stamp
     }
 }

@@ -18,6 +18,12 @@ android {
         consumerProguardFiles("consumer-rules.pro")
     }
 
+    // Expose the exported Room schema JSONs to the instrumented tests so MigrationTestHelper can
+    // open a real v8 DB and run the committed AutoMigration(8→9) against it (#314).
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -52,6 +58,7 @@ dependencies {
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.room.testing)
 }
 
 ksp {

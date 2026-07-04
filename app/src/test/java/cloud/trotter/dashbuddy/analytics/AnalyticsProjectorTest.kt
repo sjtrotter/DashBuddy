@@ -1,0 +1,344 @@
+package cloud.trotter.dashbuddy.analytics
+
+import androidx.room.Room
+import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsProjector
+import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
+import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
+import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
+import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.dashbuddy.core.database.event.AppEventDao
+import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
+import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
+import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Platform
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+
+/**
+ * #314 PR2 — the [AnalyticsProjector] orchestrator against an in-memory v9 Room DB: the watermark
+ * catch-up loop, restart-correct exactly-once folding, re-run idempotency, malformed-payload
+ * fail-soft, and the `projectorVersion` wipe+refold. The fold arithmetic itself is covered purely
+ * in `:domain`'s `RecordFoldsTest`; this proves the durable, transactional edges.
+ */
+@RunWith(RobolectricTestRunner::class)
+class AnalyticsProjectorTest {
+
+    private lateinit var db: DashBuddyDatabase
+    private lateinit var analyticsDao: AnalyticsDao
+    private lateinit var eventDao: AppEventDao
+    private lateinit var repo: AppEventRepo
+    private lateinit var prefs: AppPreferencesRepository
+
+    @Before
+    fun setUp() {
+        val context = RuntimeEnvironment.getApplication()
+        db = Room.inMemoryDatabaseBuilder(context, DashBuddyDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        analyticsDao = db.analyticsDao()
+        eventDao = db.appEventDao()
+        repo = AppEventRepo(db, eventDao, db.effectsFiredDao())
+        prefs = mock { on { userEconomy } doReturn flowOf(UserEconomy()) }
+    }
+
+    @After
+    fun tearDown() = db.close()
+
+    private fun projector() = AnalyticsProjector(db, repo, eventDao, analyticsDao, prefs)
+
+    // ── Seeding ─────────────────────────────────────────────────────────
+
+    private suspend fun insert(
+        type: AppEventType,
+        sessionId: String?,
+        at: Long,
+        payload: AppEventPayload?,
+        odometer: Double? = null,
+    ): Long = eventDao.insert(
+        AppEventEntity(
+            aggregateId = sessionId,
+            eventType = type,
+            eventPayload = payload?.let(AppEventCodec::encodePayload) ?: "{}",
+            occurredAt = at,
+            metadata = odometer?.let { """{"odometer":$it}""" },
+        ),
+    )
+
+    private fun eval(opCpm: Double) = OfferEvaluation(
+        action = OfferAction.ACCEPT, score = 80.0, qualityLevel = OfferQuality.GOOD,
+        payAmount = 12.0, fuelCostEstimate = 0.0, operatingCostPerMile = opCpm,
+        netPayAmount = 12.0 - 3.0 * opCpm, distanceMiles = 3.0,
+        dollarsPerMile = 3.0, dollarsPerHour = 20.0, estimatedTimeMinutes = 15.0,
+        itemCount = 1.0, merchantName = "StoreX",
+    )
+
+    private suspend fun seedFullSession(sid: String = "S1", opCpm: Double = 0.25) {
+        insert(
+            AppEventType.DASH_START, sid, 1_000,
+            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, sid, 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(opCpm), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        insert(
+            AppEventType.DELIVERY_COMPLETED, sid, 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c",
+                phaseStartedAt = 2_400, arrivedAt = 2_880, completedAt = 3_000, totalPay = 10.0,
+            ),
+            odometer = 105.0,
+        )
+        insert(
+            AppEventType.DASH_STOP, sid, 4_000,
+            SessionStopPayload(sid, endedAt = 4_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = 10.0),
+            odometer = 110.0,
+        )
+    }
+
+    // ── Tests ───────────────────────────────────────────────────────────
+
+    @Test
+    fun `catchUp folds a full session into records and advances the watermark`() = runBlocking {
+        seedFullSession()
+        projector().catchUp()
+
+        val totals = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals(10.0, totals.pay, 1e-9)
+        assertEquals(1, totals.deliveries)
+        assertEquals(1, totals.jobs)
+
+        val s = analyticsDao.sessionRecord("S1")!!
+        assertEquals("doordash", s.platform)
+        assertEquals(1, s.deliveries)
+        assertEquals(1, s.jobsCompleted)
+        assertEquals(1, s.offersAccepted)
+        assertEquals(100.0, s.startOdometer!!, 1e-9)
+        assertEquals(110.0, s.lastOdometer!!, 1e-9)
+        assertEquals(4_000L, s.endedAt)
+        assertEquals(SessionEndSource.SUMMARY_SCREEN, s.endSource)
+
+        val sessionMiles = analyticsDao.sessionTotals(0, Long.MAX_VALUE).first()
+        assertEquals(10.0, sessionMiles.miles, 1e-9) // 110 − 100
+
+        assertEquals(4L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `a restart between batches folds exactly once and hydrates the frozen basis from the db`() = runBlocking {
+        seedFullSession(opCpm = 0.40)
+
+        // Batch 1: DASH_START + OFFER_ACCEPTED only (watermark → 2), then the process "dies".
+        projector().processBatch(limit = 2)
+        assertEquals(2L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+
+        // A brand-new projector instance (fresh in-memory state) resumes from the durable watermark.
+        val resumed = projector()
+        resumed.processBatch(limit = 100)
+        assertNull(resumed.processBatch(limit = 100)) // fully drained
+
+        val totals = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals("delivery folded exactly once across the restart", 1, totals.deliveries)
+        assertEquals(1, analyticsDao.sessionRecord("S1")!!.deliveries)
+        assertEquals(4L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+
+        // The delivery folded AFTER the restart still resolved its frozen cpm — proof the session's
+        // offer basis was rehydrated from offer_records, not lost with the dead process.
+        val delivery = analyticsDao.lastDeliveryInSession("S1")!!
+        assertEquals("OFFER_FROZEN", delivery.costBasis)
+        assertEquals(0.40, delivery.frozenCostPerMile!!, 1e-9)
+    }
+
+    @Test
+    fun `re-running a drained log rewrites identical tables`() = runBlocking {
+        seedFullSession()
+        projector().catchUp()
+        val firstPay = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        val firstWatermark = analyticsDao.getWatermark()!!.watermarkSequenceId
+
+        // Nothing new in the log — a second catch-up is a no-op rewrite.
+        val stats = projector().catchUp()
+        assertEquals(0, stats.events)
+        val secondPay = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals(firstPay, secondPay)
+        assertEquals(firstWatermark, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `a malformed payload row is skipped and counted while the rest of the batch folds`() = runBlocking {
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 0.0,
+        )
+        // A DELIVERY_COMPLETED whose payload never decoded (empty "{}") — must be skipped, not crash.
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 2_000, payload = null, odometer = 2.0)
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
+            DeliveryPayload(jobId = "J1", taskId = "T1", storeName = "StoreX", phaseStartedAt = 2_400, totalPay = 7.0),
+            odometer = 5.0,
+        )
+
+        projector().catchUp()
+
+        val totals = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals("only the valid delivery is recorded", 1, totals.deliveries)
+        assertEquals(7.0, totals.pay, 1e-9)
+        // The watermark still advances past the skipped row — the loop can't stall.
+        assertEquals(3L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `a projectorVersion mismatch wipes and refolds to the same tables as a fresh fold`() = runBlocking {
+        seedFullSession()
+        projector().catchUp()
+        val fresh = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+
+        // Simulate a stale projection from a different fold version, plus a bogus row that a fresh
+        // fold would never produce.
+        analyticsDao.upsertDelivery(
+            DeliveryRecordEntity(
+                eventSequenceId = 9_999, sessionId = "GHOST", platform = "doordash", jobId = "JX", taskId = "TX",
+                storeName = null, customerHash = null, addressHash = null, phaseStartedAt = 0, arrivedAt = null,
+                completedAt = 5_000, deadlineMillis = null, realizedPay = 999.0, payBasis = "NONE",
+                tip = null, basePay = null, odometerAtCompletion = null, realizedMiles = null, realizedMinutes = null,
+                frozenCostPerMile = null, netProfit = null, costBasis = "NONE",
+            ),
+        )
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 4, projectorVersion = 99))
+
+        projector().catchUp() // detects 99 ≠ current version → wipe + refold
+
+        val rebuilt = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals("rebuild == fresh fold (the bogus row is gone)", fresh, rebuilt)
+        assertNotNull(analyticsDao.sessionRecord("S1"))
+        assertNull("the ghost session was wiped", analyticsDao.sessionRecord("GHOST"))
+    }
+
+    @Test
+    fun `a fresh DASH_START infers the close of a crash-orphaned prior session`() = runBlocking {
+        // Session A never gets a DASH_STOP (crash); session B starts later on the same platform.
+        insert(
+            AppEventType.DASH_START, "A", 1_000,
+            SessionStartPayload("A", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 10.0,
+        )
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "A", 2_000,
+            DeliveryPayload(jobId = "J1", taskId = "T1", storeName = "S", phaseStartedAt = 1_500, totalPay = 5.0),
+            odometer = 14.0,
+        )
+        insert(
+            AppEventType.DASH_START, "B", 9_000,
+            SessionStartPayload("B", Platform.DoorDash.name, 9_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 20.0,
+        )
+
+        projector().catchUp()
+
+        val a = analyticsDao.sessionRecord("A")!!
+        assertEquals("orphaned session A is inferred-closed", "inferred", a.endSource)
+        assertEquals("A's endedAt is its last event", 2_000L, a.endedAt)
+        assertNull("the live session B stays open", analyticsDao.sessionRecord("B")!!.endedAt)
+    }
+
+    @Test
+    fun `a placeholder session folded before DASH_START in an earlier batch is upgraded, not left _unknown (F1)`() = runBlocking {
+        // A session-scoped event (OFFER_ACCEPTED) ordered just ahead of DASH_START — the live steady
+        // state, where each app_events insert wakes a 1-event drain, so the two same-timestamp rows
+        // routinely land in SEPARATE batches (also: app killed between them).
+        insert(
+            AppEventType.OFFER_ACCEPTED, "S1", 1_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.30), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 970, decidedAt = 1_000, returnFlow = Flow.Idle,
+            ),
+        )
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+
+        // Batch 1 folds the offer → persists an `_unknown` placeholder session_record.
+        projector().processBatch(limit = 1)
+        assertEquals("the offer-before-DASH_START synthesized an _unknown placeholder", "_unknown", analyticsDao.sessionRecord("S1")!!.platform)
+
+        // Batch 2 is a FRESH projector instance → it HYDRATES the placeholder from the DB (the F1
+        // locus). Against the old `started = true` hydration this took the RECOVERY non-clobber arm
+        // and the session stayed `_unknown` forever; the fix upgrades it with the real platform +
+        // startedAt (a still-`_unknown` hydrated row is NOT "started").
+        projector().processBatch(limit = 1)
+
+        val s = analyticsDao.sessionRecord("S1")!!
+        assertEquals("DASH_START in a later batch upgrades the placeholder platform", "doordash", s.platform)
+        assertEquals("and adopts the real startedAt", 1_000L, s.startedAt)
+        assertEquals("and the real start odometer", 100.0, s.startOdometer!!, 1e-9)
+    }
+
+    @Test
+    fun `inferred-close of a crash-orphaned session works across a batch boundary via the openSessions DB arm (F6)`() = runBlocking {
+        // Session A never gets a DASH_STOP (crash); it is fully folded in batch 1 by a projector
+        // instance that is then discarded, so A's context survives only in the DB.
+        insert(
+            AppEventType.DASH_START, "A", 1_000,
+            SessionStartPayload("A", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 10.0,
+        )
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "A", 2_000,
+            DeliveryPayload(jobId = "J1", taskId = "T1", storeName = "S", phaseStartedAt = 1_500, totalPay = 5.0),
+            odometer = 14.0,
+        )
+        projector().processBatch(limit = 2)
+
+        // Session B's DASH_START lands in a LATER batch — A is only in the DB, so the inferred-close
+        // must find it via `openSessions` (the DB-row arm), not an in-memory context.
+        insert(
+            AppEventType.DASH_START, "B", 9_000,
+            SessionStartPayload("B", Platform.DoorDash.name, 9_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 20.0,
+        )
+        projector().processBatch(limit = 100)
+
+        val a = analyticsDao.sessionRecord("A")!!
+        assertEquals("orphaned session A is inferred-closed across the batch boundary", "inferred", a.endSource)
+        assertEquals("A's endedAt is its last event", 2_000L, a.endedAt)
+        assertNull("the live session B stays open", analyticsDao.sessionRecord("B")!!.endedAt)
+    }
+}

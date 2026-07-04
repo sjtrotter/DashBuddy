@@ -55,6 +55,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var shadowStoreChainLogger: cloud.trotter.dashbuddy.state.shadow.ShadowStoreChainLogger
 
+    @Inject
+    lateinit var analyticsProjector: cloud.trotter.dashbuddy.core.data.analytics.AnalyticsProjector
+
     // Global Context Accessor (Still useful for Utils, but avoid if possible)
     companion object {
         lateinit var instance: DashBuddyApplication
@@ -122,6 +125,11 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             shadowStoreChainLogger.start(applicationScope)
         }
+
+        // 3c. Analytics read-model projector (#314): the event-sourced fold of app_events into the
+        // durable read-model tables (backfill on first launch, then incremental). NOT debug-gated —
+        // this is the product's historical earnings/miles source of truth, not debug telemetry.
+        analyticsProjector.start(applicationScope)
 
         // 4. Schedule Background Tasks
         scheduleBackgroundWorkers()
