@@ -68,10 +68,12 @@ data class PlatformGrossTotalsRow(
     val unattributed: Double,
 )
 
-/** Cross-platform session totals for a period: miles = Σ odo delta, onlineMillis = Σ duration. */
+/** Cross-platform session totals for a period: miles = Σ odo delta, onlineMillis = Σ duration, sessions = COUNT. */
 data class SessionTotalsRow(
     val miles: Double,
     val onlineMillis: Long,
+    /** Dashes (sessions) that started in the period — the Time-tab dash count / avg-dash denominator (#315 H4). */
+    val sessions: Int,
 )
 
 /** Per-platform session totals (GROUP BY platform). */
@@ -79,6 +81,26 @@ data class PlatformSessionTotalsRow(
     val platform: String,
     val miles: Double,
     val onlineMillis: Long,
+    /** Dashes for the platform's period rows (#315 H4). */
+    val sessions: Int,
+)
+
+/**
+ * Time-tab delivery aggregates for a period (#315 H4) — session-anchored (#655), same WHERE shape as
+ * [DeliveryTotalsRow]. [deliveryMinutes]/[deliveryMiles] are Σ per-delivery realized **partition
+ * deltas** (nullable and left un-`COALESCE`d: SQL `SUM` of an empty set is NULL — the "nothing
+ * measured" signal, never a fabricated 0 miles/minutes). [withDeadline]/[onTime] cover ONLY
+ * deadline-carrying rows (a delivery with no captured deadline is excluded from both, never counted
+ * as late). [avgDeadlineMarginMillis] = `AVG(deadlineMillis − completedAt)` over deadline-carrying
+ * rows, positive when the driver typically finished early (nullable — null when no row carried a
+ * deadline).
+ */
+data class DeliveryTimeTotalsRow(
+    val deliveryMinutes: Double?,
+    val deliveryMiles: Double?,
+    val withDeadline: Int,
+    val onTime: Int,
+    val avgDeadlineMarginMillis: Double?,
 )
 
 /**

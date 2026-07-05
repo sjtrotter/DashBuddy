@@ -130,7 +130,8 @@ interface AnalyticsDao {
 
     @Query(
         """SELECT COALESCE(SUM(MAX(lastOdometer - startOdometer, 0)), 0) AS miles,
-                  COALESCE(SUM(COALESCE(endedAt, lastEventAt) - startedAt), 0) AS onlineMillis
+                  COALESCE(SUM(COALESCE(endedAt, lastEventAt) - startedAt), 0) AS onlineMillis,
+                  COUNT(*) AS sessions
            FROM session_records
            WHERE startedAt >= :start AND startedAt < :end"""
     )
@@ -139,7 +140,8 @@ interface AnalyticsDao {
     @Query(
         """SELECT platform,
                   COALESCE(SUM(MAX(lastOdometer - startOdometer, 0)), 0) AS miles,
-                  COALESCE(SUM(COALESCE(endedAt, lastEventAt) - startedAt), 0) AS onlineMillis
+                  COALESCE(SUM(COALESCE(endedAt, lastEventAt) - startedAt), 0) AS onlineMillis,
+                  COUNT(*) AS sessions
            FROM session_records
            WHERE startedAt >= :start AND startedAt < :end
            GROUP BY platform"""
@@ -237,6 +239,36 @@ interface AnalyticsDao {
            GROUP BY outcome"""
     )
     fun offerScoreOutcomes(start: Long, end: Long): Flow<List<ScoreOutcomeRow>>
+
+    // ── Time-tab aggregates (#315 H4) ───────────────────────────────────
+
+    /**
+     * Realized-time / realized-miles / on-time aggregates for the deliveries belonging to the
+     * **sessions that started in `[start, end)`** (session-anchored periods, #655) — the Time-tab
+     * inputs. The WHERE clause is **byte-identical to [deliveryTotals]**: a delivery buckets by the
+     * period of its *session's* `startedAt` (joined via `sessionId`), with the same null-session
+     * `completedAt` fallback for a truly session-less row. `NULL IN (…)` is never true in SQL, so the
+     * two clauses are disjoint (no double count); LIFETIME `(0, MAX)` keeps every row.
+     *
+     * [deliveryMinutes]/[deliveryMiles] are nullable SUMs left un-`COALESCE`d — SQL `SUM` of an empty
+     * set is NULL, the honest "nothing measured" signal (never a fabricated 0). [withDeadline]/[onTime]
+     * count ONLY deadline-carrying rows (a delivery with no captured deadline is excluded from both —
+     * never counted as late), and [avgDeadlineMarginMillis] averages `deadline − completedAt` over just
+     * those rows (positive = typically early; NULL when none carried a deadline — `AVG` skips the null
+     * CASE arms).
+     */
+    @Query(
+        """SELECT SUM(realizedMinutes) AS deliveryMinutes,
+                  SUM(realizedMiles) AS deliveryMiles,
+                  COALESCE(SUM(CASE WHEN deadlineMillis IS NOT NULL THEN 1 ELSE 0 END), 0) AS withDeadline,
+                  COALESCE(SUM(CASE WHEN deadlineMillis IS NOT NULL AND completedAt <= deadlineMillis THEN 1 ELSE 0 END), 0) AS onTime,
+                  AVG(CASE WHEN deadlineMillis IS NOT NULL THEN deadlineMillis - completedAt END) AS avgDeadlineMarginMillis
+           FROM delivery_records
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+              OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)"""
+    )
+    fun deliveryTimeTotals(start: Long, end: Long): Flow<DeliveryTimeTotalsRow>
 
     // ── Drill-down list reads (future hub / #650) ────────────────────────
 

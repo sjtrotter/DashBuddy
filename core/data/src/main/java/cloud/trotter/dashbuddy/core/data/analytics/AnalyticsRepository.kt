@@ -1,8 +1,10 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
+import cloud.trotter.dashbuddy.core.database.analytics.DeliveryTimeTotalsRow
 import cloud.trotter.dashbuddy.core.database.analytics.OutcomeCountRow
 import cloud.trotter.dashbuddy.core.database.analytics.ScoreOutcomeRow
+import cloud.trotter.dashbuddy.core.database.analytics.SessionTotalsRow
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
@@ -10,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -125,6 +128,34 @@ class AnalyticsRepository @Inject constructor(
             ) { outcomes, scores -> assembleDecisions(outcomes, scores) }
         }
 
+    /**
+     * Time / mileage economics for [period] (#315 H4, Time tab): the online-time split, the deadhead
+     * (unattributed-miles) ratio, the on-time rate + avg deadline margin, and the session odometer
+     * miles behind the mileage-&-tax card. Combines the session totals ([AnalyticsDao.sessionTotals]
+     * — online time, miles, dash count) with the delivery-time aggregate
+     * ([AnalyticsDao.deliveryTimeTotals] — realized minutes/miles, on-time counts) into one
+     * [TimeEconomics].
+     *
+     * **Session-anchored (#655):** both aggregates derive from the sessions that *started* in the
+     * period (the delivery join has the same WHERE shape as [deliveryTotals], with a null-session
+     * `completedAt` fallback), so the split and its remainder are internally consistent by
+     * construction. Re-emits on new records (Room invalidation) and at midnight/week/month rollover
+     * (the boundary flow).
+     *
+     * **All figures are MEASURED, not estimated** — Σ session durations, Σ per-delivery partition
+     * deltas, Σ odometer deltas — with **no economy dependency** (Principle 5: this surface reports
+     * measured time/miles, never a re-costed value). Deadline coverage is explicit: the on-time rate
+     * covers only deliveries that carried a captured deadline. No new PII surface (counts + measured
+     * time/miles only).
+     */
+    fun timeEconomics(period: AnalyticsPeriod): Flow<TimeEconomics> =
+        periodBoundariesFlow(period).flatMapLatest { (start, end) ->
+            combine(
+                analyticsDao.sessionTotals(start, end),
+                analyticsDao.deliveryTimeTotals(start, end),
+            ) { s, d -> assembleTime(s, d) }
+        }
+
     /** Recent dashes, newest first (future hub / #650). */
     fun recentSessions(limit: Int = 20): Flow<List<SessionRecord>> =
         analyticsDao.recentSessions(limit).map { rows -> rows.map { it.toDomain() } }
@@ -227,4 +258,24 @@ class AnalyticsRepository @Inject constructor(
             avgEstPerHourDeclined = declinedScores?.avgEstPerHour,
         )
     }
+
+    /**
+     * Fold the session + delivery-time DAO rows into [TimeEconomics] (#315 H4). A straight pass-through
+     * of measured aggregates — nullable delivery SUMs stay nullable (no fabricated zero), and every
+     * derived split ([TimeEconomics.unattributedMillis]/[TimeEconomics.unattributedMiles] etc.) is the
+     * DTO's own coerce-≥0 helper, so this repository stores no second copy of that math (Principle 5).
+     */
+    private fun assembleTime(
+        session: SessionTotalsRow,
+        delivery: DeliveryTimeTotalsRow,
+    ): TimeEconomics = TimeEconomics(
+        sessions = session.sessions,
+        onlineMillis = session.onlineMillis,
+        deliveryMinutes = delivery.deliveryMinutes,
+        miles = session.miles,
+        deliveryMiles = delivery.deliveryMiles,
+        deliveriesWithDeadline = delivery.withDeadline,
+        onTimeDeliveries = delivery.onTime,
+        avgDeadlineMarginMillis = delivery.avgDeadlineMarginMillis,
+    )
 }

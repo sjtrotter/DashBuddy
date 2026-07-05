@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,10 +21,10 @@ import javax.inject.Inject
 /**
  * State holder for the Analytics hub (#315 H1) — a **review** surface assembled reactively
  * from the durable analytics read-model ([AnalyticsRepository]), exposing one immutable
- * [AnalyticsUiState] (Principle 1 — UDF). Strictly over the EXISTING repository surface:
+ * [AnalyticsUiState] (Principle 1 — UDF). Over the read-model repository surface:
  * `periodEconomics` (frozen-net totals), `perStoreEconomics` (top stores), `recentSessions`
- * (recent dashes) — no new SQL/DAO aggregation (those are later phases; the #655 bucketing
- * work owns the DAO internals).
+ * (recent dashes), `decisionEconomics` (H3 funnel/verdicts), and `timeEconomics` (H4 time/mileage) —
+ * every source session-anchored (#655) via the DAO join, which owns the bucketing.
  *
  * Reactive by construction: every source is a Room-invalidation `Flow`, so the tiles re-emit
  * as the projector folds each delivery and at midnight/week/month rollover (the boundary
@@ -57,7 +58,8 @@ class AnalyticsViewModel @Inject constructor(
                 analyticsRepository.periodEconomics(period),
                 analyticsRepository.perStoreEconomics(period),
                 analyticsRepository.decisionEconomics(period),
-            ) { economics, stores, decisions -> PeriodData(period, economics, stores, decisions) }
+                analyticsRepository.timeEconomics(period),
+            ) { economics, stores, decisions, time -> PeriodData(period, economics, stores, decisions, time) }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
     ) { tab, data, sessions ->
@@ -68,6 +70,7 @@ class AnalyticsViewModel @Inject constructor(
             topStores = data.stores.take(TOP_STORES),
             recentSessions = sessions,
             decisions = data.decisions,
+            time = data.time,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState())
 
@@ -87,6 +90,7 @@ class AnalyticsViewModel @Inject constructor(
         val economics: PeriodEconomics,
         val stores: List<StoreEconomics>,
         val decisions: DecisionEconomics,
+        val time: TimeEconomics,
     )
 
     private companion object {

@@ -30,11 +30,10 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 
 /**
- * The Analytics hub (#315). Ships the real Money / Patterns / Decisions / Time tab bar now so
- * the structure is stable; only [AnalyticsTab.Money] has content in H1 (the others show a
- * "coming soon" card — Decisions H3, Time H4, Patterns H5). A **review** surface: UDF state in,
- * `setTab`/`setPeriod` intents out (Principle 1); reactive-fresh via the read-model Flows, no
- * `rememberNow()` tick (a historical period's figures are fixed).
+ * The Analytics hub (#315). Money / Decisions / Time all render real content; Patterns (H5) still
+ * shows a "coming soon" card. A **review** surface: UDF state in, `setTab`/`setPeriod` intents out
+ * (Principle 1); reactive-fresh via the read-model Flows, no `rememberNow()` tick (a historical
+ * period's figures are fixed).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,9 +95,16 @@ fun AnalyticsScreen(
                     DecisionsTab(decisions = uiState.decisions)
                 }
 
-                AnalyticsTab.Patterns,
-                AnalyticsTab.Time,
-                -> ComingSoonCard(uiState.selectedTab)
+                AnalyticsTab.Time -> {
+                    PeriodSelector(
+                        selectedPeriod = uiState.selectedPeriod,
+                        onSelectPeriod = viewModel::setPeriod,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    TimeTab(time = uiState.time)
+                }
+
+                AnalyticsTab.Patterns -> ComingSoonCard(uiState.selectedTab)
             }
         }
     }
