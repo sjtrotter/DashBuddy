@@ -82,7 +82,9 @@ interface AnalyticsDao {
         """SELECT COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries,
-                  COUNT(DISTINCT jobId) AS jobs
+                  COUNT(DISTINCT jobId) AS jobs,
+                  SUM(frozenFuelPerMile * realizedMiles) AS fuelCost,
+                  SUM(frozenNonFuelPerMile * realizedMiles) AS nonFuelCost
            FROM delivery_records
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
@@ -96,7 +98,9 @@ interface AnalyticsDao {
                   COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries,
-                  COUNT(DISTINCT jobId) AS jobs
+                  COUNT(DISTINCT jobId) AS jobs,
+                  SUM(frozenFuelPerMile * realizedMiles) AS fuelCost,
+                  SUM(frozenNonFuelPerMile * realizedMiles) AS nonFuelCost
            FROM delivery_records
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
@@ -234,4 +238,25 @@ interface AnalyticsDao {
            ORDER BY eventSequenceId DESC LIMIT 1"""
     )
     suspend fun lastOfferCostPerMileInSession(id: String): Double?
+
+    /**
+     * The most recent closing offer's frozen fuel-per-mile in a session — rehydrates the fold's
+     * session-uniform fuel split basis on a mid-session restart so a delivery folded after the restart
+     * still freezes `frozenFuelPerMile` (#659). Mirrors [lastOfferCostPerMileInSession]; the split is
+     * session-uniform (one economy per session), so it is numerically identical across offers.
+     */
+    @Query(
+        """SELECT estFuelPerMile FROM offer_records
+           WHERE sessionId = :id AND estFuelPerMile IS NOT NULL
+           ORDER BY eventSequenceId DESC LIMIT 1"""
+    )
+    suspend fun lastOfferFuelPerMileInSession(id: String): Double?
+
+    /** The most recent closing offer's frozen non-fuel-per-mile in a session (#659) — see [lastOfferFuelPerMileInSession]. */
+    @Query(
+        """SELECT estNonFuelPerMile FROM offer_records
+           WHERE sessionId = :id AND estNonFuelPerMile IS NOT NULL
+           ORDER BY eventSequenceId DESC LIMIT 1"""
+    )
+    suspend fun lastOfferNonFuelPerMileInSession(id: String): Double?
 }

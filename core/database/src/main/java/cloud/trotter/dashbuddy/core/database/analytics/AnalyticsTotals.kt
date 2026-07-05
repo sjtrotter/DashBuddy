@@ -17,6 +17,16 @@ data class DeliveryTotalsRow(
     val net: Double,
     val deliveries: Int,
     val jobs: Int,
+    /**
+     * Σ **frozen** fuel dollars for the period = `SUM(frozenFuelPerMile × realizedMiles)` (#659) —
+     * the first-class fuel cost row of the 4-step true-net waterfall. Nullable and left un-`COALESCE`d
+     * on purpose: SQL `SUM` of all-null terms is NULL, which is the "no frozen split coverage" signal
+     * (the waterfall falls back to 3-step). Non-negative by construction (per-mile ≥ 0, miles floored
+     * ≥ 0), so it can never render a negative cost row (the #662-F1 fix — cost is not gross−net).
+     */
+    val fuelCost: Double?,
+    /** Σ frozen non-fuel dollars = `SUM(frozenNonFuelPerMile × realizedMiles)`; same null-coverage rule (#659). */
+    val nonFuelCost: Double?,
 )
 
 /** Per-platform delivery totals (GROUP BY platform). */
@@ -26,6 +36,10 @@ data class PlatformDeliveryTotalsRow(
     val net: Double,
     val deliveries: Int,
     val jobs: Int,
+    /** Σ frozen fuel dollars for the platform's period rows (#659) — see [DeliveryTotalsRow.fuelCost]. */
+    val fuelCost: Double?,
+    /** Σ frozen non-fuel dollars for the platform's period rows (#659). */
+    val nonFuelCost: Double?,
 )
 
 /** Per-store delivery totals (GROUP BY storeName) — per-store + future chain resolution (#159). */

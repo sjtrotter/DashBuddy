@@ -251,17 +251,23 @@ clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decl
 
 Analytics is a **CQRS read-model** projected from the durable `app_events` log — the event log is the
 source of truth; the read-model tables are a rebuildable cache. `AnalyticsProjector` (`:core:data`, started
-from `DashBuddyApplication`, runs every launch off-main + supervised) folds `app_events` → three Room v9
+from `DashBuddyApplication`, runs every launch off-main + supervised) folds `app_events` → three Room v10
 tables (`delivery_records`/`session_records`/`offer_records`) via the pure `RecordFolds`/`SessionFoldContext`
 (`:domain`). The fold is **exactly-once** — records + a watermark advance in one `db.withTransaction`, record
 PKs are the source `sequenceId` (REPLACE-idempotent) — so the **one-time backfill is just the first drain from
 watermark 0**, and a `projectorVersion` bump wipes + refolds the whole log (rebuild ≡ backfill). Realized
 inputs come from the log: pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528), miles from
 `metadata.odometer` partition deltas, time from timestamps. **Economics are FROZEN per record, never
-recomputed** (dev decision): each `delivery_record` stores `netProfit` + `frozenCostPerMile` + `costBasis`
-computed at projection time against the offer's own frozen `OfferEvaluation.operatingCostPerMile` (session
-granularity — the offer→delivery `jobId` link is absent in the log, but cpm is session-uniform), so editing
-economy settings only affects **future** evaluations — a record is an immutable historical fact. `NetProfit`
+recomputed** (dev decision): each `delivery_record` stores `netProfit` + `frozenCostPerMile` + its frozen
+`frozenFuelPerMile`/`frozenNonFuelPerMile` split (#659, the 4-step true-net waterfall Gross → −Fuel → −Non-fuel
+→ Net; the split rides the SAME frozen `OfferEvaluation` — `fuelCostEstimate`/`nonFuelCostEstimate` ÷
+`distanceMiles`, invariant `fuel+nonfuel ≈ cpm`; null off an `OFFER_FROZEN` basis → the waterfall falls back to
+3-step) + `costBasis`, computed at projection time against the offer's own frozen
+`OfferEvaluation.operatingCostPerMile` (session granularity — the offer→delivery `jobId` link is absent in the
+log, but cpm is session-uniform), so editing economy settings only affects **future** evaluations — a record is
+an immutable historical fact. Session hydration rehydrates `started` from a persisted `session_records.startSource`
+marker (#659, retro finding 2), not the old "has a real platform" heuristic. The v9→v10 migration is
+additive-only (three nullable columns; `PROJECTOR_VERSION` bump refolds them from the log). `NetProfit`
 (`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
 `AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =

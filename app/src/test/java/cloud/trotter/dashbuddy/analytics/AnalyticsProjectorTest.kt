@@ -93,15 +93,17 @@ class AnalyticsProjectorTest {
         ),
     )
 
-    private fun eval(opCpm: Double) = OfferEvaluation(
+    private fun eval(opCpm: Double, fuelPerMile: Double = 0.0) = OfferEvaluation(
         action = OfferAction.ACCEPT, score = 80.0, qualityLevel = OfferQuality.GOOD,
-        payAmount = 12.0, fuelCostEstimate = 0.0, operatingCostPerMile = opCpm,
+        payAmount = 12.0,
+        fuelCostEstimate = fuelPerMile * 3.0, nonFuelCostEstimate = (opCpm - fuelPerMile) * 3.0,
+        operatingCostPerMile = opCpm,
         netPayAmount = 12.0 - 3.0 * opCpm, distanceMiles = 3.0,
         dollarsPerMile = 3.0, dollarsPerHour = 20.0, estimatedTimeMinutes = 15.0,
         itemCount = 1.0, merchantName = "StoreX",
     )
 
-    private suspend fun seedFullSession(sid: String = "S1", opCpm: Double = 0.25) {
+    private suspend fun seedFullSession(sid: String = "S1", opCpm: Double = 0.25, fuelPerMile: Double = 0.0) {
         insert(
             AppEventType.DASH_START, sid, 1_000,
             SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
@@ -112,7 +114,7 @@ class AnalyticsProjectorTest {
             OfferPayload(
                 offerHash = "h1",
                 parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(opCpm), outcome = AppEventType.OFFER_ACCEPTED,
+                evaluation = eval(opCpm, fuelPerMile), outcome = AppEventType.OFFER_ACCEPTED,
                 presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
             ),
         )
@@ -374,6 +376,91 @@ class AnalyticsProjectorTest {
         )
         assertNull(delivery.frozenCostPerMile)
         assertNull(delivery.netProfit)
+    }
+
+    @Test
+    fun `folds the frozen fuel and non-fuel split onto delivery records and into the period sums (#659)`() = runBlocking {
+        // opCpm 0.25 split fuel 0.10 / non-fuel 0.15 per mile; the delivery ran 5 miles (100→105).
+        seedFullSession(opCpm = 0.25, fuelPerMile = 0.10)
+        projector().catchUp()
+
+        val d = analyticsDao.lastDeliveryInSession("S1")!!
+        assertEquals(0.10, d.frozenFuelPerMile!!, 1e-9)
+        assertEquals(0.15, d.frozenNonFuelPerMile!!, 1e-9)
+        // Invariant: fuel + non-fuel ≈ frozenCostPerMile.
+        assertEquals(d.frozenCostPerMile!!, d.frozenFuelPerMile!! + d.frozenNonFuelPerMile!!, 1e-9)
+
+        // The offer row persisted the per-mile split (rebuild-stable hydration source).
+        assertEquals(0.10, analyticsDao.lastOfferFuelPerMileInSession("S1")!!, 1e-9)
+        assertEquals(0.15, analyticsDao.lastOfferNonFuelPerMileInSession("S1")!!, 1e-9)
+
+        // Period sums = Σ perMile × realizedMiles (5 mi): fuel 0.50, non-fuel 0.75.
+        val totals = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals(0.50, totals.fuelCost!!, 1e-9)
+        assertEquals(0.75, totals.nonFuelCost!!, 1e-9)
+    }
+
+    @Test
+    fun `no-offer session leaves the frozen split null and the period sums null (3-step fallback, #659)`() = runBlocking {
+        // A delivery with no preceding offer → CURRENT_FALLBACK cpm, no split. The period fuel/non-fuel
+        // SUMs are NULL (no split coverage), the signal the waterfall uses to fall back to 3-step.
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 0.0,
+        )
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 2_000,
+            DeliveryPayload(jobId = "J1", taskId = "T1", storeName = "StoreX", phaseStartedAt = 1_500, totalPay = 5.0),
+            odometer = 4.0,
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.lastDeliveryInSession("S1")!!
+        assertEquals("CURRENT_FALLBACK", d.costBasis)
+        assertNull(d.frozenFuelPerMile)
+        assertNull(d.frozenNonFuelPerMile)
+
+        val totals = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertNull("no frozen split coverage → null fuel sum", totals.fuelCost)
+        assertNull(totals.nonFuelCost)
+    }
+
+    @Test
+    fun `startSource persists and hydration derives started from it, not from a real platform (retro finding 2)`() = runBlocking {
+        // The retro-2 hazard: a DASH_STOP carrying the real platform stamp (#314) arrives BEFORE its
+        // DASH_START, in an earlier batch. It synthesizes a real-platform placeholder with startedAt =
+        // the STOP time and startSource = null. Under the old `started = platform != Unknown` hydration
+        // that rehydrated as started=true → the DASH_START took the RECOVERY non-clobber arm and the
+        // wrong near-zero-duration startedAt stuck. With startSource-based hydration it rehydrates as
+        // started=false and the DASH_START correctly upgrades startedAt.
+        insert(
+            AppEventType.DASH_STOP, "S1", 5_000,
+            SessionStopPayload(
+                "S1", endedAt = 5_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = 10.0,
+                platform = Platform.DoorDash.name,
+            ),
+            odometer = 20.0,
+        )
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 10.0,
+        )
+
+        // Batch 1 folds the DASH_STOP → persists a real-platform placeholder with startSource = null.
+        projector().processBatch(limit = 1)
+        val afterStop = analyticsDao.sessionRecord("S1")!!
+        assertEquals("doordash", afterStop.platform)
+        assertNull("DASH_STOP does not stamp startSource", afterStop.startSource)
+        assertEquals("placeholder startedAt is the stop time", 5_000L, afterStop.startedAt)
+
+        // Batch 2 (fresh projector) HYDRATES the placeholder and folds the DASH_START.
+        projector().processBatch(limit = 1)
+        val s = analyticsDao.sessionRecord("S1")!!
+        assertEquals("the real DASH_START upgraded startedAt (not stuck at the stop time)", 1_000L, s.startedAt)
+        assertEquals("interaction", s.startSource)
+        assertEquals(10.0, s.startOdometer!!, 1e-9)
     }
 
     @Test(expected = CancellationException::class)

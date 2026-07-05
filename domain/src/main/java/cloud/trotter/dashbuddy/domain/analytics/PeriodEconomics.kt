@@ -30,6 +30,17 @@ data class PeriodEconomics(
     val netPerHour: Double?,
     /** [netProfit] ÷ miles, or `null` when no miles are logged. */
     val netPerMile: Double?,
+    /**
+     * Σ **frozen** fuel dollars over the period's deliveries (`Σ frozenFuelPerMile × realizedMiles`),
+     * or `null` when no delivery in the period carries a frozen split (#659). The first-class fuel
+     * cost row of the 4-step true-net waterfall (Gross → −Fuel → −Non-fuel → Net); when this (or
+     * [nonFuelCost]) is null the waterfall falls back to the 3-step (Gross → −Operating cost → Net).
+     * Non-negative by construction (per-mile ≥ 0, realized miles floored ≥ 0), so a reported<delivered
+     * session can never render a negative cost row — the cost is not derived as gross−net (#662-F1).
+     */
+    val fuelCost: Double? = null,
+    /** Σ frozen non-fuel dollars over the period's deliveries, or `null` when no frozen split exists (#659). */
+    val nonFuelCost: Double? = null,
 ) {
     companion object {
         val EMPTY = PeriodEconomics(
@@ -39,6 +50,8 @@ data class PeriodEconomics(
             unattributedPay = 0.0,
             netPerHour = null,
             netPerMile = null,
+            fuelCost = null,
+            nonFuelCost = null,
         )
     }
 }

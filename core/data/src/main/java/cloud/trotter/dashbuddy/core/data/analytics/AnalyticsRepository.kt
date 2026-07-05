@@ -65,6 +65,7 @@ class AnalyticsRepository @Inject constructor(
                         deliveredPay = d.pay, deliveryNet = d.net, deliveries = d.deliveries,
                         jobs = d.jobs, miles = s.miles, onlineMillis = s.onlineMillis,
                         gross = g.gross, unattributed = g.unattributed,
+                        fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost,
                     )
                 }
             } else {
@@ -82,6 +83,7 @@ class AnalyticsRepository @Inject constructor(
                         deliveries = d?.deliveries ?: 0, jobs = d?.jobs ?: 0,
                         miles = s?.miles ?: 0.0, onlineMillis = s?.onlineMillis ?: 0L,
                         gross = g?.gross ?: 0.0, unattributed = g?.unattributed ?: 0.0,
+                        fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost,
                     )
                 }
             }
@@ -118,6 +120,8 @@ class AnalyticsRepository @Inject constructor(
         onlineMillis: Long,
         gross: Double,
         unattributed: Double,
+        fuelCost: Double?,
+        nonFuelCost: Double?,
     ): PeriodEconomics {
         val net = deliveryNet + unattributed
         val hours = onlineMillis / 3_600_000.0
@@ -134,6 +138,10 @@ class AnalyticsRepository @Inject constructor(
             unattributedPay = unattributed,
             netPerHour = NetProfit.perHour(net, hours),
             netPerMile = NetProfit.perMile(net, miles),
+            // Frozen fuel/non-fuel cost rows for the 4-step waterfall — passed through as the DAO's
+            // nullable SUMs (null = no frozen split coverage → the UI falls back to 3-step, #659).
+            fuelCost = fuelCost,
+            nonFuelCost = nonFuelCost,
         )
     }
 }
