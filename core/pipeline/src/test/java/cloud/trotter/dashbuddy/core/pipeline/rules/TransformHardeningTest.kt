@@ -6,6 +6,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
@@ -115,10 +116,17 @@ class TransformHardeningTest {
         )
     }
 
-    // ── Item 6: onFail typos fail rule compile ──
+    // ── Item 6: onFail typos are caught at compile (not coerced at match) ──
+    //
+    // #362 made a typo'd onFail a compile-time RuleCompileException instead of a
+    // silent match-time coercion. #293 item 4 isolates a non-sensitive AUTHORING
+    // malformation to a per-rule SKIP (WARN'd) rather than failing the whole
+    // file — the typo is still caught at compile (the rule never becomes a live
+    // matcher), which is the property #362 defends. The whole-file-reject arm
+    // (sensitive rules + fail-closed controls) is covered in RuleCompilerHardeningTest.
 
-    @Test(expected = RuleCompileException::class)
-    fun `unknown onFail fails at compile time, not silently coercing to skip`() {
+    @Test
+    fun `unknown onFail is caught at compile and isolates the rule (item 4 skip)`() {
         val ruleJson = """[{
             "id": "test.screen.onfail_typo",
             "priority": 10,
@@ -133,15 +141,16 @@ class TransformHardeningTest {
                 { "assert": "fieldNotNull", "field": "f", "onFail": "drop" }
             ]
         }]"""
-        RuleCompiler.compileRules<cloud.trotter.dashbuddy.domain.model.accessibility.UiNode>(
+        val compiled = RuleCompiler.compileRules<cloud.trotter.dashbuddy.domain.model.accessibility.UiNode>(
             Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
         )
+        assertTrue("the malformed rule must be skipped, not compiled to a live matcher", compiled.isEmpty())
     }
 
-    // ── Item 3: unknown navigation fails rule compile ──
+    // ── Item 3: unknown navigation caught at compile, not at first match ──
 
-    @Test(expected = RuleCompileException::class)
-    fun `unknown navigate verb fails at compile time, not at first match`() {
+    @Test
+    fun `unknown navigate verb is caught at compile and isolates the rule (item 4 skip)`() {
         val ruleJson = """[{
             "id": "test.screen.bad_nav",
             "priority": 10,
@@ -153,9 +162,10 @@ class TransformHardeningTest {
                 }
             }
         }]"""
-        RuleCompiler.compileRules<cloud.trotter.dashbuddy.domain.model.accessibility.UiNode>(
+        val compiled = RuleCompiler.compileRules<cloud.trotter.dashbuddy.domain.model.accessibility.UiNode>(
             Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
         )
+        assertTrue("the malformed rule must be skipped, not compiled to a live matcher", compiled.isEmpty())
     }
 
     // ── Item 1 regression: validated specs can't NPE at match time ──
