@@ -15,6 +15,15 @@ object PayBasis {
     const val DROP_SHARE = "DROP_SHARE"
     /** The whole receipt total, stamped on this drop (single-drop / collapsed-receipt shape). */
     const val RECEIPT_TOTAL = "RECEIPT_TOTAL"
+    /**
+     * A full-receipt stamp on a drop of an ALREADY-delivered (multi-delivery) job — dropped as
+     * suspect (#653). An identity-less phantom drop in a receipted stack arrives with the whole
+     * `parsedPay` and NO apportioned `dropRealizedPay` share, while its sibling drops' shares
+     * already sum to that receipt; stamping the full receipt here would double-count the period
+     * SUM. Fold-side defense-in-depth behind the #498/#653 upstream identity firewall — no
+     * realizedPay/tip/base is recorded for such a row.
+     */
+    const val SUSPECT_FULL_RECEIPT = "SUSPECT_FULL_RECEIPT"
     /** No pay signal on the completion (receipt-skipped #596). */
     const val NONE = "NONE"
 }
@@ -295,10 +304,24 @@ object RecordFolds {
         val odo = event.metadata?.odometer
         val completedAt = p.completedAt ?: e.occurredAt
 
+        // #653: a full-receipt stamp on a drop of an ALREADY-delivered (multi-delivery) job is
+        // SUSPECT. The signal the fold can see: this jobId already delivered ≥1 drop this session
+        // (it is in the accumulated/hydrated `deliveredJobIds`), yet this completion carries the
+        // whole `parsedPay` receipt with NO apportioned `dropRealizedPay` share — the identity-less
+        // phantom shape (#498/#517/#518), excluded from the apportion denominator upstream. Its
+        // sibling drops' shares already sum to that receipt, so stamping the full receipt here would
+        // double-count the period SUM. Drop the pay/tip/base rather than inflating. A single-delivery
+        // job (this jobId's first/only drop) is NOT flagged — a bare totalPay on the sole drop is
+        // correct and keeps RECEIPT_TOTAL. Defense-in-depth behind the EffectMap identity firewall.
+        val priorDeliveryForThisJob = ctx != null && p.jobId in ctx.deliveredJobIds
+        val suspectFullReceipt =
+            priorDeliveryForThisJob && p.parsedPay != null && p.dropRealizedPay == null
+
         // Pay + basis. dropRealizedPay is a per-drop share (possibly of a multi-drop receipt);
         // its absence with a bare totalPay means the whole receipt landed on this one drop.
-        val realizedPay = p.dropRealizedPay ?: p.totalPay
+        val realizedPay = if (suspectFullReceipt) null else p.dropRealizedPay ?: p.totalPay
         val payBasis = when {
+            suspectFullReceipt -> PayBasis.SUSPECT_FULL_RECEIPT
             p.dropRealizedPay != null -> PayBasis.DROP_SHARE
             p.totalPay != null -> PayBasis.RECEIPT_TOTAL
             else -> PayBasis.NONE
@@ -306,9 +329,10 @@ object RecordFolds {
         // tip/basePay only when this drop IS the job's sole drop — i.e. it carries the WHOLE receipt.
         // The apportioner stamps `dropRealizedPay` even on a single drop (its share == the total), so
         // a null-drop bare receipt OR a share equal to the receipt total is the sole-drop signal; a
-        // smaller share is a stacked drop, which has no per-drop tip split yet (→ null).
+        // smaller share is a stacked drop, which has no per-drop tip split yet (→ null). A suspect
+        // full-receipt drop (#653) is never the sole drop — its siblings already carry the receipt.
         val receipt = p.parsedPay
-        val soleDrop = receipt != null &&
+        val soleDrop = !suspectFullReceipt && receipt != null &&
             (p.dropRealizedPay == null || kotlin.math.abs(p.dropRealizedPay - receipt.total) < 0.005)
         val tip = if (soleDrop) receipt?.totalTip else null
         val basePay = if (soleDrop) receipt?.totalBasePay else null

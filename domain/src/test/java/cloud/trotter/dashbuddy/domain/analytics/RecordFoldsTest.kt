@@ -385,6 +385,56 @@ class RecordFoldsTest {
     }
 
     @Test
+    fun `a full-receipt phantom drop in a receipted multi-delivery job is SUSPECT, no period double-count (#653)`() {
+        val s = "S4b"
+        // A receipted stack: two identity-bearing drops (A, B) split the $20 receipt via the
+        // apportioner (their dropRealizedPay shares sum to it). A third, identity-less phantom drop
+        // (C) of the SAME job slips through carrying the WHOLE receipt (parsedPay) with NO share —
+        // the #498/#517/#518 shape. Stamping the full receipt on C would double-count the period SUM.
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                offerAccepted(s, 1_500, "h", eval(net = 15.0, dist = 5.0, opCpm = 0.20)),
+                delivery(s, 3_000, "J1", "T1", dropRealizedPay = 11.34, parsedPay = parsedPay(8.0, 12.0), odo = 5.0),
+                delivery(s, 4_000, "J1", "T2", dropRealizedPay = 8.66, parsedPay = parsedPay(8.0, 12.0), odo = 8.0),
+                // Phantom: full receipt, NO apportioned share, and this job already delivered ≥1 drop.
+                delivery(s, 5_000, "J1", "T3", totalPay = 20.0, dropRealizedPay = null, parsedPay = parsedPay(8.0, 12.0), odo = 9.0),
+            ),
+        )
+        val a = outcomes[2].delivery!!
+        val b = outcomes[3].delivery!!
+        val phantom = outcomes[4].delivery!!
+
+        assertEquals(PayBasis.SUSPECT_FULL_RECEIPT, phantom.payBasis)
+        assertNull("suspect drop records no realized pay", phantom.realizedPay)
+        assertNull("suspect drop records no tip", phantom.tip)
+        assertNull("suspect drop records no base pay", phantom.basePay)
+        assertNull("no realized pay ⇒ no net", phantom.netProfit)
+
+        // The no-double-count invariant: the period SUM over the job's drops equals the receipt.
+        val periodSum = outcomes.mapNotNull { it.delivery?.realizedPay }.sum()
+        assertEquals("Σ realizedPay == receipt (phantom adds nothing)", 20.0, periodSum, 1e-9)
+        assertEquals("siblings still carry their apportioned shares", 20.0, a.realizedPay!! + b.realizedPay!!, 1e-9)
+    }
+
+    @Test
+    fun `a single-delivery job with a bare receipt keeps RECEIPT_TOTAL, not SUSPECT (#653 control)`() {
+        val s = "S4c"
+        // First (and only) drop of its job: parsedPay present, no dropRealizedPay share. This is the
+        // legitimate sole-drop shape — the whole receipt IS this drop's pay. Must NOT be flagged.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 3_000, "J9", "T9", totalPay = 12.0, dropRealizedPay = null, parsedPay = parsedPay(9.0, 3.0), odo = 5.0),
+            ),
+        )
+        val d = outcomes[1].delivery!!
+        assertEquals(PayBasis.RECEIPT_TOTAL, d.payBasis)
+        assertEquals(12.0, d.realizedPay!!, 1e-9)
+        assertEquals("sole drop carries the receipt tip", 3.0, d.tip!!, 1e-9)
+    }
+
+    @Test
     fun `partition miles sum to the session odometer delta`() {
         val s = "S5"
         val (outcomes, _) = foldSession(
