@@ -171,16 +171,23 @@ token, so two customers redact distinctly (per-customer replay fidelity) without
 PII; fail-closed to plain `[redacted]`. Coverage spans the recognized offer/pickup/dropoff/chat/
 nav/camera **screen** surfaces AND **notification** envelopes (#620 — chat title/body,
 order-ready customer name via a per-field notif `redact`; store names kept). A rules-independent
-**recognized-frame** backstop (`CustomerTextMarkers`, #624/#632 — distinct from `SensitiveTextMarkers`,
+**recognized-frame** backstop (`CustomerTextMarkers`, #624/#632/#666 — distinct from `SensitiveTextMarkers`,
 which drops the dasher's banking screens) scrubs a node (screen tree) or whole field (notification —
-#632) that ships a customer-PII marker a rule forgot to redact; the marker SSOT is cross-platform
-DATA ("Deliver to "/"Message from " for DoorDash, "Leave the order at "/"Meet at door for " for Uber
-pushes, #585 — not DoorDash-only), with a documented residual for shapes a prefix scan can't own (a
-name-at-start body, and store-ambiguous prefixes like Uber's "Going to " that precede stores AND
-addresses) where the rule-declared `redact` is the primary control; the compiler rejects branch-level `redact` and skips
-a file with duplicate rule ids (#624), and the multi-file loader skips a later file that re-declares
-an id an earlier file already claimed (#633 — cross-file `byId` redact-lookup shadow, fail-closed;
-a no-op on today's prefix-namespaced assets, hardening the #192/#639 multi-file + CDN path).
+#632, incl. `actionLabels` — #666) that ships a customer-PII marker a rule forgot to redact; the
+marker SSOT is cross-platform DATA ("Deliver to "/"Message from " for DoorDash, "Leave the order at
+"/"Meet at door for " for Uber pushes, #585 — not DoorDash-only), with a documented residual for
+shapes a prefix scan can't own (a name-at-start body, and store-ambiguous prefixes like Uber's
+"Going to " that precede stores AND addresses) where the rule-declared `redact` is the primary
+control; the compiler rejects branch-level `redact` and skips a file with duplicate rule ids (#624),
+and the multi-file loader skips a later file that re-declares an id an earlier file already claimed
+(#633 — cross-file `byId` redact-lookup shadow, fail-closed; a no-op on today's prefix-namespaced
+assets, hardening the #192/#639 multi-file + CDN path). `RawNotificationData.textFields()` (#666) is
+the SSOT enumeration of the 5 flat notif text fields (title/text/bigText/tickerText/subText) —
+`toFullString`/`contentHash`, `CompiledNotifRedact`, and `CustomerTextMarkers`'s notif path all
+iterate it instead of hand-listing the fields, so a field added to the model can't silently miss a
+scrub site; the UNKNOWN-notification `SensitiveTextMarkers` scan and the `CustomerTextMarkers`
+backstop both also scan `actionLabels` now (#666) — a push action button label is serialized into
+the envelope the same as the text fields and was previously excluded from every scrub layer.
 UNKNOWN frames and UNKNOWN clicks remain the documented
 debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers`
 backstop); the id-less building-name line residual is still tracked. `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass feeds

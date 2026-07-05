@@ -181,9 +181,14 @@ class CaptureWriter @Inject constructor(
         raw: RawNotificationData,
     ): Observation.Notification {
         // Same fail-closed backstop as captureScreen (#432) for UNKNOWN
-        // notification bodies.
+        // notification bodies. Scans the flat text fields AND actionLabels
+        // (#666 item 2c — a push action button label is serialized into the
+        // envelope same as the text fields and was previously excluded from
+        // this scan, so an UNKNOWN notification with a sensitive marker ONLY in
+        // an action label would have shipped uncaught).
         if (obs.target == UNKNOWN_TARGET) {
             val marker = SensitiveTextMarkers.findMarker(raw.toFullString())
+                ?: raw.actionLabels.firstNotNullOfOrNull { SensitiveTextMarkers.findMarker(it) }
             if (marker != null) {
                 stats.onScrubbedUnknownCapture()
                 Timber.w("Capture scrubbed: UNKNOWN notification hit sensitive marker '%s'", marker)
