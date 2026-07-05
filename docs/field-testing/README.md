@@ -73,6 +73,16 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — driving/glance-mode HUD font-scale toggle (#318).** Flip "Driving glance mode" on in
+  Settings → General while a dash is running (or the bubble is up). The bubble HUD's text — the
+  hero $/hr, task timers, captions, everything — should visibly grow (~12%) immediately, with no
+  restart of the app or the dash. Toggle it back off and the text should shrink back immediately.
+  Throughout, the **main app window** (Dashboard, Settings, etc. — outside the floating bubble)
+  should look completely unchanged at every step. How to tell it's broken: HUD text doesn't
+  change size on toggle, only *some* of the HUD text scales (e.g. the hero number but not the
+  captions/labels), the toggle needs an app restart to take effect, or the main app window's text
+  size changes too.
+
 - **🆕 NEW — Analytics tile now opens the Money tab (#315 H1 / Money tab v1).**
   From the home screen tap the **Analytics** tile: it should open a real hub (back arrow) with a
   **Money / Patterns / Decisions / Time** tab bar (the last three show a "coming soon" card). On

@@ -28,6 +28,8 @@ class AppPreferencesRepository @Inject constructor(
     val gasPrice = dataSource.gasPrice
     val isProMode = dataSource.isProMode
     val appTheme = dataSource.appTheme
+    /** Driving / glance mode (#318) — the HUD honors this, the main app window never does. */
+    val glanceMode = dataSource.glanceMode
 
     val fuelType: Flow<FuelType> = dataSource.fuelType.map { savedType ->
         try {
@@ -185,6 +187,7 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
     suspend fun setProMode(enabled: Boolean) = dataSource.setProMode(enabled)
     suspend fun setTheme(theme: String) = dataSource.setTheme(theme)
+    suspend fun setGlanceMode(enabled: Boolean) = dataSource.setGlanceMode(enabled)
 
     suspend fun updateEconomySettings(
         year: String, make: String, model: String, trim: String,
