@@ -110,7 +110,12 @@ private fun EarningsHero(economics: PeriodEconomics) {
  */
 object WaterfallModel {
 
-    /** One row of the rendered waterfall. [amount] is non-negative for [Role.COST] by construction. */
+    /**
+     * One row of the rendered waterfall. [amount] is non-negative for [Role.COST] on the 4-step
+     * path by construction (frozen per-mile rates × floored miles); the 3-step fallback's derived
+     * cost (`gross − net`) CAN go negative in the reported<delivered shape (#662-F1) — the bar
+     * renders zero-width and the signed amount displays honestly.
+     */
     data class Step(val role: Role, val label: String, val amount: Double)
 
     enum class Role { GROSS, COST, NET }

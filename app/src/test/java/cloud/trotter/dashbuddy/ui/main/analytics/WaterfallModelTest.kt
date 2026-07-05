@@ -98,4 +98,16 @@ class WaterfallModelTest {
         assertEquals(4, steps.size)
         steps.forEach { assertEquals(0.0, it.amount, 1e-9) }
     }
+
+    @Test
+    fun `negative derived cost (reported under delivered) falls back to 3 steps with the signed cost`() {
+        // The #662-F1 shape: gross < net → derived cost is negative. The 1% tolerance term goes
+        // negative but the $0.50 floor rescues max(); any real (non-negative) split then fails the
+        // guard, so the fallback renders — with the honest signed cost, never a fabricated split.
+        val steps = WaterfallModel.from(economics(gross = 20.0, net = 25.0, fuel = 1.0, nonFuel = 2.0))
+
+        assertEquals(3, steps.size)
+        assertEquals(listOf("Gross", "Operating cost", "Net"), steps.map { it.label })
+        assertEquals(-5.0, steps[1].amount, 1e-9)
+    }
 }
