@@ -169,9 +169,10 @@ enum class TimeoutType {
      * (#605), committing a graced screen-implied resume out of [Mode.Paused].
      * Like [GRACE_COMMIT] it carries no handler logic — the stepper's lazy
      * expiry performs the mode flip. A SEPARATE type (not [GRACE_COMMIT] reuse)
-     * is REQUIRED because `SideEffectEngine.activeTimers` is keyed by
-     * [TimeoutType] alone: sharing [GRACE_COMMIT] would cross-cancel a live
-     * `TASK_RETIRE`/`SESSION_END` grace timer (re-opening #431).
+     * is REQUIRED because both graces belong to the SAME platform region, so even
+     * the (type, platform) timer key (#438 item 1) would not separate them: sharing
+     * [GRACE_COMMIT] would cross-cancel a live `TASK_RETIRE`/`SESSION_END` grace
+     * timer (re-opening #431).
      */
     MODE_RESUME_COMMIT,
 }

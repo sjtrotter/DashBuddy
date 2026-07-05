@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
 import cloud.trotter.dashbuddy.core.pipeline.rules.TransformRegistry
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
@@ -24,8 +25,8 @@ import cloud.trotter.dashbuddy.domain.pipeline.NO_ID_FALLBACK
  * Single classification entry point for all pipeline events.
  *
  * Dispatches to the appropriate compiled ruleset (screen, click, notification)
- * based on event type. Caches the last classified screen target so that click
- * observations are enriched with screen context.
+ * based on event type. Caches the last classified screen target PER PLATFORM so
+ * that click observations are enriched with THEIR platform's screen context.
  *
  * Replaces the former `ScreenClassifier`, `ClickClassifier`, and
  * `NotificationClassifier` classes.
@@ -35,10 +36,23 @@ class ObservationClassifier @Inject constructor(
     private val interpreter: JsonRuleInterpreter,
     private val metadataProvider: ReplayMetadataProvider,
 ) {
-    /** Last classified screen target — updated after every non-sensitive Screen classification. */
-    @Volatile
-    var lastScreenTarget: String? = null
-        private set
+    /**
+     * Last classified screen target, keyed by platform wire (#438 item 2). A single
+     * global `lastScreenTarget` let an Uber screen gate a DoorDash click rule's
+     * `screenIs` while both platforms dashed concurrently — latent under the
+     * single-platform alpha, wrong the moment two run at once.
+     *
+     * Honest keying: only a frame whose package resolves to a real platform (a
+     * non-null wire) WRITES here — a null/Unknown-platform frame can't clobber a
+     * real platform's entry. On the read side a click whose platform is Unknown
+     * gets NO screen context (`screenTargetFor` returns null): we won't gate a
+     * click rule with cross-frame screen context we can't attribute to a platform.
+     */
+    private val lastScreenTargets = ConcurrentHashMap<String, String>()
+
+    /** THIS platform's last non-sensitive screen target, or null when unattributable. */
+    private fun screenTargetFor(platformWire: String?): String? =
+        platformWire?.let { lastScreenTargets[it] }
 
     /** True once rulesets are published — pipelines drop frames until then (#432). */
     val isReady: Boolean get() = interpreter.isLoaded
@@ -123,9 +137,11 @@ class ObservationClassifier @Inject constructor(
             expectedOutcomes = result.outcomes,
         )
 
-        // Cache last non-sensitive screen for click enrichment
-        if (obs.parsed !is ParsedFields.SensitiveFields) {
-            lastScreenTarget = obs.target
+        // Cache last non-sensitive screen for click enrichment, keyed by THIS
+        // frame's platform (#438 item 2). An Unknown/null-platform frame (null wire)
+        // is skipped so it can't clobber a real platform's screen context.
+        if (obs.parsed !is ParsedFields.SensitiveFields && platformWire != null) {
+            obs.target?.let { lastScreenTargets[platformWire] = it }
         }
 
         return obs
@@ -164,9 +180,11 @@ class ObservationClassifier @Inject constructor(
         platformWire: String?,
         now: Long,
     ): Observation.Click {
+        // Gate this click against ITS OWN platform's last screen (#438 item 2).
+        val screenTarget = screenTargetFor(platformWire)
         val ruleset = interpreter.clickRuleset
         if (ruleset != null) {
-            val result = ruleset.matchFirst(event.node, platformWire, lastScreenTarget)
+            val result = ruleset.matchFirst(event.node, platformWire, screenTarget)
             if (result != null) {
                 val parsed = ParsedFields.ClickFields(intent = result.intent)
                 return Observation.Click(
@@ -181,7 +199,7 @@ class ObservationClassifier @Inject constructor(
                     effects = DedupeTokens.resolve(result.effects, parsed),
                     transitionOverrides = result.transitionOverrides,
                     expectedOutcomes = result.outcomes,
-                    screenTarget = lastScreenTarget,
+                    screenTarget = screenTarget,
                 )
             }
         }
@@ -204,7 +222,7 @@ class ObservationClassifier @Inject constructor(
                 nodeText = nodeText,
             ),
             target = UNKNOWN_TARGET,
-            screenTarget = lastScreenTarget,
+            screenTarget = screenTarget,
         )
     }
 

@@ -59,8 +59,22 @@ class StateMachine @Inject constructor(
         obs: Observation,
     ): Map<Platform, PlatformRegion> {
         val platform = obs.platform
+        // #438 item 4: an observation whose platform can't be resolved
+        // (Platform.Unknown — e.g. an offer Accept/Decline UiInput/Loopback that
+        // carries ruleId=null) must NOT mint or step a PlatformRegion(Unknown). R0
+        // (FlowRegion) already saw it — it was stepped in step() before this — and
+        // CrossPlatformRegion derives only from real platform regions; only this
+        // per-platform tier is skipped. Before this, the first such observation
+        // planted a permanent Unknown region into state + every snapshot, and it
+        // polluted the CrossPlatform aggregates (anyPlatformOnline / activeSessionCount).
+        //
+        // Decode-compat: an OLD snapshot that persisted an Unknown region before this
+        // fix still decodes fine (Platform is a by-name enum); it is simply DROPPED on
+        // the next step here (the `- Platform.Unknown` below runs on every observation,
+        // whatever its platform), never fed to a stepper — no recovery crash.
+        if (platform == Platform.Unknown) return prev - Platform.Unknown
         val prevRegion = prev[platform] ?: PlatformRegion(platform)
         val nextRegion = platformStepper.step(prevRegion, prevFlow, nextFlow, obs, transitionPolicy)
-        return prev + (platform to nextRegion)
+        return (prev + (platform to nextRegion)) - Platform.Unknown
     }
 }

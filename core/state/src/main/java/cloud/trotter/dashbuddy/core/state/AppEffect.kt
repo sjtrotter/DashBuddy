@@ -104,7 +104,17 @@ sealed class AppEffect {
          */
         val payload: ObservationPayload? = null,
     ) : AppEffect()
-    data class CancelTimeout(val type: TimeoutType) : AppEffect()
+    data class CancelTimeout(
+        val type: TimeoutType,
+        /**
+         * Platform region whose timer of [type] to cancel (#438 item 1) — MUST match
+         * the [ScheduleTimeout.platform] of the timer being cancelled. The engine keys
+         * its timer registry by (type, platform), so two paused platforms hold their own
+         * SESSION_PAUSED_SAFETY timer and one platform's resume-cancel no longer kills the
+         * other's. Null = the non-platform-scoped timer of this type.
+         */
+        val platform: Platform? = null,
+    ) : AppEffect()
 
     data object StartOdometer : AppEffect()
     data object StopOdometer : AppEffect()

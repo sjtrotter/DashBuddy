@@ -1195,6 +1195,66 @@ class StateMachineTest {
     }
 
     // =========================================================================
+    // #438 item 4 — Platform.Unknown region filter
+    // =========================================================================
+
+    @Test
+    fun `UiInput with null ruleId (Platform_Unknown) mints no platform region`() {
+        // An offer Accept/Decline dispatches Observation.UiInput with ruleId=null →
+        // Platform.fromRuleId(null) == Unknown. It must NOT create an Unknown region.
+        val state = AppState()
+        val next = machine.step(
+            state,
+            Observation.UiInput(timestamp = tick(), action = "accept"),
+        ).newState
+
+        assertTrue(
+            "no platform region may be minted for an Unknown-platform observation",
+            next.regions.platforms.isEmpty(),
+        )
+        assertNull(next.regions.platforms[Platform.Unknown])
+    }
+
+    @Test
+    fun `Unknown-platform observation does not step an existing real platform region`() {
+        // Get DoorDash Online, then feed an Unknown-platform UiInput: DoorDash's region
+        // survives untouched and no Unknown region appears.
+        var state = machine.step(
+            AppState(), screenObs(flow = Flow.OfferPresented, parsed = offerFields()),
+        ).newState
+        val ddBefore = state.regions.platforms[Platform.DoorDash]!!
+
+        state = machine.step(
+            state, Observation.UiInput(timestamp = tick(), action = "decline"),
+        ).newState
+
+        assertNull(state.regions.platforms[Platform.Unknown])
+        assertEquals(Mode.Online, state.regions.platforms[Platform.DoorDash]!!.mode)
+        assertEquals(ddBefore.session?.sessionId, state.regions.platforms[Platform.DoorDash]!!.session?.sessionId)
+    }
+
+    @Test
+    fun `a legacy persisted Unknown region is dropped on the next step (recovery decode-compat)`() {
+        // Simulate a snapshot decoded from before this fix: a stale PlatformRegion(Unknown)
+        // in the map. It must decode without crashing (Platform is a by-name enum — done by
+        // construction here) and be DROPPED on the next step, whatever that step's platform.
+        val legacy = AppState().let {
+            it.copy(
+                regions = it.regions.copy(
+                    platforms = mapOf(Platform.Unknown to PlatformRegion(Platform.Unknown)),
+                ),
+            )
+        }
+
+        val next = machine.step(
+            legacy, screenObs(flow = Flow.OfferPresented, parsed = offerFields()),
+        ).newState
+
+        assertNull("legacy Unknown region must be dropped", next.regions.platforms[Platform.Unknown])
+        assertNotNull(next.regions.platforms[Platform.DoorDash])
+    }
+
+    // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
 
