@@ -706,7 +706,7 @@ private fun TaskMetric(
         }
         // 24sp — a co-hero size (vs the 30sp single hero) so the two metrics fit
         // side by side in the bubble's width without clipping.
-        Text(value, style = AppTheme.num.heroNum.copy(fontSize = 24.sp), color = color, maxLines = 1)
+        Text(value, style = AppTheme.num.heroNum.copy(fontSize = 24.sp * AppTheme.glance), color = color, maxLines = 1)
         if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall, color = c.text3, maxLines = 1)
     }
 }
