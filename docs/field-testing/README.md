@@ -83,6 +83,17 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   check afterwards that the delivery still shows in the session's deliveries/earnings. How to tell
   it's broken: a real, physically-delivered drop is absent from the completion list / Money tab
   while its siblings are present.
+
+- **🆕 NEW — CSV data export (#319).** Settings → Data & Privacy → "Export Data (CSV)" → tap
+  "Choose folder & export" and pick a folder (e.g. Downloads). Three files should appear:
+  `deliveries.csv`, `sessions.csv`, `summary.csv`. Open each in a spreadsheet app: deliveries should
+  have one row per completed drop (date/time, platform, store, pay, tip, miles, minutes, net…),
+  sessions one row per dash (start/end, duration, odometer start/end, miles, offer counts), and
+  summary a totals block ending in `estimated_mileage_deduction` (= total miles × 0.70, the IRS 2025
+  business rate). **How to tell it's working:** values are sane (money looks like `8.50` not `0.00`
+  everywhere; store names with commas like "Chili's, Cedar Park" stay in one cell, not split), and
+  NO customer names/addresses or hashes appear anywhere. All-time export (v1 has no date-range
+  picker). Screens with no dashes yet just yield header-only files — that's fine.
   - Confirmed: 0/2
 
 - **🆕 NEW — driving/glance-mode HUD font-scale toggle (#318).** Flip "Driving glance mode" on in
@@ -99,13 +110,25 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   From the home screen tap the **Analytics** tile: it should open a real hub (back arrow) with a
   **Money / Patterns / Decisions / Time** tab bar (the last three show a "coming soon" card). On
   **Money**, pick **Today / Week / Month / Lifetime** and confirm the figures re-anchor: the earnings
-  hero (gross + True-Net / Net-hr chips), the 3-step **gross → −operating cost → net** waterfall, the
+  hero (gross + True-Net / Net-hr chips), the **gross → −cost step(s) → net** waterfall (3- or 4-step
+  per #659 — see the dedicated item below), the
   2×2 tiles ($/hr · $/mi · Miles · Deliveries), top stores, and recent dashes. Cross-check: for the
   **same period** the Money numbers should match the dashboard's tiles (both read the same frozen
   read-model). An **unattributed-pay callout** appears only when that period has bonuses/adjustments.
   How to tell it's broken: the old "Construction Area 🚧" placeholder still shows, figures don't change
   with the period, Money ≠ dashboard for the same window, a crash on an empty period, or a "$0.00"
   unattributed callout on a period with none.
+  - Confirmed: 0/2
+- **🆕 NEW — Money tab 4-step waterfall: Fuel vs Non-fuel, with a clean fallback on mixed periods
+  (#659).** After the v10 refold, open **Analytics → Money** on a period whose deliveries all carry
+  the frozen fuel/non-fuel split (a period entirely dashed after the #668 data-side merge should
+  qualify): the waterfall should show **4 rows** — Gross → −Fuel → −Non-fuel → Net — and Fuel +
+  Non-fuel should visually sum to the old "Operating cost" gap. Then check a period that **mixes**
+  pre-split (fallback) deliveries with frozen ones (e.g. Lifetime, or a week straddling the merge):
+  the waterfall should **silently fall back to the 3-step** Gross → −Operating cost → Net shape — no
+  broken numbers, no partial-coverage row, no crash. How to tell it's broken: a 4-step render on a
+  mixed period (Fuel+Non-fuel not summing to Gross−Net), a 3-step render on an all-frozen period
+  (coverage guard too strict), or Fuel/Non-fuel bars rendering negative/nonsensical.
   - Confirmed: 0/2
 - **🆕 NEW — Analytics Decisions tab: offer funnel + value-of-saying-no + score-vs-outcome (#315 H3).**
   In the Analytics hub tap the **Decisions** tab and pick a period (Today / Week / Month / Lifetime).

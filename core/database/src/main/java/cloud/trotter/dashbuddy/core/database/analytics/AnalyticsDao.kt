@@ -248,6 +248,21 @@ interface AnalyticsDao {
     @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId ORDER BY completedAt ASC")
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecordEntity>>
 
+    // ── Raw row reads for CSV export (#319) ──────────────────────────────
+
+    /**
+     * Every delivery whose own `completedAt` is in `[start, end)`, chronological. Row-level RAW
+     * export (bucketing-free, #319) — this keys on the delivery's own completion time, NOT the
+     * session-anchored period join the read-model uses (#655); an export is the driver's underlying
+     * records dumped as-is. v1 passes `[Long.MIN, Long.MAX)` for all-time.
+     */
+    @Query("SELECT * FROM delivery_records WHERE completedAt >= :start AND completedAt < :end ORDER BY completedAt ASC")
+    suspend fun deliveriesBetween(start: Long, end: Long): List<DeliveryRecordEntity>
+
+    /** Every session whose own `startedAt` is in `[start, end)`, chronological. Raw export (#319). */
+    @Query("SELECT * FROM session_records WHERE startedAt >= :start AND startedAt < :end ORDER BY startedAt ASC")
+    suspend fun sessionsBetween(start: Long, end: Long): List<SessionRecordEntity>
+
     // ── Projector support: restart-correct context hydration (PR2) ───────
 
     @Query("SELECT * FROM session_records WHERE sessionId = :id")

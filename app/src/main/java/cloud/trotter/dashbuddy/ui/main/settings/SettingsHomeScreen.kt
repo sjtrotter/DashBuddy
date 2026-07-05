@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RocketLaunch
@@ -124,6 +125,12 @@ fun SettingsHomeScreen(
                     title = "Evidence Locker",
                     subtitle = "Manage screenshots and logs",
                     onClick = { onNavigate(Screen.EvidenceSettings.route) }
+                )
+                SettingsNavItem(
+                    icon = Icons.Default.FileDownload,
+                    title = "Export Data (CSV)",
+                    subtitle = "Mileage & earnings for a spreadsheet or tax prep",
+                    onClick = { onNavigate(Screen.DataExport.route) }
                 )
             }
 

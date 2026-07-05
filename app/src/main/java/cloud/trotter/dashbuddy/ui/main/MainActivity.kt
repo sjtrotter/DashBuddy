@@ -28,6 +28,7 @@ import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
+import cloud.trotter.dashbuddy.ui.main.settings.DataExportScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.GeneralSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.PlatformSettingsScreen
@@ -117,6 +118,13 @@ class MainActivity : ComponentActivity() {
                         // 3. Evidence Locker
                         composable(Screen.EvidenceSettings.route) {
                             EvidenceSettingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 3a. Export Data (CSV, #319)
+                        composable(Screen.DataExport.route) {
+                            DataExportScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }
