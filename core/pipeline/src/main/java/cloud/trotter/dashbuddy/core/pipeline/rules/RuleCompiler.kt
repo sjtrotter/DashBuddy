@@ -31,12 +31,61 @@ import kotlinx.serialization.json.longOrNull
  * - [MAX_DEPTH] — maximum nesting depth of predicate objects
  * - [MAX_REGEX_LENGTH] — maximum characters in any regex pattern
  * - [MAX_EACH_SIZE] — maximum elements from an `each` expression
+ * - [MAX_RULES_PER_FILE] — maximum rules in one platform file (enforced at load)
+ * - [MAX_BRANCHES_PER_RULE] — maximum branches in one rule
+ * - [MAX_EFFECTS_PER_RULE] — maximum effects a rule may declare
  */
 object RuleCompiler {
 
     const val MAX_DEPTH = 20
     const val MAX_REGEX_LENGTH = 200
     private const val MAX_EACH_SIZE = 50
+
+    /**
+     * Maximum number of rules a single platform file may declare, summed across
+     * its `screens` + `clicks` + `notifications` arrays (#419). Enforced at load
+     * ([JsonRuleInterpreter.loadSingle]); an over-cap file is rejected as a typed
+     * [RuleCompileException] and skipped WHOLE (the platform loads nothing behind
+     * the #432 fail-closed gate — better than admitting a DoS bundle).
+     *
+     * Rationale: before this, only the 1 MB byte cap
+     * ([JsonRuleInterpreter.MAX_FILE_BYTES]) bounded a bundle, and a 1 MB file can
+     * pack tens of thousands of tiny rules. [Ruleset.matchFirst] is a LINEAR scan
+     * over the merged ruleset on EVERY accessibility event; per-pattern time is
+     * bounded (#680/#418) but the AGGREGATE scan is not — an oversized bundle is a
+     * sustained-CPU DoS.
+     *
+     * Measured baseline (2026-07-05 generated assets): doordash = 103 rules
+     * (72 screens + 14 clicks + 17 notifications), uber = 34. This cap is ~5× the
+     * largest, so ordinary rules-repo growth never trips it; a future breach fires
+     * the `DefaultRulesIntegrationTest` caps canary at test time BEFORE the runtime
+     * reject.
+     */
+    const val MAX_RULES_PER_FILE = 500
+
+    /**
+     * Maximum number of branches a single rule may declare (#419). Every branch is
+     * evaluated in order inside [Ruleset.matchFirst], so an unbounded branch list
+     * is the same linear-scan-per-frame DoS as [MAX_RULES_PER_FILE] at rule scope.
+     * Checked from the raw branch array in [compileRule] BEFORE the branches
+     * compile, fail-closed as a [RuleCompileException].
+     *
+     * Measured baseline (2026-07-05): max 13 branches (the doordash multi-branch
+     * `sensitive.known` rule). This cap is ~5× generous.
+     */
+    const val MAX_BRANCHES_PER_RULE = 64
+
+    /**
+     * Maximum number of effects a single rule may declare, summed across every
+     * branch's `effects` + `transitionOverrides` (#419). Effects fire at
+     * recognition time, so an unbounded list is an amplification vector. Checked in
+     * [compileRule], fail-closed as a [RuleCompileException].
+     *
+     * Measured baseline (2026-07-05): max 2 effects in any rule (both platforms).
+     * This cap is intentionally loose (effects are cheap) — an anti-DoS ceiling,
+     * not a style bound.
+     */
+    const val MAX_EFFECTS_PER_RULE = 32
 
     /**
      * Maximum nesting depth of a parse expression (#590). The `each`/`extract`,
@@ -234,6 +283,17 @@ object RuleCompiler {
             )
         }
 
+        // #419: bound the branch count from the RAW array, before compiling — an
+        // over-cap branch list is a linear-scan-per-frame DoS at rule scope, and
+        // rejecting here avoids compiling the pathological list at all.
+        val rawBranchCount = (obj["branches"] as? JsonArray)?.size ?: 1
+        if (rawBranchCount > MAX_BRANCHES_PER_RULE) {
+            throw RuleCompileException(
+                "Rule '$id' declares $rawBranchCount branches, exceeding " +
+                    "MAX_BRANCHES_PER_RULE=$MAX_BRANCHES_PER_RULE",
+            )
+        }
+
         val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
             obj["branches"]!!.jsonArray.map { branchElement ->
                 val branchObj = branchElement.jsonObject
@@ -257,6 +317,19 @@ object RuleCompiler {
         } else {
             listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint,
                 ruleOutcomes = ruleState.outcomes, ruleId = id))
+        }
+
+        // #419: bound the total effect count across all branches (own effects +
+        // transitionOverrides). Effects fire at recognition time; an unbounded
+        // list is an amplification vector. Fail closed as a RuleCompileException.
+        val effectCount = branches.sumOf { branch ->
+            branch.effects.size + branch.transitionOverrides.values.sumOf { it.size }
+        }
+        if (effectCount > MAX_EFFECTS_PER_RULE) {
+            throw RuleCompileException(
+                "Rule '$id' declares $effectCount effects, exceeding " +
+                    "MAX_EFFECTS_PER_RULE=$MAX_EFFECTS_PER_RULE",
+            )
         }
 
         return CompiledRule(id, priority, overrideable, ruleBindings, branches, redact, notifRedact)

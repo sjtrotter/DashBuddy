@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -67,6 +68,52 @@ class DefaultRulesIntegrationTest {
     @Test
     fun `notification ruleset has rules`() {
         assertTrue("Expected notification rules, got 0", notificationRuleset.ruleCount > 0)
+    }
+
+    // =========================================================================
+    // #419 caps canary — every production platform file sits comfortably under
+    // the load-time size caps, so ordinary rules-repo growth trips this compile-
+    // time test BEFORE it would hit the runtime fail-closed reject.
+    // =========================================================================
+
+    @Test
+    fun `production rule files sit under the #419 caps`() {
+        val dir = File(TestRulesetFactory.rulesDir)
+        val files = dir.listFiles { f -> f.extension == "json" }?.toList().orEmpty()
+        assertTrue("no production rule files found", files.isNotEmpty())
+
+        for (file in files) {
+            val root = Json.parseToJsonElement(file.readText()).jsonObject
+            val allRules = listOf("screens", "clicks", "notifications")
+                .flatMap { root[it]?.jsonArray.orEmpty() }
+                .map { it.jsonObject }
+
+            assertTrue(
+                "${file.name}: ${allRules.size} rules exceeds MAX_RULES_PER_FILE=${RuleCompiler.MAX_RULES_PER_FILE}",
+                allRules.size <= RuleCompiler.MAX_RULES_PER_FILE,
+            )
+
+            for (rule in allRules) {
+                val id = rule["id"]?.jsonPrimitive?.content ?: "?"
+                val branches = rule["branches"]?.jsonArray?.size ?: 1
+                assertTrue(
+                    "${file.name}/$id: $branches branches exceeds MAX_BRANCHES_PER_RULE=${RuleCompiler.MAX_BRANCHES_PER_RULE}",
+                    branches <= RuleCompiler.MAX_BRANCHES_PER_RULE,
+                )
+
+                val branchList = rule["branches"]?.jsonArray?.map { it.jsonObject } ?: listOf(rule)
+                val effectCount = branchList.sumOf { b ->
+                    val own = b["effects"]?.jsonArray?.size ?: 0
+                    val overrides = b["transitionOverrides"]?.jsonObject?.values
+                        ?.sumOf { it.jsonArray.size } ?: 0
+                    own + overrides
+                }
+                assertTrue(
+                    "${file.name}/$id: $effectCount effects exceeds MAX_EFFECTS_PER_RULE=${RuleCompiler.MAX_EFFECTS_PER_RULE}",
+                    effectCount <= RuleCompiler.MAX_EFFECTS_PER_RULE,
+                )
+            }
+        }
     }
 
     // =========================================================================
