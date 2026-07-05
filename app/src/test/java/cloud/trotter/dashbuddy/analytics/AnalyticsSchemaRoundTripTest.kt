@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -50,6 +51,15 @@ class AnalyticsSchemaRoundTripTest {
     @After
     fun tearDown() = db.close()
 
+    /** Minimal in-window session so a delivery's session-anchored join (#655) finds it. */
+    private fun session(id: String, startedAt: Long) = SessionRecordEntity(
+        sessionId = id, platform = "doordash", startedAt = startedAt, endedAt = startedAt + 1_000,
+        lastEventAt = startedAt + 1_000, endSource = null, startOdometer = null, lastOdometer = null,
+        reportedEarnings = null, reportedDurationMillis = null,
+        offersReceived = 0, offersAccepted = 0, offersDeclined = 0, offersTimeout = 0,
+        deliveries = 0, jobsCompleted = 0,
+    )
+
     private fun delivery(
         seq: Long,
         jobId: String,
@@ -57,9 +67,10 @@ class AnalyticsSchemaRoundTripTest {
         pay: Double?,
         completedAt: Long,
         platform: String = "doordash",
+        sessionId: String = "S1",
     ) = DeliveryRecordEntity(
         eventSequenceId = seq,
-        sessionId = "S1",
+        sessionId = sessionId,
         platform = platform,
         jobId = jobId,
         taskId = "T$seq",
@@ -84,19 +95,23 @@ class AnalyticsSchemaRoundTripTest {
 
     @Test
     fun `deliveryTotals sums pay, counts rows, and counts distinct jobs`() = runBlocking {
-        analyticsDao.upsertDelivery(delivery(1, "J1", "Wendys", 10.0, 1_000))
-        analyticsDao.upsertDelivery(delivery(2, "J1", "Wendys", 5.0, 2_000))
-        analyticsDao.upsertDelivery(delivery(3, "J2", "Chipotle", 8.0, 3_000))
+        // Two sessions; deliveries join to their session's period (#655), not their own completedAt.
+        analyticsDao.upsertSession(session("S1", startedAt = 1_000))
+        analyticsDao.upsertSession(session("S2", startedAt = 3_000))
+        analyticsDao.upsertDelivery(delivery(1, "J1", "Wendys", 10.0, 1_000, sessionId = "S1"))
+        analyticsDao.upsertDelivery(delivery(2, "J1", "Wendys", 5.0, 2_000, sessionId = "S1"))
+        analyticsDao.upsertDelivery(delivery(3, "J2", "Chipotle", 8.0, 3_000, sessionId = "S2"))
 
         val all = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
         assertEquals(23.0, all.pay, 0.0001)
         assertEquals(3, all.deliveries)
         assertEquals(2, all.jobs) // J1, J2 distinct
 
-        // Half-open [start, end): only the 2_000 row lands.
-        val window = analyticsDao.deliveryTotals(1_500, 2_500).first()
-        assertEquals(5.0, window.pay, 0.0001)
-        assertEquals(1, window.deliveries)
+        // Half-open [start, end) on the SESSION's startedAt: only S1 (started 1_000) is in the
+        // window, so both of its deliveries land (incl. the one completed at 2_000), and S2 does not.
+        val window = analyticsDao.deliveryTotals(500, 1_500).first()
+        assertEquals(15.0, window.pay, 0.0001)
+        assertEquals(2, window.deliveries)
         assertEquals(1, window.jobs)
     }
 
@@ -110,6 +125,7 @@ class AnalyticsSchemaRoundTripTest {
 
     @Test
     fun `deliveryTotalsByStore groups by store, ordered by pay desc`() = runBlocking {
+        analyticsDao.upsertSession(session("S1", startedAt = 1_000))
         analyticsDao.upsertDelivery(delivery(1, "J1", "Wendys", 10.0, 1_000))
         analyticsDao.upsertDelivery(delivery(2, "J1", "Wendys", 5.0, 2_000))
         analyticsDao.upsertDelivery(delivery(3, "J2", "Chipotle", 8.0, 3_000))
@@ -126,6 +142,7 @@ class AnalyticsSchemaRoundTripTest {
 
     @Test
     fun `upsertDelivery replaces on the sequenceId primary key`() = runBlocking {
+        analyticsDao.upsertSession(session("S1", startedAt = 1_000))
         analyticsDao.upsertDelivery(delivery(1, "J1", "Wendys", 10.0, 1_000))
         // Same sequenceId, different pay — REPLACE, not a second row.
         analyticsDao.upsertDelivery(delivery(1, "J1", "Wendys", 99.0, 1_000))

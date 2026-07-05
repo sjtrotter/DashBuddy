@@ -46,6 +46,12 @@ class AnalyticsRepository @Inject constructor(
      * Frozen-net economics for [period]. `platform == null` ⇒ cross-platform; a
      * specific [platform] filters to that platform's records. Re-emits on new
      * records (Room invalidation) and at midnight/week rollover (boundary flow).
+     *
+     * **Session-anchored (#655):** a period contains the sessions that *started* in it, and every
+     * figure — delivered pay, frozen net, deliveries, miles, gross, unattributed — derives from that
+     * one session set. A midnight-spanning dash lands wholly on its start day, so a dash begun at
+     * 11:50pm counts entirely on that evening (its post-midnight deliveries with it), never split
+     * across two days. The single bucketing owner is the DAO join (Principle 5).
      */
     fun periodEconomics(period: AnalyticsPeriod, platform: Platform? = null): Flow<PeriodEconomics> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
@@ -81,7 +87,7 @@ class AnalyticsRepository @Inject constructor(
             }
         }
 
-    /** Per-store economics for [period], busiest store first — frozen net + realized gross. */
+    /** Per-store economics for [period], highest-earning store first — frozen net + realized gross. */
     fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
             analyticsDao.deliveryTotalsByStore(start, end).map { rows ->

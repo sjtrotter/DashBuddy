@@ -51,7 +51,7 @@ class AnalyticsRepositoryTest {
 
     private fun delivery(
         seq: Long,
-        sessionId: String,
+        sessionId: String?,
         jobId: String,
         storeName: String?,
         pay: Double?,
@@ -161,7 +161,8 @@ class AnalyticsRepositoryTest {
     }
 
     @Test
-    fun `perStoreEconomics groups by store with frozen net, busiest first`() = runBlocking {
+    fun `perStoreEconomics groups by store with frozen net, highest-earning first`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = null, durationMillis = 4 * hour, startOdo = 0.0, lastOdo = 0.0, deliveries = 3, jobsCompleted = 2))
         dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 10.0, net = 8.0, completedAt = base + hour))
         dao.upsertDelivery(delivery(2, "S1", "J1", "Wendys", pay = 6.0, net = 5.0, completedAt = base + 2 * hour))
         dao.upsertDelivery(delivery(3, "S1", "J2", "Chipotle", pay = 9.0, net = 7.0, completedAt = base + 3 * hour))
@@ -228,5 +229,75 @@ class AnalyticsRepositoryTest {
         val uber = repo.periodEconomics(AnalyticsPeriod.LIFETIME, cloud.trotter.dashbuddy.domain.state.Platform.Uber).first()
         assertEquals(15.0, uber.netProfit, 1e-9)
         assertEquals(1, uber.totals.deliveries)
+    }
+
+    /**
+     * THE seam (#655): a dash started 23:50 yesterday whose delivery completed 00:10 today lands
+     * WHOLLY on its start day. Under TODAY the session set is empty, so delivered pay, frozen net,
+     * miles, gross and deliveries are ALL zero; under YESTERDAY they ALL reflect the one session —
+     * proving every figure derives from the same session set (no completedAt-split).
+     * Driven at the DAO with explicit bounds so the day boundary is exact (the repository period
+     * flow reads the wall clock and can't be pinned to a synthetic midnight).
+     */
+    @Test
+    fun `midnight-spanning dash counts wholly on its start day for every figure`() = runBlocking {
+        val todayStart = base                 // treat `base` as today 00:00
+        val yesterdayStart = todayStart - day
+        val sessionStart = todayStart - 600_000   // 23:50 yesterday
+        val deliveryDone = todayStart + 600_000   // 00:10 today
+
+        dao.upsertSession(session("Y", sessionStart, reportedEarnings = 30.0, durationMillis = hour, startOdo = 100.0, lastOdo = 110.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "Y", "J1", "Wendys", pay = 25.0, net = 20.0, completedAt = deliveryDone))
+
+        // TODAY = [todayStart, todayStart + day): session Y started yesterday ⇒ nothing lands.
+        val dToday = dao.deliveryTotals(todayStart, todayStart + day).first()
+        val sToday = dao.sessionTotals(todayStart, todayStart + day).first()
+        val gToday = dao.grossAndUnattributed(todayStart, todayStart + day).first()
+        assertEquals(0, dToday.deliveries)
+        assertEquals(0.0, dToday.pay, 1e-9)
+        assertEquals(0.0, dToday.net, 1e-9)
+        assertEquals(0.0, sToday.miles, 1e-9)
+        assertEquals(0L, sToday.onlineMillis)
+        assertEquals(0.0, gToday.gross, 1e-9)
+
+        // YESTERDAY = [yesterdayStart, todayStart): the whole dash — deliveries, net, miles, gross.
+        val dYest = dao.deliveryTotals(yesterdayStart, todayStart).first()
+        val sYest = dao.sessionTotals(yesterdayStart, todayStart).first()
+        val gYest = dao.grossAndUnattributed(yesterdayStart, todayStart).first()
+        assertEquals(1, dYest.deliveries)
+        assertEquals(25.0, dYest.pay, 1e-9)     // delivered pay follows the session, not completedAt
+        assertEquals(20.0, dYest.net, 1e-9)
+        assertEquals(10.0, sYest.miles, 1e-9)   // 110 − 100
+        assertEquals(hour, sYest.onlineMillis)
+        assertEquals(30.0, gYest.gross, 1e-9)   // reported-authoritative
+        assertEquals(5.0, gYest.unattributed, 1e-9) // 30 reported − 25 delivered
+    }
+
+    /**
+     * Degraded null-session edge (#655): a delivery folded under the `_unknown` context has
+     * `sessionId IS NULL` and joins to no session, so it still counts in the period containing its
+     * own `completedAt` — never vanishing from every window but LIFETIME.
+     */
+    @Test
+    fun `null-session delivery counts by its completedAt, not lost to the session join`() = runBlocking {
+        val todayStart = base
+        val completedToday = todayStart + 600_000
+
+        dao.upsertDelivery(delivery(1, sessionId = null, jobId = "J1", storeName = "Wendys", pay = 12.0, net = 9.0, completedAt = completedToday))
+
+        // TODAY window contains its completedAt ⇒ it counts.
+        val today = dao.deliveryTotals(todayStart, todayStart + day).first()
+        assertEquals(1, today.deliveries)
+        assertEquals(12.0, today.pay, 1e-9)
+        assertEquals(9.0, today.net, 1e-9)
+
+        // Yesterday's window does not contain its completedAt ⇒ it does not.
+        val yesterday = dao.deliveryTotals(todayStart - day, todayStart).first()
+        assertEquals(0, yesterday.deliveries)
+
+        // LIFETIME still catches it (semantically unchanged).
+        val life = dao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals(1, life.deliveries)
+        assertEquals(12.0, life.pay, 1e-9)
     }
 }

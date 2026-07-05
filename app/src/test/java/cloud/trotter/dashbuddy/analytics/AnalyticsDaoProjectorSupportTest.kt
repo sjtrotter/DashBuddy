@@ -103,6 +103,9 @@ class AnalyticsDaoProjectorSupportTest {
 
     @Test
     fun `deliveryTotalsByPlatform groups pay, count, and distinct jobs per platform`() = runBlocking {
+        // Session-anchored (#655): deliveries join to their session's period, so their sessions must exist.
+        dao.upsertSession(session("A", platform = "doordash", startedAt = 1_000))
+        dao.upsertSession(session("B", platform = "uber", startedAt = 1_000))
         dao.upsertDelivery(delivery(1, "A", "J1", platform = "doordash"))
         dao.upsertDelivery(delivery(2, "A", "J1", platform = "doordash")) // same job
         dao.upsertDelivery(delivery(3, "B", "J9", platform = "uber"))
