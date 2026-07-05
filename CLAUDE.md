@@ -171,9 +171,13 @@ token, so two customers redact distinctly (per-customer replay fidelity) without
 PII; fail-closed to plain `[redacted]`. Coverage spans the recognized offer/pickup/dropoff/chat/
 nav/camera **screen** surfaces AND **notification** envelopes (#620 — chat title/body,
 order-ready customer name via a per-field notif `redact`; store names kept). A rules-independent
-**recognized-frame** backstop (`CustomerTextMarkers`, #624 — distinct from `SensitiveTextMarkers`,
-which drops the dasher's banking screens) scrubs a node that ships a customer-PII marker
-("Deliver to " etc.) a rule forgot to redact; the compiler rejects branch-level `redact` and skips
+**recognized-frame** backstop (`CustomerTextMarkers`, #624/#632 — distinct from `SensitiveTextMarkers`,
+which drops the dasher's banking screens) scrubs a node (screen tree) or whole field (notification —
+#632) that ships a customer-PII marker a rule forgot to redact; the marker SSOT is cross-platform
+DATA ("Deliver to "/"Message from " for DoorDash, "Leave the order at "/"Meet at door for " for Uber
+pushes, #585 — not DoorDash-only), with a documented residual for shapes a prefix scan can't own (a
+name-at-start body, and store-ambiguous prefixes like Uber's "Going to " that precede stores AND
+addresses) where the rule-declared `redact` is the primary control; the compiler rejects branch-level `redact` and skips
 a file with duplicate rule ids (#624), and the multi-file loader skips a later file that re-declares
 an id an earlier file already claimed (#633 — cross-file `byId` redact-lookup shadow, fail-closed;
 a no-op on today's prefix-namespaced assets, hardening the #192/#639 multi-file + CDN path).

@@ -165,6 +165,100 @@ class NotificationRedactionTest {
         assertTrue(json.contains("Tap to view"))
     }
 
+    // --- #632 rules-independent notification customer-PII backstop ------------
+
+    /** notifRedactFor never matches -> simulates a recognized rule that FORGOT redact. */
+    private val noRedactSource = object : ScreenRedactionSource {
+        override fun redactFor(ruleId: String): CompiledRedact? = null
+        override fun notifRedactFor(ruleId: String): CompiledNotifRedact? = null
+    }
+
+    @Test
+    fun `#632 backstop scrubs a recognized notification whose rule forgot to redact`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        // Uber trip_at_dropoff push with the customer ADDRESS after the lead-in, but the
+        // rule shipped NO redact block (noRedactSource) — the backstop is the only net.
+        val leak = raw(title = "Leave the order at 123 Main St, Apt 4")
+        writer(noRedactSource)
+            .captureNotification(obs("uber.notification.trip_at_dropoff", "trip_at_dropoff"), leak)
+
+        val json = capturedEnvelope()
+        assertFalse("leaked address gone", json.contains("123 Main St"))
+        assertTrue("field scrubbed whole", json.contains("[redacted]"))
+        assertEquals(1L, stats.notifRedactBackstopScrubCount)
+    }
+
+    @Test
+    fun `#632 backstop scrubs a forgotten DoorDash chat name`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        val leak = raw(title = "Message from Jennifer", text = "The gate code is 4412")
+        writer(noRedactSource)
+            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), leak)
+
+        val json = capturedEnvelope()
+        assertFalse("customer name gone", json.contains("Jennifer"))
+        assertEquals(1L, stats.notifRedactBackstopScrubCount)
+    }
+
+    @Test
+    fun `#632 backstop preserves the ORIGINAL contentHash on a scrub`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        val leak = raw(title = "Leave the order at 123 Main St")
+        val originalHash = leak.contentHash
+        writer(noRedactSource)
+            .captureNotification(obs("uber.notification.trip_at_dropoff", "trip_at_dropoff"), leak)
+
+        val hashCap = argumentCaptor<Int?>()
+        org.mockito.kotlin.verify(captureBus).offer(any(), any(), anyOrNull(), any(), any(), hashCap.capture())
+        assertEquals("dedup identity stays the ORIGINAL raw hash", originalHash, hashCap.lastValue)
+    }
+
+    @Test
+    fun `#632 backstop leaves a properly rule-redacted notification untouched (no double-scrub)`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        val message = raw(
+            title = "Message from Jennifer",
+            text = "secret body",
+            channelId = "dasher-notification-channel-inapp-chat",
+        )
+        writer(sourceFor("doordash.notification.customer_message", customerMessageRedact))
+            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), message)
+
+        // The rule redacted; the backstop found nothing to scrub.
+        assertEquals(0L, stats.notifRedactBackstopScrubCount)
+        assertTrue(
+            "the rule's own keepPrefix mask stays, not double-scrubbed to whole-field [redacted]",
+            Regex("""Message from \[redacted:[0-9a-f]{4}\]""").containsMatchIn(capturedEnvelope()),
+        )
+    }
+
+    @Test
+    fun `#632 backstop does not scrub store-only text`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        val storeOnly = raw(title = "Order confirmed", text = "Your delivery from H-E-B")
+        writer(noRedactSource)
+            .captureNotification(obs("doordash.notification.some_promo", "some_promo"), storeOnly)
+
+        assertTrue("store kept", capturedEnvelope().contains("H-E-B"))
+        assertEquals(0L, stats.notifRedactBackstopScrubCount)
+    }
+
+    @Test
+    fun `#632 backstop cannot catch an unmarked address (residual - rule redact owns it)`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        // An address with no scannable marker. (The real trip_en_route_dropoff title is
+        // "Going to <addr>" — "Going to " is deliberately NOT a marker because it also
+        // prefixes STORES on trip_en_route_pickup; either way the prefix scan cannot fire
+        // and the rule's own `redact` is the primary control. Synthetic bare-address shape.)
+        val residual = raw(title = "123 Main Street, Austin")
+        writer(noRedactSource)
+            .captureNotification(obs("uber.notification.trip_en_route_dropoff", "trip_en_route_dropoff"), residual)
+
+        // Honest residual: the prefix backstop does NOT fire here; the rule's
+        // `redact { title {} }` is the primary control for this shape.
+        assertEquals(0L, stats.notifRedactBackstopScrubCount)
+    }
+
     @Test
     fun `UNKNOWN notification never consults the notif redaction source`() {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
