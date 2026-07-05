@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,11 +35,15 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
  * shows a "coming soon" card. A **review** surface: UDF state in, `setTab`/`setPeriod` intents out
  * (Principle 1); reactive-fresh via the read-model Flows, no `rememberNow()` tick (a historical
  * period's figures are fixed).
+ *
+ * The header's CSV action routes to the existing Data & Privacy export (#319) — the hub-header entry
+ * point deferred from #671 (#315 H6); no new export logic, navigation only.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(
     onBack: () -> Unit,
+    onExportCsv: () -> Unit,
     viewModel: AnalyticsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -50,6 +55,11 @@ fun AnalyticsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onExportCsv) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "Export data (CSV)")
                     }
                 },
             )
@@ -83,6 +93,7 @@ fun AnalyticsScreen(
                         economics = uiState.economics,
                         topStores = uiState.topStores,
                         recentSessions = uiState.recentSessions,
+                        dailyEarnings = uiState.dailyEarnings,
                     )
                 }
 

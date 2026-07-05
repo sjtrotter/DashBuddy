@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
@@ -38,6 +39,11 @@ data class AnalyticsUiState(
     val economics: PeriodEconomics = PeriodEconomics.EMPTY,
     /** Top-earning stores for [selectedPeriod] (already capped to the display count). */
     val topStores: List<StoreEconomics> = emptyList(),
+    /**
+     * Per-day earnings for [selectedPeriod] — the Money-tab earnings-by-day chart (#315 H6). Empty for
+     * Today/Lifetime (one bar / unbounded), so the Money tab hides the chart card on an empty list.
+     */
+    val dailyEarnings: List<DailyEarnings> = emptyList(),
     /** Most recent dash sessions, newest first (not tappable until #650). */
     val recentSessions: List<SessionRecord> = emptyList(),
     /** Offer-decision economics for [selectedPeriod] — the Decisions tab (#315 H3, frozen est.). */
