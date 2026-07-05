@@ -68,6 +68,43 @@ class PeriodBoundsTest {
     }
 
     @Test
+    fun `THIS_MONTH starts on the 1st 00 00 local and ends next month`() {
+        val b = PeriodBounds.of(AnalyticsPeriod.THIS_MONTH, nowMillis, zone)
+        val startZdt = local(b.start)
+        assertEquals(1, startZdt.dayOfMonth)
+        assertEquals(LocalTime.MIDNIGHT, startZdt.toLocalTime())
+        // 2026-07-01 → the month anchor is 2026-07-01, next boundary 2026-08-01.
+        assertEquals(LocalDate.of(2026, 7, 1), startZdt.toLocalDate())
+        assertEquals(LocalDate.of(2026, 8, 1), local(b.end).toLocalDate())
+        assertEquals(LocalTime.MIDNIGHT, local(b.end).toLocalTime())
+        assertTrue(nowMillis >= b.start && nowMillis < b.end)
+    }
+
+    @Test
+    fun `month boundary splits last day 23-59 from the 1st 00-01`() {
+        val monthStart = PeriodBounds.of(AnalyticsPeriod.THIS_MONTH, nowMillis, zone).start
+        val firstOfMonth = local(monthStart).toLocalDate()
+
+        val lastDayBefore = firstOfMonth.minusDays(1).atTime(23, 59).atZone(zone).toInstant().toEpochMilli()
+        val firstAfter = firstOfMonth.atTime(0, 1).atZone(zone).toInstant().toEpochMilli()
+
+        assertTrue("June 30 23:59 is in the previous month", lastDayBefore < monthStart)
+        assertTrue("July 1 00:01 is in this month", firstAfter >= monthStart)
+    }
+
+    @Test
+    fun `THIS_MONTH re-anchors to the next month at rollover`() {
+        val month = PeriodBounds.of(AnalyticsPeriod.THIS_MONTH, nowMillis, zone)
+        // At the instant the window ends (next month's 1st), the next call yields that month —
+        // no gap, no overlap: [prev.end, prev.end + 1 month).
+        val nextMonth = PeriodBounds.of(AnalyticsPeriod.THIS_MONTH, month.end, zone)
+        assertEquals(month.end, nextMonth.start)
+        assertTrue(nextMonth.end > nextMonth.start)
+        assertEquals(LocalDate.of(2026, 8, 1), local(nextMonth.start).toLocalDate())
+        assertEquals(LocalDate.of(2026, 9, 1), local(nextMonth.end).toLocalDate())
+    }
+
+    @Test
     fun `TODAY re-anchors to consecutive windows at rollover`() {
         val today = PeriodBounds.of(AnalyticsPeriod.TODAY, nowMillis, zone)
         // At the instant the window ends (next midnight), the next call yields the next day —
