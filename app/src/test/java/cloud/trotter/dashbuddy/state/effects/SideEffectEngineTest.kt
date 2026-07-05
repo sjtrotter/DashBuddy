@@ -654,6 +654,78 @@ class SideEffectEngineTest {
     }
 
     @Test
+    fun `two platforms' timers of the same type coexist and each fires`() = runTest {
+        // #438 item 1: the registry is keyed by (type, platform), so two paused
+        // platforms each hold their own SESSION_PAUSED_SAFETY timer — before this,
+        // the second schedule cancelled the first (shared type key).
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val fired = mutableListOf<TimeoutEvent>()
+        backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
+            engine.events.collect { if (it is TimeoutEvent) fired.add(it) }
+        }
+        runCurrent()
+
+        engine.process(
+            AppEffect.ScheduleTimeout(
+                durationMs = 10, type = TimeoutType.SESSION_PAUSED_SAFETY,
+                platform = Platform.DoorDash,
+            ),
+        )
+        engine.process(
+            AppEffect.ScheduleTimeout(
+                durationMs = 10, type = TimeoutType.SESSION_PAUSED_SAFETY,
+                platform = Platform.Uber,
+            ),
+        )
+        runCurrent()
+        advanceTimeBy(11)
+        runCurrent()
+
+        assertEquals(2, fired.size)
+        assertEquals(
+            setOf(Platform.DoorDash, Platform.Uber),
+            fired.map { it.platform }.toSet(),
+        )
+    }
+
+    @Test
+    fun `cancelling one platform's timer leaves the other platform's timer armed`() = runTest {
+        // #438 item 1: platform A's resume CancelTimeout must not kill platform B's
+        // pause-safety timer of the same type.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val fired = mutableListOf<TimeoutEvent>()
+        backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
+            engine.events.collect { if (it is TimeoutEvent) fired.add(it) }
+        }
+        runCurrent()
+
+        engine.process(
+            AppEffect.ScheduleTimeout(
+                durationMs = 100, type = TimeoutType.SESSION_PAUSED_SAFETY,
+                platform = Platform.DoorDash,
+            ),
+        )
+        engine.process(
+            AppEffect.ScheduleTimeout(
+                durationMs = 100, type = TimeoutType.SESSION_PAUSED_SAFETY,
+                platform = Platform.Uber,
+            ),
+        )
+        runCurrent()
+        // Cancel only DoorDash's timer.
+        engine.process(
+            AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY, Platform.DoorDash),
+        )
+        runCurrent()
+        advanceTimeBy(200)
+        runCurrent()
+
+        // Only Uber's timer survived and fired.
+        assertEquals(1, fired.size)
+        assertEquals(Platform.Uber, fired.single().platform)
+    }
+
+    @Test
     fun `timers still arm during recovery (loopback, not external)`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         val fired = mutableListOf<TimeoutEvent>()

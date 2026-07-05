@@ -69,8 +69,16 @@ class SideEffectEngine @Inject constructor(
     )
     override val events: SharedFlow<StateEvent> = _events.asSharedFlow()
 
-    // Internal tracker for Timers (Replaces TimeoutHandler)
-    private val activeTimers = ConcurrentHashMap<Any, Job>()
+    /**
+     * Composite timer key (#438 item 1): the registry is keyed by (type, platform), not
+     * type alone. Two paused platforms each hold their own SESSION_PAUSED_SAFETY timer,
+     * and platform A's resume-cancel no longer untracks/kills platform B's timer of the
+     * same type. Null platform = a non-platform-scoped timer of this type.
+     */
+    private data class TimerKey(val type: TimeoutType, val platform: Platform?)
+
+    // Internal tracker for Timers (Replaces TimeoutHandler), keyed by (type, platform).
+    private val activeTimers = ConcurrentHashMap<TimerKey, Job>()
 
     // Action throttle tracker: effectKey → last fired timestamp
     private val actionLastFiredAt = ConcurrentHashMap<String, Long>()
@@ -392,7 +400,8 @@ class SideEffectEngine @Inject constructor(
 
             is AppEffect.CancelTimeout -> {
                 // Untracking happens via the job's self-removing completion handler.
-                activeTimers[effect.type]?.cancel()
+                // Keyed by (type, platform) so a resume cancels only THIS platform's timer.
+                activeTimers[TimerKey(effect.type, effect.platform)]?.cancel()
             }
         }
 
@@ -449,7 +458,10 @@ class SideEffectEngine @Inject constructor(
                 e.args,
                 Platform.fromRuleId(e.ruleId).takeIf { it != Platform.Unknown },
             )
-            EffectVerb.CANCEL_TIMEOUT -> cancelTimeoutFromArgs(e.args)
+            EffectVerb.CANCEL_TIMEOUT -> cancelTimeoutFromArgs(
+                e.args,
+                Platform.fromRuleId(e.ruleId).takeIf { it != Platform.Unknown },
+            )
         }
         return true
     }
@@ -551,8 +563,12 @@ class SideEffectEngine @Inject constructor(
      * THE timer pattern (#406): LAZY start so the map entry exists before the
      * body can run; the completion handler removes only ITSELF (two-arg
      * remove), so an expiring timer can never untrack a replacement of the
-     * same type (#341). Detached onto the engine scope — never blocks the
-     * queue (#351). Previously hand-rolled twice in this file.
+     * same (type, platform) key (#341). Detached onto the engine scope — never
+     * blocks the queue (#351). Previously hand-rolled twice in this file.
+     *
+     * Keyed by (type, platform) (#438 item 1): a schedule replaces only the
+     * same platform's timer of that type, so two platforms' timers of the same
+     * type coexist.
      */
     private fun scheduleTimer(
         type: TimeoutType,
@@ -560,7 +576,8 @@ class SideEffectEngine @Inject constructor(
         platform: Platform?,
         payload: ObservationPayload?,
     ) {
-        activeTimers[type]?.cancel()
+        val key = TimerKey(type, platform)
+        activeTimers[key]?.cancel()
         val job = engineScope.launch(start = CoroutineStart.LAZY) {
             delay(durationMs)
             Timber.w("Timer Expired: %s", type)
@@ -573,12 +590,12 @@ class SideEffectEngine @Inject constructor(
                 )
             )
         }
-        job.invokeOnCompletion { activeTimers.remove(type, job) }
-        activeTimers[type] = job
+        job.invokeOnCompletion { activeTimers.remove(key, job) }
+        activeTimers[key] = job
         job.start()
     }
 
-    private fun cancelTimeoutFromArgs(args: Map<String, String>) {
+    private fun cancelTimeoutFromArgs(args: Map<String, String>, platform: Platform?) {
         val typeWire = args["type"] ?: return
         val type = try {
             TimeoutType.valueOf(typeWire)
@@ -587,7 +604,8 @@ class SideEffectEngine @Inject constructor(
             return
         }
         // Untracking happens via the job's self-removing completion handler.
-        activeTimers[type]?.cancel()
+        // Keyed by (type, platform) to mirror the rule-driven schedule (#438 item 1).
+        activeTimers[TimerKey(type, platform)]?.cancel()
     }
 
     private fun isExternalEffect(effect: AppEffect): Boolean = when (effect) {

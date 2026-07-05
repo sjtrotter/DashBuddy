@@ -628,7 +628,7 @@ class EffectMap @Inject constructor() {
                         if (resumeOverride != null) {
                             addAll(resumeOverride)
                         } else {
-                            add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY))
+                            add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY, next.platform))
                         }
                     }
                 }
@@ -644,7 +644,7 @@ class EffectMap @Inject constructor() {
                         if (resumeOverride != null) {
                             addAll(resumeOverride)
                         } else {
-                            add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY))
+                            add(AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY, next.platform))
                         }
                     }
                 }
@@ -710,7 +710,7 @@ class EffectMap @Inject constructor() {
                     ),
                 )
             prevPend != null && nextPend == null ->
-                listOf(AppEffect.CancelTimeout(TimeoutType.GRACE_COMMIT))
+                listOf(AppEffect.CancelTimeout(TimeoutType.GRACE_COMMIT, next.platform))
             else -> emptyList()
         }
     }
@@ -719,8 +719,9 @@ class EffectMap @Inject constructor() {
      * Schedule/cancel the wake-up timer for a graced screen-implied resume out of
      * Paused (#605) — the [PlatformRegion.pendingModeResume] mirror of
      * [diffGraceTimer]. A SEPARATE [TimeoutType.MODE_RESUME_COMMIT] (not a shared
-     * GRACE_COMMIT) because SideEffectEngine.activeTimers is keyed by TimeoutType
-     * alone: a resume-grace GRACE_COMMIT would cross-cancel a live destructive grace
+     * GRACE_COMMIT) because both graces belong to the SAME platform region, so even the
+     * (type, platform) timer key (#438 item 1) would not separate them under a shared
+     * GRACE_COMMIT — a resume-grace timer would cross-cancel a live destructive grace
      * timer. Arm (or a re-arm with a new deadline) schedules; a cancel (paused frame
      * within the window, or the resume committing) cancels. A commit lands in the
      * cancel branch too — harmless, the timer has already fired or no-ops.
@@ -742,7 +743,7 @@ class EffectMap @Inject constructor() {
                     ),
                 )
             prevPend != null && nextPend == null ->
-                listOf(AppEffect.CancelTimeout(TimeoutType.MODE_RESUME_COMMIT))
+                listOf(AppEffect.CancelTimeout(TimeoutType.MODE_RESUME_COMMIT, next.platform))
             else -> emptyList()
         }
     }
