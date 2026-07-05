@@ -143,6 +143,21 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   figures don't re-anchor on a period switch, a "$0.00"/blank where an em-dash should be on an empty
   period, or a crash opening the tab with no offers yet.
   - Confirmed: 0/2
+- **🆕 NEW — Analytics Time tab: time split, deadhead, on-time gauge, mileage & tax (#315 H4).**
+  In the Analytics hub tap the **Time** tab and pick a period (Today / Week / Month / Lifetime). Four
+  cards should appear: a **time split** (hero online duration + "online across N dashes", an
+  On-delivery / Unattributed stack bar with durations, and Dashes / Avg-dash tiles), a **deadhead**
+  card (a % headline + an On-delivery / Deadhead miles bar — deadhead = miles not attached to any
+  delivery), an **on-time** gauge ("NN% on time" over the deliveries that carried a deadline, "N of M
+  … with a deadline", plus a "typically Xm early/late" margin line), and a **mileage & tax** card
+  (period miles + the est. IRS 2025 standard-mileage deduction at $0.70/mi). How to tell it's working:
+  the online split ≈ the time you spent online vs on drops for the dash, deadhead miles look sane
+  (small on a busy dash, larger if you drove a lot between/after drops), the on-time % and margin match
+  how you did against the app's deadlines, and the mileage matches the odometer miles for the period.
+  How to tell it's broken: the "coming soon" card still shows, figures don't re-anchor on a period
+  switch, a negative deadhead/unattributed value, an on-time gauge counting deliveries that had no
+  deadline, or a crash opening the tab with no dashes yet.
+  - Confirmed: 0/2
 - **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
   Open the app **after a dash** (not while on a task): the **Today** tiles (True Net / Net $/hr /
   Miles) should already reflect the just-completed dash with no manual refresh (the read-model folds

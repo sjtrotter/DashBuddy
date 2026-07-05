@@ -5,11 +5,12 @@ import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 
 /**
- * The Analytics hub tabs (#315). Only [Money] has content in H1; the rest ship as the
- * real tab-bar structure with a "coming soon" placeholder so later phases (Decisions H3,
- * Time H4, Patterns H5) slot in without reshaping navigation.
+ * The Analytics hub tabs (#315). [Money], [Decisions] (H3), and [Time] (H4) render real content;
+ * [Patterns] (H5) still ships as the real tab-bar structure with a "coming soon" placeholder so it
+ * slots in without reshaping navigation.
  */
 enum class AnalyticsTab(val label: String) {
     Money("Money"),
@@ -41,4 +42,6 @@ data class AnalyticsUiState(
     val recentSessions: List<SessionRecord> = emptyList(),
     /** Offer-decision economics for [selectedPeriod] — the Decisions tab (#315 H3, frozen est.). */
     val decisions: DecisionEconomics = DecisionEconomics.EMPTY,
+    /** Time / mileage economics for [selectedPeriod] — the Time tab (#315 H4, measured). */
+    val time: TimeEconomics = TimeEconomics.EMPTY,
 )

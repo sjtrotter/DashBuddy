@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,12 +43,14 @@ class AnalyticsViewModelTest {
         economics: PeriodEconomics,
         stores: List<StoreEconomics> = emptyList(),
         decisions: DecisionEconomics = DecisionEconomics.EMPTY,
+        time: TimeEconomics = TimeEconomics.EMPTY,
     ) {
         whenever(analyticsRepository.periodEconomics(eq(period), anyOrNull())).thenReturn(flowOf(economics))
         whenever(analyticsRepository.perStoreEconomics(eq(period))).thenReturn(flowOf(stores))
-        // The VM collects decisions unconditionally (see AnalyticsViewModel), so every period stub
-        // must supply a decisions flow or the combine would fold a null.
+        // The VM collects decisions + time unconditionally (see AnalyticsViewModel), so every period
+        // stub must supply both flows or the combine would fold a null.
         whenever(analyticsRepository.decisionEconomics(eq(period))).thenReturn(flowOf(decisions))
+        whenever(analyticsRepository.timeEconomics(eq(period))).thenReturn(flowOf(time))
     }
 
     private fun decisions(accepted: Int, declined: Int, timedOut: Int, acceptanceRate: Double?) =
