@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.main.analytics
 
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
@@ -44,13 +45,15 @@ class AnalyticsViewModelTest {
         stores: List<StoreEconomics> = emptyList(),
         decisions: DecisionEconomics = DecisionEconomics.EMPTY,
         time: TimeEconomics = TimeEconomics.EMPTY,
+        dailyEarnings: List<DailyEarnings> = emptyList(),
     ) {
         whenever(analyticsRepository.periodEconomics(eq(period), anyOrNull())).thenReturn(flowOf(economics))
         whenever(analyticsRepository.perStoreEconomics(eq(period))).thenReturn(flowOf(stores))
-        // The VM collects decisions + time unconditionally (see AnalyticsViewModel), so every period
-        // stub must supply both flows or the combine would fold a null.
+        // The VM collects decisions + time + dailyEarnings unconditionally (see AnalyticsViewModel), so
+        // every period stub must supply all three flows or the combine would fold a null.
         whenever(analyticsRepository.decisionEconomics(eq(period))).thenReturn(flowOf(decisions))
         whenever(analyticsRepository.timeEconomics(eq(period))).thenReturn(flowOf(time))
+        whenever(analyticsRepository.dailyEarnings(eq(period), anyOrNull())).thenReturn(flowOf(dailyEarnings))
     }
 
     private fun decisions(accepted: Int, declined: Int, timedOut: Int, acceptanceRate: Double?) =

@@ -78,7 +78,8 @@ class MainActivity : ComponentActivity() {
                         // --- ANALYTICS HUB (#315 H1 — Money tab v1) ---
                         composable(Screen.Analytics.route) {
                             AnalyticsScreen(
-                                onBack = { navController.popBackStack() }
+                                onBack = { navController.popBackStack() },
+                                onExportCsv = { navController.navigate(Screen.DataExport.route) }
                             )
                         }
 

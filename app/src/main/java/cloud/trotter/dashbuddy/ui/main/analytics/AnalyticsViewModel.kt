@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
@@ -59,7 +60,10 @@ class AnalyticsViewModel @Inject constructor(
                 analyticsRepository.perStoreEconomics(period),
                 analyticsRepository.decisionEconomics(period),
                 analyticsRepository.timeEconomics(period),
-            ) { economics, stores, decisions, time -> PeriodData(period, economics, stores, decisions, time) }
+                analyticsRepository.dailyEarnings(period),
+            ) { economics, stores, decisions, time, daily ->
+                PeriodData(period, economics, stores, decisions, time, daily)
+            }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
     ) { tab, data, sessions ->
@@ -71,6 +75,7 @@ class AnalyticsViewModel @Inject constructor(
             recentSessions = sessions,
             decisions = data.decisions,
             time = data.time,
+            dailyEarnings = data.dailyEarnings,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState())
 
@@ -91,6 +96,7 @@ class AnalyticsViewModel @Inject constructor(
         val stores: List<StoreEconomics>,
         val decisions: DecisionEconomics,
         val time: TimeEconomics,
+        val dailyEarnings: List<DailyEarnings>,
     )
 
     private companion object {

@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.OutcomeCountRow
 import cloud.trotter.dashbuddy.core.database.analytics.ScoreOutcomeRow
 import cloud.trotter.dashbuddy.core.database.analytics.SessionTotalsRow
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
@@ -16,11 +17,13 @@ import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.state.Platform
+import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -155,6 +158,43 @@ class AnalyticsRepository @Inject constructor(
                 analyticsDao.deliveryTimeTotals(start, end),
             ) { s, d -> assembleTime(s, d) }
         }
+
+    /**
+     * Per-day earnings for [period] (#315 H6, Money-tab chart) — a **complete day axis**: one
+     * [DailyEarnings] per local calendar day of the window, in order, with gap days present at `0.0`
+     * gross (a driver who skipped Tuesday still gets a Tuesday bar). Gross per day = Σ of the
+     * reported-authoritative per-session gross ([AnalyticsDao.sessionGrossRows], the same definition as
+     * [grossAndUnattributed]) for the sessions that *started* that day.
+     *
+     * **Session-anchored (#655):** a session's whole gross lands on its start instant's local day, so a
+     * midnight-spanning dash counts entirely on its start day — never split across two bars. [zone] is
+     * injectable so a fixed-zone test can pin the day boundaries; production uses the device zone.
+     *
+     * [TODAY][AnalyticsPeriod.TODAY] and [LIFETIME][AnalyticsPeriod.LIFETIME] return an empty list: a
+     * one-bar chart adds nothing, and LIFETIME's window is unbounded (its days can't be enumerated). The
+     * UI hides the card on an empty list.
+     *
+     * Re-emits on new session records (Room invalidation) and at week/month rollover (the boundary flow).
+     */
+    fun dailyEarnings(period: AnalyticsPeriod, zone: ZoneId = ZoneId.systemDefault()): Flow<List<DailyEarnings>> {
+        if (period == AnalyticsPeriod.TODAY || period == AnalyticsPeriod.LIFETIME) return flowOf(emptyList())
+        return periodBoundariesFlow(period, zone).flatMapLatest { (start, end) ->
+            analyticsDao.sessionGrossRows(start, end).map { rows ->
+                // The end bound is exactly the next period's local midnight (PeriodBounds), so iterate
+                // day-by-day up to (but excluding) the end instant's date — a complete, gap-filled axis.
+                val startDate = Instant.ofEpochMilli(start).atZone(zone).toLocalDate()
+                val endDate = Instant.ofEpochMilli(end).atZone(zone).toLocalDate()
+                val byDay = rows.groupBy { Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate() }
+                buildList {
+                    var date = startDate
+                    while (date < endDate) {
+                        add(DailyEarnings(date, byDay[date]?.sumOf { it.gross } ?: 0.0))
+                        date = date.plusDays(1)
+                    }
+                }
+            }
+        }
+    }
 
     /** Recent dashes, newest first (future hub / #650). */
     fun recentSessions(limit: Int = 20): Flow<List<SessionRecord>> =

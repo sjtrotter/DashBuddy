@@ -68,6 +68,17 @@ data class PlatformGrossTotalsRow(
     val unattributed: Double,
 )
 
+/**
+ * One session's start instant + reported-authoritative gross (#315 H6) — the per-day earnings-chart
+ * input, one row per session started in the window. [gross] = the summary-screen `reportedEarnings`
+ * when present, else that session's Σ delivered pay (the same per-session definition as
+ * [GrossTotalsRow]); the repository buckets it onto [startedAt]'s local day (session-anchored, #655).
+ */
+data class SessionGrossRow(
+    val startedAt: Long,
+    val gross: Double,
+)
+
 /** Cross-platform session totals for a period: miles = Σ odo delta, onlineMillis = Σ duration, sessions = COUNT. */
 data class SessionTotalsRow(
     val miles: Double,

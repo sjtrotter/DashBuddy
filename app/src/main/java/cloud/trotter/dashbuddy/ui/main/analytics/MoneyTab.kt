@@ -22,16 +22,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.core.designsystem.component.AppBar
+import cloud.trotter.dashbuddy.core.designsystem.component.AppBarChart
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCallout
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
+import java.time.format.TextStyle
+import java.util.Locale
 
 /** Placeholder shown for a rate figure that has no measurable denominator yet (dashboard parity). */
 private const val EMPTY_VALUE = "—"
@@ -50,10 +55,13 @@ fun MoneyTab(
     economics: PeriodEconomics,
     topStores: List<StoreEconomics>,
     recentSessions: List<SessionRecord>,
+    dailyEarnings: List<DailyEarnings>,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         EarningsHero(economics)
+        // Hidden for Today/Lifetime (one bar / unbounded window) — the repository returns an empty list.
+        if (dailyEarnings.isNotEmpty()) EarningsByDayCard(dailyEarnings)
         TrueNetWaterfall(economics)
         StatTiles(economics)
         if (economics.unattributedPay > UNATTRIBUTED_EPSILON) {
@@ -94,6 +102,54 @@ private fun EarningsHero(economics: PeriodEconomics) {
         }
     }
 }
+
+/**
+ * Earnings-by-day bar chart (#315 H6): one bar per local calendar day of the period, gap days at
+ * zero, the best day highlighted. Session-anchored (#655) — a dash's whole gross sits on its start
+ * day. Only rendered when [days] is non-empty (Today/Lifetime pass an empty list; see [MoneyTab]).
+ */
+@Composable
+private fun EarningsByDayCard(days: List<DailyEarnings>) {
+    val c = AppTheme.colors
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Text(text = "EARNINGS BY DAY", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Spacer(Modifier.height(10.dp))
+        if (days.all { it.gross <= 0.0 }) {
+            EmptyRow("No earnings in this period yet.")
+        } else {
+            // Highlight the first day that hit the period's peak gross (only when someone earned).
+            val bestDay = days.maxByOrNull { it.gross }?.takeIf { it.gross > 0.0 }?.date
+            val isWeek = days.size == 7
+            val bars = days.map { day ->
+                AppBar(
+                    label = dayLabel(day, isWeek),
+                    value = day.gross.toFloat(),
+                    highlight = day.date == bestDay,
+                )
+            }
+            AppBarChart(bars = bars, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "gross per day · dashes count on their start day",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.text3,
+            )
+        }
+    }
+}
+
+/**
+ * Bar label: for a 7-day week the locale's narrow day-of-week name; for a month-length list only the
+ * milestone days (1, 5, 10, 15, 20, 25, 30) carry their day-of-month number — 31 labels won't fit.
+ */
+private val MONTH_LABEL_DAYS = setOf(1, 5, 10, 15, 20, 25, 30)
+
+private fun dayLabel(day: DailyEarnings, isWeek: Boolean): String =
+    if (isWeek) {
+        day.date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault())
+    } else {
+        day.date.dayOfMonth.let { if (it in MONTH_LABEL_DAYS) it.toString() else "" }
+    }
 
 /**
  * Pure decision logic for the true-net waterfall's step count (#659) — kept Compose-free so it's

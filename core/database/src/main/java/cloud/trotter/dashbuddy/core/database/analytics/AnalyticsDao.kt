@@ -197,6 +197,26 @@ interface AnalyticsDao {
     )
     fun grossAndUnattributedByPlatform(start: Long, end: Long): Flow<List<PlatformGrossTotalsRow>>
 
+    /**
+     * Per-session start + reported-authoritative gross for the sessions started in `[start, end)` — the
+     * per-day earnings chart input (#315 H6). Gross per session = `reportedEarnings` when present else
+     * that session's Σ delivered pay (same definition as [grossAndUnattributed]; the LEFT JOIN is onto a
+     * GROUP BY sessionId subquery, one row per session, no fan-out). Session-anchored by construction
+     * (#655): a session's whole gross lands on its start instant's day.
+     */
+    @Query(
+        """SELECT s.startedAt AS startedAt,
+                  COALESCE(s.reportedEarnings, d.deliveredPay, 0) AS gross
+           FROM session_records s
+           LEFT JOIN (
+             SELECT sessionId, SUM(realizedPay) AS deliveredPay
+             FROM delivery_records GROUP BY sessionId
+           ) d ON d.sessionId = s.sessionId
+           WHERE s.startedAt >= :start AND s.startedAt < :end
+           ORDER BY s.startedAt ASC"""
+    )
+    fun sessionGrossRows(start: Long, end: Long): Flow<List<SessionGrossRow>>
+
     // ── Decisions-tab aggregates (#315 H3) ──────────────────────────────
 
     /**
