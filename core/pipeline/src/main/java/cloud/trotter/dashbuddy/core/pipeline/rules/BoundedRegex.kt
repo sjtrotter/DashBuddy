@@ -57,7 +57,19 @@ class BoundedRegex internal constructor(private val regex: Regex) {
     private inline fun <T> runBounded(default: T, input: CharSequence, block: (CharSequence) -> T): T {
         val guarded = InterruptibleCharSequence(input)
         val self = Thread.currentThread()
-        val watchdog = WATCHDOG.schedule({ self.interrupt() }, BUDGET_MS, TimeUnit.MILLISECONDS)
+        // The gate closes a race (#590 review F1): without it, a watchdog firing
+        // concurrently with match completion could interrupt AFTER the finally
+        // block's Thread.interrupted() clear — leaving a stray interrupt flag on
+        // a dispatcher thread for some later, unrelated blocking call to trip
+        // over. The task interrupts only while `done` is false under the gate;
+        // finally flips `done` under the same gate BEFORE clearing, so no
+        // interrupt can land after the clear.
+        val gate = Any()
+        var done = false
+        val watchdog = WATCHDOG.schedule(
+            { synchronized(gate) { if (!done) self.interrupt() } },
+            BUDGET_MS, TimeUnit.MILLISECONDS,
+        )
         return try {
             block(guarded)
         } catch (e: RegexBudgetExceeded) {
@@ -75,9 +87,12 @@ class BoundedRegex internal constructor(private val regex: Regex) {
             default
         } finally {
             watchdog.cancel(false)
-            // Clear any interrupt the watchdog set. The classification pipeline
-            // is coroutine-based (cooperative cancellation, not thread-interrupt),
-            // so nothing else on this thread relies on the interrupt flag.
+            synchronized(gate) { done = true }
+            // Clear any interrupt the watchdog set — safe AFTER the gate flip
+            // above, which guarantees no further interrupt can land. The
+            // classification pipeline is coroutine-based (cooperative
+            // cancellation, not thread-interrupt), so nothing else on this
+            // thread relies on the interrupt flag.
             Thread.interrupted()
         }
     }
@@ -111,8 +126,13 @@ class BoundedRegex internal constructor(private val regex: Regex) {
         const val BUDGET_MS = 200L
 
         private val WATCHDOG: ScheduledExecutorService =
-            Executors.newSingleThreadScheduledExecutor { r ->
+            java.util.concurrent.ScheduledThreadPoolExecutor(1) { r ->
                 Thread(r, "regex-redos-watchdog").apply { isDaemon = true }
+            }.apply {
+                // Cancelled watchdogs (the overwhelming majority — every healthy
+                // match cancels its own) leave the queue immediately instead of
+                // lingering until their 200 ms deadline (#590 review L1).
+                removeOnCancelPolicy = true
             }
     }
 }
