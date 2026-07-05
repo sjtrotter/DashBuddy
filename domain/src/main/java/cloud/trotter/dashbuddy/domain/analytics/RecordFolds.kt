@@ -457,8 +457,9 @@ object RecordFolds {
      * A driver-entered missed delivery (#650) → one `DeliveryFold` (payBasis [PayBasis.MANUAL]),
      * folded into the session accumulator exactly as a captured completion, but from the driver's own
      * statement. The frozen economy is inherited exactly like [foldDeliveryCompleted] (the session's
-     * offer basis, else the current fallback, else NONE), so a manual delivery's net is costed the same
-     * way as its captured siblings and is likewise immutable.
+     * offer basis, else the current fallback, else NONE) and is likewise immutable — but the NET uses
+     * the MANUAL missing-terms-as-0 policy (net-additive; see the inline comment): an uncosted driver
+     * statement must not lose its dollars from period net just for being recorded.
      */
     private fun foldManualDelivery(
         event: SequencedAppEvent,
@@ -483,12 +484,14 @@ object RecordFolds {
         }
         val frozenFuelPerMile = if (costBasis == CostBasis.OFFER_FROZEN) ctx.lastEvaluatedFuelPerMile else null
         val frozenNonFuelPerMile = if (costBasis == CostBasis.OFFER_FROZEN) ctx.lastEvaluatedNonFuelPerMile else null
-        // Net only when pay + the driver's stated miles + a cpm are all present (else undefined).
-        val netProfit = if (frozenCpm != null && p.miles != null) {
-            NetProfit.net(p.pay, p.miles, frozenCpm)
-        } else {
-            null
-        }
+        // MANUAL-basis net policy (#650 review F1): missing cost terms count as 0, so an uncosted
+        // driver statement stays NET-ADDITIVE — exactly as its dollars were while still inside
+        // `unattributedPay` (the documented net-additive estimate, PeriodEconomics). Without this,
+        // recording the missed delivery the callout asks for would DROP period net by the row's pay:
+        // the money leaves the net-additive unattributed bucket and lands in a null-net row that
+        // SUM(netProfit) discards. Machine rows keep machine semantics (the null-net machine seam is
+        // #660-family and deliberately not widened here).
+        val netProfit = NetProfit.net(p.pay, p.miles ?: 0.0, frozenCpm ?: 0.0)
 
         val delivery = DeliveryFold(
             eventSequenceId = event.sequenceId,
@@ -522,28 +525,33 @@ object RecordFolds {
         // do not pass the event's odometer into them: a manual delivery carries no odometer reading and
         // must not perturb the surrounding machine rows' partition (miles/time) deltas on a refold —
         // that would make the rebuild non-faithful. This non-perturbation is load-bearing.
+        // Liveness advances with the DELIVERY's stated time, never the correction's wall-clock
+        // `occurredAt` (#650 review F2): a correction recorded days later must not stretch a
+        // crash-orphaned (endedAt-null) session's online span to "now".
         val newCtx = ctx.copy(
             deliveries = ctx.deliveries + 1,
             deliveredJobIds = ctx.deliveredJobIds + jobId,
-            lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
+            lastEventAt = maxOf(ctx.lastEventAt, p.completedAt),
         )
         return FoldOutcome(context = newCtx, delivery = delivery)
     }
 
     /**
      * A driver PAY_ADJUSTMENT (#650) — the pure fold emits the [PayAdjustmentFold] decision (which row,
-     * what new pay) and advances the resolved session's liveness when the correction names a session;
-     * it CANNOT read the target `delivery_record` here (that is not the session accumulator), so the
-     * orchestrator applies the re-price inside the batch transaction.
+     * what new pay); it CANNOT read the target `delivery_record` here (that is not the session
+     * accumulator), so the orchestrator applies the re-price inside the batch transaction. The session
+     * context passes through UNTOUCHED (#650 review F2): a re-price is bookkeeping about a past row,
+     * not session activity — advancing liveness with the CORRECTION's wall-clock `occurredAt` would
+     * stretch a crash-orphaned (endedAt-null) session's online span to "now", and synthesizing a
+     * context here could mint a session row stamped with correction time (the target's session row
+     * already exists via the #661 invariant, or its delivery row could not).
      */
     private fun foldPayAdjustment(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
         val e = event.event
         val p = e.payload as? PayAdjustmentPayload
             ?: return FoldOutcome(context = context, skip = "PAY_ADJUSTMENT: missing/malformed payload")
-        val sid = e.sessionId ?: p.sessionId
-        val ctx = sid?.let { resolveContext(context, it, e.occurredAt).advance(e.occurredAt, event.metadata?.odometer) }
         return FoldOutcome(
-            context = ctx ?: context,
+            context = context,
             payAdjustment = PayAdjustmentFold(p.targetEventSequenceId, p.newPay),
         )
     }

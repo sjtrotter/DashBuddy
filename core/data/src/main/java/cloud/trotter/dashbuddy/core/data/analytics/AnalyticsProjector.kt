@@ -195,13 +195,26 @@ class AnalyticsProjector @Inject constructor(
                     // P7: counts only, no payload text.
                     Timber.tag(TAG).w("PAY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
                 } else {
-                    val net = if (row.frozenCostPerMile != null && row.realizedMiles != null) {
-                        NetProfit.net(adj.newPay, row.realizedMiles!!, row.frozenCostPerMile!!)
-                    } else {
-                        null
+                    // A MANUAL row stays MANUAL (#650 review F1): a driver correcting their own
+                    // statement leaves it a driver statement (the audit trail lives in the log), and
+                    // its net keeps the MANUAL missing-terms-as-0 policy (net-additive) — the generic
+                    // machine recompute would null the net and drop the dollars from period SUM.
+                    // Machine rows flip to USER_CORRECTED with the machine recompute (null when not
+                    // computable — the pre-existing #660-family seam, not widened). Deterministic on
+                    // refold: the row's basis reads the same at apply time in live and refold order.
+                    val manual = row.payBasis == PayBasis.MANUAL
+                    val net = when {
+                        manual -> NetProfit.net(adj.newPay, row.realizedMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
+                        row.frozenCostPerMile != null && row.realizedMiles != null ->
+                            NetProfit.net(adj.newPay, row.realizedMiles!!, row.frozenCostPerMile!!)
+                        else -> null
                     }
                     analyticsDao.upsertDelivery(
-                        row.copy(realizedPay = adj.newPay, payBasis = PayBasis.USER_CORRECTED, netProfit = net),
+                        row.copy(
+                            realizedPay = adj.newPay,
+                            payBasis = if (manual) PayBasis.MANUAL else PayBasis.USER_CORRECTED,
+                            netProfit = net,
+                        ),
                     )
                 }
             }

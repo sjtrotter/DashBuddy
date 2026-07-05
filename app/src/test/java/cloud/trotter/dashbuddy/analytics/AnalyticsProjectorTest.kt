@@ -535,6 +535,33 @@ class AnalyticsProjectorTest {
     }
 
     @Test
+    fun `re-pricing a MANUAL row keeps the MANUAL basis and the net-additive policy (review F1)`() = runBlocking {
+        // The v1 UI shape: a manual delivery with no miles. Its net must equal its pay (missing cost
+        // terms count as 0 — net-additive), and a later driver re-price must keep BOTH the MANUAL
+        // provenance and that policy: the generic machine recompute would null the net and silently
+        // drop the dollars from the period SUM.
+        insert(
+            AppEventType.MANUAL_DELIVERY, "MISSED", 5_000,
+            ManualDeliveryPayload(sessionId = "MISSED", pay = 9.0, completedAt = 5_000),
+        )
+        projector().catchUp()
+        val seq = analyticsDao.lastDeliveryInSession("MISSED")!!.eventSequenceId
+        val folded = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("uncosted manual net = pay (net-additive)", 9.0, folded.netProfit!!, 1e-9)
+
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "MISSED", 6_000,
+            PayAdjustmentPayload(targetEventSequenceId = seq, sessionId = "MISSED", newPay = 12.0),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("a driver statement stays a driver statement", "MANUAL", d.payBasis)
+        assertEquals(12.0, d.realizedPay!!, 1e-9)
+        assertEquals("net keeps the MANUAL missing-terms-as-0 policy", 12.0, d.netProfit!!, 1e-9)
+    }
+
+    @Test
     fun `a PAY_ADJUSTMENT re-prices its target to USER_CORRECTED and shrinks the session unattributed pay`() = runBlocking {
         val deliverySeq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
         projector().catchUp()

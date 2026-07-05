@@ -647,8 +647,11 @@ class RecordFoldsTest {
         assertEquals("manual:${d.eventSequenceId}", d.jobId)
         assertEquals(d.jobId, d.taskId)
         assertEquals(2_000L, d.completedAt)
-        assertEquals("no offer + no current economy ⇒ NONE cpm, null net", CostBasis.NONE, d.costBasis)
-        assertNull(d.netProfit)
+        assertEquals("no offer + no current economy ⇒ NONE cpm", CostBasis.NONE, d.costBasis)
+        assertEquals(
+            "MANUAL net policy: missing cost terms count as 0 ⇒ net = pay (net-additive, review F1)",
+            12.0, d.netProfit!!, 1e-9,
+        )
 
         assertEquals("the manual delivery counts", 1, ctx!!.deliveries)
         assertEquals(1, ctx.jobsCompleted)
@@ -683,7 +686,8 @@ class RecordFoldsTest {
         assertEquals(CostBasis.CURRENT_FALLBACK, d2.costBasis)
         assertEquals(10.0 - 4.0 * 0.50, d2.netProfit!!, 1e-9)
 
-        // NONE — no offer, no economy → null cpm, null net (even though miles are known).
+        // NONE — no offer, no economy → null cpm; MANUAL net policy keeps the dollars net-additive
+        // (miles are known but uncostable ⇒ cost term 0 ⇒ net = pay, review F1).
         val (none, _) = foldSession(
             listOf(
                 dashStart(s, 1_000, odo = 0.0),
@@ -694,7 +698,40 @@ class RecordFoldsTest {
         val d3 = none[1].delivery!!
         assertEquals(CostBasis.NONE, d3.costBasis)
         assertNull(d3.frozenCostPerMile)
-        assertNull(d3.netProfit)
+        assertEquals(10.0, d3.netProfit!!, 1e-9)
+    }
+
+    @Test
+    fun `an uncosted manual delivery stays net-additive - net equals pay minus what IS costable (review F1)`() {
+        val s = "M6"
+        // The v1 UI path: miles = null. With an offer cpm present, the miles term is 0 ⇒ net = pay —
+        // the dollars must NOT vanish from period SUM(netProfit) after leaving unattributedPay.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                offerAccepted(s, 1_500, "h", eval(net = 8.0, dist = 4.0, opCpm = 0.40)),
+                manualDelivery(s, 2_000, pay = 12.0, miles = null),
+            ),
+            currentCpm = null,
+        )
+        val d = outcomes[2].delivery!!
+        assertEquals(CostBasis.OFFER_FROZEN, d.costBasis)
+        assertEquals("null miles ⇒ 0-mile cost term ⇒ net = pay", 12.0, d.netProfit!!, 1e-9)
+    }
+
+    @Test
+    fun `manual-delivery liveness advances with the DELIVERY's stated time, not the correction's wall clock (review F2)`() {
+        val s = "M7"
+        // Correction recorded much later (occurredAt = 999_999) about a drop at completedAt = 2_000:
+        // an endedAt-null session's lastEventAt must NOT stretch to the correction time.
+        val (_, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                manualDelivery(s, 999_999, pay = 5.0, completedAt = 2_000),
+            ),
+            currentCpm = null,
+        )
+        assertEquals(2_000L, ctx!!.lastEventAt)
     }
 
     @Test
@@ -731,7 +768,7 @@ class RecordFoldsTest {
     }
 
     @Test
-    fun `PAY_ADJUSTMENT emits the re-price decision, no record, and advances liveness`() {
+    fun `PAY_ADJUSTMENT emits the re-price decision, no record, and passes the context through untouched (review F2)`() {
         val s = "M4"
         val ctx = RecordFolds.foldEvent(dashStart(s, 1_000, odo = 0.0), null, null).context
         val out = RecordFolds.foldEvent(payAdjustment(s, 5_000, target = 42L, newPay = 15.5), ctx, null)
@@ -741,7 +778,10 @@ class RecordFoldsTest {
         val adj = out.payAdjustment!!
         assertEquals(42L, adj.targetEventSequenceId)
         assertEquals(15.5, adj.newPay, 1e-9)
-        assertEquals("liveness advanced to the correction's timestamp", 5_000L, out.context!!.lastEventAt)
+        // Bookkeeping about a past row, not session activity: liveness must NOT advance to the
+        // correction's wall-clock time (it would stretch an endedAt-null session's online span).
+        assertEquals(ctx, out.context)
+        assertEquals(1_000L, out.context!!.lastEventAt)
     }
 
     @Test
