@@ -13,6 +13,7 @@ class MapperEnforcementTest {
         val ignoredProperties = setOf(
             "parent",           // transient property
             "allText",          // lazy property
+            "allTextLowerJoined", // lazy property (memoized joined+lowercased tree text, #293)
             "structuralHash",   // lazy property
             "contentHash",      // lazy property
             "stableHash",       // lazy property (identity-based dedup)

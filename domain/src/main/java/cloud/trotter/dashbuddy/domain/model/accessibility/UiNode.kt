@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.domain.model.accessibility
 
 import cloud.trotter.dashbuddy.domain.pipeline.NO_ID_FALLBACK
+import java.util.Locale
 
 /**
  * A data class to hold structured information about a single UI element (node).
@@ -255,6 +256,18 @@ data class UiNode(
         if (!node.text.isNullOrBlank()) list.add(node.text)
         if (!node.contentDescription.isNullOrBlank()) list.add(node.contentDescription)
         node.children.forEach { collectText(it, list) }
+    }
+
+    /**
+     * The subtree's [allText] joined on the `\u001F` unit separator and lowercased
+     * once (Locale.ROOT), memoized (#293 item 9). The `allText*` tree predicates
+     * rebuilt this string per rule per event; this node is immutable so a single
+     * `by lazy` is the SSOT the compiler's match closures read. Locale.ROOT keeps
+     * the fold locale-independent (#187/#211), matching the compiler's search-text
+     * side (both lowercase with Locale.ROOT).
+     */
+    val allTextLowerJoined: String by lazy {
+        allText.joinToString("\u001F").lowercase(Locale.ROOT)
     }
 
     val structuralHash: Int by lazy {
