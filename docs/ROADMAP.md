@@ -4,11 +4,9 @@
 reflect the board reality — when an issue's state changes, move it here or this doc rots.
 Companion: `docs/design/analytics-roadmap.md` (the analytics-specific phases).
 
-## Now / in flight (2026-07-05 evening)
+## Now / in flight (2026-07-05 night)
 
-- **#551** — semantic log levels + PII-safe shareable sink (Principle 7 implementation; the
-  export is a privacy surface; reuses `SensitiveTextMarkers` fail-closed). Phase 1 (leak fixes +
-  level/tag taxonomy) first, then the INFO+ export sink with the fail-closed scrub test. *opus*
+- Nothing in flight — the 07-05 night wave cleared the "Next up" top tier (see Recently resolved).
 - **Analytics hub (#315, epic)** — Money (H1/H2/H6 incl. earnings-by-day chart + header CSV
   action), Decisions (H3), and Time (H4) tabs are ALL LIVE. The only remaining phase is
   **H5 Patterns**, blocked on #159 (chains; zone capture doesn't exist). All new aggregations
@@ -16,19 +14,17 @@ Companion: `docs/design/analytics-roadmap.md` (the analytics-specific phases).
 
 ## Next up (unblocked, ranked by value × boundedness)
 
-1. **#590** — generative property tests over the untrusted-input boundaries (already found live
-   fail-open gaps + a CI blind spot historically). *opus*
-2. **#419** — rule-count caps + sensitive-rule survival across a ruleset replace (pledge;
-   in-app, no repo dependency; #192 prereq). *opus*
-3. **#438** — multiplatform correctness pack (per-platform timer keys etc.; unblocks #588;
-   advances #585). *opus*
-4. **#647** — canonicalizer merge hardening (unknown section keys; flat/dir collision). *opus/sonnet*
-5. **#293** — RuleCompiler robustness hardening (complements #647/#590). *opus*
-6. **#660** — null-session gross seam (net > gross possible; decide fix direction when observed).
-   The #675 per-day chart is a consumer of the same seam (noted on the issue).
-7. Mechanical batch: **#439** dead-vocabulary cull, **#57** strings.xml extraction (→ #428 i18n),
-   **#240/#239/#238** file splits (#237 family), **#244** test relocation. *sonnet*
-8. **#105** — Layer-2 OfferPipelineTest. *sonnet*
+1. **Design session (needs the dev):** #438 items 5/6/7/8/9 (D3 stepper edges, per-platform grace
+   seam, D11 per-platform offer slots, actuation identity, odometer arbitration) co-designed with
+   **#245 ADR-0007 + #251** — the scoping comment on #438 has the split rationale. Item 9 carries a
+   product decision (overlap-mile attribution, feeds #528).
+2. **#660** — null-session gross seam (net > gross possible; decide fix direction when observed —
+   dev-observation-gated). The #675 per-day chart is a consumer of the same seam (noted on the issue).
+3. Mechanical batch: **#439** dead-vocabulary cull, **#57** strings.xml extraction (→ #428 i18n),
+   **#240/#239/#238** file splits (#237 family — #239 now unblocked by #293's hardening landing
+   first per the old sequencing note), **#244** test relocation. *sonnet*
+4. **#105** — Layer-2 OfferPipelineTest. *sonnet*
+5. **#590 Phase-2 fuzzing** — stays gated on #416/#192 (the only remainder of #590).
 
 ## Needs design / field data first (actionable-soon)
 
@@ -59,6 +55,16 @@ Companion: `docs/design/analytics-roadmap.md` (the analytics-specific phases).
 - **#193/#194** academic pillar RFCs — future.
 
 ## Recently resolved in the 2026-07-05 sweep
+
+**Night wave (the security/hardening run):** #679 (#551 P1 — INFO+ leak fixes + level/tag taxonomy);
+#680 (#590 PR1 — kotest-property + compile-recursion/ReDoS-budget/notification-totality, all
+red-first); #681 (**#419 CLOSED** — rule caps + structural sensitive-rule survival; `overrideable`
+made real); #682 (#438 PR A — per-platform timer keys/screen-target, post-merge uniqueness,
+Unknown-region filter; items 5-9 deferred to design); #683 (**#647 CLOSED** — canonicalizer
+fail-loud guards); #684 (**#293 CLOSED** — RuleCompiler robustness incl. opt-in `isolable`
+per-rule isolation); #685 (#590 PR2 — marker-evasion hardening: 10/14 classes were live; INFO+
+replay gate; fill-ins); #686 (**#551 CLOSED** — the PII-safe shareable log sink, fail-closed
+scrub at the sink).
 
 **Evening wave:** #653 (phantom double-count guard, #673); #315 H4 Time tab (#674); #315 H6
 earnings-by-day chart + hub-header CSV action (#675); **#650 CLOSED** — per-dash drill-down
