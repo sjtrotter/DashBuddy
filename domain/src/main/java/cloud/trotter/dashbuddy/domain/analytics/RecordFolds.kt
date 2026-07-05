@@ -369,22 +369,38 @@ object RecordFolds {
      * The in-memory/hydrated context for [sid], or a synthesized `_unknown`-platform context when a
      * session-scoped event has no known DASH_START (fold started mid-session past the watermark, or
      * a lost start). A synthesized session degrades to a null-odometer / _unknown-platform row —
-     * never a wrong one. [platformName] refines the synthesized platform when the event itself
-     * carries one (DASH_STOP's #314 stamp).
+     * never a wrong one. [platformName] refines an `_unknown` platform when the event itself carries
+     * one (DASH_STOP's #314 stamp) — whether that `_unknown` context is being synthesized here for
+     * the first time, or was already synthesized by an EARLIER event in the session and is only now
+     * being hydrated/matched by [sid] (a skipped/malformed DASH_START leaves the session `_unknown`
+     * until its DASH_STOP arrives with the real platform; without this, the upgrade path only fired
+     * for a brand-new context and an already-`_unknown` session stayed `_unknown` forever). Never
+     * clobbers a REAL platform — only an `Unknown` one is eligible — and a [platformName] that itself
+     * fails to resolve (or resolves back to [Platform.Unknown]) leaves the context untouched.
      */
     private fun resolveContext(
         context: SessionFoldContext?,
         sid: String,
         occurredAt: Long,
         platformName: String? = null,
-    ): SessionFoldContext =
-        context?.takeIf { it.sessionId == sid }
-            ?: SessionFoldContext(
-                sessionId = sid,
-                platform = platformName?.let { Platform.fromName(it) } ?: Platform.Unknown,
-                startedAt = occurredAt,
-                lastEventAt = occurredAt,
-            )
+    ): SessionFoldContext {
+        val existing = context?.takeIf { it.sessionId == sid }
+        if (existing != null) {
+            if (existing.platform == Platform.Unknown && platformName != null) {
+                val resolved = Platform.fromName(platformName)
+                if (resolved != null && resolved != Platform.Unknown) {
+                    return existing.copy(platform = resolved)
+                }
+            }
+            return existing
+        }
+        return SessionFoldContext(
+            sessionId = sid,
+            platform = platformName?.let { Platform.fromName(it) } ?: Platform.Unknown,
+            startedAt = occurredAt,
+            lastEventAt = occurredAt,
+        )
+    }
 
     private fun SessionFoldContext.advance(occurredAt: Long, odometer: Double?): SessionFoldContext =
         copy(
