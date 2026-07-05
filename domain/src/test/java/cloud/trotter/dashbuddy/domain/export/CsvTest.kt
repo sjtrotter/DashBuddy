@@ -4,46 +4,90 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.ZoneId
 
-/** RFC-4180 quoting, machine number formatting, ISO timestamps, and the IRS deduction math (#319). */
+/**
+ * RFC-4180 quoting, formula-injection neutralization, machine number formatting, ISO timestamps,
+ * and the IRS deduction math (#319).
+ */
 class CsvTest {
 
     private val utc = ZoneId.of("UTC")
 
-    // ── RFC-4180 quoting ────────────────────────────────────────────────
+    // ── RFC-4180 quoting (textField) ────────────────────────────────────
 
     @Test fun plainField_isUnquoted() {
-        assertEquals("H-E-B", Csv.field("H-E-B"))
+        assertEquals("H-E-B", Csv.textField("H-E-B"))
     }
 
     @Test fun fieldWithComma_isQuoted() {
-        assertEquals("\"Chili's, Cedar Park\"", Csv.field("Chili's, Cedar Park"))
+        assertEquals("\"Chili's, Cedar Park\"", Csv.textField("Chili's, Cedar Park"))
     }
 
     @Test fun fieldWithQuote_doublesTheQuote() {
-        assertEquals("\"Joe \"\"The Rock\"\" Bar\"", Csv.field("Joe \"The Rock\" Bar"))
+        assertEquals("\"Joe \"\"The Rock\"\" Bar\"", Csv.textField("Joe \"The Rock\" Bar"))
     }
 
     @Test fun fieldWithNewline_isQuoted() {
-        assertEquals("\"line1\nline2\"", Csv.field("line1\nline2"))
-    }
-
-    @Test fun fieldWithCarriageReturn_isQuoted() {
-        assertEquals("\"a\rb\"", Csv.field("a\rb"))
+        assertEquals("\"line1\nline2\"", Csv.textField("line1\nline2"))
     }
 
     @Test fun nullField_isEmpty() {
-        assertEquals("", Csv.field(null))
+        assertEquals("", Csv.textField(null))
     }
 
-    @Test fun row_quotesEachField() {
+    // ── Formula-injection neutralization (textField only) ───────────────
+
+    @Test fun leadingEquals_isNeutralized() {
+        assertEquals("'=cmd()", Csv.textField("=cmd()"))
+    }
+
+    @Test fun leadingPlus_isNeutralized() {
+        assertEquals("'+1+1", Csv.textField("+1+1"))
+    }
+
+    @Test fun leadingMinus_isNeutralized() {
+        assertEquals("'-2+3", Csv.textField("-2+3"))
+    }
+
+    @Test fun leadingAt_isNeutralized() {
+        assertEquals("'@SUM(A1)", Csv.textField("@SUM(A1)"))
+    }
+
+    @Test fun leadingTab_isNeutralized() {
+        assertEquals("'\tX", Csv.textField("\tX"))
+    }
+
+    @Test fun leadingCarriageReturn_isNeutralizedAndQuoted() {
+        // CR is both a formula leader AND an RFC-4180 quote trigger: '-prefixed, then quoted.
+        assertEquals("\"'\ra\"", Csv.textField("\ra"))
+    }
+
+    @Test fun neutralizedFieldWithComma_isAlsoQuoted() {
+        assertEquals("\"'=a,b\"", Csv.textField("=a,b"))
+    }
+
+    @Test fun interiorFormulaChars_areNotNeutralized() {
+        // Only a LEADING dangerous char triggers the guard.
+        assertEquals("H-E-B Plus=1", Csv.textField("H-E-B Plus=1"))
+    }
+
+    @Test fun numericEmitters_stayBare_negativeMoneyNotNeutralized() {
+        // Program-generated numbers are safe by construction and must stay machine-parseable.
+        assertEquals("-2.50", Csv.money(-2.5))
+        assertEquals("-4.20", Csv.decimal(-4.2))
+        assertEquals("-3", Csv.int(-3))
+    }
+
+    // ── Row assembly (pre-encoded cells) ────────────────────────────────
+
+    @Test fun row_joinsEncodedCells() {
         assertEquals(
             "a,\"b,c\",\"d\"\"e\"",
-            Csv.row(listOf("a", "b,c", "d\"e")),
+            Csv.row(listOf(Csv.textField("a"), Csv.textField("b,c"), Csv.textField("d\"e"))),
         )
     }
 
-    @Test fun row_nullBecomesEmptyField() {
-        assertEquals("a,,c", Csv.row(listOf("a", null, "c")))
+    @Test fun row_nullTextBecomesEmptyCell() {
+        assertEquals("a,,c", Csv.row(listOf(Csv.textField("a"), Csv.textField(null), Csv.textField("c"))))
     }
 
     // ── Money / decimal (machine, Locale.ROOT, ungrouped) ───────────────

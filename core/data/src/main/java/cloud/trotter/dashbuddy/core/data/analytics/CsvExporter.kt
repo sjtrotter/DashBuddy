@@ -23,6 +23,13 @@ import java.time.ZoneId
  * ship them at all. No customer name/address ever existed in these rows (hashed at the edge), and
  * even the hashes stay home. No network path; SAF needs no permission.
  *
+ * **Untrusted-text posture:** store names (and the `?: wire` platform fallback) originate in
+ * third-party UI, so every text-typed cell routes through [Csv.textField], which neutralizes
+ * spreadsheet formula injection (a leading `=`/`+`/`-`/`@`/TAB/CR gets a `'` force-text prefix)
+ * on top of RFC-4180 quoting. Numeric/timestamp cells come from the [Csv] numeric emitters —
+ * program-generated `[-0-9.T:]` strings, safe by construction, left bare so `-2.50` stays
+ * machine-parseable.
+ *
  * Platform is registry-resolved to its display name via [Platform.fromWire] — never a raw wire
  * literal compared in logic (Principle 8).
  */
@@ -76,15 +83,15 @@ object CsvExporter {
 
     private fun deliveriesCsv(rows: List<DeliveryRecordEntity>, zone: ZoneId): String {
         val sb = StringBuilder()
-        sb.append(Csv.row(DELIVERY_HEADER)).append('\n')
+        sb.append(Csv.row(DELIVERY_HEADER.map { Csv.textField(it) })).append('\n')
         for (r in rows) {
             sb.append(
                 Csv.row(
                     listOf(
                         Csv.isoDate(r.completedAt, zone),
                         Csv.isoTime(r.completedAt, zone),
-                        platformName(r.platform),
-                        r.storeName,
+                        Csv.textField(platformName(r.platform)),
+                        Csv.textField(r.storeName),
                         Csv.money(r.realizedPay),
                         Csv.money(r.tip),
                         Csv.money(r.basePay),
@@ -92,8 +99,8 @@ object CsvExporter {
                         Csv.decimal(r.realizedMinutes),
                         Csv.money(r.frozenCostPerMile, digits = 3),
                         Csv.money(r.netProfit),
-                        r.payBasis,
-                        r.costBasis,
+                        Csv.textField(r.payBasis),
+                        Csv.textField(r.costBasis),
                     )
                 )
             ).append('\n')
@@ -103,7 +110,7 @@ object CsvExporter {
 
     private fun sessionsCsv(rows: List<SessionRecordEntity>, zone: ZoneId): String {
         val sb = StringBuilder()
-        sb.append(Csv.row(SESSION_HEADER)).append('\n')
+        sb.append(Csv.row(SESSION_HEADER.map { Csv.textField(it) })).append('\n')
         for (s in rows) {
             // Online duration: to the close if known, else the last event seen (still-live / orphaned).
             val durationMillis = (s.endedAt ?: s.lastEventAt) - s.startedAt
@@ -112,7 +119,7 @@ object CsvExporter {
                     listOf(
                         Csv.isoDateTime(s.startedAt, zone),
                         Csv.isoDateTime(s.endedAt, zone),
-                        platformName(s.platform),
+                        Csv.textField(platformName(s.platform)),
                         Csv.millisToMinutes(durationMillis),
                         Csv.money(s.reportedEarnings),
                         Csv.int(s.deliveries),
@@ -147,12 +154,14 @@ object CsvExporter {
         val totalRealized = deliveries.mapNotNull { it.realizedPay }.sum()
 
         val sb = StringBuilder()
-        sb.append(Csv.row(listOf("metric", "value"))).append('\n')
-        fun line(metric: String, value: String) {
-            sb.append(Csv.row(listOf(metric, value))).append('\n')
+        sb.append(Csv.row(listOf(Csv.textField("metric"), Csv.textField("value")))).append('\n')
+        // Metric names are program constants; values below are pre-encoded numeric/timestamp
+        // cells except date_range's literal, which goes through textField like any text cell.
+        fun line(metric: String, encodedValue: String) {
+            sb.append(Csv.row(listOf(Csv.textField(metric), encodedValue))).append('\n')
         }
         line("export_generated_at", Csv.isoDateTime(generatedAtMillis, zone))
-        line("date_range", "all_time")
+        line("date_range", Csv.textField("all_time"))
         line("tax_year", IrsMileage.TAX_YEAR.toString())
         line("irs_business_rate_per_mile", Csv.money(IrsMileage.RATE_PER_MILE, digits = 3))
         line("total_deductible_miles", Csv.decimal(totalMiles))

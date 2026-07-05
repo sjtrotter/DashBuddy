@@ -51,11 +51,14 @@ class DataExportViewModel @Inject constructor(
         _state.value = ExportState.InProgress
         viewModelScope.launch {
             val result = runCatching {
-                val bundle = analyticsRepository.buildCsvExport(
-                    zone = ZoneId.systemDefault(),
-                    generatedAtMillis = System.currentTimeMillis(),
-                )
-                withContext(ioDispatcher) { writeBundle(treeUri, bundle) }
+                // Whole build (DB reads + string assembly) AND write off the main thread.
+                withContext(ioDispatcher) {
+                    val bundle = analyticsRepository.buildCsvExport(
+                        zone = ZoneId.systemDefault(),
+                        generatedAtMillis = System.currentTimeMillis(),
+                    )
+                    writeBundle(treeUri, bundle)
+                }
             }
             _state.value = result.fold(
                 onSuccess = { count ->
@@ -63,7 +66,12 @@ class DataExportViewModel @Inject constructor(
                     ExportState.Success(count)
                 },
                 onFailure = { e ->
-                    Timber.tag("Export").e(e, "CSV export failed")
+                    // P7: ERROR ships in exported bug reports. Platform exception messages can
+                    // embed the SAF folder URI (a user-path), so log only the exception CLASS —
+                    // never the raw message/stack-message.
+                    Timber.tag("Export").e(
+                        "CSV export failed: %s", e.javaClass.simpleName
+                    )
                     ExportState.Error(e.message ?: "Export failed")
                 },
             )

@@ -88,6 +88,24 @@ class CsvExporterTest {
         assertTrue(out.deliveriesCsv.contains("\"Chili's, Cedar Park\""))
     }
 
+    @Test fun formulaInjection_storeName_isNeutralizedEndToEnd() {
+        // Store names are third-party UI (untrusted). A formula payload must land in the written
+        // file carrying the force-text prefix so a spreadsheet renders it as literal text.
+        val out = CsvExporter.export(
+            listOf(delivery(1, "=cmd(\"/c calc\")!A1")),
+            emptyList(), utc, generatedAt,
+        )
+        val row = out.deliveriesCsv.trim().lines()[1]
+        // The neutralized cell: '-prefixed, and RFC-4180 quoted (payload contains quotes).
+        assertTrue("neutralized cell missing in: $row", row.contains("\"'=cmd("))
+        // No cell in the row may still BEGIN with the raw formula (quoted or bare).
+        assertFalse("raw formula cell leaked in: $row", row.contains(",=cmd") || row.startsWith("=cmd"))
+        assertFalse("raw quoted formula cell leaked in: $row", row.contains(",\"=cmd"))
+        // Program-generated negatives stay bare and machine-parseable (strict-numeric exemption).
+        val negOut = CsvExporter.export(listOf(delivery(2, "S", pay = -2.50)), emptyList(), utc, generatedAt)
+        assertEquals("-2.50", negOut.deliveriesCsv.trim().lines()[1].split(",")[4])
+    }
+
     @Test fun hashes_areNeverExported() {
         val out = CsvExporter.export(
             listOf(delivery(1, "H-E-B")),
