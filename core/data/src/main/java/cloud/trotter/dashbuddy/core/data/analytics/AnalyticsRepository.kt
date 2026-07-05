@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
+import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
@@ -203,6 +204,22 @@ class AnalyticsRepository @Inject constructor(
     /** Every delivery in a session, completion order (future #650 drill-down). */
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecord>> =
         analyticsDao.deliveriesForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
+
+    /**
+     * One dash fully expanded (#650 PR A drill-down): the session header + its deliveries in
+     * completion order, as a [SessionDetail], or `null` when no session row exists for [sessionId]
+     * (the dash was never recorded, or the projector wiped/rebuilt). Read-model only, reactive by
+     * construction (both sources are Room-invalidation Flows, so the detail re-emits as the projector
+     * folds each delivery), no economy dependency (the per-delivery net is frozen), no new PII surface
+     * (store names are driver-owned; no customer hashes are exposed on [DeliveryRecord]).
+     */
+    fun sessionDetail(sessionId: String): Flow<SessionDetail?> =
+        combine(
+            analyticsDao.sessionRecordFlow(sessionId),
+            analyticsDao.deliveriesForSession(sessionId),
+        ) { session, deliveries ->
+            session?.let { SessionDetail(it.toDomain(), deliveries.map { row -> row.toDomain() }) }
+        }
 
     /**
      * Build the free-tier CSV export (#319) — deliveries / sessions / summary — for the raw rows in

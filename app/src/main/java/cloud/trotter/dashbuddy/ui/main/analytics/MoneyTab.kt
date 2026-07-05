@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +57,7 @@ fun MoneyTab(
     topStores: List<StoreEconomics>,
     recentSessions: List<SessionRecord>,
     dailyEarnings: List<DailyEarnings>,
+    onOpenSession: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -73,7 +75,7 @@ fun MoneyTab(
             )
         }
         TopStoresCard(topStores)
-        RecentDashesCard(recentSessions)
+        RecentDashesCard(recentSessions, onOpenSession)
     }
 }
 
@@ -341,11 +343,11 @@ private fun TopStoresCard(stores: List<StoreEconomics>) {
 
 /**
  * Recent dashes, newest first. Sessions don't carry a frozen net, so the money column shows the
- * platform-reported earnings (an em dash until a summary is seen). Not tappable yet — the per-dash
- * drill-down is #650.
+ * platform-reported earnings (an em dash until a summary is seen). Each row is tappable → the
+ * read-only per-dash drill-down ([onOpenSession], #650).
  */
 @Composable
-private fun RecentDashesCard(sessions: List<SessionRecord>) {
+private fun RecentDashesCard(sessions: List<SessionRecord>, onOpenSession: (String) -> Unit) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(text = "RECENT DASHES", style = MaterialTheme.typography.labelMedium, color = c.text3)
@@ -355,8 +357,12 @@ private fun RecentDashesCard(sessions: List<SessionRecord>) {
         } else {
             sessions.forEachIndexed { index, session ->
                 if (index > 0) Spacer(Modifier.height(10.dp))
-                // TODO(#650): make each dash row tappable → per-dash delivery breakdown.
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenSession(session.sessionId) },
+                ) {
                     Column(Modifier.weight(1f)) {
                         Text(
                             text = formatShortDate(session.startedAt),

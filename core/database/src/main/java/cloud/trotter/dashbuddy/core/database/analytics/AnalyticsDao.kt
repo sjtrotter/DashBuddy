@@ -300,6 +300,10 @@ interface AnalyticsDao {
     @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId ORDER BY completedAt ASC")
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecordEntity>>
 
+    /** One session row as a Flow — the #650 drill-down header (re-emits on projector commits). */
+    @Query("SELECT * FROM session_records WHERE sessionId = :id")
+    fun sessionRecordFlow(id: String): Flow<SessionRecordEntity?>
+
     // ── Raw row reads for CSV export (#319) ──────────────────────────────
 
     /**

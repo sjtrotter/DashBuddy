@@ -44,7 +44,7 @@ data class AnalyticsUiState(
      * Today/Lifetime (one bar / unbounded), so the Money tab hides the chart card on an empty list.
      */
     val dailyEarnings: List<DailyEarnings> = emptyList(),
-    /** Most recent dash sessions, newest first (not tappable until #650). */
+    /** Most recent dash sessions, newest first — each row taps through to the per-dash drill-down (#650). */
     val recentSessions: List<SessionRecord> = emptyList(),
     /** Offer-decision economics for [selectedPeriod] — the Decisions tab (#315 H3, frozen est.). */
     val decisions: DecisionEconomics = DecisionEconomics.EMPTY,

@@ -19,10 +19,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import cloud.trotter.dashbuddy.ui.main.analytics.AnalyticsScreen
+import cloud.trotter.dashbuddy.ui.main.analytics.SessionDetailScreen
 import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
@@ -79,7 +82,24 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Analytics.route) {
                             AnalyticsScreen(
                                 onBack = { navController.popBackStack() },
-                                onExportCsv = { navController.navigate(Screen.DataExport.route) }
+                                onExportCsv = { navController.navigate(Screen.DataExport.route) },
+                                onOpenSession = { sessionId ->
+                                    navController.navigate(Screen.SessionDetail.route(sessionId))
+                                }
+                            )
+                        }
+
+                        // --- PER-DASH DRILL-DOWN (#650 — read-only session detail) ---
+                        composable(
+                            Screen.SessionDetail.route,
+                            arguments = listOf(
+                                navArgument(Screen.SessionDetail.ARG_SESSION_ID) {
+                                    type = NavType.StringType
+                                }
+                            )
+                        ) {
+                            SessionDetailScreen(
+                                onBack = { navController.popBackStack() }
                             )
                         }
 

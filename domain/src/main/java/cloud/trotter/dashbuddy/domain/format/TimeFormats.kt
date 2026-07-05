@@ -62,3 +62,18 @@ fun formatShortDate(
     DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
         .withLocale(locale)
         .format(Instant.ofEpochMilli(millis).atZone(zone))
+
+/**
+ * "5:42 PM" / "17:42" — a localized clock time for a review surface (the per-delivery rows of the
+ * #650 drill-down). Same display policy as [formatShortDate]: the localized SHORT time in [locale],
+ * resolved against the device [zone] — display copy the dasher reads in their own locale, not a
+ * machine string. One owner for a rendered clock time (Principle 5).
+ */
+fun formatClockTime(
+    millis: Long,
+    zone: ZoneId = ZoneId.systemDefault(),
+    locale: Locale = Locale.getDefault(),
+): String =
+    DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+        .withLocale(locale)
+        .format(Instant.ofEpochMilli(millis).atZone(zone))
