@@ -109,15 +109,19 @@ class JsonRuleInterpreter @Inject constructor(
                 perFile += path to result
             }
 
-            // Cross-file rule-id collision policy (C3, #633): drop any LATER file that
-            // re-declares an id an EARLIER file already claimed, BEFORE the merge.
-            // Ruleset.byId is last-wins, so merging the later file would shadow the
+            // Post-merge cross-file collision policy (#633 rule-id + #438 item 3
+            // priority): drop any LATER file that collides with an EARLIER file on a
+            // rule id OR a (platform, section, priority) tuple, BEFORE the merge.
+            // Ruleset.byId is last-wins, so a re-declared id would shadow the
             // capture-redaction lookup (redactFor/notifRedactFor) across files while
             // priority-ordered matchFirst still recognizes with the earlier rule — the
             // wrong rule's redact could resolve and ship an id-keyed customer-PII node
-            // raw. Skips the offending file WHOLE (malformed-file-skip policy),
-            // complementing the within-file dup-id reject (#624). Earlier files keep
-            // every rule; other platforms are unaffected (no outage behind #432).
+            // raw. A duplicate priority within one platform's section makes matchFirst's
+            // tie-break decide recognition by load order silently. Both skip the
+            // offending file WHOLE (malformed-file-skip policy), complementing the
+            // within-file dup-id (#624) and per-file priority (compileRules) rejects.
+            // Earlier files keep every rule; other platforms are unaffected (no outage
+            // behind #432).
             val accepted = acceptNonCollidingFiles(perFile)
 
             val allScreens = mutableListOf<CompiledRule<UiNode>>()
@@ -356,26 +360,54 @@ fun missingSensitivePlatforms(screens: List<CompiledRule<UiNode>>): Set<Platform
 }
 
 /**
- * Cross-file rule-id collision policy (C3, #633). Given per-file compiled bundles in
- * LOAD ORDER, return only the files whose top-level rule ids don't collide with an id
- * an EARLIER-accepted file already claimed; a colliding file is SKIPPED WHOLE and
- * logged at ERROR (lost coverage), never merged.
+ * A merged-rule priority uniqueness key (#438 item 3): a duplicate priority is a
+ * conflict only WITHIN one platform's one rule section. Distinct platforms may reuse
+ * priorities freely (their rulesets never interleave in [Ruleset.matchFirst]), and a
+ * screen and a click may share a priority (separate rulesets).
+ */
+private data class PriorityKey(val platform: Platform, val section: String, val priority: Int)
+
+private fun bundlePriorityKeys(bundle: JsonRuleInterpreter.CompiledRuleBundle): List<PriorityKey> =
+    bundle.screens.map { PriorityKey(Platform.fromRuleId(it.id), "screens", it.priority) } +
+        bundle.clicks.map { PriorityKey(Platform.fromRuleId(it.id), "clicks", it.priority) } +
+        bundle.notifications.map { PriorityKey(Platform.fromRuleId(it.id), "notifications", it.priority) }
+
+/**
+ * Post-merge cross-file collision policy (#633 rule-id + #438 item 3 priority). Given
+ * per-file compiled bundles in LOAD ORDER, return only the files that don't collide with
+ * an EARLIER-accepted file on EITHER:
+ *  - a top-level rule id ([CompiledRule.id]), or
+ *  - a (platform, section, priority) tuple — priority uniqueness enforced POST-MERGE per
+ *    (platform, screens|clicks|notifications), not just per file.
+ * A colliding file is SKIPPED WHOLE and logged at ERROR (lost coverage), never merged.
  *
- * Why skip the LATER file, not the earlier one: [Ruleset]'s `byId` is last-wins, so a
+ * Why per (platform, section) post-merge: [RuleCompiler.compileRules] enforces priority
+ * uniqueness per rule TYPE within a SINGLE file, which is sufficient only because today
+ * each platform lives in exactly one asset file. The moment a platform splits across
+ * files (the #639 subrepo runtime path) or a remote OTA file ships alongside a bundled
+ * one (#192/#416), two files could each declare `doordash.screen` priority 100 and the
+ * per-file check would never see it — [Ruleset.matchFirst]'s stable-sort tie-break would
+ * then decide recognition by load order, silently. This is the post-merge analog of the
+ * canonicalize-time dup check (#639).
+ *
+ * Why skip the LATER file, not the earlier one (both collision kinds): consistent with
+ * the #633 first-file-wins policy. For a rule id, [Ruleset]'s `byId` is last-wins, so a
  * later file re-declaring an id would SHADOW the byId redact lookup
  * ([JsonRuleInterpreter.redactFor] / [JsonRuleInterpreter.notifRedactFor]) the capture
- * stage uses, while priority-ordered [Ruleset.matchFirst] still recognizes with a
+ * stage uses while priority-ordered [Ruleset.matchFirst] still recognizes with a
  * DIFFERENT rule — the wrong rule's `redact` block resolves and an id-keyed customer-PII
  * node (no marker prefix, invisible to the #624 screen backstop) could ship raw. Keeping
- * the earlier file's rules makes byId and matchFirst agree on that id.
+ * the earlier file's rules makes byId and matchFirst agree.
  *
  * ids come from top-level [CompiledRule.id] only — branches share the parent id and are
- * NOT in `byId`, so a branch never triggers a collision. Impossible with the current
- * prefix-namespaced asset bundles (`doordash.` / `uber.`), so this is a no-op today; it
- * hardens the future multi-file subrepo (#639) + untrusted CDN/fork rule path (#192/#416).
+ * NOT in `byId`, so a branch never triggers a collision. Both checks are impossible with
+ * the current prefix-namespaced single-file-per-platform asset bundles (`doordash.` /
+ * `uber.`), so this is a no-op today (byte-inert; [DefaultRulesIntegrationTest] and
+ * [ParseOutputGoldenTest] stay green); it hardens the future multi-file subrepo (#639) +
+ * untrusted CDN/fork rule path (#192/#416).
  *
  * Pure + top-level so it's unit-testable without an Android Context. The ERROR log names
- * the colliding id + both file paths ONLY — no rule text / no PII (Principle 7).
+ * the colliding id/priority + both file paths ONLY — no rule text / no PII (Principle 7).
  *
  * @param files compiled bundles in LOAD ORDER (earlier entries win a collision).
  */
@@ -383,21 +415,34 @@ fun acceptNonCollidingFiles(
     files: List<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>>,
 ): List<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>> {
     val claimedBy = HashMap<String, String>() // ruleId → first-claiming file path
+    val priorityClaimedBy = HashMap<PriorityKey, String>() // (platform, section, priority) → path
     val accepted = mutableListOf<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>>()
     for ((path, bundle) in files) {
         val ids = bundle.screens.map { it.id } +
             bundle.clicks.map { it.id } +
             bundle.notifications.map { it.id }
-        val collision = ids.firstOrNull { it in claimedBy }
-        if (collision != null) {
+        val idCollision = ids.firstOrNull { it in claimedBy }
+        if (idCollision != null) {
             Timber.e(
                 "JsonRuleInterpreter: rule id '%s' in '%s' already claimed by '%s' — skipping the " +
                     "later file (cross-file byId redact-lookup shadow, #633)",
-                collision, path, claimedBy.getValue(collision),
+                idCollision, path, claimedBy.getValue(idCollision),
+            )
+            continue
+        }
+        val priorityKeys = bundlePriorityKeys(bundle)
+        val priorityCollision = priorityKeys.firstOrNull { it in priorityClaimedBy }
+        if (priorityCollision != null) {
+            Timber.e(
+                "JsonRuleInterpreter: %s priority %d for platform '%s' in '%s' already claimed by " +
+                    "'%s' — skipping the later file (post-merge priority uniqueness, #438)",
+                priorityCollision.section, priorityCollision.priority,
+                priorityCollision.platform.wire, path, priorityClaimedBy.getValue(priorityCollision),
             )
             continue
         }
         for (id in ids) claimedBy[id] = path
+        for (key in priorityKeys) priorityClaimedBy[key] = path
         accepted += path to bundle
     }
     return accepted

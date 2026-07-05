@@ -112,6 +112,67 @@ class JsonRuleInterpreterCrossFileCollisionTest {
         assertNotNull(screens.ruleById("uber.screen.gamma_only"))
     }
 
+    /** A file with a single screen rule at [priority] with a unique id, for the given platform. */
+    private fun fileWithPriority(platform: String, id: String, priority: Int) = """
+        {
+          "format_version": 2,
+          "platform_id": "$platform",
+          "screens": [
+            { "id": "$id", "priority": $priority, "require": { "exists": { "hasText": "P" } } }
+          ]
+        }
+    """.trimIndent()
+
+    @Test
+    fun `later file colliding on a same-platform section priority is skipped`() {
+        // #438 item 3: two DIFFERENT files for the SAME platform declare the SAME
+        // screen priority with DISTINCT ids. compileRules' per-file check can't see
+        // it (different files); the post-merge gate rejects the later file.
+        val alpha = interpreter.loadSingle(
+            fileWithPriority("doordash.driver", "doordash.screen.a", 7777), "alpha.json",
+        )!!
+        val beta = interpreter.loadSingle(
+            fileWithPriority("doordash.driver", "doordash.screen.b", 7777), "beta.json",
+        )!!
+
+        val accepted = acceptNonCollidingFiles(listOf("alpha.json" to alpha, "beta.json" to beta))
+
+        // Later colliding file dropped whole; earlier survives.
+        assertEquals(listOf("alpha.json"), accepted.map { it.first })
+        val err = logs.entries.singleOrNull { it.priority == Log.ERROR }
+        assertNotNull("a priority collision must log exactly one ERROR", err)
+        assertTrue(err!!.message.contains("7777"))
+        assertTrue(err.message.contains("beta.json"))
+        assertTrue(err.message.contains("alpha.json"))
+
+        val screens = Ruleset(accepted.flatMap { it.second.screens })
+        assertNotNull(screens.ruleById("doordash.screen.a"))
+        assertNull(screens.ruleById("doordash.screen.b"))
+    }
+
+    @Test
+    fun `distinct platforms may reuse the same priority freely`() {
+        // #438 item 3: a DoorDash screen and an Uber screen at the SAME priority is
+        // NOT a collision — distinct platforms never interleave in matchFirst.
+        val dd = interpreter.loadSingle(
+            fileWithPriority("doordash.driver", "doordash.screen.a", 5555), "dd.json",
+        )!!
+        val uber = interpreter.loadSingle(
+            fileWithPriority("uber.driver", "uber.screen.a", 5555), "uber.json",
+        )!!
+
+        val accepted = acceptNonCollidingFiles(listOf("dd.json" to dd, "uber.json" to uber))
+
+        assertEquals(listOf("dd.json", "uber.json"), accepted.map { it.first })
+        assertTrue(
+            "cross-platform priority reuse must not log an ERROR",
+            logs.entries.none { it.priority == Log.ERROR },
+        )
+        val screens = Ruleset(accepted.flatMap { it.second.screens })
+        assertNotNull(screens.ruleById("doordash.screen.a"))
+        assertNotNull(screens.ruleById("uber.screen.a"))
+    }
+
     @Test
     fun `two files with disjoint ids both load fully`() {
         val one = interpreter.loadSingle(disjointFile("doordash.driver", "doordash.screen.one"), "one.json")!!
