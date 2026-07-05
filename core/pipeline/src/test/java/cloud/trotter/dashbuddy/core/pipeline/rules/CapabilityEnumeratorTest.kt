@@ -63,11 +63,23 @@ class CapabilityEnumeratorTest {
 
     @Test
     fun `reordering binding keys does NOT change the consent key`() {
+        // canonicalJson recursively sorts object keys, so reordering the bind
+        // ENTRY's keys must not change the consent key. A multi-key PREDICATE is
+        // now rejected by the compiler (#293 item 1), so the reorder is exercised
+        // on the entry's own keys (find + optional).
+        fun rule(entry: String) = """
+        [{
+          "id": "doordash.screen.offer_popup_test",
+          "priority": 10,
+          "require": { "exists": { "hasText": "Decline" } },
+          "bind": { "declineButton": $entry }
+        }]
+        """.trimIndent()
         val one = CapabilityEnumerator.enumerate(
-            compile(declineRule(bindPredicate = """{ "hasText": "Decline", "hasIdSuffix": "btn" }""")), "s",
+            compile(rule("""{ "find": { "hasText": "Decline" }, "optional": false }""")), "s",
         ).single()
         val reordered = CapabilityEnumerator.enumerate(
-            compile(declineRule(bindPredicate = """{ "hasIdSuffix": "btn", "hasText": "Decline" }""")), "s",
+            compile(rule("""{ "optional": false, "find": { "hasText": "Decline" } }""")), "s",
         ).single()
         assertEquals(one.key, reordered.key)
     }

@@ -17,6 +17,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import timber.log.Timber
+import java.util.Locale
 
 /**
  * Compiles a parsed `rules.json` [JsonElement] tree into typed lambda rulesets.
@@ -213,15 +215,47 @@ object RuleCompiler {
      * Compile a JSON array of rule objects into typed [CompiledRule] instances.
      * The [context] determines predicate vocabulary and parse input source.
      */
-    fun <TInput> compileRules(array: JsonArray, context: RuleContext): List<CompiledRule<TInput>> {
-        val rules = array.map { compileRule<TInput>(it.jsonObject, context) }
+    fun <TInput> compileRules(
+        array: JsonArray,
+        context: RuleContext,
+        platformId: String? = null,
+    ): List<CompiledRule<TInput>> {
+        // #293 item 4: per-rule fault isolation, OPT-IN (review F1). A rule
+        // skips (WARN with id + reason, no rule-body text — P7) instead of
+        // failing the whole file ONLY when BOTH:
+        //   • the rejection is tagged [RuleCompileException.isolable] — a
+        //     rule-authoring-level validation whose worst case is one
+        //     recognition surface degrading to UNKNOWN (→ scrubbed — safe); AND
+        //   • the rule is NOT part of the sensitive LAYER (id carries
+        //     `.sensitive.`, `overrideable == false`, or an unreadable id) —
+        //     never silently thin the sensitive block, whose coverage the #432
+        //     check only guarantees as ≥1-survives, not all-survive.
+        // Everything else — every UNTAGGED throw — rejects the WHOLE file (the
+        // conservative pre-#293 status quo). The default direction is the
+        // point: a future security/Pledge/DoS check (#419 caps, #598/#620/#624
+        // capture-PII guards, #425 actuation, #590 depth bounds) that forgets
+        // to consider isolation fails LOUD (over-reject), never as a silent
+        // per-rule downgrade — Principle 6: do not trust call-site discipline.
+        val rules = mutableListOf<CompiledRule<TInput>>()
+        for (element in array) {
+            val obj = element.jsonObject
+            try {
+                rules += compileRule<TInput>(obj, context, platformId)
+            } catch (e: RuleCompileException) {
+                if (!e.isolable || rawRuleIsSensitive(obj)) throw e
+                Timber.tag("Rules").w(
+                    "Skipping malformed %s rule '%s' (non-sensitive; frame → UNKNOWN → scrubbed): %s",
+                    context.name.lowercase(Locale.ROOT), rawRuleId(obj), e.message,
+                )
+            }
+        }
         // Enforce unique priorities within the same rule type
         val seen = mutableMapOf<Int, String>()
         for (rule in rules) {
             val existing = seen.put(rule.priority, rule.id)
             if (existing != null) {
                 throw RuleCompileException(
-                    "Duplicate priority ${rule.priority} in ${context.name.lowercase()} rules: " +
+                    "Duplicate priority ${rule.priority} in ${context.name.lowercase(Locale.ROOT)} rules: " +
                         "'$existing' and '${rule.id}'. Priorities must be unique per rule type.",
                 )
             }
@@ -230,9 +264,35 @@ object RuleCompiler {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun <TInput> compileRule(obj: JsonObject, context: RuleContext): CompiledRule<TInput> {
-        val id = obj["id"]!!.jsonPrimitive.content
-        val priority = obj["priority"]!!.jsonPrimitive.int
+    private fun <TInput> compileRule(
+        obj: JsonObject,
+        context: RuleContext,
+        platformId: String? = null,
+    ): CompiledRule<TInput> {
+        // #293 item 3: typed id/priority — a missing/mistyped field is a
+        // RuleCompileException naming the field, never a raw NPE/CCE from `!!`.
+        val id = requireStringField(obj, "id", ruleId = null)
+        val priority = requireIntField(obj, "priority", ruleId = id)
+
+        // #293 item 5: unknown top-level rule keys (the `"overridable"` typo,
+        // `"if_"`) are a typed reject naming them, not a silent default.
+        validateKnownKeys(obj, knownRuleKeys(context), scope = "rule", ruleId = id)
+
+        // #293 item 8: each rule id must carry the file's platform prefix. A
+        // mis-prefixed id silently never matches today (Platform.fromRuleId reads
+        // the leading segment) — make it loud. Platform-agnostic: the prefix is
+        // whatever the file's platform_id declares, never a hardcoded platform.
+        if (platformId != null) {
+            val platformRoot = platformId.substringBefore('.')
+            if (!id.startsWith("$platformRoot.")) {
+                throw ruleError(
+                    id,
+                    "id must start with the file's platform prefix '$platformRoot.' " +
+                        "(platform_id='$platformId')",
+                )
+            }
+        }
+
         val overrideable = obj["overrideable"]?.jsonPrimitive?.booleanOrNull ?: true
 
         // Rule-level bindings (screen rules only)
@@ -310,6 +370,8 @@ object RuleCompiler {
                             "not per-branch. Move it to the rule's top level.",
                     )
                 }
+                // #293 item 5: unknown branch keys are a typed reject naming them.
+                validateKnownKeys(branchObj, knownBranchKeys(context), scope = "branch", ruleId = id)
                 compileBranch(branchObj, context, ruleState.flow, ruleState.modeHint,
                     ruleOutcomes = ruleState.outcomes, ruleId = id,
                     ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj)
@@ -858,9 +920,9 @@ object RuleCompiler {
                 fn
             }
             "allTextContains" in presenceSpec -> {
-                val text = presenceSpec["allTextContains"]!!.jsonPrimitive.content.lowercase()
+                val text = presenceSpec["allTextContains"]!!.jsonPrimitive.content.lowercase(Locale.ROOT)
                 val fn: (UiNode) -> Boolean = { tree ->
-                    tree.allText.joinToString("\u001F").lowercase().contains(text)
+                    tree.allTextLowerJoined.contains(text)
                 }
                 fn
             }
@@ -1000,7 +1062,10 @@ object RuleCompiler {
         val onFail = obj["onFail"]?.jsonPrimitive?.content ?: "skip"
         // A typo'd onFail used to coerce silently to "skip" (#362).
         if (onFail !in setOf("skip", "dropParsed")) {
-            throw RuleCompileException("Unknown onFail: '$onFail' (expected 'skip' or 'dropParsed')")
+            throw RuleCompileException(
+                "Unknown onFail: '$onFail' (expected 'skip' or 'dropParsed')",
+                isolable = true, // authoring typo — the rule isolates (#293 item 4)
+            )
         }
 
         return { parsed ->
@@ -1138,6 +1203,171 @@ object RuleCompiler {
     }
 
     // ==========================================================================
+    //  #293 robustness helpers — typed casts, value-honoring flags, known keys
+    // ==========================================================================
+
+    /**
+     * The scalar of a single-key predicate, or a typed [RuleCompileException]
+     * (#293 item 3). Replaces the bare `value as JsonPrimitive` casts scattered
+     * through the predicate compilers so a mistyped rule (a nested object where a
+     * string is expected) fails rule LOAD with a clear message instead of throwing
+     * a raw [ClassCastException] out of the compiler.
+     */
+    private fun primOf(value: JsonElement, key: String): JsonPrimitive =
+        value as? JsonPrimitive
+            ?: throw RuleCompileException(
+                "Predicate '$key' requires a scalar value, got: $value",
+                isolable = true,
+            )
+
+    /**
+     * A boolean-flag predicate's declared value (#293 item 2), typed (#293 item 3).
+     * `{"isClickable": false}` now matches NON-clickable nodes instead of silently
+     * ignoring the value. A non-boolean value is a typed compile error, not a
+     * silent default.
+     */
+    private fun boolFlag(value: JsonElement, key: String): Boolean =
+        primOf(value, key).booleanOrNull
+            ?: throw RuleCompileException(
+                "Predicate '$key' requires a boolean value (true/false), got: $value",
+                isolable = true,
+            )
+
+    /**
+     * Enforce that a predicate object carries EXACTLY ONE key (#293 item 1). The
+     * predicate vocabularies (tree/node/notification) are single-key by design
+     * (see docs/rules.schema.json: "Object with exactly one key"); a second key
+     * — `{"hasIdSuffix":"x","hasText":"y"}` — used to compile with only the first
+     * key firing and the rest silently dropped. There are no auxiliary keys on
+     * these predicates (case-insensitivity is intrinsic, not a `ignoreCase` flag),
+     * so exactly-one is the correct contract. [what] names the vocabulary for the
+     * error; the empty-object case keeps its own message.
+     */
+    private fun requireSinglePredicateKey(obj: JsonObject, what: String) {
+        if (obj.size > 1) {
+            throw RuleCompileException(
+                "$what must have exactly one key, got ${obj.keys.toList()}",
+                isolable = true,
+            )
+        }
+    }
+
+    /** A required string field on a rule object, typed (#293 item 3). */
+    private fun requireStringField(obj: JsonObject, field: String, ruleId: String?): String {
+        val el = obj[field]
+            ?: throw ruleError(ruleId, "missing required '$field'")
+        val prim = el as? JsonPrimitive
+        if (prim == null || !prim.isString) {
+            throw ruleError(ruleId, "'$field' must be a string, got: $el")
+        }
+        return prim.content
+    }
+
+    /** A required integer field on a rule object, typed (#293 item 3). */
+    private fun requireIntField(obj: JsonObject, field: String, ruleId: String?): Int {
+        val el = obj[field]
+            ?: throw ruleError(ruleId, "missing required '$field'")
+        return (el as? JsonPrimitive)?.intOrNull
+            ?: throw ruleError(ruleId, "'$field' must be an integer, got: $el")
+    }
+
+    /**
+     * A rule-authoring-level error (missing/mistyped id or priority, unknown
+     * key, bad platform prefix) — tagged isolable: worst case is one surface
+     * degrading to UNKNOWN. The isolation loop's sensitive belt still rejects
+     * the whole file when the offending rule is sensitive-layer or its id is
+     * unreadable (`rawRuleIsSensitive`).
+     */
+    private fun ruleError(ruleId: String?, msg: String): RuleCompileException =
+        RuleCompileException(
+            if (ruleId != null) "Rule '$ruleId': $msg" else "Rule: $msg",
+            isolable = true,
+        )
+
+    // -- Known-key validation (#293 item 5) --------------------------------------
+    //
+    // Single owner for the rule/branch key vocabulary the compiler consumes. Built
+    // from what compileRule/compileBranch actually read PLUS docs/rules.schema.json
+    // (the compiler-ignored `comment`/`description` metadata keys are permitted).
+    // An unknown key — the `"overridable"` typo, `"if_"` — is a typed reject naming
+    // it, instead of silently defaulting. Production goldens are the proof this set
+    // is right (a legitimate key that tripped it would fail DefaultRulesIntegrationTest).
+
+    /** Metadata keys any rule/branch object may carry; ignored by the compiler. */
+    private val META_KEYS = setOf("comment", "description")
+
+    private fun knownRuleKeys(context: RuleContext): Set<String> = when (context) {
+        RuleContext.SCREEN -> setOf(
+            "id", "priority", "overrideable", "state", "bind", "redact", "reject",
+            "require", "parse", "validate", "effects", "transitionOverrides",
+            "branches", "intent",
+        )
+        RuleContext.CLICK -> setOf(
+            "id", "priority", "overrideable", "state", "bind", "redact", "reject",
+            "require", "parse", "validate", "effects", "transitionOverrides",
+            "branches", "intent", "screenIs",
+        )
+        RuleContext.NOTIFICATION -> setOf(
+            "id", "priority", "overrideable", "state", "redact", "reject",
+            "require", "parse", "validate", "effects", "transitionOverrides",
+            "branches", "intent",
+        )
+    } + META_KEYS
+
+    private fun knownBranchKeys(context: RuleContext): Set<String> = when (context) {
+        RuleContext.SCREEN -> setOf(
+            "state", "bind", "reject", "require", "parse", "validate", "effects",
+            "transitionOverrides", "intent",
+        )
+        RuleContext.CLICK -> setOf(
+            "state", "bind", "reject", "require", "parse", "validate", "effects",
+            "transitionOverrides", "intent", "screenIs",
+        )
+        RuleContext.NOTIFICATION -> setOf(
+            "state", "reject", "require", "parse", "validate", "effects",
+            "transitionOverrides", "intent",
+        )
+    } + META_KEYS
+
+    private fun validateKnownKeys(
+        obj: JsonObject,
+        allowed: Set<String>,
+        scope: String,
+        ruleId: String?,
+    ) {
+        val unknown = obj.keys.filterNot { it in allowed }
+        if (unknown.isNotEmpty()) {
+            throw ruleError(ruleId, "unknown $scope key(s) $unknown (allowed: ${allowed.sorted()})")
+        }
+    }
+
+    // -- Per-rule fault isolation, sensitive-exempt (#293 item 4) -----------------
+
+    /**
+     * True when a rule that FAILED to compile must still reject the WHOLE file
+     * rather than be skipped (#293 item 4). Per-rule isolation must never silently
+     * thin the sensitive block: the #432 coverage check only guarantees ≥1
+     * sensitive rule per platform survives, not that ALL did. A skipped
+     * non-sensitive rule degrades one recognition surface (its frames → UNKNOWN →
+     * scrubbed — safe); a skipped sensitive rule degrades the Pledge. Read from RAW
+     * JSON because the rule didn't compile: sensitive iff the readable `id` carries
+     * the `.sensitive.` segment, OR `overrideable == false`, OR the `id` is
+     * UNREADABLE (can't tell what it is → fail closed).
+     */
+    private fun rawRuleIsSensitive(obj: JsonObject): Boolean {
+        val idPrim = obj["id"] as? JsonPrimitive
+        val id = idPrim?.takeIf { it.isString }?.content
+            ?: return true // unreadable id → fail closed
+        if (".sensitive." in id) return true
+        val overrideable = (obj["overrideable"] as? JsonPrimitive)?.booleanOrNull ?: true
+        return !overrideable
+    }
+
+    /** Readable rule id for a WARN line, or a placeholder — never rule-body text (P7). */
+    private fun rawRuleId(obj: JsonObject): String =
+        (obj["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: "<unreadable-id>"
+
+    // ==========================================================================
     //  Tree predicate compiler (operates on full UiNode tree)
     // ==========================================================================
 
@@ -1149,7 +1379,8 @@ object RuleCompiler {
             ?: throw RuleCompileException("Tree predicate must be a JSON object, got: $json")
         val key = obj.keys.firstOrNull()
             ?: throw RuleCompileException("Empty tree predicate object")
-        val value = obj[key]!!
+        requireSinglePredicateKey(obj, "Tree predicate")
+        val value = obj.getValue(key)
 
         return when (key) {
             "exists" -> {
@@ -1161,25 +1392,25 @@ object RuleCompiler {
                 ;{ tree -> tree.findNode(nodePred) == null }
             }
             "allTextContains" -> {
-                val text = (value as? JsonPrimitive)?.content?.lowercase()
+                val text = (value as? JsonPrimitive)?.content?.lowercase(Locale.ROOT)
                     ?: throw RuleCompileException("allTextContains requires a string value")
-                ;{ tree -> tree.allText.joinToString("\u001F").lowercase().contains(text) }
+                ;{ tree -> tree.allTextLowerJoined.contains(text) }
             }
             "allTextContainsAll" -> {
                 val texts = (value as? JsonArray)
-                    ?.map { (it as JsonPrimitive).content.lowercase() }
+                    ?.map { primOf(it, key).content.lowercase(Locale.ROOT) }
                     ?: throw RuleCompileException("allTextContainsAll requires an array")
                 ;{ tree ->
-                    val joined = tree.allText.joinToString("\u001F").lowercase()
+                    val joined = tree.allTextLowerJoined
                     texts.all { joined.contains(it) }
                 }
             }
             "allTextContainsAny" -> {
                 val texts = (value as? JsonArray)
-                    ?.map { (it as JsonPrimitive).content.lowercase() }
+                    ?.map { primOf(it, key).content.lowercase(Locale.ROOT) }
                     ?: throw RuleCompileException("allTextContainsAny requires an array")
                 ;{ tree ->
-                    val joined = tree.allText.joinToString("\u001F").lowercase()
+                    val joined = tree.allTextLowerJoined
                     texts.any { joined.contains(it) }
                 }
             }
@@ -1215,42 +1446,45 @@ object RuleCompiler {
             ?: throw RuleCompileException("Node predicate must be a JSON object, got: $json")
         val key = obj.keys.firstOrNull()
             ?: throw RuleCompileException("Empty node predicate object")
-        val value = obj[key]!!
+        requireSinglePredicateKey(obj, "Node predicate")
+        val value = obj.getValue(key)
 
         return when (key) {
             "hasIdSuffix" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.viewIdResourceName?.endsWith(s, ignoreCase = true) == true }
             }
             "hasIdExact" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.viewIdResourceName == s }
             }
             "hasIdContaining" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.viewIdResourceName?.contains(s) == true }
             }
-            "hasNoId" ->
-                { node -> node.viewIdResourceName.isNullOrBlank() }
+            "hasNoId" -> {
+                val want = boolFlag(value, key)
+                ;{ node -> node.viewIdResourceName.isNullOrBlank() == want }
+            }
 
             "hasText" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.text?.equals(s, ignoreCase = true) == true }
             }
             "hasTextCaseSensitive" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.text == s }
             }
             "hasTextContaining" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.text?.contains(s, ignoreCase = true) == true }
             }
             "hasTextStartsWith" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.text?.startsWith(s, ignoreCase = true) == true }
             }
             "hasTextMatchesRegex" -> {
-                val regex = compileRegex((value as JsonPrimitive).content)
+                val regex = compileRegex(primOf(value, key).content)
                 ;{ node -> node.text?.let { str -> regex.containsMatchIn(str) } == true }
             }
 
@@ -1261,42 +1495,42 @@ object RuleCompiler {
             // Button has no text on the outer node; the text is in a nested
             // textView_prism_button_title child).
             "hasAnyText" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.allText.any { it.equals(s, ignoreCase = true) } }
             }
 
             "hasDesc" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.contentDescription?.equals(s, ignoreCase = true) == true }
             }
             "hasDescContaining" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.contentDescription?.contains(s, ignoreCase = true) == true }
             }
 
             "hasStateDescription" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.stateDescription?.equals(s, ignoreCase = true) == true }
             }
             "hasStateDescriptionContaining" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.stateDescription?.contains(s, ignoreCase = true) == true }
             }
 
             "hasClassName" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.className == s }
             }
             "hasClassNameEndsWith" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ node -> node.className?.endsWith(s, ignoreCase = true) == true }
             }
 
-            "isClickable" -> { node -> node.isClickable }
-            "isEnabled" -> { node -> node.isEnabled }
-            "isChecked" -> { node -> node.isChecked != 0 }
-            "hasChildren" -> { node -> node.children.isNotEmpty() }
-            "isLeaf" -> { node -> node.children.isEmpty() }
+            "isClickable" -> { val want = boolFlag(value, key); { node -> node.isClickable == want } }
+            "isEnabled" -> { val want = boolFlag(value, key); { node -> node.isEnabled == want } }
+            "isChecked" -> { val want = boolFlag(value, key); { node -> (node.isChecked != 0) == want } }
+            "hasChildren" -> { val want = boolFlag(value, key); { node -> node.children.isNotEmpty() == want } }
+            "isLeaf" -> { val want = boolFlag(value, key); { node -> node.children.isEmpty() == want } }
 
             "all" -> {
                 val preds = (value as? JsonArray)
@@ -1331,76 +1565,81 @@ object RuleCompiler {
             ?: throw RuleCompileException("Notification predicate must be a JSON object")
         val key = obj.keys.firstOrNull()
             ?: throw RuleCompileException("Empty notification predicate object")
-        val value = obj[key]!!
+        requireSinglePredicateKey(obj, "Notification predicate")
+        val value = obj.getValue(key)
 
         return when (key) {
             "titleEquals" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.title?.equals(s, ignoreCase = true) == true }
             }
             "titleContains" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.title?.contains(s, ignoreCase = true) == true }
             }
             "titleMatchesRegex" -> {
-                val regex = compileRegex((value as JsonPrimitive).content)
+                val regex = compileRegex(primOf(value, key).content)
                 ;{ raw -> raw.title?.let { str -> regex.containsMatchIn(str) } == true }
             }
             "textEquals" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.text?.equals(s, ignoreCase = true) == true }
             }
             "textContains" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.text?.contains(s, ignoreCase = true) == true }
             }
             "textMatchesRegex" -> {
-                val regex = compileRegex((value as JsonPrimitive).content)
+                val regex = compileRegex(primOf(value, key).content)
                 ;{ raw -> raw.text?.let { str -> regex.containsMatchIn(str) } == true }
             }
             "bigTextContains" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.bigText?.contains(s, ignoreCase = true) == true }
             }
             "bigTextMatchesRegex" -> {
-                val regex = compileRegex((value as JsonPrimitive).content)
+                val regex = compileRegex(primOf(value, key).content)
                 ;{ raw -> raw.bigText?.let { str -> regex.containsMatchIn(str) } == true }
             }
             "tickerTextContains" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.tickerText?.contains(s, ignoreCase = true) == true }
             }
             "tickerTextMatchesRegex" -> {
-                val regex = compileRegex((value as JsonPrimitive).content)
+                val regex = compileRegex(primOf(value, key).content)
                 ;{ raw -> raw.tickerText?.let { str -> regex.containsMatchIn(str) } == true }
             }
-            "isClearable" ->
-                { raw -> raw.isClearable }
-            "isOngoing" ->
-                { raw -> raw.isOngoing }
+            "isClearable" -> {
+                val want = boolFlag(value, key)
+                ;{ raw -> raw.isClearable == want }
+            }
+            "isOngoing" -> {
+                val want = boolFlag(value, key)
+                ;{ raw -> raw.isOngoing == want }
+            }
             "channelIdEquals" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.channelId == s }
             }
             "channelIdContains" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.channelId?.contains(s, ignoreCase = true) == true }
             }
             "categoryEquals" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.category == s }
             }
             "hasAction" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.actionLabels.any { it.contains(s, ignoreCase = true) } }
             }
             "anyFieldContains" -> {
-                val s = (value as JsonPrimitive).content
+                val s = primOf(value, key).content
                 ;{ raw -> raw.toFullString().contains(s, ignoreCase = true) }
             }
             "anyFieldContainsAll" -> {
                 val texts = (value as? JsonArray)
-                    ?.map { (it as JsonPrimitive).content }
+                    ?.map { primOf(it, key).content }
                     ?: throw RuleCompileException("anyFieldContainsAll requires an array")
                 ;{ raw ->
                     val full = raw.toFullString()
@@ -1409,7 +1648,7 @@ object RuleCompiler {
             }
             "anyFieldContainsAny" -> {
                 val texts = (value as? JsonArray)
-                    ?.map { (it as JsonPrimitive).content }
+                    ?.map { primOf(it, key).content }
                     ?: throw RuleCompileException("anyFieldContainsAny requires an array")
                 ;{ raw ->
                     val full = raw.toFullString()
@@ -1417,7 +1656,7 @@ object RuleCompiler {
                 }
             }
             "anyFieldMatchesRegex" -> {
-                val regex = compileRegex((value as JsonPrimitive).content)
+                val regex = compileRegex(primOf(value, key).content)
                 ;{ raw -> regex.containsMatchIn(raw.toFullString()) }
             }
             "all" -> {
@@ -1510,7 +1749,10 @@ object RuleCompiler {
                 val idSuffix = nav.removePrefix("findDescendant(").removeSuffix(")")
                 ;{ node -> node.findDescendantById(idSuffix) }
             }
-            else -> throw RuleCompileException("Unknown navigation: '$nav'")
+            else -> throw RuleCompileException(
+                "Unknown navigation: '$nav'",
+                isolable = true, // authoring typo — the rule isolates (#293 item 4)
+            )
         }
     }
 

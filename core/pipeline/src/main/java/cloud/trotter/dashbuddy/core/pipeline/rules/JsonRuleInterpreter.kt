@@ -227,14 +227,18 @@ class JsonRuleInterpreter @Inject constructor(
                 )
             }
 
+            // #293 item 8: the file's platform_id (validated present by
+            // RulesetLoader.validate) pins each rule id's required platform prefix.
+            val platformId = root["platform_id"]?.jsonPrimitive?.content
+
             val screens = root["screens"]?.jsonArray
-                ?.let { RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
+                ?.let { RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN, platformId) }
                 ?: emptyList()
             val clicks = root["clicks"]?.jsonArray
-                ?.let { RuleCompiler.compileRules<UiNode>(it, RuleContext.CLICK) }
+                ?.let { RuleCompiler.compileRules<UiNode>(it, RuleContext.CLICK, platformId) }
                 ?: emptyList()
             val notifications = root["notifications"]?.jsonArray
-                ?.let { RuleCompiler.compileRules<RawNotificationData>(it, RuleContext.NOTIFICATION) }
+                ?.let { RuleCompiler.compileRules<RawNotificationData>(it, RuleContext.NOTIFICATION, platformId) }
                 ?: emptyList()
 
             val formatVersion = root["format_version"]?.jsonPrimitive?.int

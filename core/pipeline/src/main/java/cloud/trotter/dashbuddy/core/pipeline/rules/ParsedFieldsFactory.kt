@@ -55,6 +55,7 @@ object ParsedFieldsFactory {
                 throw RuleCompileException(
                     "Rule '$ruleId' declares shape '$shape' but parse block is missing required " +
                         "fields: ${missing.joinToString(", ") { "'$it'" }}",
+                    isolable = true, // authoring-level shape violation — the rule isolates (#293 item 4)
                 )
             }
         }
@@ -65,6 +66,7 @@ object ParsedFieldsFactory {
                     throw RuleCompileException(
                         "Rule '$ruleId' declares shape '$shape' but parse block must include " +
                             "at least one of: ${group.joinToString(", ") { "'$it'" }}",
+                        isolable = true, // authoring-level shape violation — the rule isolates (#293 item 4)
                     )
                 }
             }

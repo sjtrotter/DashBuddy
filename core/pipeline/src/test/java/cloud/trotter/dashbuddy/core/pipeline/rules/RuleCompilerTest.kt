@@ -826,8 +826,13 @@ class RuleCompilerTest {
         ParsedFieldsFactory.validateShapeFields("future_shape", emptySet(), "test.rule")
     }
 
-    @Test(expected = RuleCompileException::class)
-    fun `compileRules rejects offer shape rule missing payAmount`() {
+    @Test
+    fun `offer shape rule missing payAmount is caught at compile and isolates the rule (item 4 skip)`() {
+        // The shape-contract violation is an authoring malformation, not a
+        // fail-closed security control, so #293 item 4 isolates it to a per-rule
+        // SKIP (WARN'd) rather than failing the whole file — the missing required
+        // field is still caught at compile (the rule never becomes a live offer
+        // matcher; a bad offer never recognizes → surface UNKNOWN → safe).
         val ruleJson = """[{
             "id": "test.screen.bad_offer",
             "priority": 10,
@@ -839,9 +844,10 @@ class RuleCompilerTest {
                 }
             }
         }]"""
-        RuleCompiler.compileRules<UiNode>(
+        val compiled = RuleCompiler.compileRules<UiNode>(
             Json.parseToJsonElement(ruleJson).jsonArray, RuleContext.SCREEN,
         )
+        assertTrue("the malformed offer rule must be skipped, not compiled", compiled.isEmpty())
     }
 
     @Test

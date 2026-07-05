@@ -70,11 +70,25 @@ class RuleCapabilityEnumerationTest {
 
     @Test
     fun `reordering binding keys does NOT change the key - no spurious re-consent`() {
+        // The consent key canonicalizes (recursively sorts) the binding
+        // definition JSON, so reordering the bind ENTRY's keys must not change
+        // it. A multi-key PREDICATE is now rejected by the compiler (#293 item 1
+        // — extra predicate keys used to be silently dropped), so the reorder is
+        // exercised on the entry's own keys (find + optional), which is the real
+        // canonicalization surface.
+        fun rule(entry: String) = """
+        [{
+          "id": "doordash.screen.offer_popup_test",
+          "priority": 10,
+          "require": { "exists": { "hasText": "Decline" } },
+          "bind": { "declineButton": $entry }
+        }]
+        """.trimIndent()
         val one = RuleCompiler.enumerateCapabilities(
-            compile(declineTargetRule(bindPredicate = """{ "hasText": "Decline", "hasIdSuffix": "btn" }""")), "s",
+            compile(rule("""{ "find": { "hasText": "Decline" }, "optional": false }""")), "s",
         ).single()
         val reordered = RuleCompiler.enumerateCapabilities(
-            compile(declineTargetRule(bindPredicate = """{ "hasIdSuffix": "btn", "hasText": "Decline" }""")), "s",
+            compile(rule("""{ "optional": false, "find": { "hasText": "Decline" } }""")), "s",
         ).single()
         assertEquals(one.key, reordered.key)
     }
