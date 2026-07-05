@@ -59,12 +59,16 @@ fun DashBuddyTheme(
     val dash = if (darkTheme) darkAppColors() else lightAppColors()
     CompositionLocalProvider(
         LocalDashColors provides dash,
-        LocalDashTextStyles provides dashTextStyles(),
+        // #318: the numeric HUD style family (AppTheme.num.*) scales by `glance` on top of
+        // system fontScale — a no-op at the 1.0 default the main app window always passes.
+        LocalDashTextStyles provides dashTextStyles().scaledByGlance(glance),
         LocalGlance provides glance,
     ) {
         MaterialTheme(
             colorScheme = dashColorScheme(dash),
-            typography = AppTypography,
+            // Same scaling for stock M3 typography (captions/labels/chips) so the whole HUD
+            // card moves together, not just the numeric heroes.
+            typography = AppTypography.scaledByGlance(glance),
             shapes = AppShapes,
             content = content,
         )

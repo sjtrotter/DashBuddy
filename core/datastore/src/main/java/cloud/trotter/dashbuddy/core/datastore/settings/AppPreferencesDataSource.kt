@@ -31,6 +31,8 @@ class AppPreferencesDataSource @Inject constructor(
         val GAS_PRICE = floatPreferencesKey("gas_price")
         val IS_PRO_MODE = booleanPreferencesKey("is_pro_mode")
         val APP_THEME = stringPreferencesKey("app_theme")
+        // Driving / glance mode (#318) — bumps the HUD's LocalGlance multiplier.
+        val GLANCE_MODE = booleanPreferencesKey("glance_mode")
         val FUEL_TYPE = stringPreferencesKey("fuel_type")
         // Legacy key (pre-v2 schema, "CAR"/"E_BIKE"). VEHICLE_CLASS supersedes it.
         val VEHICLE_TYPE = stringPreferencesKey("vehicle_type")
@@ -84,6 +86,7 @@ class AppPreferencesDataSource @Inject constructor(
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
     val isProMode: Flow<Boolean> = ds.data.map { it[Keys.IS_PRO_MODE] ?: false }
     val appTheme: Flow<String?> = ds.data.map { it[Keys.APP_THEME] }
+    val glanceMode: Flow<Boolean> = ds.data.map { it[Keys.GLANCE_MODE] ?: false }
     val fuelType: Flow<String?> = ds.data.map { it[Keys.FUEL_TYPE] }
     /**
      * Reads `vehicle_class` first; falls back to legacy `vehicle_type` (mapping
@@ -162,6 +165,10 @@ class AppPreferencesDataSource @Inject constructor(
 
     suspend fun setTheme(theme: String) {
         ds.edit { it[Keys.APP_THEME] = theme }
+    }
+
+    suspend fun setGlanceMode(enabled: Boolean) {
+        ds.edit { it[Keys.GLANCE_MODE] = enabled }
     }
 
     suspend fun updateEconomySettings(

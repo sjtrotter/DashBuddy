@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.designsystem.theme.DRIVING_GLANCE_MULTIPLIER
 import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -47,11 +49,19 @@ class BubbleViewModel @Inject constructor(
     odometerRepository: OdometerRepository,
     private val stateManager: StateManagerV2,
     appEventRepo: AppEventRepo,
+    appPreferencesRepository: AppPreferencesRepository,
 ) : ViewModel() {
 
     // Current app state — drives the mode card in the HUD
     val appState = stateManager.state
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppState())
+
+    // Driving / glance mode (#318) — the HUD's LocalGlance multiplier, reactive to the
+    // Settings toggle so flipping it updates the live HUD without a restart. The main app
+    // window (MainActivity) never reads this — only BubbleActivity does.
+    val glanceMultiplier = appPreferencesRepository.glanceMode
+        .map { enabled -> if (enabled) DRIVING_GLANCE_MULTIPLIER else 1f }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1f)
 
     // Which platform the bubble is currently showing
     val focusedPlatform = stateManager.state

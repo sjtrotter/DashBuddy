@@ -22,6 +22,8 @@ class SettingsMenuViewModel @Inject constructor(
     val evidenceConfig = strategyRepository.evidenceConfig
     val appTheme = appPreferencesRepository.appTheme
     val isProMode = appPreferencesRepository.isProMode
+    /** Driving / glance mode (#318) — surfaced on General settings. */
+    val glanceMode = appPreferencesRepository.glanceMode
     /** Surfaced on Settings home so the Personal Economy nav row shows live $/mi. */
     val userEconomy = appPreferencesRepository.userEconomy
 
@@ -59,5 +61,9 @@ class SettingsMenuViewModel @Inject constructor(
 
     fun setTheme(theme: String) = viewModelScope.launch {
         appPreferencesRepository.setTheme(theme)
+    }
+
+    fun setGlanceMode(enabled: Boolean) = viewModelScope.launch {
+        appPreferencesRepository.setGlanceMode(enabled)
     }
 }

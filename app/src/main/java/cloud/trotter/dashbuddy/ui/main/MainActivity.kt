@@ -28,6 +28,7 @@ import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EvidenceSettingsScreen
+import cloud.trotter.dashbuddy.ui.main.settings.GeneralSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.PlatformSettingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.ui.main.settings.StrategySettingsScreen
@@ -129,8 +130,7 @@ class MainActivity : ComponentActivity() {
 
                         // 4. General Settings
                         composable(Screen.GeneralSettings.route) {
-                            PlaceholderScreen(
-                                title = "General Settings",
+                            GeneralSettingsScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }

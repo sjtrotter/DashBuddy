@@ -62,6 +62,49 @@ fun dashTextStyles(): AppTextStyles = AppTextStyles(
 
 val LocalDashTextStyles = staticCompositionLocalOf { dashTextStyles() }
 
+/** Scales a single style's font size by [glance] — a no-op copy at the 1.0 default. */
+private fun TextStyle.scaledByGlance(glance: Float): TextStyle =
+    if (glance == 1f) this else copy(fontSize = fontSize * glance)
+
+/**
+ * Driving / glance mode (#318): every numeric HUD style scales by [glance] on top of whatever
+ * system `fontScale` already applied to the base sp values — the two multiply, neither replaces
+ * the other. Called from [DashBuddyTheme] with the live [LocalGlance] value; a no-op at 1.0 so
+ * the main app window (which never passes `glance`) is unaffected.
+ */
+fun AppTextStyles.scaledByGlance(glance: Float): AppTextStyles = if (glance == 1f) this else copy(
+    heroNum = heroNum.scaledByGlance(glance),
+    xlNum = xlNum.scaledByGlance(glance),
+    lgNum = lgNum.scaledByGlance(glance),
+    mdNum = mdNum.scaledByGlance(glance),
+    smNum = smNum.scaledByGlance(glance),
+    xsNum = xsNum.scaledByGlance(glance),
+    chip = chip.scaledByGlance(glance),
+)
+
+/**
+ * Scales every M3 [Typography] slot by [glance] (#318) — the HUD also renders plain body/label
+ * text (captions, chips) via `MaterialTheme.typography.*`, not just the [AppTextStyles] numeric
+ * family, so both need to move together for the toggle to visibly enlarge the whole card.
+ */
+fun Typography.scaledByGlance(glance: Float): Typography = if (glance == 1f) this else copy(
+    displayLarge = displayLarge.scaledByGlance(glance),
+    displayMedium = displayMedium.scaledByGlance(glance),
+    displaySmall = displaySmall.scaledByGlance(glance),
+    headlineLarge = headlineLarge.scaledByGlance(glance),
+    headlineMedium = headlineMedium.scaledByGlance(glance),
+    headlineSmall = headlineSmall.scaledByGlance(glance),
+    titleLarge = titleLarge.scaledByGlance(glance),
+    titleMedium = titleMedium.scaledByGlance(glance),
+    titleSmall = titleSmall.scaledByGlance(glance),
+    bodyLarge = bodyLarge.scaledByGlance(glance),
+    bodyMedium = bodyMedium.scaledByGlance(glance),
+    bodySmall = bodySmall.scaledByGlance(glance),
+    labelLarge = labelLarge.scaledByGlance(glance),
+    labelMedium = labelMedium.scaledByGlance(glance),
+    labelSmall = labelSmall.scaledByGlance(glance),
+)
+
 /** Material 3 Typography — Hanken Grotesk across the board, sized to the design scale. */
 val AppTypography: Typography = Typography().let { b ->
     val ui = HankenGrotesk
