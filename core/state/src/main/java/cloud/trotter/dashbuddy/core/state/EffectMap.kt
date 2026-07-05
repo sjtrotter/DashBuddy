@@ -400,7 +400,16 @@ class EffectMap @Inject constructor() {
                     // customer-less "completion" of a store that was never delivered (06-21 seq98:
                     // Smoky Mo's pickup …32 completed at the moment the Burger King add-on was
                     // accepted). Only a task that actually reached the dropoff phase may complete.
-                    if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF) {
+                    // #653 firewall parity: mirror the #596 close-out path's #498 identity firewall
+                    // (below, `customerNameHash == null && customerAddressHash == null`) here too —
+                    // an identity-less phantom drop must not mint a full-receipt completion from the
+                    // PostTask-exit path either, or it would land the whole receipt on a phantom while
+                    // its siblings' apportioned shares already sum to it (the read-model double-count,
+                    // #653/#630). An identity-BEARING single drop is the normal path, unaffected.
+                    val identityLess = completedTask != null &&
+                        completedTask.customerNameHash == null &&
+                        completedTask.customerAddressHash == null
+                    if (completedTask != null && completedTask.phase == TaskPhase.DROPOFF && !identityLess) {
                         val retireSince = p.pendingDestructive
                             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
                         // #528: attribute this drop's share of the combined receipt. Read the

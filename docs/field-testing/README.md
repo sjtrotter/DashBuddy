@@ -73,6 +73,17 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — identity-less completions now firewalled at PostTask exit (#653 / PR #673): watch a
+  no-name drop for a MISSING completion.** The PostTask-exit `DELIVERY_COMPLETED` mint now mirrors
+  the close-out path's #498 identity firewall: a dropoff task that never acquired a customer
+  name/address hash mints no completion. Field history says identity-less dropoff tasks are
+  phantoms, but the known residual is a REAL delivery whose only name-bearing screen is still
+  unruled — e.g. a GoPuff last drop via the multi-order-confirm surface (#501 deferred). On any
+  GoPuff batch (or other drop where the customer name never appeared on a recognized screen),
+  check afterwards that the delivery still shows in the session's deliveries/earnings. How to tell
+  it's broken: a real, physically-delivered drop is absent from the completion list / Money tab
+  while its siblings are present.
+
 - **🆕 NEW — CSV data export (#319).** Settings → Data & Privacy → "Export Data (CSV)" → tap
   "Choose folder & export" and pick a folder (e.g. Downloads). Three files should appear:
   `deliveries.csv`, `sessions.csv`, `summary.csv`. Open each in a spreadsheet app: deliveries should

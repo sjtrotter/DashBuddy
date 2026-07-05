@@ -1228,7 +1228,8 @@ class EffectMapTest {
     fun `leaving PostTask emits DELIVERY_COMPLETED`() {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
-        val completedTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L, completedAt = 950L)
+        // #653: identity-bearing (a real delivered drop) so the PostTask-exit firewall admits it.
+        val completedTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", customerNameHash = "cust-1", startedAt = 900L, completedAt = 950L)
         // #596: a real receipt exit has the job still ACTIVE going in (it closes on this same step),
         // so completedJobId is non-null → the SCOPED fallback finds the task. The unscoped (job-less)
         // fallback is now gated when there's genuinely nothing to complete (job already closed, no
@@ -1307,7 +1308,8 @@ class EffectMapTest {
         // must name the still-active task, stamped at the receipt's appearance.
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
-        val active = Task(taskId = "task-9", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L)
+        // #653: identity-bearing (a real delivered drop) so the PostTask-exit firewall admits it.
+        val active = Task(taskId = "task-9", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", customerNameHash = "cust-9", startedAt = 900L)
         val pend = PendingDestructive(
             kind = DestructiveKind.TASK_RETIRE, since = 950L, deadline = 3_450L, authoritative = true,
         )

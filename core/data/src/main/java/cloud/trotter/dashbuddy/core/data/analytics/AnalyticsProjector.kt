@@ -396,7 +396,10 @@ class AnalyticsProjector @Inject constructor(
          * v2 (#659): frozen fuel/non-fuel per-mile split on delivery_records + estFuel/NonFuelPerMile
          * on offer_records + startSource on session_records — all populated from the immutable log on
          * the refold this bump triggers.
+         * v3 (#653): the fold now drops a full-receipt stamp on an already-delivered multi-delivery
+         * job as SUSPECT (`PayBasis.SUSPECT_FULL_RECEIPT`, no realizedPay/tip/base) instead of
+         * double-counting the period SUM — the refold applies the guard to history.
          */
-        private const val PROJECTOR_VERSION = 2
+        private const val PROJECTOR_VERSION = 3
     }
 }

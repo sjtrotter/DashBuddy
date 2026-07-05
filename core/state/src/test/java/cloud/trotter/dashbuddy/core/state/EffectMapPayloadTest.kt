@@ -444,7 +444,7 @@ class EffectMapPayloadTest {
             jobId = "J6",
             phase = TaskPhase.DROPOFF,
             arrivedAt = 2500L,
-        )
+        ).copy(customerNameHash = "cust-t6") // #653: identity-bearing so the PostTask-exit firewall admits it
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,
@@ -479,6 +479,49 @@ class EffectMapPayloadTest {
         // #518: idempotency scoped to the completed task (not obs.timestamp) so a re-entered
         // PostTask receipt can't re-fire the same delivery via effects_fired.
         assertEquals("log:DELIVERY_COMPLETED:T6", logs[0].effectKey)
+    }
+
+    @Test
+    fun `PostTask-exit does NOT mint a completion for an identity-less phantom drop (#653 firewall parity)`() {
+        // Same receipted PostTask exit as above, but the completing DROPOFF task carries NO customer
+        // identity (name AND address hash both null) — the #498/#517/#518 phantom shape. The #596
+        // close-out path already refuses such a task; #653 adds the parity firewall to this
+        // PostTask-exit mint so a phantom can't land a full-receipt completion here either (which the
+        // read-model fold would then double-count against the siblings' apportioned shares).
+        val postFields = ParsedFields.PostTaskFields(
+            totalPay = 7.50,
+            parsedPay = ParsedPay(
+                appPayComponents = listOf(ParsedPayItem("Base Pay", 4.50)),
+                customerTips = listOf(ParsedPayItem("Wendy's", 3.00)),
+            ),
+            sessionEarnings = 47.50,
+        )
+        val phantom = task(
+            taskId = "T7",
+            jobId = "J7",
+            phase = TaskPhase.DROPOFF,
+            arrivedAt = 2500L,
+        ) // identity-less: customerNameHash + customerAddressHash both null (helper default)
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 500L, runningEarnings = 47.50),
+            activeJob = Job("J7", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 400L),
+            recentTasks = listOf(phantom),
+            lastPostTaskFields = postFields,
+        )
+        val prev = appState(
+            flow = FlowRegion(flow = Flow.PostTask),
+            platforms = mapOf(Platform.DoorDash to regionPrev),
+        )
+        val next = appState(
+            flow = FlowRegion(flow = Flow.Idle),
+            platforms = mapOf(Platform.DoorDash to regionPrev.copy()),
+        )
+        val obs = screenObs(flow = Flow.Idle, timestamp = 3000L)
+
+        val logs = logEvents(prev, next, obs, AppEventType.DELIVERY_COMPLETED)
+        assertEquals("identity-less phantom does not mint a completion", 0, logs.size)
     }
 
     // =========================================================================
