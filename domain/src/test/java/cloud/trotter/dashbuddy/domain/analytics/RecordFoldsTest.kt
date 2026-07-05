@@ -105,11 +105,15 @@ class RecordFoldsTest {
         parsedPay: ParsedPay? = null,
         odo: Double? = null,
         phaseStartedAt: Long = at - 600_000,
+        // Identity-bearing by default (a real delivered drop). A #498/#653 phantom payload has
+        // BOTH hashes null (the payload copies the task's null hashes) — pass true to model it.
+        identityLess: Boolean = false,
     ) = ev(
         AppEventType.DELIVERY_COMPLETED, sid, at,
         DeliveryPayload(
             jobId = jobId, taskId = taskId, storeName = "StoreX",
-            customerHash = "cust-$taskId", addressHash = "addr-$taskId",
+            customerHash = if (identityLess) null else "cust-$taskId",
+            addressHash = if (identityLess) null else "addr-$taskId",
             phaseStartedAt = phaseStartedAt, arrivedAt = at - 120_000, completedAt = at,
             totalPay = totalPay, parsedPay = parsedPay, dropRealizedPay = dropRealizedPay,
         ),
@@ -397,8 +401,9 @@ class RecordFoldsTest {
                 offerAccepted(s, 1_500, "h", eval(net = 15.0, dist = 5.0, opCpm = 0.20)),
                 delivery(s, 3_000, "J1", "T1", dropRealizedPay = 11.34, parsedPay = parsedPay(8.0, 12.0), odo = 5.0),
                 delivery(s, 4_000, "J1", "T2", dropRealizedPay = 8.66, parsedPay = parsedPay(8.0, 12.0), odo = 8.0),
-                // Phantom: full receipt, NO apportioned share, and this job already delivered ≥1 drop.
-                delivery(s, 5_000, "J1", "T3", totalPay = 20.0, dropRealizedPay = null, parsedPay = parsedPay(8.0, 12.0), odo = 9.0),
+                // Phantom: IDENTITY-LESS (both hashes null — the real #498 class), full receipt,
+                // NO apportioned share, and this job already delivered ≥1 drop.
+                delivery(s, 5_000, "J1", "T3", totalPay = 20.0, dropRealizedPay = null, parsedPay = parsedPay(8.0, 12.0), odo = 9.0, identityLess = true),
             ),
         )
         val a = outcomes[2].delivery!!
@@ -432,6 +437,41 @@ class RecordFoldsTest {
         assertEquals(PayBasis.RECEIPT_TOTAL, d.payBasis)
         assertEquals(12.0, d.realizedPay!!, 1e-9)
         assertEquals("sole drop carries the receipt tip", 3.0, d.tip!!, 1e-9)
+    }
+
+    @Test
+    fun `pre-#528 receipted stack — the identity-BEARING full-receipt last drop keeps RECEIPT_TOTAL (#653 F1)`() {
+        val s = "S4d"
+        // The HISTORICAL (05-17 → 07-03, pre-#528) mint shape for a legitimate receipted 2-drop
+        // stack: N−1 null-pay rows + ONE identity-bearing row carrying the whole receipt — no
+        // dropRealizedPay anywhere (the field didn't exist yet). That receipted drop is the job's
+        // ONLY money and normally folds LAST (jobId already in deliveredJobIds). The v3 refold
+        // must keep it RECEIPT_TOTAL with full pay — NOT flag it SUSPECT (which would zero the
+        // entire pre-#528 field campaign's stack pay). The identity discriminator is what saves it.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                offerAccepted(s, 1_500, "h", eval(net = 15.0, dist = 5.0, opCpm = 0.20)),
+                // Drop A: identity-bearing, NO pay signal at all (the pre-#528 non-announced drop).
+                delivery(s, 3_000, "J1", "TA", odo = 5.0),
+                // Drop B: identity-BEARING, whole receipt (parsedPay + totalPay), no share field.
+                delivery(s, 4_000, "J1", "TB", totalPay = 20.0, dropRealizedPay = null, parsedPay = parsedPay(8.0, 12.0), odo = 8.0),
+            ),
+        )
+        val a = outcomes[2].delivery!!
+        val b = outcomes[3].delivery!!
+
+        assertEquals("non-announced sibling has no pay signal", PayBasis.NONE, a.payBasis)
+        assertNull(a.realizedPay)
+
+        assertEquals("identity-bearing full-receipt drop is LEGITIMATE, not suspect", PayBasis.RECEIPT_TOTAL, b.payBasis)
+        assertEquals(20.0, b.realizedPay!!, 1e-9)
+        assertEquals("it carries the receipt tip (sole money row)", 12.0, b.tip!!, 1e-9)
+        assertEquals(8.0, b.basePay!!, 1e-9)
+
+        // Period SUM == receipt: the stack's money is counted exactly once.
+        val periodSum = outcomes.mapNotNull { it.delivery?.realizedPay }.sum()
+        assertEquals("Σ realizedPay == receipt (counted once, not zeroed)", 20.0, periodSum, 1e-9)
     }
 
     @Test
