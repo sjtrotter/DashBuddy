@@ -18,11 +18,18 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 internal object RegexSafety {
 
     /**
-     * Compile a rule-supplied pattern into a case-insensitive [Regex], enforcing
-     * the length cap and the catastrophic-backtracking guard first. Throws
-     * [RuleCompileException] on an over-long, ReDoS-prone, or invalid pattern.
+     * Compile a rule-supplied pattern into a case-insensitive [BoundedRegex],
+     * enforcing the length cap and the catastrophic-backtracking guard first.
+     * Throws [RuleCompileException] on an over-long, ReDoS-prone, or invalid
+     * pattern.
+     *
+     * The result is a [BoundedRegex] (#590): the compile-time heuristic below is
+     * a first line of defense, but it is not sound on every catastrophic shape,
+     * and Kotlin [Regex] has no match timeout — so the returned matcher carries a
+     * runtime match-time budget, making "accepted ⇒ bounded" true by
+     * construction. Every rule-authored match runs through this one entry point.
      */
-    fun compileRegex(pattern: String): Regex {
+    fun compileRegex(pattern: String): BoundedRegex {
         if (pattern.length > RuleCompiler.MAX_REGEX_LENGTH)
             throw RuleCompileException(
                 "Regex pattern length ${pattern.length} exceeds " +
@@ -30,7 +37,7 @@ internal object RegexSafety {
             )
         assertNoCatastrophicBacktracking(pattern)
         return try {
-            Regex(pattern, RegexOption.IGNORE_CASE)
+            BoundedRegex(Regex(pattern, RegexOption.IGNORE_CASE))
         } catch (e: Exception) {
             throw RuleCompileException("Invalid regex pattern: '$pattern'", e)
         }

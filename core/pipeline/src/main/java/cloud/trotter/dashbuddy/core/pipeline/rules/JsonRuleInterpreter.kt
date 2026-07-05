@@ -8,7 +8,6 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -195,7 +194,12 @@ class JsonRuleInterpreter @Inject constructor(
         }
 
         return try {
-            val root = Json.parseToJsonElement(jsonString).jsonObject
+            // #590: bounded parse — a depth pre-scan rejects pathologically
+            // nested JSON as a typed RuleCompileException BEFORE the recursive
+            // parser can StackOverflowError (an Error escaping this catch = fail
+            // open). The RuleCompileException lands in the catch below and skips
+            // the file per the malformed-file policy.
+            val root = RuleCompiler.parseBoundedJson(jsonString).jsonObject
 
             // ADR-0003 seven-step compatibility check
             val rejection = RulesetLoader.validate(root, source)

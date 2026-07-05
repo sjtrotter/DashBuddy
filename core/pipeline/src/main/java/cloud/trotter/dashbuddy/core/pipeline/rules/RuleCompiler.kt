@@ -38,6 +38,74 @@ object RuleCompiler {
     const val MAX_REGEX_LENGTH = 200
     private const val MAX_EACH_SIZE = 50
 
+    /**
+     * Maximum nesting depth of a parse expression (#590). The `each`/`extract`,
+     * `join`, and `coalesce` compilers recurse into [compileParseExpression]
+     * with NO structural bound of their own — a pathologically nested parse
+     * block would overflow the JVM stack at COMPILE time. A [StackOverflowError]
+     * is an [Error], not an [Exception], so it ESCAPES the `Exception`-only
+     * catch in [JsonRuleInterpreter.loadSingle] (a fail-OPEN crash of the rule
+     * load / classification path). This guard rejects over-deep parse
+     * expressions as a typed [RuleCompileException] instead — fail closed.
+     * Generous: real rules nest < 10.
+     */
+    const val MAX_PARSE_DEPTH = 64
+
+    /**
+     * Maximum nesting depth of raw rule JSON accepted before it reaches
+     * kotlinx-serialization's recursive-descent parser (#590). The parser
+     * overflows the stack on pathological nesting; the resulting
+     * [StackOverflowError] escapes the `Exception`-only loader catch (fail
+     * open). [parseBoundedJson] pre-scans depth and rejects past this bound as
+     * a typed [RuleCompileException] before the recursive parser runs. Generous
+     * (real rule files nest < 10); matches [MAX_PARSE_DEPTH].
+     */
+    const val MAX_JSON_DEPTH = 64
+
+    /**
+     * Parse rule JSON with a fail-CLOSED nesting bound (#590). A cheap linear
+     * pre-scan counts `{`/`[` nesting (skipping string literals + escapes) and
+     * throws [RuleCompileException] past [MAX_JSON_DEPTH] BEFORE
+     * [Json.parseToJsonElement] — whose recursive descent would otherwise
+     * [StackOverflowError] (an [Error] that escapes the loader's
+     * `Exception`-only catch, a fail-open crash). The only place the rule
+     * loader turns a raw string into JSON.
+     */
+    fun parseBoundedJson(jsonString: String): JsonElement {
+        assertJsonDepthWithinBound(jsonString)
+        return kotlinx.serialization.json.Json.parseToJsonElement(jsonString)
+    }
+
+    /** Linear depth pre-scan for [parseBoundedJson]; string-literal aware. */
+    private fun assertJsonDepthWithinBound(json: String) {
+        var depth = 0
+        var maxDepth = 0
+        var inString = false
+        var i = 0
+        while (i < json.length) {
+            val c = json[i]
+            if (inString) {
+                if (c == '\\') { i += 2; continue }
+                if (c == '"') inString = false
+            } else {
+                when (c) {
+                    '"' -> inString = true
+                    '{', '[' -> {
+                        depth++
+                        if (depth > maxDepth) maxDepth = depth
+                        if (depth > MAX_JSON_DEPTH) {
+                            throw RuleCompileException(
+                                "Rule JSON nesting depth exceeds MAX_JSON_DEPTH=$MAX_JSON_DEPTH",
+                            )
+                        }
+                    }
+                    '}', ']' -> if (depth > 0) depth--
+                }
+            }
+            i++
+        }
+    }
+
     // ==========================================================================
     //  Permission introspection
     // ==========================================================================
@@ -263,11 +331,23 @@ object RuleCompiler {
         return CompiledRedact(entries)
     }
 
-    /** Recursively scan raw rule JSON for a `"sha256"` transform value (#598). */
-    private fun jsonUsesSha256(element: JsonElement): Boolean = when (element) {
-        is JsonPrimitive -> element.isString && element.content == "sha256"
-        is JsonObject -> element.values.any { jsonUsesSha256(it) }
-        is JsonArray -> element.any { jsonUsesSha256(it) }
+    /**
+     * Recursively scan raw rule JSON for a `"sha256"` transform value (#598).
+     * Depth-bounded at [MAX_JSON_DEPTH] (#590): this walks the WHOLE raw rule
+     * object, so a pathologically nested rule would overflow the stack here
+     * before the parse-expression compiler's own [MAX_PARSE_DEPTH] guard runs.
+     * Production JSON is already depth-bounded by [parseBoundedJson], so this
+     * guard never trips for real rules; it makes [compileRules] fail-closed for
+     * a JSON tree handed in directly.
+     */
+    private fun jsonUsesSha256(element: JsonElement, depth: Int = 0): Boolean {
+        if (depth > MAX_JSON_DEPTH)
+            throw RuleCompileException("Rule JSON nesting exceeds MAX_JSON_DEPTH=$MAX_JSON_DEPTH")
+        return when (element) {
+            is JsonPrimitive -> element.isString && element.content == "sha256"
+            is JsonObject -> element.values.any { jsonUsesSha256(it, depth + 1) }
+            is JsonArray -> element.any { jsonUsesSha256(it, depth + 1) }
+        }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -557,9 +637,17 @@ object RuleCompiler {
     // ==========================================================================
 
     /**
-     * Compile a single parse expression for screen rules.
+     * Compile a single parse expression for screen rules. [depth] bounds the
+     * `each`/`join`/`coalesce` recursion at [MAX_PARSE_DEPTH] (#590) — a fail-
+     * closed [RuleCompileException] in place of a stack-overflowing crash.
      */
-    private fun compileParseExpression(spec: JsonElement): (UiNode, Bindings) -> Any? {
+    private fun compileParseExpression(
+        spec: JsonElement,
+        depth: Int = 0,
+    ): (UiNode, Bindings) -> Any? {
+        if (depth > MAX_PARSE_DEPTH)
+            throw RuleCompileException("Parse expression nesting exceeds MAX_PARSE_DEPTH=$MAX_PARSE_DEPTH")
+
         if (spec is JsonPrimitive) {
             val value = spec.content
             return { _, _ -> value }
@@ -580,9 +668,9 @@ object RuleCompiler {
             "textAfterLabel" in obj -> compileTextAfterLabel(obj, fromName)
             "presence" in obj -> compilePresence(obj, fromName)
             "conditionalEnum" in obj -> compileConditionalEnum(obj, fromName)
-            "each" in obj -> compileEach(obj, fromName)
-            "join" in obj -> compileJoin(obj)
-            "coalesce" in obj -> compileCoalesce(obj)
+            "each" in obj -> compileEach(obj, fromName, depth)
+            "join" in obj -> compileJoin(obj, depth)
+            "coalesce" in obj -> compileCoalesce(obj, depth)
             "siblingOf" in obj -> compileSiblingOf(obj, fromName)
             "read" in obj && fromName != null -> compileReadFromBinding(obj, fromName)
             else -> throw RuleCompileException("Unknown parse expression keys: ${obj.keys}")
@@ -739,7 +827,7 @@ object RuleCompiler {
         }
     }
 
-    private fun compileEach(obj: JsonObject, fromName: String?): (UiNode, Bindings) -> Any? {
+    private fun compileEach(obj: JsonObject, fromName: String?, depth: Int = 0): (UiNode, Bindings) -> Any? {
         val findPred = compileNodePred(obj["each"]!!)
         val scopeSpec = obj["scope"]
         val excludeSpec = obj["exclude"]?.let { compileNodePred(it) }
@@ -748,7 +836,7 @@ object RuleCompiler {
 
         val compiledExtract: List<Pair<String, (UiNode, Bindings) -> Any?>> =
             extractObj.entries.map { (name, spec) ->
-                name to compileParseExpression(spec)
+                name to compileParseExpression(spec, depth + 1)
             }
 
         return { tree, bindings ->
@@ -775,13 +863,13 @@ object RuleCompiler {
         }
     }
 
-    private fun compileJoin(obj: JsonObject): (UiNode, Bindings) -> Any? {
+    private fun compileJoin(obj: JsonObject, depth: Int = 0): (UiNode, Bindings) -> Any? {
         val partsArray = obj["join"]!!.jsonArray
         val separator = obj["separator"]?.jsonPrimitive?.content ?: ""
         val skipNulls = obj["skipNulls"]?.jsonPrimitive?.booleanOrNull ?: true
         val transformSpec = obj["transform"]
 
-        val compiledParts = partsArray.map { compileParseExpression(it) }
+        val compiledParts = partsArray.map { compileParseExpression(it, depth + 1) }
 
         return { tree, bindings ->
             val values = compiledParts.map { it(tree, bindings)?.toString() }
@@ -797,7 +885,7 @@ object RuleCompiler {
         }
     }
 
-    private fun compileCoalesce(obj: JsonObject): (UiNode, Bindings) -> Any? {
+    private fun compileCoalesce(obj: JsonObject, depth: Int = 0): (UiNode, Bindings) -> Any? {
         // #549 hardening: coalesce returns the first non-null branch verbatim — it does NOT apply a
         // top-level transform. Silently dropping one would be a privacy footgun: a PII coalesce whose
         // sha256 sat at the top level (instead of inside each branch) would emit the RAW value. Reject
@@ -809,7 +897,7 @@ object RuleCompiler {
                     "would leak the raw value)",
             )
         }
-        val exprs = obj["coalesce"]!!.jsonArray.map { compileParseExpression(it) }
+        val exprs = obj["coalesce"]!!.jsonArray.map { compileParseExpression(it, depth + 1) }
 
         return { tree, bindings ->
             exprs.firstNotNullOfOrNull { it(tree, bindings) }
@@ -1369,5 +1457,5 @@ object RuleCompiler {
      * + ReDoS rejection, #418). Kept here as the compiler's call site / public
      * entry point; the security logic lives in [RegexSafety] (audit #11).
      */
-    internal fun compileRegex(pattern: String): Regex = RegexSafety.compileRegex(pattern)
+    internal fun compileRegex(pattern: String): BoundedRegex = RegexSafety.compileRegex(pattern)
 }

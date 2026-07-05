@@ -105,7 +105,7 @@ sealed interface NotifFieldMask {
      * rest — e.g. the STORE in "<name>'s order is ready for pickup at <store>"
      * (merchants are not PII).
      */
-    data class RegexGroup(val regex: Regex, val group: Int) : NotifFieldMask
+    data class RegexGroup(val regex: BoundedRegex, val group: Int) : NotifFieldMask
 }
 
 /**
@@ -140,7 +140,7 @@ data class CompiledNotifRedact(
         }
     }
 
-    private fun maskGroup(value: String, regex: Regex, group: Int): String {
+    private fun maskGroup(value: String, regex: BoundedRegex, group: Int): String {
         // FAIL CLOSED (#620 review F2b): if the capture regex drifts from the
         // require gate (the rule matched but this pattern doesn't, or the group is
         // absent), masking the group would ship the RAW field. A recognized frame

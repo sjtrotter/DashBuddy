@@ -55,6 +55,10 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockito.kotlin)
+    // #590 — standalone kotest-property (Arb/checkAll/forAll), runner-agnostic:
+    // it runs inside plain JUnit-4 @Test bodies via runTest/runBlocking. NOT the
+    // Kotest runner, NOT jqwik/Jazzer (both JUnit-Platform-only; this repo is JUnit 4).
+    testImplementation(libs.kotest.property)
 }
 
 // ===========================================================================
