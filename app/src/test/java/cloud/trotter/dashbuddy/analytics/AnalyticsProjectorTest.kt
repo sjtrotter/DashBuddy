@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.analytics
 
 import androidx.room.Room
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsProjector
+import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
@@ -18,7 +19,9 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
@@ -461,6 +464,174 @@ class AnalyticsProjectorTest {
         assertEquals("the real DASH_START upgraded startedAt (not stuck at the stop time)", 1_000L, s.startedAt)
         assertEquals("interaction", s.startSource)
         assertEquals(10.0, s.startOdometer!!, 1e-9)
+    }
+
+    // ── User corrections (#650) ─────────────────────────────────────────
+
+    /** A session with a real DASH_START, one accepted offer (frozen cpm 0.25), one delivery, a stop. */
+    private suspend fun seedCorrectableSession(
+        sid: String = "S1",
+        deliveryPay: Double = 10.0,
+        reportedEarnings: Double = 20.0,
+    ): Long {
+        insert(
+            AppEventType.DASH_START, sid, 1_000,
+            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, sid, 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        val deliverySeq = insert(
+            AppEventType.DELIVERY_COMPLETED, sid, 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c",
+                phaseStartedAt = 2_400, arrivedAt = 2_880, completedAt = 3_000, totalPay = deliveryPay,
+            ),
+            odometer = 105.0, // 5 miles from the DASH_START reading
+        )
+        insert(
+            AppEventType.DASH_STOP, sid, 4_000,
+            SessionStopPayload(sid, endedAt = 4_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = reportedEarnings),
+            odometer = 110.0,
+        )
+        return deliverySeq
+    }
+
+    @Test
+    fun `a MANUAL_DELIVERY for a session with no prior rows lands its delivery AND a session row in one drain (the #661 invariant)`() = runBlocking {
+        // No DASH_START at all — the correction is the only event for session "MISSED".
+        insert(
+            AppEventType.MANUAL_DELIVERY, "MISSED", 5_000,
+            ManualDeliveryPayload(
+                sessionId = "MISSED", storeName = "Chipotle", pay = 9.0, tip = 2.0,
+                completedAt = 5_000, miles = 3.0, note = "app crashed before capture",
+            ),
+        )
+
+        projector().catchUp()
+
+        val totals = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals("the manual delivery is recorded", 1, totals.deliveries)
+        assertEquals(9.0, totals.pay, 1e-9)
+
+        // #661: a correction can never create a dangling-sessionId delivery row — the projector
+        // synthesized + upserted the session context in the SAME transaction.
+        val s = analyticsDao.sessionRecord("MISSED")
+        assertNotNull("the synthesized session row landed in the same drain", s)
+        assertEquals(1, s!!.deliveries)
+
+        val d = analyticsDao.lastDeliveryInSession("MISSED")!!
+        assertEquals("MANUAL", d.payBasis)
+        assertEquals("Chipotle", d.storeName)
+        assertEquals(3.0, d.realizedMiles!!, 1e-9)
+        assertNull("a manual row has no captured customer identity", d.customerHash)
+    }
+
+    @Test
+    fun `re-pricing a MANUAL row keeps the MANUAL basis and the net-additive policy (review F1)`() = runBlocking {
+        // The v1 UI shape: a manual delivery with no miles. Its net must equal its pay (missing cost
+        // terms count as 0 — net-additive), and a later driver re-price must keep BOTH the MANUAL
+        // provenance and that policy: the generic machine recompute would null the net and silently
+        // drop the dollars from the period SUM.
+        insert(
+            AppEventType.MANUAL_DELIVERY, "MISSED", 5_000,
+            ManualDeliveryPayload(sessionId = "MISSED", pay = 9.0, completedAt = 5_000),
+        )
+        projector().catchUp()
+        val seq = analyticsDao.lastDeliveryInSession("MISSED")!!.eventSequenceId
+        val folded = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("uncosted manual net = pay (net-additive)", 9.0, folded.netProfit!!, 1e-9)
+
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "MISSED", 6_000,
+            PayAdjustmentPayload(targetEventSequenceId = seq, sessionId = "MISSED", newPay = 12.0),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("a driver statement stays a driver statement", "MANUAL", d.payBasis)
+        assertEquals(12.0, d.realizedPay!!, 1e-9)
+        assertEquals("net keeps the MANUAL missing-terms-as-0 policy", 12.0, d.netProfit!!, 1e-9)
+    }
+
+    @Test
+    fun `a PAY_ADJUSTMENT re-prices its target to USER_CORRECTED and shrinks the session unattributed pay`() = runBlocking {
+        val deliverySeq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
+        projector().catchUp()
+
+        val repo = AnalyticsRepository(analyticsDao)
+        assertEquals("before: reported 20 − captured 10", 10.0, repo.sessionDetail("S1").first()!!.unattributedPay, 1e-9)
+
+        // The driver re-prices the captured delivery up to $15 (a mis-captured tip).
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "S1", 6_000,
+            PayAdjustmentPayload(targetEventSequenceId = deliverySeq, sessionId = "S1", newPay = 15.0, note = "missed tip"),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(deliverySeq)!!
+        assertEquals("USER_CORRECTED", d.payBasis)
+        assertEquals(15.0, d.realizedPay!!, 1e-9)
+        // Net recomputed against the row's OWN frozen cpm (0.25) over its 5 realized miles.
+        assertEquals(15.0 - 5.0 * 0.25, d.netProfit!!, 1e-9)
+        assertEquals("frozen cpm is untouched by the re-price", 0.25, d.frozenCostPerMile!!, 1e-9)
+
+        assertEquals("after: reported 20 − captured 15", 5.0, repo.sessionDetail("S1").first()!!.unattributedPay, 1e-9)
+    }
+
+    @Test
+    fun `a PAY_ADJUSTMENT whose target row is missing is skipped without crashing and the watermark still advances`() = runBlocking {
+        seedCorrectableSession()
+        projector().catchUp()
+        val before = analyticsDao.lastDeliveryInSession("S1")!!
+
+        // Target a sequenceId that no delivery_record has.
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "S1", 6_000,
+            PayAdjustmentPayload(targetEventSequenceId = 9_999, sessionId = "S1", newPay = 99.0, note = "typo"),
+        )
+        projector().catchUp() // must not throw
+
+        assertEquals("the target delivery is unchanged", before, analyticsDao.lastDeliveryInSession("S1"))
+        assertEquals("the watermark advanced past the skipped correction", 5L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `wiping and refolding from 0 reproduces byte-identical corrected rows (rebuild-faithful)`() = runBlocking {
+        val deliverySeq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
+        // A manual delivery AND a re-price of the captured one.
+        insert(
+            AppEventType.MANUAL_DELIVERY, "S1", 5_000,
+            ManualDeliveryPayload(
+                sessionId = "S1", storeName = "Panera", pay = 7.5, tip = 1.5,
+                completedAt = 5_000, miles = 2.0, note = "took an offer off-app",
+            ),
+        )
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "S1", 6_000,
+            PayAdjustmentPayload(targetEventSequenceId = deliverySeq, sessionId = "S1", newPay = 15.0, note = "missed tip"),
+        )
+        projector().catchUp()
+
+        val deliveriesBefore = analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE)
+        val sessionsBefore = analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE)
+
+        // Force a version-mismatch wipe + refold from watermark 0.
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 6, projectorVersion = 99))
+        projector().catchUp()
+
+        assertEquals(
+            "the corrected delivery rows rebuild byte-identically from the log",
+            deliveriesBefore, analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE),
+        )
+        assertEquals(sessionsBefore, analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE))
     }
 
     @Test(expected = CancellationException::class)
