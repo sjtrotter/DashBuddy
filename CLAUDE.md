@@ -267,7 +267,7 @@ recomputed** (dev decision): each `delivery_record` stores `netProfit` + `frozen
 log, but cpm is session-uniform), so editing economy settings only affects **future** evaluations — a record is
 an immutable historical fact. Session hydration rehydrates `started` from a persisted `session_records.startSource`
 marker (#659, retro finding 2), not the old "has a real platform" heuristic. The v9→v10 migration is
-additive-only (three nullable columns; `PROJECTOR_VERSION` bump refolds them from the log). `NetProfit`
+additive-only (five nullable columns — delivery +2, offer +2, session +1; `PROJECTOR_VERSION` bump refolds them from the log). `NetProfit`
 (`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
 `AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =
