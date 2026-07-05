@@ -30,13 +30,16 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  * vocabulary (DoorDash screens/pushes AND Uber pushes) so the backstop is not
  * DoorDash-only — cross-platform marker DATA in one SSOT, not per-platform Kotlin
  * (#585 platform-coupling catalog: recognition vocabulary is data). Deliberate
- * exclusions (VET V2): `"Heading to "` prefixes STORE names on pickup-nav frames,
- * and `"Your delivery from "` prefixes a STORE (merchants are not PII). Two
- * residual shapes CANNOT be caught by a prefix scan and rely on the rule-declared
- * `redact` as the primary control: Uber's `trip_en_route_dropoff` title is a WHOLE
- * address with no lead-in, and DoorDash's `order_ready` puts the customer name at
- * the START (`"<name>'s order is ready…"`). The `CaptureBackstopCorpusTest` pins
- * the set to ZERO false positives on the committed (already-redacted) corpus.
+ * exclusions (VET V2): `"Heading to "` and `"Your delivery from "` prefix STORE
+ * names (merchants are not PII), and Uber's `"Going to "` is excluded for the
+ * same reason — it prefixes a STORE on `trip_en_route_pickup` (`^Going to (?!\d)`)
+ * and only an address on `trip_en_route_dropoff` (`^Going to \d`); a plain prefix
+ * scan can't tell them apart, so that dropoff title relies on the rule-declared
+ * `redact` as the primary control (store-FP risk, the "Heading to " precedent —
+ * NOT because the title lacks a lead-in). DoorDash's `order_ready` is a true
+ * no-marker residual: the customer name sits at the START (`"<name>'s order is
+ * ready…"`), so no prefix precedes it. The `CaptureBackstopCorpusTest` pins the
+ * set to ZERO false positives on the committed (already-redacted) corpus.
  */
 object CustomerTextMarkers {
 

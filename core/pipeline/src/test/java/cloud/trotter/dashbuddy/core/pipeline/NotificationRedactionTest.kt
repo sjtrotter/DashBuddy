@@ -244,9 +244,12 @@ class NotificationRedactionTest {
     }
 
     @Test
-    fun `#632 backstop cannot catch a no-lead-in address (residual - rule redact owns it)`() {
+    fun `#632 backstop cannot catch an unmarked address (residual - rule redact owns it)`() {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
-        // Uber trip_en_route_dropoff title is a WHOLE address with no lead-in marker.
+        // An address with no scannable marker. (The real trip_en_route_dropoff title is
+        // "Going to <addr>" — "Going to " is deliberately NOT a marker because it also
+        // prefixes STORES on trip_en_route_pickup; either way the prefix scan cannot fire
+        // and the rule's own `redact` is the primary control. Synthetic bare-address shape.)
         val residual = raw(title = "123 Main Street, Austin")
         writer(noRedactSource)
             .captureNotification(obs("uber.notification.trip_en_route_dropoff", "trip_en_route_dropoff"), residual)
