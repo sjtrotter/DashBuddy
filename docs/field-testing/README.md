@@ -73,6 +73,18 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — CSV data export (#319).** Settings → Data & Privacy → "Export Data (CSV)" → tap
+  "Choose folder & export" and pick a folder (e.g. Downloads). Three files should appear:
+  `deliveries.csv`, `sessions.csv`, `summary.csv`. Open each in a spreadsheet app: deliveries should
+  have one row per completed drop (date/time, platform, store, pay, tip, miles, minutes, net…),
+  sessions one row per dash (start/end, duration, odometer start/end, miles, offer counts), and
+  summary a totals block ending in `estimated_mileage_deduction` (= total miles × 0.70, the IRS 2025
+  business rate). **How to tell it's working:** values are sane (money looks like `8.50` not `0.00`
+  everywhere; store names with commas like "Chili's, Cedar Park" stay in one cell, not split), and
+  NO customer names/addresses or hashes appear anywhere. All-time export (v1 has no date-range
+  picker). Screens with no dashes yet just yield header-only files — that's fine.
+  - Confirmed: 0/2
+
 - **🆕 NEW — driving/glance-mode HUD font-scale toggle (#318).** Flip "Driving glance mode" on in
   Settings → General while a dash is running (or the bubble is up). The bubble HUD's text — the
   hero $/hr, task timers, captions, everything — should visibly grow (~12%) immediately, with no
