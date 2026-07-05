@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.ui.main.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,11 +40,18 @@ fun DataExportScreen(
     viewModel: DataExportViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val logState by viewModel.logState.collectAsStateWithLifecycle()
 
     val pickFolder = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) viewModel.export(uri)
+    }
+
+    val pickLogFolder = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) viewModel.exportLog(uri)
     }
 
     Scaffold(
@@ -57,7 +66,12 @@ fun DataExportScreen(
             )
         }
     ) { padding ->
-        Column(Modifier.padding(padding).padding(horizontal = 16.dp)) {
+        Column(
+            Modifier
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+        ) {
             Spacer(Modifier.height(8.dp))
             Text(
                 "Export your mileage & earnings to CSV",
@@ -108,6 +122,59 @@ fun DataExportScreen(
                 }
                 DataExportViewModel.ExportState.Idle -> Unit
             }
+
+            Spacer(Modifier.height(32.dp))
+
+            // --- Bug-report (shareable log) export (#551) ---
+            Text(
+                "Export a bug report",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Pick a folder and DashBuddy writes dashbuddy-log.txt into it — the log the " +
+                    "developer needs to diagnose an issue.\n\n" +
+                    "INFO+ milestones only — no raw store, customer, or address text. Every line is " +
+                    "auto-scrubbed at the sink before it's written, so a leaked name can't reach the " +
+                    "file. On-device, nothing is uploaded.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+
+            Button(
+                onClick = { viewModel.resetLog(); pickLogFolder.launch(null) },
+                enabled = logState !is DataExportViewModel.LogExportState.InProgress,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.FileDownload, contentDescription = null)
+                Text("  Choose folder & export log")
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            when (val s = logState) {
+                is DataExportViewModel.LogExportState.InProgress -> {
+                    CircularProgressIndicator()
+                }
+                is DataExportViewModel.LogExportState.Success -> {
+                    Text(
+                        "Exported dashbuddy-log.txt — ${s.scrubbedLines} line(s) were auto-scrubbed.",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                is DataExportViewModel.LogExportState.Error -> {
+                    Text(
+                        "Log export failed: ${s.message}",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                DataExportViewModel.LogExportState.Idle -> Unit
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

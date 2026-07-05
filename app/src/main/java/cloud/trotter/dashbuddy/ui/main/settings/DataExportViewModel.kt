@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.CsvExporter
+import cloud.trotter.dashbuddy.core.data.log.LogRepository
 import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,6 +32,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DataExportViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
+    private val logRepository: LogRepository,
     @param:ApplicationContext private val context: Context,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
@@ -42,8 +44,20 @@ class DataExportViewModel @Inject constructor(
         data class Error(val message: String) : ExportState
     }
 
+    /** Bug-report (shareable log) export state (#551), separate from the CSV export state. */
+    sealed interface LogExportState {
+        data object Idle : LogExportState
+        data object InProgress : LogExportState
+        /** [scrubbedLines] = INFO+ lines the sink-gate redacted (surfaced for honesty). */
+        data class Success(val scrubbedLines: Int) : LogExportState
+        data class Error(val message: String) : LogExportState
+    }
+
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
     val state = _state.asStateFlow()
+
+    private val _logState = MutableStateFlow<LogExportState>(LogExportState.Idle)
+    val logState = _logState.asStateFlow()
 
     /** Export all-time analytics into the SAF directory [treeUri] as three CSV files. */
     fun export(treeUri: Uri) {
@@ -80,6 +94,65 @@ class DataExportViewModel @Inject constructor(
 
     fun reset() {
         _state.value = ExportState.Idle
+    }
+
+    /**
+     * Export the PII-safe shareable log (#551) as a single `dashbuddy-log.txt` bug report into the
+     * SAF directory [treeUri]. The content is the shareable sink's current contents — INFO+
+     * milestones only, already scrubbed at the sink — with a header comment. Never the firehose.
+     */
+    fun exportLog(treeUri: Uri) {
+        if (_logState.value == LogExportState.InProgress) return
+        _logState.value = LogExportState.InProgress
+        viewModelScope.launch {
+            val scrubbed = logRepository.autoScrubbedLineCount
+            val result = runCatching {
+                withContext(ioDispatcher) {
+                    val body = logRepository.shareableLogContents()
+                    val content = buildLogFile(body, scrubbed)
+                    writeSingleFile(treeUri, LOG_FILENAME, "text/plain", content)
+                }
+            }
+            _logState.value = result.fold(
+                onSuccess = {
+                    // P7: counts only — never the log body. Non-zero scrub count is itself signal.
+                    Timber.tag("Export").i("Bug-report log exported (auto-scrubbed=%d)", scrubbed)
+                    LogExportState.Success(scrubbed)
+                },
+                onFailure = { e ->
+                    // P7: log the exception CLASS only — messages can embed the SAF folder URI.
+                    Timber.tag("Export").e("Log export failed: %s", e.javaClass.simpleName)
+                    LogExportState.Error(e.message ?: "Export failed")
+                },
+            )
+        }
+    }
+
+    fun resetLog() {
+        _logState.value = LogExportState.Idle
+    }
+
+    /** Header comment + shareable body. Header-only file when the log is empty (CSV parity). */
+    internal fun buildLogFile(body: String, scrubbedLines: Int): String = buildString {
+        append("# DashBuddy bug report — INFO+ milestones only (no raw store/customer text).\n")
+        append("# $scrubbedLines line(s) were auto-scrubbed by the fail-closed sink gate.\n")
+        append("# Generated ")
+        append(java.time.Instant.ofEpochMilli(System.currentTimeMillis()))
+        append("\n\n")
+        append(body)
+    }
+
+    /** Writes one text file into the tree, overwriting any same-named prior export. */
+    private fun writeSingleFile(treeUri: Uri, name: String, mime: String, content: String) {
+        val resolver = context.contentResolver
+        val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+        val dirUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+        deleteIfExists(treeUri, treeDocId, name)
+        val fileUri = DocumentsContract.createDocument(resolver, dirUri, mime, name)
+            ?: error("Could not create $name in the chosen folder")
+        resolver.openOutputStream(fileUri)?.use { out ->
+            out.write(content.toByteArray(Charsets.UTF_8))
+        } ?: error("Could not open $name for writing")
     }
 
     /** Writes the three CSVs into the tree, overwriting same-named files. Returns files written. */
@@ -126,5 +199,9 @@ class DataExportViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private companion object {
+        const val LOG_FILENAME = "dashbuddy-log.txt"
     }
 }
