@@ -73,6 +73,17 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — PII-safe bug-report log export (#551 P2): Data & Privacy → Export Data → Export log.**
+  After a real dash (with at least one recognized offer/delivery so INFO milestones exist), go to
+  Settings → Data & Privacy → Export Data, scroll to "Export a bug report", pick a folder, export.
+  How to tell it's working: (1) open `dashbuddy-log.txt` and **grep your shop's merchant name — ZERO
+  hits** (it's INFO+ milestones only, scrubbed at the sink); any `[scrubbed:<marker>]` lines are the
+  gate catching a leak. (2) The success line's auto-scrub count is sane (usually 0, non-zero means an
+  upstream site leaked and the sink caught it — worth reporting). (3) The firehose (`app.log` in the
+  app's files dir) is still **full fidelity** — raw store names present there, as expected (on-device
+  only, never exported). (PR #551-P2)
+  - Confirmed: 0/2
+
 - **🆕 NEW — per-dash drill-down (#650 PR A): tap a recent dash on the Money tab.** Analytics → Money
   tab → scroll to RECENT DASHES → tap any dash row. It should open a read-only "Dash detail" screen.
   How to tell it's working: the header figures (date, start–end clock times, duration, gross, miles,
