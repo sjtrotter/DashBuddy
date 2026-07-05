@@ -258,7 +258,13 @@
     {
       "id": "doordash.screen.sensitive.catchall",
       "priority": 999,
-      "overrideable": false,
+      // A LOW-confidence, last-resort banking-term backstop (priority 999 = evaluated
+      // last). It is `overrideable: true` on purpose (#419): specific recognition at a
+      // normal priority is MEANT to win over this broad `allTextContainsAny` net, so it
+      // must stay in the overrideable partition and keep its last position. The
+      // HIGH-confidence, structurally-protected block is `sensitive.known` (priority 0,
+      // overrideable: false), which evaluates in the non-overrideable partition first.
+      "overrideable": true,
       "require": {
         "allTextContainsAny": [
           "Bank Account",

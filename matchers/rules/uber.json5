@@ -86,7 +86,12 @@
     {
       "id": "uber.screen.sensitive.catchall",
       "priority": 998,
-      "overrideable": false,
+      // Low-confidence, last-resort banking-term backstop (priority 998 = evaluated last).
+      // `overrideable: true` on purpose (#419): specific recognition is meant to win over
+      // this broad net, so it stays in the overrideable partition and keeps its last
+      // position. The structurally-protected block is `sensitive.known` (priority 0,
+      // overrideable: false), evaluated in the non-overrideable partition first.
+      "overrideable": true,
       "parse": {
         "as": "sensitive"
       },

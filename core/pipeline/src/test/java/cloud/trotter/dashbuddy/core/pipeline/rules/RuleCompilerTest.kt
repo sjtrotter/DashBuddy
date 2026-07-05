@@ -486,6 +486,52 @@ class RuleCompilerTest {
     }
 
     @Test(expected = RuleCompileException::class)
+    fun `rule exceeding MAX_BRANCHES_PER_RULE throws (#419)`() {
+        val branches = (0..RuleCompiler.MAX_BRANCHES_PER_RULE).joinToString(",") {
+            """{ "require": { "exists": { "hasText": "x$it" } } }"""
+        }
+        val rule = """[{ "id": "dd.screen.fat", "priority": 7000, "branches": [ $branches ] }]"""
+        RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+    }
+
+    @Test
+    fun `rule at MAX_BRANCHES_PER_RULE compiles (#419 boundary)`() {
+        val branches = (0 until RuleCompiler.MAX_BRANCHES_PER_RULE).joinToString(",") {
+            """{ "require": { "exists": { "hasText": "x$it" } } }"""
+        }
+        val rule = """[{ "id": "dd.screen.atcap", "priority": 7001, "branches": [ $branches ] }]"""
+        val compiled = RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+        assertEquals(RuleCompiler.MAX_BRANCHES_PER_RULE, compiled.single().branches.size)
+    }
+
+    @Test(expected = RuleCompileException::class)
+    fun `rule exceeding MAX_EFFECTS_PER_RULE throws (#419)`() {
+        val effects = (0..RuleCompiler.MAX_EFFECTS_PER_RULE).joinToString(",") {
+            """{ "log": { "type": "T$it" } }"""
+        }
+        val rule = """[{
+            "id": "dd.screen.effecty", "priority": 7002,
+            "require": { "exists": { "hasText": "x" } },
+            "effects": [ $effects ]
+        }]"""
+        RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+    }
+
+    @Test
+    fun `rule at MAX_EFFECTS_PER_RULE compiles (#419 boundary)`() {
+        val effects = (0 until RuleCompiler.MAX_EFFECTS_PER_RULE).joinToString(",") {
+            """{ "log": { "type": "T$it" } }"""
+        }
+        val rule = """[{
+            "id": "dd.screen.effectcap", "priority": 7003,
+            "require": { "exists": { "hasText": "x" } },
+            "effects": [ $effects ]
+        }]"""
+        val compiled = RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN)
+        assertEquals(1, compiled.size)
+    }
+
+    @Test(expected = RuleCompileException::class)
     fun `node pred depth limit throws`() {
         var json = """{"hasText": "x"}"""
         repeat(RuleCompiler.MAX_DEPTH + 2) { json = """{"not": $json}""" }

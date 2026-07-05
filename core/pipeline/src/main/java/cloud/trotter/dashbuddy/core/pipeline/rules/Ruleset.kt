@@ -21,6 +21,32 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
 
     private val sorted: List<CompiledRule<TInput>> = rules.sortedBy { it.priority }
 
+    /**
+     * Match-time evaluation order (#419): the NON-overrideable rules
+     * ([CompiledRule.overrideable] == false), priority-ordered, THEN the
+     * overrideable rules, priority-ordered. Partitioned ONCE at construction,
+     * never per-frame.
+     *
+     * This makes `overrideable: false` structurally real. Previously the
+     * sensitive-screen block relied only on priority-0-first + unique-priority +
+     * first-match, and the parsed [CompiledRule.overrideable] flag was inert — a
+     * replacement bundle (or a future multi-source merge, #192) that gamed
+     * priorities, giving a non-sensitive rule a priority number below a sensitive
+     * rule's, could pre-empt the sensitive classification. Evaluating the
+     * non-overrideable partition first means no priority value in any later/other
+     * source can pre-empt a non-overrideable (sensitive) classification.
+     *
+     * Byte-inert for today's assets: the only shipped `overrideable: false` rules
+     * are the priority-0 `sensitive.known` blocks (and the priority-0
+     * `crimson_balance` notification), which a pure-priority sort already put
+     * first — so this partition leaves the evaluation order identical. The broad
+     * `sensitive.catchall` fallback is `overrideable: true` (priority 999): a
+     * deliberate last-resort that specific recognition is meant to override, so it
+     * stays in the overrideable partition and keeps its last position.
+     */
+    private val evalOrder: List<CompiledRule<TInput>> =
+        sorted.filterNot { it.overrideable } + sorted.filter { it.overrideable }
+
     /** Rule lookup by id (#598) — the capture-redaction seam fetches a
      *  recognized rule's compiled `redact` block without exposing the list. */
     private val byId: Map<String, CompiledRule<TInput>> = sorted.associateBy { it.id }
@@ -31,8 +57,13 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
     fun ruleById(id: String): CompiledRule<TInput>? = byId[id]
 
     /**
-     * Evaluate the sorted rules against [input] and return the first match,
-     * or null if no rule matches (caller should fall back to UNKNOWN).
+     * Evaluate the rules against [input] and return the first match, or null if
+     * no rule matches (caller should fall back to UNKNOWN).
+     *
+     * Rules are walked in [evalOrder]: the non-overrideable partition first
+     * (priority-ordered), then the overrideable partition (priority-ordered) — so
+     * a non-overrideable (sensitive) classification can never be pre-empted by a
+     * lower-priority-number rule from another/later source (#419).
      *
      * @param input The input to match against (UiNode tree, clicked node, or notification).
      * @param platformWire When non-null, only rules whose ID starts with this prefix are evaluated.
@@ -45,9 +76,9 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         screenTarget: String? = null,
     ): RuleMatchResult? {
         val rules = if (platformWire != null) {
-            sorted.filter { it.id.startsWith("$platformWire.") }
+            evalOrder.filter { it.id.startsWith("$platformWire.") }
         } else {
-            sorted
+            evalOrder
         }
         for (rule in rules) {
             // Phase 1: Resolve rule-level bindings (screen rules only)
