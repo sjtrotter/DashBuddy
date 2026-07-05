@@ -51,6 +51,15 @@ data class SessionFoldContext(
      */
     val lastEvaluatedCostPerMile: Double? = null,
     /**
+     * The fuel component of [lastEvaluatedCostPerMile] — the most recent closing offer's
+     * `fuelCostEstimate ÷ distanceMiles` (per-mile), session-uniform like the cpm. Null until an
+     * offer with a positive-distance evaluation is seen (a distance-0 offer captures cpm but no
+     * split). The frozen fuel/non-fuel per-mile basis for the 4-step true-net waterfall (#659).
+     */
+    val lastEvaluatedFuelPerMile: Double? = null,
+    /** The non-fuel component of [lastEvaluatedCostPerMile] — `nonFuelCostEstimate ÷ distanceMiles` (#659). */
+    val lastEvaluatedNonFuelPerMile: Double? = null,
+    /**
      * True once a real DASH_START has established this session's platform/startedAt anchor. A context
      * synthesized for a session-scoped event that arrived before its DASH_START (e.g. the
      * OFFER_RECEIVED ordered just ahead of DASH_START at the same instant) is a `_unknown` placeholder
@@ -58,6 +67,15 @@ data class SessionFoldContext(
      * mistaken for a RECOVERY re-start that must not clobber.
      */
     val started: Boolean = false,
+    /**
+     * Provenance of this session's start: the DASH_START payload's `source` (e.g. "interaction",
+     * "recovery") once a real start has been seen; null for a synthesized `_unknown` placeholder that
+     * has not (#659, retro finding 2). The persisted marker the projector rehydrates `started` from —
+     * so hydration no longer infers "saw DASH_START" from "has a real platform" (a row synthesized by
+     * a real-platform DASH_STOP arriving before its DASH_START would otherwise rehydrate as started
+     * and keep a near-zero-duration `startedAt`).
+     */
+    val startSource: String? = null,
 ) {
     val jobsCompleted: Int get() = deliveredJobIds.size
     val offersReceived: Int get() = offersAccepted + offersDeclined + offersTimeout

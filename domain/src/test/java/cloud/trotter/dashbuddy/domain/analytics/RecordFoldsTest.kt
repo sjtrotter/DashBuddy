@@ -53,12 +53,20 @@ class RecordFoldsTest {
             odometer = odo,
         )
 
-    private fun eval(net: Double, dist: Double, opCpm: Double) = OfferEvaluation(
+    private fun eval(
+        net: Double,
+        dist: Double,
+        opCpm: Double,
+        fuelPerMile: Double = 0.0,
+        nonFuelPerMile: Double = opCpm - fuelPerMile,
+    ) = OfferEvaluation(
         action = OfferAction.ACCEPT,
         score = 80.0,
         qualityLevel = OfferQuality.GOOD,
         payAmount = net + dist * opCpm,
-        fuelCostEstimate = 0.0,
+        // Route-total estimates — the fold divides by distanceMiles to recover the per-mile split.
+        fuelCostEstimate = fuelPerMile * dist,
+        nonFuelCostEstimate = nonFuelPerMile * dist,
         operatingCostPerMile = opCpm,
         netPayAmount = net,
         distanceMiles = dist,
@@ -210,6 +218,126 @@ class RecordFoldsTest {
         assertEquals(CostBasis.NONE, d3.costBasis)
         assertNull(d3.frozenCostPerMile)
         assertNull(d3.netProfit)
+    }
+
+    @Test
+    fun `fuel and non-fuel per-mile split is extracted from the offer eval and frozen on the delivery`() {
+        val s = "F1"
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                // opCpm 0.25 split as fuel 0.10 / non-fuel 0.15 per mile over a 4-mile route.
+                offerAccepted(s, 2_000, "h1", eval(net = 9.0, dist = 4.0, opCpm = 0.25, fuelPerMile = 0.10)),
+                delivery(s, 3_000, "J1", "T1", totalPay = 10.0, odo = 105.0),
+            ),
+        )
+
+        // Offer row carries the per-mile split (route-total estimate ÷ distanceMiles).
+        val offer = outcomes[1].offer!!
+        assertEquals(0.10, offer.estFuelPerMile!!, 1e-9)
+        assertEquals(0.15, offer.estNonFuelPerMile!!, 1e-9)
+
+        // Delivery freezes the same split off the OFFER_FROZEN basis.
+        val d = outcomes[2].delivery!!
+        assertEquals(CostBasis.OFFER_FROZEN, d.costBasis)
+        assertEquals(0.10, d.frozenFuelPerMile!!, 1e-9)
+        assertEquals(0.15, d.frozenNonFuelPerMile!!, 1e-9)
+        // The invariant the 4-step waterfall relies on: fuel + non-fuel ≈ frozenCostPerMile.
+        assertEquals(d.frozenCostPerMile!!, d.frozenFuelPerMile!! + d.frozenNonFuelPerMile!!, 1e-9)
+    }
+
+    @Test
+    fun `a distance-0 offer eval captures cpm but null fuel-non-fuel split (guarded division)`() {
+        val s = "F2"
+        // An eval whose distanceMiles is 0 — the per-mile split would divide by zero, so it stays null
+        // while operatingCostPerMile is still captured. The delivery keeps OFFER_FROZEN cpm, null split
+        // (→ the waterfall falls back to 3-step for this row).
+        val zeroDistEval = eval(net = 5.0, dist = 0.0, opCpm = 0.30, fuelPerMile = 0.12)
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                offerAccepted(s, 2_000, "h1", zeroDistEval),
+                delivery(s, 3_000, "J1", "T1", totalPay = 10.0, odo = 105.0),
+            ),
+        )
+        val offer = outcomes[1].offer!!
+        assertNull(offer.estFuelPerMile)
+        assertNull(offer.estNonFuelPerMile)
+        assertEquals(0.30, offer.estOperatingCostPerMile!!, 1e-9)
+
+        val d = outcomes[2].delivery!!
+        assertEquals(CostBasis.OFFER_FROZEN, d.costBasis)
+        assertEquals(0.30, d.frozenCostPerMile!!, 1e-9)
+        assertNull("no split on a distance-0 offer", d.frozenFuelPerMile)
+        assertNull(d.frozenNonFuelPerMile)
+    }
+
+    @Test
+    fun `CURRENT_FALLBACK and NONE deliveries carry no fuel-non-fuel split`() {
+        val s = "F3"
+        // No offer in the session → CURRENT_FALLBACK cpm, but the live economy read supplies a bare
+        // cpm, not its split → null fuel/non-fuel.
+        val (fallback, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 3_000, "J1", "T1", totalPay = 10.0, odo = 4.0),
+            ),
+            currentCpm = 0.50,
+        )
+        val dFallback = fallback[1].delivery!!
+        assertEquals(CostBasis.CURRENT_FALLBACK, dFallback.costBasis)
+        assertEquals(0.50, dFallback.frozenCostPerMile!!, 1e-9)
+        assertNull(dFallback.frozenFuelPerMile)
+        assertNull(dFallback.frozenNonFuelPerMile)
+
+        // No offer AND no current economy → NONE, null cpm and null split.
+        val (none, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 3_000, "J1", "T1", totalPay = 10.0, odo = 4.0),
+            ),
+            currentCpm = null,
+        )
+        val dNone = none[1].delivery!!
+        assertEquals(CostBasis.NONE, dNone.costBasis)
+        assertNull(dNone.frozenFuelPerMile)
+        assertNull(dNone.frozenNonFuelPerMile)
+    }
+
+    @Test
+    fun `startSource is the DASH_START source for a real start and null for a synthesized placeholder`() {
+        // A real DASH_START stamps startSource with the payload's source.
+        val realCtx = RecordFolds.foldEvent(
+            dashStart("G1", 1_000, odo = 0.0, source = SessionStartSource.INTERACTION), null, null,
+        ).context
+        assertEquals(SessionStartSource.INTERACTION, realCtx!!.startSource)
+
+        // An offer arriving before any DASH_START synthesizes an `_unknown` placeholder — startSource
+        // stays null (the retro-finding-2 signal that this session has NOT seen a real start).
+        val placeholderCtx = RecordFolds.foldEvent(
+            offerAccepted("G2", 2_000, "h", eval(net = 5.0, dist = 2.0, opCpm = 0.3)), null, null,
+        ).context
+        assertEquals(Platform.Unknown, placeholderCtx!!.platform)
+        assertNull("a synthesized placeholder has no startSource", placeholderCtx.startSource)
+
+        // The DASH_START that later lands upgrades the placeholder and stamps startSource.
+        val upgraded = RecordFolds.foldEvent(
+            dashStart("G2", 2_100, odo = 10.0, source = SessionStartSource.INTERACTION), placeholderCtx, null,
+        ).context
+        assertEquals(SessionStartSource.INTERACTION, upgraded!!.startSource)
+        assertEquals(2_100L, upgraded.startedAt)
+    }
+
+    @Test
+    fun `RECOVERY re-start keeps the original startSource`() {
+        var ctx: SessionFoldContext? = null
+        ctx = RecordFolds.foldEvent(
+            dashStart("G3", 1_000, odo = 50.0, source = SessionStartSource.INTERACTION), ctx, null,
+        ).context
+        ctx = RecordFolds.foldEvent(
+            dashStart("G3", 9_000, odo = 60.0, source = SessionStartSource.RECOVERY), ctx, null,
+        ).context
+        assertEquals("original interaction source preserved", SessionStartSource.INTERACTION, ctx!!.startSource)
     }
 
     @Test

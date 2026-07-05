@@ -81,6 +81,16 @@ data class DeliveryRecordEntity(
     // ── Frozen economics (immutable historical fact — never re-costed on economy edit) ──
     /** Operating cost-per-mile this delivery is costed at, frozen from the accepted offer (PR2). */
     val frozenCostPerMile: Double?,
+    /**
+     * Fuel component of [frozenCostPerMile] (per-mile), frozen from the accepted offer's own
+     * evaluation (#659). Populated only off an `OFFER_FROZEN` basis; null for CURRENT_FALLBACK/NONE
+     * (the live economy read supplies a bare cpm, not its split) → the 4-step true-net waterfall
+     * falls back to 3-step for such rows. `frozenFuelPerMile + frozenNonFuelPerMile ≈
+     * frozenCostPerMile` when all present.
+     */
+    val frozenFuelPerMile: Double? = null,
+    /** Non-fuel component of [frozenCostPerMile] (per-mile), same OFFER_FROZEN-only rule (#659). */
+    val frozenNonFuelPerMile: Double? = null,
     /** Frozen realized net = realizedPay − realizedMiles × frozenCostPerMile (PR2). */
     val netProfit: Double?,
     /** Provenance of the cost basis: "OFFER_FROZEN" | "CAPTURED" | "CURRENT_FALLBACK" | "NONE". */

@@ -52,4 +52,12 @@ data class OfferRecordEntity(
     val estDollarsPerMile: Double?,
     val estTimeMinutes: Double?,
     val estOperatingCostPerMile: Double?,
+    /**
+     * Fuel component of [estOperatingCostPerMile] (per-mile) = `fuelCostEstimate ÷ distanceMiles`;
+     * null when distance ≤ 0. Persisted so the delivery fold's fuel/non-fuel split basis rehydrates
+     * on a mid-session restart from the same offer row as the cpm — rebuild-stable (#659).
+     */
+    val estFuelPerMile: Double? = null,
+    /** Non-fuel component of [estOperatingCostPerMile] (per-mile) = `nonFuelCostEstimate ÷ distanceMiles` (#659). */
+    val estNonFuelPerMile: Double? = null,
 )

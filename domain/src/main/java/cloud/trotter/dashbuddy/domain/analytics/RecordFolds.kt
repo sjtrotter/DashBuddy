@@ -71,6 +71,10 @@ data class DeliveryFold(
     val realizedMiles: Double?,
     val realizedMinutes: Double?,
     val frozenCostPerMile: Double?,
+    /** Fuel component of [frozenCostPerMile] (per-mile), frozen from the offer basis; null off it (#659). */
+    val frozenFuelPerMile: Double?,
+    /** Non-fuel component of [frozenCostPerMile] (per-mile), frozen from the offer basis; null off it (#659). */
+    val frozenNonFuelPerMile: Double?,
     val netProfit: Double?,
     val costBasis: String,
 )
@@ -96,6 +100,10 @@ data class OfferFold(
     val estDollarsPerMile: Double?,
     val estTimeMinutes: Double?,
     val estOperatingCostPerMile: Double?,
+    /** `fuelCostEstimate ÷ distanceMiles` (per-mile); null when distance ≤ 0. Rebuild-stable split hydration (#659). */
+    val estFuelPerMile: Double?,
+    /** `nonFuelCostEstimate ÷ distanceMiles` (per-mile); null when distance ≤ 0 (#659). */
+    val estNonFuelPerMile: Double?,
 )
 
 /**
@@ -179,6 +187,8 @@ object RecordFolds {
                     startOdometer = context.startOdometer ?: odo,
                     lastEventAt = maxOf(context.lastEventAt, e.occurredAt),
                     lastOdometer = odo ?: context.lastOdometer,
+                    // Already a real start — keep its original startSource; only fill if somehow null.
+                    startSource = context.startSource ?: p.source,
                 ),
             )
         }
@@ -195,6 +205,7 @@ object RecordFolds {
                     lastEventAt = maxOf(context.lastEventAt, e.occurredAt),
                     lastOdometer = odo ?: context.lastOdometer,
                     started = true,
+                    startSource = p.source,
                 ),
                 freshSession = true,
             )
@@ -208,6 +219,7 @@ object RecordFolds {
                 startOdometer = odo,
                 lastOdometer = odo,
                 started = true,
+                startSource = p.source,
             ),
             freshSession = true,
         )
@@ -222,6 +234,14 @@ object RecordFolds {
         val platformWire = ctx?.platform?.wire ?: Platform.Unknown.wire
         val eval = p.evaluation
         val parsed = p.parsedOffer
+        // Per-mile fuel/non-fuel split from the SAME frozen evaluation the cpm comes from: the eval
+        // carries route-total estimates + distance, so per-mile = estimate ÷ distanceMiles. Guard a
+        // non-positive distance → null split (the delivery falls back to the 3-step waterfall). By
+        // construction fuelPerMile + nonFuelPerMile ≈ operatingCostPerMile (both totals are that same
+        // per-mile rate × distance), the invariant the waterfall relies on (#659).
+        val evalDist = eval?.distanceMiles
+        val fuelPerMile = if (eval != null && evalDist != null && evalDist > 0.0) eval.fuelCostEstimate / evalDist else null
+        val nonFuelPerMile = if (eval != null && evalDist != null && evalDist > 0.0) eval.nonFuelCostEstimate / evalDist else null
         val offer = OfferFold(
             eventSequenceId = event.sequenceId,
             sessionId = sid,
@@ -242,13 +262,21 @@ object RecordFolds {
             estDollarsPerMile = eval?.dollarsPerMile,
             estTimeMinutes = eval?.estimatedTimeMinutes,
             estOperatingCostPerMile = eval?.operatingCostPerMile,
+            estFuelPerMile = fuelPerMile,
+            estNonFuelPerMile = nonFuelPerMile,
         )
         val newCtx = ctx?.let {
             it.advance(e.occurredAt, event.metadata?.odometer)
                 .bumpOutcome(e.type)
-                // Capture the session-uniform frozen cpm from any closing offer that carries an
-                // evaluation (accepted/declined/timeout all reflect the same economy).
-                .copy(lastEvaluatedCostPerMile = eval?.operatingCostPerMile ?: it.lastEvaluatedCostPerMile)
+                // Capture the session-uniform frozen cpm AND its fuel/non-fuel split from any closing
+                // offer that carries an evaluation (accepted/declined/timeout all reflect the same
+                // economy). Keep-prior on a null (a distance-0 offer captures cpm but no split) so a
+                // later good split isn't wiped — session-uniformity makes them numerically identical.
+                .copy(
+                    lastEvaluatedCostPerMile = eval?.operatingCostPerMile ?: it.lastEvaluatedCostPerMile,
+                    lastEvaluatedFuelPerMile = fuelPerMile ?: it.lastEvaluatedFuelPerMile,
+                    lastEvaluatedNonFuelPerMile = nonFuelPerMile ?: it.lastEvaluatedNonFuelPerMile,
+                )
         }
         return FoldOutcome(context = newCtx, offer = offer)
     }
@@ -300,6 +328,13 @@ object RecordFolds {
             currentCostPerMile != null -> currentCostPerMile to CostBasis.CURRENT_FALLBACK
             else -> null to CostBasis.NONE
         }
+        // The fuel/non-fuel split is populated ONLY off the OFFER_FROZEN basis — the offer's own
+        // evaluation carried it. CURRENT_FALLBACK/NONE deliveries have no split (the live economy read
+        // supplies a bare cpm, not its components), so they stay null → the 4-step waterfall falls back
+        // to 3-step for those rows (#659). By construction frozenFuelPerMile + frozenNonFuelPerMile ≈
+        // frozenCostPerMile when all present.
+        val frozenFuelPerMile = if (costBasis == CostBasis.OFFER_FROZEN) ctx?.lastEvaluatedFuelPerMile else null
+        val frozenNonFuelPerMile = if (costBasis == CostBasis.OFFER_FROZEN) ctx?.lastEvaluatedNonFuelPerMile else null
         val netProfit = if (frozenCpm != null && realizedPay != null && realizedMiles != null) {
             NetProfit.net(realizedPay, realizedMiles, frozenCpm)
         } else {
@@ -327,6 +362,8 @@ object RecordFolds {
             realizedMiles = realizedMiles,
             realizedMinutes = realizedMinutes,
             frozenCostPerMile = frozenCpm,
+            frozenFuelPerMile = frozenFuelPerMile,
+            frozenNonFuelPerMile = frozenNonFuelPerMile,
             netProfit = netProfit,
             costBasis = costBasis,
         )

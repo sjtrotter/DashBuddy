@@ -44,6 +44,14 @@ data class SessionRecordEntity(
     val lastEventAt: Long,
     /** "summary_screen" | "early_offline" | "inferred" | null. */
     val endSource: String?,
+    /**
+     * Provenance of the session's start: the DASH_START payload's `source` ("interaction"/"recovery")
+     * once a real start has been folded; null for a placeholder synthesized before its DASH_START
+     * landed (#659, retro finding 2). Hydration rehydrates `started` from THIS marker — not from the
+     * old "has a real platform" heuristic, so a row synthesized by a real-platform DASH_STOP that
+     * arrived before its DASH_START no longer rehydrates as started with a near-zero-duration start.
+     */
+    val startSource: String? = null,
     /** metadata.odometer of DASH_START (first non-null wins). */
     val startOdometer: Double?,
     /** Last non-null metadata.odometer seen — miles = lastOdometer − startOdometer, DERIVED in SQL. */

@@ -240,6 +240,8 @@ class AnalyticsProjector @Inject constructor(
             prevDropOdometer = lastDelivery?.odometerAtCompletion,
             prevDropAt = lastDelivery?.completedAt,
             lastEvaluatedCostPerMile = analyticsDao.lastOfferCostPerMileInSession(sessionId),
+            lastEvaluatedFuelPerMile = analyticsDao.lastOfferFuelPerMileInSession(sessionId),
+            lastEvaluatedNonFuelPerMile = analyticsDao.lastOfferNonFuelPerMileInSession(sessionId),
         )
     }
 
@@ -287,6 +289,7 @@ class AnalyticsProjector @Inject constructor(
         offersTimeout = offersTimeout,
         deliveries = deliveries,
         jobsCompleted = jobsCompleted,
+        startSource = startSource,
     )
 
     private fun SessionRecordEntity.toContext(
@@ -294,6 +297,8 @@ class AnalyticsProjector @Inject constructor(
         prevDropOdometer: Double? = null,
         prevDropAt: Long? = null,
         lastEvaluatedCostPerMile: Double? = null,
+        lastEvaluatedFuelPerMile: Double? = null,
+        lastEvaluatedNonFuelPerMile: Double? = null,
     ) = SessionFoldContext(
         sessionId = sessionId,
         platform = Platform.fromWire(platform) ?: Platform.Unknown,
@@ -313,11 +318,17 @@ class AnalyticsProjector @Inject constructor(
         prevDropOdometer = prevDropOdometer,
         prevDropAt = prevDropAt,
         lastEvaluatedCostPerMile = lastEvaluatedCostPerMile,
-        // A persisted row with a REAL platform is a started session (a RECOVERY re-start must not
-        // clobber it). A still-`_unknown` row is a placeholder persisted before its DASH_START landed
-        // (they arrive in separate 1-event drains at steady state) — NOT started, so the DASH_START
-        // that lands in a later batch upgrades it with the real platform/startedAt (F1).
-        started = Platform.fromWire(platform)?.let { it != Platform.Unknown } ?: false,
+        lastEvaluatedFuelPerMile = lastEvaluatedFuelPerMile,
+        lastEvaluatedNonFuelPerMile = lastEvaluatedNonFuelPerMile,
+        // `started` rehydrates from the persisted [startSource] marker (#659, retro finding 2) — a
+        // real DASH_START stamped it ("interaction"/"recovery"), a placeholder synthesized before its
+        // DASH_START (or by a DASH_STOP that arrived first) left it null. This replaces the old
+        // `platform != Unknown` heuristic, under which a row synthesized by a real-platform DASH_STOP
+        // rehydrated as started and then took the RECOVERY non-clobber arm, keeping a near-zero
+        // startedAt. A still-`_unknown` placeholder (startSource null) is NOT started, so the
+        // DASH_START that lands in a later batch upgrades it with the real platform/startedAt (F1).
+        started = startSource != null,
+        startSource = startSource,
     )
 
     private fun DeliveryFold.toEntity() = DeliveryRecordEntity(
@@ -341,6 +352,8 @@ class AnalyticsProjector @Inject constructor(
         realizedMiles = realizedMiles,
         realizedMinutes = realizedMinutes,
         frozenCostPerMile = frozenCostPerMile,
+        frozenFuelPerMile = frozenFuelPerMile,
+        frozenNonFuelPerMile = frozenNonFuelPerMile,
         netProfit = netProfit,
         costBasis = costBasis,
     )
@@ -365,6 +378,8 @@ class AnalyticsProjector @Inject constructor(
         estDollarsPerMile = estDollarsPerMile,
         estTimeMinutes = estTimeMinutes,
         estOperatingCostPerMile = estOperatingCostPerMile,
+        estFuelPerMile = estFuelPerMile,
+        estNonFuelPerMile = estNonFuelPerMile,
     )
 
     private companion object {
@@ -376,7 +391,12 @@ class AnalyticsProjector @Inject constructor(
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 60_000L
 
-        /** Fold-logic version — bump to wipe records + refold the whole log on next start. */
-        private const val PROJECTOR_VERSION = 1
+        /**
+         * Fold-logic version — bump to wipe records + refold the whole log on next start.
+         * v2 (#659): frozen fuel/non-fuel per-mile split on delivery_records + estFuel/NonFuelPerMile
+         * on offer_records + startSource on session_records — all populated from the immutable log on
+         * the refold this bump triggers.
+         */
+        private const val PROJECTOR_VERSION = 2
     }
 }
