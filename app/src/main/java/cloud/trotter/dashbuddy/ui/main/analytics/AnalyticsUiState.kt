@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
@@ -38,4 +39,6 @@ data class AnalyticsUiState(
     val topStores: List<StoreEconomics> = emptyList(),
     /** Most recent dash sessions, newest first (not tappable until #650). */
     val recentSessions: List<SessionRecord> = emptyList(),
+    /** Offer-decision economics for [selectedPeriod] — the Decisions tab (#315 H3, frozen est.). */
+    val decisions: DecisionEconomics = DecisionEconomics.EMPTY,
 )

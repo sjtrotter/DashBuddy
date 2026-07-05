@@ -95,6 +95,19 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   with the period, Money ≠ dashboard for the same window, a crash on an empty period, or a "$0.00"
   unattributed callout on a period with none.
   - Confirmed: 0/2
+- **🆕 NEW — Analytics Decisions tab: offer funnel + value-of-saying-no + score-vs-outcome (#315 H3).**
+  In the Analytics hub tap the **Decisions** tab and pick a period (Today / Week / Month / Lifetime).
+  Three sections should appear: an **offer funnel** (a stacked Accepted / Declined / Timed-out bar +
+  legend, with the **acceptance rate** as the big headline and the offer count under it), a **value of
+  saying no** card ("~$X est. net skipped across N declined offers"), and a **score vs outcome**
+  comparison (avg score + avg **est.** $/hr for Accepted vs Declined). How to tell it's working: the
+  Accepted/Declined/Timed-out counts and the acceptance rate should match what you actually did on the
+  dash; value-of-saying-no ≈ the sum of the estimated net of the offers you declined; every economic
+  figure is labelled **"est."** (these are the offer's frozen decision-time estimates, not realized
+  pay). How to tell it's broken: the "coming soon" card still shows, counts don't match the dash,
+  figures don't re-anchor on a period switch, a "$0.00"/blank where an em-dash should be on an empty
+  period, or a crash opening the tab with no offers yet.
+  - Confirmed: 0/2
 - **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
   Open the app **after a dash** (not while on a task): the **Today** tiles (True Net / Net $/hr /
   Miles) should already reflect the just-completed dash with no manual refresh (the read-model folds
