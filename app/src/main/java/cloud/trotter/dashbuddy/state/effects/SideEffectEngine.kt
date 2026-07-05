@@ -307,13 +307,19 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.ResumeOdometer -> odometerEffectHandler.resume()
 
             is AppEffect.RecordShopRate -> {
-                // #556: learn the dasher's shopping pace. PII-safe (store name is a merchant name).
+                // #556: learn the dasher's shopping pace.
                 val minutes = effect.shopDurationMs / 60_000.0
                 strategyRepository.recordShopRate(effect.itemsShopped, minutes)
+                val perMin = if (minutes > 0) effect.itemsShopped / minutes else 0.0
+                // #551 P7: rate math is a shareable INFO milestone, but the merchant name
+                // (raw third-party UI text) stays on the DEBUG firehose only.
                 Timber.tag("ShopRate").i(
+                    "recorded %d items / %.1f min = %.2f/min",
+                    effect.itemsShopped, minutes, perMin,
+                )
+                Timber.tag("ShopRate").d(
                     "recorded %d items / %.1f min = %.2f/min (store=%s)",
-                    effect.itemsShopped, minutes,
-                    if (minutes > 0) effect.itemsShopped / minutes else 0.0, effect.storeName ?: "?",
+                    effect.itemsShopped, minutes, perMin, effect.storeName ?: "?",
                 )
             }
 
@@ -509,7 +515,10 @@ class SideEffectEngine @Inject constructor(
     private fun logFromArgs(args: Map<String, String>) {
         val type = args["type"] ?: "RULE_EFFECT"
         val payload = args["payload"]
-        Timber.i("Rule LOG [%s]: %s", type, payload ?: "(no payload)")
+        // #551 P7: a rule LOG payload is a rule-authored diagnostic that can template raw
+        // third-party UI text ({rawText}, {storeName} — e.g. "TIP_RECEIVED: {rawText}"), so it is
+        // a DEBUG firehose step, never the shareable INFO stream.
+        Timber.tag("Effects").d("Rule LOG [%s]: %s", type, payload ?: "(no payload)")
     }
 
     private fun sessionStartFromArgs(args: Map<String, String>) {
