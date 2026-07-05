@@ -73,6 +73,14 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — per-dash drill-down (#650 PR A): tap a recent dash on the Money tab.** Analytics → Money
+  tab → scroll to RECENT DASHES → tap any dash row. It should open a read-only "Dash detail" screen.
+  How to tell it's working: the header figures (date, start–end clock times, duration, gross, miles,
+  deliveries) match that dash's summary, and the per-delivery rows list each drop (store, completion
+  time, pay, tip, net, miles/min) matching what you actually delivered. When the platform-reported
+  total exceeded the captured delivery pay, an "unaccounted on this dash" callout appears. (PR #650-A)
+  - Confirmed: 0/2
+
 - **🆕 NEW — identity-less completions now firewalled at PostTask exit (#653 / PR #673): watch a
   no-name drop for a MISSING completion.** The PostTask-exit `DELIVERY_COMPLETED` mint now mirrors
   the close-out path's #498 identity firewall: a dropoff task that never acquired a customer

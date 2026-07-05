@@ -4,6 +4,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import java.time.ZoneId
 import java.util.Locale
 
 /**
@@ -47,5 +48,21 @@ class TimeFormatsTest {
         Locale.setDefault(Locale.forLanguageTag("ar-EG"))
         assertEquals("3m 12s", formatDuration(192_000))
         assertEquals("1:05", formatCountdown(65_000))
+    }
+
+    @Test
+    fun `formatClockTime renders localized SHORT time at a fixed zone and locale`() {
+        // 2021-09-13 21:42:07 UTC → 5:42 PM in America/New_York (EDT, UTC−4), US locale.
+        // CLDR separates the time from the day-period with a NARROW NO-BREAK SPACE (U+202F).
+        val millis = 1_631_569_327_000L
+        assertEquals(
+            "5:42 PM",
+            formatClockTime(millis, ZoneId.of("America/New_York"), Locale.US).replace('\u202F', ' '),
+        )
+        // Same instant is 21:42 in UTC under a 24-hour locale (UK).
+        assertEquals(
+            "21:42",
+            formatClockTime(millis, ZoneId.of("UTC"), Locale.UK),
+        )
     }
 }

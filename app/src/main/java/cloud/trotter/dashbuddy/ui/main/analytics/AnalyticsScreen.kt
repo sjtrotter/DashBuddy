@@ -44,6 +44,7 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 fun AnalyticsScreen(
     onBack: () -> Unit,
     onExportCsv: () -> Unit,
+    onOpenSession: (String) -> Unit,
     viewModel: AnalyticsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -94,6 +95,7 @@ fun AnalyticsScreen(
                         topStores = uiState.topStores,
                         recentSessions = uiState.recentSessions,
                         dailyEarnings = uiState.dailyEarnings,
+                        onOpenSession = onOpenSession,
                     )
                 }
 
