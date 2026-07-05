@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 import cloud.trotter.dashbuddy.domain.format.Formats
@@ -20,6 +21,10 @@ class TtsEffectHandler @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) {
     private var tts: TextToSpeech? = null
+
+    /** Monotonic utterance ids (#551 P7): the id is logged by the WARN error callback, so it
+     *  must never embed the merchant name — a counter correlates callbacks just as well. */
+    private val utteranceSeq = AtomicLong(0)
 
     @Volatile
     private var isReady = false
@@ -75,7 +80,7 @@ class TtsEffectHandler @Inject constructor(
         Timber.tag("Tts").d("speaking: %s", text)
 
         audioManager.requestAudioFocus(audioFocusRequest)
-        val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "offer_${eval.merchantName}")
+        val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "offer_${utteranceSeq.incrementAndGet()}")
         if (result != TextToSpeech.SUCCESS) {
             // A failed speak() never fires an utterance callback — release focus here or
             // other apps stay ducked (#341).
