@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.NoRedaction
 import cloud.trotter.dashbuddy.domain.capture.CaptureBus
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -116,6 +117,47 @@ class CaptureScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = benign, packageName = "com.doordash.driverapp"),
             screenTarget = null,
         )
+
+        verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    // #666 item 2c: the UNKNOWN-notification backstop must scan actionLabels too —
+    // previously only the flat text fields (title/text/bigText/tickerText/subText)
+    // were scanned, so a sensitive marker living ONLY in a push action button label
+    // (e.g. a future "Cash out" quick-action) would have shipped uncaught.
+
+    private fun unknownNotifObs() = Observation.Notification(
+        timestamp = 1_000L,
+        captureId = null,
+        ruleId = null,
+        metadata = ReplayMetadata.EMPTY,
+        flow = null,
+        modeHint = null,
+        parsed = ParsedFields.None,
+        target = UNKNOWN_TARGET,
+    )
+
+    private fun rawNotif(title: String? = null, actionLabels: List<String> = emptyList()) =
+        RawNotificationData(
+            title = title, text = null, tickerText = null, bigText = null,
+            packageName = "com.doordash.driverapp", postTime = 0L, isClearable = true,
+            actionLabels = actionLabels,
+        )
+
+    @Test
+    fun `UNKNOWN notification with a sensitive marker ONLY in an action label is scrubbed`() {
+        val toxic = rawNotif(title = "New promo", actionLabels = listOf("Cash out"))
+        writer.captureNotification(unknownNotifObs(), toxic)
+
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(1L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `benign UNKNOWN notification with clean action labels still captures for triage`() {
+        val benign = rawNotif(title = "New promo", actionLabels = listOf("Accept", "Decline"))
+        writer.captureNotification(unknownNotifObs(), benign)
 
         verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)

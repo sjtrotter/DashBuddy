@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.test.util
 
+import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -120,10 +121,13 @@ object SnapshotRedactor {
     private fun collectNotif(o: JsonObject, repl: MutableMap<String, String>) {
         val isChat = (o["channelId"]?.jsonPrimitive?.content?.contains("inapp-chat") == true) ||
             (o["title"]?.jsonPrimitive?.content?.startsWith("Message from") == true)
-        for (k in listOf("title", "text", "bigText", "tickerText", "subText")) {
+        // #666: iterate the production RawNotificationData.textFields() wire-name
+        // SSOT instead of hand-listing title/text/bigText/tickerText/subText.
+        for (field in NotifTextField.entries) {
+            val k = field.wire
             val v = o[k] as? JsonPrimitive ?: continue
             if (!v.isString) continue
-            val red = if (isChat && k != "title") MASK else scrub(v.content, false)
+            val red = if (isChat && field != NotifTextField.TITLE) MASK else scrub(v.content, false)
             record(v.content, red, repl)
         }
     }

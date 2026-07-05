@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
@@ -90,23 +91,10 @@ data class CompiledRule<TInput>(
     val notifRedact: CompiledNotifRedact = CompiledNotifRedact.EMPTY,
 )
 
-/** The notification fields a [CompiledNotifRedact] can mask (#620). */
-enum class NotifField(val wire: String) {
-    TITLE("title"),
-    TEXT("text"),
-    BIG_TEXT("bigText"),
-    TICKER_TEXT("tickerText"),
-    SUB_TEXT("subText"),
-    ;
-
-    companion object {
-        fun fromWire(wire: String): NotifField? = entries.firstOrNull { it.wire == wire }
-    }
-}
-
 /**
  * A per-field notification redact masker (#620). Notifications are flat strings
- * (no tree), so masking is keyed by field name rather than a node predicate.
+ * (no tree), so masking is keyed by field name ([NotifTextField], the #666 SSOT
+ * on [RawNotificationData]) rather than a node predicate.
  */
 sealed interface NotifFieldMask {
     /** Mask the whole field value, preserving an optional leading [keepPrefix]. */
@@ -129,24 +117,21 @@ sealed interface NotifFieldMask {
  * `[redacted:<4hex>]` distinctness + fail-closed contract as screen redaction.
  */
 data class CompiledNotifRedact(
-    val fields: Map<NotifField, NotifFieldMask>,
+    val fields: Map<NotifTextField, NotifFieldMask>,
 ) {
     fun isEmpty(): Boolean = fields.isEmpty()
 
     /**
      * Return a masked COPY of [raw] for envelope serialization. The original is
      * never mutated; callers must read the dedup `contentHash` off the ORIGINAL
-     * (a masked copy recomputes a different hash).
+     * (a masked copy recomputes a different hash). Iterates the #666
+     * [RawNotificationData.textFields] SSOT rather than hand-listing the 5 fields.
      */
-    fun apply(raw: RawNotificationData): RawNotificationData = raw.copy(
-        title = maskField(NotifField.TITLE, raw.title),
-        text = maskField(NotifField.TEXT, raw.text),
-        bigText = maskField(NotifField.BIG_TEXT, raw.bigText),
-        tickerText = maskField(NotifField.TICKER_TEXT, raw.tickerText),
-        subText = maskField(NotifField.SUB_TEXT, raw.subText),
+    fun apply(raw: RawNotificationData): RawNotificationData = raw.withTextFields(
+        raw.textFields().associate { (field, value) -> field to maskField(field, value) },
     )
 
-    private fun maskField(field: NotifField, value: String?): String? {
+    private fun maskField(field: NotifTextField, value: String?): String? {
         if (value == null) return null
         return when (val m = fields[field]) {
             null -> value

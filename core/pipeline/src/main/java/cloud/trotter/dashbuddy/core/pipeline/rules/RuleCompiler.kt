@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -202,10 +203,10 @@ object RuleCompiler {
      */
     private fun compileNotifRedactBlock(obj: JsonObject): CompiledNotifRedact {
         val fields = obj.entries.associate { (fieldName, spec) ->
-            val field = NotifField.fromWire(fieldName)
+            val field = NotifTextField.fromWire(fieldName)
                 ?: throw RuleCompileException(
                     "notification redact: unknown field '$fieldName' " +
-                        "(expected one of ${NotifField.entries.map { it.wire }})",
+                        "(expected one of ${NotifTextField.entries.map { it.wire }})",
                 )
             val specObj = spec as? JsonObject
                 ?: throw RuleCompileException(

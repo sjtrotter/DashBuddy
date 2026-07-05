@@ -124,6 +124,39 @@ class CustomerTextMarkersTest {
         assertNull(CustomerTextMarkers.firstUnredactedMarkerInNotif(notif(text = "Your delivery from H-E-B")))
     }
 
+    // --- actionLabels (#666 item 2) -------------------------------------------
+
+    @Test
+    fun `a customer-marker action label is detected and scrubbed, a clean label is untouched`() {
+        val raw = notif(title = "New order").copy(
+            actionLabels = listOf("Message from Jane", "Dismiss"),
+        )
+        assertEquals("Message from ", CustomerTextMarkers.firstUnredactedMarkerInNotif(raw))
+
+        val scrubbed = CustomerTextMarkers.scrubNotif(raw)
+        assertEquals("[redacted]", scrubbed.actionLabels[0])
+        assertEquals("Dismiss", scrubbed.actionLabels[1])
+        // Text fields untouched (marker was only in the action label).
+        assertEquals("New order", scrubbed.title)
+        // Clean after scrub.
+        assertNull(CustomerTextMarkers.firstUnredactedMarkerInNotif(scrubbed))
+    }
+
+    @Test
+    fun `action labels with no marker are left untouched`() {
+        val raw = notif(title = "New order").copy(actionLabels = listOf("Accept", "Decline"))
+        assertNull(CustomerTextMarkers.firstUnredactedMarkerInNotif(raw))
+        val scrubbed = CustomerTextMarkers.scrubNotif(raw)
+        assertEquals(listOf("Accept", "Decline"), scrubbed.actionLabels)
+    }
+
+    @Test
+    fun `firstUnredactedMarkerInNotif checks text fields before action labels`() {
+        val raw = notif(title = "Deliver to Jane").copy(actionLabels = listOf("Message from Bob"))
+        // Text-field marker found first (order doesn't affect correctness, but pins behavior).
+        assertEquals("Deliver to ", CustomerTextMarkers.firstUnredactedMarkerInNotif(raw))
+    }
+
     @Test
     fun `no-lead-in customer shapes are the documented residual the rule redact owns`() {
         // Uber trip_en_route_dropoff title is a WHOLE address with NO lead-in marker —

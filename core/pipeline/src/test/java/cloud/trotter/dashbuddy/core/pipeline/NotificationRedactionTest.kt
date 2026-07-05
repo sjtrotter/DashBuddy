@@ -52,10 +52,11 @@ class NotificationRedactionTest {
         bigText: String? = null,
         tickerText: String? = null,
         channelId: String? = null,
+        actionLabels: List<String> = emptyList(),
     ) = RawNotificationData(
         title = title, text = text, bigText = bigText, tickerText = tickerText,
         packageName = "com.doordash.driverapp", postTime = 0L, isClearable = true,
-        channelId = channelId,
+        channelId = channelId, actionLabels = actionLabels,
     )
 
     private fun obs(ruleId: String?, target: String?) = Observation.Notification(
@@ -257,6 +258,53 @@ class NotificationRedactionTest {
         // Honest residual: the prefix backstop does NOT fire here; the rule's
         // `redact { title {} }` is the primary control for this shape.
         assertEquals(0L, stats.notifRedactBackstopScrubCount)
+    }
+
+    // --- actionLabels (#666 item 2b) -------------------------------------------
+    // actionLabels was serialized into every notif envelope but excluded from the
+    // #632 backstop scan entirely. A recognized notification whose rule forgot to
+    // redact a customer-PII marker living in an action label must still be caught.
+
+    @Test
+    fun `#632 backstop scrubs a marker-bearing action label`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        val leak = raw(title = "New message", actionLabels = listOf("Message from Jennifer", "Dismiss"))
+        writer(noRedactSource)
+            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), leak)
+
+        val json = capturedEnvelope()
+        assertFalse("leaked name gone", json.contains("Jennifer"))
+        assertTrue("action label scrubbed whole", json.contains("[redacted]"))
+        assertTrue("clean sibling label kept", json.contains("Dismiss"))
+        assertEquals(1L, stats.notifRedactBackstopScrubCount)
+    }
+
+    @Test
+    fun `#632 backstop leaves clean action labels untouched`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        val benign = raw(title = "You have a new order!", actionLabels = listOf("Accept", "Decline"))
+        writer(noRedactSource)
+            .captureNotification(obs("doordash.notification.new_order", "new_order"), benign)
+
+        val json = capturedEnvelope()
+        assertTrue(json.contains("Accept"))
+        assertTrue(json.contains("Decline"))
+        assertEquals(0L, stats.notifRedactBackstopScrubCount)
+    }
+
+    @Test
+    fun `#632 backstop action-label scrub preserves the ORIGINAL contentHash`() {
+        whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
+        val leak = raw(title = "New message", actionLabels = listOf("Message from Jennifer"))
+        val originalHash = leak.contentHash
+        writer(noRedactSource)
+            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), leak)
+
+        val hashCap = argumentCaptor<Int?>()
+        org.mockito.kotlin.verify(captureBus).offer(any(), any(), anyOrNull(), any(), any(), hashCap.capture())
+        // actionLabels are NOT part of toFullString()/contentHash — scrubbing one
+        // must not perturb the dedup identity.
+        assertEquals("dedup identity stays the ORIGINAL raw hash", originalHash, hashCap.lastValue)
     }
 
     @Test

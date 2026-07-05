@@ -101,32 +101,38 @@ object CustomerTextMarkers {
     // Notification captures are FLAT fields, not a UiNode tree — so a hit scrubs
     // the WHOLE offending field (there are no children to isolate). Same
     // already-redacted skip (VET V1) and same marker SSOT as the screen path.
+    // Text fields iterate the #666 RawNotificationData.textFields() SSOT rather
+    // than hand-listing title/text/bigText/tickerText/subText.
 
     /**
      * The first un-redacted customer marker across [raw]'s flat text fields
-     * (title/text/bigText/tickerText/subText), or null when clean. Cheap scan run
-     * on every recognized notification capture; the [scrubNotif] copy is built
-     * only on a hit.
+     * (title/text/bigText/tickerText/subText, via [RawNotificationData.textFields])
+     * OR its `actionLabels` (#666 item 2 — a push action button label is
+     * serialized into the envelope same as the text fields and was previously
+     * excluded from this scan), or null when clean. Cheap scan run on every
+     * recognized notification capture; the [scrubNotif] copy is built only on
+     * a hit.
      */
     fun firstUnredactedMarkerInNotif(raw: RawNotificationData): String? =
-        notifFields(raw).firstNotNullOfOrNull { unredactedMarker(it) }
+        raw.textFields().firstNotNullOfOrNull { (_, value) -> unredactedMarker(value) }
+            ?: raw.actionLabels.firstNotNullOfOrNull { unredactedMarker(it) }
 
     /**
-     * A copy of [raw] with every flat field carrying an un-redacted customer
-     * marker scrubbed WHOLE to [CompiledRedact.REDACTED]. Call only after
-     * [firstUnredactedMarkerInNotif] returned non-null.
+     * A copy of [raw] with every flat text field AND every action label carrying
+     * an un-redacted customer marker scrubbed WHOLE to [CompiledRedact.REDACTED].
+     * Call only after [firstUnredactedMarkerInNotif] returned non-null.
+     * `actionLabels` is intentionally scrubbed here (not folded into
+     * [RawNotificationData.textFields]) since it isn't part of
+     * [RawNotificationData.toFullString]/`contentHash` — the dedup identity must
+     * stay stable regardless of action-label scrubbing.
      */
-    fun scrubNotif(raw: RawNotificationData): RawNotificationData = raw.copy(
-        title = scrubField(raw.title),
-        text = scrubField(raw.text),
-        bigText = scrubField(raw.bigText),
-        tickerText = scrubField(raw.tickerText),
-        subText = scrubField(raw.subText),
-    )
-
-    private fun notifFields(raw: RawNotificationData): List<String?> =
-        listOf(raw.title, raw.text, raw.bigText, raw.tickerText, raw.subText)
+    fun scrubNotif(raw: RawNotificationData): RawNotificationData = raw
+        .withTextFields(raw.textFields().associate { (field, value) -> field to scrubField(value) })
+        .copy(actionLabels = raw.actionLabels.map { scrubActionLabel(it) })
 
     private fun scrubField(field: String?): String? =
         if (unredactedMarker(field) != null) CompiledRedact.REDACTED else field
+
+    private fun scrubActionLabel(label: String): String =
+        if (unredactedMarker(label) != null) CompiledRedact.REDACTED else label
 }
