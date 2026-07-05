@@ -208,6 +208,21 @@ class JsonRuleInterpreter @Inject constructor(
                 return null
             }
 
+            // #419: cap the total rule count from the RAW arrays, BEFORE compiling
+            // — a 1 MB bundle passes MAX_FILE_BYTES yet can pack tens of thousands
+            // of tiny rules, and matchFirst is a linear scan per accessibility
+            // event. Over-cap → typed RuleCompileException → the malformed-file
+            // skip below (the platform loads nothing, fail closed behind #432).
+            val ruleCount = (root["screens"]?.jsonArray?.size ?: 0) +
+                (root["clicks"]?.jsonArray?.size ?: 0) +
+                (root["notifications"]?.jsonArray?.size ?: 0)
+            if (ruleCount > RuleCompiler.MAX_RULES_PER_FILE) {
+                throw RuleCompileException(
+                    "'$source' declares $ruleCount rules, exceeding " +
+                        "MAX_RULES_PER_FILE=${RuleCompiler.MAX_RULES_PER_FILE}",
+                )
+            }
+
             val screens = root["screens"]?.jsonArray
                 ?.let { RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
                 ?: emptyList()
@@ -260,6 +275,23 @@ class JsonRuleInterpreter @Inject constructor(
      */
     suspend fun load(jsonString: String, source: String = "unknown") {
         val result = loadSingle(jsonString, source) ?: return
+
+        // #419 (2a): a REPLACEMENT bundle must not silently drop sensitive-screen
+        // coverage. loadDefaults merges independent platform files, so it EXCLUDES
+        // only an uncovered platform's screens; load() swaps the WHOLE ruleset
+        // atomically, so a coverage downgrade must not go live at all — REJECT and
+        // keep the previous good bundle (its sensitive rules stay in force). Uses
+        // the same missingSensitivePlatforms SSOT as the #432 loadDefaults gate.
+        val uncovered = missingSensitivePlatforms(result.screens)
+        if (uncovered.isNotEmpty()) {
+            Timber.e(
+                "JsonRuleInterpreter: rejected replacement '%s' — platform(s) %s ship screen rules " +
+                    "but NO sensitive rule; keeping the previous bundle (fail closed, #419/#432)",
+                source, uncovered.joinToString { it.wire },
+            )
+            return
+        }
+
         reconcileCapabilities(
             RuleCompiler.enumerateCapabilities(
                 result.screens + result.clicks + result.notifications,
