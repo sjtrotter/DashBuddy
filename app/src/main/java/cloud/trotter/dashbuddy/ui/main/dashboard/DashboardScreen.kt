@@ -179,6 +179,7 @@ private data class PeriodOption(val period: AnalyticsPeriod, val label: String)
 private val PERIOD_OPTIONS = listOf(
     PeriodOption(AnalyticsPeriod.TODAY, "Today"),
     PeriodOption(AnalyticsPeriod.THIS_WEEK, "This week"),
+    PeriodOption(AnalyticsPeriod.THIS_MONTH, "Month"),
     PeriodOption(AnalyticsPeriod.LIFETIME, "Lifetime"),
 )
 
@@ -264,7 +265,7 @@ private fun EntryTileGrid(onNavigate: (String) -> Unit) {
                 icon = Icons.Filled.BarChart,
                 label = "Analytics",
                 modifier = Modifier.weight(1f),
-                // TODO(#315): wire to the analytics hub once :feature:analytics lands.
+                // #315 H1: routes to the Analytics hub (Money tab v1); other tabs stubbed.
                 onClick = { onNavigate(Screen.Analytics.route) },
             )
             EntryTile(

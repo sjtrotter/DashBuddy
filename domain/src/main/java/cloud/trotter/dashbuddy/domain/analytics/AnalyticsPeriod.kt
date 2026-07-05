@@ -16,6 +16,9 @@ enum class AnalyticsPeriod {
     /** Monday 00:00 local → now (the pay-week the dasher already sees). */
     THIS_WEEK,
 
+    /** 1st of the month 00:00 local → now (the calendar-month review window, #315 H1). */
+    THIS_MONTH,
+
     /** All records, ever. */
     LIFETIME,
 }

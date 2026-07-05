@@ -1,0 +1,276 @@
+package cloud.trotter.dashbuddy.ui.main.analytics
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.core.designsystem.component.AppCallout
+import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
+import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
+import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.domain.format.formatShortDate
+
+/** Placeholder shown for a rate figure that has no measurable denominator yet (dashboard parity). */
+private const val EMPTY_VALUE = "—"
+
+/** Below this the unattributed pay is effectively zero — no callout (avoids a "$0.00" flag). */
+private const val UNATTRIBUTED_EPSILON = 0.005
+
+/**
+ * Money tab v1 (#315 H1): the frozen-net earnings review for the selected period, top→bottom —
+ * earnings hero, 3-step true-net waterfall, stat tiles, the unattributed-pay review flag, top
+ * stores, and recent dashes. Pure data in / [PeriodEconomics] + record lists, no side effects.
+ * Every string routes through the [Formats]/[formatShortDate] SSOT.
+ */
+@Composable
+fun MoneyTab(
+    economics: PeriodEconomics,
+    topStores: List<StoreEconomics>,
+    recentSessions: List<SessionRecord>,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        EarningsHero(economics)
+        TrueNetWaterfall(economics)
+        StatTiles(economics)
+        if (economics.unattributedPay > UNATTRIBUTED_EPSILON) {
+            AppCallout(
+                text = "${Formats.money(economics.unattributedPay)} not attributed to any " +
+                    "delivery — bonuses/adjustments; review coming (#650)",
+                container = AppTheme.colors.warnBg,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        TopStoresCard(topStores)
+        RecentDashesCard(recentSessions)
+    }
+}
+
+/** Gross headline + True-Net and Net/hr chips. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EarningsHero(economics: PeriodEconomics) {
+    val c = AppTheme.colors
+    val netColor = if (economics.netProfit >= 0.0) c.good else c.bad
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Text(text = "GROSS EARNINGS", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Spacer(Modifier.height(4.dp))
+        Text(text = Formats.money(economics.grossEarnings), style = AppTheme.num.heroNum, color = c.text)
+        Spacer(Modifier.height(10.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AppChip(
+                text = "True net ${Formats.money(economics.netProfit)}",
+                color = netColor,
+                container = if (economics.netProfit >= 0.0) c.goodBg else c.badBg,
+            )
+            AppChip(
+                text = "Net/hr ${economics.netPerHour?.let { Formats.money(it) } ?: EMPTY_VALUE}",
+                color = c.accent,
+                container = c.accentDim,
+            )
+        }
+    }
+}
+
+/**
+ * The 3-step true-net waterfall (#659 pending 4-step lift): gross → −operating cost → net.
+ * Operating cost is the gap (gross − net); unattributed pay is net-additive, so it flows through
+ * consistently. Each row is a proportional bar against gross — the honest visual of "what stayed".
+ */
+@Composable
+private fun TrueNetWaterfall(economics: PeriodEconomics) {
+    val c = AppTheme.colors
+    val gross = economics.grossEarnings
+    val net = economics.netProfit
+    val cost = gross - net
+    // Bars scale against the largest magnitude so a net > gross (net-additive unattributed) still
+    // renders sanely and a zero period draws empty bars instead of dividing by zero.
+    val scale = maxOf(gross, cost, net, 0.0).takeIf { it > 0.0 } ?: 1.0
+
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Text(text = "TRUE NET", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Spacer(Modifier.height(10.dp))
+        WaterfallRow("Gross", Formats.money(gross), (gross / scale).toFloat(), c.accent, c.text)
+        Spacer(Modifier.height(8.dp))
+        WaterfallRow("Operating cost", "−${Formats.money(cost)}", (cost / scale).toFloat(), c.bad, c.text2)
+        Spacer(Modifier.height(8.dp))
+        WaterfallRow("Net", Formats.money(net), (net / scale).toFloat(), c.good, if (net >= 0.0) c.good else c.bad)
+    }
+}
+
+@Composable
+private fun WaterfallRow(label: String, amount: String, fraction: Float, barColor: Color, amountColor: Color) {
+    val c = AppTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = c.text2, modifier = Modifier.width(110.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(14.dp)
+                .clip(RoundedCornerShape(7.dp))
+                .background(c.surface3),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(barColor),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = amount,
+            style = AppTheme.num.smNum,
+            color = amountColor,
+            modifier = Modifier.width(88.dp),
+            textAlign = TextAlign.End,
+        )
+    }
+}
+
+/** 2×2 stat tiles: Net $/hr · Net $/mi · Miles · Deliveries. */
+@Composable
+private fun StatTiles(economics: PeriodEconomics) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppStatTile(
+                label = "Net/hr",
+                value = economics.netPerHour?.let { Formats.money(it) } ?: EMPTY_VALUE,
+                modifier = Modifier.weight(1f),
+            )
+            AppStatTile(
+                label = "Net/mi",
+                value = economics.netPerMile?.let { Formats.money(it) } ?: EMPTY_VALUE,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppStatTile(
+                label = "Miles",
+                value = Formats.decimal(economics.totals.miles),
+                modifier = Modifier.weight(1f),
+            )
+            AppStatTile(
+                label = "Deliveries",
+                value = Formats.commaInt(economics.totals.deliveries),
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+/** Top-earning stores for the period. Store names are merchants — fine to render (Principle 7 governs logs). */
+@Composable
+private fun TopStoresCard(stores: List<StoreEconomics>) {
+    val c = AppTheme.colors
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Text(text = "TOP STORES", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Spacer(Modifier.height(10.dp))
+        if (stores.isEmpty()) {
+            EmptyRow("No store earnings in this period yet.")
+        } else {
+            stores.forEachIndexed { index, store ->
+                if (index > 0) Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = store.storeName ?: "Unknown store",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.text,
+                        )
+                        Text(
+                            text = "${Formats.commaInt(store.deliveries)} " +
+                                if (store.deliveries == 1) "delivery" else "deliveries",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.text3,
+                        )
+                    }
+                    Text(
+                        text = Formats.money(store.net),
+                        style = AppTheme.num.smNum,
+                        color = if (store.net >= 0.0) c.good else c.bad,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Recent dashes, newest first. Sessions don't carry a frozen net, so the money column shows the
+ * platform-reported earnings (an em dash until a summary is seen). Not tappable yet — the per-dash
+ * drill-down is #650.
+ */
+@Composable
+private fun RecentDashesCard(sessions: List<SessionRecord>) {
+    val c = AppTheme.colors
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Text(text = "RECENT DASHES", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Spacer(Modifier.height(10.dp))
+        if (sessions.isEmpty()) {
+            EmptyRow("No dashes recorded yet.")
+        } else {
+            sessions.forEachIndexed { index, session ->
+                if (index > 0) Spacer(Modifier.height(10.dp))
+                // TODO(#650): make each dash row tappable → per-dash delivery breakdown.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = formatShortDate(session.startedAt),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.text,
+                        )
+                        Text(
+                            text = "${Formats.commaInt(session.deliveries)} " +
+                                if (session.deliveries == 1) "delivery" else "deliveries",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.text3,
+                        )
+                    }
+                    // Platform label is registry-resolved (never a literal) — Principle 8.
+                    AppChip(text = session.platform.shortName.ifEmpty { session.platform.displayName })
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = session.reportedEarnings?.let { Formats.money(it) } ?: EMPTY_VALUE,
+                        style = AppTheme.num.smNum,
+                        color = c.text,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyRow(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = AppTheme.colors.text3,
+        modifier = Modifier.padding(vertical = 4.dp),
+    )
+}
