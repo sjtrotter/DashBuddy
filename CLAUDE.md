@@ -406,7 +406,13 @@ Every new feature or refactor holds to these — they are forefront design input
    tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a
    privacy defect of the same class as leaking it to disk — gate the shareable-export sink behind that
    test, do not trust call-site discipline. When a change adds or moves a log site, state its level and
-   (for INFO+) confirm it carries no raw PII. (Implementation tracked in #551.)
+   (for INFO+) confirm it carries no raw PII. Shipped as two sinks in `LogRepository` (#551): the
+   verbatim DEBUG firehose (`app.log`, on-device only) and the PII-safe INFO+ `shareable.log` a user
+   exports as a bug report (Settings → Data & Privacy → Export Data), where every INFO+ line passes a
+   **fail-closed scrub at the sink** — an injected `LogScrubber` bound to `SensitiveTextMarkers` (one
+   marker SSOT, no `:core:data`→`:core:pipeline` edge), a hit/throw/unbound scrubber redacting to a
+   `[scrubbed:<marker>]` placeholder rather than trusting call sites (the #590 replay gate patrols
+   upstream; the sink is the last line).
 8. **Platform-agnostic core.** The recognition→state→effects spine never encodes a specific gig
    platform. Recognition is data (per-platform rulesets), not code; platform identity resolves
    only through the `Platform` registry (`fromRuleId`/`fromPackage`/`fromWire`) — never a literal
