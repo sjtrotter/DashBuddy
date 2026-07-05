@@ -201,7 +201,34 @@ class CaptureWriter @Inject constructor(
         // the SensitiveTextMarkers backstop above instead.
         val originalContentHash = raw.contentHash
         val notifRedact = obs.ruleId?.let { redactionSource.notifRedactFor(it) }
-        val payloadRaw = notifRedact?.apply(raw) ?: raw
+        val redactedRaw = notifRedact?.apply(raw) ?: raw
+        // #632 recognized-notification customer-PII backstop (defense-in-depth):
+        // the notif analogue of the #624 screen backstop. The #598 sha256→redact
+        // compile gate only fires for a rule that HASHES PII; a recognized
+        // notification rule that ships raw customer text with NO redact block (or a
+        // future downloaded rule that omits one) stays silent. Scan the masked flat
+        // fields for a customer-PII marker whose field was NOT already redacted and
+        // scrub the whole field, so a rule that FORGOT to redact still ships a
+        // scrubbed envelope. The contentHash is still originalContentHash (the dedup
+        // identity, #620 VET V7). UNKNOWN notifications are handled by
+        // SensitiveTextMarkers above; here they have no ruleId so nothing changes.
+        val payloadRaw = if (obs.target != UNKNOWN_TARGET) {
+            val marker = CustomerTextMarkers.firstUnredactedMarkerInNotif(redactedRaw)
+            if (marker != null) {
+                stats.onNotifRedactBackstopScrub()
+                // Principle 7: log the MARKER + rule id only — NEVER the leaked value.
+                Timber.w(
+                    "Capture backstop: recognized notification carried un-redacted customer " +
+                        "marker '%s' (ruleId=%s) — scrubbing field from envelope",
+                    marker, obs.ruleId,
+                )
+                CustomerTextMarkers.scrubNotif(redactedRaw)
+            } else {
+                redactedRaw
+            }
+        } else {
+            redactedRaw
+        }
         val capture = EnvelopeBuilder.build(
             pipelineId = NotificationPipeline.PIPELINE_ID,
             schema = RawNotificationSchema,
