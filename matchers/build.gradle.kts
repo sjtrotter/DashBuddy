@@ -456,3 +456,8 @@ artifacts {
 }
 
 tasks.named("assemble") { dependsOn(canonicalizeRules) }
+
+// The hardening proof task runs with every canonicalize (#647 review): the guards
+// themselves fire inline during canonicalization, but this keeps their bad-input
+// proofs live in CI instead of rotting as a never-invoked standalone task.
+tasks.named("canonicalizeRules") { dependsOn("verifyMatchersHardening") }
