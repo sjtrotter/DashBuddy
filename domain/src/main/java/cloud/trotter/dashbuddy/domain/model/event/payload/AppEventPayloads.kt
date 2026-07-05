@@ -131,6 +131,56 @@ data class DeliveryPayload(
     val sessionEarningsAtCompletion: Double? = null,
 ) : AppEventPayload
 
+/**
+ * Payload for `MANUAL_DELIVERY` (#650) — a driver-entered missed delivery: a real drop the capture
+ * pipeline never saw (an unrecognized screen, a crash, an offer taken outside the app). It is an
+ * **event, never a destructive edit**: the projector folds it into a `delivery_record` (payBasis
+ * `MANUAL`) exactly as it folds a captured completion, so the correction is durable, rebuild-faithful
+ * (a from-zero refold reproduces it), and auditable — the `MANUAL` provenance keeps a driver's own
+ * statement distinguishable from a machine capture forever.
+ *
+ * [pay] is the only required money field ([tip]/[miles] are optional driver knowledge); [miles] is
+ * the driver's own statement of the drop's distance, NOT a partition delta off the odometer — a
+ * manual delivery must not perturb the surrounding machine rows' mileage anchors on a refold.
+ * [note] is driver-authored free text (driver-owned local data; never emitted in INFO+ logs, P7).
+ */
+@Serializable
+data class ManualDeliveryPayload(
+    /** The dash session this correction belongs to. */
+    val sessionId: String,
+    /** Driver-entered merchant name, optional. */
+    val storeName: String? = null,
+    /** Required — the driver's stated pay for this delivery. */
+    val pay: Double,
+    val tip: Double? = null,
+    /** When the delivery happened; v1 the caller defaults it (e.g. the session's end/start). */
+    val completedAt: Long,
+    /** Driver-known miles, optional — the driver's statement, not an odometer partition delta. */
+    val miles: Double? = null,
+    /** Driver-authored free text — driver-owned local data, never in INFO+ logs (P7). */
+    val note: String? = null,
+) : AppEventPayload
+
+/**
+ * Payload for `PAY_ADJUSTMENT` (#650) — a driver re-price of an already-recorded delivery (a
+ * mis-captured tip, a late-arriving adjustment). It is an **event, never a destructive edit**: the
+ * original `DELIVERY_COMPLETED` event and its provenance stay in the log untouched; the projector
+ * re-prices the target `delivery_record` in place (payBasis flips to `USER_CORRECTED`, net recomputed
+ * against the row's OWN frozen cost basis — never re-costed by today's economy). Because a correction
+ * always sequences AFTER its target's completion, a from-zero refold replays them in order and
+ * reproduces identical rows; the `USER_CORRECTED` provenance keeps machine-vs-user distinguishable.
+ */
+@Serializable
+data class PayAdjustmentPayload(
+    /** PK (source `sequenceId`) of the `delivery_record` being re-priced. */
+    val targetEventSequenceId: Long,
+    /** For session attribution / liveness only — the fold never reads the target row through it. */
+    val sessionId: String? = null,
+    val newPay: Double,
+    /** Driver-authored free text — driver-owned local data, never in INFO+ logs (P7). */
+    val note: String? = null,
+) : AppEventPayload
+
 /** Wire values for [SessionStartPayload.source] (#366) — mirrors [SessionEndSource]. */
 object SessionStartSource {
     /** Normal user-initiated start. */

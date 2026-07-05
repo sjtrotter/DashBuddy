@@ -291,8 +291,13 @@ rows (row-level, bucketing-free — the driver's own records dumped, not session
 pure `CsvExporter` (`:core:data`, RFC-4180 + machine `Csv`/`IrsMileage` primitives in `:domain`) formats
 deliveries/sessions/summary CSVs; the SAF directory-write edge is a `:app` ViewModel (Settings → Data &
 Privacy → Export Data). Merchant/store names are exported (driver-owned); customer/address hashes are
-excluded; no network. Follow-ups: #650 (drill-down + user corrections as
-`MANUAL_DELIVERY`/`PAY_ADJUSTMENT` events the projector folds — non-destructive, auditable), #653/#655.
+excluded; no network. #650 corrections are now IN: the per-dash drill-down (`SessionDetailScreen`) appends
+`MANUAL_DELIVERY` (a driver-entered missed drop → `MANUAL`-basis delivery_record) and `PAY_ADJUSTMENT` (a
+re-price of an existing row → `USER_CORRECTED`, net recomputed against that row's OWN frozen cpm) via the
+write-side `CorrectionRepository`; the projector folds them non-destructively (the original event/row is never
+deleted) and rebuild-faithfully (a from-zero refold replays a correction after its target and reproduces
+identical rows — no PROJECTOR_VERSION bump needed, the new event types can't exist in already-folded history).
+Session-categorize of an unattributed remainder is deferred (#650 follow-up). Related: #653/#655.
 
 ## Development Principles
 

@@ -328,6 +328,15 @@ interface AnalyticsDao {
     @Query("SELECT * FROM delivery_records WHERE sessionId = :id ORDER BY eventSequenceId DESC LIMIT 1")
     suspend fun lastDeliveryInSession(id: String): DeliveryRecordEntity?
 
+    /**
+     * One delivery row by its source-event PK — the target of a driver PAY_ADJUSTMENT re-price (#650).
+     * The projector reads it inside the batch transaction (after the batch's own delivery upserts) to
+     * rewrite realizedPay + recompute net against the row's own frozen cost basis; null ⇒ the target
+     * does not exist (a skip, never a crash).
+     */
+    @Query("SELECT * FROM delivery_records WHERE eventSequenceId = :eventSequenceId")
+    suspend fun deliveryRecord(eventSequenceId: Long): DeliveryRecordEntity?
+
     /** Still-live sessions for a platform — the next DASH_START infers their close. */
     @Query("SELECT * FROM session_records WHERE platform = :platform AND endedAt IS NULL")
     suspend fun openSessions(platform: String): List<SessionRecordEntity>

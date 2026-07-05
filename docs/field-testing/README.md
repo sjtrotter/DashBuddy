@@ -81,6 +81,19 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   total exceeded the captured delivery pay, an "unaccounted on this dash" callout appears. (PR #650-A)
   - Confirmed: 0/2
 
+- **🆕 NEW — user corrections as events (#650 PR B): add a missed delivery, adjust a pay.** On a dash
+  that has an **"unaccounted on this dash"** callout (Analytics → Money → tap the dash), tap **Add
+  missed delivery**, enter a pay (optionally store/tip/note), confirm. How to tell it's working: within
+  a moment the callout **shrinks or disappears** and a new delivery row appears (store you typed, the
+  pay, marked as a manual/driver entry). Then tap the **edit (pencil) icon** on any delivery row,
+  change the pay, save: the row **re-prices** and the header gross / period totals follow. On a dash
+  with **no** callout, the **Add missed delivery** button still appears at the bottom of the deliveries
+  card. Cross-check nothing was destroyed: the original captured rows are still present (a correction is
+  an added event, not an overwrite). How to tell it's broken: the callout doesn't move after adding, the
+  new row never appears, the re-price doesn't stick (or reverts on the next screen refresh), or a
+  previously captured delivery vanishes. (PR #650-B)
+  - Confirmed: 0/2
+
 - **🆕 NEW — identity-less completions now firewalled at PostTask exit (#653 / PR #673): watch a
   no-name drop for a MISSING completion.** The PostTask-exit `DELIVERY_COMPLETED` mint now mirrors
   the close-out path's #498 identity firewall: a dropoff task that never acquired a customer

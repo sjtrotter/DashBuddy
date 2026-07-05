@@ -13,17 +13,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -80,6 +89,8 @@ fun SessionDetailScreen(
         when {
             detail != null -> DashDetailContent(
                 detail = detail,
+                onAddManualDelivery = viewModel::addManualDelivery,
+                onAdjustPay = viewModel::adjustPay,
                 modifier = Modifier
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
@@ -95,19 +106,59 @@ fun SessionDetailScreen(
 }
 
 @Composable
-private fun DashDetailContent(detail: SessionDetail, modifier: Modifier) {
+private fun DashDetailContent(
+    detail: SessionDetail,
+    onAddManualDelivery: (pay: Double, tip: Double?, storeName: String?, note: String?) -> Unit,
+    onAdjustPay: (targetEventSequenceId: Long, newPay: Double, note: String?) -> Unit,
+    modifier: Modifier,
+) {
+    // Correction dialog state — hoisted here, stateless children below (Principle 1 / 3).
+    var showAddDialog by remember { mutableStateOf(false) }
+    var adjustTarget by remember { mutableStateOf<DeliveryRecord?>(null) }
+
+    val hasCallout = detail.unattributedPay > UNATTRIBUTED_EPSILON
+
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         HeaderCard(detail)
-        if (detail.unattributedPay > UNATTRIBUTED_EPSILON) {
-            AppCallout(
-                text = "${Formats.money(detail.unattributedPay)} unaccounted on this dash — the " +
-                    "platform reported more than the captured deliveries. Corrections land in the " +
-                    "next phase (#650).",
-                container = AppTheme.colors.warnBg,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        if (hasCallout) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                AppCallout(
+                    text = "${Formats.money(detail.unattributedPay)} unaccounted on this dash — the " +
+                        "platform reported more than the captured deliveries.",
+                    container = AppTheme.colors.warnBg,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextButton(onClick = { showAddDialog = true }) { Text("Add missed delivery") }
+            }
         }
-        DeliveriesCard(detail.deliveries)
+        // With no callout, the add entry point lives at the bottom of the deliveries card — a missed
+        // delivery can exist without a reported excess.
+        DeliveriesCard(
+            deliveries = detail.deliveries,
+            showAddButton = !hasCallout,
+            onAddMissed = { showAddDialog = true },
+            onAdjust = { adjustTarget = it },
+        )
+    }
+
+    if (showAddDialog) {
+        AddMissedDeliveryDialog(
+            onDismiss = { showAddDialog = false },
+            onConfirm = { pay, tip, store, note ->
+                onAddManualDelivery(pay, tip, store, note)
+                showAddDialog = false
+            },
+        )
+    }
+    adjustTarget?.let { target ->
+        AdjustPayDialog(
+            currentPay = target.realizedPay,
+            onDismiss = { adjustTarget = null },
+            onConfirm = { newPay, note ->
+                onAdjustPay(target.eventSequenceId, newPay, note)
+                adjustTarget = null
+            },
+        )
     }
 }
 
@@ -175,7 +226,12 @@ private fun dashDuration(startedAt: Long, endedAt: Long?, reportedDurationMillis
     }
 
 @Composable
-private fun DeliveriesCard(deliveries: List<DeliveryRecord>) {
+private fun DeliveriesCard(
+    deliveries: List<DeliveryRecord>,
+    showAddButton: Boolean,
+    onAddMissed: () -> Unit,
+    onAdjust: (DeliveryRecord) -> Unit,
+) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(text = "DELIVERIES", style = MaterialTheme.typography.labelMedium, color = c.text3)
@@ -185,14 +241,18 @@ private fun DeliveriesCard(deliveries: List<DeliveryRecord>) {
         } else {
             deliveries.forEachIndexed { index, delivery ->
                 if (index > 0) Spacer(Modifier.height(14.dp))
-                DeliveryRow(delivery)
+                DeliveryRow(delivery, onAdjust = { onAdjust(delivery) })
             }
+        }
+        if (showAddButton) {
+            Spacer(Modifier.height(6.dp))
+            TextButton(onClick = onAddMissed) { Text("Add missed delivery") }
         }
     }
 }
 
 @Composable
-private fun DeliveryRow(delivery: DeliveryRecord) {
+private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
     val c = AppTheme.colors
     Row(verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f)) {
@@ -235,6 +295,13 @@ private fun DeliveryRow(delivery: DeliveryRecord) {
                 textAlign = TextAlign.End,
             )
         }
+        IconButton(onClick = onAdjust) {
+            Icon(
+                Icons.Default.Edit,
+                contentDescription = "Adjust pay",
+                tint = AppTheme.colors.text3,
+            )
+        }
     }
 }
 
@@ -262,4 +329,100 @@ private fun CenteredMessage(text: String, modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(text = text, style = MaterialTheme.typography.bodyMedium, color = AppTheme.colors.text3)
     }
+}
+
+/** A blank or non-blank-but-positive number parses; a non-blank invalid one does not. */
+private fun optionalMoney(text: String): Double? = text.takeIf { it.isNotBlank() }?.toDoubleOrNull()
+private fun String.isBlankOrValidMoney(): Boolean = isBlank() || (toDoubleOrNull()?.let { it > 0.0 } == true)
+private fun String.isValidMoney(): Boolean = toDoubleOrNull()?.let { it > 0.0 } == true
+
+/**
+ * Add-a-missed-delivery dialog (#650) — store (optional), pay (required, > 0), tip (optional, > 0
+ * when present), note (optional). Confirm stays disabled until pay is valid and any entered tip is
+ * valid. Stateless w/ hoisted local field state per the codebase idiom.
+ */
+@Composable
+private fun AddMissedDeliveryDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (pay: Double, tip: Double?, storeName: String?, note: String?) -> Unit,
+) {
+    var store by remember { mutableStateOf("") }
+    var pay by remember { mutableStateOf("") }
+    var tip by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    val valid = pay.isValidMoney() && tip.isBlankOrValidMoney()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add missed delivery") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MoneyField(store, { store = it }, "Store (optional)", numeric = false)
+                MoneyField(pay, { pay = it }, "Pay")
+                MoneyField(tip, { tip = it }, "Tip (optional)")
+                MoneyField(note, { note = it }, "Note (optional)", numeric = false)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = valid,
+                onClick = {
+                    onConfirm(
+                        pay.toDouble(),
+                        optionalMoney(tip),
+                        store.trim().takeIf { it.isNotBlank() },
+                        note.trim().takeIf { it.isNotBlank() },
+                    )
+                },
+            ) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Adjust-pay dialog (#650) — prefilled with the delivery's current pay, note optional. Confirm stays
+ * disabled until the new pay is a positive number.
+ */
+@Composable
+private fun AdjustPayDialog(
+    currentPay: Double?,
+    onDismiss: () -> Unit,
+    onConfirm: (newPay: Double, note: String?) -> Unit,
+) {
+    // Prefill with a parse-faithful value (NOT Formats.decimal, which rounds to 1 digit and would
+    // silently drop cents from the round-trip).
+    var pay by remember { mutableStateOf(currentPay?.toString() ?: "") }
+    var note by remember { mutableStateOf("") }
+    val valid = pay.isValidMoney()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Adjust pay") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MoneyField(pay, { pay = it }, "Pay")
+                MoneyField(note, { note = it }, "Note (optional)", numeric = false)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = valid,
+                onClick = { onConfirm(pay.toDouble(), note.trim().takeIf { it.isNotBlank() }) },
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun MoneyField(value: String, onValueChange: (String) -> Unit, label: String, numeric: Boolean = true) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = if (numeric) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }

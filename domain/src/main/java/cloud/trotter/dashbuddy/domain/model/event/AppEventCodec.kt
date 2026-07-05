@@ -2,7 +2,9 @@ package cloud.trotter.dashbuddy.domain.model.event
 
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionPausedPayload
@@ -34,6 +36,8 @@ object AppEventCodec {
         is SessionStartPayload -> json.encodeToString(payload)
         is SessionPausedPayload -> json.encodeToString(payload)
         is SessionStopPayload -> json.encodeToString(payload)
+        is ManualDeliveryPayload -> json.encodeToString(payload)
+        is PayAdjustmentPayload -> json.encodeToString(payload)
     }
 
     /**
@@ -72,6 +76,12 @@ object AppEventCodec {
 
             AppEventType.DASH_STOP ->
                 json.decodeFromString<SessionStopPayload>(payloadJson)
+
+            AppEventType.MANUAL_DELIVERY ->
+                json.decodeFromString<ManualDeliveryPayload>(payloadJson)
+
+            AppEventType.PAY_ADJUSTMENT ->
+                json.decodeFromString<PayAdjustmentPayload>(payloadJson)
 
             AppEventType.ZONE_SWITCH,
             AppEventType.NOTIFICATION_RECEIVED,

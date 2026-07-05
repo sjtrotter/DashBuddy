@@ -4,7 +4,9 @@ import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -32,6 +34,18 @@ object PayBasis {
     const val SUSPECT_FULL_RECEIPT = "SUSPECT_FULL_RECEIPT"
     /** No pay signal on the completion (receipt-skipped #596). */
     const val NONE = "NONE"
+
+    /**
+     * A driver-entered missed delivery (#650); pay/tip/miles are the driver's own statement, not a
+     * capture. Keeps a manual correction distinguishable from a machine-captured row forever.
+     */
+    const val MANUAL = "MANUAL"
+
+    /**
+     * A machine-captured row whose pay was re-priced by a driver PAY_ADJUSTMENT (#650); the original
+     * event remains in the log — the re-price is a later event, never a destructive edit.
+     */
+    const val USER_CORRECTED = "USER_CORRECTED"
 }
 
 /**
@@ -134,6 +148,24 @@ data class FoldOutcome(
     val offer: OfferFold? = null,
     val freshSession: Boolean = false,
     val skip: String? = null,
+    /**
+     * A driver PAY_ADJUSTMENT decision (#650): the pure fold decides WHICH row to re-price and to
+     * what, but cannot read the target `delivery_record` (it is not the session accumulator) — the
+     * orchestrator applies it inside the batch transaction after the delivery/offer upserts.
+     */
+    val payAdjustment: PayAdjustmentFold? = null,
+)
+
+/**
+ * A driver's re-price decision (#650) — the pure fold's output for a PAY_ADJUSTMENT. The orchestrator
+ * looks up [targetEventSequenceId] in `delivery_records` and rewrites its realizedPay to [newPay]
+ * (payBasis → `USER_CORRECTED`, net recomputed against the row's OWN frozen cost basis). Because a
+ * PAY_ADJUSTMENT always sequences after its target's DELIVERY_COMPLETED, a from-zero refold replays
+ * them in order and reproduces identical rows.
+ */
+data class PayAdjustmentFold(
+    val targetEventSequenceId: Long,
+    val newPay: Double,
 )
 
 /**
@@ -169,6 +201,8 @@ object RecordFolds {
             AppEventType.OFFER_DECLINED,
             AppEventType.OFFER_TIMEOUT -> foldOffer(event, context)
             AppEventType.DELIVERY_COMPLETED -> foldDeliveryCompleted(event, context, currentCostPerMile)
+            AppEventType.MANUAL_DELIVERY -> foldManualDelivery(event, context, currentCostPerMile)
+            AppEventType.PAY_ADJUSTMENT -> foldPayAdjustment(event, context)
             AppEventType.DASH_STOP -> foldDashStop(event, context)
             // Every other session-attributed event just advances the liveness/odometer anchors so
             // the open-session duration and lastOdometer stay honest; the watermark still moves past
@@ -417,6 +451,101 @@ object RecordFolds {
             lastOdometer = odo ?: ctx.lastOdometer,
         )
         return FoldOutcome(context = newCtx, delivery = delivery)
+    }
+
+    /**
+     * A driver-entered missed delivery (#650) → one `DeliveryFold` (payBasis [PayBasis.MANUAL]),
+     * folded into the session accumulator exactly as a captured completion, but from the driver's own
+     * statement. The frozen economy is inherited exactly like [foldDeliveryCompleted] (the session's
+     * offer basis, else the current fallback, else NONE), so a manual delivery's net is costed the same
+     * way as its captured siblings and is likewise immutable.
+     */
+    private fun foldManualDelivery(
+        event: SequencedAppEvent,
+        context: SessionFoldContext?,
+        currentCostPerMile: Double?,
+    ): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? ManualDeliveryPayload
+            ?: return FoldOutcome(context = context, skip = "MANUAL_DELIVERY: missing/malformed payload")
+        val sid = e.sessionId ?: p.sessionId
+        // resolveContext synthesizes an `_unknown` context if the session isn't known — and the
+        // projector upserts every touched context in the same batch transaction, so a manual delivery
+        // can never create a dangling-sessionId delivery row (the #661 invariant).
+        val ctx = resolveContext(context, sid, e.occurredAt)
+        val jobId = "manual:" + event.sequenceId
+
+        // Frozen economy — the same waterfall as a captured completion (immutable historical fact).
+        val (frozenCpm, costBasis) = when {
+            ctx.lastEvaluatedCostPerMile != null -> ctx.lastEvaluatedCostPerMile to CostBasis.OFFER_FROZEN
+            currentCostPerMile != null -> currentCostPerMile to CostBasis.CURRENT_FALLBACK
+            else -> null to CostBasis.NONE
+        }
+        val frozenFuelPerMile = if (costBasis == CostBasis.OFFER_FROZEN) ctx.lastEvaluatedFuelPerMile else null
+        val frozenNonFuelPerMile = if (costBasis == CostBasis.OFFER_FROZEN) ctx.lastEvaluatedNonFuelPerMile else null
+        // Net only when pay + the driver's stated miles + a cpm are all present (else undefined).
+        val netProfit = if (frozenCpm != null && p.miles != null) {
+            NetProfit.net(p.pay, p.miles, frozenCpm)
+        } else {
+            null
+        }
+
+        val delivery = DeliveryFold(
+            eventSequenceId = event.sequenceId,
+            sessionId = sid,
+            platform = ctx.platform.wire,
+            jobId = jobId,
+            taskId = jobId,
+            storeName = p.storeName,
+            customerHash = null,
+            addressHash = null,
+            phaseStartedAt = p.completedAt,
+            arrivedAt = null,
+            completedAt = p.completedAt,
+            deadlineMillis = null,
+            realizedPay = p.pay,
+            payBasis = PayBasis.MANUAL,
+            tip = p.tip,
+            basePay = null,
+            odometerAtCompletion = null,
+            // The driver's own stated miles — NOT a partition delta off the odometer.
+            realizedMiles = p.miles,
+            realizedMinutes = null,
+            frozenCostPerMile = frozenCpm,
+            frozenFuelPerMile = frozenFuelPerMile,
+            frozenNonFuelPerMile = frozenNonFuelPerMile,
+            netProfit = netProfit,
+            costBasis = costBasis,
+        )
+
+        // Advance the delivery counters + liveness, but DO NOT touch prevDropOdometer/prevDropAt and
+        // do not pass the event's odometer into them: a manual delivery carries no odometer reading and
+        // must not perturb the surrounding machine rows' partition (miles/time) deltas on a refold —
+        // that would make the rebuild non-faithful. This non-perturbation is load-bearing.
+        val newCtx = ctx.copy(
+            deliveries = ctx.deliveries + 1,
+            deliveredJobIds = ctx.deliveredJobIds + jobId,
+            lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
+        )
+        return FoldOutcome(context = newCtx, delivery = delivery)
+    }
+
+    /**
+     * A driver PAY_ADJUSTMENT (#650) — the pure fold emits the [PayAdjustmentFold] decision (which row,
+     * what new pay) and advances the resolved session's liveness when the correction names a session;
+     * it CANNOT read the target `delivery_record` here (that is not the session accumulator), so the
+     * orchestrator applies the re-price inside the batch transaction.
+     */
+    private fun foldPayAdjustment(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? PayAdjustmentPayload
+            ?: return FoldOutcome(context = context, skip = "PAY_ADJUSTMENT: missing/malformed payload")
+        val sid = e.sessionId ?: p.sessionId
+        val ctx = sid?.let { resolveContext(context, it, e.occurredAt).advance(e.occurredAt, event.metadata?.odometer) }
+        return FoldOutcome(
+            context = ctx ?: context,
+            payAdjustment = PayAdjustmentFold(p.targetEventSequenceId, p.newPay),
+        )
     }
 
     private fun foldDashStop(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {

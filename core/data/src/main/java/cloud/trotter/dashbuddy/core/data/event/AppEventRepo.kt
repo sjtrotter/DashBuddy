@@ -54,6 +54,18 @@ class AppEventRepo @Inject constructor(
         }
     }
 
+    /**
+     * Append a user-initiated event (a #650 correction — `MANUAL_DELIVERY` / `PAY_ADJUSTMENT`) with a
+     * plain insert and NO `effects_fired` idempotency mark. The mark exists only for state-machine
+     * effect idempotency (crash-recovery double-run protection of effect-driven `LogEvent`s keyed by an
+     * effect key); a user-initiated correction has no effect key and is never replayed by the effect
+     * engine, so a bare insert is the correct — and complete — write. The analytics projector's
+     * `maxSequenceId()` drain picks it up automatically.
+     */
+    suspend fun appendUserEvent(event: AppEvent, metadataJson: String? = null) {
+        dao.insert(event.toEntity(metadataJson))
+    }
+
     fun getAllEvents(): Flow<List<AppEvent>> =
         dao.getAllEvents().map { rows -> rows.map { it.toDomain() } }
 

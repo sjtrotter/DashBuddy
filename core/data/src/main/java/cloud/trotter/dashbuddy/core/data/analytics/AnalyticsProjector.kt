@@ -12,8 +12,11 @@ import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryFold
 import cloud.trotter.dashbuddy.domain.analytics.OfferFold
+import cloud.trotter.dashbuddy.domain.analytics.PayAdjustmentFold
+import cloud.trotter.dashbuddy.domain.analytics.PayBasis
 import cloud.trotter.dashbuddy.domain.analytics.RecordFolds
 import cloud.trotter.dashbuddy.domain.analytics.SessionFoldContext
+import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -149,6 +152,7 @@ class AnalyticsProjector @Inject constructor(
         val touched = LinkedHashSet<String>()
         val deliveries = ArrayList<DeliveryFold>()
         val offers = ArrayList<OfferFold>()
+        val payAdjustments = ArrayList<PayAdjustmentFold>()
         var skips = 0
 
         for (ev in events) {
@@ -159,6 +163,7 @@ class AnalyticsProjector @Inject constructor(
             if (outcome.skip != null) skips++
             outcome.delivery?.let { deliveries += it }
             outcome.offer?.let { offers += it }
+            outcome.payAdjustment?.let { payAdjustments += it }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -172,18 +177,43 @@ class AnalyticsProjector @Inject constructor(
         }
 
         val lastSeq = events.last().sequenceId
+        var adjustmentSkips = 0
         db.withTransaction {
             deliveries.forEach { analyticsDao.upsertDelivery(it.toEntity()) }
             offers.forEach { analyticsDao.upsertOffer(it.toEntity()) }
             touched.forEach { sid -> contexts[sid]?.let { analyticsDao.upsertSession(it.toEntity()) } }
+            // Apply driver PAY_ADJUSTMENT re-prices AFTER the batch's own delivery upserts (so a
+            // same-batch target is already written) and before the watermark. Determinism: a
+            // correction always sequences after its target's DELIVERY_COMPLETED, so a from-zero refold
+            // replays them in this same order and reproduces identical rows. The re-price recomputes
+            // net against the row's OWN frozen cpm (never today's economy — an immutable historical
+            // fact); tip/basePay are left untouched.
+            payAdjustments.forEach { adj ->
+                val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId)
+                if (row == null) {
+                    adjustmentSkips++
+                    // P7: counts only, no payload text.
+                    Timber.tag(TAG).w("PAY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
+                } else {
+                    val net = if (row.frozenCostPerMile != null && row.realizedMiles != null) {
+                        NetProfit.net(adj.newPay, row.realizedMiles!!, row.frozenCostPerMile!!)
+                    } else {
+                        null
+                    }
+                    analyticsDao.upsertDelivery(
+                        row.copy(realizedPay = adj.newPay, payBasis = PayBasis.USER_CORRECTED, netProfit = net),
+                    )
+                }
+            }
             analyticsDao.setWatermark(
                 AnalyticsProjectionStateEntity(watermarkSequenceId = lastSeq, projectorVersion = PROJECTOR_VERSION),
             )
         }
 
         Timber.tag(TAG).d(
-            "batch: %d events (→seq %d) → %d deliveries, %d offers, %d sessions, %d skipped",
-            events.size, lastSeq, deliveries.size, offers.size, touched.size, skips,
+            "batch: %d events (→seq %d) → %d deliveries, %d offers, %d sessions, %d re-priced, %d skipped",
+            events.size, lastSeq, deliveries.size, offers.size, touched.size,
+            payAdjustments.size - adjustmentSkips, skips,
         )
         if (skips > 0) {
             Timber.tag(TAG).w("batch skipped %d event(s) with a missing/malformed payload", skips)
@@ -399,6 +429,8 @@ class AnalyticsProjector @Inject constructor(
          * v3 (#653): the fold now drops a full-receipt stamp on an already-delivered multi-delivery
          * job as SUSPECT (`PayBasis.SUSPECT_FULL_RECEIPT`, no realizedPay/tip/base) instead of
          * double-counting the period SUM — the refold applies the guard to history.
+         * (#650 does NOT bump this: `MANUAL_DELIVERY`/`PAY_ADJUSTMENT` are new event types that cannot
+         * exist in already-folded history, so there is nothing to refold — a fresh drain folds them.)
          */
         private const val PROJECTOR_VERSION = 3
     }

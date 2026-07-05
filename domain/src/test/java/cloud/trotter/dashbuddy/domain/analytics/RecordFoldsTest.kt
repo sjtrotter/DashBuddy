@@ -9,7 +9,9 @@ import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
@@ -591,5 +593,174 @@ class RecordFoldsTest {
         )
         assertEquals("real platform from DASH_START is preserved", Platform.DoorDash, outcomes.last().context!!.platform)
         assertEquals(Platform.DoorDash, ctx!!.platform)
+    }
+
+    // ── User corrections (#650) ─────────────────────────────────────────
+
+    private fun manualDelivery(
+        sid: String?,
+        at: Long,
+        pay: Double,
+        tip: Double? = null,
+        miles: Double? = null,
+        store: String? = "ManualStore",
+        completedAt: Long = at,
+    ) = ev(
+        AppEventType.MANUAL_DELIVERY, sid, at,
+        ManualDeliveryPayload(
+            sessionId = sid ?: "S",
+            storeName = store,
+            pay = pay,
+            tip = tip,
+            completedAt = completedAt,
+            miles = miles,
+            note = "driver note",
+        ),
+    )
+
+    private fun payAdjustment(sid: String?, at: Long, target: Long, newPay: Double) = ev(
+        AppEventType.PAY_ADJUSTMENT, sid, at,
+        PayAdjustmentPayload(targetEventSequenceId = target, sessionId = sid, newPay = newPay, note = "fix"),
+    )
+
+    @Test
+    fun `a manual delivery folds to a MANUAL-basis row carrying the driver's stated pay-tip-miles`() {
+        val s = "M1"
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                manualDelivery(s, 2_000, pay = 12.0, tip = 3.0, miles = 4.0),
+            ),
+            currentCpm = null,
+        )
+        val d = outcomes[1].delivery!!
+        assertEquals(PayBasis.MANUAL, d.payBasis)
+        assertEquals(12.0, d.realizedPay!!, 1e-9)
+        assertEquals(3.0, d.tip!!, 1e-9)
+        assertEquals("driver's stated miles, not a partition delta", 4.0, d.realizedMiles!!, 1e-9)
+        assertNull("a manual delivery has no measured elapsed time", d.realizedMinutes)
+        assertNull(d.basePay)
+        assertNull("no customer identity on a driver-entered row", d.customerHash)
+        assertNull(d.addressHash)
+        assertNull("no odometer on a manual row", d.odometerAtCompletion)
+        assertEquals("ManualStore", d.storeName)
+        assertEquals("manual:${d.eventSequenceId}", d.jobId)
+        assertEquals(d.jobId, d.taskId)
+        assertEquals(2_000L, d.completedAt)
+        assertEquals("no offer + no current economy ⇒ NONE cpm, null net", CostBasis.NONE, d.costBasis)
+        assertNull(d.netProfit)
+
+        assertEquals("the manual delivery counts", 1, ctx!!.deliveries)
+        assertEquals(1, ctx.jobsCompleted)
+    }
+
+    @Test
+    fun `a manual delivery inherits the frozen economy exactly like a captured completion (all three bases)`() {
+        val s = "M2"
+        // OFFER_FROZEN — a preceding accepted offer supplies the session cpm.
+        val (withOffer, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                offerAccepted(s, 1_500, "h", eval(net = 8.0, dist = 4.0, opCpm = 0.40)),
+                manualDelivery(s, 2_000, pay = 10.0, miles = 4.0),
+            ),
+            currentCpm = 0.99,
+        )
+        val d1 = withOffer[2].delivery!!
+        assertEquals(CostBasis.OFFER_FROZEN, d1.costBasis)
+        assertEquals(0.40, d1.frozenCostPerMile!!, 1e-9)
+        assertEquals(10.0 - 4.0 * 0.40, d1.netProfit!!, 1e-9)
+
+        // CURRENT_FALLBACK — no offer, but a live economy cpm.
+        val (fallback, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                manualDelivery(s, 2_000, pay = 10.0, miles = 4.0),
+            ),
+            currentCpm = 0.50,
+        )
+        val d2 = fallback[1].delivery!!
+        assertEquals(CostBasis.CURRENT_FALLBACK, d2.costBasis)
+        assertEquals(10.0 - 4.0 * 0.50, d2.netProfit!!, 1e-9)
+
+        // NONE — no offer, no economy → null cpm, null net (even though miles are known).
+        val (none, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                manualDelivery(s, 2_000, pay = 10.0, miles = 4.0),
+            ),
+            currentCpm = null,
+        )
+        val d3 = none[1].delivery!!
+        assertEquals(CostBasis.NONE, d3.costBasis)
+        assertNull(d3.frozenCostPerMile)
+        assertNull(d3.netProfit)
+    }
+
+    @Test
+    fun `a manual delivery does not perturb a later machine delivery's partition anchors (rebuild-stable)`() {
+        val s = "M3"
+        // Control: DASH_START then a machine completion — no manual event between them.
+        val (control, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                delivery(s, 3_000, "J1", "T1", totalPay = 8.0, odo = 105.0),
+            ),
+        )
+        val controlMachine = control[1].delivery!!
+
+        // With a manual delivery folded BEFORE the machine completion: it must not move
+        // prevDropOdometer/prevDropAt, so the machine row's realized miles/minutes are unchanged.
+        val (withManual, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                manualDelivery(s, 2_000, pay = 5.0, miles = 2.0),
+                delivery(s, 3_000, "J1", "T1", totalPay = 8.0, odo = 105.0),
+            ),
+        )
+        val perturbedMachine = withManual[2].delivery!!
+
+        assertEquals(
+            "machine realizedMiles unchanged by the interposed manual delivery",
+            controlMachine.realizedMiles!!, perturbedMachine.realizedMiles!!, 1e-9,
+        )
+        assertEquals(
+            "machine realizedMinutes unchanged by the interposed manual delivery",
+            controlMachine.realizedMinutes!!, perturbedMachine.realizedMinutes!!, 1e-9,
+        )
+    }
+
+    @Test
+    fun `PAY_ADJUSTMENT emits the re-price decision, no record, and advances liveness`() {
+        val s = "M4"
+        val ctx = RecordFolds.foldEvent(dashStart(s, 1_000, odo = 0.0), null, null).context
+        val out = RecordFolds.foldEvent(payAdjustment(s, 5_000, target = 42L, newPay = 15.5), ctx, null)
+
+        assertNull("a re-price produces no delivery record in the pure fold", out.delivery)
+        assertNull(out.offer)
+        val adj = out.payAdjustment!!
+        assertEquals(42L, adj.targetEventSequenceId)
+        assertEquals(15.5, adj.newPay, 1e-9)
+        assertEquals("liveness advanced to the correction's timestamp", 5_000L, out.context!!.lastEventAt)
+    }
+
+    @Test
+    fun `malformed MANUAL_DELIVERY and PAY_ADJUSTMENT payloads are skipped, not folded`() {
+        val s = "M5"
+        val badManual = SequencedAppEvent(
+            sequenceId = ++seq,
+            event = AppEvent(AppEventType.MANUAL_DELIVERY, occurredAt = 2_000, sessionId = s, payload = null),
+        )
+        val manualOut = RecordFolds.foldEvent(badManual, null, null)
+        assertNull(manualOut.delivery)
+        assertNotNull(manualOut.skip)
+
+        val badAdjust = SequencedAppEvent(
+            sequenceId = ++seq,
+            event = AppEvent(AppEventType.PAY_ADJUSTMENT, occurredAt = 2_000, sessionId = s, payload = null),
+        )
+        val adjustOut = RecordFolds.foldEvent(badAdjust, null, null)
+        assertNull(adjustOut.payAdjustment)
+        assertNotNull(adjustOut.skip)
     }
 }
