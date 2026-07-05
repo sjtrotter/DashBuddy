@@ -87,13 +87,25 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   From the home screen tap the **Analytics** tile: it should open a real hub (back arrow) with a
   **Money / Patterns / Decisions / Time** tab bar (the last three show a "coming soon" card). On
   **Money**, pick **Today / Week / Month / Lifetime** and confirm the figures re-anchor: the earnings
-  hero (gross + True-Net / Net-hr chips), the 3-step **gross → −operating cost → net** waterfall, the
+  hero (gross + True-Net / Net-hr chips), the **gross → −cost step(s) → net** waterfall (3- or 4-step
+  per #659 — see the dedicated item below), the
   2×2 tiles ($/hr · $/mi · Miles · Deliveries), top stores, and recent dashes. Cross-check: for the
   **same period** the Money numbers should match the dashboard's tiles (both read the same frozen
   read-model). An **unattributed-pay callout** appears only when that period has bonuses/adjustments.
   How to tell it's broken: the old "Construction Area 🚧" placeholder still shows, figures don't change
   with the period, Money ≠ dashboard for the same window, a crash on an empty period, or a "$0.00"
   unattributed callout on a period with none.
+  - Confirmed: 0/2
+- **🆕 NEW — Money tab 4-step waterfall: Fuel vs Non-fuel, with a clean fallback on mixed periods
+  (#659).** After the v10 refold, open **Analytics → Money** on a period whose deliveries all carry
+  the frozen fuel/non-fuel split (a period entirely dashed after the #668 data-side merge should
+  qualify): the waterfall should show **4 rows** — Gross → −Fuel → −Non-fuel → Net — and Fuel +
+  Non-fuel should visually sum to the old "Operating cost" gap. Then check a period that **mixes**
+  pre-split (fallback) deliveries with frozen ones (e.g. Lifetime, or a week straddling the merge):
+  the waterfall should **silently fall back to the 3-step** Gross → −Operating cost → Net shape — no
+  broken numbers, no partial-coverage row, no crash. How to tell it's broken: a 4-step render on a
+  mixed period (Fuel+Non-fuel not summing to Gross−Net), a 3-step render on an all-frozen period
+  (coverage guard too strict), or Fuel/Non-fuel bars rendering negative/nonsensical.
   - Confirmed: 0/2
 - **🆕 NEW — Analytics Decisions tab: offer funnel + value-of-saying-no + score-vs-outcome (#315 H3).**
   In the Analytics hub tap the **Decisions** tab and pick a period (Today / Week / Month / Lifetime).
