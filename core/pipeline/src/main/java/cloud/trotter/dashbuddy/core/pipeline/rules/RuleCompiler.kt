@@ -1457,5 +1457,5 @@ object RuleCompiler {
      * + ReDoS rejection, #418). Kept here as the compiler's call site / public
      * entry point; the security logic lives in [RegexSafety] (audit #11).
      */
-    internal fun compileRegex(pattern: String): Regex = RegexSafety.compileRegex(pattern)
+    internal fun compileRegex(pattern: String): BoundedRegex = RegexSafety.compileRegex(pattern)
 }

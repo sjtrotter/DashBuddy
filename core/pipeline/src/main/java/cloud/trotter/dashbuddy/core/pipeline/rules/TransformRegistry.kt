@@ -32,7 +32,7 @@ object TransformRegistry {
 
     /** Compiled-regex cache for the `regex` transform (#362) — the spec is
      *  re-dispatched per value, so without this every value recompiled. */
-    private val regexCache = java.util.concurrent.ConcurrentHashMap<String, Regex>()
+    private val regexCache = java.util.concurrent.ConcurrentHashMap<String, BoundedRegex>()
 
     /**
      * Reference clock for time transforms (#343): the OBSERVATION's instant + zone,
