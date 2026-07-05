@@ -240,8 +240,8 @@ object SessionReplay {
     /**
      * Level B, heterogeneous — fold a timestamp-ordered mix of real screen/click captures and
      * synthetic click/timeout observations through the REAL [StateMachine]. ONE classifier instance
-     * handles both screens and clicks, so a preceding screen primes `lastScreenTarget` for the
-     * following click naturally (no reflection). Every observation is re-stamped with its input
+     * handles both screens and clicks, so a preceding screen primes that platform's last-screen
+     * target for the following click naturally (no reflection). Every observation is re-stamped with its input
      * [ReplayInput.atMs] (the classifier stamps wall-clock `eventNow`), keeping the fold
      * deterministic.
      */
@@ -318,7 +318,7 @@ object SessionReplay {
 
     /**
      * A classifier wired to **both** the production screen and click rulesets — one instance, so a
-     * screen classification updates `lastScreenTarget` for the next click ([reduceMixed]).
+     * screen classification updates that platform's last-screen target for the next click ([reduceMixed]).
      */
     private fun mixedClassifier(): ObservationClassifier = ObservationClassifier(
         mock<JsonRuleInterpreter> {
