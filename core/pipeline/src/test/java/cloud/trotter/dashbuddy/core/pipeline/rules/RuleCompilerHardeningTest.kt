@@ -13,7 +13,8 @@ import org.junit.Test
  * #293 — the RuleCompiler robustness pack (the Phase-A2 survivors of #211). One
  * focused test per item: multi-key predicate reject (1), value-honoring boolean
  * flags (2), typed compile errors (3), per-rule fault isolation with the
- * sensitive/fail-closed whole-file exemption (4 — BOTH arms), known-key
+ * opt-in `isolable` isolation + sensitive/untagged whole-file default (4 —
+ * both arms + the inversion canary), known-key
  * validation (5), and rule-id platform-prefix validation (8). Locale.ROOT (6)
  * and the memoized joined text (9) are proven behavior-equivalent by the
  * existing predicate suites + goldens; item 7 (regex match-time timeout) is
@@ -181,9 +182,10 @@ class RuleCompilerHardeningTest {
     }
 
     @Test
-    fun `a fail-closed security reject (DoS cap) rejects the WHOLE file even for a non-sensitive rule`() {
-        // MAX_EFFECTS_PER_RULE is an anti-DoS control; item 4 must not downgrade it
-        // to a silent per-rule skip. Build a non-sensitive rule over the effect cap.
+    fun `a security reject (DoS cap) rejects the WHOLE file even for a non-sensitive rule`() {
+        // MAX_EFFECTS_PER_RULE is an anti-DoS control. Isolation is opt-in
+        // (review F1): security sites carry NO `isolable` tag, so the default
+        // whole-file reject applies. Build a non-sensitive rule over the cap.
         val effects = (0..RuleCompiler.MAX_EFFECTS_PER_RULE).joinToString(",") {
             """{ "bubble": { "text": "e$it" } }"""
         }
@@ -194,6 +196,32 @@ class RuleCompilerHardeningTest {
                 )
             },
             contains = "MAX_EFFECTS_PER_RULE",
+        )
+    }
+
+    @Test
+    fun `CANARY - an UNTAGGED RuleCompileException rejects the WHOLE file (isolation is opt-in)`() {
+        // The regression test for the review-F1 inversion itself: a bare
+        // RuleCompileException (no `isolable` flag) thrown while compiling a
+        // NON-sensitive rule must reject the whole file — the conservative
+        // default arm. If this fails, either the isolation loop's default was
+        // weakened (a Principle 6 violation — a future untagged security check
+        // would silently downgrade to a per-rule skip), or the chosen untagged
+        // site ("Empty tree predicate object") was tagged isolable — pick
+        // another untagged site consciously, don't loosen the loop. The valid
+        // sibling proves the file rejects WHOLE, not just the bad rule.
+        expectCompileFails(
+            {
+                compile(
+                    """
+                    [
+                      { "id": "doordash.screen.good", "priority": 10, "require": { "exists": { "hasText": "A" } } },
+                      { "id": "doordash.screen.bare_error", "priority": 11, "require": {} }
+                    ]
+                    """.trimIndent(),
+                )
+            },
+            contains = "Empty tree predicate",
         )
     }
 

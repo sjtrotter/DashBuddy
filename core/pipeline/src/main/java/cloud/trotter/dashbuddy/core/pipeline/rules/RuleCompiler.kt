@@ -147,7 +147,6 @@ object RuleCompiler {
                         if (depth > MAX_JSON_DEPTH) {
                             throw RuleCompileException(
                                 "Rule JSON nesting depth exceeds MAX_JSON_DEPTH=$MAX_JSON_DEPTH",
-                                failClosed = true,
                             )
                         }
                     }
@@ -221,29 +220,29 @@ object RuleCompiler {
         context: RuleContext,
         platformId: String? = null,
     ): List<CompiledRule<TInput>> {
-        // #293 item 4: per-rule fault isolation. One malformed rule SKIPS (WARN
-        // with id + reason, no rule-body text — P7) instead of failing the whole
-        // file — EXCEPT it still rejects the WHOLE file when EITHER:
-        //   • the rule is part of the sensitive LAYER (id carries `.sensitive.`,
-        //     `overrideable == false`, or an unreadable id) — never silently thin
-        //     the sensitive block, whose coverage the #432 check only guarantees
-        //     as ≥1-survives, not all-survive; OR
-        //   • the rejection is a fail-closed SECURITY / PLEDGE / DoS control
-        //     ([RuleCompileException.failClosed]: an #419 cap, a #598/#620/#624
-        //     capture-PII guard, a #425 actuation reject, a #590 depth bound) —
-        //     downgrading one of THOSE to a silent per-rule skip would weaken a
-        //     documented fail-closed control (Principle 6 > the spec's narrower
-        //     "sensitive-only" exemption; this is a strict strengthening).
-        // A genuine AUTHORING malformation (bad predicate, unknown key, mistyped
-        // field, bad platform prefix) degrades one recognition surface to UNKNOWN
-        // (→ scrubbed — safe), so it isolates to a skip.
+        // #293 item 4: per-rule fault isolation, OPT-IN (review F1). A rule
+        // skips (WARN with id + reason, no rule-body text — P7) instead of
+        // failing the whole file ONLY when BOTH:
+        //   • the rejection is tagged [RuleCompileException.isolable] — a
+        //     rule-authoring-level validation whose worst case is one
+        //     recognition surface degrading to UNKNOWN (→ scrubbed — safe); AND
+        //   • the rule is NOT part of the sensitive LAYER (id carries
+        //     `.sensitive.`, `overrideable == false`, or an unreadable id) —
+        //     never silently thin the sensitive block, whose coverage the #432
+        //     check only guarantees as ≥1-survives, not all-survive.
+        // Everything else — every UNTAGGED throw — rejects the WHOLE file (the
+        // conservative pre-#293 status quo). The default direction is the
+        // point: a future security/Pledge/DoS check (#419 caps, #598/#620/#624
+        // capture-PII guards, #425 actuation, #590 depth bounds) that forgets
+        // to consider isolation fails LOUD (over-reject), never as a silent
+        // per-rule downgrade — Principle 6: do not trust call-site discipline.
         val rules = mutableListOf<CompiledRule<TInput>>()
         for (element in array) {
             val obj = element.jsonObject
             try {
                 rules += compileRule<TInput>(obj, context, platformId)
             } catch (e: RuleCompileException) {
-                if (e.failClosed || rawRuleIsSensitive(obj)) throw e
+                if (!e.isolable || rawRuleIsSensitive(obj)) throw e
                 Timber.tag("Rules").w(
                     "Skipping malformed %s rule '%s' (non-sensitive; frame → UNKNOWN → scrubbed): %s",
                     context.name.lowercase(Locale.ROOT), rawRuleId(obj), e.message,
@@ -327,7 +326,6 @@ object RuleCompiler {
             throw RuleCompileException(
                 "Rule '$id': `redact` is not supported on CLICK rules — a click envelope carries " +
                     "app-vocabulary button labels, not customer PII. Remove the redact block.",
-                failClosed = true,
             )
         }
 
@@ -342,7 +340,6 @@ object RuleCompiler {
                     "(#598): a rule that hashes customer PII in its parse must redact the same raw " +
                     "nodes from the capture envelope, or the plaintext ships to disk. Add a " +
                     "top-level \"redact\": [ { \"find\": <nodePred>, \"keepPrefix\": [ ... ] } ].",
-                failClosed = true,
             )
         }
 
@@ -354,7 +351,6 @@ object RuleCompiler {
             throw RuleCompileException(
                 "Rule '$id' declares $rawBranchCount branches, exceeding " +
                     "MAX_BRANCHES_PER_RULE=$MAX_BRANCHES_PER_RULE",
-                failClosed = true,
             )
         }
 
@@ -372,7 +368,6 @@ object RuleCompiler {
                         "Rule '$id': a `redact` block inside a branches[] entry is not supported — " +
                             "redact masks capture-envelope nodes for the ENTIRE recognized frame, " +
                             "not per-branch. Move it to the rule's top level.",
-                        failClosed = true,
                     )
                 }
                 // #293 item 5: unknown branch keys are a typed reject naming them.
@@ -396,7 +391,6 @@ object RuleCompiler {
             throw RuleCompileException(
                 "Rule '$id' declares $effectCount effects, exceeding " +
                     "MAX_EFFECTS_PER_RULE=$MAX_EFFECTS_PER_RULE",
-                failClosed = true,
             )
         }
 
@@ -416,13 +410,11 @@ object RuleCompiler {
                 ?: throw RuleCompileException(
                     "notification redact: unknown field '$fieldName' " +
                         "(expected one of ${NotifTextField.entries.map { it.wire }})",
-                    failClosed = true,
                 )
             val specObj = spec as? JsonObject
                 ?: throw RuleCompileException(
                     "notification redact: field '$fieldName' must be an object " +
                         "({ \"keepPrefix\": [...] } or { \"match\": <regex>, \"maskGroup\": <int> })",
-                    failClosed = true,
                 )
             val matchPattern = specObj["match"]?.jsonPrimitive?.content
             val masker: NotifFieldMask = if (matchPattern != null) {
@@ -437,7 +429,6 @@ object RuleCompiler {
                     throw RuleCompileException(
                         "notification redact: field '$fieldName' maskGroup $group is out of range " +
                             "(pattern '$matchPattern' has $groupCount capturing group(s); valid 0..$groupCount)",
-                        failClosed = true,
                     )
                 }
                 NotifFieldMask.RegexGroup(regex, group)
@@ -464,9 +455,9 @@ object RuleCompiler {
     private fun compileRedactBlock(array: JsonArray): CompiledRedact {
         val entries = array.map { element ->
             val obj = element as? JsonObject
-                ?: throw RuleCompileException("redact entry must be an object with a 'find' predicate", failClosed = true)
+                ?: throw RuleCompileException("redact entry must be an object with a 'find' predicate")
             val findSpec = obj["find"]
-                ?: throw RuleCompileException("redact entry has no 'find' predicate", failClosed = true)
+                ?: throw RuleCompileException("redact entry has no 'find' predicate")
             val find = compileNodePred(findSpec)
             val keepPrefix = obj["keepPrefix"]?.jsonArray?.map { it.jsonPrimitive.content }
                 ?: emptyList()
@@ -486,7 +477,7 @@ object RuleCompiler {
      */
     private fun jsonUsesSha256(element: JsonElement, depth: Int = 0): Boolean {
         if (depth > MAX_JSON_DEPTH)
-            throw RuleCompileException("Rule JSON nesting exceeds MAX_JSON_DEPTH=$MAX_JSON_DEPTH", failClosed = true)
+            throw RuleCompileException("Rule JSON nesting exceeds MAX_JSON_DEPTH=$MAX_JSON_DEPTH")
         return when (element) {
             is JsonPrimitive -> element.isString && element.content == "sha256"
             is JsonObject -> element.values.any { jsonUsesSha256(it, depth + 1) }
@@ -790,7 +781,7 @@ object RuleCompiler {
         depth: Int = 0,
     ): (UiNode, Bindings) -> Any? {
         if (depth > MAX_PARSE_DEPTH)
-            throw RuleCompileException("Parse expression nesting exceeds MAX_PARSE_DEPTH=$MAX_PARSE_DEPTH", failClosed = true)
+            throw RuleCompileException("Parse expression nesting exceeds MAX_PARSE_DEPTH=$MAX_PARSE_DEPTH")
 
         if (spec is JsonPrimitive) {
             val value = spec.content
@@ -1039,7 +1030,6 @@ object RuleCompiler {
                 "coalesce does not apply a top-level 'transform' — put the transform inside each " +
                     "branch (a top-level transform would be silently dropped, which for a PII field " +
                     "would leak the raw value)",
-                failClosed = true,
             )
         }
         val exprs = obj["coalesce"]!!.jsonArray.map { compileParseExpression(it, depth + 1) }
@@ -1072,7 +1062,10 @@ object RuleCompiler {
         val onFail = obj["onFail"]?.jsonPrimitive?.content ?: "skip"
         // A typo'd onFail used to coerce silently to "skip" (#362).
         if (onFail !in setOf("skip", "dropParsed")) {
-            throw RuleCompileException("Unknown onFail: '$onFail' (expected 'skip' or 'dropParsed')")
+            throw RuleCompileException(
+                "Unknown onFail: '$onFail' (expected 'skip' or 'dropParsed')",
+                isolable = true, // authoring typo — the rule isolates (#293 item 4)
+            )
         }
 
         return { parsed ->
@@ -1129,7 +1122,6 @@ object RuleCompiler {
                     "bindings (e.g. bind: { \"declineButton\": { \"find\": ... } }) and the " +
                     "app-owned RuleAction registry performs taps. " +
                     "See docs/design/rule-capability-consent.md.",
-                failClosed = true,
             )
         }
         val verb = cloud.trotter.dashbuddy.domain.pipeline.EffectVerb.fromWire(wireVerb)
@@ -1223,7 +1215,10 @@ object RuleCompiler {
      */
     private fun primOf(value: JsonElement, key: String): JsonPrimitive =
         value as? JsonPrimitive
-            ?: throw RuleCompileException("Predicate '$key' requires a scalar value, got: $value")
+            ?: throw RuleCompileException(
+                "Predicate '$key' requires a scalar value, got: $value",
+                isolable = true,
+            )
 
     /**
      * A boolean-flag predicate's declared value (#293 item 2), typed (#293 item 3).
@@ -1235,6 +1230,7 @@ object RuleCompiler {
         primOf(value, key).booleanOrNull
             ?: throw RuleCompileException(
                 "Predicate '$key' requires a boolean value (true/false), got: $value",
+                isolable = true,
             )
 
     /**
@@ -1251,6 +1247,7 @@ object RuleCompiler {
         if (obj.size > 1) {
             throw RuleCompileException(
                 "$what must have exactly one key, got ${obj.keys.toList()}",
+                isolable = true,
             )
         }
     }
@@ -1274,8 +1271,18 @@ object RuleCompiler {
             ?: throw ruleError(ruleId, "'$field' must be an integer, got: $el")
     }
 
+    /**
+     * A rule-authoring-level error (missing/mistyped id or priority, unknown
+     * key, bad platform prefix) — tagged isolable: worst case is one surface
+     * degrading to UNKNOWN. The isolation loop's sensitive belt still rejects
+     * the whole file when the offending rule is sensitive-layer or its id is
+     * unreadable (`rawRuleIsSensitive`).
+     */
     private fun ruleError(ruleId: String?, msg: String): RuleCompileException =
-        RuleCompileException(if (ruleId != null) "Rule '$ruleId': $msg" else "Rule: $msg")
+        RuleCompileException(
+            if (ruleId != null) "Rule '$ruleId': $msg" else "Rule: $msg",
+            isolable = true,
+        )
 
     // -- Known-key validation (#293 item 5) --------------------------------------
     //
@@ -1366,7 +1373,7 @@ object RuleCompiler {
 
     fun compileTreePred(json: JsonElement, depth: Int = 0): (UiNode) -> Boolean {
         if (depth > MAX_DEPTH)
-            throw RuleCompileException("Predicate nesting exceeds MAX_DEPTH=$MAX_DEPTH", failClosed = true)
+            throw RuleCompileException("Predicate nesting exceeds MAX_DEPTH=$MAX_DEPTH")
 
         val obj = json as? JsonObject
             ?: throw RuleCompileException("Tree predicate must be a JSON object, got: $json")
@@ -1433,7 +1440,7 @@ object RuleCompiler {
 
     fun compileNodePred(json: JsonElement, depth: Int = 0): (UiNode) -> Boolean {
         if (depth > MAX_DEPTH)
-            throw RuleCompileException("Predicate nesting exceeds MAX_DEPTH=$MAX_DEPTH", failClosed = true)
+            throw RuleCompileException("Predicate nesting exceeds MAX_DEPTH=$MAX_DEPTH")
 
         val obj = json as? JsonObject
             ?: throw RuleCompileException("Node predicate must be a JSON object, got: $json")
@@ -1552,7 +1559,7 @@ object RuleCompiler {
 
     fun compileNotifPred(json: JsonElement, depth: Int = 0): (RawNotificationData) -> Boolean {
         if (depth > MAX_DEPTH)
-            throw RuleCompileException("Predicate nesting exceeds MAX_DEPTH=$MAX_DEPTH", failClosed = true)
+            throw RuleCompileException("Predicate nesting exceeds MAX_DEPTH=$MAX_DEPTH")
 
         val obj = json as? JsonObject
             ?: throw RuleCompileException("Notification predicate must be a JSON object")
@@ -1742,7 +1749,10 @@ object RuleCompiler {
                 val idSuffix = nav.removePrefix("findDescendant(").removeSuffix(")")
                 ;{ node -> node.findDescendantById(idSuffix) }
             }
-            else -> throw RuleCompileException("Unknown navigation: '$nav'")
+            else -> throw RuleCompileException(
+                "Unknown navigation: '$nav'",
+                isolable = true, // authoring typo — the rule isolates (#293 item 4)
+            )
         }
     }
 
