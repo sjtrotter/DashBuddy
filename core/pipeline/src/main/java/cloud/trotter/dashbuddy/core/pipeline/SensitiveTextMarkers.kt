@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import java.text.Normalizer
+import java.util.Locale
 
 /**
  * App-owned fail-closed backstop for the sensitive-screen pledge (#432).
@@ -78,24 +80,86 @@ object SensitiveTextMarkers {
     )
 
     /**
-     * Scan the tree's text for a sensitive marker. Returns the first
-     * matched marker (for logging) or null when clean.
+     * Sentinel returned when [normalize] throws — the scan is FAIL-CLOSED (#590):
+     * a text we cannot normalize is treated as toxic, never silently reported
+     * clean. Losing a real banking screen to disk because a homoglyph tripped the
+     * normalizer would defeat the whole backstop, so an unexpected throw drops the
+     * capture exactly as a real marker would.
      */
-    fun findMarker(tree: UiNode): String? {
-        for (text in tree.allText) {
-            val keyword = KEYWORDS.firstOrNull { text.contains(it, ignoreCase = true) }
-            if (keyword != null) return keyword
-            val shape = SHAPE_PATTERNS.firstOrNull { it.containsMatchIn(text) }
-            if (shape != null) return "shape:${shape.pattern}"
-        }
-        return null
+    private const val NORMALIZE_FAILED = "normalize-error"
+
+    /**
+     * Markers pre-normalized once (evasion resistance, #590). The scan compares
+     * NORMALIZED text against NORMALIZED markers so the two sides agree — a marker
+     * with an ASCII space matches text whose space arrived as an NBSP after
+     * folding. Paired with the original marker so [findMarker] still returns the
+     * human-readable form for the WARN log.
+     */
+    private val normalizedKeywords: List<Pair<String, String>> by lazy {
+        KEYWORDS.map { normalize(it) to it }
     }
 
-    /** Scan a flat text blob (notification body) for a sensitive marker. */
-    fun findMarker(text: String): String? {
-        val keyword = KEYWORDS.firstOrNull { text.contains(it, ignoreCase = true) }
-        if (keyword != null) return keyword
-        return SHAPE_PATTERNS.firstOrNull { it.containsMatchIn(text) }
+    /**
+     * Single-pass homoglyph/whitespace normalizer (#590) shared by both scan
+     * overloads and applied to BOTH sides (markers + scanned text). Closes the
+     * evasion classes a plain `contains` substring test misses:
+     *  - NFKC folds NBSP (U+00A0) / narrow-NBSP (U+202F) → space and fullwidth
+     *    digits/letters (U+FF10+) / ideographic space (U+3000) → ASCII;
+     *  - zero-width & other format chars (U+200B/200C/200D/FEFF, `Character.FORMAT`)
+     *    are stripped, so a marker split by an invisible char rejoins;
+     *  - unicode dashes (U+2010–U+2015, U+2212 minus) fold to ASCII `-` so the
+     *    SSN/PAN shapes match homoglyph hyphens;
+     *  - all remaining whitespace (incl. the `` unit separator used to join
+     *    sibling text) collapses to a single ASCII space;
+     *  - `Locale.ROOT` lowercase gives locale-safe case-insensitivity in one place
+     *    (so the scan can use a plain, allocation-light `contains`).
+     * Single allocation pass over the NFKC output; NFKC itself is O(n).
+     */
+    internal fun normalize(s: String): String {
+        val nfkc = Normalizer.normalize(s, Normalizer.Form.NFKC)
+        val sb = StringBuilder(nfkc.length)
+        for (ch in nfkc) {
+            when {
+                Character.getType(ch) == Character.FORMAT.toInt() -> {} // strip zero-width / format
+                ch in '‐'..'―' || ch == '−' -> sb.append('-') // unicode dashes → hyphen
+                ch == '' || ch.isWhitespace() -> sb.append(' ') // canonicalize whitespace
+                else -> sb.append(ch)
+            }
+        }
+        return sb.toString().lowercase(Locale.ROOT)
+    }
+
+    private fun scan(normalizedText: String): String? {
+        val keyword = normalizedKeywords.firstOrNull { (norm, _) -> normalizedText.contains(norm) }
+        if (keyword != null) return keyword.second
+        return SHAPE_PATTERNS.firstOrNull { it.containsMatchIn(normalizedText) }
             ?.let { "shape:${it.pattern}" }
+    }
+
+    /**
+     * Scan the tree's text for a sensitive marker. Returns the first
+     * matched marker (for logging) or null when clean.
+     *
+     * The whole `allText` is joined on a space and scanned as ONE normalized blob
+     * (#590): a keyword within a single node stays intact, AND a keyword split
+     * across adjacent sibling nodes ("Bank" | "Account") rejoins across the space.
+     * Uses the existing `allText` walk — no new tree traversal. FAIL-CLOSED: any
+     * throw in normalization returns the toxic sentinel (drop the capture), never
+     * null.
+     */
+    fun findMarker(tree: UiNode): String? = try {
+        scan(normalize(tree.allText.joinToString(" ")))
+    } catch (_: Throwable) {
+        NORMALIZE_FAILED
+    }
+
+    /**
+     * Scan a flat text blob (notification body) for a sensitive marker.
+     * FAIL-CLOSED: a normalization throw returns the toxic sentinel, never null.
+     */
+    fun findMarker(text: String): String? = try {
+        scan(normalize(text))
+    } catch (_: Throwable) {
+        NORMALIZE_FAILED
     }
 }

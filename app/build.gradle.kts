@@ -166,6 +166,11 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)
     testImplementation(libs.kotlinx.coroutines.test)
+    // #590 — standalone kotest-property (Arb/checkAll/forAll) for the phase-2
+    // ingestion property tests that live in the app test tree (they need
+    // TestRulesetFactory + SessionReplay, which resolve here). Same runner-agnostic
+    // JUnit-4 usage as :core:pipeline; NOT the Kotest runner, NOT jqwik/Jazzer.
+    testImplementation(libs.kotest.property)
     // #314 — Robolectric DAO round-trip tests build an in-memory DashBuddyDatabase;
     // Room's builder API is only transitively runtime-visible via :core:database
     // (implementation), so surface it on the test compile classpath. room-ktx (the
