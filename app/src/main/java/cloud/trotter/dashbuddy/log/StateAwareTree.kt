@@ -63,8 +63,10 @@ class StateAwareTree(
         }
         logLine.append("\n")
 
-        // Send to the Repo to be written to disk
-        logRepository.appendLog(logLine.toString())
+        // Send to the Repo to be written to disk. The priority routes the line to the two sinks
+        // (#551): every line hits the firehose; INFO+ additionally flows through the fail-closed
+        // scrub into the shareable/export sink.
+        logRepository.appendLog(logLine.toString(), priority)
     }
 
 }
