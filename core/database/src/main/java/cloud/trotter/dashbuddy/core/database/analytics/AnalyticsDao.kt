@@ -69,12 +69,14 @@ interface AnalyticsDao {
      * delivery/net counts agree with the session-derived miles/gross ([sessionTotals],
      * [grossAndUnattributed]) over one shared session set by construction.
      *
-     * Edge — **degraded null-session rows**: a delivery folded under the `_unknown`-context
-     * degradation has `sessionId IS NULL` and joins to no session, so it is included by its own
-     * `completedAt` falling in the window — otherwise it would vanish from every period but
-     * LIFETIME. `NULL IN (…)` is never true in SQL, so the two `WHERE` clauses are disjoint (no
-     * double count). LIFETIME `(0, MAX)` is semantically unchanged: every session is in-window and
-     * every completedAt is in `[0, MAX)`.
+     * Edge — **null-session rows**: a `sessionId IS NULL` delivery row can only come from an event
+     * that carried no sessionId at all (`aggregateId` null in the log) — the `_unknown`-context
+     * degradation still assigns the event's own sessionId AND upserts its placeholder session row
+     * in the same transaction, so those rows are session-reachable. A truly session-less row joins
+     * to no session and is included by its own `completedAt` falling in the window — otherwise it
+     * would vanish from every period but LIFETIME. `NULL IN (…)` is never true in SQL, so the two
+     * `WHERE` clauses are disjoint (no double count). LIFETIME `(0, MAX)` is semantically
+     * unchanged: every session is in-window and every completedAt is in `[0, MAX)`.
      */
     @Query(
         """SELECT COALESCE(SUM(realizedPay), 0) AS pay,

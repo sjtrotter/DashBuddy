@@ -274,9 +274,11 @@ class AnalyticsRepositoryTest {
     }
 
     /**
-     * Degraded null-session edge (#655): a delivery folded under the `_unknown` context has
-     * `sessionId IS NULL` and joins to no session, so it still counts in the period containing its
-     * own `completedAt` — never vanishing from every window but LIFETIME.
+     * Null-session edge (#655): a delivery row whose source event carried NO sessionId at all
+     * (`aggregateId` null — the `_unknown`-context degradation still assigns a sessionId + an
+     * atomic placeholder session row, so it is NOT the null source) joins to no session and must
+     * still count in the period containing its own `completedAt` — never vanishing from every
+     * window but LIFETIME.
      */
     @Test
     fun `null-session delivery counts by its completedAt, not lost to the session join`() = runBlocking {
