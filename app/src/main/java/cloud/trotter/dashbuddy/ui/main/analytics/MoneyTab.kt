@@ -41,9 +41,9 @@ private const val UNATTRIBUTED_EPSILON = 0.005
 
 /**
  * Money tab v1 (#315 H1): the frozen-net earnings review for the selected period, top→bottom —
- * earnings hero, 3-step true-net waterfall, stat tiles, the unattributed-pay review flag, top
- * stores, and recent dashes. Pure data in / [PeriodEconomics] + record lists, no side effects.
- * Every string routes through the [Formats]/[formatShortDate] SSOT.
+ * earnings hero, true-net waterfall (3- or 4-step per [WaterfallModel], #659), stat tiles, the
+ * unattributed-pay review flag, top stores, and recent dashes. Pure data in / [PeriodEconomics] +
+ * record lists, no side effects. Every string routes through the [Formats]/[formatShortDate] SSOT.
  */
 @Composable
 fun MoneyTab(
@@ -96,28 +96,86 @@ private fun EarningsHero(economics: PeriodEconomics) {
 }
 
 /**
- * The 3-step true-net waterfall (#659 pending 4-step lift): gross → −operating cost → net.
- * Operating cost is the gap (gross − net); unattributed pay is net-additive, so it flows through
- * consistently. Each row is a proportional bar against gross — the honest visual of "what stayed".
+ * Pure decision logic for the true-net waterfall's step count (#659) — kept Compose-free so it's
+ * unit-testable in isolation from rendering.
+ *
+ * The waterfall renders **4-step** (Gross → −Fuel → −Non-fuel → Net) only when the frozen
+ * fuel/non-fuel split is trustworthy for the whole period: both sums are non-null AND they
+ * reconcile against the period's derived operating cost (`gross − net`) within a tolerance. A
+ * period that mixes `OFFER_FROZEN` rows with pre-split fallback rows has fuel+non-fuel covering
+ * only the frozen subset, so the sums fall short of `gross − net` — that shortfall IS the coverage
+ * signal, no separate flag needed. When the guard fails, this silently returns the exact **3-step**
+ * (Gross → −Operating cost → Net) shape instead — no partial-coverage note is shown; the fallback
+ * keeps the surface honest without cluttering it with a caveat (see PR for the tradeoff).
+ */
+object WaterfallModel {
+
+    /** One row of the rendered waterfall. [amount] is non-negative for [Role.COST] by construction. */
+    data class Step(val role: Role, val label: String, val amount: Double)
+
+    enum class Role { GROSS, COST, NET }
+
+    /** Whichever is larger wins: a flat cent floor for small periods, 1% for large ones. */
+    private const val RELATIVE_TOLERANCE = 0.01
+    private const val ABSOLUTE_TOLERANCE_DOLLARS = 0.50
+
+    fun from(economics: PeriodEconomics): List<Step> {
+        val gross = economics.grossEarnings
+        val net = economics.netProfit
+        val cost = gross - net
+        val fuel = economics.fuelCost
+        val nonFuel = economics.nonFuelCost
+
+        if (fuel != null && nonFuel != null) {
+            val tolerance = maxOf(cost * RELATIVE_TOLERANCE, ABSOLUTE_TOLERANCE_DOLLARS)
+            if (kotlin.math.abs((fuel + nonFuel) - cost) <= tolerance) {
+                return listOf(
+                    Step(Role.GROSS, "Gross", gross),
+                    Step(Role.COST, "Fuel", fuel),
+                    Step(Role.COST, "Non-fuel (wear, depreciation, fixed)", nonFuel),
+                    Step(Role.NET, "Net", net),
+                )
+            }
+        }
+
+        return listOf(
+            Step(Role.GROSS, "Gross", gross),
+            Step(Role.COST, "Operating cost", cost),
+            Step(Role.NET, "Net", net),
+        )
+    }
+}
+
+/**
+ * The true-net waterfall: gross → −cost step(s) → net, 3- or 4-step per [WaterfallModel.from]
+ * (#659). Unattributed pay is net-additive, so it flows through consistently regardless of step
+ * count. Each row is a proportional bar against the period's largest magnitude — the honest
+ * visual of "what stayed".
  */
 @Composable
 private fun TrueNetWaterfall(economics: PeriodEconomics) {
     val c = AppTheme.colors
-    val gross = economics.grossEarnings
-    val net = economics.netProfit
-    val cost = gross - net
+    val steps = WaterfallModel.from(economics)
     // Bars scale against the largest magnitude so a net > gross (net-additive unattributed) still
     // renders sanely and a zero period draws empty bars instead of dividing by zero.
-    val scale = maxOf(gross, cost, net, 0.0).takeIf { it > 0.0 } ?: 1.0
+    val scale = (listOf(0.0) + steps.map { it.amount }).max().takeIf { it > 0.0 } ?: 1.0
 
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(text = "TRUE NET", style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
-        WaterfallRow("Gross", Formats.money(gross), (gross / scale).toFloat(), c.accent, c.text)
-        Spacer(Modifier.height(8.dp))
-        WaterfallRow("Operating cost", "−${Formats.money(cost)}", (cost / scale).toFloat(), c.bad, c.text2)
-        Spacer(Modifier.height(8.dp))
-        WaterfallRow("Net", Formats.money(net), (net / scale).toFloat(), c.good, if (net >= 0.0) c.good else c.bad)
+        steps.forEachIndexed { index, step ->
+            if (index > 0) Spacer(Modifier.height(8.dp))
+            val (amountText, barColor, amountColor) = when (step.role) {
+                WaterfallModel.Role.GROSS -> Triple(Formats.money(step.amount), c.accent, c.text)
+                WaterfallModel.Role.COST -> Triple("−${Formats.money(step.amount)}", c.bad, c.text2)
+                WaterfallModel.Role.NET -> Triple(
+                    Formats.money(step.amount),
+                    c.good,
+                    if (step.amount >= 0.0) c.good else c.bad,
+                )
+            }
+            WaterfallRow(step.label, amountText, (step.amount / scale).toFloat(), barColor, amountColor)
+        }
     }
 }
 
