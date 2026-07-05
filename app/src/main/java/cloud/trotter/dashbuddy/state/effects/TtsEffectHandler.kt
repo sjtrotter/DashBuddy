@@ -49,14 +49,14 @@ class TtsEffectHandler @Inject constructor(
                         // No-op: errorCode overload handles this
                     }
                     override fun onError(utteranceId: String?, errorCode: Int) {
-                        Timber.w("TTS error %d for utterance %s", errorCode, utteranceId)
+                        Timber.tag("Tts").w("error %d for utterance %s", errorCode, utteranceId)
                         audioManager.abandonAudioFocusRequest(audioFocusRequest)
                     }
                 })
                 isReady = true
-                Timber.i("TTS engine initialized")
+                Timber.tag("Tts").i("engine initialized")
             } else {
-                Timber.w("TTS init failed with status %d", status)
+                Timber.tag("Tts").w("init failed with status %d", status)
             }
         }
     }
@@ -64,18 +64,22 @@ class TtsEffectHandler @Inject constructor(
     /** Speak the offer's evaluation aloud — the verdict, then the card's headline economics. */
     fun speakOffer(eval: OfferEvaluation) {
         if (!isReady) {
-            Timber.w("TTS not ready, skipping offer speech")
+            Timber.tag("Tts").w("not ready, skipping offer speech")
             return
         }
         val text = formatEvaluation(eval)
-        Timber.i("TTS speaking: %s", text)
+        // #551 P7: the spoken text names merchants ("Accept. Target & Maple Street …"),
+        // so the shareable INFO stream carries counts only; the raw utterance stays on the
+        // DEBUG firehose.
+        Timber.tag("Tts").i("speaking (%d chars)", text.length)
+        Timber.tag("Tts").d("speaking: %s", text)
 
         audioManager.requestAudioFocus(audioFocusRequest)
         val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "offer_${eval.merchantName}")
         if (result != TextToSpeech.SUCCESS) {
             // A failed speak() never fires an utterance callback — release focus here or
             // other apps stay ducked (#341).
-            Timber.w("TTS speak returned %s — abandoning audio focus", result)
+            Timber.tag("Tts").w("speak returned %s — abandoning audio focus", result)
             audioManager.abandonAudioFocusRequest(audioFocusRequest)
         }
     }

@@ -19,13 +19,18 @@ class TipEffectHandler @Inject constructor(
     fun process(scope: CoroutineScope, effect: AppEffect.ProcessTipNotification) {
         scope.launch(Dispatchers.IO) {
             try {
-                Timber.i("Tip received: ${Formats.money(effect.amount)} from ${effect.storeName}")
+                // #551 P7: the tip amount is the dasher's own economics (INFO-safe); the store name
+                // is raw third-party UI text, so it stays on the DEBUG firehose.
+                Timber.tag("Effects").i("Tip received: %s", Formats.money(effect.amount))
+                Timber.tag("Effects").d(
+                    "Tip received: %s from %s", Formats.money(effect.amount), effect.storeName,
+                )
                 bubbleManager.postMessage(
                     text = "Nice! ${Formats.money(effect.amount)} tip from ${effect.storeName}",
                     persona = ChatPersona.Dispatcher
                 )
             } catch (e: Exception) {
-                Timber.e(e, "Error processing tip notification")
+                Timber.tag("Effects").e(e, "Error processing tip notification")
             }
         }
     }

@@ -144,8 +144,10 @@ class BubbleManager @Inject constructor(
         persona: ChatPersona = ChatPersona.Dispatcher,
         expand: Boolean = false
     ) {
-        // Updated to use displayName
-        Timber.tag("Chat").i("[${persona.displayName}]: $text")
+        // #551 P7: chat text can carry raw merchant/store text ("Pickup: <store>"), so the
+        // shareable INFO stream logs a counts-only milestone; the raw body stays on DEBUG.
+        Timber.tag("Chat").i("message posted [%s] (%d chars)", persona.displayName, text.length)
+        Timber.tag("Chat").d("[%s]: %s", persona.displayName, text)
 
         // 2. UPDATED: Launched in a coroutine because the Repository is pure suspend now!
         scope.launch {
@@ -279,7 +281,10 @@ class BubbleManager @Inject constructor(
     fun postOfferNotification(offer: FlowCardSnapshot.Offer, evaluation: OfferEvaluation) {
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
-        Timber.tag("Chat").i("[${persona.displayName}]: $summary")
+        // #551 P7: the offer summary ends with the merchant name (raw third-party UI text), so
+        // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
+        Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.displayName, summary.length)
+        Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
         scope.launch { chatRepository.saveMessage(activeSessionId.value, summary.toString(), persona) }
         showOfferHeadsUp(offer, summary, persona)
     }

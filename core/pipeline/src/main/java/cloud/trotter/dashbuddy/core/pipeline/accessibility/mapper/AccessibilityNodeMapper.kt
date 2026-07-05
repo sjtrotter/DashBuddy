@@ -82,9 +82,11 @@ private fun convert(
         }
     }
 
-    // In debug builds, log when children are reported but inaccessible
+    // In debug builds, log when children are reported but inaccessible. #551 P7: this is benign,
+    // frequent per-frame tree noise — VERBOSE (firehose only), not WARN. WARN must mean a defended
+    // invariant fired, and this noise was drowning the real WARNs (grace commits, gate denials).
     if (BuildConfig.DEBUG && nullChildren > 0) {
-        Timber.w(
+        Timber.tag("Mapper").v(
             "👻 NULL CHILDREN: %d/%d null at depth=%d class=%s id=%s",
             nullChildren, childCount, depth,
             node.className, node.viewIdResourceName,

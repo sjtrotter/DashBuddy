@@ -90,19 +90,21 @@ class ObservationClassifier @Inject constructor(
     ): Observation.Screen {
         val ruleset = interpreter.screenRuleset
         if (ruleset == null) {
-            Timber.w("ObservationClassifier: no screen ruleset loaded")
+            // Fail-closed invariant fired (rulesets not loaded) — a real WARN (#551 P7).
+            Timber.tag("Classifier").w("no screen ruleset loaded")
             return makeScreenObservation(now, UNKNOWN_TARGET, null, null, ParsedFields.None, null)
         }
 
         val result = ruleset.matchFirst(event.tree, platformWire)
         if (result == null) {
-            Timber.i("SCREEN: UNKNOWN")
+            // #551 P7: per-frame trace → VERBOSE (firehose only), never the shareable INFO stream.
+            Timber.tag("Classifier").v("SCREEN: UNKNOWN")
             return makeScreenObservation(now, UNKNOWN_TARGET, null, null, ParsedFields.None, null)
         }
 
-        Timber.i("SCREEN: ${result.intent}")
+        Timber.tag("Classifier").v("SCREEN: ${result.intent}")
         if (result.effects.isNotEmpty()) {
-            Timber.d("SCREEN: ${result.intent} has ${result.effects.size} effect(s)")
+            Timber.tag("Classifier").d("SCREEN: ${result.intent} has ${result.effects.size} effect(s)")
         }
 
         val parsed = ParsedFieldsFactory.create(result.shape, result.fields)
@@ -188,7 +190,7 @@ class ObservationClassifier @Inject constructor(
         val nodeId = event.node.viewIdResourceName
             ?.takeIf { it.isNotBlank() && it != NO_ID_FALLBACK }
         val nodeText = event.node.text?.takeIf { it.isNotBlank() }
-        Timber.d("ObservationClassifier: UNKNOWN click — id=$nodeId text=$nodeText")
+        Timber.tag("Classifier").d("UNKNOWN click — id=$nodeId text=$nodeText")
         return Observation.Click(
             timestamp = now,
             captureId = null,
@@ -234,7 +236,7 @@ class ObservationClassifier @Inject constructor(
 
         // Unknown notification — preserve raw text for future analysis
         val rawText = event.raw.toFullString()
-        Timber.d("ObservationClassifier: UNKNOWN notification — $rawText")
+        Timber.tag("Classifier").d("UNKNOWN notification — $rawText")
         return Observation.Notification(
             timestamp = event.raw.postTime,
             captureId = null,

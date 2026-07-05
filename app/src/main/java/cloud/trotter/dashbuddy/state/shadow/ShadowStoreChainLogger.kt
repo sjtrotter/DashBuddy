@@ -20,8 +20,10 @@ import javax.inject.Singleton
  *
  * Runs off the hot path: a passive collector on [StateManagerV2.state] that captures the active job
  * (with its resolved task stores) and the PostTask payout while a job is live, and emits one chain
- * line when the job clears. Debug-build only (a diagnostic, like captures). PII-safe by construction
- * — store names are merchant names, customers are logged as `sha256` prefixes only (no raw PII).
+ * line when the job clears. Debug-build only (a diagnostic, like captures). The full store-chain body
+ * names merchants (raw third-party UI text), so it logs at **DEBUG** (firehose only, #551 P7); the
+ * shareable **INFO** milestone carries only the job id + link count (customers are always `sha256`
+ * prefixes, never raw PII).
  */
 @Singleton
 class ShadowStoreChainLogger @Inject constructor(
@@ -51,7 +53,9 @@ class ShadowStoreChainLogger @Inject constructor(
         }
     }
 
-    private fun logChain(job: Job, payout: ParsedPay?) {
+    // internal (not private) so the #551 P7 PII-safety test can drive the exact log site directly
+    // without a full AppState/StateFlow fixture.
+    internal fun logChain(job: Job, payout: ParsedPay?) {
         val chain = StoreChainProjector.project(job, payout)
         if (chain.links.isEmpty()) return
         val body = chain.links.joinToString("; ") { l ->
@@ -65,6 +69,9 @@ class ShadowStoreChainLogger @Inject constructor(
                 append(" custs=").append(l.customerHashes.map { it.take(6) })
             }
         }
-        Timber.tag("ShadowProjector").i("job %s store-chain (%d): %s", chain.jobId, chain.links.size, body)
+        // #551 P7: milestone (job id + link count) is PII-safe INFO; the merchant-bearing body
+        // is raw third-party UI text, so it stays on the DEBUG firehose.
+        Timber.tag("Shadow").i("job %s store-chain resolved (%d links)", chain.jobId, chain.links.size)
+        Timber.tag("Shadow").d("job %s store-chain (%d): %s", chain.jobId, chain.links.size, body)
     }
 }

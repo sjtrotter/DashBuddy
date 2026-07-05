@@ -117,6 +117,20 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   picker). Screens with no dashes yet just yield header-only files — that's fine.
   - Confirmed: 0/2
 
+- **🆕 NEW — Principle-7 logging phase 1: INFO+ log is PII-safe, `SCREEN:` spam gone, real WARNs
+  visible (#551 PR #551-P1).** After a dash (ideally one with a **grocery shop**, so the TTS/ShopRate
+  paths fire), export/inspect the log (Settings → the log/bug-report export, or pull the on-device
+  file). How to tell it's working: **(a)** grep the log for your shop's merchant name (e.g. `H-E-B`,
+  `Target`) — it must appear ONLY on `DEBUG` lines, NEVER on `INFO`/`WARN`/`ERROR` (the shareable
+  stream). The INFO milestones should read counts-only, e.g. `INFO/Tts: speaking (NN chars)`,
+  `INFO/ShopRate: recorded NN items / M.M min = R.RR/min`, `INFO/Chat: offer posted [Persona] (NN
+  chars)`. **(b)** The per-frame `SCREEN: <intent>` lines are gone from INFO (now `VERBOSE/Classifier`)
+  and the `👻 NULL CHILDREN` noise is gone from WARN (now `VERBOSE/Mapper`). **(c)** The real WARNs —
+  `GRACE_COMMIT`/grace-timer wakes, fail-closed gate denials — are now legible in the INFO+ slice
+  instead of drowned. How to tell it's broken: any raw store/customer/address text on an INFO+ line,
+  `SCREEN:` still at INFO, or WARN still buried under ghost-child noise. (PR #551-P1)
+  - Confirmed: 0/2
+
 - **🆕 NEW — driving/glance-mode HUD font-scale toggle (#318).** Flip "Driving glance mode" on in
   Settings → General while a dash is running (or the bubble is up). The bubble HUD's text — the
   hero $/hr, task timers, captions, everything — should visibly grow (~12%) immediately, with no

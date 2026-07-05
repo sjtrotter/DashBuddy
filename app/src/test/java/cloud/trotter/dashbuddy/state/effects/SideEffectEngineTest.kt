@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import android.util.Log
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
@@ -25,7 +26,9 @@ import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.test.util.RecordingTree
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
+import timber.log.Timber
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -666,5 +669,36 @@ class SideEffectEngineTest {
         advanceTimeBy(11)
         runCurrent()
         assertEquals(1, fired.size)
+    }
+
+    // =========================================================================
+    // #551 P7 — RecordShopRate: rate math is INFO-safe, the store name stays on DEBUG
+    // =========================================================================
+
+    @Test
+    fun `RecordShopRate keeps the store name out of INFO+ but on the DEBUG firehose`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val tree = RecordingTree()
+        Timber.plant(tree)
+        try {
+            engine.process(
+                AppEffect.RecordShopRate(
+                    itemsShopped = 24,
+                    shopDurationMs = 18 * 60_000L,
+                    storeName = "H-E-B",
+                    jobId = "job-1",
+                    taskId = "task-1",
+                ),
+            )
+            runCurrent()
+
+            // The shareable INFO stream carries the pace math but never the merchant name.
+            tree.assertNoInfoPlusContains("H-E-B")
+            tree.assertLevelContains(Log.INFO, "24 items")
+            // The DEBUG firehose still names the store.
+            tree.assertLevelContains(Log.DEBUG, "H-E-B")
+        } finally {
+            Timber.uproot(tree)
+        }
     }
 }
