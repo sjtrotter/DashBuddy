@@ -178,7 +178,7 @@ private data class PeriodOption(val period: AnalyticsPeriod, val label: String)
 
 private val PERIOD_OPTIONS = listOf(
     PeriodOption(AnalyticsPeriod.TODAY, "Today"),
-    PeriodOption(AnalyticsPeriod.THIS_WEEK, "This week"),
+    PeriodOption(AnalyticsPeriod.THIS_WEEK, "Week"),
     PeriodOption(AnalyticsPeriod.THIS_MONTH, "Month"),
     PeriodOption(AnalyticsPeriod.LIFETIME, "Lifetime"),
 )
