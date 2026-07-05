@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.state.Platform
+import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -102,6 +103,25 @@ class AnalyticsRepository @Inject constructor(
     /** Every delivery in a session, completion order (future #650 drill-down). */
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecord>> =
         analyticsDao.deliveriesForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
+
+    /**
+     * Build the free-tier CSV export (#319) — deliveries / sessions / summary — for the raw rows in
+     * `[start, end)` (delivery `completedAt` / session `startedAt`). v1 exports all-time (the default
+     * full range). Pure formatting is delegated to [CsvExporter]; this only supplies the rows, the
+     * device [zone], and the export timestamp. Suspend, one-shot (not a Flow) — an export is a
+     * snapshot the driver takes, not a live surface. No PII: customer/address hashes are excluded by
+     * the exporter; store/merchant names are driver-owned and included.
+     */
+    suspend fun buildCsvExport(
+        zone: ZoneId,
+        generatedAtMillis: Long,
+        start: Long = Long.MIN_VALUE,
+        end: Long = Long.MAX_VALUE,
+    ): CsvExporter.Bundle {
+        val deliveries = analyticsDao.deliveriesBetween(start, end)
+        val sessions = analyticsDao.sessionsBetween(start, end)
+        return CsvExporter.export(deliveries, sessions, zone, generatedAtMillis)
+    }
 
     /**
      * Fold the DAO period rows into [PeriodEconomics]. Net is frozen (Σ delivery net +

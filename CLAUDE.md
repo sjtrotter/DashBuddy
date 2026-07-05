@@ -272,7 +272,13 @@ immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`;
 reported-total authoritative + the unattributed review flag; per-store; Monday-week boundaries via
 `PeriodBounds`, midnight-reactive) as Room-invalidation Flows to the home glance + the future Analytics hub
 (#315). Period totals are **read-side only** — they never re-enter the pure state machine (the dead
-`CrossPlatformRegion.PeriodTotals` fields were deleted). Follow-ups: #650 (drill-down + user corrections as
+`CrossPlatformRegion.PeriodTotals` fields were deleted). The free-tier **CSV export** (#319) is a second
+read-side consumer: `AnalyticsRepository.buildCsvExport` reads raw `deliveriesBetween`/`sessionsBetween`
+rows (row-level, bucketing-free — the driver's own records dumped, not session-anchored periods) and the
+pure `CsvExporter` (`:core:data`, RFC-4180 + machine `Csv`/`IrsMileage` primitives in `:domain`) formats
+deliveries/sessions/summary CSVs; the SAF directory-write edge is a `:app` ViewModel (Settings → Data &
+Privacy → Export Data). Merchant/store names are exported (driver-owned); customer/address hashes are
+excluded; no network. Follow-ups: #650 (drill-down + user corrections as
 `MANUAL_DELIVERY`/`PAY_ADJUSTMENT` events the projector folds — non-destructive, auditable), #653/#655.
 
 ## Development Principles
