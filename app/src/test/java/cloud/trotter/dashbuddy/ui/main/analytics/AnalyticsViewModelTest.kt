@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.main.analytics
 
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
@@ -40,10 +41,28 @@ class AnalyticsViewModelTest {
         period: AnalyticsPeriod,
         economics: PeriodEconomics,
         stores: List<StoreEconomics> = emptyList(),
+        decisions: DecisionEconomics = DecisionEconomics.EMPTY,
     ) {
         whenever(analyticsRepository.periodEconomics(eq(period), anyOrNull())).thenReturn(flowOf(economics))
         whenever(analyticsRepository.perStoreEconomics(eq(period))).thenReturn(flowOf(stores))
+        // The VM collects decisions unconditionally (see AnalyticsViewModel), so every period stub
+        // must supply a decisions flow or the combine would fold a null.
+        whenever(analyticsRepository.decisionEconomics(eq(period))).thenReturn(flowOf(decisions))
     }
+
+    private fun decisions(accepted: Int, declined: Int, timedOut: Int, acceptanceRate: Double?) =
+        DecisionEconomics(
+            received = accepted + declined + timedOut,
+            accepted = accepted,
+            declined = declined,
+            timedOut = timedOut,
+            acceptanceRate = acceptanceRate,
+            declinedEstNet = 12.5,
+            avgScoreAccepted = 0.8,
+            avgScoreDeclined = 0.2,
+            avgEstPerHourAccepted = 22.0,
+            avgEstPerHourDeclined = 7.0,
+        )
 
     private fun stubSessions(sessions: List<SessionRecord>) {
         whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(sessions))
@@ -120,14 +139,21 @@ class AnalyticsViewModelTest {
     }
 
     @Test
-    fun `setTab switches the visible tab without touching the period`() = runTest {
+    fun `setTab switches to Decisions and the decision read-model is present in state`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        stubPeriod(AnalyticsPeriod.THIS_WEEK, economics(net = 100.0, netPerHour = 20.0))
+        stubPeriod(
+            AnalyticsPeriod.THIS_WEEK,
+            economics(net = 100.0, netPerHour = 20.0),
+            decisions = decisions(accepted = 3, declined = 5, timedOut = 2, acceptanceRate = 0.3),
+        )
         stubSessions(emptyList())
 
         val viewModel = buildViewModel()
         val job = launch { viewModel.uiState.collect {} }
         testScheduler.advanceUntilIdle()
+
+        // Decisions are collected unconditionally, so they're in state even before the tab switch.
+        assertEquals(3, viewModel.uiState.value.decisions.accepted)
 
         viewModel.setTab(AnalyticsTab.Decisions)
         testScheduler.advanceUntilIdle()
@@ -135,6 +161,10 @@ class AnalyticsViewModelTest {
         val ui = viewModel.uiState.value
         assertEquals(AnalyticsTab.Decisions, ui.selectedTab)
         assertEquals(AnalyticsPeriod.THIS_WEEK, ui.selectedPeriod)
+        assertEquals(10, ui.decisions.received)
+        assertEquals(5, ui.decisions.declined)
+        assertEquals(0.3, ui.decisions.acceptanceRate!!, 1e-9)
+        assertEquals(12.5, ui.decisions.declinedEstNet, 1e-9)
         job.cancel()
     }
 

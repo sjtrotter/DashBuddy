@@ -66,3 +66,27 @@ data class PlatformSessionTotalsRow(
     val miles: Double,
     val onlineMillis: Long,
 )
+
+/**
+ * Per-outcome offer counts + Σ frozen `estNetPay` for a period (#315 H3, Decisions tab). One row
+ * per closing [outcome] ("OFFER_ACCEPTED" / "OFFER_DECLINED" / "OFFER_TIMEOUT") — the funnel counts
+ * and the value-of-saying-no input (Σ est net of the declined group). Estimates are the offer's
+ * FROZEN decision-time snapshot (an economy edit never re-costs them), never realized net.
+ */
+data class OutcomeCountRow(
+    val outcome: String,
+    val count: Int,
+    val estNetSum: Double,
+)
+
+/**
+ * Per-outcome score / est-$/hr averages for a period (#315 H3) — the "is my judgment matching the
+ * verdicts" read. [avgScore]/[avgEstPerHour] are SQL `AVG`s (nullable — a group whose rows all
+ * carried a null `score`/`estDollarsPerHour` yields null, never a fabricated 0). Frozen estimates.
+ */
+data class ScoreOutcomeRow(
+    val outcome: String,
+    val count: Int,
+    val avgScore: Double?,
+    val avgEstPerHour: Double?,
+)

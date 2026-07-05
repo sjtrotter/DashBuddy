@@ -191,6 +191,49 @@ interface AnalyticsDao {
     )
     fun grossAndUnattributedByPlatform(start: Long, end: Long): Flow<List<PlatformGrossTotalsRow>>
 
+    // ── Decisions-tab aggregates (#315 H3) ──────────────────────────────
+
+    /**
+     * Per-outcome offer counts + Σ frozen `estNetPay` for a period — the funnel + value-of-saying-no
+     * inputs (#315 H3). **Session-anchored (#655), identical WHERE shape to [deliveryTotals]:** an
+     * offer buckets by the period of its *session's* `startedAt` (joined via `sessionId`); a
+     * `sessionId IS NULL` offer (no session context at all) falls back to its own `decidedAt` falling
+     * in the window — the analog of the delivery-side `completedAt` fallback. `NULL IN (…)` is never
+     * true in SQL, so the two clauses are disjoint (no double count), and LIFETIME `(0, MAX)` keeps
+     * every row. GROUP BY outcome only (no per-offer list yet). Estimates are the offer's frozen
+     * decision-time snapshot, not realized net.
+     */
+    @Query(
+        """SELECT outcome,
+                  COUNT(*) AS count,
+                  COALESCE(SUM(estNetPay), 0) AS estNetSum
+           FROM offer_records
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+              OR (sessionId IS NULL AND decidedAt >= :start AND decidedAt < :end)
+           GROUP BY outcome"""
+    )
+    fun offerOutcomes(start: Long, end: Long): Flow<List<OutcomeCountRow>>
+
+    /**
+     * Per-outcome count + `AVG(score)` + `AVG(estDollarsPerHour)` for a period — the score-vs-outcome
+     * read (#315 H3). Same session-anchored WHERE shape + null-session `decidedAt` fallback as
+     * [offerOutcomes]/[deliveryTotals]. `AVG` skips nulls and yields null for an all-null group (no
+     * fabricated 0). Frozen estimates.
+     */
+    @Query(
+        """SELECT outcome,
+                  COUNT(*) AS count,
+                  AVG(score) AS avgScore,
+                  AVG(estDollarsPerHour) AS avgEstPerHour
+           FROM offer_records
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+              OR (sessionId IS NULL AND decidedAt >= :start AND decidedAt < :end)
+           GROUP BY outcome"""
+    )
+    fun offerScoreOutcomes(start: Long, end: Long): Flow<List<ScoreOutcomeRow>>
+
     // ── Drill-down list reads (future hub / #650) ────────────────────────
 
     /** Most recent sessions, newest first — the "recent dashes" list. */
