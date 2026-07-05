@@ -21,7 +21,11 @@ import kotlinx.coroutines.flow.Flow
  *     tables themselves (they ARE the fold state).
  *
  * Periods are half-open `[start, end)` predicates computed at query time — no
- * bucketing columns, no timezone materialized into rows.
+ * bucketing columns, no timezone materialized into rows. **A period is anchored on
+ * the sessions whose `startedAt` falls in the window** (session-anchored periods,
+ * #655); every delivery-side aggregate derives from that one session set (joined via
+ * `sessionId`) so gross/net/miles/deliveries are internally consistent by construction,
+ * and a midnight-spanning dash lands wholly on its start day.
  */
 @Dao
 interface AnalyticsDao {
@@ -57,16 +61,36 @@ interface AnalyticsDao {
 
     // ── Read-side aggregates (Flow ⇒ reactive via Room invalidation) ─────
 
+    /**
+     * Delivered pay / frozen net / counts for the deliveries belonging to the **sessions that
+     * started in `[start, end)`** (session-anchored periods, #655): a delivery buckets by the
+     * period of its *session's* `startedAt`, joined via `sessionId` — not independently by its own
+     * `completedAt`. So a midnight-spanning dash lands wholly on its start day, and these
+     * delivery/net counts agree with the session-derived miles/gross ([sessionTotals],
+     * [grossAndUnattributed]) over one shared session set by construction.
+     *
+     * Edge — **null-session rows**: a `sessionId IS NULL` delivery row can only come from an event
+     * that carried no sessionId at all (`aggregateId` null in the log) — the `_unknown`-context
+     * degradation still assigns the event's own sessionId AND upserts its placeholder session row
+     * in the same transaction, so those rows are session-reachable. A truly session-less row joins
+     * to no session and is included by its own `completedAt` falling in the window — otherwise it
+     * would vanish from every period but LIFETIME. `NULL IN (…)` is never true in SQL, so the two
+     * `WHERE` clauses are disjoint (no double count). LIFETIME `(0, MAX)` is semantically
+     * unchanged: every session is in-window and every completedAt is in `[0, MAX)`.
+     */
     @Query(
         """SELECT COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries,
                   COUNT(DISTINCT jobId) AS jobs
            FROM delivery_records
-           WHERE completedAt >= :start AND completedAt < :end"""
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+              OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)"""
     )
     fun deliveryTotals(start: Long, end: Long): Flow<DeliveryTotalsRow>
 
+    /** Per-platform variant of [deliveryTotals] — same session-anchored join + null-session edge. */
     @Query(
         """SELECT platform,
                   COALESCE(SUM(realizedPay), 0) AS pay,
@@ -74,18 +98,27 @@ interface AnalyticsDao {
                   COUNT(*) AS deliveries,
                   COUNT(DISTINCT jobId) AS jobs
            FROM delivery_records
-           WHERE completedAt >= :start AND completedAt < :end
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+              OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)
            GROUP BY platform"""
     )
     fun deliveryTotalsByPlatform(start: Long, end: Long): Flow<List<PlatformDeliveryTotalsRow>>
 
+    /**
+     * Per-store variant of [deliveryTotals] — same session-anchored join + null-session edge.
+     * `ORDER BY pay DESC` is the **highest-earning store first** (realized gross), intentional so
+     * the store list leads with where the money came from.
+     */
     @Query(
         """SELECT storeName,
                   COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries
            FROM delivery_records
-           WHERE completedAt >= :start AND completedAt < :end
+           WHERE sessionId IN (SELECT sessionId FROM session_records
+                               WHERE startedAt >= :start AND startedAt < :end)
+              OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)
            GROUP BY storeName
            ORDER BY pay DESC"""
     )
@@ -110,12 +143,19 @@ interface AnalyticsDao {
     fun sessionTotalsByPlatform(start: Long, end: Long): Flow<List<PlatformSessionTotalsRow>>
 
     /**
-     * Reported-authoritative gross + unattributed delta for a period (#314 PR3), bucketed by
-     * session `startedAt`. Per session: gross = the summary-screen `reportedEarnings` when present,
-     * else that session's Σ delivered pay; unattributed = `reportedEarnings − deliveredPay` when
-     * reported exceeds delivered (bonuses/adjustments/a missed capture — never negative). The
-     * delivered-pay subquery sums each session's full realized pay (no period filter — a session's
-     * own pay against its own reported total), joined to the in-period sessions.
+     * Reported-authoritative gross + unattributed delta for a period (#314 PR3), anchored on the
+     * sessions whose `startedAt` is in `[start, end)` — the same session set the delivery-side
+     * aggregates ([deliveryTotals]) now derive from (#655), so gross and net are consistent by
+     * construction. Per session: gross = the summary-screen `reportedEarnings` when present, else
+     * that session's Σ delivered pay; unattributed = `reportedEarnings − deliveredPay` when reported
+     * exceeds delivered (bonuses/adjustments/a missed capture — never negative).
+     *
+     * The delivered-pay subquery is deliberately **unfiltered by period**: the session set is
+     * already the single filter (the outer `WHERE s.startedAt …`), and a session is matched to its
+     * own full delivered pay for its own reported total — a `completedAt` filter here would be both
+     * redundant and wrong (it could split a midnight-spanning session's pay away from its reported
+     * total). The `LEFT JOIN` is onto a `GROUP BY sessionId` subquery (one row per session), so
+     * there is no fan-out.
      */
     @Query(
         """SELECT COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0)), 0) AS gross,

@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.domain.format
 
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -41,3 +45,20 @@ fun formatCountdown(millis: Long): String {
     val seconds = TimeUnit.MILLISECONDS.toSeconds(safe) % 60
     return String.format(Locale.ROOT, "%d:%02d", totalMinutes, seconds)
 }
+
+/**
+ * "Jul 3, 2026" — a calendar date for a review surface (recent-dashes list, #315/#650).
+ *
+ * Unlike the clock/duration strings above, a calendar date is display copy the dasher
+ * reads in their own locale, so it follows the [Formats] display policy: the localized
+ * MEDIUM date in [locale], resolved against the device [zone]. This is the one owner for
+ * a rendered session date — the future #650 drill-down derives from here too (Principle 5).
+ */
+fun formatShortDate(
+    millis: Long,
+    zone: ZoneId = ZoneId.systemDefault(),
+    locale: Locale = Locale.getDefault(),
+): String =
+    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+        .withLocale(locale)
+        .format(Instant.ofEpochMilli(millis).atZone(zone))

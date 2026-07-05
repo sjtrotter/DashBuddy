@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import cloud.trotter.dashbuddy.ui.main.analytics.AnalyticsScreen
 import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
@@ -73,10 +74,9 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // --- ANALYTICS HUB (Phase 4, #315) — placeholder for now ---
+                        // --- ANALYTICS HUB (#315 H1 — Money tab v1) ---
                         composable(Screen.Analytics.route) {
-                            PlaceholderScreen(
-                                title = "Analytics",
+                            AnalyticsScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }

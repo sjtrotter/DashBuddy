@@ -7,7 +7,7 @@ sealed class Screen(val route: String) {
 
     // Analytics surfaces (home-screen entry tiles, epic #320)
     data object Ratings : Screen("ratings")
-    // Analytics hub is Phase 4 (#315) — routes to the placeholder for now.
+    // Analytics hub (#315 H1) — Money tab v1; Patterns/Decisions/Time tabs stubbed.
     data object Analytics : Screen("analytics")
 
     // Settings Hierarchy

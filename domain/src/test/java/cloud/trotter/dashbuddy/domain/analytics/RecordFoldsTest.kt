@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Platform
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -107,9 +108,12 @@ class RecordFoldsTest {
         odometer = odo,
     )
 
-    private fun dashStop(sid: String, at: Long, odo: Double?, earnings: Double?) = ev(
+    private fun dashStop(sid: String, at: Long, odo: Double?, earnings: Double?, platform: String? = null) = ev(
         AppEventType.DASH_STOP, sid, at,
-        SessionStopPayload(sid, endedAt = at, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = earnings),
+        SessionStopPayload(
+            sid, endedAt = at, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = earnings,
+            platform = platform,
+        ),
         odometer = odo,
     )
 
@@ -322,5 +326,52 @@ class RecordFoldsTest {
         assertEquals(Platform.Unknown.wire, out.delivery!!.platform)
         assertNull(out.delivery!!.sessionId)
         assertNull("no session context is created for a session-less event", out.context)
+    }
+
+    @Test
+    fun `DASH_STOP's platform stamp upgrades an _unknown context left by a skipped DASH_START`() {
+        val s = "S8"
+        // A malformed DASH_START (no payload) is skipped — no context is created.
+        val badStart = SequencedAppEvent(
+            sequenceId = ++seq,
+            event = AppEvent(AppEventType.DASH_START, occurredAt = 1_000, sessionId = s, payload = null),
+        )
+        val skipOut = RecordFolds.foldEvent(badStart, context = null, currentCostPerMile = null)
+        assertNotNull(skipOut.skip)
+        assertNull(skipOut.context)
+
+        // A mid-session offer (no known DASH_START) synthesizes an `_unknown` placeholder context.
+        val offerOut = RecordFolds.foldEvent(
+            offerAccepted(s, 2_000, "h", eval(net = 5.0, dist = 2.0, opCpm = 0.3)),
+            context = skipOut.context,
+            currentCostPerMile = null,
+        )
+        val unknownCtx = offerOut.context
+        assertEquals(Platform.Unknown, unknownCtx!!.platform)
+
+        // DASH_STOP arrives carrying the real platform (#314 stamp) — the `_unknown` context is
+        // upgraded, not left stuck forever.
+        val stopOut = RecordFolds.foldEvent(
+            dashStop(s, 3_000, odo = null, earnings = 10.0, platform = Platform.DoorDash.name),
+            context = unknownCtx,
+            currentCostPerMile = null,
+        )
+        assertEquals("DASH_STOP's platform stamp refines an _unknown session", Platform.DoorDash, stopOut.context!!.platform)
+        assertEquals("doordash", stopOut.context!!.platform.wire)
+    }
+
+    @Test
+    fun `DASH_STOP's platform stamp does NOT clobber an already-real platform`() {
+        val s = "S9"
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                // A malformed/mismatched platform stamp on DASH_STOP must never override a real,
+                // already-established session platform.
+                dashStop(s, 2_000, odo = null, earnings = 5.0, platform = Platform.Uber.name),
+            ),
+        )
+        assertEquals("real platform from DASH_START is preserved", Platform.DoorDash, outcomes.last().context!!.platform)
+        assertEquals(Platform.DoorDash, ctx!!.platform)
     }
 }

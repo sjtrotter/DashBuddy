@@ -34,8 +34,8 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "delivery_records",
     indices = [
-        Index("completedAt"),                       // period predicates
-        Index(value = ["platform", "completedAt"]), // per-platform periods
+        Index("completedAt"),                       // null-session fallback window + per-day charts
+        Index(value = ["platform", "completedAt"]), // per-platform ordering/charts (period bucketing is session-anchored, #655)
         Index("sessionId"),                         // per-dash drilldown + fold hydration
         Index(value = ["sessionId", "jobId"]),      // incremental distinct-job counting
         Index("storeName"),                         // per-store aggregation + chain resolution (#159)

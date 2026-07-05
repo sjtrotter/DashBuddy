@@ -26,7 +26,9 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Platform
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -340,5 +342,61 @@ class AnalyticsProjectorTest {
         assertEquals("orphaned session A is inferred-closed across the batch boundary", "inferred", a.endSource)
         assertEquals("A's endedAt is its last event", 2_000L, a.endedAt)
         assertNull("the live session B stays open", analyticsDao.sessionRecord("B")!!.endedAt)
+    }
+
+    @Test
+    fun `a DataStore read failure degrades cpm to null instead of crashing the batch (retro finding 3)`() = runBlocking {
+        // The economy DataStore throws (transient IO) — currentCostPerMile must catch it, log, and
+        // fall back to null (never crash the drain loop or the batch transaction).
+        val failingPrefs = mock<AppPreferencesRepository> {
+            on { userEconomy } doReturn flow { throw RuntimeException("datastore boom") }
+        }
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 0.0,
+        )
+        // No preceding offer in this session, so the delivery has no OFFER_FROZEN basis and would
+        // normally fall back to the live economy's cpm.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 2_000,
+            DeliveryPayload(jobId = "J1", taskId = "T1", storeName = "StoreX", phaseStartedAt = 1_500, totalPay = 5.0),
+            odometer = 4.0,
+        )
+
+        val projector = AnalyticsProjector(db, repo, eventDao, analyticsDao, failingPrefs)
+        projector.catchUp() // must not throw
+
+        val delivery = analyticsDao.lastDeliveryInSession("S1")!!
+        assertEquals(
+            "no offer basis + a failed cpm read → NONE, never a stale/wrong cpm",
+            "NONE", delivery.costBasis,
+        )
+        assertNull(delivery.frozenCostPerMile)
+        assertNull(delivery.netProfit)
+    }
+
+    @Test(expected = CancellationException::class)
+    fun `currentCostPerMile does not swallow CancellationException (retro finding 3)`(): Unit = runBlocking {
+        // A blanket `runCatching` around the DataStore read would catch a CancellationException too
+        // and quietly degrade to null cpm — violating the drain loop's own never-swallow-cancellation
+        // rule (`start`'s `catch (e: CancellationException) { throw e }`, three lines above the old
+        // `runCatching`). The fix must let it propagate instead of being caught-and-nulled.
+        val cancellingPrefs = mock<AppPreferencesRepository> {
+            on { userEconomy } doReturn flow { throw CancellationException("simulated cooperative cancellation") }
+        }
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 0.0,
+        )
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 2_000,
+            DeliveryPayload(jobId = "J1", taskId = "T1", storeName = "StoreX", phaseStartedAt = 1_500, totalPay = 5.0),
+            odometer = 4.0,
+        )
+
+        val projector = AnalyticsProjector(db, repo, eventDao, analyticsDao, cancellingPrefs)
+        projector.catchUp() // must rethrow, not degrade to a null cpm and continue
     }
 }

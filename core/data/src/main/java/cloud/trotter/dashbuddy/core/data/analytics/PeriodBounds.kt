@@ -24,7 +24,7 @@ object PeriodBounds {
     /**
      * The `[start, end)` window for [period], anchored at [nowMillis] in [zone].
      * TODAY = local midnight → next midnight; THIS_WEEK = Monday 00:00 → next Monday
-     * 00:00; LIFETIME = all time.
+     * 00:00; THIS_MONTH = 1st 00:00 → next month's 1st 00:00; LIFETIME = all time.
      */
     fun of(period: AnalyticsPeriod, nowMillis: Long, zone: ZoneId): Bounds {
         if (period == AnalyticsPeriod.LIFETIME) return Bounds(0L, Long.MAX_VALUE)
@@ -33,12 +33,14 @@ object PeriodBounds {
         val startDate = when (period) {
             AnalyticsPeriod.TODAY -> today
             AnalyticsPeriod.THIS_WEEK -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            AnalyticsPeriod.THIS_MONTH -> today.with(TemporalAdjusters.firstDayOfMonth())
             AnalyticsPeriod.LIFETIME -> error("handled above")
         }
         val startZdt = startDate.atStartOfDay(zone)
         val endZdt = when (period) {
             AnalyticsPeriod.TODAY -> startZdt.plusDays(1)
             AnalyticsPeriod.THIS_WEEK -> startZdt.plusWeeks(1)
+            AnalyticsPeriod.THIS_MONTH -> startZdt.plusMonths(1)
             AnalyticsPeriod.LIFETIME -> error("handled above")
         }
         return Bounds(startZdt.toInstant().toEpochMilli(), endZdt.toInstant().toEpochMilli())

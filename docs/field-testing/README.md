@@ -82,6 +82,18 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   change size on toggle, only *some* of the HUD text scales (e.g. the hero number but not the
   captions/labels), the toggle needs an app restart to take effect, or the main app window's text
   size changes too.
+
+- **🆕 NEW — Analytics tile now opens the Money tab (#315 H1 / Money tab v1).**
+  From the home screen tap the **Analytics** tile: it should open a real hub (back arrow) with a
+  **Money / Patterns / Decisions / Time** tab bar (the last three show a "coming soon" card). On
+  **Money**, pick **Today / Week / Month / Lifetime** and confirm the figures re-anchor: the earnings
+  hero (gross + True-Net / Net-hr chips), the 3-step **gross → −operating cost → net** waterfall, the
+  2×2 tiles ($/hr · $/mi · Miles · Deliveries), top stores, and recent dashes. Cross-check: for the
+  **same period** the Money numbers should match the dashboard's tiles (both read the same frozen
+  read-model). An **unattributed-pay callout** appears only when that period has bonuses/adjustments.
+  How to tell it's broken: the old "Construction Area 🚧" placeholder still shows, figures don't change
+  with the period, Money ≠ dashboard for the same window, a crash on an empty period, or a "$0.00"
+  unattributed callout on a period with none.
   - Confirmed: 0/2
 - **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
   Open the app **after a dash** (not while on a task): the **Today** tiles (True Net / Net $/hr /

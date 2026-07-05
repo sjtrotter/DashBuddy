@@ -213,9 +213,22 @@ class AnalyticsProjector @Inject constructor(
     private suspend fun currentWatermark(): Long =
         analyticsDao.getWatermark()?.watermarkSequenceId ?: 0L
 
-    /** The live economy's operating cost-per-mile — the frozen `CURRENT_FALLBACK` basis only. */
+    /**
+     * The live economy's operating cost-per-mile — the frozen `CURRENT_FALLBACK` basis only. A
+     * `null` here just means this batch's fallback-basis deliveries stamp `CostBasis.NONE` instead
+     * (never a wrong cpm); it must NOT swallow cancellation (the drain loop's own rule, `start`
+     * above) — only a real DataStore read failure is caught, logged, and degraded to `null`.
+     */
     private suspend fun currentCostPerMile(): Double? =
-        runCatching { appPreferencesRepository.userEconomy.first().operatingCostPerMile }.getOrNull()
+        try {
+            appPreferencesRepository.userEconomy.first().operatingCostPerMile
+        } catch (e: CancellationException) {
+            throw e // cooperative cancellation — never swallow it
+        } catch (e: Exception) {
+            // No PII: the failure class only, never preference contents.
+            Timber.tag(TAG).w(e, "currentCostPerMile: economy read failed; falling back to null cpm")
+            null
+        }
 
     // ── Restart-correct context hydration (the record tables ARE the fold state) ──
 
