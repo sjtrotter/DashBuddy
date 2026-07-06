@@ -86,6 +86,17 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **NOTE (expected, not a bug):** net for a receipt-less shop is now **pay − mileage cost**, which is
   **LOWER** than the old unattributed-callout number (that number was raw pay with no cost) — a lower,
   more honest figure is correct. (#691 / PR)
+  - **(4) 🆕 UBER SCOPE (PR #702 round 2): Uber deliveries now show est. offer pay platform-wide.**
+    Uber has no post-trip receipt rules at all (`uber.screen.post_trip` has no parse), so EVERY Uber
+    delivery now folds an OFFER_PAY estimate (the platform-agnostic mechanism working as designed, P8).
+    This changes Uber analytics **wholesale** — **sanity-check the est. offer pay against your actual
+    Uber earnings** (the offer's guaranteed quote vs what Uber actually paid, incl. surge/tips added
+    after). Flag any drift.
+  - **(5) 🆕 REGRESSION WATCH (PR #702 round 2): a collapsed/transient summary must NOT force $0.**
+    On a receipt-less drop, watch that the row shows the **est. offer pay**, NOT a `$0.00` receipted
+    row — a transient `delivery_summary_collapsed` frame used to coerce a `$0` pseudo-receipt that
+    masked the estimate. If any receipt-less drop reads `$0.00` (basis RECEIPT_TOTAL) instead of an
+    est. figure, capture the session and flag it.
   - Confirmed: 0/2
 
 - **🆕 NEW — multi-pickup stack: symmetric pickup placeholders + store re-attribution (#526 / PR).**
