@@ -73,6 +73,21 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — receipt-less shop delivery shows est. offer pay, not $0-unattributed (#691 / PR).**
+  Do a **DoorDash shop order** (grocery/convenience — the kind that shows NO per-delivery receipt at
+  the end; pay lives only on the offer + the running dash total). After it completes, open **Analytics
+  → the dash → the delivery drill-down**.
+  How to tell it's working: (1) the delivery row shows a **real pay figure with an "est. offer pay"
+  qualifier** under it, NOT a `$0` / "Unknown"-style row, and the Money-tab unattributed callout
+  shrinks accordingly. (2) On a **receipt-less shop STACK** (2+ orders, no receipt), the two drop rows
+  are **≈ equal halves of the offer pay shown at accept** (e.g. a $12.95 stack → ~$6.48 / ~$6.47),
+  summing to the offer total — not one drop taking the whole thing and the other $0. (3) A shop order
+  that DID show a receipt still uses the receipt (basis DROP_SHARE/RECEIPT_TOTAL), no "est." qualifier.
+  **NOTE (expected, not a bug):** net for a receipt-less shop is now **pay − mileage cost**, which is
+  **LOWER** than the old unattributed-callout number (that number was raw pay with no cost) — a lower,
+  more honest figure is correct. (#691 / PR)
+  - Confirmed: 0/2
+
 - **🆕 NEW — multi-pickup stack: symmetric pickup placeholders + store re-attribution (#526 / PR).**
   Accept a **multi-store stack** (two+ orders from DIFFERENT stores in one offer — e.g. the 07-05
   Bill Miller BBQ + Mama Margies). Watch the whole run: both pickups AND both drops.
