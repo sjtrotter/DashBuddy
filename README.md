@@ -16,7 +16,7 @@ your real mileage, and a heads-up when a dash gets paused. Nothing leaves your p
 
 ## What it does for you
 
-* **True net profitability.** Parses each incoming offer and shows real $ /hour and $ /mile *after*
+* **True net profitability.** Parses each incoming offer and shows real '$'/hour and '$'/mile *after*
   estimated fuel and vehicle cost — not the platform's headline number.
 * **Automatic shift & mileage logging.** Detects when a dash starts, pauses, and ends, and tracks
   mileage only while you're actually working.
