@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.domain.export
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
 
@@ -151,15 +154,58 @@ class CsvTest {
         assertEquals("", Csv.isoDateTime(null, utc))
     }
 
-    // ── IRS deduction ───────────────────────────────────────────────────
+    // ── IRS per-year mileage rates (#689) ───────────────────────────────
 
-    @Test fun irsRate_isTaxYear2025Business() {
-        assertEquals(2025, IrsMileage.TAX_YEAR)
-        assertEquals(0.70, IrsMileage.RATE_PER_MILE, 0.0)
+    @Test fun irsRate_knownYears() {
+        assertEquals(0.70, IrsMileage.rateFor(2025)!!, 0.0)
+        assertEquals(0.725, IrsMileage.rateFor(2026)!!, 0.0)
     }
 
-    @Test fun irsDeduction_math() {
-        assertEquals(70.0, IrsMileage.deduction(100.0), 1e-9)
-        assertEquals(0.0, IrsMileage.deduction(0.0), 0.0)
+    @Test fun irsRate_unknownYear_isNull() {
+        assertNull(IrsMileage.rateFor(2027))
+        assertNull(IrsMileage.rateFor(2024))
+    }
+
+    @Test fun irsIsKnown_tracksThePublishedTable() {
+        assertTrue(IrsMileage.isKnown(2025))
+        assertTrue(IrsMileage.isKnown(2026))
+        assertFalse(IrsMileage.isKnown(2027))
+    }
+
+    @Test fun irsLatestKnown_isTheMaxYearsRate() {
+        assertEquals(2026 to 0.725, IrsMileage.latestKnown())
+    }
+
+    @Test fun irsDeduction_perYearRate() {
+        assertEquals(70.0, IrsMileage.deduction(100.0, 2025), 1e-9)
+        assertEquals(72.5, IrsMileage.deduction(100.0, 2026), 1e-9)
+        assertEquals(0.0, IrsMileage.deduction(0.0, 2025), 0.0)
+    }
+
+    @Test fun irsDeduction_unknownYear_fallsBackToLatestKnownRate() {
+        // 2027 has no published rate → latest known (2026 = $0.725/mi).
+        assertEquals(72.5, IrsMileage.deduction(100.0, 2027), 1e-9)
+    }
+
+    @Test fun irsEffectiveRate_publishedRate_orLatestKnownFallback() {
+        assertEquals(0.70, IrsMileage.effectiveRate(2025), 0.0)
+        assertEquals(0.725, IrsMileage.effectiveRate(2026), 0.0)
+        assertEquals(0.725, IrsMileage.effectiveRate(2027), 0.0) // future unknown → latest
+        assertEquals(0.725, IrsMileage.effectiveRate(2024), 0.0) // pre-table → latest (disclaimed below)
+    }
+
+    @Test fun irsFallbackNote_isDirectionAware_andNullForPublishedYears() {
+        assertNull(IrsMileage.fallbackNote(2025))
+        assertNull(IrsMileage.fallbackNote(2026))
+        // Future year: genuinely not yet published.
+        assertEquals(
+            "2027 rate not yet published — estimated at the 2026 rate",
+            IrsMileage.fallbackNote(2027),
+        )
+        // Past year: its rate IS published (just not shipped) — the copy must not claim otherwise.
+        assertEquals(
+            "no 2024 rate in the app's rate table — estimated at the 2026 rate",
+            IrsMileage.fallbackNote(2024),
+        )
     }
 }

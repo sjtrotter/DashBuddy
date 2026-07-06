@@ -7,12 +7,17 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /** Entity → CSV assembly, hash exclusion, header shape, and the summary deduction (#319). */
 class CsvExporterTest {
 
     private val utc = ZoneId.of("UTC")
     private val generatedAt = 1_783_260_207_000L // 2026-07-05T14:03:27Z
+
+    /** Noon-UTC on a fixed day of [year] — pins a session into a specific local tax year. */
+    private fun millisIn(year: Int): Long =
+        ZonedDateTime.of(year, 6, 15, 12, 0, 0, 0, utc).toInstant().toEpochMilli()
 
     private fun delivery(
         seq: Long,
@@ -158,16 +163,62 @@ class CsvExporterTest {
     }
 
     @Test fun summary_deductionMath() {
+        // Default session starts 2026-07-05 (an hour before generatedAt) → 2026 rate ($0.725/mi).
         val out = CsvExporter.export(
             listOf(delivery(1, "S")),
             listOf(session(startOdo = 1000.0, lastOdo = 1100.0)), // 100 mi
             utc, generatedAt,
         )
         val summary = out.summaryCsv
-        assertTrue(summary.contains("tax_year,2025"))
+        assertTrue(summary.contains("tax_year,2026"))
+        assertTrue(summary.contains("irs_business_rate_per_mile,0.725"))
         assertTrue(summary.contains("total_deductible_miles,100.00"))
-        assertTrue(summary.contains("estimated_mileage_deduction,70.00")) // 100 * 0.70
+        assertTrue(summary.contains("estimated_mileage_deduction,72.50")) // 100 * 0.725
         assertTrue(summary.contains("total_sessions,1"))
         assertTrue(summary.contains("total_deliveries,1"))
+    }
+
+    @Test fun summary_yearBoundarySpan_emitsOneGroupPerYear_withEachYearsRate() {
+        val out = CsvExporter.export(
+            emptyList(),
+            listOf(
+                session(id = "a", startedAt = millisIn(2025), endedAt = millisIn(2025), startOdo = 1000.0, lastOdo = 1100.0), // 100 mi @2025
+                session(id = "b", startedAt = millisIn(2026), endedAt = millisIn(2026), startOdo = 2000.0, lastOdo = 2200.0), // 200 mi @2026
+            ),
+            utc, generatedAt,
+        )
+        val summary = out.summaryCsv
+        // Two tax-year groups, each with its own rate + deduction.
+        assertTrue(summary.contains("tax_year,2025"))
+        assertTrue(summary.contains("tax_year,2026"))
+        assertTrue(summary.contains("irs_business_rate_per_mile,0.700"))
+        assertTrue(summary.contains("irs_business_rate_per_mile,0.725"))
+        assertTrue(summary.contains("estimated_mileage_deduction,70.00"))  // 100 * 0.70
+        assertTrue(summary.contains("estimated_mileage_deduction,145.00")) // 200 * 0.725
+        // Ascending order: the 2025 group precedes the 2026 group.
+        assertTrue(summary.indexOf("tax_year,2025") < summary.indexOf("tax_year,2026"))
+        // No stray disclaimer for years with a published rate.
+        assertFalse(summary.contains("rate_note"))
+    }
+
+    @Test fun summary_unknownYear_usesLatestRate_withFormulaSafeDisclaimer() {
+        val out = CsvExporter.export(
+            emptyList(),
+            listOf(session(startedAt = millisIn(2027), endedAt = millisIn(2027), startOdo = 1000.0, lastOdo = 1100.0)), // 100 mi @2027 (unpublished)
+            utc, generatedAt,
+        )
+        val summary = out.summaryCsv
+        assertTrue(summary.contains("tax_year,2027"))
+        // Falls back to the latest known rate (2026 = $0.725/mi) → 100 * 0.725 = 72.50.
+        assertTrue(summary.contains("irs_business_rate_per_mile,0.725"))
+        assertTrue(summary.contains("estimated_mileage_deduction,72.50"))
+        // Explicit, clearly-labelled disclaimer line (routed through Csv.textField — formula-safe).
+        assertTrue(
+            summary.contains("rate_note,2027 rate not yet published — estimated at the 2026 rate"),
+        )
+        // Disclaimer starts with a digit, so no cell in the summary begins with a formula leader.
+        summary.trim().lines().forEach { row ->
+            assertFalse("formula-leading cell leaked: $row", row.startsWith("=") || row.startsWith("@"))
+        }
     }
 }

@@ -114,7 +114,7 @@ fun AnalyticsScreen(
                         onSelectPeriod = viewModel::setPeriod,
                     )
                     Spacer(Modifier.height(16.dp))
-                    TimeTab(time = uiState.time)
+                    TimeTab(time = uiState.time, period = uiState.selectedPeriod)
                 }
 
                 AnalyticsTab.Patterns -> ComingSoonCard(uiState.selectedTab)

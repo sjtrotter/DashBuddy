@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.domain.export.Csv
 import cloud.trotter.dashbuddy.domain.export.IrsMileage
 import cloud.trotter.dashbuddy.domain.state.Platform
+import java.time.Instant
 import java.time.ZoneId
 
 /**
@@ -137,10 +138,21 @@ object CsvExporter {
         return sb.toString()
     }
 
+    /** The local tax year a record falls in, derived from its epoch millis in the export [zone]. */
+    private fun taxYearOf(epochMillis: Long, zone: ZoneId): Int =
+        Instant.ofEpochMilli(epochMillis).atZone(zone).year
+
     /**
-     * A `metric,value` summary — the tax-preparer line the issue calls for: total odometer-derived
-     * business miles × the IRS standard business rate, with the tax year and rate stated explicitly
-     * so the deduction number is never ambiguous about which year produced it.
+     * A `metric,value` summary — the tax-preparer lines the issue calls for: odometer-derived
+     * business miles × the IRS standard business rate. The rate is **year-specific** (#689), so the
+     * deduction is computed per row's own tax year — a session's `startedAt` resolved in the export
+     * [zone] (one owner: the same zone the row timestamps use). Sessions are grouped by tax year and
+     * **one `tax_year`/`irs_business_rate_per_mile`/`total_deductible_miles`/`estimated_mileage_deduction`
+     * group is emitted per year present**, ascending, so a year-boundary-spanning export applies the
+     * right rate to each year's miles instead of one (wrong) global label. A year with no rate in
+     * the table applies [IrsMileage.effectiveRate]'s fallback and appends [IrsMileage.fallbackNote]
+     * as a `rate_note` line (routed through [Csv.textField] — formula-injection rules still apply)
+     * so the substitution is never silent.
      */
     private fun summaryCsv(
         deliveries: List<DeliveryRecordEntity>,
@@ -148,24 +160,30 @@ object CsvExporter {
         zone: ZoneId,
         generatedAtMillis: Long,
     ): String {
-        val totalMiles = sessions.sumOf { sessionMiles(it) ?: 0.0 }
-        val deduction = IrsMileage.deduction(totalMiles)
+        // Deductible miles grouped by the session's own local tax year (ascending).
+        val milesByYear: Map<Int, Double> = sessions
+            .groupBy { taxYearOf(it.startedAt, zone) }
+            .mapValues { (_, group) -> group.sumOf { sessionMiles(it) ?: 0.0 } }
+            .toSortedMap()
         val totalReported = sessions.mapNotNull { it.reportedEarnings }.sum()
         val totalRealized = deliveries.mapNotNull { it.realizedPay }.sum()
 
         val sb = StringBuilder()
         sb.append(Csv.row(listOf(Csv.textField("metric"), Csv.textField("value")))).append('\n')
         // Metric names are program constants; values below are pre-encoded numeric/timestamp
-        // cells except date_range's literal, which goes through textField like any text cell.
+        // cells except the text literals (date_range, rate_note), which go through textField.
         fun line(metric: String, encodedValue: String) {
             sb.append(Csv.row(listOf(Csv.textField(metric), encodedValue))).append('\n')
         }
         line("export_generated_at", Csv.isoDateTime(generatedAtMillis, zone))
         line("date_range", Csv.textField("all_time"))
-        line("tax_year", IrsMileage.TAX_YEAR.toString())
-        line("irs_business_rate_per_mile", Csv.money(IrsMileage.RATE_PER_MILE, digits = 3))
-        line("total_deductible_miles", Csv.decimal(totalMiles))
-        line("estimated_mileage_deduction", Csv.money(deduction))
+        for ((year, miles) in milesByYear) {
+            line("tax_year", year.toString())
+            line("irs_business_rate_per_mile", Csv.money(IrsMileage.effectiveRate(year), digits = 3))
+            line("total_deductible_miles", Csv.decimal(miles))
+            line("estimated_mileage_deduction", Csv.money(IrsMileage.deduction(miles, year)))
+            IrsMileage.fallbackNote(year)?.let { line("rate_note", Csv.textField(it)) }
+        }
         line("total_sessions", Csv.int(sessions.size))
         line("total_deliveries", Csv.int(deliveries.size))
         line("total_reported_earnings", Csv.money(totalReported))
