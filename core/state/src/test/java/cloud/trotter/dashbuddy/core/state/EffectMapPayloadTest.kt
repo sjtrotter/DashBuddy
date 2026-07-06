@@ -156,13 +156,14 @@ class EffectMapPayloadTest {
             session = Session("dash-7", startedAt = 500L),
         )
         val prev = appState(
-            flow = FlowRegion(flow = Flow.Idle, pendingOffer = null, activePlatform = Platform.DoorDash),
+            flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
             platforms = mapOf(Platform.DoorDash to region),
         )
         val newOffer = pendingOffer(hash = "new-1", presentedAt = 1234L)
         val next = appState(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = newOffer, activePlatform = Platform.DoorDash),
-            platforms = mapOf(Platform.DoorDash to region),
+            flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash),
+            // #438 B3: the offer is owned by the region now.
+            platforms = mapOf(Platform.DoorDash to region.copy(pendingOffers = listOf(newOffer))),
         )
         val obs = screenObs(flow = Flow.OfferPresented, timestamp = 1234L)
 
@@ -190,11 +191,11 @@ class EffectMapPayloadTest {
             session = Session("dash-42", startedAt = 500L),
         )
         val prev = appState(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer, activePlatform = Platform.DoorDash),
-            platforms = mapOf(Platform.DoorDash to region),
+            flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash),
+            platforms = mapOf(Platform.DoorDash to region.copy(pendingOffers = listOf(offer))),
         )
         val next = appState(
-            flow = FlowRegion(flow = Flow.Idle, pendingOffer = null, activePlatform = Platform.DoorDash),
+            flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
             platforms = mapOf(Platform.DoorDash to region),
         )
         val click = Observation.Click(
@@ -229,8 +230,15 @@ class EffectMapPayloadTest {
     @Test
     fun `OFFER_DECLINED carries rich payload`() {
         val offer = pendingOffer(hash = "xyz")
-        val prev = appState(flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer))
-        val next = appState(flow = FlowRegion(flow = Flow.Idle, pendingOffer = null))
+        val region = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online, session = Session("s-decl", startedAt = 500L))
+        val prev = appState(
+            flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash),
+            platforms = mapOf(Platform.DoorDash to region.copy(pendingOffers = listOf(offer))),
+        )
+        val next = appState(
+            flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
+            platforms = mapOf(Platform.DoorDash to region),
+        )
         val click = Observation.Click(
             timestamp = 1600L,
             captureId = null,
@@ -252,8 +260,15 @@ class EffectMapPayloadTest {
     @Test
     fun `OFFER_TIMEOUT carries rich payload`() {
         val offer = pendingOffer(hash = "to1")
-        val prev = appState(flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer))
-        val next = appState(flow = FlowRegion(flow = Flow.Idle, pendingOffer = null))
+        val region = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online, session = Session("s-to", startedAt = 500L))
+        val prev = appState(
+            flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash),
+            platforms = mapOf(Platform.DoorDash to region.copy(pendingOffers = listOf(offer))),
+        )
+        val next = appState(
+            flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
+            platforms = mapOf(Platform.DoorDash to region),
+        )
         // No click — falls through to TIMEOUT
         val obs = screenObs(flow = Flow.Idle, timestamp = 1700L)
 

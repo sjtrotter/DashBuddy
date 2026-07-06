@@ -126,11 +126,6 @@ class SerializationRoundTripTest {
             regions = Regions(
                 flow = FlowRegion(
                     flow = Flow.OfferPresented,
-                    pendingOffer = PendingOffer(
-                        offerHash = "h1", offerFields = offerFields,
-                        presentedAt = 1_000L, evaluation = evaluation,
-                        returnFlow = Flow.Idle, lastClickIntent = "accept_offer",
-                    ),
                     sourceRuleId = "doordash.screen.offer_popup",
                     activePlatform = Platform.DoorDash,
                     lastObservedAt = 1_000L,
@@ -139,6 +134,14 @@ class SerializationRoundTripTest {
                     Platform.DoorDash to PlatformRegion(
                         platform = Platform.DoorDash,
                         mode = Mode.Online,
+                        // #438 B3: offers live on the region now.
+                        pendingOffers = listOf(
+                            PendingOffer(
+                                offerHash = "h1", offerFields = offerFields,
+                                presentedAt = 1_000L, evaluation = evaluation,
+                                returnFlow = Flow.Idle, lastClickIntent = "accept_offer",
+                            ),
+                        ),
                         session = Session("session-doordash-1000-0", startedAt = 100L, runningEarnings = 41.25),
                         activeJob = Job(
                             jobId = "job-doordash-1000-1",

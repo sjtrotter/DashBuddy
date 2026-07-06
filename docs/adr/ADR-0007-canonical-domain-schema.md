@@ -208,6 +208,17 @@ device → aggregator boundary.
 What the evaluator scores and what the federation studies. Captured exactly
 once, at presentation, then immutable.
 
+> **State-layer note (#438 B3, 2026-07-06).** This ADR's "offer shape should be
+> a list, not a scalar" constraint (N≥1 concurrent offers) is now *satisfied at
+> the state layer*: `PlatformRegion.pendingOffers: List<PendingOffer>` replaced
+> the single global `FlowRegion.pendingOffer` scalar (see
+> `docs/design/multiplatform-correctness-pack.md` §Item 7). The per-offer expiry
+> (hash-carrying `OFFER_EXPIRY` timer) and click→offer correlation contracts are
+> locked there, so populating N>1 per platform is ruleset/parser work (#251) with
+> zero `:core:state` edits expected. This ADR's own *canonical persisted* schema
+> below is unaffected and **stays Proposed** — its implementation remains #245's
+> series; this note only records that the runtime slot is no longer scalar.
+
 The Offer carries **offer-wide facts only**: total pay, total estimated
 distance, total estimated duration, total item count, an overall delivery
 deadline (the "Deliver by HH:MM" shown on the offer screen), and the

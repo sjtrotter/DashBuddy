@@ -60,22 +60,13 @@ class PerRegionLifecycleEdgesTest {
         itemCount = 1, isItemCountEstimated = false, badges = emptySet(),
     )
 
-    /** A shared-R0 flow holding a DoorDash accept-latched offer (as if DoorDash just presented it). */
-    private fun doordashOfferFlow(hash: String = "dd-offer") = FlowRegion(
+    /**
+     * A shared-R0 flow showing DoorDash's offer SCREEN. #438 B3: the offer itself lives on the
+     * DoorDash region's own `pendingOffers`, NOT on R0 — so the Uber region can never even see it.
+     * The shared R0 still records the last screen (used only for the lastActedFlow fallback).
+     */
+    private fun doordashOfferFlow() = FlowRegion(
         flow = Flow.OfferPresented,
-        pendingOffer = PendingOffer(
-            offerHash = hash,
-            offerFields = ParsedFields.OfferFields(
-                parsedOffer = ParsedOffer(
-                    offerHash = hash, payAmount = 14.0, distanceMiles = 5.0,
-                    timeToCompleteMinutes = 20L, orders = listOf(order(0, "Bill Miller BBQ")),
-                ),
-            ),
-            presentedAt = 500L,
-            returnFlow = Flow.Idle,
-            lastClickIntent = OfferIntent.ACCEPT,
-            sourceRuleId = "doordash.screen.offer",
-        ),
         sourceRuleId = "doordash.screen.offer",
         activePlatform = Platform.DoorDash,
     )
@@ -99,9 +90,10 @@ class PerRegionLifecycleEdgesTest {
     // =====================================================================
 
     @Test
-    fun `an Uber task frame does not mint a job from a DoorDash offer in the shared R0`() {
+    fun `an Uber task frame does not mint a job from a DoorDash offer (offers are region-owned)`() {
         // The Uber region is online and has already acted on its own idle frame — the realistic
-        // concurrent case. A DoorDash accept-latched offer sits in the shared R0.
+        // concurrent case. R0 shows DoorDash's offer screen, but #438 B3 keeps the offer on the
+        // DoorDash region: the Uber region owns NO pending offer, so it structurally can't consume one.
         val uber = PlatformRegion(
             platform = Platform.Uber, mode = Mode.Online,
             session = Session("u-sess", startedAt = 100L),

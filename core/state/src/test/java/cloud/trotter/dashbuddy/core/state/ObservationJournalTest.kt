@@ -112,21 +112,25 @@ class ObservationJournalTest {
         assertEquals("offer-A", result.offerHash)
         assertEquals(eval, result.evaluation)
 
-        // And the replayed loopback LANDS on a pending offer — the fidelity gap
-        // this issue exists for.
-        val region = FlowRegion(
-            flow = Flow.OfferPresented,
-            pendingOffer = PendingOffer(
-                offerHash = "offer-A",
-                offerFields = ParsedFields.OfferFields(
-                    parsedOffer = ParsedOffer(offerHash = "offer-A", payAmount = 7.5),
+        // And the replayed loopback LANDS on the owning region's own pending offer — the fidelity
+        // gap this issue exists for. #438 B3: offers live on the PlatformRegion, so the eval lands
+        // through the platform stepper's offer lifecycle (correlated by offerHash), not R0.
+        val region = cloud.trotter.dashbuddy.domain.state.PlatformRegion(
+            platform = cloud.trotter.dashbuddy.domain.state.Platform.DoorDash,
+            pendingOffers = listOf(
+                PendingOffer(
+                    offerHash = "offer-A",
+                    offerFields = ParsedFields.OfferFields(
+                        parsedOffer = ParsedOffer(offerHash = "offer-A", payAmount = 7.5),
+                    ),
+                    presentedAt = 1_000L,
+                    returnFlow = Flow.Idle,
                 ),
-                presentedAt = 1_000L,
-                returnFlow = Flow.Idle,
             ),
         )
-        val next = FlowRegionStepper().step(region, replayed)
-        assertNotNull(next.pendingOffer?.evaluation)
+        val offerFlow = FlowRegion(flow = Flow.OfferPresented)
+        val next = PlatformRegionStepper().step(region, offerFlow, offerFlow, replayed, TransitionPolicy())
+        assertNotNull(next.presentedOffer()?.evaluation)
     }
 
     @Test

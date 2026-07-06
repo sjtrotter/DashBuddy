@@ -195,13 +195,13 @@ class BubbleViewModel @Inject constructor(
     fun declineOffer() = onOfferAction(OfferIntent.DECLINE)
 
     private fun onOfferAction(action: String) {
-        // #438 item 8a: stamp the acted offer's identity from the state the bubble renders so the
+        // #438 item 8a/B3: stamp the acted offer's identity from the state the bubble renders so the
         // dispatched UiInput targets the owning region (an Unknown-platform tap steps no region
-        // post-#682). The pending offer's platform is its own provenance, not the focused/global
-        // one — they coincide today (offers live on R0), diverge under B3's platform-owned offers.
-        val pendingOffer = stateManager.state.value.regions.flow.pendingOffer
-        val platform = pendingOffer?.sourceRuleId?.let(Platform::fromRuleId)?.takeIf { it != Platform.Unknown }
-            ?: focusedPlatform.value
+        // post-#682). The offer now lives on the focused platform's OWN region; its platform is its
+        // own provenance (PendingOffer.platform SSOT), falling back to the focused platform.
+        val focused = focusedPlatform.value
+        val pendingOffer = focused?.let { stateManager.state.value.regions.platforms[it]?.presentedOffer() }
+        val platform = pendingOffer?.platform?.takeIf { it != Platform.Unknown } ?: focused
         stateManager.dispatch(
             Observation.UiInput(
                 timestamp = System.currentTimeMillis(),
