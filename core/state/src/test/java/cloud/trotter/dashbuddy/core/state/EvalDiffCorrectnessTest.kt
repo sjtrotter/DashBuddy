@@ -90,33 +90,35 @@ class EvalDiffCorrectnessTest {
         ),
     )
 
-    // ---- 1. eval correlation ----
+    // ---- 1. eval correlation ---- (#438 B3: offers live on the region; eval lands via OfferLifecycle)
+
+    private val policy = TransitionPolicy()
+    private val platformStepper = PlatformRegionStepper()
+    private val offerFlow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash)
+    private fun regionWith(o: PendingOffer) = PlatformRegion(
+        platform = Platform.DoorDash, mode = Mode.Online, session = Session("s", startedAt = 100L),
+        pendingOffers = listOf(o), lastActedFlow = Flow.OfferPresented,
+    )
 
     @Test
     fun `evaluation for a replaced offer does not land on the current offer`() {
-        val region = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer("offer-B"))
-
-        val next = flowStepper.step(region, loopback(evalForHash = "offer-A"))
-
-        assertNull(next.pendingOffer?.evaluation)
+        val region = regionWith(offer("offer-B"))
+        val next = platformStepper.step(region, offerFlow, offerFlow, loopback(evalForHash = "offer-A"), policy)
+        assertNull(next.presentedOffer()?.evaluation)
     }
 
     @Test
     fun `evaluation with the matching hash lands`() {
-        val region = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer("offer-A"))
-
-        val next = flowStepper.step(region, loopback(evalForHash = "offer-A"))
-
-        assertNotNull(next.pendingOffer?.evaluation)
+        val region = regionWith(offer("offer-A"))
+        val next = platformStepper.step(region, offerFlow, offerFlow, loopback(evalForHash = "offer-A"), policy)
+        assertNotNull(next.presentedOffer()?.evaluation)
     }
 
     @Test
     fun `evaluation with no hash lands (legacy replay stubs)`() {
-        val region = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer("offer-A"))
-
-        val next = flowStepper.step(region, loopback(evalForHash = null))
-
-        assertNotNull(next.pendingOffer?.evaluation)
+        val region = regionWith(offer("offer-A"))
+        val next = platformStepper.step(region, offerFlow, offerFlow, loopback(evalForHash = null), policy)
+        assertNotNull(next.presentedOffer()?.evaluation)
     }
 
     // ---- 2. task closure on a non-flow observation ----

@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
@@ -75,17 +76,19 @@ class JobCloseOutTest {
         estimatedTimeMinutes = est, itemCount = 1.0, merchantName = "Test Store",
     )
 
-    private fun offerFlow(offerHash: String) = FlowRegion(
-        flow = Flow.OfferPresented,
-        pendingOffer = PendingOffer(
-            offerHash = offerHash,
-            offerFields = ParsedFields.OfferFields(
-                parsedOffer = ParsedOffer(offerHash = offerHash, payAmount = 7.0, distanceMiles = 3.0, timeToCompleteMinutes = 12L),
-            ),
-            presentedAt = 500L,
-            evaluation = eval(),
-            returnFlow = Flow.Idle,
+    // #438 B3: an accept-latched offer that has left presentation — an accepted-pending-consumption
+    // survivor on the region's own pendingOffers, ready for the task edge to mint.
+    private fun acceptedOffer(offerHash: String) = PendingOffer(
+        offerHash = offerHash,
+        offerFields = ParsedFields.OfferFields(
+            parsedOffer = ParsedOffer(offerHash = offerHash, payAmount = 7.0, distanceMiles = 3.0, timeToCompleteMinutes = 12L),
         ),
+        presentedAt = 500L,
+        evaluation = eval(),
+        returnFlow = Flow.Idle,
+        lastClickIntent = OfferIntent.ACCEPT,
+        acceptClickAt = 500L,
+        acceptedAt = 500L,
     )
 
     private fun acceptObs(timestamp: Long, store: String) = Observation.Screen(
@@ -98,9 +101,12 @@ class JobCloseOutTest {
         timestamp = timestamp, type = TimeoutType.GRACE_COMMIT, targetPlatform = Platform.DoorDash,
     )
 
-    private fun stepAccept(prev: PlatformRegion, prevFlow: FlowRegion, obs: Observation): PlatformRegion {
+    // #438 B3: seed the accepted survivor on the region, then step the task frame that consumes it.
+    private fun stepAccept(prev: PlatformRegion, offer: PendingOffer, obs: Observation): PlatformRegion {
+        val seeded = prev.copy(pendingOffers = prev.pendingOffers + offer)
+        val prevFlow = FlowRegion(flow = Flow.Idle, activePlatform = prev.platform)
         val nextFlow = if (obs is Observation.FlowObservation) flowStepper.step(prevFlow, obs) else prevFlow
-        return stepper.step(prev, prevFlow, nextFlow, obs, policy)
+        return stepper.step(seeded, prevFlow, nextFlow, obs, policy)
     }
 
     // ---- predicate (pure) ----
@@ -197,7 +203,7 @@ class JobCloseOutTest {
         val delivered = dropoff("task-old", "job-old", customer = "cust-old", completedAt = 500L)
         val oldJob = jobWithDropoffs("job-old", tasks = listOf(delivered))
         val region = onlineRegion(oldJob).copy(activeTask = null, recentTasks = listOf(delivered))
-        val r = stepAccept(region, offerFlow("offer-1"), acceptObs(2_000L, "Chipotle"))
+        val r = stepAccept(region, acceptedOffer("offer-1"), acceptObs(2_000L, "Chipotle"))
         assertNotNull(r.activeJob)
         assertNotEquals("an accept over a complete job is an independent job, not an add-on", "job-old", r.activeJob?.jobId)
         assertEquals("the new job carries only the new offer", 1, r.activeJob?.acceptedOffers?.size)
@@ -214,7 +220,7 @@ class JobCloseOutTest {
                 kind = DestructiveKind.TASK_RETIRE, since = 1_500L, deadline = 11_500L, armedFromFlow = Flow.Idle,
             ),
         )
-        val r = stepAccept(region, offerFlow("offer-1"), acceptObs(2_000L, "Chipotle"))
+        val r = stepAccept(region, acceptedOffer("offer-1"), acceptObs(2_000L, "Chipotle"))
         assertNotEquals("the complete old job is closed; a fresh job is minted", "job-old", r.activeJob?.jobId)
         // Honest completion time = the grace-arm `since`, not obs.timestamp (retireActiveTask semantics).
         assertTrue(
@@ -228,7 +234,7 @@ class JobCloseOutTest {
         val active = dropoff("task-active", "job-old", customer = "cust-1", completedAt = null)
         val oldJob = jobWithDropoffs("job-old", tasks = listOf(active))
         val region = onlineRegion(oldJob).copy(activeTask = active)
-        val r = stepAccept(region, offerFlow("offer-2"), acceptObs(2_000L, "Chipotle"))
+        val r = stepAccept(region, acceptedOffer("offer-2"), acceptObs(2_000L, "Chipotle"))
         assertEquals("an add-on into an incomplete job stays the same job (#499/#503)", "job-old", r.activeJob?.jobId)
         assertEquals("the add-on offer accumulates onto the job", 2, r.activeJob?.acceptedOffers?.size)
     }
@@ -246,7 +252,7 @@ class JobCloseOutTest {
                 kind = DestructiveKind.TASK_RETIRE, since = 1_500L, deadline = 11_500L, armedFromFlow = Flow.OfferPresented,
             ),
         )
-        val r = stepAccept(region, offerFlow("offer-2"), acceptObs(2_000L, "Chipotle"))
+        val r = stepAccept(region, acceptedOffer("offer-2"), acceptObs(2_000L, "Chipotle"))
         assertEquals("an offer-armed retire means this accept folds in — same job", "job-old", r.activeJob?.jobId)
         assertEquals(2, r.activeJob?.acceptedOffers?.size)
     }

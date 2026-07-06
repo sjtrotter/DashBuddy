@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -59,22 +60,24 @@ class JobEconomicsTest {
         merchantName = "Test Store",
     )
 
-    private fun offerFlow(offerHash: String, net: Double, est: Double, dist: Double, pay: Double) = FlowRegion(
-        flow = Flow.OfferPresented,
-        pendingOffer = PendingOffer(
-            offerHash = offerHash,
-            offerFields = ParsedFields.OfferFields(
-                parsedOffer = ParsedOffer(
-                    offerHash = offerHash,
-                    payAmount = pay,
-                    distanceMiles = dist,
-                    timeToCompleteMinutes = est.toLong(),
-                ),
+    // #438 B3: an accept-latched offer that has already left presentation — an accepted-pending-
+    // consumption survivor on the region's own pendingOffers, ready for the task edge to mint.
+    private fun acceptedOffer(offerHash: String, net: Double, est: Double, dist: Double, pay: Double) = PendingOffer(
+        offerHash = offerHash,
+        offerFields = ParsedFields.OfferFields(
+            parsedOffer = ParsedOffer(
+                offerHash = offerHash,
+                payAmount = pay,
+                distanceMiles = dist,
+                timeToCompleteMinutes = est.toLong(),
             ),
-            presentedAt = 500L,
-            evaluation = eval(net = net, est = est, dist = dist, pay = pay),
-            returnFlow = Flow.Idle,
         ),
+        presentedAt = 500L,
+        evaluation = eval(net = net, est = est, dist = dist, pay = pay),
+        returnFlow = Flow.Idle,
+        lastClickIntent = OfferIntent.ACCEPT,
+        acceptClickAt = 500L,
+        acceptedAt = 500L,
     )
 
     private fun acceptObs(timestamp: Long, store: String) = Observation.Screen(
@@ -113,13 +116,21 @@ class JobEconomicsTest {
         return stepper.step(prev, prevFlow, nextFlow, obs, policy)
     }
 
+    // #438 B3: seed the region with the accepted survivor, then step the task frame that consumes it.
+    private fun stepAccept(region: PlatformRegion, offer: PendingOffer, obs: Observation.FlowObservation): PlatformRegion {
+        val seeded = region.copy(pendingOffers = listOf(offer))
+        val prevFlow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash)
+        val nextFlow = flowStepper.step(prevFlow, obs)
+        return stepper.step(seeded, prevFlow, nextFlow, obs, policy)
+    }
+
     // ---- tests ----
 
     @Test
     fun `accept pre-creates the offer's dropoff subtask, customer TBD (#503 slice 3)`() {
-        val r1 = step(
+        val r1 = stepAccept(
             onlineRegion(activeJob = null),
-            offerFlow("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
+            acceptedOffer("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
             acceptObs(1_000L, "H-E-B"),
         )
         val job = r1.activeJob
@@ -132,9 +143,9 @@ class JobEconomicsTest {
 
     @Test
     fun `the dropoff screen resolves the customer onto the pre-created subtask, no fresh mint (#503 slice 3)`() {
-        val r1 = step(
+        val r1 = stepAccept(
             onlineRegion(activeJob = null),
-            offerFlow("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
+            acceptedOffer("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
             acceptObs(1_000L, "H-E-B"),
         )
         val expectedDropoffId = r1.activeJob!!.tasks.single { it.phase == TaskPhase.DROPOFF }.taskId
@@ -159,9 +170,9 @@ class JobEconomicsTest {
 
     @Test
     fun `first accept seeds job economics from the offer`() {
-        val r1 = step(
+        val r1 = stepAccept(
             onlineRegion(activeJob = null),
-            offerFlow("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
+            acceptedOffer("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
             acceptObs(1_000L, "H-E-B"),
         )
 
@@ -176,9 +187,9 @@ class JobEconomicsTest {
 
     @Test
     fun `add-on offer accepted mid-job accumulates onto the active job`() {
-        val r1 = step(
+        val r1 = stepAccept(
             onlineRegion(activeJob = jobWith("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5)),
-            offerFlow("offer-2", net = 5.0, est = 12.0, dist = 3.0, pay = 7.0),
+            acceptedOffer("offer-2", net = 5.0, est = 12.0, dist = 3.0, pay = 7.0),
             acceptObs(2_000L, "Chipotle"),
         )
 
@@ -194,9 +205,9 @@ class JobEconomicsTest {
 
     @Test
     fun `re-accepting the same offer does not double-count`() {
-        val r1 = step(
+        val r1 = stepAccept(
             onlineRegion(activeJob = jobWith("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5)),
-            offerFlow("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
+            acceptedOffer("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
             acceptObs(2_000L, "H-E-B"),
         )
 
