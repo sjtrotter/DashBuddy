@@ -63,9 +63,10 @@ private fun PlatformRegionStepper.pruneExpiredSurvivors(region: PlatformRegion, 
 
 /**
  * Own `OfferPresented` frame: push a new offer, replace a different-hash one, or enrich the same
- * one. Mirrors the pre-B3 `FlowRegionStepper.stepOffer` scalar logic on the owned list. A
- * superseding new offer clears any stale accepted survivor of a different hash (the pre-B3
- * `armAcceptStash` supersession rule).
+ * one. Mirrors the pre-B3 `FlowRegionStepper.stepOffer` scalar logic on the owned list. Any push
+ * clears ALL accepted survivors: a different hash supersedes a stale accept, and the same hash
+ * re-presenting revokes it (#526 FIX2b) — the pre-B3 `armAcceptStash` supersession + revocation
+ * rules as lifecycle rules.
  */
 private fun PlatformRegionStepper.pushOrReplaceOffer(
     region: PlatformRegion,
@@ -90,8 +91,14 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                 ) else it
             }
 
-        // New or replaced offer → push it; drop the old presented offer and any accepted survivor
-        // of a DIFFERENT hash (superseded). A same-hash survivor is retained (re-presentation).
+        // New or replaced offer → push it; the old presented offer and EVERY accepted survivor
+        // drop. A different-hash survivor is superseded (a new offer on screen invalidates a
+        // stale accept — the pre-B3 armAcceptStash supersession rule); a SAME-hash
+        // re-presentation means the prior accept did NOT take server-side, so the survivor is
+        // REVOKED (#526 FIX2b) — retaining it would let a later-declined re-present fold
+        // phantom economics + a never-resolvable dropoff placeholder into the job
+        // (adversarial-review HIGH-1 red probe). Re-accepting the fresh copy re-creates the
+        // survivor cleanly, so no double-count either.
         else -> {
             val fresh = PendingOffer(
                 offerHash = newHash,
@@ -105,7 +112,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                 targets = obs.targets,
                 sourceRuleId = obs.ruleId,
             )
-            region.pendingOffers.filter { it.acceptedAt != null && it.offerHash == newHash } + fresh
+            listOf(fresh)
         }
     }
     return region.copy(pendingOffers = newOffers)

@@ -259,6 +259,49 @@ class OwnedOfferSurvivalTest {
         assertTrue("nothing left pending", r.pendingOffers.isEmpty())
     }
 
+    @Test
+    fun `a same-hash re-presentation revokes the survivor (#526 FIX2b)`() {
+        // The platform re-showing the SAME offer means the accept did not take server-side.
+        val r = drive(
+            region(),
+            offerObs(1_000L, "o1", listOf("Bill Miller BBQ")),
+            acceptClick(1_050L),
+            teardownObs(1_400L),                            // o1 becomes a survivor
+            offerObs(1_600L, "o1", listOf("Bill Miller BBQ")), // same offer re-presented → revoked
+        )
+        assertNull("the re-presented offer's stale survivor is revoked", r.survivor())
+        assertEquals("the fresh copy is simply presented again", "o1", r.presentedOffer()?.offerHash)
+    }
+
+    @Test
+    fun `revoked-then-declined re-presentation folds NO phantom economics into the active job`() {
+        // Adversarial-review HIGH-1 red probe: accept an add-on → teardown (survivor) → the SAME
+        // offer re-presents (accept didn't take) → dasher declines it → teardown → the active
+        // job's task flow resumes. The declined add-on must NOT fold in.
+        val existing = Job(
+            jobId = "job-1", offerStoreHint = listOf("Bill Miller BBQ"), parentOfferHash = "o1",
+            acceptedOffers = listOf(
+                AcceptedOfferEconomics(offerHash = "o1", payAmount = 10.0, netPay = 7.0, estMinutes = 15.0, distanceMiles = 3.0, acceptedAt = 200L),
+            ),
+            startedAt = 200L,
+        )
+        val r = drive(
+            region(activeJob = existing),
+            offerObs(3_000L, "o2", listOf("Mama Margies"), pay = 8.0),
+            acceptClick(3_050L),
+            teardownObs(3_400L),                             // o2 survivor armed
+            offerObs(3_600L, "o2", listOf("Mama Margies"), pay = 8.0), // re-present = revocation
+            declineClick(3_700L),                            // dasher declines it this time
+            teardownObs(3_900L),
+            dropoffNav(4_200L, "cx-1"),                      // active job's task flow resumes
+        )
+        val job = r.activeJob
+        assertEquals("stays the same job", "job-1", job!!.jobId)
+        assertEquals("the declined re-present folded NO phantom economics", 1, job.acceptedOffers.size)
+        assertEquals("gross unchanged", 10.0, job.totalPayAmount, 0.001)
+        assertNull("no survivor remains", r.survivor())
+    }
+
     // =====================================================================
     // SESSION END
     // =====================================================================

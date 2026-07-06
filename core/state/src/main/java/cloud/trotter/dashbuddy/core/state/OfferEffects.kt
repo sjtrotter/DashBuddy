@@ -188,12 +188,14 @@ internal fun EffectMap.diffOfferAction(obs: Observation, next: cloud.trotter.das
         else -> return emptyList()
     }
     val platform = obs.platform.takeIf { it != Platform.Unknown }
-    // Resolve the acted offer within its OWN platform's list, by carried offerHash (fall back to the
-    // platform's current presented offer when the tap carried no hash — a legacy dispatch).
+    // Resolve the acted offer within its OWN platform's list, by carried offerHash. The
+    // presented-offer fallback applies ONLY to a hash-less legacy dispatch: a tap that CARRIED a
+    // hash which no longer matches is a stale banner racing a replacement — it must WARN + abort
+    // to manual (spec M4; adversarial-review MED-1), never act on the offer that replaced it.
     val region = platform?.let { next.regions.platforms[it] }
     val offer = region?.let { r ->
-        obs.offerHash?.let { h -> r.pendingOffers.firstOrNull { it.offerHash == h } }
-            ?: r.presentedOffer()
+        if (obs.offerHash != null) r.pendingOffers.firstOrNull { it.offerHash == obs.offerHash }
+        else r.presentedOffer()
     }
     val target = offer?.targets?.get(action.targetBindName)
     return when {

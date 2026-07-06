@@ -1506,6 +1506,30 @@ class EffectMapTest {
     }
 
     @Test
+    fun `a UiInput with a STALE carried hash aborts to manual - never acts on the replacing offer (#438 B3 vet M4)`() {
+        // Adversarial-review MED-1: a tap dispatched from a banner for a since-replaced offer
+        // carries the OLD hash. It must NOT fall back to the platform's current presented offer —
+        // that would accept/decline whatever replaced it. WARN + abort to manual.
+        val offer = testPendingOffer.copy(
+            offerHash = "hash-NEW",
+            sourceRuleId = "doordash.screen.offer",
+            targets = mapOf("acceptButton" to testNodeRef()),
+        )
+        val state = offerState(flow = Flow.OfferPresented, offer = offer, activePlatform = Platform.DoorDash)
+        val obs = Observation.UiInput(
+            timestamp = 1L, action = OfferIntent.ACCEPT,
+            targetPlatform = Platform.DoorDash, offerHash = "hash-STALE",
+        )
+
+        val effects = effectMap.diff(state, state, obs)
+
+        assertTrue(
+            "a stale hash resolves no offer → aborts to manual, never the replacing offer",
+            effects.filterIsInstance<AppEffect.PerformRuleAction>().isEmpty(),
+        )
+    }
+
+    @Test
     fun `collapsed summary with expand target schedules a deferred EXPAND_EARNINGS`() {
         val obs = screenObs(
             flow = Flow.PostTask,
