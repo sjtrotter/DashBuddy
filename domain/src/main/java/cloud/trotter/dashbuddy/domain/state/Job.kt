@@ -48,6 +48,17 @@ data class Job(
     /** Total accepted gross pay across all offers in this job. */
     val totalPayAmount: Double get() = acceptedOffers.sumOf { it.payAmount ?: 0.0 }
 
+    /**
+     * Nullable total accepted gross pay — the numerator for the #691 offer-pay fallback estimate
+     * (an equal split across the job's receipt-less drops). Unlike [totalPayAmount], which floors a
+     * missing per-offer pay at 0.0, this returns null when NO offer carried a pay amount (a pay-less
+     * offer must not stamp $0 estimate rows) and honestly UNDER-counts a partial-null stack (an
+     * add-on with no captured pay contributes nothing). Follows the [blendedNetPay] nullability
+     * precedent. Do not conflate with [totalPayAmount]; the live task-card economics still use that.
+     */
+    val offerPayTotal: Double?
+        get() = acceptedOffers.mapNotNull { it.payAmount }.takeIf { it.isNotEmpty() }?.sum()
+
     /** Total accepted net pay (after operating costs) across all offers. */
     val totalNetPay: Double get() = acceptedOffers.sumOf { it.netPay ?: 0.0 }
 

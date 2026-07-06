@@ -148,4 +148,51 @@ class DropPayApportionerTest {
         val shares = DropPayApportioner.apportion(receipt, drops)
         assertSumsToReceipt(shares, receipt)
     }
+
+    // ── #691 equalSplit: the offer-pay fallback for a wholly receipt-less job ──
+
+    @Test
+    fun `equalSplit — two drops, cents-exact remainder to last`() {
+        // Offer total $12.95 over 2 drops: 6.475 → toCents rounds first to 648, remainder 647 last.
+        val drops = listOf(drop("d1", "H-E-B"), drop("d2", "H-E-B"))
+        val shares = DropPayApportioner.equalSplit(12.95, drops)
+        assertEquals(6.48, shares.getValue("d1"), 0.0001)
+        assertEquals(6.47, shares.getValue("d2"), 0.0001)
+        assertEquals("shares sum EXACTLY to the offer total", 1295L, shares.values.sumOf { cents(it) })
+    }
+
+    @Test
+    fun `equalSplit — single drop takes the whole offer total`() {
+        val shares = DropPayApportioner.equalSplit(26.50, listOf(drop("d1", "Target")))
+        assertEquals(26.50, shares.getValue("d1"), 0.0001)
+    }
+
+    @Test
+    fun `equalSplit — empty denominator yields empty map`() {
+        assertTrue(DropPayApportioner.equalSplit(12.95, emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `equalSplit — null total yields empty map`() {
+        assertTrue(DropPayApportioner.equalSplit(null, listOf(drop("d1", "H-E-B"))).isEmpty())
+    }
+
+    @Test
+    fun `equalSplit — zero total yields empty map`() {
+        assertTrue(DropPayApportioner.equalSplit(0.0, listOf(drop("d1", "H-E-B"))).isEmpty())
+    }
+
+    @Test
+    fun `equalSplit — negative total yields empty map`() {
+        assertTrue(DropPayApportioner.equalSplit(-5.0, listOf(drop("d1", "H-E-B"))).isEmpty())
+    }
+
+    @Test
+    fun `equalSplit — dedupes drops by taskId`() {
+        // A duplicated task id must not inflate the denominator.
+        val drops = listOf(drop("d1", "H-E-B"), drop("d1", "H-E-B"), drop("d2", "H-E-B"))
+        val shares = DropPayApportioner.equalSplit(9.00, drops)
+        assertEquals(2, shares.size)
+        assertEquals(900L, shares.values.sumOf { cents(it) })
+    }
 }

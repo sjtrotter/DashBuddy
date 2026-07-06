@@ -66,8 +66,51 @@ object DropPayApportioner {
             drops.associate { it.taskId to evenShare }
         }
 
-        // Reconcile to integer cents so the shares sum EXACTLY to the receipt total; the rounding
-        // remainder goes to the last drop.
+        return reconcileToCents(drops, rawShares, totalCents)
+    }
+
+    /**
+     * An **equal split of a bare total** across the job's dropoffs (#691) — the offer-pay fallback
+     * for a wholly receipt-less job (a DoorDash shop order shows NO per-delivery receipt; pay exists
+     * only on the accepted offer + the running dash total). Unlike [apportion], which deliberately
+     * refuses to split a bare [ParsedPay]-less total, this splits an ESTIMATE ([Job.offerPayTotal],
+     * the accepted-offer guaranteed pay) equally: the platform's actual per-drop split is unknowable
+     * without a receipt, so the honest estimate is the offer total divided evenly.
+     *
+     * Reuses the SAME cents-exact remainder-to-last invariant as [apportion] ([reconcileToCents]), so
+     * the emitted shares sum EXACTLY to [total] in integer cents and no drop double-counts.
+     *
+     * Returns an **empty map** when [total] is null, ≤ 0, or [dropoffTasks] is empty — a pay-less
+     * offer (or a partial-null stack that summed to null) must not stamp $0 estimate rows. The caller
+     * records `null` per drop → the fold keeps `PayBasis.NONE` for those completions.
+     *
+     * [dropoffTasks] is the job's OWN owed-dropoff set (deduped by `taskId`); the denominator and the
+     * shares are derived from it.
+     */
+    fun equalSplit(total: Double?, dropoffTasks: List<Task>): Map<String, Double> {
+        if (total == null || total <= 0.0) return emptyMap()
+        val drops = dropoffTasks.distinctBy { it.taskId }
+        if (drops.isEmpty()) return emptyMap()
+
+        val totalCents = toCents(total)
+        if (drops.size == 1) {
+            return mapOf(drops.first().taskId to totalCents / 100.0)
+        }
+        val evenShare = total / drops.size
+        val rawShares = drops.associate { it.taskId to evenShare }
+        return reconcileToCents(drops, rawShares, totalCents)
+    }
+
+    /**
+     * Reconcile per-drop raw (double) shares to integer cents so they sum EXACTLY to [totalCents];
+     * the rounding remainder is assigned to the LAST drop. The one splitting invariant shared by
+     * [apportion] (tip-matched or even receipt split) and [equalSplit] (offer-pay estimate split).
+     */
+    private fun reconcileToCents(
+        drops: List<Task>,
+        rawShares: Map<String, Double>,
+        totalCents: Long,
+    ): Map<String, Double> {
         val result = LinkedHashMap<String, Double>(drops.size)
         var assigned = 0L
         drops.forEachIndexed { index, drop ->

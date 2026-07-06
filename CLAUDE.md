@@ -293,7 +293,11 @@ tables (`delivery_records`/`session_records`/`offer_records`) via the pure `Reco
 (`:domain`). The fold is **exactly-once** — records + a watermark advance in one `db.withTransaction`, record
 PKs are the source `sequenceId` (REPLACE-idempotent) — so the **one-time backfill is just the first drain from
 watermark 0**, and a `projectorVersion` bump wipes + refolds the whole log (rebuild ≡ backfill). Realized
-inputs come from the log: pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528), miles from
+inputs come from the log: pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528), else — when the
+WHOLE job was receipt-less (a DoorDash shop order shows no per-delivery receipt) — a `PayBasis.OFFER_PAY`
+ESTIMATE from `DeliveryPayload.offerPayShare`, the accepted offer's total split equally across the job's
+owed drops at the mint site and consumed by the fold only if no sibling drop already folded a real receipt
+(#691); miles from
 `metadata.odometer` partition deltas, time from timestamps. **Economics are FROZEN per record, never
 recomputed** (dev decision): each `delivery_record` stores `netProfit` + `frozenCostPerMile` + its frozen
 `frozenFuelPerMile`/`frozenNonFuelPerMile` split (#659, the 4-step true-net waterfall Gross → −Fuel → −Non-fuel

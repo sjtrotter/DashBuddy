@@ -24,6 +24,7 @@ class CsvExporterTest {
         store: String?,
         completedAt: Long = generatedAt,
         pay: Double? = 8.50,
+        basis: String = "DROP_SHARE",
     ) = DeliveryRecordEntity(
         eventSequenceId = seq,
         sessionId = "s1",
@@ -38,7 +39,7 @@ class CsvExporterTest {
         completedAt = completedAt,
         deadlineMillis = null,
         realizedPay = pay,
-        payBasis = "DROP_SHARE",
+        payBasis = basis,
         tip = 3.25,
         basePay = 5.25,
         odometerAtCompletion = 1000.0,
@@ -86,6 +87,14 @@ class CsvExporterTest {
             "2026-07-05,14:03:27,DoorDash,H-E-B,8.50,3.25,5.25,4.20,12.50,0.165,7.81,DROP_SHARE,OFFER_FROZEN",
             lines[1],
         )
+    }
+
+    @Test fun deliveries_offerPayBasis_appearsVerbatim() {
+        // #691: an OFFER_PAY estimate row exports its pay_basis verbatim so the basis column IS the
+        // never-silent disclosure for the tax-preparer artifact (no separate UI qualifier needed).
+        val out = CsvExporter.export(listOf(delivery(1, "H-E-B", basis = "OFFER_PAY")), emptyList(), utc, generatedAt)
+        val row = out.deliveriesCsv.trim().lines()[1]
+        assertTrue("OFFER_PAY basis missing in: $row", row.endsWith(",OFFER_PAY,OFFER_FROZEN"))
     }
 
     @Test fun deliveries_storeWithComma_isQuoted() {

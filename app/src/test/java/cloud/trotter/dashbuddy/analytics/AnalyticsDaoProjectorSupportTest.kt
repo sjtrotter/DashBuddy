@@ -61,10 +61,11 @@ class AnalyticsDaoProjectorSupportTest {
         platform: String = "doordash",
         odo: Double? = null,
         completedAt: Long = 3_000,
+        payBasis: String = "RECEIPT_TOTAL",
     ) = DeliveryRecordEntity(
         eventSequenceId = seq, sessionId = sessionId, platform = platform, jobId = jobId, taskId = "T$seq",
         storeName = "S", customerHash = null, addressHash = null, phaseStartedAt = 0, arrivedAt = null,
-        completedAt = completedAt, deadlineMillis = null, realizedPay = 5.0, payBasis = "RECEIPT_TOTAL",
+        completedAt = completedAt, deadlineMillis = null, realizedPay = 5.0, payBasis = payBasis,
         tip = null, basePay = null, odometerAtCompletion = odo, realizedMiles = null, realizedMinutes = null,
         frozenCostPerMile = null, netProfit = null, costBasis = "NONE",
     )
@@ -160,5 +161,19 @@ class AnalyticsDaoProjectorSupportTest {
         dao.upsertOffer(offer(30, "A", cpm = null))  // null cpm skipped
         assertEquals("newest non-null offer cpm", 0.35, dao.lastOfferCostPerMileInSession("A")!!, 1e-9)
         assertNull(dao.lastOfferCostPerMileInSession("nobody"))
+    }
+
+    @Test
+    fun `receiptedJobIdsInSession includes DROP_SHARE-RECEIPT_TOTAL-SUSPECT and excludes OFFER_PAY-NONE (#691 FIX3)`() = runBlocking {
+        dao.upsertDelivery(delivery(1, "A", "J1", payBasis = "DROP_SHARE"))
+        dao.upsertDelivery(delivery(2, "A", "J2", payBasis = "RECEIPT_TOTAL"))
+        dao.upsertDelivery(delivery(3, "A", "J3", payBasis = "SUSPECT_FULL_RECEIPT"))
+        dao.upsertDelivery(delivery(4, "A", "J4", payBasis = "OFFER_PAY"))
+        dao.upsertDelivery(delivery(5, "A", "J5", payBasis = "NONE"))
+        assertEquals(
+            "SUSPECT counts as receipt evidence; OFFER_PAY/NONE do not",
+            setOf("J1", "J2", "J3"),
+            dao.receiptedJobIdsInSession("A").toSet(),
+        )
     }
 }

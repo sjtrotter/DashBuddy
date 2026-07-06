@@ -43,6 +43,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
+import cloud.trotter.dashbuddy.domain.analytics.PayBasis
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatClockTime
@@ -279,6 +280,15 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
             delivery.tip?.let {
                 Text(
                     text = "incl. ${Formats.money(it)} tip",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.text3,
+                )
+            }
+            // #691: a receipt-less shop delivery's pay is an equal-split ESTIMATE of the accepted
+            // offer, not a captured receipt — disclose it (never-silent, the #689 precedent).
+            if (delivery.payBasis == PayBasis.OFFER_PAY) {
+                Text(
+                    text = "est. offer pay",
                     style = MaterialTheme.typography.bodySmall,
                     color = c.text3,
                 )

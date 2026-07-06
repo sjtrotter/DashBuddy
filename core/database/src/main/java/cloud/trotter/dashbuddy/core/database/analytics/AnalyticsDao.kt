@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import cloud.trotter.dashbuddy.domain.analytics.PayBasis
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -348,6 +349,24 @@ interface AnalyticsDao {
      */
     @Query("SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id")
     suspend fun deliveredJobIdsInSession(id: String): List<String>
+
+    /**
+     * The distinct jobIds already recorded with **receipt evidence** (`DROP_SHARE` / `RECEIPT_TOTAL`
+     * / `SUSPECT_FULL_RECEIPT`) for a session — rehydrates the fold's #691 mixed-receipt guard set
+     * across a drain/batch boundary (mirrors [deliveredJobIdsInSession]), so a receipt-less sibling
+     * folded in a LATER batch is still denied the offer-pay estimate. `SUSPECT_FULL_RECEIPT` is
+     * included: its money was nulled (#653), but the receipt still proves the job is not receipt-less.
+     * The IN-list is compile-time-concatenated from [PayBasis]'s `const val`s (legal in an annotation)
+     * so it derives from the SAME SSOT as the in-fold guard ([PayBasis.RECEIPT_EVIDENCE]) — the two
+     * sides can never drift. Deliberately excludes `USER_CORRECTED` (a documented hydration wrinkle,
+     * #691 VET F1; closed by v11 receipt-evidence persistence, #703) and the estimate/none bases.
+     */
+    @Query(
+        "SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id " +
+            "AND payBasis IN ('" + PayBasis.DROP_SHARE + "', '" + PayBasis.RECEIPT_TOTAL +
+            "', '" + PayBasis.SUSPECT_FULL_RECEIPT + "')"
+    )
+    suspend fun receiptedJobIdsInSession(id: String): List<String>
 
     /**
      * The most recent closing offer's frozen operating-cost-per-mile in a session — rehydrates the

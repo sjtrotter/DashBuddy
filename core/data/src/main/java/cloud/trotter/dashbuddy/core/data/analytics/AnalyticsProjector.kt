@@ -280,6 +280,7 @@ class AnalyticsProjector @Inject constructor(
         val lastDelivery = analyticsDao.lastDeliveryInSession(sessionId)
         return session.toContext(
             deliveredJobIds = analyticsDao.deliveredJobIdsInSession(sessionId).toSet(),
+            receiptedJobIds = analyticsDao.receiptedJobIdsInSession(sessionId).toSet(),
             prevDropOdometer = lastDelivery?.odometerAtCompletion,
             prevDropAt = lastDelivery?.completedAt,
             lastEvaluatedCostPerMile = analyticsDao.lastOfferCostPerMileInSession(sessionId),
@@ -337,6 +338,7 @@ class AnalyticsProjector @Inject constructor(
 
     private fun SessionRecordEntity.toContext(
         deliveredJobIds: Set<String> = emptySet(),
+        receiptedJobIds: Set<String> = emptySet(),
         prevDropOdometer: Double? = null,
         prevDropAt: Long? = null,
         lastEvaluatedCostPerMile: Double? = null,
@@ -358,6 +360,7 @@ class AnalyticsProjector @Inject constructor(
         offersTimeout = offersTimeout,
         deliveries = deliveries,
         deliveredJobIds = deliveredJobIds,
+        receiptedJobIds = receiptedJobIds,
         prevDropOdometer = prevDropOdometer,
         prevDropAt = prevDropAt,
         lastEvaluatedCostPerMile = lastEvaluatedCostPerMile,

@@ -22,8 +22,14 @@ data class DeliveryRecord(
     val taskId: String,
     val storeName: String?,
     val completedAt: Long,
-    /** dropRealizedPay ?: totalPay. */
+    /** dropRealizedPay ?: totalPay ?: offerPayShare. */
     val realizedPay: Double?,
+    /**
+     * Provenance of [realizedPay] ([cloud.trotter.dashbuddy.domain.analytics.PayBasis]) — drives the
+     * drill-down's "est. offer pay" qualifier on an `OFFER_PAY` estimate row (#691, the never-silent
+     * disclosure the #689 precedent set).
+     */
+    val payBasis: String,
     /** Frozen realized net against the accepted offer's cost basis — never re-costed. */
     val netProfit: Double?,
     val realizedMiles: Double?,

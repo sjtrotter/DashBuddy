@@ -39,6 +39,16 @@ data class SessionFoldContext(
     val deliveries: Int = 0,
     /** Distinct delivered jobIds — [jobsCompleted] is its size (counts a stacked job once). */
     val deliveredJobIds: Set<String> = emptySet(),
+    /**
+     * Distinct jobIds that have folded ≥1 drop with **receipt-derived** pay (`DROP_SHARE` /
+     * `RECEIPT_TOTAL`) this session — the #691 mixed-receipt guard. A receipt-less drop of such a job
+     * keeps `PayBasis.NONE` rather than stamping an offer-pay estimate (an equal split of the offer
+     * total assumes the WHOLE job is receipt-less; mixing a real receipt with offer-share estimates
+     * would over-count invisibly under the one-sided `MAX(reported − Σ, 0)` unattributed floor). This
+     * is fold-side defense-in-depth — the EffectMap job-scoped stamp condition is the primary control.
+     * NOT populated by `USER_CORRECTED` (a documented hydration wrinkle, #691 VET F1).
+     */
+    val receiptedJobIds: Set<String> = emptySet(),
     /** Partition anchor: odometer at the previous completion; null ⇒ fall back to [startOdometer]. */
     val prevDropOdometer: Double? = null,
     /** Partition anchor: time at the previous completion; null ⇒ fall back to [startedAt]. */
