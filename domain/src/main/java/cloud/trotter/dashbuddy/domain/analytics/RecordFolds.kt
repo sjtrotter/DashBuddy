@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.domain.analytics
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
@@ -66,8 +67,10 @@ object PayBasis {
      * the offer-pay estimate to a receipt-less sibling of the same job. This is the ONE definition
      * both sides of the guard derive from: the in-fold `receiptedJobIds` accumulation here and the
      * `AnalyticsDao.receiptedJobIdsInSession` hydration IN-list (built from the same const vals).
-     * Deliberately EXCLUDES [USER_CORRECTED] (a documented hydration wrinkle, #691 VET F1; closed by
-     * the v11 receipt-evidence persistence, #703) and the estimate/none bases.
+     * Deliberately EXCLUDES [USER_CORRECTED] (formerly a hydration wrinkle, #691 VET F1; CLOSED by
+     * the v11 receipt-evidence persistence, #703 — the DAO now hydrates on `COALESCE(originalPayBasis,
+     * payBasis)`, so a re-priced row keeps its FIRST-fold basis as receipt evidence) and the
+     * estimate/none bases.
      */
     val RECEIPT_EVIDENCE: List<String> = listOf(DROP_SHARE, RECEIPT_TOTAL, SUSPECT_FULL_RECEIPT)
 }
@@ -119,6 +122,8 @@ data class DeliveryFold(
     val realizedPay: Double?,
     val payBasis: String,
     val tip: Double?,
+    /** Driver-entered cash tip (#688) — set only on a MANUAL fold; null on a machine completion. */
+    val cashTip: Double?,
     val basePay: Double?,
     val odometerAtCompletion: Double?,
     val realizedMiles: Double?,
@@ -178,6 +183,12 @@ data class FoldOutcome(
      * orchestrator applies it inside the batch transaction after the delivery/offer upserts.
      */
     val payAdjustment: PayAdjustmentFold? = null,
+    /**
+     * A driver DELIVERY_ADJUSTMENT decision (#688): the widened multi-field re-apply. Same shape as
+     * [payAdjustment] — the pure fold decides WHICH row and WHICH fields change; the orchestrator
+     * applies it by-PK inside the batch transaction after the upserts.
+     */
+    val deliveryAdjustment: DeliveryAdjustmentFold? = null,
 )
 
 /**
@@ -190,6 +201,24 @@ data class FoldOutcome(
 data class PayAdjustmentFold(
     val targetEventSequenceId: Long,
     val newPay: Double,
+)
+
+/**
+ * A driver's widened re-apply decision (#688) — the pure fold's output for a DELIVERY_ADJUSTMENT.
+ * Every field is optional (null ⇒ that column of the target row is left unchanged); the orchestrator
+ * looks up [targetEventSequenceId] and copies each non-null field into the row, applying the basis /
+ * net rules (payBasis flips to `USER_CORRECTED` iff [newPay] is non-null on a machine row; MANUAL
+ * stays MANUAL; a cash/tip/store-only edit touches neither basis nor net). Because a DELIVERY_ADJUSTMENT
+ * always sequences after its target, a from-zero refold replays them in order and reproduces identical
+ * rows. `note` is intentionally absent — it lives only in the event payload and changes no column.
+ */
+data class DeliveryAdjustmentFold(
+    val targetEventSequenceId: Long,
+    val newStoreName: String? = null,
+    val newPay: Double? = null,
+    val newTip: Double? = null,
+    val newCashTip: Double? = null,
+    val newMiles: Double? = null,
 )
 
 /**
@@ -227,6 +256,7 @@ object RecordFolds {
             AppEventType.DELIVERY_COMPLETED -> foldDeliveryCompleted(event, context, currentCostPerMile)
             AppEventType.MANUAL_DELIVERY -> foldManualDelivery(event, context, currentCostPerMile)
             AppEventType.PAY_ADJUSTMENT -> foldPayAdjustment(event, context)
+            AppEventType.DELIVERY_ADJUSTMENT -> foldDeliveryAdjustment(event, context)
             AppEventType.DASH_STOP -> foldDashStop(event, context)
             // Every other session-attributed event just advances the liveness/odometer anchors so
             // the open-session duration and lastOdometer stay honest; the watermark still moves past
@@ -486,6 +516,7 @@ object RecordFolds {
             realizedPay = realizedPay,
             payBasis = payBasis,
             tip = tip,
+            cashTip = null, // machine completions never carry a driver cash tip (#688)
             basePay = basePay,
             odometerAtCompletion = odo,
             realizedMiles = realizedMiles,
@@ -573,6 +604,7 @@ object RecordFolds {
             realizedPay = p.pay,
             payBasis = PayBasis.MANUAL,
             tip = p.tip,
+            cashTip = p.cashTip, // driver-entered cash tip (#688) — the only fold that writes it
             basePay = null,
             odometerAtCompletion = null,
             // The driver's own stated miles — NOT a partition delta off the odometer.
@@ -617,6 +649,31 @@ object RecordFolds {
         return FoldOutcome(
             context = context,
             payAdjustment = PayAdjustmentFold(p.targetEventSequenceId, p.newPay),
+        )
+    }
+
+    /**
+     * A driver DELIVERY_ADJUSTMENT (#688) — the widened analog of [foldPayAdjustment]. The pure fold
+     * emits the [DeliveryAdjustmentFold] decision (which row, which fields); it CANNOT read the target
+     * `delivery_record` here, so the orchestrator applies the multi-field re-apply inside the batch
+     * transaction. The session context passes through UNTOUCHED (the #650 review F2 discipline): a
+     * re-apply is bookkeeping about a past row, not session activity — advancing liveness with the
+     * correction's wall-clock `occurredAt` would stretch a crash-orphaned session's online span.
+     */
+    private fun foldDeliveryAdjustment(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? DeliveryAdjustmentPayload
+            ?: return FoldOutcome(context = context, skip = "DELIVERY_ADJUSTMENT: missing/malformed payload")
+        return FoldOutcome(
+            context = context,
+            deliveryAdjustment = DeliveryAdjustmentFold(
+                targetEventSequenceId = p.targetEventSequenceId,
+                newStoreName = p.newStoreName,
+                newPay = p.newPay,
+                newTip = p.newTip,
+                newCashTip = p.newCashTip,
+                newMiles = p.newMiles,
+            ),
         )
     }
 

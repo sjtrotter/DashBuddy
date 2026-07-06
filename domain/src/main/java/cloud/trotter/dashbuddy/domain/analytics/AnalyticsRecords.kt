@@ -36,6 +36,11 @@ data class DeliveryRecord(
     val realizedMinutes: Double?,
     val tip: Double?,
     val basePay: Double?,
+    /**
+     * Driver-entered cash tip (#688) — the driver-attested tip source. Added to gross/net at the
+     * read sites only (never inside [realizedPay]/[netProfit]); null on a machine completion.
+     */
+    val cashTip: Double? = null,
 )
 
 /** One dash session. */
