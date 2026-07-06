@@ -1,11 +1,26 @@
 package cloud.trotter.dashbuddy.core.database.analytics
 
+import androidx.room.Embedded
+
 /**
  * Aggregate query-result projections for [AnalyticsDao] (#314). Plain POJOs Room
  * maps SUM/COUNT rows into — NOT entities, NOT persisted. They stay in
  * `:core:database` next to the DAO whose queries produce them; the read-side
  * repository (`:core:data`, PR3) folds economy in on top.
  */
+
+/**
+ * One recent session row + its Σ driver-entered cash tips (#688 F7). [session] is the whole
+ * `session_records` row (`@Embedded`); [cash] is `COALESCE(SUM(cashTip), 0)` over that session's
+ * delivery rows — a LEFT-JOINed `GROUP BY sessionId` subquery (one row per session, no fan-out, the
+ * same shape as `AnalyticsDao.sessionGrossRows`). Kept as its OWN column — never folded into the
+ * session row — so the recent-dashes list can show a "+cash" marker WITHOUT rewriting the
+ * platform-reported earnings number (the label stays honest; cash is additive-visible only).
+ */
+data class SessionWithCashRow(
+    @Embedded val session: SessionRecordEntity,
+    val cash: Double,
+)
 
 /**
  * Cross-platform delivery totals for a period. [net] is Σ **frozen** per-delivery net

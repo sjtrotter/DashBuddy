@@ -308,9 +308,22 @@ interface AnalyticsDao {
 
     // ── Drill-down list reads (future hub / #650) ────────────────────────
 
-    /** Most recent sessions, newest first — the "recent dashes" list. */
-    @Query("SELECT * FROM session_records ORDER BY startedAt DESC LIMIT :limit")
-    fun recentSessions(limit: Int): Flow<List<SessionRecordEntity>>
+    /**
+     * Most recent sessions, newest first — the "recent dashes" list — each with its Σ driver-entered
+     * cash tips (#688 F7). The cash comes from a LEFT-JOINed `GROUP BY sessionId` subquery (one row
+     * per session, no fan-out — the same shape as [sessionGrossRows]); a session with no cash rows
+     * gets `cash = 0`. Cash is a SEPARATE column, never folded into the session's reported earnings,
+     * so the list can render a "+cash" marker while the reported number stays verbatim.
+     */
+    @Query(
+        """SELECT s.*, COALESCE(d.cash, 0) AS cash
+           FROM session_records s
+           LEFT JOIN (
+             SELECT sessionId, SUM(cashTip) AS cash FROM delivery_records GROUP BY sessionId
+           ) d ON d.sessionId = s.sessionId
+           ORDER BY s.startedAt DESC LIMIT :limit"""
+    )
+    fun recentSessions(limit: Int): Flow<List<SessionWithCashRow>>
 
     /** Every delivery in a session, in completion order — the per-dash breakdown. */
     @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId ORDER BY completedAt ASC")

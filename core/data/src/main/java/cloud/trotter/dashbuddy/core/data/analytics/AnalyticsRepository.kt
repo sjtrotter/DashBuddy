@@ -102,10 +102,19 @@ class AnalyticsRepository @Inject constructor(
         }
 
     /**
-     * Per-store economics for [period], highest-earning store first — frozen net + realized gross.
+     * Per-store economics for [period], highest-**gross** store first — frozen net + realized gross.
      * Cash tips (#688 F5) are added to BOTH gross and net (`gross = realized pay + cash`, `net =
-     * frozen net + cash`) — explicit adds here, mirroring the period-level locked accounting; the
-     * DAO's `ORDER BY pay DESC` stays cash-free (sorted on realized pay, not the cash-inclusive gross).
+     * frozen net + cash`) — explicit adds here, mirroring the period-level locked accounting.
+     *
+     * **Cash-inclusive ordering (F8):** the DAO's `ORDER BY pay DESC` is a cash-free **stable
+     * pre-sort**; the final rank is re-sorted here by the cash-inclusive [StoreEconomics.gross] so a
+     * cash-heavy store isn't ranked below a lower-gross one whose cash the SQL sort key ignored. The
+     * repository owns the mapped-value ordering because cash is added here, not in SQL (Principle 5 —
+     * one owner for the gross number, one owner for the sort that uses it).
+     *
+     * **Null-net + cash presentation:** a store whose only row has a null frozen `net` (no cost basis)
+     * but a recorded `cashTip` surfaces as `net = 0 + cash` — i.e. "net = cash". Accepted: cash has no
+     * cost term to net out, so the driver-attested cash IS the honest net contribution of that row.
      */
     fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
@@ -117,7 +126,7 @@ class AnalyticsRepository @Inject constructor(
                         gross = it.pay + it.cash,
                         deliveries = it.deliveries,
                     )
-                }
+                }.sortedByDescending { it.gross }
             }
         }
 
