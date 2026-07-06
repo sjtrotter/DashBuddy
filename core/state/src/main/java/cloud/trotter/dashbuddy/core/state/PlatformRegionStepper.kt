@@ -6,12 +6,14 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.AcceptStash
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.PendingModeResume
+import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.SessionType
@@ -47,6 +49,13 @@ class PlatformRegionStepper @Inject constructor() {
     companion object {
         /** Max completed tasks retained per platform during a session. */
         const val MAX_RECENT_TASKS = 20
+
+        /**
+         * #526 D1: how long an accept stash stays consumable. An accept is always followed by the
+         * task flow within a couple of minutes; a generous window recovers the F3 teardown race
+         * while a stale stash still can't leak into an unrelated later job.
+         */
+        const val ACCEPT_STASH_GRACE_MS = 120_000L
     }
 
     /**
@@ -88,13 +97,202 @@ class PlatformRegionStepper @Inject constructor() {
         )
     }
 
+    /**
+     * #526 D1: the accepted-offer inputs a job mint needs, sourced from EITHER the live pending offer
+     * ([acceptInputsFromPending], accept-adjacent happy path) or the stash ([acceptInputsFromStash],
+     * the F3 teardown-race recovery). One shape so [consumeAcceptIntoJob] is source-agnostic.
+     */
+    private data class AcceptInputs(
+        val offerHash: String?,
+        val economics: AcceptedOfferEconomics,
+        /** Raw per-order store hints (`orders.map { storeName }`); empty when the offer wasn't parsed. */
+        val storeHints: List<String>,
+        /** One dropoff placeholder per order; fallback 1 when the offer wasn't parsed. */
+        val dropoffCount: Int,
+    )
+
+    private fun acceptInputsFromPending(pending: PendingOffer?, acceptedAt: Long): AcceptInputs {
+        val parsedOffer = pending?.offerFields?.parsedOffer
+        val eval = pending?.evaluation
+        val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
+        return AcceptInputs(
+            offerHash = pending?.offerHash,
+            economics = AcceptedOfferEconomics(
+                offerHash = pending?.offerHash,
+                payAmount = eval?.payAmount ?: parsedOffer?.payAmount,
+                netPay = eval?.netPayAmount,
+                estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble(),
+                distanceMiles = eval?.distanceMiles ?: parsedOffer?.distanceMiles,
+                acceptedAt = acceptedAt,
+            ),
+            storeHints = storeHints,
+            dropoffCount = storeHints.size.takeIf { it > 0 } ?: 1,
+        )
+    }
+
+    private fun acceptInputsFromStash(stash: AcceptStash): AcceptInputs = AcceptInputs(
+        offerHash = stash.offerHash,
+        economics = AcceptedOfferEconomics(
+            offerHash = stash.offerHash,
+            payAmount = stash.payAmount,
+            netPay = stash.netPay,
+            estMinutes = stash.estMinutes,
+            distanceMiles = stash.distanceMiles,
+            acceptedAt = stash.acceptedAt,
+        ),
+        storeHints = stash.storeHints,
+        dropoffCount = stash.storeHints.size.takeIf { it > 0 } ?: 1,
+    )
+
+    /**
+     * #526 D1: consume an accepted offer into the job graph — fresh mint, #596 T2 close+mint on an
+     * independent offer over a finished job, or add-on append. Clears [PlatformRegion.lastAcceptedOffer]
+     * on every path (the accept is now realized). The single entry point shared by the accept-adjacent,
+     * D1c add-on, and fallback branches.
+     */
+    private fun consumeAcceptIntoJob(
+        region: PlatformRegion,
+        obs: Observation.FlowObservation,
+        inputs: AcceptInputs,
+    ): PlatformRegion {
+        val existing = region.activeJob ?: return mintFreshJobFromAccept(region, obs, inputs)
+
+        // #596 T2: an accept while the active job is already physically complete is an INDEPENDENT
+        // offer, not an add-on — do NOT fold it into a never-closed job (the 06-30 job-61 case: one
+        // never-closed job swallowed three offers, $19 of $45.75 unattributed). Close the old job and
+        // mint a fresh one. At accept time the final drop may still be inside its TASK_RETIRE grace
+        // (activeTask not yet retired); commit that retire inline first (honest completion = pend.since,
+        // matching retireActiveTask) so the completeness check sees the finished drop. Skipped when the
+        // retire was armed by deliberating on THIS add-on offer (armedFromFlow == OfferPresented).
+        run {
+            val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
+            if (pend?.armedFromFlow == Flow.OfferPresented) return@run
+            val justRetired = if (pend != null) region.activeTask?.copy(completedAt = pend.since) else null
+            val recentForCheck =
+                if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
+            if (isJobPhysicallyComplete(existing, recentForCheck, justRetired)) {
+                val committed = if (justRetired != null) {
+                    region.copy(
+                        activeTask = null,
+                        recentTasks = recentForCheck.takeLast(MAX_RECENT_TASKS),
+                        pendingDestructive = null,
+                    )
+                } else region
+                return mintFreshJobFromAccept(completeActiveJob(committed), obs, inputs)
+            }
+        }
+
+        return appendAddOn(region, existing, obs, inputs)
+    }
+
+    /**
+     * Mint a fresh Job from an accepted offer: jobId at offset 0, the D customer-TBD dropoff
+     * placeholders at offsets 1..D, then (#526 D2) one PICKUP placeholder per distinct store at
+     * offsets D+1..D+P — all in one copy() that advances the mint counter past the whole batch (#344).
+     */
+    private fun mintFreshJobFromAccept(
+        base: PlatformRegion,
+        obs: Observation.FlowObservation,
+        inputs: AcceptInputs,
+    ): PlatformRegion {
+        val jobId = mintId("job", base, obs)
+        val dropoffs = preCreatedDropoffs(base, obs, jobId, inputs.dropoffCount, startOffset = 1)
+        return base.copy(
+            activeJob = Job(
+                jobId = jobId,
+                offerStoreHint = inputs.storeHints,
+                parentOfferHash = inputs.offerHash,
+                acceptedOffers = listOf(inputs.economics),
+                startedAt = obs.timestamp,
+                tasks = dropoffs,
+            ),
+            // job(1) + D dropoffs, all minted in this one copy() (#344).
+            mintCounter = base.mintCounter + 1 + inputs.dropoffCount,
+            lastAcceptedOffer = null,
+        )
+    }
+
+    /**
+     * Append an add-on accept into the active job: its own D dropoff placeholders (offsets 0..D-1).
+     * No job mint this step. Deduped by offerHash so a re-entered OfferPresented for the same offer
+     * can't double-count.
+     */
+    private fun appendAddOn(
+        region: PlatformRegion,
+        existing: Job,
+        obs: Observation.FlowObservation,
+        inputs: AcceptInputs,
+    ): PlatformRegion {
+        val alreadyCounted = inputs.offerHash != null &&
+            existing.acceptedOffers.any { it.offerHash == inputs.offerHash }
+        if (alreadyCounted) return region.copy(lastAcceptedOffer = null)
+        val addOnDropoffs = preCreatedDropoffs(region, obs, existing.jobId, inputs.dropoffCount, startOffset = 0)
+        return region.copy(
+            activeJob = existing.copy(
+                acceptedOffers = existing.acceptedOffers + inputs.economics,
+                offerStoreHint = existing.offerStoreHint + inputs.storeHints,
+                tasks = existing.tasks + addOnDropoffs,
+            ),
+            mintCounter = region.mintCounter + inputs.dropoffCount,
+            lastAcceptedOffer = null,
+        )
+    }
+
     fun step(
         prev: PlatformRegion,
         prevFlow: FlowRegion,
         nextFlow: FlowRegion,
         obs: Observation,
         policy: TransitionPolicy,
-    ): PlatformRegion = reconcileDropoffStore(reconcileJobTasks(stepCore(prev, prevFlow, nextFlow, obs, policy)))
+    ): PlatformRegion = armAcceptStash(
+        reconcileDropoffStore(reconcileJobTasks(stepCore(prev, prevFlow, nextFlow, obs, policy))),
+        nextFlow,
+        obs,
+    )
+
+    /**
+     * #526 D1a — mirror an accept-latched pending offer into [PlatformRegion.lastAcceptedOffer] so a
+     * job can still be minted with full economics + placeholders when the `OfferPresented → task`
+     * edge is skipped by a teardown frame (F3). Runs AFTER [stepCore] on every step: consumption
+     * (inside `updateJobLifecycle`) reads a stash armed on a PRIOR step, then this re-mirrors THIS
+     * step's offer.
+     *
+     * The mirror is idempotent (keyed by `offerHash`, [AcceptStash.acceptedAt] preserved across
+     * re-mirrors); a superseding pending offer with a different hash and a stash older than the
+     * accept grace both clear it, so no corpse rides the snapshot. Session end clears it in
+     * [endSession]. Pure: [isAcceptLatched] + `obs.timestamp` only.
+     */
+    private fun armAcceptStash(
+        region: PlatformRegion,
+        nextFlow: FlowRegion,
+        obs: Observation,
+    ): PlatformRegion {
+        var stash = region.lastAcceptedOffer
+        val po = nextFlow.pendingOffer
+        // Supersession: a different offer on screen invalidates a stale stash.
+        if (stash != null && po != null && po.offerHash != stash.offerHash) stash = null
+        // Lazy expiry: don't carry a corpse.
+        if (stash != null && isStashExpired(stash, obs)) stash = null
+        // Mirror an accept-latched pending offer.
+        if (po != null && po.isAcceptLatched()) {
+            val parsedOffer = po.offerFields.parsedOffer
+            val eval = po.evaluation
+            val acceptedAt = stash?.takeIf { it.offerHash == po.offerHash }?.acceptedAt ?: obs.timestamp
+            stash = AcceptStash(
+                offerHash = po.offerHash,
+                payAmount = eval?.payAmount ?: parsedOffer.payAmount,
+                netPay = eval?.netPayAmount,
+                estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer.timeToCompleteMinutes?.toDouble(),
+                distanceMiles = eval?.distanceMiles ?: parsedOffer.distanceMiles,
+                storeHints = parsedOffer.orders.map { it.storeName },
+                acceptedAt = acceptedAt,
+            )
+        }
+        return if (stash === region.lastAcceptedOffer) region else region.copy(lastAcceptedOffer = stash)
+    }
+
+    private fun isStashExpired(stash: AcceptStash, obs: Observation): Boolean =
+        obs.timestamp - stash.acceptedAt > ACCEPT_STASH_GRACE_MS
 
     /**
      * #526: a dropoff's store is resolved from the job's PICKUP lineage, not from the dropoff card's
@@ -610,90 +808,36 @@ class PlatformRegionStepper @Inject constructor() {
         // offerHash so a re-entered OfferPresented for the same offer (screen oscillation)
         // does not double-count.
         if (prevFlowVal == Flow.OfferPresented && nextFlowVal.isTaskFlow()) {
+            // Accept-adjacent (happy path): the offer is still on prevFlow. Read it straight off the
+            // pending offer (the direct source); prefer the stash's acceptedAt when it matches this
+            // offer — the accept-CLICK time, not this task frame (#526 D1a). Consumption clears the
+            // stash inside the mint helpers.
             val pending = prevFlow.pendingOffer
-            val parsedOffer = pending?.offerFields?.parsedOffer
-            val eval = pending?.evaluation
-            val economics = AcceptedOfferEconomics(
-                offerHash = pending?.offerHash,
-                payAmount = eval?.payAmount ?: parsedOffer?.payAmount,
-                netPay = eval?.netPayAmount,
-                estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble(),
-                distanceMiles = eval?.distanceMiles ?: parsedOffer?.distanceMiles,
-                acceptedAt = obs.timestamp,
-            )
-            val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
-            val existing = region.activeJob
-
-            // #503 slice 3b: pre-create one dropoff placeholder PER ORDER the offer covers, so a
-            // stack's Job owns ordered dropoffs (not a single drop). Fallback to 1 when the offer
-            // wasn't parsed — the pre-3b behaviour for a single delivery.
-            val dropoffCount = parsedOffer?.orders?.size?.takeIf { it > 0 } ?: 1
-
-            // Mint a fresh Job: jobId at offset 0, the N customer-TBD dropoff placeholders at
-            // offsets 1..N off the mint counter, which the copy() advances past. Shared by the
-            // first accept of a job and by #596 T2 (an accept over a physically-complete job).
-            fun startFreshJob(base: PlatformRegion): PlatformRegion {
-                val jobId = mintId("job", base, obs)
-                return base.copy(
-                    activeJob = Job(
-                        jobId = jobId,
-                        offerStoreHint = storeHints,
-                        parentOfferHash = pending?.offerHash,
-                        acceptedOffers = listOf(economics),
-                        startedAt = obs.timestamp,
-                        tasks = preCreatedDropoffs(base, obs, jobId, dropoffCount, startOffset = 1),
-                    ),
-                    mintCounter = base.mintCounter + dropoffCount + 1,
-                )
-            }
-
-            if (existing == null) return startFreshJob(region)
-
-            // #596 T2: an accept while the active job is already physically complete is an
-            // INDEPENDENT offer, not an add-on — do NOT fold it into a never-closed job (the 06-30
-            // job-61 case: one never-closed job swallowed three offers, $19 of $45.75 unattributed).
-            // Close the old job and mint a fresh one. At accept time the final drop may still be
-            // inside its TASK_RETIRE grace (activeTask not yet retired); commit that retire inline
-            // first (honest completion = pend.since, matching retireActiveTask) so the completeness
-            // check sees the finished drop. Skipped when the retire was armed by deliberating on THIS
-            // add-on offer (armedFromFlow == OfferPresented) — that drop isn't delivered, so it folds.
-            run {
-                val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
-                if (pend?.armedFromFlow == Flow.OfferPresented) return@run
-                val justRetired = if (pend != null) region.activeTask?.copy(completedAt = pend.since) else null
-                val recentForCheck =
-                    if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
-                if (isJobPhysicallyComplete(existing, recentForCheck, justRetired)) {
-                    val committed = if (justRetired != null) {
-                        region.copy(
-                            activeTask = null,
-                            recentTasks = recentForCheck.takeLast(MAX_RECENT_TASKS),
-                            pendingDestructive = null,
-                        )
-                    } else region
-                    return startFreshJob(completeActiveJob(committed))
-                }
-            }
-
-            // Add-on into the active job — append unless this offer was already counted.
-            val alreadyCounted = economics.offerHash != null &&
-                existing.acceptedOffers.any { it.offerHash == economics.offerHash }
-            if (alreadyCounted) return region
-            // #503 slice 3b: the add-on offer brings its own dropoff(s) — append a placeholder per
-            // order so a stacked add-on's drops are owned by the job too (offsets 0..N-1, no job mint
-            // this step).
-            return region.copy(
-                activeJob = existing.copy(
-                    acceptedOffers = existing.acceptedOffers + economics,
-                    offerStoreHint = existing.offerStoreHint + storeHints,
-                    tasks = existing.tasks + preCreatedDropoffs(region, obs, existing.jobId, dropoffCount, startOffset = 0),
-                ),
-                mintCounter = region.mintCounter + dropoffCount,
-            )
+            val stash = region.lastAcceptedOffer?.takeIf { !isStashExpired(it, obs) }
+            val acceptedAt = stash?.takeIf { it.offerHash == pending?.offerHash }?.acceptedAt ?: obs.timestamp
+            return consumeAcceptIntoJob(region, obs, acceptInputsFromPending(pending, acceptedAt))
         }
 
-        // Job start: task flow without active job (recovery or mid-session restart)
+        // #526 D1c: the F3 race — an add-on accepted while a job is active, but a `waiting_for_offer`
+        // teardown popped the pending offer BEFORE the first task frame, so the accept-adjacent
+        // branch above never fired. Consume the stash as an add-on the moment the task flow resumes.
+        // The offerHash dedup inside [consumeAcceptIntoJob]/[appendAddOn] makes a double-fold
+        // impossible; the #596 T2 physically-complete check inside it keeps an independent offer over
+        // a finished job from folding. Fires once (the stash clears on consumption).
+        if (nextFlowVal.isTaskFlow() && region.activeJob != null && region.lastAcceptedOffer != null) {
+            val stash = region.lastAcceptedOffer?.takeIf { !isStashExpired(it, obs) }
+            if (stash != null) return consumeAcceptIntoJob(region, obs, acceptInputsFromStash(stash))
+            return region.copy(lastAcceptedOffer = null)
+        }
+
+        // Job start: task flow without active job (recovery, mid-session restart, or the F3 race
+        // where the accept edge was skipped entirely).
         if (nextFlowVal.isTaskFlow() && region.activeJob == null) {
+            // #526 D1: a valid accept stash → mint the FULL offer-shaped job (economics + dropoff +
+            // pickup placeholders + store hints), recovering the F3 teardown race. Else today's bare
+            // fallback (no accept was ever seen — genuine recovery/restart).
+            val stash = region.lastAcceptedOffer?.takeIf { !isStashExpired(it, obs) }
+            if (stash != null) return consumeAcceptIntoJob(region, obs, acceptInputsFromStash(stash))
             val parsed = obs.parsed as? ParsedFields.TaskFields
             return region.copy(
                 activeJob = Job(
@@ -703,6 +847,7 @@ class PlatformRegionStepper @Inject constructor() {
                     startedAt = obs.timestamp,
                 ),
                 mintCounter = region.mintCounter + 1,
+                lastAcceptedOffer = null,
             )
         }
 
@@ -1097,6 +1242,8 @@ class PlatformRegionStepper @Inject constructor() {
             idleEnteredAt = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,
+            // #526 D1: the session's over — a stashed accept must not leak into the next dash.
+            lastAcceptedOffer = null,
         )
     }
 

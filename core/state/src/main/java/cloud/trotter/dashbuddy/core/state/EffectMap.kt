@@ -1218,11 +1218,11 @@ class EffectMap @Inject constructor() {
         //    fallback below.
         if (prevOffer?.declineCommittedAt != null) return AppEventType.OFFER_DECLINED
         // 1. Stored click intent on PendingOffer — covers the common case where
-        //    the click was observed first and the resolving obs is a Screen
-        when (prevOffer?.lastClickIntent) {
-            OfferIntent.ACCEPT -> return AppEventType.OFFER_ACCEPTED
-            OfferIntent.DECLINE -> return AppEventType.OFFER_DECLINED
-        }
+        //    the click was observed first and the resolving obs is a Screen. The
+        //    ACCEPT arm routes through the shared #526 D1b predicate (the SSOT the
+        //    accept-stash arming also uses); DECLINE stays explicit here.
+        if (prevOffer != null && prevOffer.isAcceptLatched()) return AppEventType.OFFER_ACCEPTED
+        if (prevOffer?.lastClickIntent == OfferIntent.DECLINE) return AppEventType.OFFER_DECLINED
         // 2. Direct click observation — covers the edge case where click and
         //    flow change arrive in the same observation
         val clickFields = when (obs) {
