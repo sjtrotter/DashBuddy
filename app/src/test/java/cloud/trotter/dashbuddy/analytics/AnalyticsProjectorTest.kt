@@ -956,6 +956,130 @@ class AnalyticsProjectorTest {
         assertNull(t2Row.realizedPay)
     }
 
+    // ── #705 fix round: sequence-ordered apply (F1), F3 null-session cash, F5 SUSPECT block ──
+
+    @Test
+    fun `a PAY_ADJUSTMENT sequenced after a DELIVERY_ADJUSTMENT on one row wins in a single batch (#705 F1)`() = runBlocking {
+        val seq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 30.0)
+        // DA (earlier seq) sets pay 15; PA (later seq) sets pay 20. In true LOG order the PA is last and
+        // must win. The old type-partitioned apply ran ALL PAs before ALL DAs, so the DA (15) wrongly won.
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 15.0),
+        )
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "S1", 7_000,
+            PayAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 20.0),
+        )
+        projector().catchUp() // both fold in ONE batch
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("the later-sequenced PAY_ADJUSTMENT wins, not the type-order-last DELIVERY_ADJUSTMENT", 20.0, d.realizedPay!!, 1e-9)
+        assertEquals("USER_CORRECTED", d.payBasis)
+        assertEquals(20.0 - 5.0 * 0.25, d.netProfit!!, 1e-9)
+    }
+
+    @Test
+    fun `the PA-after-DA interleave is batch-boundary-invariant (#705 F1 determinism)`() = runBlocking {
+        val seq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 30.0)
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 15.0),
+        )
+        insert(
+            AppEventType.PAY_ADJUSTMENT, "S1", 7_000,
+            PayAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 20.0),
+        )
+        // One event per batch forces the DA and PA into SEPARATE batches — same final row as one batch.
+        val live = projector()
+        while (live.processBatch(limit = 1) != null) { /* drain one event at a time */ }
+
+        assertEquals("across batches == single batch: the PA still wins", 20.0, analyticsDao.deliveryRecord(seq)!!.realizedPay!!, 1e-9)
+    }
+
+    @Test
+    fun `a DELIVERY_ADJUSTMENT cash edit is dropped on a null-session row while other fields apply (#705 F3)`() = runBlocking {
+        // A DELIVERY_COMPLETED with NO sessionId folds a session-less delivery row (the invariant violator).
+        val seq = insert(
+            AppEventType.DELIVERY_COMPLETED, null, 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX",
+                phaseStartedAt = 2_400, completedAt = 3_000, totalPay = 10.0,
+            ),
+            odometer = 105.0,
+        )
+        projector().catchUp()
+        assertNull("precondition: the row is session-less", analyticsDao.deliveryRecord(seq)!!.sessionId)
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, null, 6_000,
+            DeliveryAdjustmentPayload(
+                targetEventSequenceId = seq, sessionId = null, newStoreName = "Bill Millers", newCashTip = 5.0,
+            ),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertNull("cash tip ignored on a null-session row (F3 sessionful-cash invariant)", d.cashTip)
+        assertEquals("every other field still applies", "Bill Millers", d.storeName)
+    }
+
+    /** A prior identity-bearing drop of J1, then an identity-less whole-receipt drop → SUSPECT_FULL_RECEIPT. */
+    private suspend fun seedSuspectFullReceiptRow(): Long {
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        // T1: an identity-bearing receipt-share drop → job J1 has now delivered ≥1 drop this session.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 2_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
+                phaseStartedAt = 1_500, completedAt = 2_000, dropRealizedPay = 6.0,
+            ),
+            odometer = 102.0,
+        )
+        // T2: identity-less, whole receipt, no apportioned share → SUSPECT_FULL_RECEIPT (money nulled).
+        return insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T2", storeName = "StoreX",
+                phaseStartedAt = 2_500, completedAt = 3_000,
+                parsedPay = cloud.trotter.dashbuddy.domain.model.pay.ParsedPay(
+                    appPayComponents = listOf(cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem("Base Pay", 10.0)),
+                    customerTips = emptyList(),
+                ),
+            ),
+            odometer = 104.0,
+        )
+    }
+
+    @Test
+    fun `a DELIVERY_ADJUSTMENT pay-tip edit is blocked on a SUSPECT_FULL_RECEIPT row while store-cash still apply (#705 F5)`() = runBlocking {
+        val seq = seedSuspectFullReceiptRow()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("precondition: the de-monetized double-count guard row", "SUSPECT_FULL_RECEIPT", before.payBasis)
+        assertNull(before.realizedPay)
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(
+                targetEventSequenceId = seq, sessionId = "S1",
+                newStoreName = "Bill Millers", newPay = 25.0, newTip = 5.0, newCashTip = 3.0,
+            ),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertNull("pay stays nulled — editing it back re-opens the #653 double count", d.realizedPay)
+        assertNull("tip is blocked alongside pay", d.tip)
+        assertEquals("basis unchanged (no pay edit took effect)", "SUSPECT_FULL_RECEIPT", d.payBasis)
+        assertEquals("store still applies", "Bill Millers", d.storeName)
+        assertEquals("cash still applies (a sessionful row, so F3 permits it)", 3.0, d.cashTip!!, 1e-9)
+    }
+
     @Test(expected = CancellationException::class)
     fun `currentCostPerMile does not swallow CancellationException (retro finding 3)`(): Unit = runBlocking {
         // A blanket `runCatching` around the DataStore read would catch a CancellationException too
