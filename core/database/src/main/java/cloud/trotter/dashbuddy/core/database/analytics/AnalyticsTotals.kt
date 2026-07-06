@@ -18,6 +18,12 @@ data class DeliveryTotalsRow(
     val deliveries: Int,
     val jobs: Int,
     /**
+     * Σ driver-entered cash tips = `COALESCE(SUM(cashTip), 0)` (#688). Kept as its OWN alias — NOT
+     * folded into [pay]/[net] — so the locked accounting adds cash to gross/net explicitly at the
+     * repository while the reconciliation's Σ-attributed ([pay]) stays cash-free.
+     */
+    val cash: Double,
+    /**
      * Σ **frozen** fuel dollars for the period = `SUM(frozenFuelPerMile × realizedMiles)` (#659) —
      * the first-class fuel cost row of the 4-step true-net waterfall. Nullable and left un-`COALESCE`d
      * on purpose: SQL `SUM` of all-null terms is NULL, which is the "no frozen split coverage" signal
@@ -36,6 +42,8 @@ data class PlatformDeliveryTotalsRow(
     val net: Double,
     val deliveries: Int,
     val jobs: Int,
+    /** Σ driver-entered cash tips for the platform's period rows (#688) — see [DeliveryTotalsRow.cash]. */
+    val cash: Double,
     /** Σ frozen fuel dollars for the platform's period rows (#659) — see [DeliveryTotalsRow.fuelCost]. */
     val fuelCost: Double?,
     /** Σ frozen non-fuel dollars for the platform's period rows (#659). */
@@ -48,6 +56,8 @@ data class StoreTotalsRow(
     val pay: Double,
     val net: Double,
     val deliveries: Int,
+    /** Σ driver-entered cash tips for the store's period rows (#688) — see [DeliveryTotalsRow.cash]. */
+    val cash: Double,
 )
 
 /**

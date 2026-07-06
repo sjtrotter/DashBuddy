@@ -85,7 +85,8 @@ interface AnalyticsDao {
                   COUNT(*) AS deliveries,
                   COUNT(DISTINCT jobId) AS jobs,
                   SUM(frozenFuelPerMile * realizedMiles) AS fuelCost,
-                  SUM(frozenNonFuelPerMile * realizedMiles) AS nonFuelCost
+                  SUM(frozenNonFuelPerMile * realizedMiles) AS nonFuelCost,
+                  COALESCE(SUM(cashTip), 0) AS cash
            FROM delivery_records
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
@@ -101,7 +102,8 @@ interface AnalyticsDao {
                   COUNT(*) AS deliveries,
                   COUNT(DISTINCT jobId) AS jobs,
                   SUM(frozenFuelPerMile * realizedMiles) AS fuelCost,
-                  SUM(frozenNonFuelPerMile * realizedMiles) AS nonFuelCost
+                  SUM(frozenNonFuelPerMile * realizedMiles) AS nonFuelCost,
+                  COALESCE(SUM(cashTip), 0) AS cash
            FROM delivery_records
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
@@ -113,13 +115,16 @@ interface AnalyticsDao {
     /**
      * Per-store variant of [deliveryTotals] — same session-anchored join + null-session edge.
      * `ORDER BY pay DESC` is the **highest-earning store first** (realized gross), intentional so
-     * the store list leads with where the money came from.
+     * the store list leads with where the money came from. The order stays **cash-free** (realized
+     * pay only) on purpose — cash is added to the store's gross/net in the repository mapper (#688
+     * F5), not used as the sort key.
      */
     @Query(
         """SELECT storeName,
                   COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
-                  COUNT(*) AS deliveries
+                  COUNT(*) AS deliveries,
+                  COALESCE(SUM(cashTip), 0) AS cash
            FROM delivery_records
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
@@ -163,9 +168,19 @@ interface AnalyticsDao {
      * redundant and wrong (it could split a midnight-spanning session's pay away from its reported
      * total). The `LEFT JOIN` is onto a `GROUP BY sessionId` subquery (one row per session), so
      * there is no fan-out.
+     *
+     * **Cash tips (#688 locked accounting):** `gross` adds each session's Σ `cashTip` (the subquery's
+     * `cashTip` alias) — cash is real earnings, so it belongs in gross. The `unattributed` CASE stays
+     * **untouched** (it still compares `reportedEarnings` against the cash-free `deliveredPay`), so a
+     * recorded cash tip raises gross/net without shrinking the reported-vs-captured reconciliation.
+     * **Invariant (#688 F3):** every cash-bearing row is sessionful (the drill-down writes only
+     * sessionful targets, MANUAL carries a sessionId) — so the cash counted into `net` (via
+     * [deliveryTotals]'s null-session-inclusive `cash`) and into `gross` here (session-join only) is
+     * the same amount; a null-session cash row would leak into net but not gross, which the invariant
+     * forbids.
      */
     @Query(
-        """SELECT COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0)), 0) AS gross,
+        """SELECT COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
                   COALESCE(SUM(
                     CASE WHEN s.reportedEarnings IS NOT NULL
                               AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
@@ -173,7 +188,7 @@ interface AnalyticsDao {
                          ELSE 0 END), 0) AS unattributed
            FROM session_records s
            LEFT JOIN (
-             SELECT sessionId, SUM(realizedPay) AS deliveredPay
+             SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip
              FROM delivery_records GROUP BY sessionId
            ) d ON d.sessionId = s.sessionId
            WHERE s.startedAt >= :start AND s.startedAt < :end"""
@@ -182,7 +197,7 @@ interface AnalyticsDao {
 
     @Query(
         """SELECT s.platform AS platform,
-                  COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0)), 0) AS gross,
+                  COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
                   COALESCE(SUM(
                     CASE WHEN s.reportedEarnings IS NOT NULL
                               AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
@@ -190,7 +205,7 @@ interface AnalyticsDao {
                          ELSE 0 END), 0) AS unattributed
            FROM session_records s
            LEFT JOIN (
-             SELECT sessionId, SUM(realizedPay) AS deliveredPay
+             SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip
              FROM delivery_records GROUP BY sessionId
            ) d ON d.sessionId = s.sessionId
            WHERE s.startedAt >= :start AND s.startedAt < :end
@@ -207,10 +222,10 @@ interface AnalyticsDao {
      */
     @Query(
         """SELECT s.startedAt AS startedAt,
-                  COALESCE(s.reportedEarnings, d.deliveredPay, 0) AS gross
+                  COALESCE(s.reportedEarnings, d.deliveredPay, 0) + COALESCE(d.cashTip, 0) AS gross
            FROM session_records s
            LEFT JOIN (
-             SELECT sessionId, SUM(realizedPay) AS deliveredPay
+             SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip
              FROM delivery_records GROUP BY sessionId
            ) d ON d.sessionId = s.sessionId
            WHERE s.startedAt >= :start AND s.startedAt < :end
@@ -358,13 +373,16 @@ interface AnalyticsDao {
      * included: its money was nulled (#653), but the receipt still proves the job is not receipt-less.
      * The IN-list is compile-time-concatenated from [PayBasis]'s `const val`s (legal in an annotation)
      * so it derives from the SAME SSOT as the in-fold guard ([PayBasis.RECEIPT_EVIDENCE]) — the two
-     * sides can never drift. Deliberately excludes `USER_CORRECTED` (a documented hydration wrinkle,
-     * #691 VET F1; closed by v11 receipt-evidence persistence, #703) and the estimate/none bases.
+     * sides can never drift. Matched on `COALESCE(originalPayBasis, payBasis)` (#703): a row re-priced
+     * to `USER_CORRECTED` keeps its FIRST-fold basis as receipt evidence via the persisted
+     * `originalPayBasis`, closing the #691 VET F1 hydration wrinkle even for re-priced rows; the
+     * COALESCE covers legacy rows whose `originalPayBasis` is still null (pre-`PROJECTOR_VERSION` 4
+     * refold). Deliberately excludes `USER_CORRECTED` itself and the estimate/none bases.
      */
     @Query(
         "SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id " +
-            "AND payBasis IN ('" + PayBasis.DROP_SHARE + "', '" + PayBasis.RECEIPT_TOTAL +
-            "', '" + PayBasis.SUSPECT_FULL_RECEIPT + "')"
+            "AND COALESCE(originalPayBasis, payBasis) IN ('" + PayBasis.DROP_SHARE + "', '" +
+            PayBasis.RECEIPT_TOTAL + "', '" + PayBasis.SUSPECT_FULL_RECEIPT + "')"
     )
     suspend fun receiptedJobIdsInSession(id: String): List<String>
 

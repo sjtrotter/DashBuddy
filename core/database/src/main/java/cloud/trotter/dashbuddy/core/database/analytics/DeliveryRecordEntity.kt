@@ -95,4 +95,24 @@ data class DeliveryRecordEntity(
     val netProfit: Double?,
     /** Provenance of the cost basis: "OFFER_FROZEN" | "CAPTURED" | "CURRENT_FALLBACK" | "NONE". */
     val costBasis: String,
+
+    // ── Driver-attested side columns (#688, v11) ────────────────────────────
+    /**
+     * Driver-entered CASH tip (#688). The tip provenance vocabulary: [tip] = platform-reported
+     * (on-app / receipt `totalTip`, sole-drop) · `cashTip` = driver-entered cash · a #550
+     * post-delivery additional tip is a future third source (its own column when the toast capture
+     * lands). Written ONLY by driver events (DELIVERY_ADJUSTMENT / MANUAL_DELIVERY), never by a
+     * machine completion. **Locked accounting:** cash lives OUTSIDE [realizedPay] and [netProfit] —
+     * it is added to gross/net only at the read sites, so the reconciliation's Σ-attributed
+     * (`SUM(realizedPay)`) stays structurally cash-free.
+     */
+    val cashTip: Double? = null,
+    /**
+     * The [payBasis] stamped at FIRST fold (#703), **never rewritten by any correction** (every
+     * orchestrator apply preserves it via `row.copy`; only the fold-time `toEntity` sets it). The
+     * #691 receipt-evidence hydration reads `COALESCE(originalPayBasis, payBasis)`, so a row re-priced
+     * to `USER_CORRECTED` still proves its original receipt evidence to a receipt-less sibling. Null
+     * on legacy rows until the `PROJECTOR_VERSION` 3→4 refold populates it from the immutable log.
+     */
+    val originalPayBasis: String? = null,
 )

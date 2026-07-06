@@ -46,7 +46,18 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // (retro finding 2 — `started` provenance). Every value repopulates from the
     // immutable log on the PROJECTOR_VERSION 1→2 refold, so the ADD COLUMN nulls are
     // transient. Additive ⇒ never wipes app_events or the existing analytics rows.
-    autoMigrations = [AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10)],
+    // v10→v11 (#688/#703) is additive-only: two new nullable columns on delivery_records
+    // — cashTip (driver-entered cash tip, added to gross/net only at read sites) and
+    // originalPayBasis (the first-fold payBasis, never rewritten by a correction — the
+    // #703 receipt-evidence hydration anchor). Both repopulate from the immutable log on
+    // the PROJECTOR_VERSION 3→4 refold this bump triggers (cashTip stays null in history —
+    // no cash events exist; originalPayBasis is stamped for every row). Additive ⇒ never
+    // wipes app_events or the existing analytics rows.
+    autoMigrations = [
+        AutoMigration(from = 8, to = 9),
+        AutoMigration(from = 9, to = 10),
+        AutoMigration(from = 10, to = 11),
+    ],
 )
 @TypeConverters(DataTypeConverters::class)
 abstract class DashBuddyDatabase : RoomDatabase() {
@@ -73,7 +84,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 10
+        const val VERSION = 11
     }
 
 }
