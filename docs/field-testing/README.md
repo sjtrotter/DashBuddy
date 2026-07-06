@@ -73,6 +73,15 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — per-region lifecycle edges hold single-platform behavior (#438 B1 / PR #707).** The
+  state machine's job/task edges now fire off each platform's OWN last-acted flow instead of the
+  global screen flow (a latent multi-platform fix — single-platform behavior should be **byte
+  identical**). Watch that a normal DoorDash dash is unchanged: accepts still mint jobs **with
+  economics** (offer $ visible on the job/receipt), exactly one "Saved: $X" receipt bubble per
+  delivery, no spurious/premature completions, dash summary ends the session normally. Anything
+  that looks like a missing accept (job with no offer pay) or a doubled/missing completion is a
+  B1 regression — capture it.
+  - Confirmed: 0/2
 - **🆕 NEW — edit a delivery directly + cash tips (#688 phase A / PR).** In **Analytics → a dash →
   the delivery drill-down**, **tap a delivery row** (or its pencil) → the **Adjust delivery** dialog:
   Store name / Pay / Tip / Cash tip / Miles / Note. This replaces the pay-only editor and is the real

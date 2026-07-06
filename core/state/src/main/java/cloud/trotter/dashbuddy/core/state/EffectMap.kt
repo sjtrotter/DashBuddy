@@ -350,11 +350,13 @@ class EffectMap @Inject constructor() {
         // #438 item 5 (D3): the lifecycle edges below diff THIS region's own acted flow, not the
         // shared global R0 flow — `diff` iterates every platform, but under concurrency R0.flow is
         // whatever platform last touched the screen (so a foreign frame used to fire this platform's
-        // PostTask edges). Each side falls back to the matching GLOBAL flow only for legacy snapshots
-        // (lastActedFlow=null), which reproduces the pre-B1 behavior byte-for-byte — a region that
-        // has ever acted carries a non-null lastActedFlow, so the fallback is never taken for one that
-        // owns a task to (spuriously) complete. Under B1 the observing region stamps its own flow, so
-        // a non-observing region — where p === next → actedPrev == actedNext — never sees an edge.
+        // PostTask edges). Each side falls back to the matching GLOBAL flow only while
+        // lastActedFlow is null, which reproduces the pre-B1 behavior byte-for-byte. The fallback
+        // is never taken for a region that acted POST-B1 (its first own flow frame stamps it);
+        // a legacy pre-B1 snapshot decodes task-owning regions with lastActedFlow=null and keeps
+        // pre-B1 behavior until each region's first own frame heals it — a one-shot, accepted
+        // residual. Under B1 the observing region stamps its own flow, so a stamped non-observing
+        // region — where p === next → actedPrev == actedNext — never sees an edge.
         val actedPrevFlow = p.lastActedFlow ?: prevFlow.flow
         val actedNextFlow = next.lastActedFlow ?: nextFlow.flow
 

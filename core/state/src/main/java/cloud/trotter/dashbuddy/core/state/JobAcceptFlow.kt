@@ -332,9 +332,13 @@ internal fun PlatformRegionStepper.armAcceptStash(
 /**
  * #526 FIX2a: does [po] belong to [region]'s platform? The offer's platform is read from its
  * `sourceRuleId` (via [Platform.fromRuleId]), falling back to the flow's active platform. A
- * KNOWN foreign platform blocks arming (the shared-FlowRegion cross-platform bleed); an
- * [Platform.Unknown] result (e.g. an unattributed test fixture) can't be told apart, so it
- * arms as before — arming is non-destructive and consumption is still offerHash-guarded.
+ * KNOWN foreign platform is blocked; an [Platform.Unknown] result (e.g. an unattributed test
+ * fixture) can't be told apart, so it passes — fail-open. Two call sites: stash ARMING
+ * ([armAcceptStash], non-destructive, consumption still offerHash-guarded) and, since #438 B1,
+ * the accept-edge CONSUMPTION read in `updateJobLifecycle` (destructive — it mints economics).
+ * Production rule ids are prefix-namespaced so provenance always resolves there; B3 (the offer
+ * move onto [PlatformRegion]) retires this gate entirely, and should it survive in any form,
+ * the consumption site should fail closed instead.
  * Keyed only by the [Platform] registry — no platform literals (Principle 8).
  */
 internal fun PlatformRegionStepper.offerBelongsToRegion(po: PendingOffer, flow: FlowRegion, region: PlatformRegion): Boolean {

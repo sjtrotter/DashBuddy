@@ -576,7 +576,7 @@ class PlatformRegionStepper @Inject constructor() {
         r = updateRatings(r, obs)
 
         // Job lifecycle
-        r = updateJobLifecycle(r, prev, next, prevFlow, nextFlow, obs)
+        r = updateJobLifecycle(r, prev, next, prevFlow, obs)
 
         // Task lifecycle
         r = updateTaskLifecycle(r, prev, next, obs, policy)
@@ -671,7 +671,6 @@ class PlatformRegionStepper @Inject constructor() {
         prevFlowVal: Flow,
         nextFlowVal: Flow,
         prevFlow: FlowRegion,
-        nextFlow: FlowRegion,
         obs: Observation.FlowObservation,
     ): PlatformRegion {
         // Offer accepted → capture its economics onto the job. A first accept STARTS a new

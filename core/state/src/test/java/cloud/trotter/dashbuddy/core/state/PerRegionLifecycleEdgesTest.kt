@@ -24,6 +24,7 @@ import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -113,6 +114,8 @@ class PerRegionLifecycleEdgesTest {
         val result = stepper.step(uber, ddOfferFlow, nextFlow, uberPickupNav(1_000L), policy)
 
         // The Uber region mints its OWN bare job (a genuine Uber task) — never the DoorDash offer's.
+        // Pin the mint itself: without it the two negatives below pass vacuously on a no-job step.
+        assertNotNull("the fall-through bare-mints an Uber job", result.activeJob)
         assertTrue(
             "no cross-platform economics: the Uber job carries no accepted offer",
             result.activeJob?.acceptedOffers.isNullOrEmpty(),
