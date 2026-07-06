@@ -55,6 +55,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.reflect)
+    // #690 — DatabaseBackupTest needs a real Context (getDatabasePath/filesDir) and a real
+    // SQLiteDatabase to set user_version, so it runs under Robolectric (same dep the app module
+    // uses for its Room round-trip tests). This is a UNIT test — it gates PR CI.
+    testImplementation(libs.robolectric)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

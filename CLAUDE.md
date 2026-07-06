@@ -110,7 +110,27 @@ matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:
   PlatformRegionStepper, CrossPlatformRegionStepper), effect map, `TransitionPolicy` (the
   expected/unexpected classification + commit graces; replaced the old `HealingPolicy`), crash
   recovery (StateManagerV2). Defines `EffectExecutor` and `MetadataProvider` interfaces.
-- **`:core:database`** — Room entities, DAOs, and database setup.
+- **`:core:database`** — Room entities, DAOs, and database setup. **Data-safety posture (#690):
+  no `fallbackToDestructiveMigration`.** `app_events` is the analytics source of truth (the
+  read-model tables are a rebuildable projection of it), so an upgrade that Room has no path for must
+  **fail loud** (`IllegalStateException`) rather than silently DROP-and-recreate the log — the dev
+  backs up + resolves instead of losing history. The supported upgrade base is **v8+**: on-disk
+  versions below v8, and downgrades (on-disk newer than the code), are an **intentional loud crash at
+  startup**, each preceded by a fresh pre-crash snapshot. `DatabaseModule` **eagerly opens** the DB
+  at injection time (`openHelper.writableDatabase`) so the failure is a deterministic startup crash,
+  not a lazy first-query one that the projector/recovery supervision would swallow; just before the
+  open it takes a pre-open file snapshot (`DatabaseBackup`, WAL-aware version read, dedup-marked,
+  version-prefixed dirs, last 2, failure-tolerant) whenever the on-disk version ≠ the code version, so
+  even a botched *future* migration is recoverable. Schema version is one SSOT const
+  (`DashBuddyDatabase.VERSION`). **Release checklist when changing the schema: bump
+  `DashBuddyDatabase.VERSION` → regenerate the exported schema JSON (`exportSchema`) → add the
+  `AutoMigration` (or a manual `Migration`) covering the new edge → add its `MigrationTestHelper`
+  case** (`core/database/src/androidTest`). Two **real gates** enforce this: the CI
+  `Schemas committed (Room export drift)` step fails if the build regenerated an uncommitted schema
+  JSON, and `SchemaVersionGuardTest` (unit) source-scans the `@Database` migration edges (it's BINARY
+  retention) to prove they chain v8 → `VERSION` with no gap — the forgotten-`AutoMigration` class the
+  retired fallback used to mask. Migration-*correctness* tests are instrumented (`connectedAndroidTest`)
+  and do NOT gate the unit-only PR CI.
 - **`:core:data`** — Repository implementations, mappers, data sources. Bridges domain interfaces to
   concrete data layers.
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration.

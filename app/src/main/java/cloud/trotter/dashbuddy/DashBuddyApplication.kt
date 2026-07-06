@@ -85,6 +85,13 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     }
 
     override fun onCreate() {
+        // Planted before super.onCreate() so injection-time code (DatabaseBackup #690, which runs
+        // during Hilt field injection inside super.onCreate()) can log. The plain DebugTree needs no
+        // injected dependencies; the StateAwareTree below does, so it stays planted after super.
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+
         super.onCreate()
         instance = this
 
@@ -99,9 +106,6 @@ class DashBuddyApplication : Application(), Configuration.Provider {
             }
         }
 
-        if (BuildConfig.DEBUG) {
-            Timber.plant(Timber.DebugTree())
-        }
         Timber.plant(
             StateAwareTree(
                 logRepository,

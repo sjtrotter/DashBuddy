@@ -33,7 +33,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         OfferRecordEntity::class,
         AnalyticsProjectionStateEntity::class,
     ],
-    version = 10,
+    version = DashBuddyDatabase.VERSION,
     exportSchema = true,
     // v8→v9 adds only new tables (the analytics read-model). AutoMigration is a
     // no-op for existing tables, so it CANNOT wipe app_events (unlike the
@@ -58,5 +58,22 @@ abstract class DashBuddyDatabase : RoomDatabase() {
     abstract fun effectsFiredDao(): EffectsFiredDao
     abstract fun observationDao(): ObservationDao
     abstract fun analyticsDao(): AnalyticsDao
+
+    companion object {
+        /**
+         * On-disk database file name. SSOT for both the Room builder and the pre-open backup
+         * belt ([cloud.trotter.dashbuddy.core.database.di.DatabaseBackup]).
+         */
+        const val NAME = "dashbuddy-v2.db"
+
+        /**
+         * The schema version this build ships. SSOT: consumed by the `@Database` annotation
+         * above, by the pre-open backup's "is an upgrade pending?" check, and asserted equal to
+         * the newest exported schema JSON by the unit-level `SchemaVersionGuardTest` (#690). Bump
+         * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
+         * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
+         */
+        const val VERSION = 10
+    }
 
 }
