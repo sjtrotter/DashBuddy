@@ -90,7 +90,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   deliveries) match that dash's summary, and the per-delivery rows list each drop (store, completion
   time, pay, tip, net, miles/min) matching what you actually delivered. When the platform-reported
   total exceeded the captured delivery pay, an "unaccounted on this dash" callout appears. (PR #650-A)
-  - Confirmed: 0/2
+  - Confirmed: 1/2 — 2026-07-05 (DoorDash, 5 deliveries): used live — header + per-delivery rows matched the dash; the unaccounted callout showed the real $39.45 gap.
 
 - **🆕 NEW — user corrections as events (#650 PR B): add a missed delivery, adjust a pay.** On a dash
   that has an **"unaccounted on this dash"** callout (Analytics → Money → tap the dash), tap **Add
@@ -103,7 +103,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   an added event, not an overwrite). How to tell it's broken: the callout doesn't move after adding, the
   new row never appears, the re-price doesn't stick (or reverts on the next screen refresh), or a
   previously captured delivery vanishes. (PR #650-B)
-  - Confirmed: 0/2
+  - Confirmed: 1/2 — 2026-07-05: exercised heavily — 5 PAY_ADJUSTMENTs across 3 rows; callout reconciled to $0 exactly (104.47 = 104.47); re-price stuck (incl. a two-try edit); nothing destroyed (all original events in the log). UX gaps → #688.
 
 - **🆕 NEW — identity-less completions now firewalled at PostTask exit (#653 / PR #673): watch a
   no-name drop for a MISSING completion.** The PostTask-exit `DELIVERY_COMPLETED` mint now mirrors
@@ -126,7 +126,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   everywhere; store names with commas like "Chili's, Cedar Park" stay in one cell, not split), and
   NO customer names/addresses or hashes appear anywhere. All-time export (v1 has no date-range
   picker). Screens with no dashes yet just yield header-only files — that's fine.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 — 2026-07-05: exported via the hub header icon; files sane; found the stale-2025-rate bug → #689 (the export itself worked as built).
 
 - **🆕 NEW — Principle-7 logging phase 1: INFO+ log is PII-safe, `SCREEN:` spam gone, real WARNs
   visible (#551 PR #551-P1).** After a dash (ideally one with a **grocery shop**, so the TTS/ShopRate
@@ -140,7 +140,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `GRACE_COMMIT`/grace-timer wakes, fail-closed gate denials — are now legible in the INFO+ slice
   instead of drowned. How to tell it's broken: any raw store/customer/address text on an INFO+ line,
   `SCREEN:` still at INFO, or WARN still buried under ghost-child noise. (PR #551-P1)
-  - Confirmed: 0/2
+  - Confirmed: 1/2 — 2026-07-05/06 log pull: post-install log has merchant names ONLY at DEBUG, `SCREEN:` gone from INFO (INFO fell to ~1% of lines), real WARNs legible. Residual untagged sites → #692.
 
 - **🆕 NEW — driving/glance-mode HUD font-scale toggle (#318).** Flip "Driving glance mode" on in
   Settings → General while a dash is running (or the bubble is up). The bubble HUD's text — the
@@ -164,7 +164,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   How to tell it's broken: the old "Construction Area 🚧" placeholder still shows, figures don't change
   with the period, Money ≠ dashboard for the same window, a crash on an empty period, or a "$0.00"
   unattributed callout on a period with none.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 — 2026-07-05: all tabs viewed post-dash; Money figures re-anchored and matched reality (incl. the unattributed callout). Copy vocabulary note → #694.
 - **🆕 NEW — Money tab 4-step waterfall: Fuel vs Non-fuel, with a clean fallback on mixed periods
   (#659).** After the v10 refold, open **Analytics → Money** on a period whose deliveries all carry
   the frozen fuel/non-fuel split (a period entirely dashed after the #668 data-side merge should
@@ -188,7 +188,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   pay). How to tell it's broken: the "coming soon" card still shows, counts don't match the dash,
   figures don't re-anchor on a period switch, a "$0.00"/blank where an em-dash should be on an empty
   period, or a crash opening the tab with no offers yet.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 — 2026-07-05: viewed post-dash; funnel counts matched the dash (5 accepted / 3 declined, no timeouts).
 - **🆕 NEW — Analytics Time tab: time split, deadhead, on-time gauge, mileage & tax (#315 H4).**
   In the Analytics hub tap the **Time** tab and pick a period (Today / Week / Month / Lifetime). Four
   cards should appear: a **time split** (hero online duration + "online across N dashes", an
@@ -203,7 +203,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   How to tell it's broken: the "coming soon" card still shows, figures don't re-anchor on a period
   switch, a negative deadhead/unattributed value, an on-time gauge counting deliveries that had no
   deadline, or a crash opening the tab with no dashes yet.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 — 2026-07-05: viewed post-dash; no anomalies reported. (Mileage & tax card carries the #689 stale-rate issue.)
 - **🆕 NEW — Analytics Money tab: earnings-by-day chart + header CSV export icon (#315 H6).**
   Open **Analytics → Money** and pick **Week** or **Month**: a new **"EARNINGS BY DAY"** card should
   appear as the **second** card (right under the gross hero), a bar per day of the period — 7 bars for
@@ -217,7 +217,7 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   tell it's broken: the chart shows on Today/Lifetime, a day's bar doesn't match its earnings, no day
   highlighted on a period where you did earn, missing gap days (a squished <7 bar week), or the header
   icon doesn't open the CSV export screen. (PR #315-H6.)
-  - Confirmed: 0/2
+  - Confirmed: 1/2 — 2026-07-05: header icon used for the CSV export (opens the same Data & Privacy screen); Week chart viewed.
 - **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
   Open the app **after a dash** (not while on a task): the **Today** tiles (True Net / Net $/hr /
   Miles) should already reflect the just-completed dash with no manual refresh (the read-model folds
@@ -1354,6 +1354,29 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - Confirmed: 0/2.
 
 ---
+
+## 2026-07-05 — DoorDash session (afternoon/evening dash; desk synthesis 07-06 from db/logs/captures)
+
+- **Platform(s) tested:** DoorDash
+- **Branch under test:** `master` @ `a9a47e08` (post-#679 — the full 07-05 evening wave through P7 logging phase 1; pre-#680..#686)
+- **Field conditions:** ~4.5h afternoon/evening; 8 offers (5 accepted / 3 declined), 5 deliveries — three big H-E-B shops + one two-pickup stack (Bill Miller BBQ + Mama Margies); one final shop accepted then manually unassigned. Reported gross $104.47. Data pulled 07-06 to `~/dashbuddy/logs/2026/07/06/` (46k log lines, 464 captures, db integrity ok). NOTE: app data was manually cleared before the dash, so the on-device event log starts at this session (07-03 backup preserves older history; hardening → #690).
+
+### Bugs
+
+1. **Receipt/pay capture gap — 3 of 5 drops completed with NO pay signal** (payBasis NONE): the first solo H-E-B shop AND both stack drops. $39.45 of the reported $104.47 landed as unattributed until hand-corrected. Hypotheses + triage plan (the missing receipt frames are likely among the 141 UNKNOWN captures) → **#691**. The stack's two completions minted at the same instant (16:08:19) with the Bill Millers drop carrying no store name — the #526/#557 family; the receipt was never captured at all, so the #528 apportioner had nothing to split.
+2. **Post-dash bubble showed a STALE dash** — after the $0 unassign session, the bubble fell back to the last dash *with money* instead of the actual last session. Direction (dev): the post-dash bubble should render a last-dash SUMMARY (design handoff) + just-in-time actions (vehicle, gas price) → **#693**.
+3. **CSV summary claims tax year 2025 / $0.70** for 2026 driving (found via the export) → **#689** (2026 = $0.725, per-year lookup; Time tab card is a second consumer; unknown-year = latest-known + disclaimer, decided).
+
+### Field UX context
+
+4. **Corrections (#650 PR B) carried the session's accounting.** Adjustment trail (log events 57–61): H-E-B → 26.50; the empty-store stack drop → 11.375 → 7.60 (two tries), re-saved with note "bill millers" as a store-name workaround; Mama Margies → 5.35. Split = the offer's exact $12.95. The missing edit surface (store/tip/miles + cash tips, per-drop splits, per-leg mileage) is **#688** (grounded plan on the issue; per-leg odometer data verified already wired — every lifecycle event carries `metadata.odometer`).
+5. **Hub copy says "dashes"** — platform-flavored vocabulary for the generic session concept → **#694**.
+6. **Session-2 unassign captured cleanly**: accepted $24.25 H-E-B shop 18:39, arrived 18:52, unassigned (dev-confirmed), session grace-closed 19:10–19:11 with a CORRECT $0.00 reported summary. The unassign-flow frames are in the UNKNOWN captures → **#301** corpus.
+
+### Meta / architecture
+
+7. **The two-pickup stack capture SATISFIES the #526 field gate** (offer frame + both pickup arrivals as separate tasks + per-leg odometer). Evidence posted on #526; build unblocked.
+8. Log health: 8 ERROR lines total, all the EIA fetch retry class (succeeded 07-05 morning, failed on 07-06 wifi — WorkManager self-heals); `Timer Expired` WARN spam + EIA-at-ERROR are P7 residuals → **#692**. No pipeline restarts, no recognition crashes, no recovery events.
 
 ## Untriaged — carried over from scratch notes
 
