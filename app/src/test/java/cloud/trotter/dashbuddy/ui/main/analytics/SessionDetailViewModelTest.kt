@@ -108,18 +108,18 @@ class SessionDetailViewModelTest {
         val job = launch { viewModel.uiState.collect {} }
         testScheduler.advanceUntilIdle()
 
-        viewModel.addManualDelivery(pay = 9.5, tip = 2.0, storeName = "Chipotle", note = "missed")
+        viewModel.addManualDelivery(pay = 9.5, tip = 2.0, cashTip = 3.0, storeName = "Chipotle", note = "missed")
         testScheduler.advanceUntilIdle()
 
         // completedAt defaults to the loaded session's endedAt; miles is v1-null.
         verify(correctionRepository).addManualDelivery(
-            eq("s1"), eq("Chipotle"), eq(9.5), eq(2.0), eq(1_700_003_600_000L), isNull(), eq("missed"),
+            eq("s1"), eq("Chipotle"), eq(9.5), eq(2.0), eq(3.0), eq(1_700_003_600_000L), isNull(), eq("missed"),
         )
         job.cancel()
     }
 
     @Test
-    fun `adjustPay intent appends via the repository with the target seq and the VM sessionId`() = runTest {
+    fun `adjustDelivery intent appends via the repository with the target seq and the VM sessionId`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val detail = SessionDetail(session("s1"), listOf(delivery("s1")))
         whenever(analyticsRepository.sessionDetail(eq("s1"))).thenReturn(flowOf(detail))
@@ -127,10 +127,15 @@ class SessionDetailViewModelTest {
         val job = launch { viewModel.uiState.collect {} }
         testScheduler.advanceUntilIdle()
 
-        viewModel.adjustPay(targetEventSequenceId = 42L, newPay = 15.0, note = "tip")
+        viewModel.adjustDelivery(
+            targetEventSequenceId = 42L, newStoreName = "Bill Millers", newPay = 15.0,
+            newTip = null, newCashTip = 4.0, newMiles = null, note = "tip",
+        )
         testScheduler.advanceUntilIdle()
 
-        verify(correctionRepository).adjustDeliveryPay(eq(42L), eq("s1"), eq(15.0), eq("tip"))
+        verify(correctionRepository).adjustDelivery(
+            eq(42L), eq("s1"), eq("Bill Millers"), eq(15.0), isNull(), eq(4.0), isNull(), eq("tip"),
+        )
         job.cancel()
     }
 }

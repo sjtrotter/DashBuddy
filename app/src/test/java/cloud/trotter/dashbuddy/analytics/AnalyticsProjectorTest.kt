@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
@@ -729,6 +730,230 @@ class AnalyticsProjectorTest {
             deliveriesBefore, analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE),
         )
         assertEquals(sessionsBefore, analyticsDao.sessionsBetween(Long.MIN_VALUE, Long.MAX_VALUE))
+    }
+
+    // ── DELIVERY_ADJUSTMENT (#688) + #703 originalPayBasis ──────────────
+
+    @Test
+    fun `a DELIVERY_ADJUSTMENT applies every field by-PK and flips a machine row to USER_CORRECTED on a pay edit (#688)`() = runBlocking {
+        val seq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
+        projector().catchUp()
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(
+                targetEventSequenceId = seq, sessionId = "S1", newStoreName = "Bill Millers",
+                newPay = 15.0, newTip = 4.0, newCashTip = 3.0, newMiles = 8.0, note = "edit",
+            ),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("Bill Millers", d.storeName)
+        assertEquals(15.0, d.realizedPay!!, 1e-9)
+        assertEquals(4.0, d.tip!!, 1e-9)
+        assertEquals(3.0, d.cashTip!!, 1e-9)
+        assertEquals(8.0, d.realizedMiles!!, 1e-9)
+        assertEquals("USER_CORRECTED", d.payBasis)
+        // Net recomputed against the row's OWN frozen cpm (0.25) over the EDITED 8 miles.
+        assertEquals(15.0 - 8.0 * 0.25, d.netProfit!!, 1e-9)
+        assertEquals("frozen cpm untouched by the edit", 0.25, d.frozenCostPerMile!!, 1e-9)
+        assertEquals("originalPayBasis preserved (#703)", "RECEIPT_TOTAL", d.originalPayBasis)
+    }
+
+    @Test
+    fun `a store-only edit on an OFFER_PAY row keeps the basis and its disclosure (VET F1 regression)`() = runBlocking {
+        // A wholly receipt-less job → T1 folds OFFER_PAY (the "est. offer pay" disclosure row).
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, "S1", 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        val seq = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
+                phaseStartedAt = 2_400, completedAt = 3_000, offerPayShare = 12.95,
+            ),
+            odometer = 105.0,
+        )
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("OFFER_PAY", before.payBasis)
+
+        // A store-name-only edit must NOT flip the basis (which would drop the estimate disclosure).
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newStoreName = "Bill Millers"),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("Bill Millers", d.storeName)
+        assertEquals("basis (and the est. offer pay disclosure) survives a non-pay edit", "OFFER_PAY", d.payBasis)
+        assertEquals("pay is unchanged", 12.95, d.realizedPay!!, 1e-9)
+        assertEquals(before.netProfit!!, d.netProfit!!, 1e-9)
+    }
+
+    @Test
+    fun `a cashTip-only edit does not flip payBasis and leaves netProfit byte-identical (D6c)`() = runBlocking {
+        val seq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newCashTip = 6.0),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals(6.0, d.cashTip!!, 1e-9)
+        assertEquals("cash is a side column — basis untouched", before.payBasis, d.payBasis)
+        assertEquals("netProfit byte-identical (cash never enters net)", before.netProfit, d.netProfit)
+        assertEquals(before.realizedPay, d.realizedPay)
+    }
+
+    @Test
+    fun `a MANUAL row edited via DELIVERY_ADJUSTMENT stays MANUAL with the net-additive policy (#688)`() = runBlocking {
+        insert(
+            AppEventType.MANUAL_DELIVERY, "MISSED", 5_000,
+            ManualDeliveryPayload(sessionId = "MISSED", pay = 9.0, completedAt = 5_000),
+        )
+        projector().catchUp()
+        val seq = analyticsDao.lastDeliveryInSession("MISSED")!!.eventSequenceId
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "MISSED", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "MISSED", newPay = 12.0, newCashTip = 2.0),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("a driver statement stays a driver statement", "MANUAL", d.payBasis)
+        assertEquals(12.0, d.realizedPay!!, 1e-9)
+        assertEquals(2.0, d.cashTip!!, 1e-9)
+        assertEquals("net keeps the MANUAL missing-terms-as-0 policy over final values", 12.0, d.netProfit!!, 1e-9)
+        assertEquals("MANUAL", d.originalPayBasis)
+    }
+
+    @Test
+    fun `a note-only DELIVERY_ADJUSTMENT is a no-op apply (VET F6)`() = runBlocking {
+        val seq = seedCorrectableSession()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", note = "bill millers actually"),
+        )
+        projector().catchUp()
+
+        assertEquals("a note-only edit changes no column", before, analyticsDao.deliveryRecord(seq))
+    }
+
+    @Test
+    fun `a DELIVERY_ADJUSTMENT with a missing target is skipped and the watermark still advances (#688)`() = runBlocking {
+        seedCorrectableSession()
+        projector().catchUp()
+        val before = analyticsDao.lastDeliveryInSession("S1")!!
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = 9_999, sessionId = "S1", newPay = 99.0),
+        )
+        projector().catchUp() // must not throw
+
+        assertEquals("the target delivery is unchanged", before, analyticsDao.lastDeliveryInSession("S1"))
+        assertEquals("the watermark advanced past the skipped adjustment", 5L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `an adjustment in a later batch equals a from-zero refold and originalPayBasis is populated (#688 determinism)`() = runBlocking {
+        val seq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(
+                targetEventSequenceId = seq, sessionId = "S1", newStoreName = "Bill Millers",
+                newPay = 15.0, newCashTip = 3.0,
+            ),
+        )
+
+        // Live incremental: small batches force the adjustment into a LATER batch than its target.
+        val live = projector()
+        while (live.processBatch(limit = 1) != null) { /* drain one event at a time */ }
+        val liveRow = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("Bill Millers", liveRow.storeName)
+        assertEquals(15.0, liveRow.realizedPay!!, 1e-9)
+        assertEquals("USER_CORRECTED", liveRow.payBasis)
+        assertEquals("originalPayBasis stamped and preserved across batches (#703)", "RECEIPT_TOTAL", liveRow.originalPayBasis)
+
+        // From-zero refold (one drain, no boundary) must reproduce a byte-identical row.
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq + 1, projectorVersion = 99))
+        projector().catchUp()
+        assertEquals("live == from-zero refold", liveRow, analyticsDao.deliveryRecord(seq))
+    }
+
+    @Test
+    fun `a re-priced receipted row still denies a receipt-less sibling folded after a restart (#703 hydration COALESCE)`() = runBlocking {
+        // T1 receipted (DROP_SHARE) then re-priced to USER_CORRECTED; the job's originalPayBasis stays
+        // DROP_SHARE, so the #691 mixed-receipt guard must still see the job as receipted when the
+        // receipt-less sibling T2 is folded by a FRESH projector (empty in-memory → DB hydration).
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, "S1", 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        val t1 = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
+                phaseStartedAt = 2_400, completedAt = 3_000, dropRealizedPay = 6.0,
+            ),
+            odometer = 104.0,
+        )
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 4_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = t1, sessionId = "S1", newPay = 7.0),
+        )
+        // Drain everything so far; T1 is now USER_CORRECTED (originalPayBasis DROP_SHARE).
+        projector().catchUp()
+        assertEquals("USER_CORRECTED", analyticsDao.deliveryRecord(t1)!!.payBasis)
+        assertEquals("originalPayBasis keeps the first-fold receipt evidence", "DROP_SHARE", analyticsDao.deliveryRecord(t1)!!.originalPayBasis)
+
+        // T2 (receipt-less sibling) arrives LATER — a fresh projector must hydrate the receipted-jobId
+        // set from the DB via COALESCE(originalPayBasis, payBasis) and DENY the offer-pay estimate.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 5_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T2", storeName = "StoreX", customerHash = "c2",
+                phaseStartedAt = 4_500, completedAt = 5_000, offerPayShare = 6.48,
+            ),
+            odometer = 106.0,
+        )
+        projector().catchUp()
+
+        val t2Row = analyticsDao.deliveryRecord(analyticsDao.lastDeliveryInSession("S1")!!.eventSequenceId)!!
+        assertEquals("the re-priced sibling still proves the job receipted → estimate denied", "NONE", t2Row.payBasis)
+        assertNull(t2Row.realizedPay)
     }
 
     @Test(expected = CancellationException::class)
