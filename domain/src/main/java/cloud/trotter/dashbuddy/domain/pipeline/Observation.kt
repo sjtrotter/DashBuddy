@@ -11,8 +11,9 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * consumes. Extends [StateEvent] so it can flow through the existing
  * state machine merge alongside engine events.
  *
- * The `platform` for any observation is derived from [ruleId] via
- * [Platform.fromRuleId].
+ * The `platform` for an observation defaults to [Platform.fromRuleId] on
+ * [ruleId]; subtypes that receive no ruleId ([Timeout], [UiInput], [Loopback])
+ * carry an explicit `targetPlatform` that takes precedence (#342 / #438 8a).
  */
 sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateEvent {
     override val timestamp: Long

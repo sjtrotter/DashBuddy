@@ -34,7 +34,7 @@ class OfferActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val uiInput = uiInputFrom(intent) ?: return
-        Timber.i("OfferActionReceiver: %s on %s", uiInput.action, uiInput.targetPlatform?.wire ?: "?")
+        Timber.tag("Effects").i("OfferActionReceiver: %s on %s", uiInput.action, uiInput.targetPlatform?.wire ?: "?")
         // #457: dismiss the heads-up immediately — the dasher acted. (Offer resolution also fires
         // CancelOfferNotification, but cancel now so the banner/shade entry doesn't linger.)
         NotificationManagerCompat.from(context).cancel(BubbleManager.OFFER_NOTIFICATION_ID)
