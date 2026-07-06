@@ -110,7 +110,20 @@ matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:
   PlatformRegionStepper, CrossPlatformRegionStepper), effect map, `TransitionPolicy` (the
   expected/unexpected classification + commit graces; replaced the old `HealingPolicy`), crash
   recovery (StateManagerV2). Defines `EffectExecutor` and `MetadataProvider` interfaces.
-- **`:core:database`** — Room entities, DAOs, and database setup.
+- **`:core:database`** — Room entities, DAOs, and database setup. **Data-safety posture (#690):
+  no `fallbackToDestructiveMigration`.** `app_events` is the analytics source of truth (the
+  read-model tables are a rebuildable projection of it), so an upgrade Room has no path for must
+  **fail loud** (`IllegalStateException` at open) rather than silently DROP-and-recreate the log —
+  the dev backs up + resolves instead of losing history. `DatabaseModule` also takes a pre-open
+  file snapshot (`DatabaseBackup`, last 2, failure-tolerant) when an upgrade is pending, so even a
+  botched *future* migration is recoverable. Schema version is one SSOT const
+  (`DashBuddyDatabase.VERSION`, consumed by the `@Database` annotation, the backup detector, and the
+  CI-gating `SchemaVersionGuardTest`). **Release checklist when changing the schema: bump
+  `DashBuddyDatabase.VERSION` → regenerate the exported schema JSON (`exportSchema`) → add the
+  `AutoMigration` (or a manual `Migration`) covering the new edge → add its `MigrationTestHelper`
+  case** (`core/database/src/androidTest`). Migration-correctness tests are instrumented
+  (`connectedAndroidTest`) and do NOT gate the unit-only PR CI; `SchemaVersionGuardTest` (unit) is
+  what gates — it fails if `VERSION` has no matching newest schema JSON.
 - **`:core:data`** — Repository implementations, mappers, data sources. Bridges domain interfaces to
   concrete data layers.
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration.
