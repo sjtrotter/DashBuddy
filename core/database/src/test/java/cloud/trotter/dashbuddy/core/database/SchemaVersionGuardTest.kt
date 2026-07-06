@@ -6,6 +6,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.io.File
 
@@ -14,19 +15,29 @@ import java.io.File
  * migration-correctness tests are instrumented/androidTest and only run under
  * `:core:database:connectedAndroidTest`, which the PR workflow does not invoke).
  *
- * With the destructive fallback retired, a version bump that forgets to regenerate the exported
- * schema JSON (or bumps the schema without bumping the code) would ship a DB whose declared version
- * has no committed schema — an upgrade path that can only fail loudly at runtime on a device. This
- * test catches that class of mistake at build time by asserting:
+ * With the destructive fallback retired, a version bump that forgets its `AutoMigration` edge would
+ * ship a DB whose declared version has no upgrade path — a loud runtime crash on a device. This test
+ * catches that class of mistake at build time. The load-bearing check is
+ * [migrationEdgesChainFromSupportedBaseToDeclaredVersion]: a **source scan** of the migration edges
+ * (`@Database` is BINARY retention — see below — so the edges are read from source, not reflection),
+ * which is exactly the forgotten-`AutoMigration` class the retired fallback used to mask.
  *
- *  1. an exported schema JSON exists for the version the code ships ([DashBuddyDatabase.VERSION],
- *     which is also the `@Database(version = …)` value — same SSOT const);
- *  2. [DashBuddyDatabase.VERSION] equals the **newest** committed schema file;
- *  3. every schema file's internal `database.version` matches its filename number (a mis-copied
- *     schema is caught);
- *  4. the committed schema versions are contiguous (no gap that would strand an upgrade path).
+ * **What CI can and cannot catch here.** The schema-JSON checks (tests 1–3) run against files KSP
+ * **regenerates during the build**, so in CI they can only ever see a freshly-exported, internally
+ * consistent schema — they CANNOT catch a schema JSON that was never *committed*. That
+ * commit-enforcement is a separate CI step (`Schemas committed (Room export drift)` in
+ * `pr-check.yml`), not this test. These checks still earn their keep: they catch local-dev drift
+ * (a VERSION bump run before an `exportSchema` regen) fast, without a device.
  */
 class SchemaVersionGuardTest {
+
+    /**
+     * The oldest on-disk schema version this build supports upgrading FROM. On-disk versions below
+     * this (and downgrades) are an intentional loud crash at startup (#690), with a fresh pre-crash
+     * snapshot taken by `DatabaseBackup`. Bump this only when a floor is deliberately raised (dropping
+     * an old migration edge), which is a data-migration decision, not a routine version bump.
+     */
+    private val supportedBase = 8
 
     private val schemaDir: File by lazy { locateSchemaDir() }
 
@@ -79,9 +90,73 @@ class SchemaVersionGuardTest {
         assertTrue("No schema JSONs found under ${schemaDir.path}", schemaVersions.isNotEmpty())
         val expected = (schemaVersions.first()..schemaVersions.last()).toList()
         assertEquals(
-            "Committed schema versions have a gap ($schemaVersions) — an upgrade path would be stranded.",
+            "Committed schema *files* have a numbering gap ($schemaVersions). NB: this asserts the " +
+                "exported-schema filenames are contiguous, NOT that a migration edge exists between " +
+                "them — migrationEdgesChainFromSupportedBaseToDeclaredVersion() owns that claim.",
             expected,
             schemaVersions,
+        )
+    }
+
+    /**
+     * The load-bearing #690 guard: the committed **migration edges** must chain from [supportedBase]
+     * to [DashBuddyDatabase.VERSION] with no gap. Source-scanned rather than reflected because
+     * `@Database` (which carries `autoMigrations`) has **BINARY retention** — the `AutoMigration`
+     * annotations are not visible at runtime. We scan the `@Database` source for `AutoMigration(from,
+     * to)` and (if any) `DatabaseModule` for manual `Migration(from, to)` registrations, then walk
+     * the edges from [supportedBase]: a forgotten edge (the exact mistake the retired destructive
+     * fallback used to paper over) leaves a hole and fails here at build time, not loudly on a device.
+     */
+    @Test
+    fun migrationEdgesChainFromSupportedBaseToDeclaredVersion() {
+        val edgeRegex = Regex("""AutoMigration\s*\(\s*from\s*=\s*(\d+)\s*,\s*to\s*=\s*(\d+)""")
+        val manualRegex = Regex("""\bMigration\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)""")
+
+        val dbSource = locateSourceFile(
+            "src/main/java/cloud/trotter/dashbuddy/core/database/DashBuddyDatabase.kt",
+        ).readText()
+        val moduleSource = locateSourceFile(
+            "src/main/java/cloud/trotter/dashbuddy/core/database/di/DatabaseModule.kt",
+        ).readText()
+
+        val edges = buildList {
+            edgeRegex.findAll(dbSource).forEach { m ->
+                add(m.groupValues[1].toInt() to m.groupValues[2].toInt())
+            }
+            manualRegex.findAll(moduleSource).forEach { m ->
+                add(m.groupValues[1].toInt() to m.groupValues[2].toInt())
+            }
+        }
+
+        assertTrue(
+            "No migration edges found by source scan. Expected AutoMigration(from,to) on @Database " +
+                "chaining $supportedBase → ${DashBuddyDatabase.VERSION}.",
+            edges.isNotEmpty(),
+        )
+
+        val edgesByFrom = edges.groupBy { it.first }
+        var cur = supportedBase
+        val visited = mutableSetOf<Int>()
+        while (cur < DashBuddyDatabase.VERSION) {
+            if (!visited.add(cur)) {
+                fail("Migration edges form a cycle at v$cur (edges=$edges).")
+                return
+            }
+            val next = edgesByFrom[cur]?.maxOfOrNull { it.second }
+                ?: run {
+                    fail(
+                        "No migration edge from v$cur — the chain $supportedBase → " +
+                            "${DashBuddyDatabase.VERSION} is broken (edges=$edges). Add the missing " +
+                            "AutoMigration(from = $cur, to = ${cur + 1}).",
+                    )
+                    return
+                }
+            cur = next
+        }
+        assertEquals(
+            "Migration edges overshoot the declared version (reached v$cur, edges=$edges).",
+            DashBuddyDatabase.VERSION,
+            cur,
         )
     }
 
@@ -99,6 +174,16 @@ class SchemaVersionGuardTest {
         return candidates.firstOrNull { it.isDirectory }
             ?: error(
                 "Could not locate exported schema dir '$rel' (cwd=${File(".").absolutePath}). " +
+                    "Tried: ${candidates.joinToString { it.path }}",
+            )
+    }
+
+    /** Locate a module source file, robust to a module-root or repo-root cwd (see [locateSchemaDir]). */
+    private fun locateSourceFile(rel: String): File {
+        val candidates = listOf(File(rel), File("core/database", rel))
+        return candidates.firstOrNull { it.isFile }
+            ?: error(
+                "Could not locate source file '$rel' (cwd=${File(".").absolutePath}). " +
                     "Tried: ${candidates.joinToString { it.path }}",
             )
     }

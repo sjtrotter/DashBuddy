@@ -37,18 +37,36 @@ object DatabaseModule {
      * Belt: [DatabaseBackup.backupIfUpgradePending] snapshots the current DB files just before Room
      * opens them when an upgrade is pending, so even a botched future migration is recoverable. It is
      * failure-tolerant — a backup failure can never prevent the app from starting.
+     *
+     * **Eager open (loud-at-startup, not loud-at-first-query).** Room opens the file lazily, on the
+     * first DAO call. But the first DB consumers — the `AnalyticsProjector` drain and `StateManagerV2`
+     * crash recovery — run inside broad `catch (Exception)` supervision that would SWALLOW the
+     * missing-migration `IllegalStateException`, leaving the app limping silently: the exact opposite
+     * of this module's stated loud-fail posture. So we force the open here by touching
+     * `openHelper.writableDatabase`, which runs the open — and any pending migration, and any
+     * no-path-for-this-version throw — deterministically at **injection time**. An injection-time
+     * crash no supervisor can swallow.
+     *
+     * Tradeoff (accepted for this single-user alpha): this puts the open (ms-scale; real DDL on an
+     * upgrade launch) plus the pre-open backup copy on the first-injection thread — Application
+     * startup, likely main. Determinism is chosen over lazy stealth failure. Residual: a very large
+     * DB copied on an upgrade launch stalls startup — accepted, once per release.
      */
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): DashBuddyDatabase {
         DatabaseBackup.backupIfUpgradePending(context, DashBuddyDatabase.NAME, DashBuddyDatabase.VERSION)
-        return Room.databaseBuilder(
+        val db = Room.databaseBuilder(
             context,
             DashBuddyDatabase::class.java,
             DashBuddyDatabase.NAME
         )
             // Intentionally NO .fallbackToDestructiveMigration(...) — see KDoc above (#690).
             .build()
+        // Force the open now so a missing migration throws at injection time (a crash no consumer's
+        // supervision can swallow), not lazily on the first DAO call. See KDoc.
+        db.openHelper.writableDatabase
+        return db
     }
 
     @Provides

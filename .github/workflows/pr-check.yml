@@ -42,6 +42,14 @@ jobs:
         # include; without it every :domain test is CI-invisible (#617 review / #590 gap).
         run: ./gradlew testDebugUnitTest :domain:test
 
+      - name: Schemas committed (Room export drift)
+        # With the destructive fallback retired (#690), an uncommitted Room schema export is a
+        # missing upgrade path that only crashes on a device. KSP regenerated the schemas during
+        # the build/test steps above; if that produced a JSON diff (or a new untracked file) the
+        # bump was committed without its schema — fail the job.
+        run: |
+          git diff --exit-code -- core/database/schemas && test -z "$(git status --porcelain core/database/schemas)"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
