@@ -72,31 +72,31 @@ data class PlatformRegion(
      */
     val pendingModeResume: PendingModeResume? = null,
     /**
-     * The most-recently accepted offer, stashed at accept time (#526 D1), pending consumption
-     * by the job-mint that follows. Default-null so existing snapshots deserialize unchanged.
+     * This platform's presented + accepted-pending-consumption offers (#438 item 7 / B3), moved off
+     * the shared global `FlowRegion.pendingOffer` so concurrent platforms no longer collide on one
+     * scalar slot. Default-empty so existing snapshots deserialize unchanged (a live pending offer
+     * at upgrade is lost — accepted, offers live ~30s; alpha).
      *
-     * WHY: the job is normally minted on the `OfferPresented → task-flow` edge, reading the offer
-     * straight off `FlowRegion.pendingOffer`. But a `waiting_for_offer` teardown frame can land
-     * between the accept click and the first task frame (the F3 race, verified in the 07-05
-     * two-pickup capture), popping `pendingOffer` first — so that edge never fires and the job is
-     * minted by the bare fallback with no economics, no dropoff/pickup placeholders, no store hint.
-     * The stash survives the teardown: it's mirrored (idempotently, keyed by offerHash) on every
-     * step whose flow still holds an accept-latched `pendingOffer`, and consumed by whichever
-     * mint path runs — accept-adjacent, add-on, or fallback. Cleared on consumption, on a
-     * superseding new offer, on session end, and lazily when older than the accept grace.
+     * Lifecycle (in [cloud.trotter.dashbuddy.core.state.OfferLifecycle]): driven by THIS platform's
+     * own observations only — pushed/replaced/enriched on own `OfferPresented` frames, click-latched,
+     * eval-landed by offerHash, and resolved when the own flow leaves offer-presentation. An
+     * accept-latched offer survives that edge as an [PendingOffer.acceptedAt]-marked
+     * accepted-pending-consumption entry (this replaces the #526 accept stash) that the task edge
+     * consumes into the job mint. Today the list holds at most one presented offer (the pre-B3
+     * single-offer replace semantics per platform); N>1 waits on #251.
      *
      * Plain data (kotlinx-serializable); all timestamps are `obs.timestamp`, so it is replay-stable.
      */
-    val lastAcceptedOffer: AcceptStash? = null,
+    val pendingOffers: List<PendingOffer> = emptyList(),
     /**
      * The last **non-null** [Flow] this region actually stepped on (#438 item 5 / D3). The global
      * R0 [FlowRegion] is shared, so under concurrency `FlowRegion.flow` is whatever platform last
      * touched the screen; keying this region's lifecycle edges (PostTask entry/exit, task
      * retire/completion) off the *global* flow lets a foreign platform's frame fire THIS platform's
      * edges (a premature completion, a duplicate receipt bubble). This records the flow this
-     * platform's own observations drove, so the edge diffs are per-region. (The accept edge's
-     * cross-platform guard is separate — `offerBelongsToRegion`, since the offer still lives in the
-     * shared R0 until B3.)
+     * platform's own observations drove, so the edge diffs are per-region. (Since #438 B3 the accept
+     * edge reads THIS region's own accepted-pending-consumption offer from [pendingOffers], so it is
+     * structurally per-region too — the interim `offerBelongsToRegion` cross-region guard is gone.)
      *
      * Stamped by the [step] wrapper from `flowObs.flow` — NOT `nextFlow.flow`: a flow-less obs
      * (flow=null clicks/notifications) leaves it unchanged, because `nextFlow.flow` on such a frame
@@ -105,29 +105,16 @@ data class PlatformRegion(
      * making single-platform behavior identical.
      */
     val lastActedFlow: Flow? = null,
-)
-
-/**
- * An accepted offer captured at accept time (#526 D1), so a job can be minted with full economics
- * and pre-created placeholders even when the `OfferPresented → task-flow` edge is skipped by a
- * teardown frame (the F3 race). See [PlatformRegion.lastAcceptedOffer].
- *
- * [storeHints] is the raw per-order store list (`orders.map { storeName }`) — empty when the offer
- * wasn't parsed; the dropoff count is `storeHints.size` (fallback 1), the distinct pickup stores are
- * its case-insensitive dedup (#499). [acceptedAt] is the `obs.timestamp` of the accept-latch step
- * that first armed the stash (preserved across idempotent re-mirrors), and becomes the minted
- * job's [AcceptedOfferEconomics.acceptedAt].
- */
-@Serializable
-data class AcceptStash(
-    val offerHash: String?,
-    val payAmount: Double? = null,
-    val netPay: Double? = null,
-    val estMinutes: Double? = null,
-    val distanceMiles: Double? = null,
-    val storeHints: List<String> = emptyList(),
-    val acceptedAt: Long,
-)
+) {
+    /**
+     * This platform's current PRESENTED offer — the accepted-pending-consumption survivors
+     * ([PendingOffer.acceptedAt] non-null) excluded. The single-offer slot today (#251 makes N>1
+     * reachable). The one SSOT for "what offer is on screen for this platform" — the live bubble
+     * card (`LiveCardBuilder`), the HUD accept/decline dispatch (`BubbleViewModel`), and the
+     * `:core:state` offer diffs all read it, so none re-derive it.
+     */
+    fun presentedOffer(): PendingOffer? = pendingOffers.lastOrNull { it.acceptedAt == null }
+}
 
 /**
  * A provisional screen-implied resume out of [Mode.Paused], pending confirmation

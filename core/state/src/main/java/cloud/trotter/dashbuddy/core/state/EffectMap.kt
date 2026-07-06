@@ -73,6 +73,14 @@ class EffectMap @Inject constructor() {
          * former rule-declared click's `delayMs`.
          */
         const val EXPAND_SETTLE_MS = 500L
+
+        /**
+         * #438 B3 (vet H1/L5): de-facto offer TTL when the offer rule parses no countdown (none do
+         * today) — the [cloud.trotter.dashbuddy.domain.pipeline.TimeoutType.OFFER_EXPIRY] fires this
+         * long after `presentedAt`, guaranteeing a presented offer that vanishes without a frame is
+         * eventually resolved. Long enough it can never fire before a real accept/decline lands.
+         */
+        const val OFFER_EXPIRY_DEFAULT_MS = 120_000L
     }
 
 
@@ -81,15 +89,9 @@ class EffectMap @Inject constructor() {
         addAll(diffExpandAction(obs))
         addAll(diffConfirmDeclineAction(obs, next))
         addAll(diffSettleUiTimeout(obs))
-        // Offer-resolution events fire in the FlowRegion handler. They need to
-        // be scoped to the active platform's session so AppEventDao queries
-        // by dashId see them — without this, the bubble HUD's card stack
-        // never sees offer events (#257).
-        val activeSessionId = next.regions.flow.activePlatform
-            ?.let { next.regions.platforms[it]?.session?.sessionId }
-            ?: prev.regions.flow.activePlatform
-                ?.let { prev.regions.platforms[it]?.session?.sessionId }
-        addAll(diffFlowRegion(prev.regions.flow, next.regions.flow, obs, activeSessionId))
+        // #438 B3: a HUD accept/decline resolves by the tap's OWN carried (platform, offerHash)
+        // against that platform's owned offers — no global-flow precondition (vet M4).
+        addAll(diffOfferAction(obs, next))
         val allPlatforms = (prev.regions.platforms.keys + next.regions.platforms.keys).distinct()
         for (p in allPlatforms) {
             addAll(
@@ -102,241 +104,6 @@ class EffectMap @Inject constructor() {
                     obs,
                 )
             )
-        }
-    }
-
-    // =========================================================================
-    // FLOW REGION DIFFS
-    // =========================================================================
-
-    private fun diffFlowRegion(
-        prev: FlowRegion,
-        next: FlowRegion,
-        obs: Observation,
-        sessionId: String?,
-    ): List<AppEffect> = buildList {
-        val flowObs = obs as? Observation.FlowObservation
-        val prevOffer = prev.pendingOffer
-        val nextOffer = next.pendingOffer
-
-        // Offer presented
-        // Screenshot for the offer screen still comes from rule-declared
-        // effects (deduped via dedupeKey + throttleMs). DB-persisted
-        // events flow through here so payloads stay typed and consistent
-        // across platforms (#257 design discussion).
-        if (prevOffer == null && nextOffer != null) {
-            val offer = nextOffer.offerFields
-            val platform = (next.activePlatform ?: Platform.Unknown).name
-
-            // Log OFFER_RECEIVED with the full parsed offer. Evaluation
-            // hasn't run yet at this point (it fires async via the
-            // EvaluateOffer side effect); the rich evaluation lands on
-            // the closing OFFER_ACCEPTED / DECLINED / TIMEOUT payload.
-            val receivedPayload = OfferReceivedPayload(
-                offerHash = nextOffer.offerHash,
-                parsedOffer = offer.parsedOffer,
-                presentedAt = nextOffer.presentedAt,
-                platform = platform,
-                returnFlow = nextOffer.returnFlow,
-            )
-            add(logEffect(sessionId, AppEventType.OFFER_RECEIVED, obs.timestamp, receivedPayload))
-
-            // Evaluate (the heads-up notification + spoken read fire later, once the async
-            // evaluation lands on the pending offer — see the eval-landing block below). The
-            // platform is the OFFER's own provenance (#438 item 8a) — its sourceRuleId, not
-            // next.activePlatform (the global mirror this pack removes) — so the eval loopback
-            // lands on the region that owns the offer even behind another platform's screen.
-            add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash, offerPlatform(nextOffer)))
-        }
-
-        // Offer replaced (different hash)
-        // Screenshot + log for new offer handled by rule-declared effects (deduped
-        // per offerHash). Resolution log for old offer stays here.
-        if (prevOffer != null && nextOffer != null &&
-            prevOffer.offerHash != nextOffer.offerHash
-        ) {
-            // Log resolution of old offer with full context.
-            val outcome = resolveOfferOutcome(obs, prevOffer)
-            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, "Replaced by new offer")))
-            // #601: the ledger records an outcome for the replaced offer even though no card
-            // popped for it before — surface it now (SSOT: same outcome→text table as the
-            // resolution block below), suffixed so it reads as the OLD offer's disposition,
-            // not a claim about the new one on screen.
-            add(
-                AppEffect.UpdateBubble(
-                    "${outcomeCardText(outcome)} (offer replaced)",
-                    persona = ChatPersona.Dispatcher,
-                )
-            )
-
-            // #457: dismiss the OLD offer's heads-up now. Its Accept/Decline is a separate, persistent
-            // notification (not the self-replacing bubble), so without this the prior banner lingers
-            // until the new offer's async eval lands — and a tap in that window would resolve against
-            // the NEW pending offer. The new offer's heads-up re-posts on eval-landing below.
-            add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
-
-            // Evaluate the new offer (notification + spoken read fire on eval-landing below).
-            val offer = nextOffer.offerFields
-            add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash, offerPlatform(nextOffer)))
-        }
-
-        // Evaluation landed (async loopback) → fire the offer's UI side-effects: the heads-up
-        // notification and the spoken read, both off the evaluation. Keyed on the evaluation
-        // arriving in state (same offer, eval null → non-null) rather than fired inline from the
-        // EvaluateOffer handler, so the offer's UI effects stay first-class + testable.
-        val landedEval = nextOffer?.evaluation
-        if (prevOffer != null && nextOffer != null && landedEval != null &&
-            prevOffer.offerHash == nextOffer.offerHash &&
-            prevOffer.evaluation == null
-        ) {
-            // #578: assemble the rich offer card via the same SSOT the bubble card uses
-            // (FlowCardSnapshot.Offer.from), so the heads-up notification renders the same data.
-            val parsedOffer = nextOffer.offerFields.parsedOffer
-            val expiresAt = parsedOffer.initialCountdownSeconds?.let { nextOffer.presentedAt + it * 1000L }
-            val offerCard = FlowCardSnapshot.Offer.from(
-                parsedOffer = parsedOffer,
-                evaluation = landedEval,
-                offerHash = nextOffer.offerHash,
-                phaseStartedAt = nextOffer.presentedAt,
-                expiresAt = expiresAt,
-                countdownSeconds = parsedOffer.initialCountdownSeconds,
-            )
-            add(AppEffect.PostOfferNotification(landedEval, offerCard, nextOffer.offerHash, offerPlatform(nextOffer)))
-            add(AppEffect.SpeakOffer(landedEval))
-        }
-
-        // Offer resolved (accepted/declined/timeout)
-        if (prevOffer != null && nextOffer == null) {
-            val outcome = resolveOfferOutcome(obs, prevOffer)
-            // #594: when the latch forced DECLINED but the last literal click was an ACCEPT, the
-            // dasher hit "Review offer"→Accept after the decline was already committed — record
-            // that the decline stood, for the forensic payload.
-            val raceDescription = if (
-                outcome == AppEventType.OFFER_DECLINED &&
-                prevOffer.declineCommittedAt != null &&
-                prevOffer.lastClickIntent == OfferIntent.ACCEPT
-            ) {
-                "Accept clicked after decline was already committed — decline stands (#594)"
-            } else {
-                null
-            }
-            // Abort a notification still waiting out its post delay (#436) —
-            // an Accept/Decline heads-up must not land after the offer is gone.
-            add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
-            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, raceDescription)))
-
-            // #601: the outcome card is derived from the SAME `outcome` value just logged above —
-            // one committed fact, one card. The click-feedback block below no longer claims an
-            // outcome at tap time (it only acks the intent); this is the single place the chat
-            // states what actually happened, so it can never desync from the ledger.
-            add(AppEffect.UpdateBubble(outcomeCardText(outcome), persona = ChatPersona.Dispatcher))
-        }
-
-        // Click feedback for offer accept/decline
-        //
-        // #601: this is an ACK, not an outcome claim — the dasher gets instant feedback that the
-        // tap registered, but the card that states what actually happened (Accepted/Declined/
-        // Timed Out) fires from the resolution block above, off the SAME `outcome` value that's
-        // logged to the ledger. Before this, a click here printed "Offer Accepted"/"Offer
-        // Declined" independently of resolveOfferOutcome — two code paths that only agreed
-        // because handleOfferClick happened to thread the same intent into both, with no
-        // structural guarantee they couldn't desync.
-        // The ack is click-time feedback that a decision is IN FLIGHT — so skip it when this
-        // same click also popped the offer (nextOffer == null): the resolution block above
-        // already emitted the committed outcome card this step, and a trailing "Accepting…"
-        // would be a never-resolving contradiction (#625 review — unreachable with today's
-        // flow-less click rules, but cheap to guard).
-        if (flowObs is Observation.Click && prev.flow == Flow.OfferPresented && nextOffer != null) {
-            val fields = flowObs.parsed as? ParsedFields.ClickFields
-            // #594: the decline-commit latch set on a prior confirm click (survives on this
-            // click's next.pendingOffer, or prev's if the pop is concurrent).
-            val declineCommitted = (next.pendingOffer ?: prevOffer)?.declineCommittedAt
-            when (fields?.intent) {
-                OfferIntent.ACCEPT ->
-                    if (declineCommitted != null) {
-                        // The decline was already committed server-side; this Accept (the
-                        // "Review offer"→Accept race) won't take. Say so instead of the
-                        // contradictory "Accepting…", and count the defended invariant
-                        // (Principle 7: WARN = a defended invariant fired; no PII in the line).
-                        Timber.w(
-                            "Accept click ignored (#594): decline already committed at %d — decline stands",
-                            declineCommitted,
-                        )
-                        add(
-                            AppEffect.UpdateBubble(
-                                "Decline already submitted — Accept won't take",
-                                persona = ChatPersona.Dispatcher,
-                            )
-                        )
-                    } else {
-                        add(AppEffect.UpdateBubble("Accepting…", persona = ChatPersona.Dispatcher))
-                    }
-                OfferIntent.DECLINE -> add(
-                    AppEffect.UpdateBubble("Declining…", persona = ChatPersona.Dispatcher)
-                )
-            }
-        }
-
-        // HUD-initiated accept/decline (bubble buttons / own-notification actions) →
-        // perform the app-owned action, aimed by the target the offer rule bound
-        // (#425). No binding = action unavailable on this platform (fail to
-        // manual). Decline taps the initial decline button; in Native mode the
-        // user confirms in DoorDash's own dialog (auto-confirm = #110 2c).
-        //
-        // #457 instrumentation: the notification-SHADE Accept/Decline buttons
-        // were found broken in the field while the in-bubble ones work — yet
-        // both dispatch this IDENTICAL UiInput, so the divergence is here or
-        // downstream. A UiInput never changes the flow (it isn't a
-        // FlowObservation), so this gate is purely "was R0 OfferPresented when
-        // the tap dispatched" — and a heads-up notification can outlive the
-        // on-screen offer. Every drop reason now logs (the gate-skip and the
-        // null platform/offer cases were previously silent) so the next field
-        // OR chance-desk occurrence self-documents which gate ate the tap, no
-        // live logcat required. Behavior is unchanged — only logging is added.
-        if (obs is Observation.UiInput) {
-            val action = when (obs.action) {
-                OfferIntent.ACCEPT -> RuleAction.ACCEPT_OFFER
-                OfferIntent.DECLINE -> RuleAction.DECLINE_OFFER
-                else -> null
-            }
-            if (action != null) {
-                val onOfferFlow = next.flow == Flow.OfferPresented || prev.flow == Flow.OfferPresented
-                // #438 item 8a: resolve the platform from the tap's OWN carried identity
-                // (obs.platform, stamped by the bubble/notification dispatch), not the global
-                // next.activePlatform mirror this pack removes. An identity-less legacy tap
-                // (Unknown) falls back to the R0 active-platform chain — today's behavior.
-                val carried = obs.platform.takeIf { it != Platform.Unknown }
-                val platform = carried ?: next.activePlatform ?: prev.activePlatform
-                val offer = next.pendingOffer ?: prev.pendingOffer
-                val target = offer?.targets?.get(action.targetBindName)
-                when {
-                    !onOfferFlow -> Timber.w(
-                        "Offer action %s dropped (#457): R0 flow is %s, not OfferPresented — " +
-                            "shade tap likely arrived after the offer left the screen",
-                        action.wire, next.flow,
-                    )
-                    platform == null || offer == null -> Timber.w(
-                        "Offer action %s dropped (#457): no active platform/pending offer " +
-                            "(platform=%s, offerHash=%s)",
-                        action.wire, platform?.wire, offer?.offerHash,
-                    )
-                    target == null -> Timber.w(
-                        "No '%s' target bound for %s — %s unavailable, leaving it to the user (#457)",
-                        action.targetBindName, platform.wire, action.wire,
-                    )
-                    else -> {
-                        // USER trigger: the dasher pressed Accept/Decline — that
-                        // press is the consent for this fire (#417).
-                        Timber.i("Offer action %s firing on %s (#457)", action.wire, platform.wire)
-                        add(
-                            AppEffect.PerformRuleAction(
-                                action, platform, target, offer.sourceRuleId,
-                                trigger = ActionTrigger.USER,
-                            ),
-                        )
-                    }
-                }
-            }
         }
     }
 
@@ -369,6 +136,12 @@ class EffectMap @Inject constructor() {
         val actedNextFlow = next.lastActedFlow ?: nextFlow.flow
 
         return buildList {
+            // #438 B3: offers are now per-platform durable state — their effect diffs join the other
+            // per-region lifecycle diffs (received/replaced/eval-landed/resolved/click-ack + expiry
+            // arm/cancel), extracted to OfferEffects (vet L4). Session-scoped so AppEventDao dashId
+            // queries see the offer events (#257) — the region's own session, per-platform.
+            val offerSessionId = next.session?.sessionId ?: p.session?.sessionId
+            addAll(diffOfferLifecycle(p, next, obs, offerSessionId))
             addAll(diffMode(p, next, obs))
             addAll(diffGraceTimer(p, next, obs))
             addAll(diffModeResumeTimer(p, next, obs))
@@ -1263,7 +1036,10 @@ class EffectMap @Inject constructor() {
         val flowObs = obs as? Observation.Screen ?: return emptyList()
         val action = RuleAction.CONFIRM_DECLINE
         val target = flowObs.targets[action.targetBindName] ?: return emptyList()
-        if (next.regions.flow.pendingOffer == null) return emptyList()
+        // #438 B3 (vet M3): a live offer is now the OBSERVING platform's own presented offer, not the
+        // shared global R0 slot — re-keyed off `pendingOffers`, or auto-confirm silently dies.
+        val hasLiveOffer = next.regions.platforms[flowObs.platform]?.presentedOffer() != null
+        if (!hasLiveOffer) return emptyList()
         return listOf(
             AppEffect.ScheduleTimeout(
                 durationMs = EXPAND_SETTLE_MS,
@@ -1325,14 +1101,7 @@ class EffectMap @Inject constructor() {
     // HELPERS
     // =========================================================================
 
-    /**
-     * The offer's own platform (#438 item 8a), from its `sourceRuleId` via the [Platform]
-     * registry — NOT `next.activePlatform`, the global mirror this pack removes. Used to
-     * stamp identity onto the eval loopback + notification so they land on the owning region.
-     */
-    private fun offerPlatform(offer: PendingOffer): Platform = Platform.fromRuleId(offer.sourceRuleId)
-
-    private fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
+    internal fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
         // 0. Decline-commit latch (#594): a DECLINE-intent click already committed this offer's
         //    decline server-side. That decision is final — a later "Review offer"→Accept click
         //    cannot un-decline it — so the latch wins over lastClickIntent AND the direct-click
@@ -1363,7 +1132,7 @@ class EffectMap @Inject constructor() {
      * caller) route through this ONE table, keyed on the exact [AppEventType] that gets logged
      * to the ledger — so the chat can never claim an outcome the ledger doesn't record.
      */
-    private fun outcomeCardText(outcome: AppEventType): String = when (outcome) {
+    internal fun outcomeCardText(outcome: AppEventType): String = when (outcome) {
         AppEventType.OFFER_ACCEPTED -> "Offer Accepted"
         AppEventType.OFFER_DECLINED -> "Offer Declined"
         AppEventType.OFFER_TIMEOUT -> "Offer Timed Out!"
@@ -1396,7 +1165,7 @@ class EffectMap @Inject constructor() {
     // Pure domain emission (#354): payload encoding + device metadata happen at the
     // executor edge. occurredAt is the OBSERVATION timestamp, so the LogEvent's
     // idempotency key is identical between live execution and recovery replay (#300).
-    private fun logEffect(
+    internal fun logEffect(
         sessionId: String?,
         type: AppEventType,
         occurredAt: Long,
@@ -1421,7 +1190,7 @@ class EffectMap @Inject constructor() {
     // entities; see #257.
     // =========================================================================
 
-    private fun offerPayload(
+    internal fun offerPayload(
         offer: PendingOffer,
         outcome: AppEventType,
         decidedAt: Long,

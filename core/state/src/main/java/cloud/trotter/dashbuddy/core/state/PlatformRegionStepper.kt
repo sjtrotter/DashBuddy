@@ -6,7 +6,6 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
-import cloud.trotter.dashbuddy.domain.state.AcceptStash
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -53,11 +52,12 @@ class PlatformRegionStepper @Inject constructor() {
         const val MAX_RECENT_TASKS = 20
 
         /**
-         * #526 D1: how long an accept stash stays consumable. An accept is always followed by the
-         * task flow within a couple of minutes; a generous window recovers the F3 teardown race
-         * while a stale stash still can't leak into an unrelated later job.
+         * #438 B3 (was #526 D1): how long an accepted-pending-consumption offer stays consumable by
+         * the mint. An accept is always followed by the task flow within a couple of minutes; a
+         * generous window recovers the F3 teardown race while a stale survivor still can't leak into
+         * an unrelated later job.
          */
-        const val ACCEPT_STASH_GRACE_MS = 120_000L
+        const val ACCEPT_GRACE_MS = 120_000L
     }
 
     /**
@@ -83,11 +83,10 @@ class PlatformRegionStepper @Inject constructor() {
         obs: Observation,
         policy: TransitionPolicy,
     ): PlatformRegion = stampLastActedFlow(
-        armAcceptStash(
-            reconcileDropoffStore(reconcileJobTasks(stepCore(prev, prevFlow, nextFlow, obs, policy))),
-            nextFlow,
-            obs,
-        ),
+        // #438 B3: the offer lifecycle runs FIRST, on THIS platform's owned pendingOffers, so an
+        // accept-latched offer is marked accepted-pending-consumption before stepCore's task edge
+        // consumes it (the old armAcceptStash mirror, run AFTER stepCore, is retired).
+        reconcileDropoffStore(reconcileJobTasks(stepCore(stepOffers(prev, obs), prevFlow, nextFlow, obs, policy))),
         obs,
     )
 
@@ -104,10 +103,6 @@ class PlatformRegionStepper @Inject constructor() {
         val flow = (obs as? Observation.FlowObservation)?.flow ?: return region
         return if (region.lastActedFlow == flow) region else region.copy(lastActedFlow = flow)
     }
-
-
-    internal fun isStashExpired(stash: AcceptStash, obs: Observation): Boolean =
-        obs.timestamp - stash.acceptedAt > ACCEPT_STASH_GRACE_MS
 
 
     /**
@@ -576,7 +571,7 @@ class PlatformRegionStepper @Inject constructor() {
         r = updateRatings(r, obs)
 
         // Job lifecycle
-        r = updateJobLifecycle(r, prev, next, prevFlow, obs)
+        r = updateJobLifecycle(r, prev, next, obs)
 
         // Task lifecycle
         r = updateTaskLifecycle(r, prev, next, obs, policy)
@@ -670,63 +665,35 @@ class PlatformRegionStepper @Inject constructor() {
         region: PlatformRegion,
         prevFlowVal: Flow,
         nextFlowVal: Flow,
-        prevFlow: FlowRegion,
         obs: Observation.FlowObservation,
     ): PlatformRegion {
-        // Offer accepted → capture its economics onto the job. A first accept STARTS a new
-        // Job; an add-on accepted while a job is already active APPENDS (so stacked pay,
-        // time, and distance accumulate) rather than being silently dropped. Deduped by
-        // offerHash so a re-entered OfferPresented for the same offer (screen oscillation)
-        // does not double-count.
-        //
-        // #438 item 5: the accept TRIGGER is a GLOBAL R0 read — the offer lives in the shared
-        // FlowRegion until B3 moves it onto the platform (the vet's interim cross-region read; B3
-        // deletes it). It is deliberately NOT the per-region `prevFlowVal`: a task frame follows the
-        // offer frame, so this platform's OWN prior acted flow is already the offer only when it
-        // stepped that offer screen — telescoped/at-once sequences would otherwise never fire. The
-        // per-region `nextFlowVal.isTaskFlow()` scopes the reaction to the platform that got the
-        // task frame, and offerBelongsToRegion (#526 FIX2a — the same provenance gate armAcceptStash
-        // uses) ensures ONLY the owning platform consumes the offer. A foreign/absent offer falls
-        // through to the D1c / bare job-start below instead of minting an empty-economics accept —
-        // the concurrency fix (an Uber offer in R0 must not become a DoorDash job's economics).
-        if (prevFlow.flow == Flow.OfferPresented && nextFlowVal.isTaskFlow()) {
-            // Accept-adjacent (happy path): the offer is still on prevFlow. Read it straight off the
-            // pending offer (the direct source); prefer the stash's acceptedAt when it matches this
-            // offer — the accept-CLICK time, not this task frame (#526 D1a). Consumption clears the
-            // stash inside the mint helpers.
-            val pending = prevFlow.pendingOffer?.takeIf { offerBelongsToRegion(it, prevFlow, region) }
-            if (pending != null) {
-                val stash = region.lastAcceptedOffer?.takeIf { !isStashExpired(it, obs) }
-                val acceptedAt = stash?.takeIf { it.offerHash == pending.offerHash }?.acceptedAt ?: obs.timestamp
-                return consumeAcceptIntoJob(region, obs, acceptInputsFromPending(pending, acceptedAt))
-            }
-        }
-
-        // #526 D1c: the F3 race — an add-on accepted while a job is active, but a `waiting_for_offer`
-        // teardown popped the pending offer BEFORE the first task frame, so the accept-adjacent
-        // branch above never fired. Consume the stash as an add-on the moment the task flow resumes.
-        // The offerHash dedup inside [consumeAcceptIntoJob]/[appendAddOn] makes a double-fold
-        // impossible; the #596 T2 physically-complete check inside it keeps an independent offer over
-        // a finished job from folding. Fires once (the stash clears on consumption).
+        // #438 B3: consume THIS region's own accepted-pending-consumption offer on a task flow — the
+        // SINGLE mint source (richer than the old accept stash: the owned offer carries full fields +
+        // evaluation). The offer was marked accepted-pending-consumption by [stepOffers] when the own
+        // flow left offer-presentation with the accept latch set. This one path covers:
+        //   - the happy path (offer→task in one step: the survivor is marked AND consumed same-frame);
+        //   - the F3 teardown race (the survivor was marked on a prior leave-edge — a
+        //     `waiting_for_offer` frame that popped presentation — and is consumed when the task flow
+        //     finally arrives).
+        // consumeAcceptIntoJob mints fresh / appends an add-on / #596-T2 closes+mints. The trigger is
+        // structurally per-region now (the offer lives on this region), so the interim
+        // offerBelongsToRegion cross-region guard is gone.
         var current = region
-        if (nextFlowVal.isTaskFlow() && current.activeJob != null && current.lastAcceptedOffer != null) {
-            val stash = current.lastAcceptedOffer?.takeIf { !isStashExpired(it, obs) }
-            if (stash != null) return consumeAcceptIntoJob(current, obs, acceptInputsFromStash(stash))
-            // #526 FIX2c: an EXPIRED stash is a corpse — clear it INLINE but do NOT early-return.
-            // Returning here short-circuited the rest of this frame's job handling; the frame must
-            // still be processed normally (a lost arrivedAt stamp would trip the #615 arrival gate
-            // and the job would never close). Fall through to the tail with the corpse cleared.
-            current = current.copy(lastAcceptedOffer = null)
+        val accepted = current.pendingOffers.lastOrNull { it.acceptedAt != null }
+        if (nextFlowVal.isTaskFlow() && accepted != null) {
+            if (!isOfferAcceptExpired(accepted, obs)) {
+                val consumed = current.copy(pendingOffers = current.pendingOffers.filterNot { it === accepted })
+                return consumeAcceptIntoJob(consumed, obs, acceptInputsFromPending(accepted, accepted.acceptedAt))
+            }
+            // A lapsed survivor is a corpse — clear it INLINE but do NOT early-return; the frame must
+            // still process normally (a lost arrivedAt stamp would trip the #615 arrival gate and the
+            // job would never close). Fall through with the corpse cleared.
+            current = current.copy(pendingOffers = current.pendingOffers.filterNot { it === accepted })
         }
 
-        // Job start: task flow without active job (recovery, mid-session restart, or the F3 race
-        // where the accept edge was skipped entirely).
+        // Job start: task flow without active job (recovery, mid-session restart, or an accept that
+        // was never latched — genuine bare fallback with no economics).
         if (nextFlowVal.isTaskFlow() && current.activeJob == null) {
-            // #526 D1: a valid accept stash → mint the FULL offer-shaped job (economics + dropoff +
-            // pickup placeholders + store hints), recovering the F3 teardown race. Else today's bare
-            // fallback (no accept was ever seen — genuine recovery/restart).
-            val stash = current.lastAcceptedOffer?.takeIf { !isStashExpired(it, obs) }
-            if (stash != null) return consumeAcceptIntoJob(current, obs, acceptInputsFromStash(stash))
             val parsed = obs.parsed as? ParsedFields.TaskFields
             return current.copy(
                 activeJob = Job(
@@ -736,7 +703,6 @@ class PlatformRegionStepper @Inject constructor() {
                     startedAt = obs.timestamp,
                 ),
                 mintCounter = current.mintCounter + 1,
-                lastAcceptedOffer = null,
             )
         }
 
@@ -1202,8 +1168,8 @@ class PlatformRegionStepper @Inject constructor() {
             idleEnteredAt = null,
             lastPostTaskPayHash = null,
             lastPostTaskFields = null,
-            // #526 D1: the session's over — a stashed accept must not leak into the next dash.
-            lastAcceptedOffer = null,
+            // #438 B3: the session's over — pending/accepted offers must not leak into the next dash.
+            pendingOffers = emptyList(),
         )
     }
 

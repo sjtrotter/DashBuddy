@@ -197,4 +197,16 @@ enum class TimeoutType {
      * timer (re-opening #431).
      */
     MODE_RESUME_COMMIT,
+
+    /**
+     * Expires a presented offer whose overlay can vanish without emitting a frame (#438 B3 /
+     * vet H1). Armed by EffectMap on offer push ([cloud.trotter.dashbuddy.core.state.OfferEffects],
+     * the [GRACE_COMMIT] mechanism — NEVER inside a reducer), deadline `presentedAt +
+     * countdown*1000` else a 120s de-facto TTL; cancelled on resolution. The fire carries the
+     * offer's `offerHash` in its [Observation.Timeout.payload] and resolves BY hash, and NO-OPS on
+     * an accept-latched / accepted-pending-consumption offer — both TTLs land inside the accept
+     * grace, and timing-out an accepted survivor would log a false `OFFER_TIMEOUT` and destroy the
+     * mint (the #526 regression the survival rule prevents).
+     */
+    OFFER_EXPIRY,
 }

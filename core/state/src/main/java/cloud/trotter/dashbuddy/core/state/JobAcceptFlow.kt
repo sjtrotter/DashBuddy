@@ -1,15 +1,12 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
-import cloud.trotter.dashbuddy.domain.state.AcceptStash
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
-import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
-import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.StoreNameMatch
 import cloud.trotter.dashbuddy.domain.state.Task
@@ -50,9 +47,10 @@ internal fun PlatformRegionStepper.preCreatedDropoffs(
 }
 
 /**
- * #526 D1: the accepted-offer inputs a job mint needs, sourced from EITHER the live pending offer
- * ([acceptInputsFromPending], accept-adjacent happy path) or the stash ([acceptInputsFromStash],
- * the F3 teardown-race recovery). One shape so [consumeAcceptIntoJob] is source-agnostic.
+ * #438 B3 (was #526 D1): the accepted-offer inputs a job mint needs, sourced from the region's own
+ * accepted-pending-consumption [PendingOffer] via [acceptInputsFromPending]. One shape so
+ * [consumeAcceptIntoJob] is source-agnostic — it serves the accept-adjacent happy path AND the F3
+ * teardown-race recovery (both now read the same owned survivor, so the old stash variant is gone).
  */
 internal data class AcceptInputs(
     val offerHash: String?,
@@ -63,7 +61,7 @@ internal data class AcceptInputs(
     val dropoffCount: Int,
 )
 
-internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer?, acceptedAt: Long): AcceptInputs {
+internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer?, acceptedAt: Long?): AcceptInputs {
     val parsedOffer = pending?.offerFields?.parsedOffer
     val eval = pending?.evaluation
     val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
@@ -75,32 +73,19 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
             netPay = eval?.netPayAmount,
             estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble(),
             distanceMiles = eval?.distanceMiles ?: parsedOffer?.distanceMiles,
-            acceptedAt = acceptedAt,
+            // The honest accept moment (the accept-click time); falls back to the consume frame.
+            acceptedAt = acceptedAt ?: pending?.acceptClickAt ?: pending?.presentedAt ?: 0L,
         ),
         storeHints = storeHints,
         dropoffCount = storeHints.size.takeIf { it > 0 } ?: 1,
     )
 }
 
-internal fun PlatformRegionStepper.acceptInputsFromStash(stash: AcceptStash): AcceptInputs = AcceptInputs(
-    offerHash = stash.offerHash,
-    economics = AcceptedOfferEconomics(
-        offerHash = stash.offerHash,
-        payAmount = stash.payAmount,
-        netPay = stash.netPay,
-        estMinutes = stash.estMinutes,
-        distanceMiles = stash.distanceMiles,
-        acceptedAt = stash.acceptedAt,
-    ),
-    storeHints = stash.storeHints,
-    dropoffCount = stash.storeHints.size.takeIf { it > 0 } ?: 1,
-)
-
 /**
- * #526 D1: consume an accepted offer into the job graph — fresh mint, #596 T2 close+mint on an
- * independent offer over a finished job, or add-on append. Clears [PlatformRegion.lastAcceptedOffer]
- * on every path (the accept is now realized). The single entry point shared by the accept-adjacent,
- * D1c add-on, and fallback branches.
+ * #438 B3 (was #526 D1): consume an accepted offer into the job graph — fresh mint, #596 T2
+ * close+mint on an independent offer over a finished job, or add-on append. The caller has already
+ * removed the consumed offer from [PlatformRegion.pendingOffers]; this only assembles the job graph.
+ * The single entry point shared by the accept-adjacent, add-on, and fallback branches.
  */
 internal fun PlatformRegionStepper.consumeAcceptIntoJob(
     region: PlatformRegion,
@@ -165,7 +150,6 @@ internal fun PlatformRegionStepper.mintFreshJobFromAccept(
         ),
         // job(1) + D dropoffs + P pickups, all minted in this one copy() (#344).
         mintCounter = base.mintCounter + 1 + inputs.dropoffCount + pickups.size,
-        lastAcceptedOffer = null,
     )
 }
 
@@ -183,7 +167,7 @@ internal fun PlatformRegionStepper.appendAddOn(
 ): PlatformRegion {
     val alreadyCounted = inputs.offerHash != null &&
         existing.acceptedOffers.any { it.offerHash == inputs.offerHash }
-    if (alreadyCounted) return region.copy(lastAcceptedOffer = null)
+    if (alreadyCounted) return region
     val addOnDropoffs = preCreatedDropoffs(region, obs, existing.jobId, inputs.dropoffCount, startOffset = 0)
     // #526 FIX3c: dedup incoming add-on stores against BOTH the existing pickups' offer hints
     // AND their resolved store names — a bare-fallback job (hint null, storeName "H-E-B") would
@@ -203,7 +187,6 @@ internal fun PlatformRegionStepper.appendAddOn(
             tasks = existing.tasks + addOnDropoffs + addOnPickups,
         ),
         mintCounter = region.mintCounter + inputs.dropoffCount + addOnPickups.size,
-        lastAcceptedOffer = null,
     )
 }
 
@@ -280,71 +263,3 @@ internal fun PlatformRegionStepper.maybeSwapMisboundPickup(
     return swappedJob to newActive
 }
 
-/**
- * #526 D1a — mirror an accept-latched pending offer into [PlatformRegion.lastAcceptedOffer] so a
- * job can still be minted with full economics + placeholders when the `OfferPresented → task`
- * edge is skipped by a teardown frame (F3). Runs AFTER [stepCore] on every step: consumption
- * (inside `updateJobLifecycle`) reads a stash armed on a PRIOR step, then this re-mirrors THIS
- * step's offer.
- *
- * The mirror is idempotent (keyed by `offerHash`, [AcceptStash.acceptedAt] preserved across
- * re-mirrors); a superseding pending offer with a different hash and a stash older than the
- * accept grace both clear it, so no corpse rides the snapshot. Session end clears it in
- * [endSession]. Pure: [isAcceptLatched] + `obs.timestamp` only.
- */
-internal fun PlatformRegionStepper.armAcceptStash(
-    region: PlatformRegion,
-    nextFlow: FlowRegion,
-    obs: Observation,
-): PlatformRegion {
-    var stash = region.lastAcceptedOffer
-    val po = nextFlow.pendingOffer
-    // Supersession: a different offer on screen invalidates a stale stash.
-    if (stash != null && po != null && po.offerHash != stash.offerHash) stash = null
-    // #526 FIX2b revocation: the SAME offer is still on screen but its accept latch is GONE
-    // (a decline-after-accept — the "Review offer" → decline race, #594). The accept was
-    // revoked, so drop the stash: without this a declined add-on would be folded into the job
-    // by D1c as phantom economics + a never-resolvable dropoff placeholder that blocks
-    // isJobPhysicallyComplete forever.
-    if (stash != null && po != null && po.offerHash == stash.offerHash && !po.isAcceptLatched()) stash = null
-    // Lazy expiry: don't carry a corpse.
-    if (stash != null && isStashExpired(stash, obs)) stash = null
-    // Mirror an accept-latched pending offer — but only into the region that OWNS the offer
-    // (#526 FIX2a / Principle 8): the FlowRegion is shared, so an Uber timer obs stepping the
-    // Uber region must not arm Uber's stash from a DoorDash offer still sitting in R0.
-    if (po != null && po.isAcceptLatched() && offerBelongsToRegion(po, nextFlow, region)) {
-        val parsedOffer = po.offerFields.parsedOffer
-        val eval = po.evaluation
-        val acceptedAt = stash?.takeIf { it.offerHash == po.offerHash }?.acceptedAt ?: obs.timestamp
-        stash = AcceptStash(
-            offerHash = po.offerHash,
-            payAmount = eval?.payAmount ?: parsedOffer.payAmount,
-            netPay = eval?.netPayAmount,
-            estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer.timeToCompleteMinutes?.toDouble(),
-            distanceMiles = eval?.distanceMiles ?: parsedOffer.distanceMiles,
-            storeHints = parsedOffer.orders.map { it.storeName },
-            acceptedAt = acceptedAt,
-        )
-    }
-    return if (stash === region.lastAcceptedOffer) region else region.copy(lastAcceptedOffer = stash)
-}
-
-/**
- * #526 FIX2a: does [po] belong to [region]'s platform? The offer's platform is read from its
- * `sourceRuleId` (via [Platform.fromRuleId]), falling back to the flow's active platform. A
- * KNOWN foreign platform is blocked; an [Platform.Unknown] result (e.g. an unattributed test
- * fixture) can't be told apart, so it passes — fail-open. Two call sites: stash ARMING
- * ([armAcceptStash], non-destructive, consumption still offerHash-guarded) and, since #438 B1,
- * the accept-edge CONSUMPTION read in `updateJobLifecycle` (destructive — it mints economics).
- * Production rule ids are prefix-namespaced so provenance always resolves there; B3 (the offer
- * move onto [PlatformRegion]) retires this gate entirely, and should it survive in any form,
- * the consumption site should fail closed instead.
- * Keyed only by the [Platform] registry — no platform literals (Principle 8).
- */
-internal fun PlatformRegionStepper.offerBelongsToRegion(po: PendingOffer, flow: FlowRegion, region: PlatformRegion): Boolean {
-    val offerPlatform = Platform.fromRuleId(po.sourceRuleId)
-        .takeIf { it != Platform.Unknown }
-        ?: flow.activePlatform
-        ?: Platform.Unknown
-    return offerPlatform == Platform.Unknown || offerPlatform == region.platform
-}

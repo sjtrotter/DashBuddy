@@ -38,7 +38,9 @@ object LiveCardBuilder {
             }
 
             Flow.OfferPresented -> {
-                val pending = state.regions.flow.pendingOffer ?: return null
+                // #438 B3: the foreground offer is the focused platform's own presented offer
+                // (offers moved off the shared global R0 slot onto the owning region).
+                val pending = region.presentedOffer() ?: return null
                 val offer = pending.offerFields.parsedOffer
                 FlowCardSnapshot.Offer.from(
                     parsedOffer = offer,

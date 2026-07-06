@@ -46,4 +46,16 @@ sealed interface ObservationPayload {
         val offerHash: String? = null,
         val evaluation: OfferEvaluation? = null,
     ) : ObservationPayload
+
+    /**
+     * Identifies WHICH presented offer an [TimeoutType.OFFER_EXPIRY] timer belongs to (#438 B3 /
+     * vet M5). The fire resolves BY [offerHash] within the owning region's `pendingOffers`, so
+     * N>1 offers per platform each hold their own logical expiry even though the timer registry
+     * slot is `(type, platform)`. Round-trips losslessly through the observation journal.
+     */
+    @Serializable
+    @SerialName("offerExpiry")
+    data class OfferExpiry(
+        val offerHash: String,
+    ) : ObservationPayload
 }
