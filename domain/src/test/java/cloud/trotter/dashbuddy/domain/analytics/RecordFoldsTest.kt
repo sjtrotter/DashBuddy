@@ -105,6 +105,7 @@ class RecordFoldsTest {
         totalPay: Double? = null,
         dropRealizedPay: Double? = null,
         parsedPay: ParsedPay? = null,
+        offerPayShare: Double? = null,
         odo: Double? = null,
         phaseStartedAt: Long = at - 600_000,
         // Identity-bearing by default (a real delivered drop). A #498/#653 phantom payload has
@@ -118,6 +119,7 @@ class RecordFoldsTest {
             addressHash = if (identityLess) null else "addr-$taskId",
             phaseStartedAt = phaseStartedAt, arrivedAt = at - 120_000, completedAt = at,
             totalPay = totalPay, parsedPay = parsedPay, dropRealizedPay = dropRealizedPay,
+            offerPayShare = offerPayShare,
         ),
         odometer = odo,
     )
@@ -593,6 +595,148 @@ class RecordFoldsTest {
         )
         assertEquals("real platform from DASH_START is preserved", Platform.DoorDash, outcomes.last().context!!.platform)
         assertEquals(Platform.DoorDash, ctx!!.platform)
+    }
+
+    // ── #691 offer-pay fallback for receipt-less completions ─────────────
+
+    @Test
+    fun `a receipt-less drop with an offer-pay share folds OFFER_PAY with a real net`() {
+        val s = "OP1"
+        // A wholly receipt-less shop delivery: no dropRealizedPay, no totalPay, no parsedPay — just
+        // the write-side offer-pay estimate. Folds OFFER_PAY with net computed against the frozen cpm.
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                offerAccepted(s, 2_000, "h1", eval(net = 9.0, dist = 3.0, opCpm = 0.25)),
+                delivery(s, 3_000, "J1", "T1", offerPayShare = 12.95, odo = 105.0),
+            ),
+        )
+        val d = outcomes[2].delivery!!
+        assertEquals(PayBasis.OFFER_PAY, d.payBasis)
+        assertEquals(12.95, d.realizedPay!!, 1e-9)
+        assertNull("no itemization on an offer-pay estimate", d.tip)
+        assertNull(d.basePay)
+        assertEquals(CostBasis.OFFER_FROZEN, d.costBasis)
+        assertEquals("net = pay − miles × cpm (5 mi × 0.25)", 12.95 - 5.0 * 0.25, d.netProfit!!, 1e-9)
+        assertEquals("offer-pay is NOT a receipt — job stays unreceipted", emptySet<String>(), ctx!!.receiptedJobIds)
+    }
+
+    @Test
+    fun `precedence — a real receipt beats an offer-pay share on the same drop`() {
+        val s = "OP2"
+        // Even if a stray offerPayShare is present, dropRealizedPay/totalPay win (a receipt is truth).
+        val (dropShareOut, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 3_000, "J1", "T1", dropRealizedPay = 7.0, offerPayShare = 99.0, odo = 4.0),
+            ),
+        )
+        val d1 = dropShareOut[1].delivery!!
+        assertEquals(PayBasis.DROP_SHARE, d1.payBasis)
+        assertEquals(7.0, d1.realizedPay!!, 1e-9)
+
+        val (totalOut, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 3_000, "J2", "T2", totalPay = 11.0, offerPayShare = 99.0, odo = 4.0),
+            ),
+        )
+        val d2 = totalOut[1].delivery!!
+        assertEquals(PayBasis.RECEIPT_TOTAL, d2.payBasis)
+        assertEquals(11.0, d2.realizedPay!!, 1e-9)
+    }
+
+    @Test
+    fun `mixed-receipt guard — a receipt-first sibling denies OFFER_PAY to the later receipt-less drop`() {
+        val s = "OP3"
+        // Drop 1 of J1 folds a real receipt → the job is marked receipted. Drop 2 of J1 is
+        // receipt-less but carries an offer-pay share: the guard keeps it NONE (mixing a real
+        // receipt with an offer-total estimate would over-count under the MAX-floored reconciliation).
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 2_000, "J1", "T1", dropRealizedPay = 6.0, parsedPay = parsedPay(4.0, 2.0), odo = 4.0),
+                delivery(s, 3_000, "J1", "T2", offerPayShare = 6.48, odo = 8.0),
+            ),
+        )
+        val d2 = outcomes[2].delivery!!
+        assertEquals("sibling already receipted ⇒ no offer-pay estimate", PayBasis.NONE, d2.payBasis)
+        assertNull(d2.realizedPay)
+        assertEquals(setOf("J1"), ctx!!.receiptedJobIds)
+    }
+
+    @Test
+    fun `mixed-receipt guard — offer-pay first, then a receipt sibling — the documented reverse order stands`() {
+        val s = "OP4"
+        // The reverse order: an offer-pay drop folds first (job not yet receipted → OFFER_PAY), then a
+        // receipt drop of the same job arrives. Per-task events are immutable — the offer-pay row is
+        // NOT retroactively unwound; the receipt drop uses its own receipt. Documented residual.
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 2_000, "J1", "T1", offerPayShare = 6.48, odo = 4.0),
+                delivery(s, 3_000, "J1", "T2", dropRealizedPay = 6.0, parsedPay = parsedPay(4.0, 2.0), odo = 8.0),
+            ),
+        )
+        assertEquals(PayBasis.OFFER_PAY, outcomes[1].delivery!!.payBasis)
+        assertEquals(PayBasis.DROP_SHARE, outcomes[2].delivery!!.payBasis)
+        assertEquals("the receipt drop still marks the job receipted", setOf("J1"), ctx!!.receiptedJobIds)
+    }
+
+    @Test
+    fun `a suspect full-receipt still wins over an offer-pay share`() {
+        val s = "OP5"
+        // The #653 suspect check is evaluated first and unchanged: an identity-less phantom full
+        // receipt on an already-delivered job is SUSPECT even if an offerPayShare is present.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 2_000, "J1", "T1", dropRealizedPay = 10.0, parsedPay = parsedPay(7.0, 3.0), odo = 4.0),
+                delivery(s, 3_000, "J1", "T2", totalPay = 10.0, parsedPay = parsedPay(7.0, 3.0), offerPayShare = 5.0, odo = 5.0, identityLess = true),
+            ),
+        )
+        val phantom = outcomes[2].delivery!!
+        assertEquals(PayBasis.SUSPECT_FULL_RECEIPT, phantom.payBasis)
+        assertNull(phantom.realizedPay)
+    }
+
+    @Test
+    fun `a receipt-less drop with NO offer-pay share stays NONE — old payloads refold byte-identically`() {
+        val s = "OP6"
+        // A pre-#691 event carries no offerPayShare (deserializes null) → the fold reproduces today's
+        // NONE row exactly. This is the rebuild-faithful, no-PROJECTOR_VERSION-bump guarantee.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 3_000, "J1", "T1", odo = 4.0),
+            ),
+            currentCpm = 0.30,
+        )
+        val d = outcomes[1].delivery!!
+        assertEquals(PayBasis.NONE, d.payBasis)
+        assertNull(d.realizedPay)
+        assertNull("no pay ⇒ no net even with a cpm", d.netProfit)
+    }
+
+    @Test
+    fun `an OFFER_PAY drop with null miles gets null net but still shrinks unattributed (machine semantics)`() {
+        val s = "OP7"
+        // VET item E: a receipt-less drop with a valid offer-pay share but NO odometer → realizedMiles
+        // is null → netProfit is null (machine semantics, the #660-family null-net seam, deliberately
+        // not widened), while realizedPay is still set so period unattributedPay shrinks. Asserted so
+        // the choice is pinned.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                offerAccepted(s, 2_000, "h1", eval(net = 9.0, dist = 3.0, opCpm = 0.25)),
+                delivery(s, 3_000, "J1", "T1", offerPayShare = 12.95, odo = null),
+            ),
+        )
+        val d = outcomes[2].delivery!!
+        assertEquals(PayBasis.OFFER_PAY, d.payBasis)
+        assertEquals(12.95, d.realizedPay!!, 1e-9)
+        assertNull("null miles ⇒ null net (machine semantics)", d.netProfit)
+        assertNull(d.realizedMiles)
     }
 
     // ── User corrections (#650) ─────────────────────────────────────────

@@ -32,6 +32,18 @@ object PayBasis {
      * still counts as a delivery / advances the partition anchors — only its money is nulled.
      */
     const val SUSPECT_FULL_RECEIPT = "SUSPECT_FULL_RECEIPT"
+    /**
+     * An ESTIMATE basis (#691): the accepted offer's guaranteed total, split EQUALLY across the
+     * job's owed dropoffs, stamped at completion when the WHOLE job was receipt-less (a DoorDash
+     * shop order shows no per-delivery receipt — pay lives only on the offer + the running dash
+     * total). The platform's actual per-drop split is unknowable without a receipt, so the honest
+     * estimate is the offer total ÷ drops. Consumed only when no sibling drop of the same job folded
+     * with receipt-derived pay (the mixed-receipt guard); tip/base stay null (no itemization).
+     * Surfaced as "est. offer pay" in the UI and as `OFFER_PAY` in the CSV `pay_basis` column so the
+     * estimate is never silent (the #689 precedent).
+     */
+    const val OFFER_PAY = "OFFER_PAY"
+
     /** No pay signal on the completion (receipt-skipped #596). */
     const val NONE = "NONE"
 
@@ -364,13 +376,31 @@ object RecordFolds {
             priorDeliveryForThisJob && p.parsedPay != null && p.dropRealizedPay == null &&
                 p.customerHash == null && p.addressHash == null
 
+        // #691 mixed-receipt guard: an offer-pay ESTIMATE (an equal split of the offer total)
+        // assumes the WHOLE job is receipt-less. If a sibling drop of this job already folded a REAL
+        // receipt this session, mixing the two over-counts invisibly (the reported-total
+        // reconciliation floors at 0), so a receipt-less drop of such a job keeps NONE. Defense-in-
+        // depth behind the EffectMap job-scoped stamp condition (which is the primary control).
+        val jobAlreadyReceipted = ctx != null && p.jobId in ctx.receiptedJobIds
+        val useOfferShare = !suspectFullReceipt &&
+            p.dropRealizedPay == null && p.totalPay == null &&
+            p.offerPayShare != null && !jobAlreadyReceipted
+
         // Pay + basis. dropRealizedPay is a per-drop share (possibly of a multi-drop receipt);
-        // its absence with a bare totalPay means the whole receipt landed on this one drop.
-        val realizedPay = if (suspectFullReceipt) null else p.dropRealizedPay ?: p.totalPay
+        // its absence with a bare totalPay means the whole receipt landed on this one drop. With
+        // neither, the #691 offer-pay estimate is the fallback before NONE.
+        val realizedPay = when {
+            suspectFullReceipt -> null
+            p.dropRealizedPay != null -> p.dropRealizedPay
+            p.totalPay != null -> p.totalPay
+            useOfferShare -> p.offerPayShare
+            else -> null
+        }
         val payBasis = when {
             suspectFullReceipt -> PayBasis.SUSPECT_FULL_RECEIPT
             p.dropRealizedPay != null -> PayBasis.DROP_SHARE
             p.totalPay != null -> PayBasis.RECEIPT_TOTAL
+            useOfferShare -> PayBasis.OFFER_PAY
             else -> PayBasis.NONE
         }
         // tip/basePay only when this drop IS the job's sole drop — i.e. it carries the WHOLE receipt.
@@ -439,9 +469,13 @@ object RecordFolds {
             costBasis = costBasis,
         )
 
+        // #691: mark the job receipted once any drop folds real receipt pay, so a later receipt-less
+        // sibling of the same job is denied the offer-pay estimate (the mixed-receipt guard above).
+        val jobReceipted = payBasis == PayBasis.DROP_SHARE || payBasis == PayBasis.RECEIPT_TOTAL
         val newCtx = ctx?.copy(
             deliveries = ctx.deliveries + 1,
             deliveredJobIds = ctx.deliveredJobIds + p.jobId,
+            receiptedJobIds = if (jobReceipted) ctx.receiptedJobIds + p.jobId else ctx.receiptedJobIds,
             // Advance the miles anchor only when this drop had an odometer, so a null-odometer drop
             // folds its miles into the next drop instead of resetting the partition; the time anchor
             // always advances (time is always known).
