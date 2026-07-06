@@ -22,6 +22,7 @@ internal fun DeliveryRecordEntity.toDomain(): DeliveryRecord = DeliveryRecord(
     storeName = storeName,
     completedAt = completedAt,
     realizedPay = realizedPay,
+    payBasis = payBasis,
     netProfit = netProfit,
     realizedMiles = realizedMiles,
     realizedMinutes = realizedMinutes,

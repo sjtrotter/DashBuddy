@@ -48,8 +48,8 @@ class SessionDetailViewModelTest {
     private fun delivery(id: String) = DeliveryRecord(
         eventSequenceId = 1L, sessionId = id, platform = Platform.DoorDash, jobId = "job-1",
         taskId = "task-1", storeName = "Wendys", completedAt = 1_700_001_000_000L,
-        realizedPay = 8.0, netProfit = 3.0, realizedMiles = 3.0, realizedMinutes = 10.0,
-        tip = 2.0, basePay = 6.0,
+        realizedPay = 8.0, payBasis = "DROP_SHARE", netProfit = 3.0, realizedMiles = 3.0,
+        realizedMinutes = 10.0, tip = 2.0, basePay = 6.0,
     )
 
     private fun buildViewModel(sessionId: String) = SessionDetailViewModel(
