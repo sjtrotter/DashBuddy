@@ -14,8 +14,19 @@ data class SessionDetail(
     val session: SessionRecord,
     val deliveries: List<DeliveryRecord>,   // completion order
 ) {
-    /** Σ captured delivery pay for THIS session (null pays counted as 0). */
+    /**
+     * Σ captured delivery pay for THIS session (null pays counted as 0). Deliberately CASH-FREE
+     * (#688 locked accounting): cash tips live outside `realizedPay`, so this stays the exact
+     * quantity the `unattributedPay` reconciliation compares against `reportedEarnings`.
+     */
     val deliveredPay: Double get() = deliveries.sumOf { it.realizedPay ?: 0.0 }
+
+    /**
+     * Σ driver-entered cash tips for THIS session (#688). Added to the displayed gross/net as its
+     * OWN line — never folded into [deliveredPay] or [unattributedPay], so recording a cash tip
+     * raises gross/net without shrinking the reported-vs-captured reconciliation.
+     */
+    val cashTips: Double get() = deliveries.sumOf { it.cashTip ?: 0.0 }
 
     /**
      * `reported − delivered` when the platform-reported total exceeds captured delivery pay, else

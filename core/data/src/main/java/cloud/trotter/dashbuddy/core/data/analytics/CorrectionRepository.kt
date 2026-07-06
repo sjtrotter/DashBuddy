@@ -3,15 +3,17 @@ package cloud.trotter.dashbuddy.core.data.analytics
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
-import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Write-side entry point for driver corrections (#650) — appends `MANUAL_DELIVERY` / `PAY_ADJUSTMENT`
- * events to the durable `app_events` log. Deliberately SEPARATE from the read-side [AnalyticsRepository]
+ * Write-side entry point for driver corrections (#650/#688) — appends `MANUAL_DELIVERY` /
+ * `DELIVERY_ADJUSTMENT` events to the durable `app_events` log. (The legacy `PAY_ADJUSTMENT` event
+ * stays fully readable by the fold/projector for history, but the new UI writes only the widened
+ * `DELIVERY_ADJUSTMENT`.) Deliberately SEPARATE from the read-side [AnalyticsRepository]
  * (Principle 3 — single responsibility: one repository reads the projected records, another writes the
  * correction events; they never share a code path). Corrections are **events, never destructive edits**:
  * the original capture and its provenance stay in the log; the projector folds the correction on its
@@ -31,16 +33,25 @@ class CorrectionRepository @Inject constructor(
      * are optional driver knowledge. [completedAt] is when the delivery happened (the caller picks an
      * honest default, e.g. the session's end/start). The projector folds it into a `delivery_record`
      * (payBasis `MANUAL`) on its next drain.
+     *
+     * Validation (#705 F4b — parity with [adjustDelivery], which this method previously lacked
+     * entirely): every money/miles value must be **finite** (a non-finite value would reach
+     * `AppEventCodec` and throw a `SerializationException`), pay finite > 0, tip/cash/miles finite ≥ 0.
      */
     suspend fun addManualDelivery(
         sessionId: String,
         storeName: String?,
         pay: Double,
         tip: Double?,
+        cashTip: Double?,
         completedAt: Long,
         miles: Double?,
         note: String?,
     ) {
+        require(pay.isFinite() && pay > 0.0) { "pay must be a finite positive amount" }
+        require(tip == null || (tip.isFinite() && tip >= 0.0)) { "tip must be finite and non-negative" }
+        require(cashTip == null || (cashTip.isFinite() && cashTip >= 0.0)) { "cashTip must be finite and non-negative" }
+        require(miles == null || (miles.isFinite() && miles >= 0.0)) { "miles must be finite and non-negative" }
         appEventRepo.appendUserEvent(
             AppEvent(
                 type = AppEventType.MANUAL_DELIVERY,
@@ -51,6 +62,7 @@ class CorrectionRepository @Inject constructor(
                     storeName = storeName,
                     pay = pay,
                     tip = tip,
+                    cashTip = cashTip,
                     completedAt = completedAt,
                     miles = miles,
                     note = note,
@@ -62,32 +74,55 @@ class CorrectionRepository @Inject constructor(
     }
 
     /**
-     * Append a driver re-price of an already-recorded delivery (#650). [targetEventSequenceId] is the
-     * PK of the `delivery_record` to re-price; [sessionId] is for attribution/liveness only. The
-     * projector rewrites the target row's realizedPay to [newPay] (payBasis → `USER_CORRECTED`, net
-     * recomputed against the row's own frozen cost basis) on its next drain — the original event stays.
+     * Append a driver multi-field edit of an already-recorded delivery (#688) — the widened
+     * correction. [targetEventSequenceId] is the PK of the target `delivery_record`; [sessionId] is
+     * for attribution/liveness only. Every new-value field is optional (null ⇒ that column is left
+     * unchanged); the projector re-applies the target row on its next drain (payBasis → `USER_CORRECTED`
+     * only when [newPay] changes, per the never-silent disclosure rule; net recomputed against the row's
+     * own frozen cost basis) — the original event stays.
+     *
+     * Validation: at least one new-value field OR [note] must be non-null (a note-only annotation is
+     * valid, #688 F6); money is > 0 where present, tip/cash ≥ 0, miles ≥ 0.
      */
-    suspend fun adjustDeliveryPay(
+    suspend fun adjustDelivery(
         targetEventSequenceId: Long,
         sessionId: String?,
-        newPay: Double,
-        note: String?,
+        newStoreName: String? = null,
+        newPay: Double? = null,
+        newTip: Double? = null,
+        newCashTip: Double? = null,
+        newMiles: Double? = null,
+        note: String? = null,
     ) {
+        require(
+            newStoreName != null || newPay != null || newTip != null ||
+                newCashTip != null || newMiles != null || note != null,
+        ) { "DELIVERY_ADJUSTMENT must change at least one field or carry a note" }
+        // Every money/miles value must be FINITE (#705 F4b): a non-finite value (e.g. a pasted `1e999`
+        // → `Infinity`) would reach `AppEventCodec` and throw a `SerializationException`.
+        require(newPay == null || (newPay.isFinite() && newPay > 0.0)) { "newPay must be a finite positive amount" }
+        require(newTip == null || (newTip.isFinite() && newTip >= 0.0)) { "newTip must be finite and non-negative" }
+        require(newCashTip == null || (newCashTip.isFinite() && newCashTip >= 0.0)) { "newCashTip must be finite and non-negative" }
+        require(newMiles == null || (newMiles.isFinite() && newMiles >= 0.0)) { "newMiles must be finite and non-negative" }
         appEventRepo.appendUserEvent(
             AppEvent(
-                type = AppEventType.PAY_ADJUSTMENT,
+                type = AppEventType.DELIVERY_ADJUSTMENT,
                 occurredAt = System.currentTimeMillis(),
                 sessionId = sessionId,
-                payload = PayAdjustmentPayload(
+                payload = DeliveryAdjustmentPayload(
                     targetEventSequenceId = targetEventSequenceId,
                     sessionId = sessionId,
+                    newStoreName = newStoreName,
                     newPay = newPay,
+                    newTip = newTip,
+                    newCashTip = newCashTip,
+                    newMiles = newMiles,
                     note = note,
                 ),
             ),
         )
-        // P7: no note text — counts/ids only.
-        Timber.tag(TAG).i("PAY_ADJUSTMENT appended for delivery seq %d", targetEventSequenceId)
+        // P7: no note/store text — counts/ids only.
+        Timber.tag(TAG).i("DELIVERY_ADJUSTMENT appended for delivery seq %d", targetEventSequenceId)
     }
 
     private companion object {

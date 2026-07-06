@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
@@ -993,6 +994,60 @@ class RecordFoldsTest {
         // correction's wall-clock time (it would stretch an endedAt-null session's online span).
         assertEquals(ctx, out.context)
         assertEquals(1_000L, out.context!!.lastEventAt)
+    }
+
+    @Test
+    fun `DELIVERY_ADJUSTMENT emits the widened decision, no record, and passes the context through untouched (F2)`() {
+        val s = "M8"
+        val ctx = RecordFolds.foldEvent(dashStart(s, 1_000, odo = 0.0), null, null).context
+        val ev = ev(
+            AppEventType.DELIVERY_ADJUSTMENT, s, 5_000,
+            DeliveryAdjustmentPayload(
+                targetEventSequenceId = 42L, sessionId = s, newStoreName = "Bill Millers",
+                newPay = 15.5, newCashTip = 4.0, note = "fix",
+            ),
+        )
+        val out = RecordFolds.foldEvent(ev, ctx, null)
+
+        assertNull("a re-apply produces no delivery record in the pure fold", out.delivery)
+        assertNull(out.offer)
+        assertNull(out.payAdjustment)
+        val adj = out.deliveryAdjustment!!
+        assertEquals(42L, adj.targetEventSequenceId)
+        assertEquals("Bill Millers", adj.newStoreName)
+        assertEquals(15.5, adj.newPay!!, 1e-9)
+        assertEquals(4.0, adj.newCashTip!!, 1e-9)
+        assertNull("an unset field stays null (unchanged)", adj.newTip)
+        assertNull(adj.newMiles)
+        // Bookkeeping about a past row, not session activity: liveness must NOT advance to the
+        // correction's wall-clock time.
+        assertEquals(ctx, out.context)
+        assertEquals(1_000L, out.context!!.lastEventAt)
+    }
+
+    @Test
+    fun `a manual delivery carries the driver's cash tip on the fold (#688)`() {
+        val s = "M9"
+        val ev = ev(
+            AppEventType.MANUAL_DELIVERY, s, 2_000,
+            ManualDeliveryPayload(sessionId = s, pay = 9.0, cashTip = 5.0, completedAt = 2_000),
+        )
+        val ctx = RecordFolds.foldEvent(dashStart(s, 1_000, odo = 0.0), null, null).context
+        val d = RecordFolds.foldEvent(ev, ctx, null).delivery!!
+        assertEquals(5.0, d.cashTip!!, 1e-9)
+        assertEquals("cash stays OUTSIDE realizedPay", 9.0, d.realizedPay!!, 1e-9)
+    }
+
+    @Test
+    fun `a malformed DELIVERY_ADJUSTMENT payload is skipped, not folded (#688)`() {
+        val s = "MA"
+        val bad = SequencedAppEvent(
+            sequenceId = ++seq,
+            event = AppEvent(AppEventType.DELIVERY_ADJUSTMENT, occurredAt = 2_000, sessionId = s, payload = null),
+        )
+        val out = RecordFolds.foldEvent(bad, null, null)
+        assertNull(out.deliveryAdjustment)
+        assertNotNull(out.skip)
     }
 
     @Test

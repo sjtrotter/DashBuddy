@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -91,7 +92,7 @@ fun SessionDetailScreen(
             detail != null -> DashDetailContent(
                 detail = detail,
                 onAddManualDelivery = viewModel::addManualDelivery,
-                onAdjustPay = viewModel::adjustPay,
+                onAdjustDelivery = viewModel::adjustDelivery,
                 modifier = Modifier
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
@@ -109,8 +110,16 @@ fun SessionDetailScreen(
 @Composable
 private fun DashDetailContent(
     detail: SessionDetail,
-    onAddManualDelivery: (pay: Double, tip: Double?, storeName: String?, note: String?) -> Unit,
-    onAdjustPay: (targetEventSequenceId: Long, newPay: Double, note: String?) -> Unit,
+    onAddManualDelivery: (pay: Double, tip: Double?, cashTip: Double?, storeName: String?, note: String?) -> Unit,
+    onAdjustDelivery: (
+        targetEventSequenceId: Long,
+        newStoreName: String?,
+        newPay: Double?,
+        newTip: Double?,
+        newCashTip: Double?,
+        newMiles: Double?,
+        note: String?,
+    ) -> Unit,
     modifier: Modifier,
 ) {
     // Correction dialog state — hoisted here, stateless children below (Principle 1 / 3).
@@ -145,18 +154,18 @@ private fun DashDetailContent(
     if (showAddDialog) {
         AddMissedDeliveryDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { pay, tip, store, note ->
-                onAddManualDelivery(pay, tip, store, note)
+            onConfirm = { pay, tip, cashTip, store, note ->
+                onAddManualDelivery(pay, tip, cashTip, store, note)
                 showAddDialog = false
             },
         )
     }
     adjustTarget?.let { target ->
-        AdjustPayDialog(
-            currentPay = target.realizedPay,
+        AdjustDeliveryDialog(
+            target = target,
             onDismiss = { adjustTarget = null },
-            onConfirm = { newPay, note ->
-                onAdjustPay(target.eventSequenceId, newPay, note)
+            onConfirm = { store, newPay, newTip, newCashTip, newMiles, note ->
+                onAdjustDelivery(target.eventSequenceId, store, newPay, newTip, newCashTip, newMiles, note)
                 adjustTarget = null
             },
         )
@@ -212,6 +221,16 @@ private fun HeaderCard(detail: SessionDetail) {
                 modifier = Modifier.weight(1f),
             )
         }
+        // Cash tips render as their OWN line (#688 F4) — the "Gross (reported)" tile stays cash-free
+        // (it's the platform-reported total), so cash is never silently folded into a mislabelled tile.
+        if (detail.cashTips > UNATTRIBUTED_EPSILON) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "+${Formats.money(detail.cashTips)} cash tips",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.good,
+            )
+        }
     }
 }
 
@@ -255,7 +274,14 @@ private fun DeliveriesCard(
 @Composable
 private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
     val c = AppTheme.colors
-    Row(verticalAlignment = Alignment.Top) {
+    // The whole row is the tap target (the dev's tap-a-delivery entry) AND the pencil opens the same
+    // edit dialog — both route to [onAdjust].
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onAdjust() },
+    ) {
         Column(Modifier.weight(1f)) {
             Text(
                 text = delivery.storeName ?: "Unknown store",
@@ -284,6 +310,14 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
                     color = c.text3,
                 )
             }
+            // Driver-entered cash tip (#688) — its own line; added to net below (display-level only).
+            delivery.cashTip?.takeIf { it > UNATTRIBUTED_EPSILON }?.let {
+                Text(
+                    text = "+${Formats.money(it)} cash",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.good,
+                )
+            }
             // #691: a receipt-less shop delivery's pay is an equal-split ESTIMATE of the accepted
             // offer, not a captured receipt — disclose it (never-silent, the #689 precedent).
             if (delivery.payBasis == PayBasis.OFFER_PAY) {
@@ -293,7 +327,9 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
                     color = c.text3,
                 )
             }
-            val net = delivery.netProfit
+            // Net includes the cash tip at display level only (the frozen netProfit column stays
+            // cash-free); a null-net row (no cost basis) stays an em dash even with cash present.
+            val net = delivery.netProfit?.let { it + (delivery.cashTip ?: 0.0) }
             Text(
                 text = "net ${net?.let { Formats.money(it) } ?: EMPTY_VALUE}",
                 style = MaterialTheme.typography.bodySmall,
@@ -308,7 +344,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
         IconButton(onClick = onAdjust) {
             Icon(
                 Icons.Default.Edit,
-                contentDescription = "Adjust pay",
+                contentDescription = "Adjust delivery",
                 tint = AppTheme.colors.text3,
             )
         }
@@ -341,26 +377,41 @@ private fun CenteredMessage(text: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** A blank or non-blank-but-positive number parses; a non-blank invalid one does not. */
-private fun optionalMoney(text: String): Double? = text.takeIf { it.isNotBlank() }?.toDoubleOrNull()
-private fun String.isBlankOrValidMoney(): Boolean = isBlank() || (toDoubleOrNull()?.let { it > 0.0 } == true)
-private fun String.isValidMoney(): Boolean = toDoubleOrNull()?.let { it > 0.0 } == true
+/**
+ * Parse an optional numeric field (F9): blank ⇒ null (unchanged); a non-blank field ⇒ its parsed
+ * value ONLY when it is **finite** (a pasted `1e999` parses to `Infinity`, which the codec would then
+ * reject with a crash, #705 F4a) — else null. This owns ONLY finiteness + parseability; **range**
+ * validation (> 0 for money, ≥ 0 for tip/cash/miles) belongs to the `isValid*`/`isBlankOr*` checks
+ * below. Used for pay/tip/cash/miles alike (it is not money-specific), so it is deliberately un-named
+ * for money.
+ */
+private fun optionalNumber(text: String): Double? =
+    text.takeIf { it.isNotBlank() }?.toDoubleOrNull()?.takeIf { it.isFinite() }
+
+/** A finite, strictly-positive money value (F4a: `isFinite` rejects a pasted `1e999`). */
+private fun String.isValidMoney(): Boolean = toDoubleOrNull()?.let { it.isFinite() && it > 0.0 } == true
+private fun String.isBlankOrValidMoney(): Boolean = isBlank() || isValidMoney()
+
+/** Blank, or a finite non-negative number — for tip/cash/miles fields (0 is a valid entry; F4a). */
+private fun String.isBlankOrNonNegative(): Boolean =
+    isBlank() || (toDoubleOrNull()?.let { it.isFinite() && it >= 0.0 } == true)
 
 /**
- * Add-a-missed-delivery dialog (#650) — store (optional), pay (required, > 0), tip (optional, > 0
- * when present), note (optional). Confirm stays disabled until pay is valid and any entered tip is
- * valid. Stateless w/ hoisted local field state per the codebase idiom.
+ * Add-a-missed-delivery dialog (#650/#688) — store (optional), pay (required, > 0), tip (optional,
+ * ≥ 0 when present), cash tip (optional, ≥ 0 when present), note (optional). Confirm stays disabled
+ * until pay is valid and any entered tip/cash is valid. Stateless w/ hoisted local field state.
  */
 @Composable
 private fun AddMissedDeliveryDialog(
     onDismiss: () -> Unit,
-    onConfirm: (pay: Double, tip: Double?, storeName: String?, note: String?) -> Unit,
+    onConfirm: (pay: Double, tip: Double?, cashTip: Double?, storeName: String?, note: String?) -> Unit,
 ) {
     var store by remember { mutableStateOf("") }
     var pay by remember { mutableStateOf("") }
     var tip by remember { mutableStateOf("") }
+    var cashTip by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    val valid = pay.isValidMoney() && tip.isBlankOrValidMoney()
+    val valid = pay.isValidMoney() && tip.isBlankOrNonNegative() && cashTip.isBlankOrNonNegative()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -369,7 +420,8 @@ private fun AddMissedDeliveryDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 MoneyField(store, { store = it }, "Store (optional)", numeric = false)
                 MoneyField(pay, { pay = it }, "Pay")
-                MoneyField(tip, { tip = it }, "Tip (optional)")
+                MoneyField(tip, { tip = it }, "Tip (included in pay)")
+                MoneyField(cashTip, { cashTip = it }, "Cash tip (optional)")
                 MoneyField(note, { note = it }, "Note (optional)", numeric = false)
             }
         },
@@ -379,7 +431,8 @@ private fun AddMissedDeliveryDialog(
                 onClick = {
                     onConfirm(
                         pay.toDouble(),
-                        optionalMoney(tip),
+                        optionalNumber(tip),
+                        optionalNumber(cashTip),
                         store.trim().takeIf { it.isNotBlank() },
                         note.trim().takeIf { it.isNotBlank() },
                     )
@@ -391,34 +444,98 @@ private fun AddMissedDeliveryDialog(
 }
 
 /**
- * Adjust-pay dialog (#650) — prefilled with the delivery's current pay, note optional. Confirm stays
- * disabled until the new pay is a positive number.
+ * Adjust-delivery dialog (#688) — the one multi-field editor: Store name / Pay / Tip / Cash tip /
+ * Miles / Note. Each money/miles field is prefilled cent-faithfully via `toString()` (NOT
+ * `Formats.decimal`, which rounds and would drop cents from the round-trip). **Blank = unchanged**
+ * (a store name can't be cleared to empty — intended; clearing a value is not supported). Only fields
+ * whose PARSED value differs from the row's current value ship in the event; a blank/unchanged field
+ * → null. Save stays disabled until every entered field is valid AND at least one parsed field
+ * differs (or a note is present, #688 F6 — a note-only annotation is a valid edit).
  */
 @Composable
-private fun AdjustPayDialog(
-    currentPay: Double?,
+private fun AdjustDeliveryDialog(
+    target: DeliveryRecord,
     onDismiss: () -> Unit,
-    onConfirm: (newPay: Double, note: String?) -> Unit,
+    onConfirm: (
+        newStoreName: String?,
+        newPay: Double?,
+        newTip: Double?,
+        newCashTip: Double?,
+        newMiles: Double?,
+        note: String?,
+    ) -> Unit,
 ) {
-    // Prefill with a parse-faithful value (NOT Formats.decimal, which rounds to 1 digit and would
-    // silently drop cents from the round-trip).
-    var pay by remember { mutableStateOf(currentPay?.toString() ?: "") }
-    var note by remember { mutableStateOf("") }
-    val valid = pay.isValidMoney()
+    // All field state is keyed on [target] (F6): a mid-edit Room re-emission that produces a DIFFERENT
+    // target snapshot re-initialises the fields from it, so the change-diff below never compares an
+    // edit against a stale prefill. An equal re-emission (data-class equality) leaves the edit intact.
+    var store by remember(target) { mutableStateOf(target.storeName ?: "") }
+    var pay by remember(target) { mutableStateOf(target.realizedPay?.toString() ?: "") }
+    var tip by remember(target) { mutableStateOf(target.tip?.toString() ?: "") }
+    var cashTip by remember(target) { mutableStateOf(target.cashTip?.toString() ?: "") }
+    var miles by remember(target) { mutableStateOf(target.realizedMiles?.toString() ?: "") }
+    var note by remember(target) { mutableStateOf("") }
+
+    // FIX 5: a SUSPECT_FULL_RECEIPT row's money was nulled as a #653 double-count guard — editing pay
+    // back onto it re-opens the double count (its siblings keep their shares). Disable the Pay field
+    // (the orchestrator also blocks it as a second gate); tip is prefilled null on such a row anyway.
+    val payLocked = target.payBasis == PayBasis.SUSPECT_FULL_RECEIPT
+
+    // Parsed values (blank ⇒ null ⇒ unchanged; F9 optionalNumber rejects a non-finite paste).
+    val storeParsed = store.trim().takeIf { it.isNotBlank() }
+    val payParsed = optionalNumber(pay)
+    val tipParsed = optionalNumber(tip)
+    val cashParsed = optionalNumber(cashTip)
+    val milesParsed = optionalNumber(miles)
+    val noteParsed = note.trim().takeIf { it.isNotBlank() }
+
+    // Per-field validity: pay > 0 (when present); tip/cash/miles ≥ 0 (when present).
+    val payValid = pay.isBlankOrValidMoney()
+    val tipValid = tip.isBlankOrNonNegative()
+    val cashValid = cashTip.isBlankOrNonNegative()
+    val milesValid = miles.isBlankOrNonNegative()
+
+    // Changed-field detection on PARSED values (prefill round-trips via toString, so an untouched
+    // field parses back equal and is not sent). Store compares TRIMMED-vs-TRIMMED (F6) so a
+    // machine-parsed trailing-space store name doesn't ship a phantom newStoreName on a cash-only edit.
+    val storeChanged = storeParsed != null && storeParsed != (target.storeName?.trim() ?: "")
+    val payChanged = payParsed != null && payParsed != target.realizedPay
+    val tipChanged = tipParsed != null && tipParsed != target.tip
+    val cashChanged = cashParsed != null && cashParsed != target.cashTip
+    val milesChanged = milesParsed != null && milesParsed != target.realizedMiles
+
+    val anyChange = storeChanged || payChanged || tipChanged || cashChanged || milesChanged || noteParsed != null
+    val valid = payValid && tipValid && cashValid && milesValid && anyChange
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Adjust pay") },
+        title = { Text("Adjust delivery") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                MoneyField(pay, { pay = it }, "Pay")
+                MoneyField(store, { store = it }, "Store name", numeric = false)
+                MoneyField(
+                    pay, { pay = it }, "Pay",
+                    enabled = !payLocked,
+                    supportingText = if (payLocked) "de-duplicated receipt — edit the real drop's row" else null,
+                )
+                MoneyField(tip, { tip = it }, "Tip (included in pay)", enabled = !payLocked)
+                MoneyField(cashTip, { cashTip = it }, "Cash tip")
+                MoneyField(miles, { miles = it }, "Miles")
                 MoneyField(note, { note = it }, "Note (optional)", numeric = false)
             }
         },
         confirmButton = {
             TextButton(
                 enabled = valid,
-                onClick = { onConfirm(pay.toDouble(), note.trim().takeIf { it.isNotBlank() }) },
+                onClick = {
+                    onConfirm(
+                        if (storeChanged) storeParsed else null,
+                        if (payChanged) payParsed else null,
+                        if (tipChanged) tipParsed else null,
+                        if (cashChanged) cashParsed else null,
+                        if (milesChanged) milesParsed else null,
+                        noteParsed,
+                    )
+                },
             ) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
@@ -426,12 +543,21 @@ private fun AdjustPayDialog(
 }
 
 @Composable
-private fun MoneyField(value: String, onValueChange: (String) -> Unit, label: String, numeric: Boolean = true) {
+private fun MoneyField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    numeric: Boolean = true,
+    enabled: Boolean = true,
+    supportingText: String? = null,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
+        enabled = enabled,
+        supportingText = supportingText?.let { { Text(it) } },
         keyboardOptions = if (numeric) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
         modifier = Modifier.fillMaxWidth(),
     )

@@ -343,8 +343,11 @@ private fun TopStoresCard(stores: List<StoreEconomics>) {
 
 /**
  * Recent dashes, newest first. Sessions don't carry a frozen net, so the money column shows the
- * platform-reported earnings (an em dash until a summary is seen). Each row is tappable → the
- * read-only per-dash drill-down ([onOpenSession], #650).
+ * platform-reported earnings (an em dash until a summary is seen), with a small "+cash" line below it
+ * when the dash has driver-entered cash tips (#688 F7) — every sibling gross surface (hero, per-day
+ * chart, drill-down) is cash-inclusive, so this keeps the recent-dashes row from showing a different
+ * gross one tap away. Cash is shown ADDITIVELY, never folded into the reported number (the label stays
+ * honest). Each row is tappable → the read-only per-dash drill-down ([onOpenSession], #650).
  */
 @Composable
 private fun RecentDashesCard(sessions: List<SessionRecord>, onOpenSession: (String) -> Unit) {
@@ -379,11 +382,21 @@ private fun RecentDashesCard(sessions: List<SessionRecord>, onOpenSession: (Stri
                     // Platform label is registry-resolved (never a literal) — Principle 8.
                     AppChip(text = session.platform.shortName.ifEmpty { session.platform.displayName })
                     Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = session.reportedEarnings?.let { Formats.money(it) } ?: EMPTY_VALUE,
-                        style = AppTheme.num.smNum,
-                        color = c.text,
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = session.reportedEarnings?.let { Formats.money(it) } ?: EMPTY_VALUE,
+                            style = AppTheme.num.smNum,
+                            color = c.text,
+                        )
+                        // Additive-only cash marker (#688 F7) — never folded into the reported number.
+                        if (session.cashTips > UNATTRIBUTED_EPSILON) {
+                            Text(
+                                text = "+${Formats.money(session.cashTips)} cash",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.good,
+                            )
+                        }
+                    }
                 }
             }
         }

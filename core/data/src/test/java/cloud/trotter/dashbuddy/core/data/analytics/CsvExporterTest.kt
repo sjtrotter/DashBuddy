@@ -25,6 +25,7 @@ class CsvExporterTest {
         completedAt: Long = generatedAt,
         pay: Double? = 8.50,
         basis: String = "DROP_SHARE",
+        cashTip: Double? = null,
     ) = DeliveryRecordEntity(
         eventSequenceId = seq,
         sessionId = "s1",
@@ -48,6 +49,7 @@ class CsvExporterTest {
         frozenCostPerMile = 0.165,
         netProfit = 7.81,
         costBasis = "OFFER_FROZEN",
+        cashTip = cashTip,
     )
 
     private fun session(
@@ -77,16 +79,30 @@ class CsvExporterTest {
     )
 
     @Test fun deliveries_headerAndRow_withPlatformDisplayName() {
-        val out = CsvExporter.export(listOf(delivery(1, "H-E-B")), emptyList(), utc, generatedAt)
+        val out = CsvExporter.export(listOf(delivery(1, "H-E-B", cashTip = 4.00)), emptyList(), utc, generatedAt)
         val lines = out.deliveriesCsv.trim().lines()
         assertEquals(
-            "date,time,platform,store,gross_pay,tip,base_pay,miles,minutes,frozen_cost_per_mile,net_profit,pay_basis,cost_basis",
+            "date,time,platform,store,gross_pay,tip,base_pay,cash_tip,miles,minutes,frozen_cost_per_mile,net_profit,pay_basis,cost_basis",
             lines[0],
         )
         assertEquals(
-            "2026-07-05,14:03:27,DoorDash,H-E-B,8.50,3.25,5.25,4.20,12.50,0.165,7.81,DROP_SHARE,OFFER_FROZEN",
+            "2026-07-05,14:03:27,DoorDash,H-E-B,8.50,3.25,5.25,4.00,4.20,12.50,0.165,7.81,DROP_SHARE,OFFER_FROZEN",
             lines[1],
         )
+    }
+
+    @Test fun deliveries_nullCashTip_isEmptyField() {
+        val out = CsvExporter.export(listOf(delivery(1, "H-E-B")), emptyList(), utc, generatedAt)
+        // cash_tip is column index 7 (date,time,platform,store,gross_pay,tip,base_pay,cash_tip).
+        assertEquals("", out.deliveriesCsv.trim().lines()[1].split(",")[7])
+    }
+
+    @Test fun summary_totalCashTips_line() {
+        val out = CsvExporter.export(
+            listOf(delivery(1, "S", cashTip = 4.00), delivery(2, "S", cashTip = 1.50)),
+            listOf(session()), utc, generatedAt,
+        )
+        assertTrue(out.summaryCsv.contains("total_cash_tips,5.50"))
     }
 
     @Test fun deliveries_offerPayBasis_appearsVerbatim() {

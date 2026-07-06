@@ -58,6 +58,7 @@ class AnalyticsRepositoryTest {
         net: Double?,
         completedAt: Long,
         platform: String = "doordash",
+        cashTip: Double? = null,
     ) = DeliveryRecordEntity(
         eventSequenceId = seq,
         sessionId = sessionId,
@@ -81,6 +82,7 @@ class AnalyticsRepositoryTest {
         frozenCostPerMile = 0.30,
         netProfit = net,
         costBasis = "OFFER_FROZEN",
+        cashTip = cashTip,
     )
 
     private fun session(
@@ -158,6 +160,86 @@ class AnalyticsRepositoryTest {
         assertEquals(7.0, eco.netProfit, 1e-9)     // the stored frozen net, verbatim
         assertEquals(0.0, eco.unattributedPay, 1e-9)
         assertEquals(10.0, eco.grossEarnings, 1e-9)
+    }
+
+    /**
+     * #688 locked accounting: cash tips ADD to net and gross but STAY OUT of the unattributed
+     * reconciliation (which still compares reported against the cash-free delivered pay). The exact
+     * SUMs: reported 50 > delivered 40 → 10 unattributed, unchanged by the $5 cash; net rises by 5;
+     * gross rises by 5.
+     */
+    @Test
+    fun `cash tips add to net and gross but leave unattributed unchanged (#688)`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = 50.0, durationMillis = 2 * hour, startOdo = 100.0, lastOdo = 110.0, deliveries = 2, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 25.0, net = 20.0, completedAt = base + hour, cashTip = 5.0))
+        dao.upsertDelivery(delivery(2, "S1", "J1", "Wendys", pay = 15.0, net = 13.0, completedAt = base + 2 * hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        // Frozen delivery net 20+13 = 33; unattributed 10; cash 5 → net = 48.
+        assertEquals(48.0, eco.netProfit, 1e-9)
+        assertEquals("unattributed compares cash-free delivered pay, so cash never shrinks it", 10.0, eco.unattributedPay, 1e-9)
+        // Gross = 50 reported + 5 cash.
+        assertEquals(55.0, eco.grossEarnings, 1e-9)
+        // Delivered pay (totals.earnings) is cash-free.
+        assertEquals(40.0, eco.totals.earnings, 1e-9)
+        // Invariant (#688 F3): gross − net == the pre-cash operating cost (cash cancels).
+        val cost = eco.grossEarnings - eco.netProfit
+        assertEquals("cash cancels in cost: (50+5) − (43+5) == 50 − 43", 50.0 - 43.0, cost, 1e-9)
+    }
+
+    /** A null-net row's cash is still counted in period net (cash lives outside netProfit). */
+    @Test
+    fun `a null-net row still contributes its cash tip to period net and gross (#688)`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = null, durationMillis = hour, startOdo = 0.0, lastOdo = 0.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 8.0, net = null, completedAt = base + hour, cashTip = 4.0))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("frozen net 0 (null) + unattributed 0 + cash 4", 4.0, eco.netProfit, 1e-9)
+        assertEquals("gross = delivered 8 + cash 4", 12.0, eco.grossEarnings, 1e-9)
+    }
+
+    @Test
+    fun `perStoreEconomics adds cash to gross and net, and ranks by cash-inclusive gross (#688 F5, #705 F8)`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = null, durationMillis = 4 * hour, startOdo = 0.0, lastOdo = 0.0, deliveries = 2, jobsCompleted = 2))
+        // Wendys realized pay 9 (< Chipotle 10) but a big cash tip lifts its cash-inclusive gross to 15.
+        // F8: the mapped list is re-sorted by gross DESC, so the cash-heavy store leads despite the
+        // DAO's cash-free `ORDER BY pay` pre-sort ranking it second.
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 9.0, net = 7.0, completedAt = base + hour, cashTip = 6.0))
+        dao.upsertDelivery(delivery(2, "S1", "J2", "Chipotle", pay = 10.0, net = 8.0, completedAt = base + 2 * hour))
+
+        val stores = repo.perStoreEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("ranked by cash-inclusive gross: Wendys 15 > Chipotle 10", "Wendys", stores[0].storeName)
+        assertEquals("Chipotle", stores[1].storeName)
+        assertEquals("Wendys gross = pay 9 + cash 6", 15.0, stores[0].gross, 1e-9)
+        assertEquals("Wendys net = frozen net 7 + cash 6", 13.0, stores[0].net, 1e-9)
+        assertEquals("Chipotle has no cash", 10.0, stores[1].gross, 1e-9)
+    }
+
+    /** F8 null-net + cash presentation: a store whose only row has a null frozen net but a cash tip surfaces net = cash. */
+    @Test
+    fun `perStoreEconomics surfaces net = cash for a null-net store with cash (#705 F8)`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = null, durationMillis = hour, startOdo = 0.0, lastOdo = 0.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 8.0, net = null, completedAt = base + hour, cashTip = 5.0))
+
+        val stores = repo.perStoreEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("net = frozen 0 (null) + cash 5", 5.0, stores[0].net, 1e-9)
+        assertEquals("gross = pay 8 + cash 5", 13.0, stores[0].gross, 1e-9)
+    }
+
+    /** F7: the recent-dashes read path carries each session's Σ cash tips (never folded into reportedEarnings). */
+    @Test
+    fun `recentSessions carries per-session cash tips as its own field (#705 F7)`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = 40.0, durationMillis = 2 * hour, startOdo = 0.0, lastOdo = 0.0, deliveries = 2, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 9.0, net = 7.0, completedAt = base + hour, cashTip = 6.0))
+        dao.upsertDelivery(delivery(2, "S1", "J1", "Wendys", pay = 11.0, net = 9.0, completedAt = base + 2 * hour, cashTip = 4.0))
+        // A second dash with no cash tips at all → cash 0.
+        dao.upsertSession(session("S2", base + 10 * hour, reportedEarnings = 20.0, durationMillis = hour, startOdo = 0.0, lastOdo = 0.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(3, "S2", "J2", "Chipotle", pay = 20.0, net = 17.0, completedAt = base + 11 * hour))
+
+        val sessions = repo.recentSessions(limit = 10).first().associateBy { it.sessionId }
+        assertEquals("S1 cash = 6 + 4", 10.0, sessions.getValue("S1").cashTips, 1e-9)
+        assertEquals("reportedEarnings untouched by cash", 40.0, sessions.getValue("S1").reportedEarnings!!, 1e-9)
+        assertEquals("a cash-free dash reports 0 cash", 0.0, sessions.getValue("S2").cashTips, 1e-9)
     }
 
     @Test

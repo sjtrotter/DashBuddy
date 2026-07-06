@@ -77,7 +77,7 @@ class AnalyticsRepository @Inject constructor(
                         deliveredPay = d.pay, deliveryNet = d.net, deliveries = d.deliveries,
                         jobs = d.jobs, miles = s.miles, onlineMillis = s.onlineMillis,
                         gross = g.gross, unattributed = g.unattributed,
-                        fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost,
+                        fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost, cash = d.cash,
                     )
                 }
             } else {
@@ -95,17 +95,38 @@ class AnalyticsRepository @Inject constructor(
                         deliveries = d?.deliveries ?: 0, jobs = d?.jobs ?: 0,
                         miles = s?.miles ?: 0.0, onlineMillis = s?.onlineMillis ?: 0L,
                         gross = g?.gross ?: 0.0, unattributed = g?.unattributed ?: 0.0,
-                        fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost,
+                        fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost, cash = d?.cash ?: 0.0,
                     )
                 }
             }
         }
 
-    /** Per-store economics for [period], highest-earning store first — frozen net + realized gross. */
+    /**
+     * Per-store economics for [period], highest-**gross** store first — frozen net + realized gross.
+     * Cash tips (#688 F5) are added to BOTH gross and net (`gross = realized pay + cash`, `net =
+     * frozen net + cash`) — explicit adds here, mirroring the period-level locked accounting.
+     *
+     * **Cash-inclusive ordering (F8):** the DAO's `ORDER BY pay DESC` is a cash-free **stable
+     * pre-sort**; the final rank is re-sorted here by the cash-inclusive [StoreEconomics.gross] so a
+     * cash-heavy store isn't ranked below a lower-gross one whose cash the SQL sort key ignored. The
+     * repository owns the mapped-value ordering because cash is added here, not in SQL (Principle 5 —
+     * one owner for the gross number, one owner for the sort that uses it).
+     *
+     * **Null-net + cash presentation:** a store whose only row has a null frozen `net` (no cost basis)
+     * but a recorded `cashTip` surfaces as `net = 0 + cash` — i.e. "net = cash". Accepted: cash has no
+     * cost term to net out, so the driver-attested cash IS the honest net contribution of that row.
+     */
     fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
             analyticsDao.deliveryTotalsByStore(start, end).map { rows ->
-                rows.map { StoreEconomics(storeName = it.storeName, net = it.net, gross = it.pay, deliveries = it.deliveries) }
+                rows.map {
+                    StoreEconomics(
+                        storeName = it.storeName,
+                        net = it.net + it.cash,
+                        gross = it.pay + it.cash,
+                        deliveries = it.deliveries,
+                    )
+                }.sortedByDescending { it.gross }
             }
         }
 
@@ -257,8 +278,13 @@ class AnalyticsRepository @Inject constructor(
         unattributed: Double,
         fuelCost: Double?,
         nonFuelCost: Double?,
+        cash: Double,
     ): PeriodEconomics {
-        val net = deliveryNet + unattributed
+        // Locked accounting (#688): cash tips add to BOTH net and gross. [gross] already includes the
+        // cash sum (folded in the DAO's `grossAndUnattributed`); net adds it here (it is deliberately
+        // OUTSIDE the frozen delivery `netProfit`, so it can't be lost to a null-net row). The
+        // waterfall's cost = gross − net is unchanged (cash cancels), so the 4-step reconcile holds.
+        val net = deliveryNet + unattributed + cash
         val hours = onlineMillis / 3_600_000.0
         return PeriodEconomics(
             totals = PeriodTotals(

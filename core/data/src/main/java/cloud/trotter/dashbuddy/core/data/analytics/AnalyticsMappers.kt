@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.SessionWithCashRow
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -28,6 +29,7 @@ internal fun DeliveryRecordEntity.toDomain(): DeliveryRecord = DeliveryRecord(
     realizedMinutes = realizedMinutes,
     tip = tip,
     basePay = basePay,
+    cashTip = cashTip,
 )
 
 internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(
@@ -49,3 +51,9 @@ internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(
     offersDeclined = offersDeclined,
     offersTimeout = offersTimeout,
 )
+
+/**
+ * Recent-dashes row → domain (#688 F7): the embedded session row mapped as usual, with its Σ cash
+ * tips carried onto [SessionRecord.cashTips] for the additive "+cash" marker.
+ */
+internal fun SessionWithCashRow.toDomain(): SessionRecord = session.toDomain().copy(cashTips = cash)

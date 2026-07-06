@@ -76,6 +76,7 @@ class AnalyticsSessionDetailTest {
         completedAt: Long,
         realizedPay: Double? = 8.0,
         storeName: String? = "Wendys",
+        cashTip: Double? = null,
     ) = DeliveryRecordEntity(
         eventSequenceId = seq,
         sessionId = sessionId,
@@ -99,6 +100,7 @@ class AnalyticsSessionDetailTest {
         frozenCostPerMile = null,
         netProfit = null,
         costBasis = "NONE",
+        cashTip = cashTip,
     )
 
     @Test
@@ -130,6 +132,18 @@ class AnalyticsSessionDetailTest {
         val detail = repo.sessionDetail("S").first()!!
         assertEquals(18.0, detail.deliveredPay, 1e-9)
         assertEquals(7.0, detail.unattributedPay, 1e-9)          // 25 − 18
+    }
+
+    @Test
+    fun `cashTips sums the per-delivery cash and leaves deliveredPay-unattributed cash-free (#688)`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = 25.0))
+        dao.upsertDelivery(delivery(1, "S", completedAt = base + hour, realizedPay = 8.0, cashTip = 3.0))
+        dao.upsertDelivery(delivery(2, "S", completedAt = base + 2 * hour, realizedPay = 10.0, cashTip = 1.5))
+
+        val detail = repo.sessionDetail("S").first()!!
+        assertEquals(4.5, detail.cashTips, 1e-9)
+        assertEquals("deliveredPay stays cash-free", 18.0, detail.deliveredPay, 1e-9)
+        assertEquals("unattributed compares cash-free delivered pay", 7.0, detail.unattributedPay, 1e-9)
     }
 
     @Test

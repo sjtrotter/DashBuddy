@@ -165,11 +165,60 @@ data class ManualDeliveryPayload(
     val storeName: String? = null,
     /** Required — the driver's stated pay for this delivery. */
     val pay: Double,
+    /** Platform-reported tip already included in [pay] (itemization only; sole-drop). */
     val tip: Double? = null,
+    /**
+     * Driver-entered CASH tip (#688) — the tip vocabulary's driver-attested source. Kept OUTSIDE
+     * [pay] (cash is added to gross/net only at the read sites, never baked into realizedPay/net) so
+     * the reconciliation's Σ-attributed stays structurally cash-free. Nullable-with-default: old
+     * events deserialize identically.
+     */
+    val cashTip: Double? = null,
     /** When the delivery happened; v1 the caller defaults it (e.g. the session's end/start). */
     val completedAt: Long,
     /** Driver-known miles, optional — the driver's statement, not an odometer partition delta. */
     val miles: Double? = null,
+    /** Driver-authored free text — driver-owned local data, never in INFO+ logs (P7). */
+    val note: String? = null,
+) : AppEventPayload
+
+/**
+ * Payload for `DELIVERY_ADJUSTMENT` (#688) — a driver multi-field edit of an already-recorded
+ * delivery, WIDENING [PayAdjustmentPayload] (which stays fully supported for history). It is an
+ * **event, never a destructive edit**: the original `DELIVERY_COMPLETED` (or `MANUAL_DELIVERY`)
+ * event and its provenance stay in the log; the projector re-applies the target `delivery_record`
+ * in place inside the batch transaction. Because a correction always sequences AFTER its target, a
+ * from-zero refold replays them in order and reproduces identical rows.
+ *
+ * Every new-value field is ALL-OPTIONAL: only the fields the driver changed are non-null, and a
+ * null field leaves the target row's value untouched. The provenance rules the orchestrator applies:
+ * a machine row's `payBasis` flips to `USER_CORRECTED` **iff [newPay] is non-null** (#688 VET F1 —
+ * payBasis rewrites exactly when realizedPay does, so a store-name/tip/cash edit never drops an
+ * "est. offer pay" disclosure); a MANUAL row stays MANUAL; cash/tip are driver-attested side columns
+ * (a [newCashTip]/[newTip]-only edit touches neither basis nor net).
+ *
+ * There is deliberately **no `newCompletedAt`** (#688 VET F2): editing the latest row's completedAt
+ * would make restart-incremental folding disagree with a from-zero refold (restart hydration reads
+ * `prevDropAt` from the corrected row while live context uses the payload's), reintroducing the
+ * determinism class #703 closes. Re-adding it later requires correction-immune anchor hydration
+ * (the projector must resolve `prevDropAt` from an origin the correction can't move).
+ */
+@Serializable
+data class DeliveryAdjustmentPayload(
+    /** PK (source `sequenceId`) of the `delivery_record` being edited. */
+    val targetEventSequenceId: Long,
+    /** For session attribution / liveness only — the fold never reads the target row through it. */
+    val sessionId: String? = null,
+    /** Driver-entered merchant name; null ⇒ unchanged. */
+    val newStoreName: String? = null,
+    /** New realized pay (> 0); null ⇒ unchanged. Flips a machine row to `USER_CORRECTED` (VET F1). */
+    val newPay: Double? = null,
+    /** New platform-reported tip already inside pay (itemization only, ≥ 0); null ⇒ unchanged. */
+    val newTip: Double? = null,
+    /** New driver-entered cash tip (≥ 0); null ⇒ unchanged. Side column — never touches basis/net. */
+    val newCashTip: Double? = null,
+    /** New driver-stated miles (≥ 0); null ⇒ unchanged. Recomputes net (no basis flip on its own). */
+    val newMiles: Double? = null,
     /** Driver-authored free text — driver-owned local data, never in INFO+ logs (P7). */
     val note: String? = null,
 ) : AppEventPayload

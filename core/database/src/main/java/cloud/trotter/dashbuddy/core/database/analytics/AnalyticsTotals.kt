@@ -1,11 +1,26 @@
 package cloud.trotter.dashbuddy.core.database.analytics
 
+import androidx.room.Embedded
+
 /**
  * Aggregate query-result projections for [AnalyticsDao] (#314). Plain POJOs Room
  * maps SUM/COUNT rows into — NOT entities, NOT persisted. They stay in
  * `:core:database` next to the DAO whose queries produce them; the read-side
  * repository (`:core:data`, PR3) folds economy in on top.
  */
+
+/**
+ * One recent session row + its Σ driver-entered cash tips (#688 F7). [session] is the whole
+ * `session_records` row (`@Embedded`); [cash] is `COALESCE(SUM(cashTip), 0)` over that session's
+ * delivery rows — a LEFT-JOINed `GROUP BY sessionId` subquery (one row per session, no fan-out, the
+ * same shape as `AnalyticsDao.sessionGrossRows`). Kept as its OWN column — never folded into the
+ * session row — so the recent-dashes list can show a "+cash" marker WITHOUT rewriting the
+ * platform-reported earnings number (the label stays honest; cash is additive-visible only).
+ */
+data class SessionWithCashRow(
+    @Embedded val session: SessionRecordEntity,
+    val cash: Double,
+)
 
 /**
  * Cross-platform delivery totals for a period. [net] is Σ **frozen** per-delivery net
@@ -17,6 +32,12 @@ data class DeliveryTotalsRow(
     val net: Double,
     val deliveries: Int,
     val jobs: Int,
+    /**
+     * Σ driver-entered cash tips = `COALESCE(SUM(cashTip), 0)` (#688). Kept as its OWN alias — NOT
+     * folded into [pay]/[net] — so the locked accounting adds cash to gross/net explicitly at the
+     * repository while the reconciliation's Σ-attributed ([pay]) stays cash-free.
+     */
+    val cash: Double,
     /**
      * Σ **frozen** fuel dollars for the period = `SUM(frozenFuelPerMile × realizedMiles)` (#659) —
      * the first-class fuel cost row of the 4-step true-net waterfall. Nullable and left un-`COALESCE`d
@@ -36,6 +57,8 @@ data class PlatformDeliveryTotalsRow(
     val net: Double,
     val deliveries: Int,
     val jobs: Int,
+    /** Σ driver-entered cash tips for the platform's period rows (#688) — see [DeliveryTotalsRow.cash]. */
+    val cash: Double,
     /** Σ frozen fuel dollars for the platform's period rows (#659) — see [DeliveryTotalsRow.fuelCost]. */
     val fuelCost: Double?,
     /** Σ frozen non-fuel dollars for the platform's period rows (#659). */
@@ -48,6 +71,8 @@ data class StoreTotalsRow(
     val pay: Double,
     val net: Double,
     val deliveries: Int,
+    /** Σ driver-entered cash tips for the store's period rows (#688) — see [DeliveryTotalsRow.cash]. */
+    val cash: Double,
 )
 
 /**

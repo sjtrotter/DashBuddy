@@ -307,8 +307,16 @@ recomputed** (dev decision): each `delivery_record` stores `netProfit` + `frozen
 `OfferEvaluation.operatingCostPerMile` (session granularity — the offer→delivery `jobId` link is absent in the
 log, but cpm is session-uniform), so editing economy settings only affects **future** evaluations — a record is
 an immutable historical fact. Session hydration rehydrates `started` from a persisted `session_records.startSource`
-marker (#659, retro finding 2), not the old "has a real platform" heuristic. The v9→v10 migration is
-additive-only (five nullable columns — delivery +2, offer +2, session +1; `PROJECTOR_VERSION` bump refolds them from the log). `NetProfit`
+marker (#659, retro finding 2), not the old "has a real platform" heuristic. Each `delivery_record` also
+carries `cashTip` (driver-entered cash — the tip vocabulary's driver-attested source; kept OUTSIDE
+`realizedPay`/`netProfit` and added to gross/net only at the read sites, so the reconciliation's
+Σ-attributed stays structurally cash-free, #688) and `originalPayBasis` (the payBasis stamped at FIRST fold,
+never rewritten by a correction — the #691 receipt-evidence hydration reads `COALESCE(originalPayBasis,
+payBasis)` so a re-priced `USER_CORRECTED` row keeps its original receipt evidence, #703). The v9→v10 migration is
+additive-only (five nullable columns — delivery +2, offer +2, session +1); the v10→v11 migration is likewise
+additive-only (delivery +2 — `cashTip`/`originalPayBasis`; `PROJECTOR_VERSION` 3→4 refolds them from the log,
+populating `originalPayBasis` for all history — the bump is #703's requirement, not a corrections one, and it
+also re-stamps `CURRENT_FALLBACK` rows against today's economy). `NetProfit`
 (`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
 `AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =
@@ -326,8 +334,14 @@ excluded; no network. #650 corrections are now IN: the per-dash drill-down (`Ses
 re-price of an existing row → `USER_CORRECTED`, net recomputed against that row's OWN frozen cpm) via the
 write-side `CorrectionRepository`; the projector folds them non-destructively (the original event/row is never
 deleted) and rebuild-faithfully (a from-zero refold replays a correction after its target and reproduces
-identical rows — no PROJECTOR_VERSION bump needed, the new event types can't exist in already-folded history).
-Session-categorize of an unattributed remainder is deferred (#650 follow-up). Related: #653/#655.
+identical rows — the correction event types can't exist in already-folded history). #688 phase A widens the
+re-price into `DELIVERY_ADJUSTMENT` — the drill-down's tap-a-delivery / pencil opens one **Adjust delivery**
+dialog (store/pay/tip/cash-tip/miles/note) writing a single all-optional-fields event; the orchestrator
+applies each non-null field by-PK (payBasis flips to `USER_CORRECTED` **iff pay changes** so a store/tip/cash
+edit never drops an "est. offer pay" disclosure; a MANUAL row stays MANUAL; net recomputes only when pay/miles
+change, against the row's OWN frozen cpm; `originalPayBasis` preserved via `row.copy`). Legacy `PAY_ADJUSTMENT`
+stays fully readable for history; new UI writes only `DELIVERY_ADJUSTMENT`. Phase B (per-leg mileage, #688) is
+deferred. Session-categorize of an unattributed remainder is deferred (#650 follow-up). Related: #653/#655/#703.
 
 ## Development Principles
 

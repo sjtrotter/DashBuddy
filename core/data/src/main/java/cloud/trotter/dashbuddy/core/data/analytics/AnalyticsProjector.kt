@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
+import cloud.trotter.dashbuddy.domain.analytics.DeliveryAdjustmentFold
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryFold
 import cloud.trotter.dashbuddy.domain.analytics.OfferFold
 import cloud.trotter.dashbuddy.domain.analytics.PayAdjustmentFold
@@ -123,9 +124,14 @@ class AnalyticsProjector @Inject constructor(
 
     /** Fold catch-up batches until the log is drained past the watermark. */
     private suspend fun drain(): DrainStats {
+        // FIX 2 (drain-stable economy): read the live economy's cpm ONCE per drain/rebuild cycle and
+        // thread it through every batch. A per-batch read let an economy edit mid-refold freeze
+        // DIFFERENT `CURRENT_FALLBACK` cpm across batches of ONE rebuild — non-reproducible even by a
+        // second refold. One read per drain makes a whole drain economy-consistent by construction.
+        val currentCpm = currentCostPerMile()
         var acc = DrainStats()
         while (true) {
-            val batch = processBatch() ?: break
+            val batch = foldBatch(BATCH_SIZE, currentCpm) ?: break
             acc = DrainStats(
                 events = acc.events + batch.events,
                 deliveries = acc.deliveries + batch.deliveries,
@@ -138,21 +144,31 @@ class AnalyticsProjector @Inject constructor(
 
     /**
      * Fold ONE page of events after the watermark and commit records + the advanced watermark in one
-     * transaction. Returns the batch's counts, or null when the log is already drained. [limit]
-     * pages the fold (bounded memory over a long log); a test passes a small limit to force
-     * multi-batch behaviour and simulate a restart between batches.
+     * transaction. Public test/direct-call entrypoint: reads a fresh economy cpm then delegates to
+     * [foldBatch]. [limit] pages the fold (bounded memory over a long log); a test passes a small
+     * limit to force multi-batch behaviour and simulate a restart between batches. The [drain] loop
+     * uses [foldBatch] directly so a whole drain shares ONE cpm read (FIX 2).
      */
-    suspend fun processBatch(limit: Int = BATCH_SIZE): DrainStats? {
+    suspend fun processBatch(limit: Int = BATCH_SIZE): DrainStats? = foldBatch(limit, currentCostPerMile())
+
+    /**
+     * Fold ONE page of events against a pre-read [currentCpm], committing records + the advanced
+     * watermark in one transaction. Returns the batch's counts, or null when the log is already
+     * drained.
+     */
+    private suspend fun foldBatch(limit: Int, currentCpm: Double?): DrainStats? {
         val watermark = currentWatermark()
         val events = appEventRepo.getEventsAfter(after = watermark, limit = limit)
         if (events.isEmpty()) return null
 
-        val currentCpm = currentCostPerMile()
         val contexts = HashMap<String, SessionFoldContext>()
         val touched = LinkedHashSet<String>()
         val deliveries = ArrayList<DeliveryFold>()
         val offers = ArrayList<OfferFold>()
-        val payAdjustments = ArrayList<PayAdjustmentFold>()
+        // FIX 1: one event-sequence-ordered stream of adjustment decisions (PAY_ADJUSTMENT +
+        // DELIVERY_ADJUSTMENT interleaved), NOT two type-partitioned lists. Type-order apply mis-ordered
+        // a PA sequenced after a DA on the same row when they shared a batch (incremental ≠ refold).
+        val adjustments = ArrayList<Adjustment>()
         var skips = 0
 
         for (ev in events) {
@@ -163,7 +179,8 @@ class AnalyticsProjector @Inject constructor(
             if (outcome.skip != null) skips++
             outcome.delivery?.let { deliveries += it }
             outcome.offer?.let { offers += it }
-            outcome.payAdjustment?.let { payAdjustments += it }
+            outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, it) }
+            outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, it) }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -182,41 +199,17 @@ class AnalyticsProjector @Inject constructor(
             deliveries.forEach { analyticsDao.upsertDelivery(it.toEntity()) }
             offers.forEach { analyticsDao.upsertOffer(it.toEntity()) }
             touched.forEach { sid -> contexts[sid]?.let { analyticsDao.upsertSession(it.toEntity()) } }
-            // Apply driver PAY_ADJUSTMENT re-prices AFTER the batch's own delivery upserts (so a
-            // same-batch target is already written) and before the watermark. Determinism: a
-            // correction always sequences after its target's DELIVERY_COMPLETED, so a from-zero refold
-            // replays them in this same order and reproduces identical rows. The re-price recomputes
-            // net against the row's OWN frozen cpm (never today's economy — an immutable historical
-            // fact); tip/basePay are left untouched.
-            payAdjustments.forEach { adj ->
-                val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId)
-                if (row == null) {
-                    adjustmentSkips++
-                    // P7: counts only, no payload text.
-                    Timber.tag(TAG).w("PAY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
-                } else {
-                    // A MANUAL row stays MANUAL (#650 review F1): a driver correcting their own
-                    // statement leaves it a driver statement (the audit trail lives in the log), and
-                    // its net keeps the MANUAL missing-terms-as-0 policy (net-additive) — the generic
-                    // machine recompute would null the net and drop the dollars from period SUM.
-                    // Machine rows flip to USER_CORRECTED with the machine recompute (null when not
-                    // computable — the pre-existing #660-family seam, not widened). Deterministic on
-                    // refold: the row's basis reads the same at apply time in live and refold order.
-                    val manual = row.payBasis == PayBasis.MANUAL
-                    val net = when {
-                        manual -> NetProfit.net(adj.newPay, row.realizedMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
-                        row.frozenCostPerMile != null && row.realizedMiles != null ->
-                            NetProfit.net(adj.newPay, row.realizedMiles!!, row.frozenCostPerMile!!)
-                        else -> null
-                    }
-                    analyticsDao.upsertDelivery(
-                        row.copy(
-                            realizedPay = adj.newPay,
-                            payBasis = if (manual) PayBasis.MANUAL else PayBasis.USER_CORRECTED,
-                            netProfit = net,
-                        ),
-                    )
+            // Apply the driver corrections AFTER the batch's own delivery upserts (so a same-batch
+            // target is already written) and before the watermark, in ONE event-sequence order (FIX 1).
+            // Each apply reads its target row fresh by-PK, so two edits of one row compose in log order.
+            // Determinism: a correction always sequences after its target's completion, so a from-zero
+            // refold replays this same ascending order and reproduces identical rows.
+            adjustments.sortedBy { it.sequenceId }.forEach { adj ->
+                val skipped = when (adj) {
+                    is Adjustment.Pay -> applyPayAdjustment(adj.fold)
+                    is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold)
                 }
+                if (skipped) adjustmentSkips++
             }
             analyticsDao.setWatermark(
                 AnalyticsProjectionStateEntity(watermarkSequenceId = lastSeq, projectorVersion = PROJECTOR_VERSION),
@@ -226,12 +219,137 @@ class AnalyticsProjector @Inject constructor(
         Timber.tag(TAG).d(
             "batch: %d events (→seq %d) → %d deliveries, %d offers, %d sessions, %d re-priced, %d skipped",
             events.size, lastSeq, deliveries.size, offers.size, touched.size,
-            payAdjustments.size - adjustmentSkips, skips,
+            adjustments.size - adjustmentSkips, skips,
         )
         if (skips > 0) {
             Timber.tag(TAG).w("batch skipped %d event(s) with a missing/malformed payload", skips)
         }
         return DrainStats(events.size, deliveries.size, touched.size, offers.size)
+    }
+
+    /**
+     * A driver correction to apply by-PK inside the batch transaction, carrying the source event's
+     * [sequenceId] so the two correction event types merge into ONE log-ordered stream (FIX 1).
+     */
+    private sealed interface Adjustment {
+        val sequenceId: Long
+        data class Pay(override val sequenceId: Long, val fold: PayAdjustmentFold) : Adjustment
+        data class Delivery(override val sequenceId: Long, val fold: DeliveryAdjustmentFold) : Adjustment
+    }
+
+    /**
+     * Apply one legacy PAY_ADJUSTMENT re-price by-PK. Returns true iff the target row was missing (a
+     * counted skip, never a crash). A MANUAL row stays MANUAL (#650 review F1): a driver correcting
+     * their own statement leaves it a driver statement (the audit trail lives in the log), and its net
+     * keeps the MANUAL missing-terms-as-0 policy (net-additive) — the generic machine recompute would
+     * null the net and drop the dollars from period SUM. Machine rows flip to USER_CORRECTED with the
+     * machine recompute (null when not computable — the pre-existing #660-family seam, not widened).
+     * The re-price recomputes net against the row's OWN frozen cpm (never today's economy — an
+     * immutable historical fact); tip/basePay are left untouched.
+     */
+    private suspend fun applyPayAdjustment(adj: PayAdjustmentFold): Boolean {
+        val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
+            // P7: counts only, no payload text.
+            Timber.tag(TAG).w("PAY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
+            return true
+        }
+        val manual = row.payBasis == PayBasis.MANUAL
+        val net = when {
+            manual -> NetProfit.net(adj.newPay, row.realizedMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
+            row.frozenCostPerMile != null && row.realizedMiles != null ->
+                NetProfit.net(adj.newPay, row.realizedMiles!!, row.frozenCostPerMile!!)
+            else -> null
+        }
+        analyticsDao.upsertDelivery(
+            row.copy(
+                realizedPay = adj.newPay,
+                payBasis = if (manual) PayBasis.MANUAL else PayBasis.USER_CORRECTED,
+                netProfit = net,
+            ),
+        )
+        return false
+    }
+
+    /**
+     * Apply one driver DELIVERY_ADJUSTMENT (#688) multi-field re-apply by-PK. Returns true iff the
+     * target row was missing (a counted skip). Copies each non-null field; null ⇒ that column is left
+     * unchanged. Two same-row edits compose because each apply reads the row fresh (a prior same-batch
+     * upsert is already visible).
+     */
+    private suspend fun applyDeliveryAdjustment(adj: DeliveryAdjustmentFold): Boolean {
+        val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
+            // P7: counts only, no payload text.
+            Timber.tag(TAG).w("DELIVERY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
+            return true
+        }
+        // FIX 5 (#653 double-count guard): a SUSPECT_FULL_RECEIPT row's money was nulled because its
+        // siblings' shares already sum to the receipt — editing pay/tip back onto it re-opens the
+        // double count with one innocent tap. Block the pay+tip terms; store/cash/note still apply.
+        // `originalPayBasis` is the first-fold, never-rewritten basis, so this holds even after a
+        // prior non-pay edit. The dialog also disables the Pay field for these rows (a second gate).
+        val suspectReceipt = row.originalPayBasis == PayBasis.SUSPECT_FULL_RECEIPT
+        if (suspectReceipt && (adj.newPay != null || adj.newTip != null)) {
+            Timber.tag(TAG).w(
+                "DELIVERY_ADJUSTMENT: pay/tip edit blocked on SUSPECT_FULL_RECEIPT row %d (#653 double-count guard)",
+                adj.targetEventSequenceId,
+            )
+        }
+        val reqNewPay = if (suspectReceipt) null else adj.newPay
+        val reqNewTip = if (suspectReceipt) null else adj.newTip
+
+        // FIX 3 (#688 F3 invariant): cash is only meaningful on a SESSIONFUL row — gross counts it via a
+        // session join, net counts it session-inclusive. A null-session cash row would enter net but
+        // never gross, skewing the true-net waterfall cost negative. So drop a cash edit on a
+        // null-session row (one PII-safe WARN); every other field still applies. This makes the
+        // "cash-bearing rows are always sessionful" invariant real rather than merely documented.
+        val cashRejected = adj.newCashTip != null && row.sessionId == null
+        if (cashRejected) {
+            Timber.tag(TAG).w(
+                "DELIVERY_ADJUSTMENT: cash tip ignored on null-session row %d (F3 sessionful-cash invariant)",
+                adj.targetEventSequenceId,
+            )
+        }
+
+        val newStore = adj.newStoreName ?: row.storeName
+        val newPay = reqNewPay ?: row.realizedPay
+        val newTip = reqNewTip ?: row.tip
+        val newCashTip = if (cashRejected) row.cashTip else (adj.newCashTip ?: row.cashTip)
+        val newMiles = adj.newMiles ?: row.realizedMiles
+        val manual = row.payBasis == PayBasis.MANUAL
+        val payChanged = reqNewPay != null
+        val milesChanged = adj.newMiles != null
+        // Basis (VET F1): payBasis rewrites exactly when realizedPay does. A machine row flips to
+        // USER_CORRECTED iff pay changed; a MANUAL row stays MANUAL; a cash/tip/store-only edit leaves
+        // the basis (and its "est. offer pay" disclosure) intact.
+        val newBasis = when {
+            manual -> PayBasis.MANUAL
+            payChanged -> PayBasis.USER_CORRECTED
+            else -> row.payBasis
+        }
+        // Net recompute only when a net-bearing term (pay or miles) changed; otherwise the stored
+        // netProfit is preserved byte-identically (cash/tip/store/note-only edits do not touch net).
+        // MANUAL keeps the missing-terms-as-0 net-additive policy over the FINAL values; a machine row
+        // recomputes against its OWN frozen cpm (null when any term is missing — the #660-family seam).
+        val net = when {
+            !payChanged && !milesChanged -> row.netProfit
+            manual -> NetProfit.net(newPay ?: 0.0, newMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
+            row.frozenCostPerMile != null && newPay != null && newMiles != null ->
+                NetProfit.net(newPay, newMiles, row.frozenCostPerMile!!)
+            else -> null
+        }
+        analyticsDao.upsertDelivery(
+            // originalPayBasis (+ every unmentioned column) is preserved by `row.copy`.
+            row.copy(
+                storeName = newStore,
+                realizedPay = newPay,
+                tip = newTip,
+                cashTip = newCashTip,
+                realizedMiles = newMiles,
+                payBasis = newBasis,
+                netProfit = net,
+            ),
+        )
+        return false
     }
 
     // ── Version rebuild ─────────────────────────────────────────────────
@@ -402,6 +520,11 @@ class AnalyticsProjector @Inject constructor(
         frozenNonFuelPerMile = frozenNonFuelPerMile,
         netProfit = netProfit,
         costBasis = costBasis,
+        cashTip = cashTip,
+        // #703: stamp the first-fold basis ONCE, here at fold time. Every later correction apply
+        // preserves it via `row.copy`, so a re-priced row keeps its original receipt-evidence basis
+        // for the #691 hydration COALESCE.
+        originalPayBasis = payBasis,
     )
 
     private fun OfferFold.toEntity() = OfferRecordEntity(
@@ -445,9 +568,18 @@ class AnalyticsProjector @Inject constructor(
          * v3 (#653): the fold now drops a full-receipt stamp on an already-delivered multi-delivery
          * job as SUSPECT (`PayBasis.SUSPECT_FULL_RECEIPT`, no realizedPay/tip/base) instead of
          * double-counting the period SUM — the refold applies the guard to history.
-         * (#650 does NOT bump this: `MANUAL_DELIVERY`/`PAY_ADJUSTMENT` are new event types that cannot
-         * exist in already-folded history, so there is nothing to refold — a fresh drain folds them.)
+         * (#650 did NOT bump this: `MANUAL_DELIVERY`/`PAY_ADJUSTMENT` are new event types that cannot
+         * exist in already-folded history, so there was nothing to refold — a fresh drain folds them.)
+         * v4 (#703): the from-zero refold populates `originalPayBasis` (the first-fold basis, the
+         * receipt-evidence hydration anchor) for ALL history — corrections replay after their targets,
+         * so first-fold basis is reproduced faithfully, closing the #691 USER_CORRECTED hydration
+         * wrinkle for old rows too. This SUPERSEDES #650's "no bump needed" note: the bump is #703's
+         * refold requirement, not a corrections one (#688's DELIVERY_ADJUSTMENT is likewise a new event
+         * type that can't exist in folded history). Side effect (stated): the refold also re-stamps
+         * `CURRENT_FALLBACK` rows against today's economy (`CostBasis` is not rebuild-stable), so those
+         * rows' fallback net shifts on the bump — the same behaviour as the v2/v3 bumps. `cashTip`
+         * stays null in history (no cash events exist yet).
          */
-        private const val PROJECTOR_VERSION = 3
+        private const val PROJECTOR_VERSION = 4
     }
 }
