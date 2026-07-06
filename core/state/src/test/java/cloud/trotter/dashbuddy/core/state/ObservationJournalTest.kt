@@ -156,6 +156,69 @@ class ObservationJournalTest {
     }
 
     @Test
+    fun `UiInput offer identity survives the round-trip (#438 item 8a)`() = runTest {
+        val dao = FakeObservationDao()
+        val journal = ObservationJournal(dao)
+        journal.start(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)), StandardTestDispatcher(testScheduler))
+
+        journal.append(
+            Observation.UiInput(
+                timestamp = 1L, action = "accept_offer",
+                targetPlatform = Platform.Uber, offerHash = "offer-U",
+            ),
+            state(1),
+        )
+        advanceUntilIdle()
+        val ui = journal.tailAfter(0).single() as Observation.UiInput
+
+        assertEquals("accept_offer", ui.action)
+        assertEquals(Platform.Uber, ui.targetPlatform)
+        assertEquals(Platform.Uber, ui.platform) // derived override honours the stamp
+        assertEquals("offer-U", ui.offerHash)
+    }
+
+    @Test
+    fun `Loopback target platform survives the round-trip (#438 item 8a)`() = runTest {
+        val dao = FakeObservationDao()
+        val journal = ObservationJournal(dao)
+        journal.start(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)), StandardTestDispatcher(testScheduler))
+
+        journal.append(
+            Observation.Loopback(
+                timestamp = 1L, effect = "offer_evaluated",
+                targetPlatform = Platform.DoorDash,
+                payload = ObservationPayload.EvaluationResult(action = "ACCEPT", offerHash = "offer-A"),
+            ),
+            state(1),
+        )
+        advanceUntilIdle()
+        val loop = journal.tailAfter(0).single() as Observation.Loopback
+
+        assertEquals(Platform.DoorDash, loop.targetPlatform)
+        assertEquals(Platform.DoorDash, loop.platform)
+    }
+
+    @Test
+    fun `an OLD journal row without the new identity fields still decodes (#438 item 8a)`() = runTest {
+        // Additive-JSON contract: a UiInput row persisted before B2 carries only `action` in its
+        // payloadJson. The new offerHash/targetPlatform keys must decode to null defaults, not throw.
+        val dao = FakeObservationDao()
+        val journal = ObservationJournal(dao)
+        dao.inserted += ObservationEntity(
+            occurredAt = 7L, sessionId = null, pipelineId = "internal.ui", ruleId = null,
+            platform = Platform.Unknown.name, flow = null, modeHint = null, parsedJson = "{}",
+            captureId = null, metadataJson = "{}", correlationVersion = 1L,
+            payloadJson = """{"action":"accept_offer"}""",
+        )
+
+        val ui = journal.tailAfter(0).single() as Observation.UiInput
+        assertEquals("accept_offer", ui.action)
+        assertEquals(null, ui.targetPlatform)
+        assertEquals(null, ui.offerHash)
+        assertEquals(Platform.Unknown, ui.platform) // no stamp, no ruleId → Unknown (today's fallback)
+    }
+
+    @Test
     fun `flow observations round-trip their parsed fields`() = runTest {
         val dao = FakeObservationDao()
         val journal = ObservationJournal(dao)

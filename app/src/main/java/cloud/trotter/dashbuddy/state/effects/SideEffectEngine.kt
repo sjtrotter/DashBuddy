@@ -352,6 +352,10 @@ class SideEffectEngine @Inject constructor(
                     Observation.Loopback(
                         timestamp = System.currentTimeMillis(),
                         effect = Observation.Loopback.EFFECT_OFFER_EVALUATED,
+                        // #438 item 8a: stamp the offer's platform (carried on the effect) so the
+                        // loopback lands on the owning region — an Unknown-platform loopback steps
+                        // no region post-#682, silently killing the offer's notification/TTS.
+                        targetPlatform = effect.platform,
                         payload = ObservationPayload.EvaluationResult(
                             action = result.action.name,
                             offerHash = effect.offerHash,
@@ -375,7 +379,7 @@ class SideEffectEngine @Inject constructor(
                 pendingOfferNotifications[hashKey]?.cancel()
                 val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
-                    bubbleManager.postOfferNotification(effect.offer, effect.evaluation)
+                    bubbleManager.postOfferNotification(effect.offer, effect.evaluation, effect.platform)
                 }
                 job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, job) }
                 pendingOfferNotifications[hashKey] = job

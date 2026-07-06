@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -32,19 +33,35 @@ class OfferActionReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.getStringExtra(EXTRA_ACTION) ?: return
-        Timber.i("OfferActionReceiver: %s", action)
+        val uiInput = uiInputFrom(intent) ?: return
+        Timber.tag("Effects").i("OfferActionReceiver: %s on %s", uiInput.action, uiInput.targetPlatform?.wire ?: "?")
         // #457: dismiss the heads-up immediately — the dasher acted. (Offer resolution also fires
         // CancelOfferNotification, but cancel now so the banner/shade entry doesn't linger.)
         NotificationManagerCompat.from(context).cancel(BubbleManager.OFFER_NOTIFICATION_ID)
         val deps = EntryPointAccessors.fromApplication(context.applicationContext, Deps::class.java)
-        deps.stateManager().dispatch(
-            Observation.UiInput(timestamp = System.currentTimeMillis(), action = action),
-        )
+        deps.stateManager().dispatch(uiInput)
     }
 
     companion object {
         const val ACTION = "cloud.trotter.dashbuddy.action.OFFER_ACTION"
         const val EXTRA_ACTION = "offer_action"
+        const val EXTRA_PLATFORM = "offer_platform"
+        const val EXTRA_OFFER_HASH = "offer_hash"
+
+        /**
+         * Map the broadcast extras to the dispatched [Observation.UiInput] (#438 item 8a). The acted
+         * offer's identity (platform wire + offerHash) rides the PendingIntent extras so the input
+         * targets the owning region — an Unknown-platform tap steps no region post-#682. Pure +
+         * Hilt-free so the dispatch shape is unit-testable without the receiver's entry-point lookup.
+         */
+        fun uiInputFrom(intent: Intent): Observation.UiInput? {
+            val action = intent.getStringExtra(EXTRA_ACTION) ?: return null
+            return Observation.UiInput(
+                timestamp = System.currentTimeMillis(),
+                action = action,
+                targetPlatform = intent.getStringExtra(EXTRA_PLATFORM)?.let(Platform::fromWire),
+                offerHash = intent.getStringExtra(EXTRA_OFFER_HASH),
+            )
+        }
     }
 }
