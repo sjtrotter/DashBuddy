@@ -347,26 +347,36 @@ class EffectMap @Inject constructor() {
         if (next == null) return emptyList()
         val p = prev ?: PlatformRegion(platform)
 
+        // #438 item 5 (D3): the lifecycle edges below diff THIS region's own acted flow, not the
+        // shared global R0 flow — `diff` iterates every platform, but under concurrency R0.flow is
+        // whatever platform last touched the screen (so a foreign frame used to fire this platform's
+        // PostTask edges). Each side falls back to the matching GLOBAL flow only for legacy snapshots
+        // (lastActedFlow=null), which reproduces the pre-B1 behavior byte-for-byte — a region that
+        // has ever acted carries a non-null lastActedFlow, so the fallback is never taken for one that
+        // owns a task to (spuriously) complete. Under B1 the observing region stamps its own flow, so
+        // a non-observing region — where p === next → actedPrev == actedNext — never sees an edge.
+        val actedPrevFlow = p.lastActedFlow ?: prevFlow.flow
+        val actedNextFlow = next.lastActedFlow ?: nextFlow.flow
+
         return buildList {
             addAll(diffMode(p, next, obs))
             addAll(diffGraceTimer(p, next, obs))
             addAll(diffModeResumeTimer(p, next, obs))
-            addAll(diffTask(p, next, prevFlow, nextFlow, obs))
-            addAll(diffPostTask(p, next, nextFlow, obs))
+            addAll(diffTask(p, next, actedPrevFlow, actedNextFlow, obs))
+            addAll(diffPostTask(p, next, actedNextFlow, obs))
             addAll(diffNotification(obs))
 
-            // Delivery completed: leaving PostTask for a non-PostTask flow.
-            //
-            // `diff` iterates over all platforms, but `nextFlow.flow` is global.
-            // On PostTask exit the condition fires for every platform that has a
-            // PlatformRegion entry; only the one that actually owned the delivery
-            // has `completedTask` non-null. Skip the rest — without this guard,
-            // non-owning platforms emit a degenerate DELIVERY_COMPLETED row via
-            // deliveryCompletedPayload's "unknown" fallback.
+            // Delivery completed: THIS region's own acted flow leaving PostTask for a non-PostTask
+            // flow (#438 item 5 — was the global `prevFlow.flow`/`nextFlow.flow`, which fired this
+            // block for every platform whenever ANY platform's frame moved R0 off PostTask). The
+            // per-region diff means a non-observing region (p === next → actedPrev == actedNext)
+            // never sees the exit, and a foreign platform's frame can't drive this completion. The
+            // downstream `completedTask` job-scoping (#518, below) still defends the same-platform
+            // cross-JOB leak, which B1 does not obviate.
             // Task ids the PostTask-exit block emits a DELIVERY_COMPLETED for this step — the #596
             // close-out block below must NOT re-emit them (dual-mint exclusivity, amdt #2).
             val emittedThisStep = mutableSetOf<String>()
-            if (prevFlow.flow == Flow.PostTask && nextFlow.flow != Flow.PostTask) {
+            if (actedPrevFlow == Flow.PostTask && actedNextFlow != Flow.PostTask) {
                 val taskCompletedOverride = triggerOverrideEffects(obs, TransitionTrigger.TASK_COMPLETED)
                 if (taskCompletedOverride != null) {
                     addAll(taskCompletedOverride)
@@ -788,14 +798,15 @@ class EffectMap @Inject constructor() {
     private fun diffTask(
         prev: PlatformRegion,
         next: PlatformRegion,
-        prevFlow: FlowRegion,
-        nextFlow: FlowRegion,
+        actedPrevFlow: Flow,
+        actedNextFlow: Flow,
         obs: Observation,
     ): List<AppEffect> {
         // Diffs are computed from prev/next region state for EVERY observation type:
         // lazy expiry can retire a task on a non-flow observation (a routed timeout,
         // #342), and that closure must still emit DELIVERY_CONFIRMED (#345).
-        val nextFlowVal = nextFlow.flow
+        // #438 item 5: the flow reads below are THIS region's own acted flow, not the global R0.
+        val nextFlowVal = actedNextFlow
         val sessionId = next.session?.sessionId ?: prev.session?.sessionId
 
         return buildList {
@@ -957,8 +968,8 @@ class EffectMap @Inject constructor() {
                 }
             }
 
-            // Post-task: delivery completed
-            if (nextFlowVal == Flow.PostTask && prevFlow.flow != Flow.PostTask) {
+            // Post-task: delivery completed (this region's own PostTask entry, #438 item 5).
+            if (nextFlowVal == Flow.PostTask && actedPrevFlow != Flow.PostTask) {
                 add(AppEffect.ResumeOdometer)
             }
         }
@@ -1082,10 +1093,12 @@ class EffectMap @Inject constructor() {
     private fun diffPostTask(
         prev: PlatformRegion,
         next: PlatformRegion,
-        nextFlow: FlowRegion,
+        actedNextFlow: Flow,
         obs: Observation,
     ): List<AppEffect> {
-        if (nextFlow.flow != Flow.PostTask) return emptyList()
+        // #438 item 5: gate on THIS region's own acted flow — the obs is global, so without this a
+        // non-observing region would also fire the "Saved: $X" bubble on the owner's PostTask frame.
+        if (actedNextFlow != Flow.PostTask) return emptyList()
         val flowObs = obs as? Observation.FlowObservation ?: return emptyList()
         val parsed = flowObs.parsed as? ParsedFields.PostTaskFields ?: return emptyList()
 

@@ -82,11 +82,28 @@ class PlatformRegionStepper @Inject constructor() {
         nextFlow: FlowRegion,
         obs: Observation,
         policy: TransitionPolicy,
-    ): PlatformRegion = armAcceptStash(
-        reconcileDropoffStore(reconcileJobTasks(stepCore(prev, prevFlow, nextFlow, obs, policy))),
-        nextFlow,
+    ): PlatformRegion = stampLastActedFlow(
+        armAcceptStash(
+            reconcileDropoffStore(reconcileJobTasks(stepCore(prev, prevFlow, nextFlow, obs, policy))),
+            nextFlow,
+            obs,
+        ),
         obs,
     )
+
+    /**
+     * #438 item 5 (D3): record the last **non-null** own-platform flow this region stepped on
+     * ([PlatformRegion.lastActedFlow]) so the per-region lifecycle edges diff against the flow THIS
+     * platform acted on — not the shared global R0 flow. Stamped HERE in the [step] wrapper (not
+     * inside [updateLifecycle]) so the SessionEnded / Offline early-returns can't skip it. A
+     * non-FlowObservation (Timeout/UiInput/Loopback) or a flow-less FlowObservation (flow=null
+     * clicks/notifications) leaves it unchanged — such a frame is not this platform acting on a
+     * screen, and `nextFlow.flow` on it is whatever platform last owned R0.
+     */
+    private fun stampLastActedFlow(region: PlatformRegion, obs: Observation): PlatformRegion {
+        val flow = (obs as? Observation.FlowObservation)?.flow ?: return region
+        return if (region.lastActedFlow == flow) region else region.copy(lastActedFlow = flow)
+    }
 
 
     internal fun isStashExpired(stash: AcceptStash, obs: Observation): Boolean =
@@ -527,8 +544,15 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         var r = region
-        val prev = prevFlow.flow
-        val next = nextFlow.flow
+        // #438 item 5 (D3): the lifecycle edges below diff THIS region's own acted flow, not the
+        // shared global R0 flow. `region.lastActedFlow` is still the pre-step value here (the stamp
+        // runs in the [step] wrapper, after stepCore). Fallback to the global prev flow for legacy
+        // snapshots (lastActedFlow=null) keeps single-platform behavior byte-identical — the sole
+        // region acts on every own frame, so its lastActedFlow tracks R0.flow. A flow-less own obs
+        // (flow=null) is not a flow edge (next=prev), never a diff against the other platform's
+        // nextFlow.flow.
+        val prev = region.lastActedFlow ?: prevFlow.flow
+        val next = obs.flow ?: prev
 
         // Update session fields from observations
         r = updateSessionFields(r, obs)
@@ -655,15 +679,28 @@ class PlatformRegionStepper @Inject constructor() {
         // time, and distance accumulate) rather than being silently dropped. Deduped by
         // offerHash so a re-entered OfferPresented for the same offer (screen oscillation)
         // does not double-count.
-        if (prevFlowVal == Flow.OfferPresented && nextFlowVal.isTaskFlow()) {
+        //
+        // #438 item 5: the accept TRIGGER is a GLOBAL R0 read — the offer lives in the shared
+        // FlowRegion until B3 moves it onto the platform (the vet's interim cross-region read; B3
+        // deletes it). It is deliberately NOT the per-region `prevFlowVal`: a task frame follows the
+        // offer frame, so this platform's OWN prior acted flow is already the offer only when it
+        // stepped that offer screen — telescoped/at-once sequences would otherwise never fire. The
+        // per-region `nextFlowVal.isTaskFlow()` scopes the reaction to the platform that got the
+        // task frame, and offerBelongsToRegion (#526 FIX2a — the same provenance gate armAcceptStash
+        // uses) ensures ONLY the owning platform consumes the offer. A foreign/absent offer falls
+        // through to the D1c / bare job-start below instead of minting an empty-economics accept —
+        // the concurrency fix (an Uber offer in R0 must not become a DoorDash job's economics).
+        if (prevFlow.flow == Flow.OfferPresented && nextFlowVal.isTaskFlow()) {
             // Accept-adjacent (happy path): the offer is still on prevFlow. Read it straight off the
             // pending offer (the direct source); prefer the stash's acceptedAt when it matches this
             // offer — the accept-CLICK time, not this task frame (#526 D1a). Consumption clears the
             // stash inside the mint helpers.
-            val pending = prevFlow.pendingOffer
-            val stash = region.lastAcceptedOffer?.takeIf { !isStashExpired(it, obs) }
-            val acceptedAt = stash?.takeIf { it.offerHash == pending?.offerHash }?.acceptedAt ?: obs.timestamp
-            return consumeAcceptIntoJob(region, obs, acceptInputsFromPending(pending, acceptedAt))
+            val pending = prevFlow.pendingOffer?.takeIf { offerBelongsToRegion(it, prevFlow, region) }
+            if (pending != null) {
+                val stash = region.lastAcceptedOffer?.takeIf { !isStashExpired(it, obs) }
+                val acceptedAt = stash?.takeIf { it.offerHash == pending.offerHash }?.acceptedAt ?: obs.timestamp
+                return consumeAcceptIntoJob(region, obs, acceptInputsFromPending(pending, acceptedAt))
+            }
         }
 
         // #526 D1c: the F3 race — an add-on accepted while a job is active, but a `waiting_for_offer`

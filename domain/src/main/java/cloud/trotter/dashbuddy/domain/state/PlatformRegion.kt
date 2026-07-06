@@ -88,6 +88,23 @@ data class PlatformRegion(
      * Plain data (kotlinx-serializable); all timestamps are `obs.timestamp`, so it is replay-stable.
      */
     val lastAcceptedOffer: AcceptStash? = null,
+    /**
+     * The last **non-null** [Flow] this region actually stepped on (#438 item 5 / D3). The global
+     * R0 [FlowRegion] is shared, so under concurrency `FlowRegion.flow` is whatever platform last
+     * touched the screen; keying this region's lifecycle edges (PostTask entry/exit, task
+     * retire/completion) off the *global* flow lets a foreign platform's frame fire THIS platform's
+     * edges (a premature completion, a duplicate receipt bubble). This records the flow this
+     * platform's own observations drove, so the edge diffs are per-region. (The accept edge's
+     * cross-platform guard is separate — `offerBelongsToRegion`, since the offer still lives in the
+     * shared R0 until B3.)
+     *
+     * Stamped by the [step] wrapper from `flowObs.flow` — NOT `nextFlow.flow`: a flow-less obs
+     * (flow=null clicks/notifications) leaves it unchanged, because `nextFlow.flow` on such a frame
+     * is the other platform's flow (the exact contamination this removes). Default-null so existing
+     * snapshots deserialize unchanged; a null value falls back to the global flow at the read sites,
+     * making single-platform behavior identical.
+     */
+    val lastActedFlow: Flow? = null,
 )
 
 /**
