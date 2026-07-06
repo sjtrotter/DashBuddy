@@ -1039,7 +1039,7 @@ class EffectMapTest {
     fun `pickup to dropoff emits PICKUP_CONFIRMED and DELIVERY_NAV_STARTED`() {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
-        val pickupTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "Chipotle", startedAt = 900L)
+        val pickupTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "Chipotle", arrivedAt = 950L, startedAt = 900L)
         val prev = AppState(regions = Regions(
             flow = FlowRegion(flow = Flow.TaskPickupArrived),
             platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = pickupTask)),
@@ -1048,7 +1048,10 @@ class EffectMapTest {
         val dropoffTask = Task(taskId = "task-2", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 1000L)
         val next = AppState(regions = Regions(
             flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
-            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = dropoffTask)),
+            // #526 sweep design: the displaced pickup is confirmed from the job's lineage in
+            // recentTasks (the stepper displaces it there in the same step).
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session,
+                activeTask = dropoffTask, recentTasks = listOf(pickupTask.copy(completedAt = 1000L)))),
         ))
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskDropoffNavigation, parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION)))
@@ -1087,7 +1090,10 @@ class EffectMapTest {
         val dropoff = Task(taskId = "task-2", jobId = "job-1", phase = TaskPhase.DROPOFF, startedAt = confirmAt)
         val next = AppState(regions = Regions(
             flow = FlowRegion(flow = Flow.TaskDropoffNavigation),
-            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session, activeTask = dropoff)),
+            // #526 sweep design: the displaced shop pickup is confirmed from recentTasks; the
+            // shop-rate window is arrived→completedAt (== confirmAt here).
+            platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = session,
+                activeTask = dropoff, recentTasks = listOf(shopPickup.copy(completedAt = confirmAt)))),
         ))
 
         val effects = effectMap.diff(prev, next, screenObs(

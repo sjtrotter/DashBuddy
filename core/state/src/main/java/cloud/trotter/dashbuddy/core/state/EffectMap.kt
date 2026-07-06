@@ -454,10 +454,17 @@ class EffectMap @Inject constructor() {
             val closedJob = p.activeJob
             if (closedJob != null && next.activeJob?.jobId != closedJob.jobId) {
                 val sessionId = next.session?.sessionId ?: p.session?.sessionId
-                // #526 D5 sweep: a job that closed WITHOUT a pickup→dropoff edge (a T1/T2 retire
-                // close) still owes PICKUP_CONFIRMED for each arrived pickup. Per-task keys dedup
-                // against the edge sweep, so a job that DID pass a dropoff edge re-emits nothing.
-                addAll(pickupConfirmSweepEffects(sessionId, next, closedJob.jobId, obs))
+                // #526 D5 sweep: a job that closed WITHOUT ever reaching a dropoff (a pickup-only
+                // close — no pickup→dropoff edge ever fired to confirm the pickups) still owes
+                // PICKUP_CONFIRMED for each arrived pickup. A job that DID reach a dropoff already
+                // confirmed its pickups at that edge (all pickups precede all dropoffs), so we skip
+                // the sweep there to avoid a redundant per-close re-emission (harmless live under
+                // the per-task effects_fired key, but it needn't pollute the stream).
+                val jobHadDropoff = (next.recentTasks + listOfNotNull(next.activeTask))
+                    .any { it.jobId == closedJob.jobId && it.phase == TaskPhase.DROPOFF }
+                if (!jobHadDropoff) {
+                    addAll(pickupConfirmSweepEffects(sessionId, next, closedJob.jobId, obs))
+                }
                 val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
                 // #528: split the combined receipt across the job's delivered drops once, so each
                 // close-out completion carries its own share (the receipt-skip null rows and the
