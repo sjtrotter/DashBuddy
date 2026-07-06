@@ -750,4 +750,51 @@ class FlowCardMapperTest {
         assertEquals(6.50, delivery.netPay!!, 0.001)
         assertEquals(18.0, delivery.estMinutes!!, 0.001)
     }
+
+    @Test
+    fun `#526 D5b - a PICKUP_CONFIRMED for a displaced pickup does not wipe the live second-pickup card`() {
+        // The stacked-pickup Bug10a confirm (D5) can fold while the SECOND pickup is the live one
+        // (out-of-order replay). The mismatch branch must NOT null the live openPickup — that
+        // blanked the HUD and duplicated a completed card.
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"), 1000L),
+            event(AppEventType.PICKUP_NAV_STARTED, pickupPayload("T-A", "J1", "Bill Miller BBQ", 2000L), 2000L),
+            // Second pickup opens (closes A into completed, opens B as the live card).
+            event(AppEventType.PICKUP_NAV_STARTED, pickupPayload("T-B", "J1", "Mama Margies", 3000L), 3000L),
+            // The displaced first pickup (A) is confirmed while B is live — the mismatch branch.
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T-A", "J1", "Bill Miller BBQ", 2000L, arrived = 2500L, confirmed = 3000L), 3000L),
+            // Flush the live card so we can observe it survived.
+            event(AppEventType.DASH_STOP, SessionStopPayload(
+                sessionId = "s1", endedAt = 4000L, source = "test",
+            ), 4000L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        val pickups = cards.filterIsInstance<FlowCardSnapshot.Pickup>()
+        assertTrue(
+            "the live second pickup (Mama Margies) must survive the displaced-A confirm",
+            pickups.any { it.storeName == "Mama Margies" },
+        )
+        assertTrue("the first pickup (Bill Miller) is present too", pickups.any { it.storeName == "Bill Miller BBQ" })
+        assertEquals("no duplicate pickup cards after id-dedup", pickups.size, pickups.distinctBy { it.taskId }.size)
+    }
+
+    @Test
+    fun `#526 FIX4 - a double PICKUP_CONFIRMED for one task produces ONE completed pickup card`() {
+        // Recovery-replay / close-out-then-edge can re-fire the confirm for a task whose card already
+        // closed. The mismatch branch must skip synthesizing a second completed card.
+        val events = listOf(
+            event(AppEventType.PICKUP_NAV_STARTED, pickupPayload("T1", "J1", "Wendy's", 1000L), 1000L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 1000L, arrived = 1500L, confirmed = 2000L), 2000L),
+            // Same task confirmed AGAIN after its card already closed (openPickup is now null).
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 1000L, arrived = 1500L, confirmed = 2000L), 2000L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        val pickups = cards.filterIsInstance<FlowCardSnapshot.Pickup>()
+        assertEquals("one completed pickup card despite the double-confirm", 1, pickups.size)
+        assertEquals(cards.map { it.id }.distinct().size, cards.size)
+    }
 }

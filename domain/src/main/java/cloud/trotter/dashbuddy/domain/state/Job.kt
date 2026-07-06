@@ -79,4 +79,63 @@ data class Job(
 
     /** Every offer hash that contributed to this job (the add-on chain). */
     val parentOfferHashes: List<String> get() = acceptedOffers.mapNotNull { it.offerHash }
+
+    /**
+     * Swap the **accumulated screen state** between two of this job's tasks, identified by id,
+     * while preserving each task's **slot identity** (`taskId`, `jobId`, `phase`,
+     * [Task.expectedStoreHint], `startedAt`). The order-slot stays put; the observations that
+     * were attributed to it move.
+     *
+     * This is the #526 swap guard: a pickup screen can be bound to the wrong pre-created order
+     * because the offer's store hints don't reliably match the parsed pickup store, so the data
+     * accumulated for one order may actually belong to its sibling. Swapping re-attributes it
+     * without re-minting (ids stay stable for effects/db). No-op if either id is absent or they
+     * are the same task. See [swapTaskAccumulation].
+     *
+     * CONTRACT: the swap moves lifecycle timestamps (`arrivedAt`, `completedAt`) too, so callers
+     * must only swap two tasks in the **same** lifecycle state — the #526 trigger fires between two
+     * OPEN (`completedAt == null`) pickups only. Swapping an active task with a completed one would
+     * corrupt both; the call-site guard in `PlatformRegionStepper` enforces this.
+     */
+    fun withSwappedAccumulation(taskIdA: String, taskIdB: String): Job {
+        if (taskIdA == taskIdB) return this
+        val a = tasks.firstOrNull { it.taskId == taskIdA } ?: return this
+        val b = tasks.firstOrNull { it.taskId == taskIdB } ?: return this
+        val (newA, newB) = swapTaskAccumulation(a, b)
+        return copy(tasks = tasks.map {
+            when (it.taskId) {
+                taskIdA -> newA
+                taskIdB -> newB
+                else -> it
+            }
+        })
+    }
+}
+
+/**
+ * Exchange the accumulated, screen-derived observations of two tasks while keeping each task's
+ * durable slot identity (`taskId`, `jobId`, `phase`, [Task.expectedStoreHint], `startedAt`).
+ * Pure; the basis of the #526 swap guard (see [Job.withSwappedAccumulation]). Returns the pair
+ * in the same order it was given: `first` keeps a's identity with b's data, `second` keeps b's
+ * identity with a's data.
+ */
+fun swapTaskAccumulation(a: Task, b: Task): Pair<Task, Task> {
+    fun Task.withAccumulationOf(other: Task) = copy(
+        subPhase = other.subPhase,
+        storeName = other.storeName,
+        storeAddress = other.storeAddress,
+        customerNameHash = other.customerNameHash,
+        customerAddressHash = other.customerAddressHash,
+        deadlineMillis = other.deadlineMillis,
+        activity = other.activity,
+        itemsRemaining = other.itemsRemaining,
+        itemsShopped = other.itemsShopped,
+        redCardTotal = other.redCardTotal,
+        arrivedAt = other.arrivedAt,
+        odometerAtEntry = other.odometerAtEntry,
+        odometerAtArrival = other.odometerAtArrival,
+        completedAt = other.completedAt,
+        recovered = other.recovered,
+    )
+    return a.withAccumulationOf(b) to b.withAccumulationOf(a)
 }

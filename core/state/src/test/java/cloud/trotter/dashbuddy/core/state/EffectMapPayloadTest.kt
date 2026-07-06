@@ -361,6 +361,11 @@ class EffectMapPayloadTest {
                 arrivedAt = null,
                 startedAt = 2000L,
             ).copy(customerNameHash = "cust-abc"),
+            // #526 sweep design: the displaced pickup is confirmed from the job's lineage in
+            // recentTasks (the stepper displaces it there in the same step), not from prev.activeTask.
+            recentTasks = listOf(
+                task(taskId = "T3", jobId = "J3", phase = TaskPhase.PICKUP, arrivedAt = 1800L).copy(completedAt = 2000L),
+            ),
         )
         val prev = appState(
             flow = FlowRegion(flow = Flow.TaskPickupArrived),

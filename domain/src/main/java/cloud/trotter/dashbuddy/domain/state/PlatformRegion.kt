@@ -71,6 +71,45 @@ data class PlatformRegion(
      * just-completed delivery's `TASK_RETIRE` grace — the two slots cannot share.
      */
     val pendingModeResume: PendingModeResume? = null,
+    /**
+     * The most-recently accepted offer, stashed at accept time (#526 D1), pending consumption
+     * by the job-mint that follows. Default-null so existing snapshots deserialize unchanged.
+     *
+     * WHY: the job is normally minted on the `OfferPresented → task-flow` edge, reading the offer
+     * straight off `FlowRegion.pendingOffer`. But a `waiting_for_offer` teardown frame can land
+     * between the accept click and the first task frame (the F3 race, verified in the 07-05
+     * two-pickup capture), popping `pendingOffer` first — so that edge never fires and the job is
+     * minted by the bare fallback with no economics, no dropoff/pickup placeholders, no store hint.
+     * The stash survives the teardown: it's mirrored (idempotently, keyed by offerHash) on every
+     * step whose flow still holds an accept-latched `pendingOffer`, and consumed by whichever
+     * mint path runs — accept-adjacent, add-on, or fallback. Cleared on consumption, on a
+     * superseding new offer, on session end, and lazily when older than the accept grace.
+     *
+     * Plain data (kotlinx-serializable); all timestamps are `obs.timestamp`, so it is replay-stable.
+     */
+    val lastAcceptedOffer: AcceptStash? = null,
+)
+
+/**
+ * An accepted offer captured at accept time (#526 D1), so a job can be minted with full economics
+ * and pre-created placeholders even when the `OfferPresented → task-flow` edge is skipped by a
+ * teardown frame (the F3 race). See [PlatformRegion.lastAcceptedOffer].
+ *
+ * [storeHints] is the raw per-order store list (`orders.map { storeName }`) — empty when the offer
+ * wasn't parsed; the dropoff count is `storeHints.size` (fallback 1), the distinct pickup stores are
+ * its case-insensitive dedup (#499). [acceptedAt] is the `obs.timestamp` of the accept-latch step
+ * that first armed the stash (preserved across idempotent re-mirrors), and becomes the minted
+ * job's [AcceptedOfferEconomics.acceptedAt].
+ */
+@Serializable
+data class AcceptStash(
+    val offerHash: String?,
+    val payAmount: Double? = null,
+    val netPay: Double? = null,
+    val estMinutes: Double? = null,
+    val distanceMiles: Double? = null,
+    val storeHints: List<String> = emptyList(),
+    val acceptedAt: Long,
 )
 
 /**

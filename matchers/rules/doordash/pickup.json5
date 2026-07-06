@@ -163,6 +163,16 @@
             },
             "read": "text"
           },
+          "customerNameHash": {
+            "find": {
+              "hasIdSuffix": "customer_name"
+            },
+            "read": "text",
+            "transform": [
+              "trim",
+              "sha256"
+            ]
+          },
           "deadlineText": {
             "find": {
               "hasTextStartsWith": "Pick up by"

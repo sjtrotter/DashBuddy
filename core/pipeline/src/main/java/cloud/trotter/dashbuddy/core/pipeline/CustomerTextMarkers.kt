@@ -38,8 +38,13 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  * `redact` as the primary control (store-FP risk, the "Heading to " precedent —
  * NOT because the title lacks a lead-in). DoorDash's `order_ready` is a true
  * no-marker residual: the customer name sits at the START (`"<name>'s order is
- * ready…"`), so no prefix precedes it. The `CaptureBackstopCorpusTest` pins the
- * set to ZERO false positives on the committed (already-redacted) corpus.
+ * ready…"`), so no prefix precedes it. So is `pickup_arrival`'s `customer_name`
+ * node (#526 D6a): the "Order for " label is a SEPARATE sibling node
+ * (`customer_name_label`), so the `customer_name` node's text is the bare name with
+ * no in-node prefix for this scan to catch — the rule-declared `redact` on that node
+ * is the ONLY capture control there (and the #548 guard pins the parse to it). The
+ * `CaptureBackstopCorpusTest` pins the set to ZERO false positives on the committed
+ * (already-redacted) corpus.
  */
 object CustomerTextMarkers {
 
