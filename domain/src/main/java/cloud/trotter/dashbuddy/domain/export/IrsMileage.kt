@@ -15,10 +15,13 @@ package cloud.trotter.dashbuddy.domain.export
  * each record's own tax year: the CSV export applies the right rate per row (emitting one summary
  * group per tax year present), and the Time tab labels the current year's rate.
  *
- * **Unknown (unpublished) year → the latest known rate, always disclaimed** (dev decision, #689):
- * a future year with no published rate falls back to [latestKnown] rather than silently applying a
- * stale year's number; every consumer surfaces an explicit "rate not yet published" note driven by
- * [isKnown]. Honest-fallback beats a fabricated year label.
+ * **Unknown year → the latest known rate, always disclaimed** (dev decision, #689): a year with no
+ * entry in [RATES] falls back to [latestKnown] rather than silently applying a stale year's number,
+ * and every consumer surfaces the disclaimer. [effectiveRate] owns the fallback policy and
+ * [fallbackNote] owns the disclaimer copy — consumers derive both from here (Principle 5), never
+ * re-implement them. The note is direction-aware: a year *after* the latest known is "not yet
+ * published"; a year *before* the table (device clock skew, backfilled history) has a published IRS
+ * rate that simply isn't shipped in this table, so the copy must not claim non-publication.
  *
  * **RELEASE CHECKLIST (each December):** when the IRS publishes the next year's notice, add the new
  * `year to rate` entry to [RATES] (plus a corpus/UI test bump). That annual edit is the whole
@@ -46,8 +49,8 @@ object IrsMileage {
     fun isKnown(year: Int): Boolean = RATES.containsKey(year)
 
     /**
-     * The most recently published `(year, rate)` — the honest fallback rate for an unknown future
-     * year (used by [deduction] and surfaced with a disclaimer by every consumer).
+     * The most recently published `(year, rate)` — the honest fallback for an unknown year (applied
+     * by [effectiveRate] and disclaimed by [fallbackNote]).
      */
     fun latestKnown(): Pair<Int, Double> {
         val year = RATES.keys.max()
@@ -55,10 +58,30 @@ object IrsMileage {
     }
 
     /**
-     * Estimated standard-mileage deduction for [miles] business miles driven in [year]. An unknown
-     * (unpublished) year falls back to the latest known year's rate ([latestKnown]) — callers must
-     * surface the disclaimer via [isKnown] so the substitution is never silent.
+     * The rate actually applied for [year]: the published rate, or the latest known rate as the
+     * fallback. The single owner of the fallback policy — [deduction] and every consumer's "/mi"
+     * label derive from this, so a printed rate and its deduction can never disagree.
      */
-    fun deduction(miles: Double, year: Int): Double =
-        miles * (rateFor(year) ?: latestKnown().second)
+    fun effectiveRate(year: Int): Double = rateFor(year) ?: latestKnown().second
+
+    /**
+     * The one disclaimer copy for a fallback-rate substitution — the CSV `rate_note` and the
+     * Time-tab card render exactly this string (SSOT) — or `null` when [year] has a published rate
+     * in [RATES]. Direction-aware so it never states a falsehood: a past year's rate exists, it
+     * just isn't in this table.
+     */
+    fun fallbackNote(year: Int): String? {
+        val latestYear = latestKnown().first
+        return when {
+            isKnown(year) -> null
+            year > latestYear -> "$year rate not yet published — estimated at the $latestYear rate"
+            else -> "no $year rate in the app's rate table — estimated at the $latestYear rate"
+        }
+    }
+
+    /**
+     * Estimated standard-mileage deduction for [miles] business miles driven in [year], at
+     * [effectiveRate] — callers must surface [fallbackNote] so a substitution is never silent.
+     */
+    fun deduction(miles: Double, year: Int): Double = miles * effectiveRate(year)
 }

@@ -149,10 +149,10 @@ object CsvExporter {
      * [zone] (one owner: the same zone the row timestamps use). Sessions are grouped by tax year and
      * **one `tax_year`/`irs_business_rate_per_mile`/`total_deductible_miles`/`estimated_mileage_deduction`
      * group is emitted per year present**, ascending, so a year-boundary-spanning export applies the
-     * right rate to each year's miles instead of one (wrong) global label. A year with no published
-     * IRS rate falls back to the latest known rate ([IrsMileage.latestKnown]) and appends a
-     * clearly-labelled `rate_note` disclaimer (routed through [Csv.textField] — formula-injection
-     * rules still apply) so the substitution is never silent.
+     * right rate to each year's miles instead of one (wrong) global label. A year with no rate in
+     * the table applies [IrsMileage.effectiveRate]'s fallback and appends [IrsMileage.fallbackNote]
+     * as a `rate_note` line (routed through [Csv.textField] — formula-injection rules still apply)
+     * so the substitution is never silent.
      */
     private fun summaryCsv(
         deliveries: List<DeliveryRecordEntity>,
@@ -178,18 +178,11 @@ object CsvExporter {
         line("export_generated_at", Csv.isoDateTime(generatedAtMillis, zone))
         line("date_range", Csv.textField("all_time"))
         for ((year, miles) in milesByYear) {
-            val rate = IrsMileage.rateFor(year) ?: IrsMileage.latestKnown().second
             line("tax_year", year.toString())
-            line("irs_business_rate_per_mile", Csv.money(rate, digits = 3))
+            line("irs_business_rate_per_mile", Csv.money(IrsMileage.effectiveRate(year), digits = 3))
             line("total_deductible_miles", Csv.decimal(miles))
             line("estimated_mileage_deduction", Csv.money(IrsMileage.deduction(miles, year)))
-            if (!IrsMileage.isKnown(year)) {
-                val latestYear = IrsMileage.latestKnown().first
-                line(
-                    "rate_note",
-                    Csv.textField("$year rate not yet published — estimated at the $latestYear rate"),
-                )
-            }
+            IrsMileage.fallbackNote(year)?.let { line("rate_note", Csv.textField(it)) }
         }
         line("total_sessions", Csv.int(sessions.size))
         line("total_deliveries", Csv.int(deliveries.size))

@@ -186,4 +186,26 @@ class CsvTest {
         // 2027 has no published rate → latest known (2026 = $0.725/mi).
         assertEquals(72.5, IrsMileage.deduction(100.0, 2027), 1e-9)
     }
+
+    @Test fun irsEffectiveRate_publishedRate_orLatestKnownFallback() {
+        assertEquals(0.70, IrsMileage.effectiveRate(2025), 0.0)
+        assertEquals(0.725, IrsMileage.effectiveRate(2026), 0.0)
+        assertEquals(0.725, IrsMileage.effectiveRate(2027), 0.0) // future unknown → latest
+        assertEquals(0.725, IrsMileage.effectiveRate(2024), 0.0) // pre-table → latest (disclaimed below)
+    }
+
+    @Test fun irsFallbackNote_isDirectionAware_andNullForPublishedYears() {
+        assertNull(IrsMileage.fallbackNote(2025))
+        assertNull(IrsMileage.fallbackNote(2026))
+        // Future year: genuinely not yet published.
+        assertEquals(
+            "2027 rate not yet published — estimated at the 2026 rate",
+            IrsMileage.fallbackNote(2027),
+        )
+        // Past year: its rate IS published (just not shipped) — the copy must not claim otherwise.
+        assertEquals(
+            "no 2024 rate in the app's rate table — estimated at the 2026 rate",
+            IrsMileage.fallbackNote(2024),
+        )
+    }
 }

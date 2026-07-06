@@ -198,7 +198,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   delivery), an **on-time** gauge ("NN% on time" over the deliveries that carried a deadline, "N of M
   … with a deadline", plus a "typically Xm early/late" margin line), and a **mileage & tax** card
   (period miles + the est. IRS standard-mileage deduction at the current year's rate via the per-year
-  lookup — 2026 = $0.725/mi; Lifetime adds a "spans tax years — see the CSV export" note). How to tell it's working:
+  lookup — 2026 = $0.725/mi; Lifetime adds a "may span tax years — see the CSV export" note, and a
+  Monday-anchored week straddling Jan 1 gets a "spans tax years" note). How to tell it's working:
   the online split ≈ the time you spent online vs on drops for the dash, deadhead miles look sane
   (small on a busy dash, larger if you drove a lot between/after drops), the on-time % and margin match
   how you did against the app's deadlines, and the mileage matches the odometer miles for the period.

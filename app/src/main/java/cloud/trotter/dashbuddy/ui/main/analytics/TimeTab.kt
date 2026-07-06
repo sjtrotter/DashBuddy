@@ -19,12 +19,14 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStackBar
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.core.data.analytics.PeriodBounds
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.export.IrsMileage
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
-import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -199,8 +201,13 @@ private fun MileageTaxCard(time: TimeEconomics, period: AnalyticsPeriod) {
             return@AppCard
         }
 
-        // Current year from the device clock at render (a review surface — no ticker needed).
-        val labels = MileageTaxModel.from(time.miles, LocalDate.now().year, period)
+        // Device clock at render (a review surface — no ticker needed).
+        val labels = MileageTaxModel.from(
+            miles = time.miles,
+            nowMillis = System.currentTimeMillis(),
+            zone = ZoneId.systemDefault(),
+            period = period,
+        )
 
         Text(text = "${Formats.decimal(time.miles, 1)} mi", style = AppTheme.num.heroNum, color = c.text)
         Spacer(Modifier.height(6.dp))
@@ -224,42 +231,39 @@ private fun MileageTaxCard(time: TimeEconomics, period: AnalyticsPeriod) {
 
 /**
  * Pure copy logic for the MILEAGE & TAX card (#689) — Compose-free so it's unit-testable in
- * isolation from rendering (the [WaterfallModel] precedent). The card covers a selected *period*,
- * which is single-year by construction for Today/Week/Month; only Lifetime can span years.
+ * isolation from rendering (the [WaterfallModel] precedent). Today and This-Month are single-year
+ * by construction, but the Monday-anchored week straddles Jan 1 whenever New Year's Day falls
+ * Tue–Sun, and Lifetime can span any boundary — so the spans-years check derives from the period's
+ * actual [PeriodBounds] window (the bounds SSOT), not from the enum.
  *
  * Locked policy: label the deduction with the **current** year's rate via the [IrsMileage] lookup
- * (never a literal year/rate). When the current year has no published IRS rate yet
- * (`!IrsMileage.isKnown`), append an explicit disclaimer — the deduction still computes off the
- * latest known rate ([IrsMileage.deduction]'s fallback) but the substitution is stated. For
- * Lifetime, add a note that the period may span tax years and point at the CSV export (which owns
- * the per-year precision) — cheap honesty over re-costing every row here.
+ * (never a literal year/rate); the fallback policy and disclaimer copy are [IrsMileage.effectiveRate]
+ * / [IrsMileage.fallbackNote] (one owner — the CSV renders the identical note). A period that spans
+ * tax years gets a note pointing at the CSV export (which owns the per-year precision) — cheap
+ * honesty over re-costing every row here.
  */
 object MileageTaxModel {
 
     data class Labels(
         /** "$X.XX est. IRS <year> standard-mileage deduction ($0.725/mi)". */
         val deductionLine: String,
-        /** Non-null only when the current year's rate isn't published — the honest-fallback note. */
+        /** Non-null only when the current year has no rate in the table — [IrsMileage.fallbackNote]. */
         val disclaimer: String?,
-        /** Non-null only for Lifetime, which can straddle a year boundary. */
+        /** Non-null when the period's window spans (Lifetime: may span) a tax-year boundary. */
         val spansYearsNote: String?,
     )
 
-    fun from(miles: Double, currentYear: Int, period: AnalyticsPeriod): Labels {
-        val rate = IrsMileage.rateFor(currentYear) ?: IrsMileage.latestKnown().second
-        val deductionLine = "${Formats.money(IrsMileage.deduction(miles, currentYear))} " +
-            "est. IRS $currentYear standard-mileage deduction (${Formats.money3(rate)}/mi)"
-        val disclaimer = if (IrsMileage.isKnown(currentYear)) {
-            null
-        } else {
-            "$currentYear rate not yet published — estimated at the ${IrsMileage.latestKnown().first} rate"
+    fun from(miles: Double, nowMillis: Long, zone: ZoneId, period: AnalyticsPeriod): Labels {
+        val year = Instant.ofEpochMilli(nowMillis).atZone(zone).year
+        val deductionLine = "${Formats.money(IrsMileage.deduction(miles, year))} " +
+            "est. IRS $year standard-mileage deduction (${Formats.money3(IrsMileage.effectiveRate(year))}/mi)"
+        val spansYearsNote = when {
+            period == AnalyticsPeriod.LIFETIME -> "may span tax years — see the CSV export for per-year figures"
+            Instant.ofEpochMilli(PeriodBounds.of(period, nowMillis, zone).start).atZone(zone).year != year ->
+                "spans tax years — see the CSV export for per-year figures"
+            else -> null
         }
-        val spansYearsNote = if (period == AnalyticsPeriod.LIFETIME) {
-            "spans tax years — see the CSV export for per-year figures"
-        } else {
-            null
-        }
-        return Labels(deductionLine, disclaimer, spansYearsNote)
+        return Labels(deductionLine, IrsMileage.fallbackNote(year), spansYearsNote)
     }
 }
 
