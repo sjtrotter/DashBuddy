@@ -197,6 +197,11 @@ class PlatformRegionStepper @Inject constructor() {
     ): PlatformRegion {
         val jobId = mintId("job", base, obs)
         val dropoffs = preCreatedDropoffs(base, obs, jobId, inputs.dropoffCount, startOffset = 1)
+        // #526 D2: one PICKUP placeholder per distinct store, minted AFTER the dropoffs so existing
+        // dropoff ids (and the slice-3/3b tests) are unchanged — offsets job=0, dropoffs=1..D,
+        // pickups=D+1..D+P.
+        val pickupHints = distinctStoreHints(inputs.storeHints)
+        val pickups = preCreatedPickups(base, obs, jobId, pickupHints, startOffset = (1 + inputs.dropoffCount).toLong())
         return base.copy(
             activeJob = Job(
                 jobId = jobId,
@@ -204,18 +209,19 @@ class PlatformRegionStepper @Inject constructor() {
                 parentOfferHash = inputs.offerHash,
                 acceptedOffers = listOf(inputs.economics),
                 startedAt = obs.timestamp,
-                tasks = dropoffs,
+                tasks = dropoffs + pickups,
             ),
-            // job(1) + D dropoffs, all minted in this one copy() (#344).
-            mintCounter = base.mintCounter + 1 + inputs.dropoffCount,
+            // job(1) + D dropoffs + P pickups, all minted in this one copy() (#344).
+            mintCounter = base.mintCounter + 1 + inputs.dropoffCount + pickups.size,
             lastAcceptedOffer = null,
         )
     }
 
     /**
-     * Append an add-on accept into the active job: its own D dropoff placeholders (offsets 0..D-1).
-     * No job mint this step. Deduped by offerHash so a re-entered OfferPresented for the same offer
-     * can't double-count.
+     * Append an add-on accept into the active job: its own D dropoff placeholders (offsets 0..D-1),
+     * plus (#526 D2) pickup placeholders only for stores the job does NOT already own (a same-store
+     * add-on folds into the existing pickup, #499), at offsets D..D+P-1. No job mint this step.
+     * Deduped by offerHash so a re-entered OfferPresented for the same offer can't double-count.
      */
     private fun appendAddOn(
         region: PlatformRegion,
@@ -227,15 +233,90 @@ class PlatformRegionStepper @Inject constructor() {
             existing.acceptedOffers.any { it.offerHash == inputs.offerHash }
         if (alreadyCounted) return region.copy(lastAcceptedOffer = null)
         val addOnDropoffs = preCreatedDropoffs(region, obs, existing.jobId, inputs.dropoffCount, startOffset = 0)
+        val existingPickupHints = existing.tasks
+            .filter { it.phase == TaskPhase.PICKUP }
+            .mapNotNull { it.expectedStoreHint?.lowercase(Locale.ROOT) }
+            .toSet()
+        val addOnPickupHints = distinctStoreHints(inputs.storeHints)
+            .filter { it.lowercase(Locale.ROOT) !in existingPickupHints }
+        val addOnPickups = preCreatedPickups(region, obs, existing.jobId, addOnPickupHints, startOffset = inputs.dropoffCount.toLong())
         return region.copy(
             activeJob = existing.copy(
                 acceptedOffers = existing.acceptedOffers + inputs.economics,
                 offerStoreHint = existing.offerStoreHint + inputs.storeHints,
-                tasks = existing.tasks + addOnDropoffs,
+                tasks = existing.tasks + addOnDropoffs + addOnPickups,
             ),
-            mintCounter = region.mintCounter + inputs.dropoffCount,
+            mintCounter = region.mintCounter + inputs.dropoffCount + addOnPickups.size,
             lastAcceptedOffer = null,
         )
+    }
+
+    /**
+     * #526 D2: pre-create one PICKUP placeholder per **distinct store** an accepted offer covers, the
+     * symmetric counterpart to [preCreatedDropoffs]. Two orders at the *same* store are ONE combined
+     * pickup on DoorDash (the #499 fold-in), so [distinctStoreHints] must already be de-duplicated.
+     * Each placeholder carries its order's [Task.expectedStoreHint]; the authoritative [Task.storeName]
+     * is filled when a pickup screen resolves onto it. ids are minted at [startOffset]..[startOffset]+
+     * size-1; the caller advances the counter in the same copy().
+     */
+    private fun preCreatedPickups(
+        region: PlatformRegion,
+        obs: Observation,
+        jobId: String,
+        distinctStoreHints: List<String>,
+        startOffset: Long,
+    ): List<Task> = distinctStoreHints.mapIndexed { i, hint ->
+        Task(
+            taskId = mintId("task", region, obs, offset = startOffset + i),
+            jobId = jobId,
+            phase = TaskPhase.PICKUP,
+            expectedStoreHint = hint,
+            storeName = null,
+            startedAt = obs.timestamp,
+        )
+    }
+
+    /** De-duplicate raw offer store hints case-insensitively, preserving first-seen order. */
+    private fun distinctStoreHints(storeHints: List<String>): List<String> =
+        storeHints.map { it.trim() }.filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+
+    /**
+     * #526 D4a: repair a mis-bound pickup slot. If the active PICKUP task's parsed store this frame
+     * bestMatches (>=1 shared leading token) exactly ONE OTHER open pickup placeholder's hint AND
+     * shares 0 leading tokens with the active task's own hint, the accumulation is on the wrong order
+     * slot — swap it onto the correctly-hinted slot (identity-preserving, no re-mint) and return the
+     * post-swap job + the now-correct active task. Otherwise returns `(region.activeJob, activeTask)`
+     * unchanged. Conservative: unique match + clean 0-token divergence only; ambiguous → no swap.
+     * Both slots must be OPEN (the active task by definition; the other via `storeName == null &&
+     * completedAt == null`) — the D4 lifecycle contract that keeps [swapTaskAccumulation]'s timestamp
+     * swap safe.
+     */
+    private fun maybeSwapMisboundPickup(
+        region: PlatformRegion,
+        activeTask: Task,
+        taskPhase: TaskPhase,
+        taskFields: ParsedFields.TaskFields?,
+    ): Pair<Job?, Task> {
+        val noSwap = region.activeJob to activeTask
+        if (taskPhase != TaskPhase.PICKUP || activeTask.completedAt != null) return noSwap
+        val job = region.activeJob ?: return noSwap
+        if (job.tasks.none { it.taskId == activeTask.taskId }) return noSwap
+        val screenStore = taskFields?.storeName?.trim()?.takeIf { it.isNotEmpty() } ?: return noSwap
+        val displacedIds = region.recentTasks.mapTo(HashSet()) { it.taskId }
+        val others = job.tasks.filter {
+            it.phase == TaskPhase.PICKUP && it.storeName == null && it.completedAt == null &&
+                it.taskId != activeTask.taskId && it.taskId !in displacedIds &&
+                it.expectedStoreHint != null
+        }
+        val match = others
+            .filter { StoreNameMatch.sharedLeadingTokens(screenStore, it.expectedStoreHint!!) >= 1 }
+            .singleOrNull() ?: return noSwap
+        val ownHint = activeTask.expectedStoreHint
+        if (ownHint != null && StoreNameMatch.sharedLeadingTokens(screenStore, ownHint) >= 1) return noSwap
+        val swappedJob = job.withSwappedAccumulation(activeTask.taskId, match.taskId)
+        val newActive = swappedJob.tasks.firstOrNull { it.taskId == match.taskId } ?: return noSwap
+        return swappedJob to newActive
     }
 
     fun step(
@@ -988,6 +1069,61 @@ class PlatformRegionStepper @Inject constructor() {
                     )
                 }
 
+                // #526 D3: resolve a pickup screen onto a pre-created (offer-spawned) PICKUP
+                // placeholder of this job instead of minting — the symmetric counterpart to the
+                // dropoff resolution below. Store hints are unreliable, so the priority is:
+                //   1. exact case-insensitive hint match,
+                //   2. D3a: StoreNameMatch.bestMatch (>=1 shared leading token — the same SSOT
+                //      reconcileDropoffStore uses), so a noisy/null store doesn't blind-bind in
+                //      offset order,
+                //   3. next open placeholder in offset order.
+                // "Open" = storeName not yet resolved, not completed, not the current/displaced task.
+                // A wrong bind can be repaired later without re-minting via the swap guard (D4a below).
+                val expectedPickup = if (taskPhase == TaskPhase.PICKUP) {
+                    val displacedIds = region.recentTasks.mapTo(HashSet()) { it.taskId }
+                    val openPickups = region.activeJob?.tasks.orEmpty().filter { p ->
+                        p.phase == TaskPhase.PICKUP &&
+                            p.storeName == null &&
+                            p.completedAt == null &&
+                            p.taskId != currentTask?.taskId &&
+                            p.taskId !in displacedIds
+                    }
+                    val screenStore = taskFields?.storeName?.trim()?.takeIf { it.isNotEmpty() }
+                    val hintMatch = screenStore?.let { s ->
+                        openPickups.firstOrNull { it.expectedStoreHint?.equals(s, ignoreCase = true) == true }
+                    }
+                    val bestMatch = if (hintMatch == null && screenStore != null) {
+                        val best = StoreNameMatch.bestMatch(openPickups.mapNotNull { it.expectedStoreHint }, screenStore)
+                        best?.let { b -> openPickups.firstOrNull { it.expectedStoreHint == b } }
+                    } else null
+                    hintMatch ?: bestMatch ?: openPickups.firstOrNull()
+                } else null
+
+                if (expectedPickup != null) {
+                    val retireSince = region.pendingDestructive
+                        ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
+                    val displaced = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
+                    val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && expectedPickup.arrivedAt == null
+                    return region.copy(
+                        activeTask = expectedPickup.copy(
+                            subPhase = taskSubFlow,
+                            storeName = taskFields?.storeName ?: expectedPickup.storeName,
+                            storeAddress = taskFields?.storeAddress ?: expectedPickup.storeAddress,
+                            customerNameHash = taskFields?.customerNameHash ?: expectedPickup.customerNameHash,
+                            customerAddressHash = taskFields?.customerAddressHash ?: expectedPickup.customerAddressHash,
+                            deadlineMillis = taskFields?.deadline?.time ?: expectedPickup.deadlineMillis,
+                            activity = taskFields?.activity,
+                            itemsRemaining = taskFields?.itemsRemaining,
+                            itemsShopped = taskFields?.itemsShopped,
+                            redCardTotal = taskFields?.redCardTotal,
+                            startedAt = obs.timestamp,
+                            arrivedAt = if (justArrived) obs.timestamp else expectedPickup.arrivedAt,
+                        ),
+                        recentTasks = (region.recentTasks + listOfNotNull(displaced)).takeLast(MAX_RECENT_TASKS),
+                        pendingDestructive = null,
+                    )
+                }
+
                 // #503 slice 3: resolve onto a pre-created (offer-spawned, customer-TBD) dropoff
                 // subtask of this job instead of minting a fresh dropoff — the dropoff screen
                 // RESOLVES the customer onto the subtask the offer created at accept. Fixes the
@@ -1094,21 +1230,33 @@ class PlatformRegionStepper @Inject constructor() {
                 )
             }
 
-            // Same phase — update fields
-            val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && currentTask.arrivedAt == null
+            // Same phase — update fields.
+            //
+            // #526 D4a: swap-on-divergence guard. Before accumulating this frame, check whether the
+            // active PICKUP's parsed store demonstrably belongs to a DIFFERENT open pickup placeholder
+            // — its store bestMatches exactly ONE other open slot's hint (>=1 shared leading token)
+            // while sharing 0 leading tokens with the active task's own hint. That means the
+            // accumulation is sitting on the wrong order slot: move it onto the correctly-hinted slot
+            // without re-minting (the swap primitive keeps both taskIds stable) and continue on the
+            // now-correct slot. Conservative — a unique match with a clean 0-token divergence only;
+            // ambiguous → no swap. Both tasks are OPEN (the active task by definition; the guard
+            // requires the other slot open too — the D4 lifecycle contract).
+            val (baseJob, baseTask) = maybeSwapMisboundPickup(region, currentTask, taskPhase, taskFields)
+            val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && baseTask.arrivedAt == null
             return region.copy(
-                activeTask = currentTask.copy(
+                activeJob = baseJob,
+                activeTask = baseTask.copy(
                     subPhase = taskSubFlow,
-                    storeName = taskFields?.storeName ?: currentTask.storeName,
-                    storeAddress = taskFields?.storeAddress ?: currentTask.storeAddress,
-                    customerNameHash = taskFields?.customerNameHash ?: currentTask.customerNameHash,
-                    customerAddressHash = taskFields?.customerAddressHash ?: currentTask.customerAddressHash,
-                    deadlineMillis = taskFields?.deadline?.time ?: currentTask.deadlineMillis,
-                    activity = taskFields?.activity ?: currentTask.activity,
-                    itemsRemaining = taskFields?.itemsRemaining ?: currentTask.itemsRemaining,
-                    itemsShopped = taskFields?.itemsShopped ?: currentTask.itemsShopped,
-                    redCardTotal = taskFields?.redCardTotal ?: currentTask.redCardTotal,
-                    arrivedAt = if (justArrived) obs.timestamp else currentTask.arrivedAt,
+                    storeName = taskFields?.storeName ?: baseTask.storeName,
+                    storeAddress = taskFields?.storeAddress ?: baseTask.storeAddress,
+                    customerNameHash = taskFields?.customerNameHash ?: baseTask.customerNameHash,
+                    customerAddressHash = taskFields?.customerAddressHash ?: baseTask.customerAddressHash,
+                    deadlineMillis = taskFields?.deadline?.time ?: baseTask.deadlineMillis,
+                    activity = taskFields?.activity ?: baseTask.activity,
+                    itemsRemaining = taskFields?.itemsRemaining ?: baseTask.itemsRemaining,
+                    itemsShopped = taskFields?.itemsShopped ?: baseTask.itemsShopped,
+                    redCardTotal = taskFields?.redCardTotal ?: baseTask.redCardTotal,
+                    arrivedAt = if (justArrived) obs.timestamp else baseTask.arrivedAt,
                 ),
                 pendingDestructive = null,
             )
