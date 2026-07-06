@@ -151,12 +151,12 @@ class OfferPayFallbackEffectMapTest {
     }
 
     @Test
-    fun `W1-c — a mid-stack PostTask exit takes the drop's share, not the full offer total`() {
+    fun `FIX1 — a mid-stack PostTask exit does NOT stamp (not the last open owed drop)`() {
         // A receipt-less mid-stack completion: d1 completes while its sibling d2 is still owed (an
-        // unresolved, identity-less placeholder). The identity-firewall mint denominator would shrink
-        // to just d1 → d1 would take the WHOLE $12.95 (1.5×+ over-count). W1-c splits over the job's
-        // OWN owed dropoff set (Job.tasks, 2 drops) → d1 gets its 6.48 share; d2's 6.47 mints when it
-        // resolves. The job stays open (no close-out this step).
+        // unresolved, identity-less placeholder, completedAt == null). FIX 1's final-shape gate stamps
+        // a PostTask-exit drop ONLY when it is the LAST OPEN owed dropoff. d2 is not yet done → d1 is
+        // mid-stack → NO stamp (the traded class: its dollars ride unattributed; it got nothing
+        // pre-#691 too). This kills the estimate-then-late-receipt / cents-drift-across-mints over-count.
         val d1 = dropoff("d1", "H-E-B", "cA", completedAt = null)
         val placeholder = dropoff("d2", null, cust = null, completedAt = null) // identity-less, owed
         val activeJob = job(offerPay = 12.95, tasks = listOf(d1, placeholder))
@@ -175,16 +175,170 @@ class OfferPayFallbackEffectMapTest {
 
         val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
         assertEquals("only d1 completes at the mid-stack exit", 1, rows.size)
-        assertEquals(
-            "d1 takes ITS 6.48 share (offer/2), NOT the full 12.95 — W1-c denominator is the owed set",
-            6.48, rows.single().offerPayShare!!, 0.0001,
+        assertNull("mid-stack exit → no offer stamp (final-shape gate)", rows.single().offerPayShare)
+    }
+
+    @Test
+    fun `FIX1 — the LAST open owed drop completing at a PostTask exit IS stamped`() {
+        // d1 already delivered earlier (completedAt set). d2 is the final owed drop and completes at
+        // this PostTask exit → final-shape holds → d2 is stamped its share (no over-count: d1 was
+        // stamped on its own earlier exit).
+        val d1 = dropoff("d1", "H-E-B", "cA", completedAt = 380L)
+        val d2 = dropoff("d2", "H-E-B", "cB", completedAt = null) // completes now (active)
+        val activeJob = job(offerPay = 12.95, tasks = listOf(d1, d2))
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 40.0),
+            activeJob = activeJob,
+            activeTask = d2,
+            recentTasks = listOf(d1),
+            lastPostTaskFields = null,
         )
-        // The sibling's remainder is deterministic by taskId order: equalSplit gives d2 → 6.47, so
-        // the two eventual rows sum to 12.95 (never 1.5× = 19.42).
-        val d2Share = cloud.trotter.dashbuddy.domain.state.DropPayApportioner
-            .equalSplit(12.95, listOf(d1, placeholder))["d2"]!!
-        assertEquals(6.47, d2Share, 0.0001)
-        assertEquals("Σ of both eventual rows == offer total", 1295L, cents(6.48) + cents(d2Share))
+        val regionNext = regionPrev.copy(activeTask = d2.copy(completedAt = 3000L))
+
+        val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertEquals(1, rows.size)
+        assertEquals("last open owed drop → stamped its 6.47 share", 6.47, rows.single().offerPayShare!!, 0.0001)
+    }
+
+    @Test
+    fun `FIX1 — a solo receipt-less drop at a PostTask exit is stamped (seq-10 shape)`() {
+        // The 07-05 seq-10 shape: a single-drop receipt-less job completes at its PostTask exit. It is
+        // trivially the last open owed drop → stamped the whole offer total.
+        val d1 = dropoff("d1", "H-E-B", "cA", completedAt = null)
+        val activeJob = job(offerPay = 7.50, tasks = listOf(d1))
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 20.0),
+            activeJob = activeJob,
+            activeTask = d1,
+            recentTasks = listOf(d1),
+            lastPostTaskFields = null,
+        )
+        val regionNext = regionPrev.copy(activeTask = d1.copy(completedAt = 3000L))
+
+        val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertEquals(1, rows.size)
+        assertEquals("solo final drop stamped the whole offer", 7.50, rows.single().offerPayShare!!, 0.0001)
+    }
+
+    @Test
+    fun `FIX2a — a 0-coerced pseudo-receipt does NOT suppress the offer stamp`() {
+        // A transient delivery_summary_collapsed frame coerces totalPay to 0.0 (buildPostTask ?: 0.0)
+        // AND is pinned to d1 as lastPostTaskFields. It is NOT pay-bearing (0.0, no parsedPay), so it
+        // must NOT suppress the estimate — the solo receipt-less drop is still stamped.
+        val d1 = dropoff("d1", "H-E-B", "cA", completedAt = 400L)
+        val zeroReceipt = ParsedFields.PostTaskFields(totalPay = 0.0, parsedPay = null, sessionEarnings = 20.0)
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 20.0),
+            activeJob = job(offerPay = 7.50, tasks = listOf(d1)),
+            recentTasks = listOf(d1),
+            lastPostTaskFields = zeroReceipt,
+            lastAnnouncedPostTaskTaskId = "d1",
+        )
+        val regionNext = regionPrev.copy(activeJob = null)
+
+        val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertEquals(1, rows.size)
+        assertEquals("0-dollar pseudo-receipt is not pay-bearing → estimate stands", 7.50, rows.single().offerPayShare!!, 0.0001)
+    }
+
+    @Test
+    fun `FIX2b — a stale PREVIOUS-job receipt (announce id = another job's task) does NOT suppress`() {
+        // completeActiveJob cleared lastPostTaskFields but NOT lastAnnouncedPostTaskTaskId. A flickered
+        // receipt from a PRIOR job re-set a pay-bearing lastPostTaskFields whose announce id ("old")
+        // provably belongs to a DIFFERENT job's task (in recentTasks). It must NOT suppress THIS
+        // receipt-less job's estimate.
+        val oldDrop = Task(taskId = "old", jobId = "JPREV", phase = TaskPhase.DROPOFF, customerNameHash = "cx", startedAt = 10L, completedAt = 50L)
+        val d1 = dropoff("d1", "H-E-B", "cA", completedAt = 400L)
+        val stalePayBearing = ParsedFields.PostTaskFields(totalPay = 11.0, parsedPay = null, sessionEarnings = 40.0)
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 40.0),
+            activeJob = job(offerPay = 7.50, tasks = listOf(d1)),
+            recentTasks = listOf(oldDrop, d1),
+            lastPostTaskFields = stalePayBearing,
+            lastAnnouncedPostTaskTaskId = "old", // provably JPREV's task
+        )
+        val regionNext = regionPrev.copy(activeJob = null)
+
+        val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        val d = rows.single { it.taskId == "d1" }
+        assertEquals("stale foreign-job receipt does not suppress → estimate stands", 7.50, d.offerPayShare!!, 0.0001)
+    }
+
+    @Test
+    fun `FIX2b — an unattributable pay-bearing receipt (announce id null) SUPPRESSES (fail-closed)`() {
+        // A pay-bearing lastPostTaskFields with a NULL announce id cannot be attributed to any task.
+        // Fail-closed against over-count: suppress the estimate (a receipt might belong to this job).
+        val d1 = dropoff("d1", "H-E-B", "cA", completedAt = 400L)
+        val unattributable = ParsedFields.PostTaskFields(totalPay = 11.0, parsedPay = null, sessionEarnings = 40.0)
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 40.0),
+            activeJob = job(offerPay = 7.50, tasks = listOf(d1)),
+            recentTasks = listOf(d1),
+            lastPostTaskFields = unattributable,
+            lastAnnouncedPostTaskTaskId = null,
+        )
+        val regionNext = regionPrev.copy(activeJob = null)
+
+        val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertNull("unattributable pay-bearing receipt → suppress (fail-closed)", rows.single().offerPayShare)
+    }
+
+    @Test
+    fun `FIX6 — an eligible drop with a pay-less offer logs one PII-safe WARN`() {
+        val logged = mutableListOf<String>()
+        val tree = object : timber.log.Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) { logged += message }
+        }
+        timber.log.Timber.plant(tree)
+        try {
+            // Receipt-less, final-shape (close-out) job with a PAY-LESS offer → eligible but the split
+            // yields nothing → one WARN, no share.
+            val d1 = dropoff("d1", "H-E-B", "cA", completedAt = 400L)
+            val regionPrev = PlatformRegion(
+                platform = Platform.DoorDash,
+                mode = Mode.Online,
+                session = Session("s1", startedAt = 100L, runningEarnings = 0.0),
+                activeJob = job(offerPay = null, tasks = listOf(d1)),
+                recentTasks = listOf(d1),
+                lastPostTaskFields = null,
+            )
+            val regionNext = regionPrev.copy(activeJob = null)
+            val prev = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev))
+            val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+            val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+            assertNull(rows.single().offerPayShare)
+        } finally {
+            timber.log.Timber.uproot(tree)
+        }
+        assertEquals(
+            "one eligible-but-unsplit WARN surfaced", 1,
+            logged.count { it.contains("offer-pay estimate eligible but unsplit") },
+        )
     }
 
     @Test

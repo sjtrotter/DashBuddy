@@ -30,6 +30,7 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.OfferPayFallback
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
@@ -423,10 +424,14 @@ class EffectMap @Inject constructor() {
                         )[completedTask.taskId]
                         // #691: when the whole job was receipt-less, stamp this drop's equal-split
                         // share of the accepted-offer pay so it folds a real net row (not $0-unattr).
+                        // FIX 1: a PostTask-exit mint's job may still be OPEN — stamp only when this is
+                        // the LAST OPEN owed dropoff (requireFinalShape), so a mid-stack pay-less exit
+                        // can't over-count (estimate-then-late-receipt / add-on drift / cents drift).
                         val offerShare = offerPayShareFor(
+                            region = p,
                             job = p.activeJob,
-                            postTaskFields = p.lastPostTaskFields,
                             taskId = completedTask.taskId,
+                            requireFinalShape = true,
                         )
                         val payload = deliveryCompletedPayload(
                             task = completedTask,
@@ -505,11 +510,13 @@ class EffectMap @Inject constructor() {
                     // #691: eligibility is JOB-scoped on the whole job's receipt state
                     // (p.lastPostTaskFields), not the per-task-pinned `postTaskFields` above — a
                     // receipt-less close-out (no pay screen at all) stamps every owed drop's
-                    // equal-split offer share; a job that showed any receipt stamps none.
+                    // equal-split offer share; a job that showed any PAY-BEARING receipt stamps none.
+                    // The close-out job is already CLOSED → its shape is final (requireFinalShape=false).
                     val offerShare = offerPayShareFor(
+                        region = p,
                         job = closedJob,
-                        postTaskFields = p.lastPostTaskFields,
                         taskId = task.taskId,
+                        requireFinalShape = false,
                     )
                     val payload = deliveryCompletedPayload(
                         task = task,
@@ -1464,36 +1471,73 @@ class EffectMap @Inject constructor() {
     )
 
     /**
-     * #691 offer-pay estimate share for [task] when the closing [job] was WHOLLY receipt-less — the
+     * #691 offer-pay estimate share for [taskId] of [job] when the job was WHOLLY receipt-less — the
      * write-side stamp that lets a receipt-less shop delivery fold a real net row instead of a
-     * $0-unattributed one. Null (no stamp) unless:
-     * - **W1-a (job-scoped):** the job showed NO post-task receipt at all ([postTaskFields] == null).
-     *   A `PostTaskFields` is captured only from an observed pay screen (its `totalPay` is non-null by
-     *   type), and receipt fields are pinned per-task at close-out — so a sibling of a receipted drop
-     *   is receipt-less BY DESIGN and must not be stamped. The test is the WHOLE job's receipt state,
-     *   not this mint's per-drop inputs (a mint-scoped test would over-count a collapsed bare-total
-     *   receipt: receipt + (N−1)/N × offer). The fold's `receiptedJobIds` guard is defense-in-depth.
-     * - **W1-c (denominator):** the split is over the job's OWN owed dropoff set ([Job.tasks] DROPOFF,
-     *   distinct by id) — NOT the identity-filtered mint denominator, which shrinks at a mid-stack
-     *   PostTask-exit and would hand that one drop the FULL offer total (1.5×). A vanished drop's share
-     *   stays parked on its unminted placeholder → minted sums degrade BELOW the offer total, never
-     *   above (the one-sided error the read-side MAX-floor already tolerates).
-     * - **W1-b (numerator):** [Job.offerPayTotal] is nullable — a pay-less offer yields null →
-     *   [DropPayApportioner.equalSplit] returns the empty map → no stamp.
+     * $0-unattributed one. Thin edge over the pure [OfferPayFallback] policy: this computes the two
+     * inputs only the region can see — the job-scoped receipt-evidence verdict
+     * ([receiptSuppressesEstimate]) and the per-site final-shape flag — then delegates the eligibility
+     * + split, and owns the observability WARN (FIX 6) for an eligible-but-unsplit drop.
+     *
+     * [requireFinalShape] is true at the PostTask-exit mint (job may still be open — stamp only the
+     * LAST OPEN owed drop) and false at the #596 close-out (job already closed → final shape).
+     */
+    private fun offerPayShareFor(
+        region: PlatformRegion,
+        job: Job?,
+        taskId: String,
+        requireFinalShape: Boolean,
+    ): Double? {
+        if (job == null) return null
+        val result = OfferPayFallback.shareFor(
+            job = job,
+            mintingTaskId = taskId,
+            suppressedByReceipt = receiptSuppressesEstimate(region, job),
+            requireFinalShape = requireFinalShape,
+        )
+        if (result.eligibleButUnsplit) {
+            // The drop is estimate-ELIGIBLE (receipt-less, final shape) yet got NO share — a pay-less
+            // offer or a minting task outside the owed set (the quoted>delivered halving class). WARN
+            // it so the silent-denominator miss is observable. PII-safe: counts + jobId only, no
+            // store/customer text, stable tag (Principle 7; the #699 D6 join-miss precedent).
+            Timber.tag("StateMachine").w(
+                "#691 offer-pay estimate eligible but unsplit: job %s, %d owed dropoffs, offerTotal=%s " +
+                    "— no share stamped; these dollars ride the unattributed bucket",
+                job.jobId,
+                job.tasks.count { it.phase == TaskPhase.DROPOFF },
+                if (job.offerPayTotal == null) "null" else "present",
+            )
+        }
+        return result.share
+    }
+
+    /**
+     * #691 receipt-evidence verdict: does [job] show a PAY-BEARING post-task receipt attributable to
+     * ITSELF — in which case the offer-pay estimate is withheld (a real receipt is truth)?
+     *
+     * Two guards, both learned from the adversarial review:
+     * - **Pay-bearing (FIX 2a):** `ParsedFieldsFactory.buildPostTask` coerces a missing total to
+     *   `0.0`, so a transient `delivery_summary_collapsed` frame that fails to parse produces a $0.00
+     *   `PostTaskFields` — a pseudo-receipt. A real $0 delivery receipt isn't a thing, so a $0 total
+     *   with no itemized `parsedPay` is NOT evidence and must NOT suppress the estimate. Same
+     *   predicate the fold uses (`RecordFolds.payBearingReceipt`) — one definition, two sites.
+     * - **Job-scoped (FIX 2b):** `lastPostTaskFields`/`lastAnnouncedPostTaskTaskId` are REGION-scoped
+     *   and survive `completeActiveJob` clearing `lastPostTaskFields` (the announce id is NOT cleared),
+     *   so a flickered PREVIOUS-job receipt can re-set them. Suppress only when the receipt is
+     *   attributable to THIS job: the announce id is in this job's tasks, OR is null (conservative —
+     *   fail-closed against over-count), OR is not PROVABLY another job's task. Do NOT suppress only
+     *   when the announce id provably belongs to a DIFFERENT job's task (the stale cross-job flicker).
      *
      * Pure: derives only from region records; no wall clock.
      */
-    private fun offerPayShareFor(
-        job: Job?,
-        postTaskFields: ParsedFields.PostTaskFields?,
-        taskId: String,
-    ): Double? {
-        if (job == null) return null
-        if (postTaskFields != null) return null // job showed a receipt → not eligible (W1-a)
-        val ownDropoffs = job.tasks
-            .filter { it.phase == TaskPhase.DROPOFF }
-            .distinctBy { it.taskId }
-        return DropPayApportioner.equalSplit(job.offerPayTotal, ownDropoffs)[taskId]
+    private fun receiptSuppressesEstimate(region: PlatformRegion, job: Job): Boolean {
+        val fields = region.lastPostTaskFields ?: return false
+        val payBearing = fields.parsedPay != null || fields.totalPay > 0.0
+        if (!payBearing) return false
+        val announceId = region.lastAnnouncedPostTaskTaskId ?: return true // null → conservative suppress
+        if (job.tasks.any { it.taskId == announceId }) return true // this job's receipt → suppress
+        val regionTasks = region.recentTasks + listOfNotNull(region.activeTask)
+        val provablyAnotherJob = regionTasks.any { it.taskId == announceId && it.jobId != job.jobId }
+        return !provablyAnotherJob // unknown id → conservative suppress; foreign id → do not suppress
     }
 
     /**
