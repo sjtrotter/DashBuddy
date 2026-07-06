@@ -779,4 +779,22 @@ class FlowCardMapperTest {
         assertTrue("the first pickup (Bill Miller) is present too", pickups.any { it.storeName == "Bill Miller BBQ" })
         assertEquals("no duplicate pickup cards after id-dedup", pickups.size, pickups.distinctBy { it.taskId }.size)
     }
+
+    @Test
+    fun `#526 FIX4 - a double PICKUP_CONFIRMED for one task produces ONE completed pickup card`() {
+        // Recovery-replay / close-out-then-edge can re-fire the confirm for a task whose card already
+        // closed. The mismatch branch must skip synthesizing a second completed card.
+        val events = listOf(
+            event(AppEventType.PICKUP_NAV_STARTED, pickupPayload("T1", "J1", "Wendy's", 1000L), 1000L),
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 1000L, arrived = 1500L, confirmed = 2000L), 2000L),
+            // Same task confirmed AGAIN after its card already closed (openPickup is now null).
+            event(AppEventType.PICKUP_CONFIRMED,
+                pickupPayload("T1", "J1", "Wendy's", 1000L, arrived = 1500L, confirmed = 2000L), 2000L),
+        )
+        val cards = FlowCardMapper.fold(events)
+        val pickups = cards.filterIsInstance<FlowCardSnapshot.Pickup>()
+        assertEquals("one completed pickup card despite the double-confirm", 1, pickups.size)
+        assertEquals(cards.map { it.id }.distinct().size, cards.size)
+    }
 }

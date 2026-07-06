@@ -145,6 +145,20 @@ class PickupPlaceholderTest {
         assertEquals(2, pickups(r3).count())
     }
 
+    @Test
+    fun `FIX3c - a same-store add-on onto a BARE-fallback job makes no duplicate pickup placeholder`() {
+        // A no-orders offer mints a bare job — the active pickup carries a storeName but hint=null.
+        val r1 = step(region(), offerFlow("o1", emptyList()), pickupObs(1_000L, "H-E-B"))
+        assertNull("bare fallback: active pickup has no hint", r1.activeTask?.expectedStoreHint)
+        assertEquals("H-E-B", r1.activeTask?.storeName)
+        // A same-store add-on folds in — deduped against the RESOLVED storeName, not just the hint.
+        val r2 = step(r1, offerFlow("o2", listOf("H-E-B")), pickupObs(2_000L, "H-E-B"))
+        assertEquals(
+            "no duplicate H-E-B pickup placeholder from the same-store add-on",
+            0, r2.activeJob!!.tasks.count { it.phase == TaskPhase.PICKUP && it.expectedStoreHint != null },
+        )
+    }
+
     // =====================================================================
     // RESOLUTION
     // =====================================================================

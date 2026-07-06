@@ -182,6 +182,16 @@ object FlowCardMapper {
                 AppEventType.PICKUP_CONFIRMED -> {
                     val payload = event.payload as? PickupPayload ?: continue
                     val current = openPickup
+                    // #526 FIX4: when this confirm is NOT for the live pickup card AND a completed
+                    // card for this taskId already exists (the displaced pickup was closed at the
+                    // pickup→pickup nav edge, or a recovery-replay double-confirm), don't synthesize
+                    // a second completed card — the confirm sweep re-confirms every displaced pickup,
+                    // and each already has its closed card.
+                    if (current?.taskId != payload.taskId &&
+                        completed.any { it.id == "pickup:${payload.taskId}" }
+                    ) {
+                        continue
+                    }
                     val closed = if (current?.taskId == payload.taskId) {
                         current.copy(
                             confirmedAt = payload.confirmedAt ?: event.occurredAt,

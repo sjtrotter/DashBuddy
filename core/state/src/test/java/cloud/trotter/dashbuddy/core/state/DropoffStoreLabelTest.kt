@@ -206,4 +206,44 @@ class DropoffStoreLabelTest {
         )
         assertEquals("single distinct pickup store → every drop is that store", "H-E-B", r.activeTask?.storeName)
     }
+
+    @Test
+    fun `FIX5 - a multi-store drop that joins ZERO pickup hashes logs a D6 join-miss WARN`() {
+        val logged = mutableListOf<String>()
+        val tree = object : timber.log.Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                logged += message
+            }
+        }
+        timber.log.Timber.plant(tree)
+        try {
+            // Two DISTINCT pickup stores with distinct customer hashes; the drop carries a hash that
+            // matches NEITHER (cross-surface hash-format drift) and parses no store → 0 join matches.
+            val pickups = listOf(
+                completedPickup("pick-1", "Bill Miller BBQ", customer = "hashA"),
+                completedPickup("pick-2", "Mama Margies", customer = "hashB"),
+            )
+            // Drive it as an active dropoff with the drifted hash and no candidate store.
+            val active = Task(
+                taskId = "drop-1", jobId = "job-1", phase = TaskPhase.DROPOFF,
+                customerNameHash = "hashZ", storeName = null, startedAt = 500L,
+            )
+            stepper.step(
+                region(pickups, activeTask = active),
+                FlowRegion(flow = Flow.TaskDropoffNavigation), FlowRegion(flow = Flow.TaskDropoffNavigation),
+                Observation.Screen(
+                    timestamp = 1_000L, captureId = null, ruleId = "doordash.screen.dropoff_pre_arrival",
+                    metadata = ReplayMetadata.EMPTY, flow = Flow.TaskDropoffNavigation, modeHint = Mode.Online,
+                    parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION, customerNameHash = "hashZ"),
+                ),
+                policy,
+            )
+        } finally {
+            timber.log.Timber.uproot(tree)
+        }
+        assertEquals(
+            "a single D6 join-miss WARN was surfaced", 1,
+            logged.count { it.contains("D6 join miss") },
+        )
+    }
 }
