@@ -16,11 +16,12 @@ import java.util.Locale
 /**
  * #526 / #237 — the **accept → job-mint → placeholder → swap** unit, extracted from
  * [PlatformRegionStepper] (which had grown past the ~1200-line ceiling the #237 family guards). Pure
- * move, no behavior change: these are the accept-stash arming/consumption, the fresh-mint / add-on
- * append, the pre-created dropoff + pickup placeholders, and the D4a mis-bind swap guard — all as
- * `internal` extension functions on [PlatformRegionStepper] so they still share its deterministic
- * [PlatformRegionStepper.mintId] / [PlatformRegionStepper.isStashExpired] /
- * [PlatformRegionStepper.completeActiveJob] helpers and the top-level [isJobPhysicallyComplete].
+ * move: the accepted-offer consumption ([consumeAcceptIntoJob]), the fresh-mint / add-on append, the
+ * pre-created dropoff + pickup placeholders, and the D4a mis-bind swap guard — all as `internal`
+ * extension functions on [PlatformRegionStepper] so they still share its deterministic
+ * [PlatformRegionStepper.mintId] / [PlatformRegionStepper.completeActiveJob] helpers and the top-level
+ * [isJobPhysicallyComplete]. (#438 B3 retired the accept-stash arming/consumption — the accepted
+ * offer now lives on the region's own `pendingOffers`, so [OfferLifecycle] owns its lifecycle.)
  */
 /**
  * #503 slice 3b: pre-create one customer-TBD dropoff placeholder per order an accepted offer
