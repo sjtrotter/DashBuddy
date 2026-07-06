@@ -82,6 +82,18 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   that looks like a missing accept (job with no offer pay) or a doubled/missing completion is a
   B1 regression — capture it.
   - Confirmed: 0/2
+- **🆕 NEW — offer lifecycle unchanged single-platform after the platform-owned-offers move (#438 B3 / PR).**
+  Offers moved off the shared global screen slot onto each platform's own region (the concurrency
+  fix), and the whole accept-stash mechanism was replaced by an owned accepted-pending-consumption
+  survivor. Single-platform behavior must be **indistinguishable**. On a normal DoorDash dash watch the
+  full offer surface end-to-end: (1) the **offer card** pops with correct $/hr, $/mi, and the expiry
+  bar; (2) the **heads-up notification** posts once the eval lands, with working Accept/Decline; (3) the
+  **spoken read** (TTS) fires; (4) accepting **mints the job with economics** (offer $ on the job/receipt)
+  and the right pickup/dropoff placeholders for a stack; (5) declining/timing-out clears the card and
+  logs the right outcome (Declined/Timed Out), and the #594 "Review offer→Accept after a committed
+  decline" still stands as Declined. Any offer that fails to card/speak/notify, an accept that mints a
+  **bare** job (no offer pay), or a wrong/absent outcome card is a B3 regression — capture it.
+  - Confirmed: 0/2
 - **🆕 NEW — edit a delivery directly + cash tips (#688 phase A / PR).** In **Analytics → a dash →
   the delivery drill-down**, **tap a delivery row** (or its pencil) → the **Adjust delivery** dialog:
   Store name / Pay / Tip / Cash tip / Miles / Note. This replaces the pay-only editor and is the real
