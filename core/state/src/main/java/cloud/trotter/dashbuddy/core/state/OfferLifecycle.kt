@@ -112,21 +112,30 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
 }
 
 /**
- * Own flow leaving offer-presentation (vet H2). Each PRESENTED offer resolves: an accept-latched one
+ * Own flow leaving offer-presentation (vet H2). Each PRESENTED offer resolves: an ACCEPTED one
  * SURVIVES as an accepted-pending-consumption entry (`acceptedAt` = the honest accept-click time) so
- * the task edge can still mint it (the F3 fix); a declined / timed-out one is removed. The
+ * the task edge can still mint it (incl. the F3 fix); a declined / timed-out one is removed. The
  * `OFFER_ACCEPTED`/`DECLINED`/`TIMEOUT` event fires from [OfferEffects] at THIS edge (not at
  * consumption). Existing survivors pass through untouched — the mint consumes them.
+ *
+ * "Accepted" ⇔ the accept latch is set OR the destination is a task flow — reaching a task screen IS
+ * the acceptance (the platform only advances to pickup/dropoff after an accept), so an offer→task
+ * edge mints the full offer-shaped job even when no accept CLICK was captured (the pre-B3
+ * `prevFlow.pendingOffer` accept-adjacent read did this unconditionally). A committed decline (#594
+ * FIX2b) NEVER survives — that revocation must not fold phantom economics into a job.
  */
 private fun PlatformRegionStepper.resolveOnLeave(
     region: PlatformRegion,
     obs: Observation.FlowObservation,
 ): PlatformRegion {
     if (region.pendingOffers.none { it.acceptedAt == null }) return region
+    val leavingToTask = obs.flow?.isTaskFlow() == true
     val newOffers = region.pendingOffers.mapNotNull { offer ->
         when {
             offer.acceptedAt != null -> offer // existing survivor — consumption is the mint's job
-            offer.isAcceptLatched() -> offer.copy(acceptedAt = offer.acceptClickAt ?: obs.timestamp)
+            offer.declineCommittedAt != null -> null // committed decline (#594 FIX2b) — never survives
+            offer.isAcceptLatched() || leavingToTask ->
+                offer.copy(acceptedAt = offer.acceptClickAt ?: obs.timestamp)
             else -> null // declined / timed out → resolved away
         }
     }

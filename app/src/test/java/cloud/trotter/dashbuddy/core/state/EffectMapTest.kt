@@ -167,6 +167,34 @@ class EffectMapTest {
         )
     }
 
+    /**
+     * #438 B3: offers live on the platform region now, not the shared R0 flow. Build an AppState
+     * with [offer] on the DoorDash region (session sess-1) plus a flow/activePlatform, so the offer
+     * effect diffs (OfferEffects) see it. Replaces the pre-B3 `Regions(flow = FlowRegion(pendingOffer
+     * = …))` construction the offer tests used.
+     */
+    private fun offerState(
+        flow: Flow,
+        offer: PendingOffer? = null,
+        activePlatform: Platform? = null,
+    ): AppState {
+        // The offer lands on the region of ITS OWN platform (from sourceRuleId), so a UiInput
+        // carrying that platform resolves it — matching the concurrent overlay-offer case.
+        val offerPlatform = offer?.platform?.takeIf { it != Platform.Unknown } ?: Platform.DoorDash
+        val region = PlatformRegion(
+            platform = offerPlatform,
+            mode = Mode.Online,
+            session = Session("sess-1", startedAt = 100L),
+            pendingOffers = listOfNotNull(offer),
+        )
+        return AppState(
+            regions = Regions(
+                flow = FlowRegion(flow = flow, activePlatform = activePlatform),
+                platforms = mapOf(offerPlatform to region),
+            ),
+        )
+    }
+
     private inline fun <reified T : AppEffect> List<AppEffect>.effectsOfType(): List<T> =
         filterIsInstance<T>()
 
@@ -181,14 +209,8 @@ class EffectMapTest {
 
     @Test
     fun `offer presented emits Evaluate, Speak, and OFFER_RECEIVED log`() {
-        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer,
-                activePlatform = Platform.DoorDash,
-            ),
-        ))
+        val prev = offerState(flow = Flow.Idle)
+        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer, activePlatform = Platform.DoorDash)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented, parsed = testOfferFields))
 
@@ -210,14 +232,8 @@ class EffectMapTest {
         // sourceRuleId is the offer's provenance; activePlatform is the global R0 mirror this pack
         // removes. They deliberately DIVERGE here (offer=DoorDash, active=Uber) so the assertion
         // proves the stamp reads sourceRuleId, not next.activePlatform.
-        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(sourceRuleId = "doordash.screen.offer"),
-                activePlatform = Platform.Uber,
-            ),
-        ))
+        val prev = offerState(flow = Flow.Idle)
+        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(sourceRuleId = "doordash.screen.offer"), activePlatform = Platform.Uber)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented, parsed = testOfferFields))
 
@@ -227,22 +243,10 @@ class EffectMapTest {
 
     @Test
     fun `evaluation landing stamps PostOfferNotification with the offer's platform (#438 item 8a)`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(sourceRuleId = "doordash.screen.offer"),
-                activePlatform = Platform.Uber,
-            ),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(sourceRuleId = "doordash.screen.offer"), activePlatform = Platform.Uber)
+        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(
                     sourceRuleId = "doordash.screen.offer", evaluation = testEvaluation,
-                ),
-                activePlatform = Platform.Uber,
-            ),
-        ))
+                ), activePlatform = Platform.Uber)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
 
@@ -255,20 +259,8 @@ class EffectMapTest {
         // The async eval loopback attaches the evaluation to the SAME pending offer
         // (eval null → non-null). EffectMap surfaces it as a heads-up notification here,
         // rather than the EvaluateOffer handler firing the notification inline.
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer, // evaluation == null
-                activePlatform = Platform.DoorDash,
-            ),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(evaluation = testEvaluation),
-                activePlatform = Platform.DoorDash,
-            ),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer, activePlatform = Platform.DoorDash)
+        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(evaluation = testEvaluation), activePlatform = Platform.DoorDash)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
 
@@ -291,15 +283,8 @@ class EffectMapTest {
 
     @Test
     fun `offer accepted emits OFFER_ACCEPTED log`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(lastClickIntent = "accept_offer"),
-            ),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.TaskPickupNavigation),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = "accept_offer"))
+        val next = offerState(flow = Flow.TaskPickupNavigation)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskPickupNavigation))
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_ACCEPTED))
@@ -307,15 +292,8 @@ class EffectMapTest {
 
     @Test
     fun `offer declined emits OFFER_DECLINED log`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(lastClickIntent = "decline_offer"),
-            ),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.Idle),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = "decline_offer"))
+        val next = offerState(flow = Flow.Idle)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_DECLINED))
@@ -326,16 +304,11 @@ class EffectMapTest {
         // The dasher committed the decline (confirm sheet) then hit Review offer→Accept: the latch is
         // set and lastClickIntent is the racing accept. The outcome must still be OFFER_DECLINED — the
         // latch wins over lastClickIntent — and the payload records the race for forensics.
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(
                     declineCommittedAt = 900L,
                     lastClickIntent = "accept_offer",
-                ),
-            ),
-        ))
-        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
+                ))
+        val next = offerState(flow = Flow.Idle)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
         assertTrue(
@@ -356,12 +329,7 @@ class EffectMapTest {
 
     @Test
     fun `an ACCEPT click after a committed decline shows the race bubble, not Offer Accepted (#594)`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(declineCommittedAt = 900L),
-            ),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(declineCommittedAt = 900L))
         // A click doesn't change flow by itself; the latch survives on the pending offer.
         val next = prev
 
@@ -380,15 +348,8 @@ class EffectMapTest {
     fun `a resolved offer emits CancelOfferNotification for its hash`() {
         // The heads-up post is delayed ~750ms behind the screenshot settle —
         // resolving the offer inside that window must abort the post (#436).
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(lastClickIntent = "decline_offer"),
-            ),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.Idle),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = "decline_offer"))
+        val next = offerState(flow = Flow.Idle)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
         val cancels = effects.filterIsInstance<AppEffect.CancelOfferNotification>()
@@ -401,12 +362,8 @@ class EffectMapTest {
         // Separate-id heads-up (#457): when a new offer replaces the old one, the OLD banner must be
         // dismissed now — else it lingers until the new offer's async eval lands and a tap in that
         // window would resolve against the NEW offer.
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer.copy(offerHash = "hash-456")),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
+        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(offerHash = "hash-456"))
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
         val cancels = effects.filterIsInstance<AppEffect.CancelOfferNotification>()
@@ -416,15 +373,8 @@ class EffectMapTest {
 
     @Test
     fun `offer timeout emits OFFER_TIMEOUT log and UpdateBubble`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer, // no click intent
-            ),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.Idle),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
+        val next = offerState(flow = Flow.Idle)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_TIMEOUT))
@@ -438,9 +388,7 @@ class EffectMapTest {
         // #601: a click is a tap acknowledgement, not an outcome — the card that says what
         // actually happened fires from the resolution pop (see the #601 tests below), off the
         // same outcome value logged to the ledger.
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
         // Next state doesn't change flow (click doesn't change flow by itself)
         val next = prev
 
@@ -455,9 +403,7 @@ class EffectMapTest {
 
     @Test
     fun `click decline during offer emits an instant ack, not an outcome claim (#601)`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
         val next = prev
 
         val effects = effectMap.diff(prev, next, clickObs(intent = "decline_offer"))
@@ -490,9 +436,7 @@ class EffectMapTest {
     @Test
     fun `accept click acks instantly, then the resolution pop shows the matching outcome card (#601)`() {
         // Step 1 — click: instant ack, no outcome claim yet.
-        val prevAtClick = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
-        ))
+        val prevAtClick = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
         val clickEffects = effectMap.diff(prevAtClick, prevAtClick, clickObs(intent = "accept_offer"))
         assertTrue("instant ack at click time", clickEffects.any {
             it is AppEffect.UpdateBubble && it.text == "Accepting…"
@@ -502,13 +446,8 @@ class EffectMapTest {
         // state machine already recorded from step 1. The card must equal
         // expectedOutcomeCard(loggedOutcome) — card==ledger by construction, not two hand-kept
         // strings that happen to agree.
-        val prevAtPop = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(lastClickIntent = OfferIntent.ACCEPT),
-            ),
-        ))
-        val nextAtPop = AppState(regions = Regions(flow = FlowRegion(flow = Flow.TaskPickupNavigation)))
+        val prevAtPop = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = OfferIntent.ACCEPT))
+        val nextAtPop = offerState(flow = Flow.TaskPickupNavigation)
         val popEffects = effectMap.diff(prevAtPop, nextAtPop, screenObs(flow = Flow.TaskPickupNavigation))
 
         val outcome = popEffects.logEvents().first { it.event.type == AppEventType.OFFER_ACCEPTED }.event.type
@@ -521,12 +460,7 @@ class EffectMapTest {
     @Test
     fun `decline-latch race (#594)- click shows the race warning not an ack, pop logs and shows Declined (#601)`() {
         // The dasher's decline already committed server-side; a later Accept click races it.
-        val prevAtClick = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(declineCommittedAt = 900L),
-            ),
-        ))
+        val prevAtClick = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(declineCommittedAt = 900L))
         val clickEffects = effectMap.diff(prevAtClick, prevAtClick, clickObs(intent = "accept_offer"))
         assertTrue("the race warning fires instead of an ack", clickEffects.any {
             it is AppEffect.UpdateBubble && it.text == "Decline already submitted — Accept won't take"
@@ -537,16 +471,11 @@ class EffectMapTest {
 
         // Pop: the latch wins — OFFER_DECLINED is what's logged and shown, regardless of the
         // racing Accept click recorded as lastClickIntent.
-        val prevAtPop = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(
+        val prevAtPop = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(
                     declineCommittedAt = 900L,
                     lastClickIntent = OfferIntent.ACCEPT,
-                ),
-            ),
-        ))
-        val nextAtPop = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
+                ))
+        val nextAtPop = offerState(flow = Flow.Idle)
         val popEffects = effectMap.diff(prevAtPop, nextAtPop, screenObs(flow = Flow.Idle))
 
         assertTrue(popEffects.logEventTypes().contains(AppEventType.OFFER_DECLINED))
@@ -560,10 +489,8 @@ class EffectMapTest {
 
     @Test
     fun `no click, timeout pop shows only the outcome card — no ack ever fired (#601)`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
-        ))
-        val next = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
+        val next = offerState(flow = Flow.Idle)
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
 
@@ -575,15 +502,8 @@ class EffectMapTest {
 
     @Test
     fun `a replaced offer with a stored ACCEPT intent surfaces the OLD offer's outcome card, suffixed (#601)`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(
-                flow = Flow.OfferPresented,
-                pendingOffer = testPendingOffer.copy(lastClickIntent = OfferIntent.ACCEPT),
-            ),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer.copy(offerHash = "hash-456")),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = OfferIntent.ACCEPT))
+        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(offerHash = "hash-456"))
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
 
@@ -602,12 +522,8 @@ class EffectMapTest {
 
     @Test
     fun `a replaced offer with no click intent logs and shows OFFER_TIMEOUT, suffixed — no 4th outcome string (#601 vet amdt 1)`() {
-        val prev = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer),
-        ))
-        val next = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer.copy(offerHash = "hash-456")),
-        ))
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
+        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(offerHash = "hash-456"))
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
 
@@ -1557,9 +1473,7 @@ class EffectMapTest {
             sourceRuleId = "uber.screen.offer",
             targets = mapOf("acceptButton" to testNodeRef()),
         )
-        val state = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer, activePlatform = Platform.DoorDash),
-        ))
+        val state = offerState(flow = Flow.OfferPresented, offer = offer, activePlatform = Platform.DoorDash)
         val obs = Observation.UiInput(
             timestamp = 1L, action = OfferIntent.ACCEPT,
             targetPlatform = Platform.Uber, offerHash = "hash-123",
@@ -1572,21 +1486,23 @@ class EffectMapTest {
     }
 
     @Test
-    fun `a UiInput without carried identity falls back to the active platform (#438 item 8a)`() {
-        // A legacy/identity-less tap (Unknown) must behave as today — resolve via R0 activePlatform.
+    fun `a UiInput without carried identity aborts to manual (#438 B3 — no active-platform fallback)`() {
+        // #438 B3 (vet M4): the pre-B3 fallback-to-active-platform is REMOVED. An identity-less tap
+        // (Unknown platform) can no longer resolve an offer — it WARN-aborts to manual rather than
+        // guessing a platform from the global R0 mirror this pack removes.
         val offer = testPendingOffer.copy(
             sourceRuleId = "doordash.screen.offer",
             targets = mapOf("acceptButton" to testNodeRef()),
         )
-        val state = AppState(regions = Regions(
-            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer, activePlatform = Platform.DoorDash),
-        ))
+        val state = offerState(flow = Flow.OfferPresented, offer = offer, activePlatform = Platform.DoorDash)
         val obs = Observation.UiInput(timestamp = 1L, action = OfferIntent.ACCEPT)
 
         val effects = effectMap.diff(state, state, obs)
 
-        val action = effects.filterIsInstance<AppEffect.PerformRuleAction>().single()
-        assertEquals(Platform.DoorDash, action.platform)
+        assertTrue(
+            "an identity-less tap resolves no offer → aborts to manual",
+            effects.filterIsInstance<AppEffect.PerformRuleAction>().isEmpty(),
+        )
     }
 
     @Test
@@ -1647,9 +1563,8 @@ class EffectMapTest {
         ruleId = "doordash.screen.offer_popup_confirm_decline",
     ).copy(targets = mapOf("confirmDeclineButton" to testNodeRef("com.doordash.driverapp:id/textView_prism_button_title")))
 
-    private fun offerPresentedState() = AppState(
-        regions = Regions(flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = testPendingOffer)),
-    )
+    private fun offerPresentedState() =
+        offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
 
     @Test
     fun `confirm-decline screen with bound target during an offer schedules a deferred CONFIRM_DECLINE (#577)`() {
@@ -1733,13 +1648,11 @@ class EffectMapTest {
             targets = mapOf("acceptButton" to acceptRef),
             sourceRuleId = "doordash.screen.offer_popup",
         )
-        val flowRegion = FlowRegion(
-            flow = Flow.OfferPresented,
-            pendingOffer = offerWithTargets,
-            activePlatform = Platform.DoorDash,
+        val state = offerState(flow = Flow.OfferPresented, offer = offerWithTargets)
+        val obs = Observation.UiInput(
+            timestamp = 2000L, action = OfferIntent.ACCEPT,
+            targetPlatform = Platform.DoorDash, offerHash = "hash-123",
         )
-        val state = AppState(regions = Regions(flow = flowRegion))
-        val obs = Observation.UiInput(timestamp = 2000L, action = OfferIntent.ACCEPT)
 
         val effects = effectMap.diff(state, state, obs)
         val actions = effects.filterIsInstance<AppEffect.PerformRuleAction>()
@@ -1753,13 +1666,11 @@ class EffectMapTest {
 
     @Test
     fun `UiInput accept with NO bound target fires nothing - action unavailable`() {
-        val flowRegion = FlowRegion(
-            flow = Flow.OfferPresented,
-            pendingOffer = testPendingOffer, // no targets
-            activePlatform = Platform.DoorDash,
+        val state = offerState(flow = Flow.OfferPresented, offer = testPendingOffer) // no targets
+        val obs = Observation.UiInput(
+            timestamp = 2000L, action = OfferIntent.ACCEPT,
+            targetPlatform = Platform.DoorDash, offerHash = "hash-123",
         )
-        val state = AppState(regions = Regions(flow = flowRegion))
-        val obs = Observation.UiInput(timestamp = 2000L, action = OfferIntent.ACCEPT)
 
         val effects = effectMap.diff(state, state, obs)
         assertTrue(
@@ -1769,31 +1680,28 @@ class EffectMapTest {
     }
 
     @Test
-    fun `UiInput accept when R0 left OfferPresented fires nothing — the #457 shade-drop path`() {
-        // The heads-up notification can outlive the on-screen offer: by the
-        // time a SHADE Accept tap dispatches, R0 may have advanced past
-        // OfferPresented (a UiInput never changes the flow itself). The action
-        // is dropped — pinned here as the documented #457 drop path so a future
-        // fix (and the new diagnostic log) is deliberate, not accidental.
+    fun `UiInput accept acts on a buried offer even when R0 left OfferPresented (#438 B3 fixes #457)`() {
+        // #438 B3 (vet M4): the pre-B3 onOfferFlow gate DROPPED a shade tap once R0 advanced past
+        // OfferPresented — the #457 shade-drop. With offers owned per-region, a heads-up Accept on a
+        // buried offer resolves by carried (platform, offerHash) against that platform's still-pending
+        // offer and FIRES, regardless of what R0 currently shows. This is the headline multiplatform fix.
         val acceptRef = testNodeRef("com.doordash.driverapp:id/accept_button")
         val offerWithTargets = testPendingOffer.copy(
             targets = mapOf("acceptButton" to acceptRef),
             sourceRuleId = "doordash.screen.offer_popup",
         )
-        // Same offer state, but flow has moved to PostTask (offer left the screen).
-        val flowRegion = FlowRegion(
-            flow = Flow.PostTask,
-            pendingOffer = offerWithTargets,
-            activePlatform = Platform.DoorDash,
+        // R0 has moved to PostTask, but the DoorDash offer is still pending on its own region.
+        val state = offerState(flow = Flow.PostTask, offer = offerWithTargets, activePlatform = Platform.DoorDash)
+        val obs = Observation.UiInput(
+            timestamp = 2000L, action = OfferIntent.ACCEPT,
+            targetPlatform = Platform.DoorDash, offerHash = "hash-123",
         )
-        val state = AppState(regions = Regions(flow = flowRegion))
-        val obs = Observation.UiInput(timestamp = 2000L, action = OfferIntent.ACCEPT)
 
         val effects = effectMap.diff(state, state, obs)
-        assertTrue(
-            "off-OfferPresented UiInput must not fire a tap (the #457 silent drop)",
-            effects.filterIsInstance<AppEffect.PerformRuleAction>().isEmpty(),
-        )
+        val actions = effects.filterIsInstance<AppEffect.PerformRuleAction>()
+        assertEquals("the buried offer's tap now fires (#457 fixed)", 1, actions.size)
+        assertEquals(RuleAction.ACCEPT_OFFER, actions[0].action)
+        assertEquals(acceptRef, actions[0].targetRef)
     }
 
     // =========================================================================

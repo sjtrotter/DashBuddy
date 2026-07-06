@@ -34,6 +34,11 @@ import org.junit.Test
  */
 class StateMachineTest {
 
+    // #438 B3: offers live on the owning platform region now (was the shared R0 slot). The single
+    // presented offer across regions — the test screens are single-platform (DoorDash).
+    private fun AppState.pendingOfferB3() =
+        regions.platforms.values.firstNotNullOfOrNull { it.presentedOffer() }
+
     private lateinit var machine: StateMachine
 
     @Before
@@ -191,12 +196,12 @@ class StateMachineTest {
         // 2. Offer presented
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
         assertEquals(Flow.OfferPresented, state.regions.flow.flow)
-        assertNotNull(state.regions.flow.pendingOffer)
+        assertNotNull(state.pendingOfferB3())
 
         // 3. Pickup navigation (offer accepted)
         state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
         assertEquals(Flow.TaskPickupNavigation, state.regions.flow.flow)
-        assertNull(state.regions.flow.pendingOffer) // offer popped
+        assertNull(state.pendingOfferB3()) // offer popped
 
         // 4. Pickup arrived
         state = machine.step(state, screenObs(flow = Flow.TaskPickupArrived, parsed = taskFields())).newState
@@ -240,7 +245,7 @@ class StateMachineTest {
         val offer = offerFields("Chipotle", "hash-A")
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offer)).newState
 
-        val pending = state.regions.flow.pendingOffer
+        val pending = state.pendingOfferB3()
         assertNotNull(pending)
         assertEquals("hash-A", pending!!.offerHash)
         assertEquals(Flow.Idle, pending.returnFlow)
@@ -255,7 +260,7 @@ class StateMachineTest {
         // Replace with new offer
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Taco Bell", "hash-B"))).newState
 
-        val pending = state.regions.flow.pendingOffer
+        val pending = state.pendingOfferB3()
         assertNotNull(pending)
         assertEquals("hash-B", pending!!.offerHash)
         // Return flow should be inherited from original offer
@@ -267,12 +272,12 @@ class StateMachineTest {
         var state = AppState()
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Chipotle", "hash-A"))).newState
 
-        val presentedAt = state.regions.flow.pendingOffer!!.presentedAt
+        val presentedAt = state.pendingOfferB3()!!.presentedAt
 
         // Same hash, different fields
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Chipotle Mexican Grill", "hash-A"))).newState
 
-        val pending = state.regions.flow.pendingOffer!!
+        val pending = state.pendingOfferB3()!!
         assertEquals("hash-A", pending.offerHash)
         // presentedAt should remain the original time
         assertEquals(presentedAt, pending.presentedAt)
@@ -282,30 +287,30 @@ class StateMachineTest {
     fun `offer pop on accept — cleared when transitioning to pickup`() {
         var state = AppState()
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
-        assertNotNull(state.regions.flow.pendingOffer)
+        assertNotNull(state.pendingOfferB3())
 
         state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
-        assertNull(state.regions.flow.pendingOffer)
+        assertNull(state.pendingOfferB3())
     }
 
     @Test
     fun `offer pop on decline — cleared when transitioning to idle`() {
         var state = AppState()
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
-        assertNotNull(state.regions.flow.pendingOffer)
+        assertNotNull(state.pendingOfferB3())
 
         state = machine.step(state, screenObs(flow = Flow.Idle)).newState
-        assertNull(state.regions.flow.pendingOffer)
+        assertNull(state.pendingOfferB3())
     }
 
     @Test
     fun `click intent recorded on pendingOffer`() {
         var state = AppState()
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
-        assertNull(state.regions.flow.pendingOffer!!.lastClickIntent)
+        assertNull(state.pendingOfferB3()!!.lastClickIntent)
 
         state = machine.step(state, clickObs(intent = "accept_offer")).newState
-        assertEquals("accept_offer", state.regions.flow.pendingOffer!!.lastClickIntent)
+        assertEquals("accept_offer", state.pendingOfferB3()!!.lastClickIntent)
     }
 
     @Test
@@ -313,7 +318,7 @@ class StateMachineTest {
         var state = AppState()
         state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields())).newState
         state = machine.step(state, clickObs(intent = "accept_offer")).newState
-        assertEquals("accept_offer", state.regions.flow.pendingOffer!!.lastClickIntent)
+        assertEquals("accept_offer", state.pendingOfferB3()!!.lastClickIntent)
 
         // Click with non-ClickFields parsed data should not clear intent
         // (fields?.intent is null when parsed is not ClickFields)
@@ -327,7 +332,7 @@ class StateMachineTest {
             parsed = ParsedFields.None,
         )
         state = machine.step(state, nonClickObs).newState
-        assertEquals("accept_offer", state.regions.flow.pendingOffer!!.lastClickIntent)
+        assertEquals("accept_offer", state.pendingOfferB3()!!.lastClickIntent)
     }
 
     // =========================================================================
