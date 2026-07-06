@@ -28,6 +28,7 @@ import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.DropPayApportioner
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -420,6 +421,13 @@ class EffectMap @Inject constructor() {
                             parsedPay = p.lastPostTaskFields?.parsedPay,
                             dropoffTasks = jobDropoffTasks(next, p.activeJob?.jobId),
                         )[completedTask.taskId]
+                        // #691: when the whole job was receipt-less, stamp this drop's equal-split
+                        // share of the accepted-offer pay so it folds a real net row (not $0-unattr).
+                        val offerShare = offerPayShareFor(
+                            job = p.activeJob,
+                            postTaskFields = p.lastPostTaskFields,
+                            taskId = completedTask.taskId,
+                        )
                         val payload = deliveryCompletedPayload(
                             task = completedTask,
                             jobId = p.activeJob?.jobId,
@@ -427,6 +435,7 @@ class EffectMap @Inject constructor() {
                             postTaskFields = p.lastPostTaskFields,
                             sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                             dropRealizedPay = dropShare,
+                            offerPayShare = offerShare,
                         )
                         // #518: scope idempotency to the completed task, not obs.timestamp, so a
                         // re-entered PostTask receipt can't re-fire (and double-count) the same
@@ -493,6 +502,15 @@ class EffectMap @Inject constructor() {
                     // naturally gets null pay (#528's job), never a normal receipted delivery's pay.
                     val postTaskFields = p.lastPostTaskFields
                         ?.takeIf { p.lastAnnouncedPostTaskTaskId == task.taskId }
+                    // #691: eligibility is JOB-scoped on the whole job's receipt state
+                    // (p.lastPostTaskFields), not the per-task-pinned `postTaskFields` above — a
+                    // receipt-less close-out (no pay screen at all) stamps every owed drop's
+                    // equal-split offer share; a job that showed any receipt stamps none.
+                    val offerShare = offerPayShareFor(
+                        job = closedJob,
+                        postTaskFields = p.lastPostTaskFields,
+                        taskId = task.taskId,
+                    )
                     val payload = deliveryCompletedPayload(
                         task = task,
                         jobId = closedJob.jobId,
@@ -500,6 +518,7 @@ class EffectMap @Inject constructor() {
                         postTaskFields = postTaskFields,
                         sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                         dropRealizedPay = dropShares[task.taskId],
+                        offerPayShare = offerShare,
                     )
                     add(
                         logEffect(
@@ -1424,6 +1443,7 @@ class EffectMap @Inject constructor() {
         postTaskFields: ParsedFields.PostTaskFields?,
         sessionEarnings: Double?,
         dropRealizedPay: Double? = null,
+        offerPayShare: Double? = null,
     ): DeliveryPayload = DeliveryPayload(
         jobId = jobId ?: task?.jobId ?: "unknown",
         taskId = task?.taskId ?: "unknown",
@@ -1439,8 +1459,42 @@ class EffectMap @Inject constructor() {
         totalPay = postTaskFields?.totalPay,
         parsedPay = postTaskFields?.parsedPay,
         dropRealizedPay = dropRealizedPay,
+        offerPayShare = offerPayShare,
         sessionEarningsAtCompletion = sessionEarnings,
     )
+
+    /**
+     * #691 offer-pay estimate share for [task] when the closing [job] was WHOLLY receipt-less — the
+     * write-side stamp that lets a receipt-less shop delivery fold a real net row instead of a
+     * $0-unattributed one. Null (no stamp) unless:
+     * - **W1-a (job-scoped):** the job showed NO post-task receipt at all ([postTaskFields] == null).
+     *   A `PostTaskFields` is captured only from an observed pay screen (its `totalPay` is non-null by
+     *   type), and receipt fields are pinned per-task at close-out — so a sibling of a receipted drop
+     *   is receipt-less BY DESIGN and must not be stamped. The test is the WHOLE job's receipt state,
+     *   not this mint's per-drop inputs (a mint-scoped test would over-count a collapsed bare-total
+     *   receipt: receipt + (N−1)/N × offer). The fold's `receiptedJobIds` guard is defense-in-depth.
+     * - **W1-c (denominator):** the split is over the job's OWN owed dropoff set ([Job.tasks] DROPOFF,
+     *   distinct by id) — NOT the identity-filtered mint denominator, which shrinks at a mid-stack
+     *   PostTask-exit and would hand that one drop the FULL offer total (1.5×). A vanished drop's share
+     *   stays parked on its unminted placeholder → minted sums degrade BELOW the offer total, never
+     *   above (the one-sided error the read-side MAX-floor already tolerates).
+     * - **W1-b (numerator):** [Job.offerPayTotal] is nullable — a pay-less offer yields null →
+     *   [DropPayApportioner.equalSplit] returns the empty map → no stamp.
+     *
+     * Pure: derives only from region records; no wall clock.
+     */
+    private fun offerPayShareFor(
+        job: Job?,
+        postTaskFields: ParsedFields.PostTaskFields?,
+        taskId: String,
+    ): Double? {
+        if (job == null) return null
+        if (postTaskFields != null) return null // job showed a receipt → not eligible (W1-a)
+        val ownDropoffs = job.tasks
+            .filter { it.phase == TaskPhase.DROPOFF }
+            .distinctBy { it.taskId }
+        return DropPayApportioner.equalSplit(job.offerPayTotal, ownDropoffs)[taskId]
+    }
 
     /**
      * The job's delivered dropoff tasks — the completion rows the [DropPayApportioner] splits the
