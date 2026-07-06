@@ -8,11 +8,13 @@ import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -58,16 +60,26 @@ class SessionDetailViewModel @Inject constructor(
         val session = uiState.value.detail?.session
         val completedAt = session?.endedAt ?: session?.startedAt ?: System.currentTimeMillis()
         viewModelScope.launch {
-            correctionRepository.addManualDelivery(
-                sessionId = sessionId,
-                storeName = storeName,
-                pay = pay,
-                tip = tip,
-                cashTip = cashTip,
-                completedAt = completedAt,
-                miles = null,
-                note = note,
-            )
+            // F4c: never crash the launch on a rejected correction (a validation `require` throwing, a
+            // codec/write failure). Alpha-acceptable silent reject — the record simply doesn't append;
+            // the dialog's own validators are the primary guard, this is the fail-closed backstop.
+            try {
+                correctionRepository.addManualDelivery(
+                    sessionId = sessionId,
+                    storeName = storeName,
+                    pay = pay,
+                    tip = tip,
+                    cashTip = cashTip,
+                    completedAt = completedAt,
+                    miles = null,
+                    note = note,
+                )
+            } catch (e: CancellationException) {
+                throw e // cooperative cancellation — never swallow it
+            } catch (e: Exception) {
+                // P7: counts/ids only — no note/store text.
+                Timber.tag(TAG).w(e, "addManualDelivery rejected for session %s", sessionId)
+            }
         }
     }
 
@@ -86,17 +98,30 @@ class SessionDetailViewModel @Inject constructor(
         note: String?,
     ) {
         viewModelScope.launch {
-            correctionRepository.adjustDelivery(
-                targetEventSequenceId = targetEventSequenceId,
-                sessionId = sessionId,
-                newStoreName = newStoreName,
-                newPay = newPay,
-                newTip = newTip,
-                newCashTip = newCashTip,
-                newMiles = newMiles,
-                note = note,
-            )
+            // F4c: fail-closed backstop — a rejected adjustment must not crash the launch (see
+            // addManualDelivery). Alpha-acceptable silent reject; the dialog validators are primary.
+            try {
+                correctionRepository.adjustDelivery(
+                    targetEventSequenceId = targetEventSequenceId,
+                    sessionId = sessionId,
+                    newStoreName = newStoreName,
+                    newPay = newPay,
+                    newTip = newTip,
+                    newCashTip = newCashTip,
+                    newMiles = newMiles,
+                    note = note,
+                )
+            } catch (e: CancellationException) {
+                throw e // cooperative cancellation — never swallow it
+            } catch (e: Exception) {
+                // P7: counts/ids only — no note/store text.
+                Timber.tag(TAG).w(e, "adjustDelivery rejected for delivery seq %d", targetEventSequenceId)
+            }
         }
+    }
+
+    private companion object {
+        private const val TAG = "SessionDetailVm"
     }
 }
 

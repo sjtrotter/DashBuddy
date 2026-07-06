@@ -33,6 +33,10 @@ class CorrectionRepository @Inject constructor(
      * are optional driver knowledge. [completedAt] is when the delivery happened (the caller picks an
      * honest default, e.g. the session's end/start). The projector folds it into a `delivery_record`
      * (payBasis `MANUAL`) on its next drain.
+     *
+     * Validation (#705 F4b — parity with [adjustDelivery], which this method previously lacked
+     * entirely): every money/miles value must be **finite** (a non-finite value would reach
+     * `AppEventCodec` and throw a `SerializationException`), pay finite > 0, tip/cash/miles finite ≥ 0.
      */
     suspend fun addManualDelivery(
         sessionId: String,
@@ -44,6 +48,10 @@ class CorrectionRepository @Inject constructor(
         miles: Double?,
         note: String?,
     ) {
+        require(pay.isFinite() && pay > 0.0) { "pay must be a finite positive amount" }
+        require(tip == null || (tip.isFinite() && tip >= 0.0)) { "tip must be finite and non-negative" }
+        require(cashTip == null || (cashTip.isFinite() && cashTip >= 0.0)) { "cashTip must be finite and non-negative" }
+        require(miles == null || (miles.isFinite() && miles >= 0.0)) { "miles must be finite and non-negative" }
         appEventRepo.appendUserEvent(
             AppEvent(
                 type = AppEventType.MANUAL_DELIVERY,
@@ -90,10 +98,12 @@ class CorrectionRepository @Inject constructor(
             newStoreName != null || newPay != null || newTip != null ||
                 newCashTip != null || newMiles != null || note != null,
         ) { "DELIVERY_ADJUSTMENT must change at least one field or carry a note" }
-        require(newPay == null || newPay > 0.0) { "newPay must be positive" }
-        require(newTip == null || newTip >= 0.0) { "newTip must be non-negative" }
-        require(newCashTip == null || newCashTip >= 0.0) { "newCashTip must be non-negative" }
-        require(newMiles == null || newMiles >= 0.0) { "newMiles must be non-negative" }
+        // Every money/miles value must be FINITE (#705 F4b): a non-finite value (e.g. a pasted `1e999`
+        // → `Infinity`) would reach `AppEventCodec` and throw a `SerializationException`.
+        require(newPay == null || (newPay.isFinite() && newPay > 0.0)) { "newPay must be a finite positive amount" }
+        require(newTip == null || (newTip.isFinite() && newTip >= 0.0)) { "newTip must be finite and non-negative" }
+        require(newCashTip == null || (newCashTip.isFinite() && newCashTip >= 0.0)) { "newCashTip must be finite and non-negative" }
+        require(newMiles == null || (newMiles.isFinite() && newMiles >= 0.0)) { "newMiles must be finite and non-negative" }
         appEventRepo.appendUserEvent(
             AppEvent(
                 type = AppEventType.DELIVERY_ADJUSTMENT,
