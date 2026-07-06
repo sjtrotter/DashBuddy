@@ -206,7 +206,12 @@ object FlowCardMapper {
                         )
                     }
                     completed.add(closed)
-                    openPickup = null
+                    // #526 D5b: only clear the live pickup card when THIS confirm is for it. A
+                    // PICKUP_CONFIRMED for a DIFFERENT (earlier, displaced) pickup — the Bug10a
+                    // stacked-pickup confirm now emitted at the pickup→pickup edge — must NOT wipe
+                    // the live second-pickup card (that blanked the HUD for ~2 min and duplicated a
+                    // completed card).
+                    if (current?.taskId == payload.taskId) openPickup = null
                 }
 
                 AppEventType.DELIVERY_NAV_STARTED -> {

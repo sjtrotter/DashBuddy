@@ -765,6 +765,21 @@ class EffectMap @Inject constructor() {
             val prevTask = prev.activeTask
             val nextTask = next.activeTask
 
+            // #526 D5 (Bug10a): a pickup DISPLACED by another pickup (a stacked pickup→pickup
+            // transition) must be CONFIRMED. Today only the FINAL pickup is confirmed (at the first
+            // dropoff, the pickup→dropoff branch below), so a displaced first pickup got no
+            // PICKUP_CONFIRMED ever (the 07-05 Bill Miller leg). Emit it for the displaced prevTask
+            // (+ the RecordShopRate rider) — but NOT DELIVERY_NAV_STARTED: the next pickup's nav is
+            // the pickup-navigation branch just below. Placed FIRST so CONFIRMED(prev) precedes
+            // NAV_STARTED(next) (D5b); keyed on the confirmed task (D5a).
+            if (prevTask?.phase == TaskPhase.PICKUP &&
+                nextTask?.phase == TaskPhase.PICKUP &&
+                prevTask.taskId != nextTask.taskId &&
+                prevTask.arrivedAt != null
+            ) {
+                addAll(pickupConfirmedEffects(sessionId, prevTask, obs))
+            }
+
             // Task started — pickup navigation.
             //
             // Fires whenever a new PICKUP task is the active task — either the
@@ -814,29 +829,10 @@ class EffectMap @Inject constructor() {
             if (prevTask?.phase == TaskPhase.PICKUP &&
                 nextTask?.phase == TaskPhase.DROPOFF
             ) {
-                val pickupConfirmed = pickupPayload(
-                    task = prevTask,
-                    storeName = prevTask.storeName ?: UNKNOWN_STORE,
-                    confirmedAt = obs.timestamp,
-                )
-                add(logEffect(sessionId, AppEventType.PICKUP_CONFIRMED, obs.timestamp, pickupConfirmed))
+                // #526 D5a: PICKUP_CONFIRMED (+ the #556 shop-rate rider) keyed on the confirmed
+                // task, emitted BEFORE the dropoff's DELIVERY_NAV_STARTED (D5b).
+                addAll(pickupConfirmedEffects(sessionId, prevTask, obs))
                 addAll(deliveryNavStartedEffects(sessionId, nextTask, obs))
-
-                // #556: a completed SHOP pickup feeds the learned items/min. In-store time is
-                // measured arrived→confirmed (the 0.8/min seed basis); the handler floors out noise.
-                val shopItems = prevTask.itemsShopped ?: 0
-                val shopArrivedAt = prevTask.arrivedAt
-                if (prevTask.activity == PickupActivity.SHOPPING && shopItems > 0 && shopArrivedAt != null) {
-                    add(
-                        AppEffect.RecordShopRate(
-                            itemsShopped = shopItems,
-                            shopDurationMs = obs.timestamp - shopArrivedAt,
-                            storeName = prevTask.storeName,
-                            jobId = prevTask.jobId,
-                            taskId = prevTask.taskId,
-                        ),
-                    )
-                }
             }
 
             // New dropoff leg — the active task became a DIFFERENT dropoff (#603).
@@ -967,6 +963,44 @@ class EffectMap @Inject constructor() {
         // than the raw 6-char hash, and it disambiguates a multi-store stack's drops.
         val customer = customerLabel(task.storeName)
         add(AppEffect.UpdateBubble("Heading to $customer", ChatPersona.Customer(customer), dedupeScope = task.taskId))
+    }
+
+    /**
+     * #526 D5/D5a: the effects for confirming a completed PICKUP leg — `PICKUP_CONFIRMED` keyed on
+     * the confirmed task's id (so an A→B→A resume then A→dropoff can't double-confirm the same
+     * pickup under mixed keying), plus the #556 [AppEffect.RecordShopRate] rider when it was a shop.
+     * Shared by the pickup→dropoff (final leg) and pickup→pickup (displaced stacked leg, Bug10a)
+     * branches so the two can't drift.
+     */
+    private fun pickupConfirmedEffects(
+        sessionId: String?,
+        prevTask: Task,
+        obs: Observation,
+    ): List<AppEffect> = buildList {
+        add(
+            logEffect(
+                sessionId,
+                AppEventType.PICKUP_CONFIRMED,
+                obs.timestamp,
+                pickupPayload(task = prevTask, storeName = prevTask.storeName ?: UNKNOWN_STORE, confirmedAt = obs.timestamp),
+                effectKeyOverride = "log:${AppEventType.PICKUP_CONFIRMED}:${prevTask.taskId}",
+            ),
+        )
+        // #556: a completed SHOP pickup feeds the learned items/min. In-store time is measured
+        // arrived→confirmed (the 0.8/min seed basis); the handler floors out noise.
+        val shopItems = prevTask.itemsShopped ?: 0
+        val shopArrivedAt = prevTask.arrivedAt
+        if (prevTask.activity == PickupActivity.SHOPPING && shopItems > 0 && shopArrivedAt != null) {
+            add(
+                AppEffect.RecordShopRate(
+                    itemsShopped = shopItems,
+                    shopDurationMs = obs.timestamp - shopArrivedAt,
+                    storeName = prevTask.storeName,
+                    jobId = prevTask.jobId,
+                    taskId = prevTask.taskId,
+                ),
+            )
+        }
     }
 
     /**
