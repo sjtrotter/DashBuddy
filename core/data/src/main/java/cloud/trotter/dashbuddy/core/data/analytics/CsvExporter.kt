@@ -48,7 +48,7 @@ object CsvExporter {
     const val SUMMARY_FILENAME = "summary.csv"
 
     private val DELIVERY_HEADER = listOf(
-        "date", "time", "platform", "store", "gross_pay", "tip", "base_pay",
+        "date", "time", "platform", "store", "gross_pay", "tip", "base_pay", "cash_tip",
         "miles", "minutes", "frozen_cost_per_mile", "net_profit", "pay_basis", "cost_basis",
     )
 
@@ -96,6 +96,7 @@ object CsvExporter {
                         Csv.money(r.realizedPay),
                         Csv.money(r.tip),
                         Csv.money(r.basePay),
+                        Csv.money(r.cashTip),
                         Csv.decimal(r.realizedMiles),
                         Csv.decimal(r.realizedMinutes),
                         Csv.money(r.frozenCostPerMile, digits = 3),
@@ -167,6 +168,7 @@ object CsvExporter {
             .toSortedMap()
         val totalReported = sessions.mapNotNull { it.reportedEarnings }.sum()
         val totalRealized = deliveries.mapNotNull { it.realizedPay }.sum()
+        val totalCashTips = deliveries.mapNotNull { it.cashTip }.sum()
 
         val sb = StringBuilder()
         sb.append(Csv.row(listOf(Csv.textField("metric"), Csv.textField("value")))).append('\n')
@@ -188,6 +190,7 @@ object CsvExporter {
         line("total_deliveries", Csv.int(deliveries.size))
         line("total_reported_earnings", Csv.money(totalReported))
         line("total_realized_delivery_pay", Csv.money(totalRealized))
+        line("total_cash_tips", Csv.money(totalCashTips))
         return sb.toString()
     }
 }

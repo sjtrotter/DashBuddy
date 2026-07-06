@@ -28,6 +28,7 @@ internal fun DeliveryRecordEntity.toDomain(): DeliveryRecord = DeliveryRecord(
     realizedMinutes = realizedMinutes,
     tip = tip,
     basePay = basePay,
+    cashTip = cashTip,
 )
 
 internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(

@@ -77,7 +77,7 @@ class AnalyticsRepository @Inject constructor(
                         deliveredPay = d.pay, deliveryNet = d.net, deliveries = d.deliveries,
                         jobs = d.jobs, miles = s.miles, onlineMillis = s.onlineMillis,
                         gross = g.gross, unattributed = g.unattributed,
-                        fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost,
+                        fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost, cash = d.cash,
                     )
                 }
             } else {
@@ -95,17 +95,29 @@ class AnalyticsRepository @Inject constructor(
                         deliveries = d?.deliveries ?: 0, jobs = d?.jobs ?: 0,
                         miles = s?.miles ?: 0.0, onlineMillis = s?.onlineMillis ?: 0L,
                         gross = g?.gross ?: 0.0, unattributed = g?.unattributed ?: 0.0,
-                        fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost,
+                        fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost, cash = d?.cash ?: 0.0,
                     )
                 }
             }
         }
 
-    /** Per-store economics for [period], highest-earning store first — frozen net + realized gross. */
+    /**
+     * Per-store economics for [period], highest-earning store first — frozen net + realized gross.
+     * Cash tips (#688 F5) are added to BOTH gross and net (`gross = realized pay + cash`, `net =
+     * frozen net + cash`) — explicit adds here, mirroring the period-level locked accounting; the
+     * DAO's `ORDER BY pay DESC` stays cash-free (sorted on realized pay, not the cash-inclusive gross).
+     */
     fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
             analyticsDao.deliveryTotalsByStore(start, end).map { rows ->
-                rows.map { StoreEconomics(storeName = it.storeName, net = it.net, gross = it.pay, deliveries = it.deliveries) }
+                rows.map {
+                    StoreEconomics(
+                        storeName = it.storeName,
+                        net = it.net + it.cash,
+                        gross = it.pay + it.cash,
+                        deliveries = it.deliveries,
+                    )
+                }
             }
         }
 
@@ -257,8 +269,13 @@ class AnalyticsRepository @Inject constructor(
         unattributed: Double,
         fuelCost: Double?,
         nonFuelCost: Double?,
+        cash: Double,
     ): PeriodEconomics {
-        val net = deliveryNet + unattributed
+        // Locked accounting (#688): cash tips add to BOTH net and gross. [gross] already includes the
+        // cash sum (folded in the DAO's `grossAndUnattributed`); net adds it here (it is deliberately
+        // OUTSIDE the frozen delivery `netProfit`, so it can't be lost to a null-net row). The
+        // waterfall's cost = gross − net is unchanged (cash cancels), so the 4-step reconcile holds.
+        val net = deliveryNet + unattributed + cash
         val hours = onlineMillis / 3_600_000.0
         return PeriodEconomics(
             totals = PeriodTotals(
