@@ -278,7 +278,7 @@ class BubbleManager @Inject constructor(
      * DoorDash from the accessibility live-window set and fails the verified click (#457).
      * Formatting happens HERE at the UI edge (#436) — the engine hands over the domain evaluation.
      */
-    fun postOfferNotification(offer: FlowCardSnapshot.Offer, evaluation: OfferEvaluation) {
+    fun postOfferNotification(offer: FlowCardSnapshot.Offer, evaluation: OfferEvaluation, platform: Platform) {
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
         // #551 P7: the offer summary ends with the merchant name (raw third-party UI text), so
@@ -286,7 +286,7 @@ class BubbleManager @Inject constructor(
         Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.displayName, summary.length)
         Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
         scope.launch { chatRepository.saveMessage(activeSessionId.value, summary.toString(), persona) }
-        showOfferHeadsUp(offer, summary, persona)
+        showOfferHeadsUp(offer, summary, persona, platform)
     }
 
     /**
@@ -298,7 +298,7 @@ class BubbleManager @Inject constructor(
      * inflation and regress the #457 action surface; `setContentText` keeps a text body for surfaces
      * that don't render custom views (Wear/Auto). Dismissed by [cancelOfferNotification].
      */
-    private fun showOfferHeadsUp(offer: FlowCardSnapshot.Offer, summary: CharSequence, persona: ChatPersona) {
+    private fun showOfferHeadsUp(offer: FlowCardSnapshot.Offer, summary: CharSequence, persona: ChatPersona, platform: Platform) {
         val openBubble = Intent(context, BubbleActivity::class.java).apply { action = Intent.ACTION_VIEW }
         val contentIntent = PendingIntent.getActivity(
             context, REQUEST_CODE_OFFER_CONTENT, openBubble,
@@ -314,9 +314,9 @@ class BubbleManager @Inject constructor(
             .setAutoCancel(true)
             .setTimeoutAfter(OFFER_HEADS_UP_TIMEOUT_MS)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false))
-            .setCustomHeadsUpContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false))
-            .setCustomBigContentView(buildOfferCardView(offer, R.layout.notif_offer_expanded, expanded = true))
+            .setCustomContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false, platform))
+            .setCustomHeadsUpContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false, platform))
+            .setCustomBigContentView(buildOfferCardView(offer, R.layout.notif_offer_expanded, expanded = true, platform))
         // #583: Accept/Decline are now brand-styled TextViews INSIDE the custom card
         // (wired via setOnClickPendingIntent in buildOfferCardView), not the system action row —
         // the two can't coexist without doubling the buttons. Field-gated: if a dash shows the
@@ -340,6 +340,7 @@ class BubbleManager @Inject constructor(
         offer: FlowCardSnapshot.Offer,
         layoutRes: Int,
         expanded: Boolean,
+        platform: Platform,
     ): RemoteViews {
         val rv = RemoteViews(context.packageName, layoutRes)
         val action = offer.evaluationAction?.let { runCatching { OfferAction.valueOf(it) }.getOrNull() }
@@ -394,11 +395,11 @@ class BubbleManager @Inject constructor(
         // Brand-styled Accept/Decline (both layouts) — fire the same broadcast as the old action row.
         rv.setOnClickPendingIntent(
             R.id.notif_btn_decline,
-            offerActionPendingIntent(OfferIntent.DECLINE, REQUEST_CODE_DECLINE),
+            offerActionPendingIntent(OfferIntent.DECLINE, REQUEST_CODE_DECLINE, platform, offer.offerHash),
         )
         rv.setOnClickPendingIntent(
             R.id.notif_btn_accept,
-            offerActionPendingIntent(OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT),
+            offerActionPendingIntent(OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT, platform, offer.offerHash),
         )
 
         if (expanded) {
@@ -436,11 +437,23 @@ class BubbleManager @Inject constructor(
         notificationManager.cancel(OFFER_NOTIFICATION_ID)
     }
 
-    /** #583: the Accept/Decline broadcast, wired onto the in-card buttons via setOnClickPendingIntent. */
-    private fun offerActionPendingIntent(action: String, requestCode: Int): PendingIntent {
+    /**
+     * #583: the Accept/Decline broadcast, wired onto the in-card buttons via setOnClickPendingIntent.
+     * #438 item 8a: the acted offer's platform wire + offerHash ride the extras so the dispatched
+     * `UiInput` carries a real target platform (identity-less taps step no region post-#682). The
+     * fixed request codes stay — per-offer PendingIntent identity is B4 (#438 item 8b).
+     */
+    private fun offerActionPendingIntent(
+        action: String,
+        requestCode: Int,
+        platform: Platform,
+        offerHash: String,
+    ): PendingIntent {
         val intent = Intent(context, OfferActionReceiver::class.java).apply {
             this.action = OfferActionReceiver.ACTION
             putExtra(OfferActionReceiver.EXTRA_ACTION, action)
+            putExtra(OfferActionReceiver.EXTRA_PLATFORM, platform.wire)
+            putExtra(OfferActionReceiver.EXTRA_OFFER_HASH, offerHash)
         }
         return PendingIntent.getBroadcast(
             context, requestCode, intent,

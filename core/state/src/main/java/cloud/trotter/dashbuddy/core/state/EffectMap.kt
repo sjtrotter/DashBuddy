@@ -142,8 +142,11 @@ class EffectMap @Inject constructor() {
             add(logEffect(sessionId, AppEventType.OFFER_RECEIVED, obs.timestamp, receivedPayload))
 
             // Evaluate (the heads-up notification + spoken read fire later, once the async
-            // evaluation lands on the pending offer — see the eval-landing block below).
-            add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash))
+            // evaluation lands on the pending offer — see the eval-landing block below). The
+            // platform is the OFFER's own provenance (#438 item 8a) — its sourceRuleId, not
+            // next.activePlatform (the global mirror this pack removes) — so the eval loopback
+            // lands on the region that owns the offer even behind another platform's screen.
+            add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash, offerPlatform(nextOffer)))
         }
 
         // Offer replaced (different hash)
@@ -174,7 +177,7 @@ class EffectMap @Inject constructor() {
 
             // Evaluate the new offer (notification + spoken read fire on eval-landing below).
             val offer = nextOffer.offerFields
-            add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash))
+            add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash, offerPlatform(nextOffer)))
         }
 
         // Evaluation landed (async loopback) → fire the offer's UI side-effects: the heads-up
@@ -198,7 +201,7 @@ class EffectMap @Inject constructor() {
                 expiresAt = expiresAt,
                 countdownSeconds = parsedOffer.initialCountdownSeconds,
             )
-            add(AppEffect.PostOfferNotification(landedEval, offerCard, nextOffer.offerHash))
+            add(AppEffect.PostOfferNotification(landedEval, offerCard, nextOffer.offerHash, offerPlatform(nextOffer)))
             add(AppEffect.SpeakOffer(landedEval))
         }
 
@@ -298,7 +301,12 @@ class EffectMap @Inject constructor() {
             }
             if (action != null) {
                 val onOfferFlow = next.flow == Flow.OfferPresented || prev.flow == Flow.OfferPresented
-                val platform = next.activePlatform ?: prev.activePlatform
+                // #438 item 8a: resolve the platform from the tap's OWN carried identity
+                // (obs.platform, stamped by the bubble/notification dispatch), not the global
+                // next.activePlatform mirror this pack removes. An identity-less legacy tap
+                // (Unknown) falls back to the R0 active-platform chain — today's behavior.
+                val carried = obs.platform.takeIf { it != Platform.Unknown }
+                val platform = carried ?: next.activePlatform ?: prev.activePlatform
                 val offer = next.pendingOffer ?: prev.pendingOffer
                 val target = offer?.targets?.get(action.targetBindName)
                 when {
@@ -1316,6 +1324,13 @@ class EffectMap @Inject constructor() {
     // =========================================================================
     // HELPERS
     // =========================================================================
+
+    /**
+     * The offer's own platform (#438 item 8a), from its `sourceRuleId` via the [Platform]
+     * registry — NOT `next.activePlatform`, the global mirror this pack removes. Used to
+     * stamp identity onto the eval loopback + notification so they land on the owning region.
+     */
+    private fun offerPlatform(offer: PendingOffer): Platform = Platform.fromRuleId(offer.sourceRuleId)
 
     private fun resolveOfferOutcome(obs: Observation, prevOffer: PendingOffer? = null): AppEventType {
         // 0. Decline-commit latch (#594): a DECLINE-intent click already committed this offer's

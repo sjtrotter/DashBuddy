@@ -445,26 +445,26 @@ class SideEffectEngineTest {
     fun `a resolved offer cancels the pending notification post`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
 
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9"))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
         runCurrent()
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, never()).postOfferNotification(any(), any())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any())
     }
 
     @Test
     fun `an unresolved offer notification still posts after the settle delay`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
 
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9"))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any())
     }
 
     @Test
@@ -472,15 +472,41 @@ class SideEffectEngineTest {
         // The offer heads-up is now a SEPARATE notification (own id), not the self-replacing bubble,
         // so once it has posted, resolution must explicitly dismiss it.
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9"))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any())
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()
         verify(bubbleManager, times(1)).cancelOfferNotification()
+    }
+
+    @Test
+    fun `EvaluateOffer stamps the offer's platform onto the eval loopback (#438 item 8a)`() = runTest {
+        // Pre-B3 the evaluation still lands in R0 — this asserts the STAMPING (identity carried on
+        // the loopback), not the region landing. Without the stamp an Unknown-platform loopback
+        // steps no region post-#682, silently killing the offer's notification/TTS.
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        whenever(offerEvaluator.evaluate(any(), any())).thenReturn(testEvaluation())
+        val collected = mutableListOf<cloud.trotter.dashbuddy.domain.model.state.StateEvent>()
+        val job = launch { engine.events.collect { collected += it } }
+        runCurrent()
+
+        engine.process(
+            AppEffect.EvaluateOffer(
+                cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer(offerHash = "hash-U", payAmount = 7.5),
+                offerHash = "hash-U",
+                platform = Platform.Uber,
+            ),
+        )
+        runCurrent()
+        job.cancel()
+
+        val loop = collected.filterIsInstance<cloud.trotter.dashbuddy.domain.pipeline.Observation.Loopback>().single()
+        assertEquals(Platform.Uber, loop.targetPlatform)
+        assertEquals(Platform.Uber, loop.platform)
     }
 
     @Test

@@ -206,6 +206,51 @@ class EffectMapTest {
     }
 
     @Test
+    fun `EvaluateOffer carries the offer's OWN platform, not the active-platform mirror (#438 item 8a)`() {
+        // sourceRuleId is the offer's provenance; activePlatform is the global R0 mirror this pack
+        // removes. They deliberately DIVERGE here (offer=DoorDash, active=Uber) so the assertion
+        // proves the stamp reads sourceRuleId, not next.activePlatform.
+        val prev = AppState(regions = Regions(flow = FlowRegion(flow = Flow.Idle)))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(sourceRuleId = "doordash.screen.offer"),
+                activePlatform = Platform.Uber,
+            ),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented, parsed = testOfferFields))
+
+        val eval = effects.filterIsInstance<AppEffect.EvaluateOffer>().single()
+        assertEquals("Stamps the offer's own platform", Platform.DoorDash, eval.platform)
+    }
+
+    @Test
+    fun `evaluation landing stamps PostOfferNotification with the offer's platform (#438 item 8a)`() {
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(sourceRuleId = "doordash.screen.offer"),
+                activePlatform = Platform.Uber,
+            ),
+        ))
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.OfferPresented,
+                pendingOffer = testPendingOffer.copy(
+                    sourceRuleId = "doordash.screen.offer", evaluation = testEvaluation,
+                ),
+                activePlatform = Platform.Uber,
+            ),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
+
+        val post = effects.filterIsInstance<AppEffect.PostOfferNotification>().single()
+        assertEquals("Notification carries the offer's own platform", Platform.DoorDash, post.platform)
+    }
+
+    @Test
     fun `evaluation landing on the pending offer emits PostOfferNotification`() {
         // The async eval loopback attaches the evaluation to the SAME pending offer
         // (eval null → non-null). EffectMap surfaces it as a heads-up notification here,
@@ -1503,6 +1548,46 @@ class EffectMapTest {
             boundsInScreen = cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox(0, 0, 100, 50),
             pathFingerprint = "fp",
         )
+
+    @Test
+    fun `a UiInput accept resolves the platform from its OWN carried identity (#438 item 8a)`() {
+        // The tap carries targetPlatform=Uber; R0's activePlatform is DoorDash. The action must fire
+        // on the tap's carried platform (the offer it acted on), not the global active-platform mirror.
+        val offer = testPendingOffer.copy(
+            sourceRuleId = "uber.screen.offer",
+            targets = mapOf("acceptButton" to testNodeRef()),
+        )
+        val state = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer, activePlatform = Platform.DoorDash),
+        ))
+        val obs = Observation.UiInput(
+            timestamp = 1L, action = OfferIntent.ACCEPT,
+            targetPlatform = Platform.Uber, offerHash = "hash-123",
+        )
+
+        val effects = effectMap.diff(state, state, obs)
+
+        val action = effects.filterIsInstance<AppEffect.PerformRuleAction>().single()
+        assertEquals(Platform.Uber, action.platform)
+    }
+
+    @Test
+    fun `a UiInput without carried identity falls back to the active platform (#438 item 8a)`() {
+        // A legacy/identity-less tap (Unknown) must behave as today — resolve via R0 activePlatform.
+        val offer = testPendingOffer.copy(
+            sourceRuleId = "doordash.screen.offer",
+            targets = mapOf("acceptButton" to testNodeRef()),
+        )
+        val state = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, pendingOffer = offer, activePlatform = Platform.DoorDash),
+        ))
+        val obs = Observation.UiInput(timestamp = 1L, action = OfferIntent.ACCEPT)
+
+        val effects = effectMap.diff(state, state, obs)
+
+        val action = effects.filterIsInstance<AppEffect.PerformRuleAction>().single()
+        assertEquals(Platform.DoorDash, action.platform)
+    }
 
     @Test
     fun `collapsed summary with expand target schedules a deferred EXPAND_EARNINGS`() {

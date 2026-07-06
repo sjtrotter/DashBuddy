@@ -130,7 +130,19 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val ruleId: String? = null,
         override val metadata: ReplayMetadata = ReplayMetadata.EMPTY,
         val action: String,
-    ) : Observation
+        /**
+         * The platform the offer being acted on belongs to (#438 item 8a). Like
+         * [Timeout.targetPlatform] (#342), a UiInput carries no ruleId, so without an
+         * explicit target it derives [Platform.Unknown] and post-#682 never steps any
+         * region — an identity-less accept/decline would land nowhere. The bubble/
+         * notification dispatch stamps the acted offer's platform. Null = not scoped.
+         */
+        val targetPlatform: Platform? = null,
+        /** The offer this input targets (#438 item 8a) — correlates the tap to its offer. */
+        val offerHash: String? = null,
+    ) : Observation {
+        override val platform: Platform get() = targetPlatform ?: Platform.fromRuleId(ruleId)
+    }
 
     /** A loopback event from the side-effect engine back into the state machine. */
     data class Loopback(
@@ -139,9 +151,18 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val ruleId: String? = null,
         override val metadata: ReplayMetadata = ReplayMetadata.EMPTY,
         val effect: String,
+        /**
+         * The platform the looped-back offer belongs to (#438 item 8a) — same
+         * identity-less-observation problem as [UiInput.targetPlatform]: the eval
+         * loopback carries no ruleId, so the owning region never sees it. Stamped
+         * from the [AppEffect.EvaluateOffer]'s effect-carried platform. Null = not scoped.
+         */
+        val targetPlatform: Platform? = null,
         /** Typed loopback context (#366) — e.g. the landed offer evaluation. */
         val payload: ObservationPayload? = null,
     ) : Observation {
+        override val platform: Platform get() = targetPlatform ?: Platform.fromRuleId(ruleId)
+
         companion object {
             /** Effect token for the async offer-evaluation loopback (#402). */
             const val EFFECT_OFFER_EVALUATED = "offer_evaluated"

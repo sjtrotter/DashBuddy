@@ -138,9 +138,15 @@ sealed class AppEffect {
     /**
      * Evaluate the pending offer. [offerHash] rides the async round-trip so the result
      * can be correlated back — a replaced offer must never inherit the previous offer's
-     * evaluation (#345).
+     * evaluation (#345). [platform] is the offer's own provenance (derived from its
+     * `sourceRuleId`, #438 item 8a) so the eval loopback can stamp identity onto the
+     * result — an identity-less loopback lands on no region post-#682.
      */
-    data class EvaluateOffer(val parsedOffer: ParsedOffer, val offerHash: String) : AppEffect()
+    data class EvaluateOffer(
+        val parsedOffer: ParsedOffer,
+        val offerHash: String,
+        val platform: Platform,
+    ) : AppEffect()
     /** Speak the offer's evaluation aloud (verdict + headline economics). Fires on eval-landing. */
     data class SpeakOffer(val evaluation: OfferEvaluation) : AppEffect()
 
@@ -161,6 +167,12 @@ sealed class AppEffect {
         val offer: FlowCardSnapshot.Offer,
         /** Keys the engine's delayed post so [CancelOfferNotification] can abort it (#436). */
         val offerHash: String?,
+        /**
+         * The offer's platform (#438 item 8a), derived from its `sourceRuleId`. Rides the
+         * notification's Accept/Decline PendingIntent extras so the dispatched [UiInput]
+         * carries a real target platform instead of deriving [Platform.Unknown].
+         */
+        val platform: Platform,
     ) : AppEffect()
 
     /**

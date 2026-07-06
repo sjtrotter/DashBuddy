@@ -33,6 +33,10 @@ internal data class InternalObsPayload(
     val effect: String? = null,
     val targetPlatform: String? = null,
     val payload: ObservationPayload? = null,
+    // #438 item 8a: UiInput's offer identity round-trips so a recovery-replayed accept/decline
+    // targets the owning region (an identity-less UiInput Unknown-skips at StateMachine.kt:75).
+    // Additive: old journal rows without this key decode with a null default.
+    val offerHash: String? = null,
 )
 
 /**
@@ -108,9 +112,18 @@ class ObservationJournal @Inject constructor(
                 InternalObsPayload(targetPlatform = obs.targetPlatform?.wire, payload = obs.payload)
             } else null
         // Persisting the REAL action is safe: PerformRuleAction is classified
-        // external (#341), so recovery can never replay an offer tap from it.
-        is Observation.UiInput -> InternalObsPayload(action = obs.action)
-        is Observation.Loopback -> InternalObsPayload(effect = obs.effect, payload = obs.payload)
+        // external (#341), so recovery can never replay an offer tap from it. Identity
+        // (targetPlatform/offerHash) round-trips so the replayed input lands on its region (#438 8a).
+        is Observation.UiInput -> InternalObsPayload(
+            action = obs.action,
+            targetPlatform = obs.targetPlatform?.wire,
+            offerHash = obs.offerHash,
+        )
+        is Observation.Loopback -> InternalObsPayload(
+            effect = obs.effect,
+            targetPlatform = obs.targetPlatform?.wire,
+            payload = obs.payload,
+        )
         else -> null
     }
 
@@ -170,11 +183,14 @@ class ObservationJournal @Inject constructor(
             "internal.ui" -> Observation.UiInput(
                 timestamp = occurredAt,
                 action = payload?.action ?: "replay",
+                targetPlatform = payload?.targetPlatform?.let(Platform::fromWire),
+                offerHash = payload?.offerHash,
             )
 
             "internal.loopback" -> Observation.Loopback(
                 timestamp = occurredAt,
                 effect = payload?.effect ?: "replay",
+                targetPlatform = payload?.targetPlatform?.let(Platform::fromWire),
                 // Typed payload round-trips losslessly (#366) — a replayed
                 // offer_evaluated lands its evaluation with no key rebuilding.
                 payload = payload?.payload,
