@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.AcceptStash
+import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
@@ -15,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Session
+import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
@@ -222,6 +225,85 @@ class AcceptStashTest {
         assertEquals("D1c: the add-on economics folded in", 2, job.acceptedOffers.size)
         assertEquals("blended gross across both offers", 18.0, job.totalPayAmount, 0.001)
         assertNull("the stash is consumed", r3.lastAcceptedOffer)
+    }
+
+    // =====================================================================
+    // FIX2a — PLATFORM GATE (Principle 8: shared FlowRegion cross-platform bleed)
+    // =====================================================================
+
+    @Test
+    fun `FIX2a - an offer owned by another platform does NOT arm this region's stash`() {
+        // The FlowRegion is shared. A DoorDash offer sits in R0 while an Uber timer/idle obs steps
+        // the Uber region — Uber's stash must stay null.
+        val ddOffer = acceptLatchedOffer("o1", listOf("Bill Miller BBQ")).let {
+            it.copy(
+                activePlatform = Platform.DoorDash,
+                pendingOffer = it.pendingOffer!!.copy(sourceRuleId = "doordash.screen.offer"),
+            )
+        }
+        val uber = PlatformRegion(platform = Platform.Uber, mode = Mode.Online, session = Session("u1", startedAt = 100L))
+        val uberObs = Observation.Screen(
+            timestamp = 1_000L, captureId = null, ruleId = "uber.screen.idle",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online, parsed = ParsedFields.None,
+        )
+        val r = step(uber, idleFlow, ddOffer, uberObs)
+        assertNull("a DoorDash offer must not arm Uber's stash (Principle 8)", r.lastAcceptedOffer)
+    }
+
+    @Test
+    fun `FIX2a - the owning platform DOES arm from its sourceRuleId-attributed offer`() {
+        val ddOffer = acceptLatchedOffer("o1", listOf("Bill Miller BBQ")).let {
+            it.copy(
+                activePlatform = Platform.DoorDash,
+                pendingOffer = it.pendingOffer!!.copy(sourceRuleId = "doordash.screen.offer"),
+            )
+        }
+        val r = step(region(), idleFlow, ddOffer, offerObs(1_000L))
+        assertNotNull("the DoorDash region arms from its own attributed offer", r.lastAcceptedOffer)
+    }
+
+    // =====================================================================
+    // FIX2b — REVOCATION (decline-after-accept, #594)
+    // =====================================================================
+
+    @Test
+    fun `FIX2b - the stash is cleared when the same offer's accept latch is revoked`() {
+        val offer = acceptLatchedOffer("o1", listOf("Bill Miller BBQ"))
+        val r1 = step(region(), idleFlow, offer, offerObs(1_000L))
+        assertNotNull("armed on accept", r1.lastAcceptedOffer)
+        // Same offer still on screen, but its decline was committed — the accept latch is gone.
+        val revoked = offer.copy(pendingOffer = offer.pendingOffer!!.copy(declineCommittedAt = 1_200L))
+        val r2 = step(r1, offer, revoked, offerObs(1_200L))
+        assertNull("revoked accept clears the stash (no phantom add-on)", r2.lastAcceptedOffer)
+    }
+
+    // =====================================================================
+    // FIX2c — EXPIRED-STASH CLEANUP MUST NOT SWALLOW THE FRAME
+    // =====================================================================
+
+    @Test
+    fun `FIX2c - an expired add-on stash is cleared but the frame's task is still processed`() {
+        val existing = Job(
+            jobId = "job-1", offerStoreHint = listOf("Bill Miller BBQ"), parentOfferHash = "o1",
+            acceptedOffers = listOf(AcceptedOfferEconomics(offerHash = "o1", acceptedAt = 200L)),
+            startedAt = 200L,
+            tasks = listOf(
+                Task(taskId = "pk-1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "Bill Miller BBQ", startedAt = 300L),
+            ),
+        )
+        val base = region(activeJob = existing).copy(
+            activeTask = existing.tasks.first(),
+            lastAcceptedOffer = AcceptStash(offerHash = "o2", storeHints = listOf("Mama Margies"), acceptedAt = 1_000L),
+        )
+        // A pickup-ARRIVAL frame lands 130s later (past the 120s grace) → the stash is expired.
+        val obs = Observation.Screen(
+            timestamp = 1_000L + 130_000L, captureId = null, ruleId = "doordash.screen.pickup_arrival",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.TaskPickupArrived, modeHint = Mode.Online,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.ARRIVED, storeName = "Bill Miller BBQ"),
+        )
+        val r = step(base, FlowRegion(flow = Flow.TaskPickupNavigation), FlowRegion(flow = Flow.TaskPickupArrived), obs)
+        assertNull("the expired stash is cleared", r.lastAcceptedOffer)
+        assertNotNull("the frame's arrivedAt is still stamped (frame not swallowed)", r.activeTask?.arrivedAt)
     }
 
     @Test

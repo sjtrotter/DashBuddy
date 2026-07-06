@@ -173,10 +173,20 @@ class PickupPlaceholderTest {
     }
 
     @Test
-    fun `a store matching no hint at all falls onto the next open slot (the mis-bind the swap guard repairs)`() {
+    fun `a no-match store with 2+ open slots freshly mints (FIX3b - no blind next-open bind)`() {
+        // FIX3b: with ≥2 open placeholders and a store matching neither hint, a blind first-open
+        // bind would guess the wrong order — fall through to a fresh mint (master behavior). A later
+        // frame carrying a real store can hint-match the right placeholder.
         val r = step(region(), offerFlow("o1", listOf("Sprouts", "CVS")), pickupObs(1_000L, "Mystery Mart"))
         assertEquals("Mystery Mart", r.activeTask?.storeName)
-        assertEquals("bound by next-open to the first slot", "Sprouts", r.activeTask?.expectedStoreHint)
+        assertNull("no blind placeholder bind with 2 open slots — fresh mint", r.activeTask?.expectedStoreHint)
+    }
+
+    @Test
+    fun `a no-match store with exactly ONE open slot still binds next-open (FIX3b)`() {
+        val r = step(region(), offerFlow("o1", listOf("Sprouts")), pickupObs(1_000L, "Mystery Mart"))
+        assertEquals("Mystery Mart", r.activeTask?.storeName)
+        assertEquals("single open slot → next-open binds", "Sprouts", r.activeTask?.expectedStoreHint)
     }
 
     // =====================================================================
@@ -241,6 +251,26 @@ class PickupPlaceholderTest {
             pickupObs(2_000L, "CVS Pharmacy"),
         )
         assertEquals("ambiguous → no swap, stays put", "pk-A", r.activeTask?.taskId)
+    }
+
+    @Test
+    fun `swap does NOT fire when the active pickup has neither hint nor accumulated store (FIX3a)`() {
+        // FIX3a: a null hint made the 0-token divergence vacuously true → wrong swaps. With NO hint
+        // AND NO accumulated store the active slot owns nothing to diverge from → never swap.
+        val job = Job(
+            jobId = "job-1", offerStoreHint = listOf("CVS"), parentOfferHash = "o1", startedAt = 100L,
+            tasks = listOf(
+                Task(taskId = "pk-A", jobId = "job-1", phase = TaskPhase.PICKUP, expectedStoreHint = null, storeName = null, startedAt = 100L),
+                Task(taskId = "pk-B", jobId = "job-1", phase = TaskPhase.PICKUP, expectedStoreHint = "CVS", storeName = null, startedAt = 100L),
+            ),
+        )
+        val active = job.tasks.single { it.taskId == "pk-A" }
+        val r = stepRaw(
+            region(activeJob = job, activeTask = active),
+            pickupNavFlow, pickupNavFlow,
+            pickupObs(2_000L, "CVS Pharmacy"),
+        )
+        assertEquals("no hint + no store on the active slot → no swap", "pk-A", r.activeTask?.taskId)
     }
 
     @Test

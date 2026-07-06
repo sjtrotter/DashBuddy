@@ -454,6 +454,10 @@ class EffectMap @Inject constructor() {
             val closedJob = p.activeJob
             if (closedJob != null && next.activeJob?.jobId != closedJob.jobId) {
                 val sessionId = next.session?.sessionId ?: p.session?.sessionId
+                // #526 D5 sweep: a job that closed WITHOUT a pickup→dropoff edge (a T1/T2 retire
+                // close) still owes PICKUP_CONFIRMED for each arrived pickup. Per-task keys dedup
+                // against the edge sweep, so a job that DID pass a dropoff edge re-emits nothing.
+                addAll(pickupConfirmSweepEffects(sessionId, next, closedJob.jobId, obs))
                 val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
                 // #528: split the combined receipt across the job's delivered drops once, so each
                 // close-out completion carries its own share (the receipt-skip null rows and the
@@ -765,20 +769,13 @@ class EffectMap @Inject constructor() {
             val prevTask = prev.activeTask
             val nextTask = next.activeTask
 
-            // #526 D5 (Bug10a): a pickup DISPLACED by another pickup (a stacked pickup→pickup
-            // transition) must be CONFIRMED. Today only the FINAL pickup is confirmed (at the first
-            // dropoff, the pickup→dropoff branch below), so a displaced first pickup got no
-            // PICKUP_CONFIRMED ever (the 07-05 Bill Miller leg). Emit it for the displaced prevTask
-            // (+ the RecordShopRate rider) — but NOT DELIVERY_NAV_STARTED: the next pickup's nav is
-            // the pickup-navigation branch just below. Placed FIRST so CONFIRMED(prev) precedes
-            // NAV_STARTED(next) (D5b); keyed on the confirmed task (D5a).
-            if (prevTask?.phase == TaskPhase.PICKUP &&
-                nextTask?.phase == TaskPhase.PICKUP &&
-                prevTask.taskId != nextTask.taskId &&
-                prevTask.arrivedAt != null
-            ) {
-                addAll(pickupConfirmedEffects(sessionId, prevTask, obs))
-            }
+            // #526 D5 sweep: a pickup→pickup active-task change emits NOTHING new here — the new
+            // pickup's PICKUP_NAV_STARTED fires in the branch just below, and the displaced pickup's
+            // PICKUP_CONFIRMED is now emitted by the CONFIRM SWEEP at the pickup→dropoff edge / the
+            // #596 close-out (see [pickupConfirmSweepEffects]). The old per-edge displacement confirm
+            // fired a premature confirm on an order-not-ready reroute/flap (then the real confirm was
+            // suppressed by the burned per-task key + polluted the #556 shop rate) and a phantom
+            // confirm on a D4a swap edge — the sweep replaces all of it.
 
             // Task started — pickup navigation.
             //
@@ -829,9 +826,11 @@ class EffectMap @Inject constructor() {
             if (prevTask?.phase == TaskPhase.PICKUP &&
                 nextTask?.phase == TaskPhase.DROPOFF
             ) {
-                // #526 D5a: PICKUP_CONFIRMED (+ the #556 shop-rate rider) keyed on the confirmed
-                // task, emitted BEFORE the dropoff's DELIVERY_NAV_STARTED (D5b).
-                addAll(pickupConfirmedEffects(sessionId, prevTask, obs))
+                // #526 D5 sweep: confirm EVERY arrived pickup in this job's lineage (the just-
+                // displaced prevTask + any earlier displaced pickups), each at its own completion
+                // time, BEFORE the dropoff's DELIVERY_NAV_STARTED (CONFIRMED-before-NAV). Per-task
+                // keys make this idempotent with the close-out sweep below.
+                addAll(pickupConfirmSweepEffects(sessionId, next, prevTask.jobId, obs))
                 addAll(deliveryNavStartedEffects(sessionId, nextTask, obs))
             }
 
@@ -966,23 +965,48 @@ class EffectMap @Inject constructor() {
     }
 
     /**
+     * #526 D5 sweep: confirm every ARRIVED pickup in [jobId]'s lineage as visible to EffectMap —
+     * the job's completed/displaced pickups in [PlatformRegion.recentTasks] plus the active task if
+     * it is still a pickup of this job. Each emits one `PICKUP_CONFIRMED` keyed on its task id, so
+     * the two sweep sites (the pickup→dropoff edge AND the #596 close-out) are idempotent under the
+     * engine's effects_fired dedup. Each task confirms at its OWN completion time ([Task.completedAt],
+     * the real confirm moment) — a still-active edge task, not yet displaced, falls back to
+     * `obs.timestamp`. Replaces the old pickup→pickup displacement confirm.
+     */
+    private fun pickupConfirmSweepEffects(
+        sessionId: String?,
+        region: PlatformRegion,
+        jobId: String?,
+        obs: Observation,
+    ): List<AppEffect> = buildList {
+        if (jobId == null) return@buildList
+        val lineage = (region.recentTasks + listOfNotNull(region.activeTask))
+            .filter { it.jobId == jobId && it.phase == TaskPhase.PICKUP && it.arrivedAt != null }
+            .distinctBy { it.taskId }
+        for (task in lineage) {
+            addAll(pickupConfirmedEffects(sessionId, task, obs, confirmedAt = task.completedAt ?: obs.timestamp))
+        }
+    }
+
+    /**
      * #526 D5/D5a: the effects for confirming a completed PICKUP leg — `PICKUP_CONFIRMED` keyed on
      * the confirmed task's id (so an A→B→A resume then A→dropoff can't double-confirm the same
      * pickup under mixed keying), plus the #556 [AppEffect.RecordShopRate] rider when it was a shop.
-     * Shared by the pickup→dropoff (final leg) and pickup→pickup (displaced stacked leg, Bug10a)
-     * branches so the two can't drift.
+     * [confirmedAt] is the real confirm time (the swept task's `completedAt`, or `obs.timestamp` at
+     * the edge) — it stamps the log event AND the shop-rate window (arrived→confirmed).
      */
     private fun pickupConfirmedEffects(
         sessionId: String?,
         prevTask: Task,
         obs: Observation,
+        confirmedAt: Long = obs.timestamp,
     ): List<AppEffect> = buildList {
         add(
             logEffect(
                 sessionId,
                 AppEventType.PICKUP_CONFIRMED,
-                obs.timestamp,
-                pickupPayload(task = prevTask, storeName = prevTask.storeName ?: UNKNOWN_STORE, confirmedAt = obs.timestamp),
+                confirmedAt,
+                pickupPayload(task = prevTask, storeName = prevTask.storeName ?: UNKNOWN_STORE, confirmedAt = confirmedAt),
                 effectKeyOverride = "log:${AppEventType.PICKUP_CONFIRMED}:${prevTask.taskId}",
             ),
         )
@@ -994,7 +1018,7 @@ class EffectMap @Inject constructor() {
             add(
                 AppEffect.RecordShopRate(
                     itemsShopped = shopItems,
-                    shopDurationMs = obs.timestamp - shopArrivedAt,
+                    shopDurationMs = confirmedAt - shopArrivedAt,
                     storeName = prevTask.storeName,
                     jobId = prevTask.jobId,
                     taskId = prevTask.taskId,
