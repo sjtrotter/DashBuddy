@@ -121,8 +121,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   `deliveries.csv`, `sessions.csv`, `summary.csv`. Open each in a spreadsheet app: deliveries should
   have one row per completed drop (date/time, platform, store, pay, tip, miles, minutes, net…),
   sessions one row per dash (start/end, duration, odometer start/end, miles, offer counts), and
-  summary a totals block ending in `estimated_mileage_deduction` (= total miles × 0.70, the IRS 2025
-  business rate). **How to tell it's working:** values are sane (money looks like `8.50` not `0.00`
+  summary a totals block with **one `tax_year` group per year present** (miles × the IRS standard
+  business rate for that year via the per-year lookup — 2025 = $0.70, 2026 = $0.725; a future year
+  with no published rate falls back to the latest rate + a `rate_note` disclaimer). **How to tell it's working:** values are sane (money looks like `8.50` not `0.00`
   everywhere; store names with commas like "Chili's, Cedar Park" stay in one cell, not split), and
   NO customer names/addresses or hashes appear anywhere. All-time export (v1 has no date-range
   picker). Screens with no dashes yet just yield header-only files — that's fine.
@@ -196,7 +197,8 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   card (a % headline + an On-delivery / Deadhead miles bar — deadhead = miles not attached to any
   delivery), an **on-time** gauge ("NN% on time" over the deliveries that carried a deadline, "N of M
   … with a deadline", plus a "typically Xm early/late" margin line), and a **mileage & tax** card
-  (period miles + the est. IRS 2025 standard-mileage deduction at $0.70/mi). How to tell it's working:
+  (period miles + the est. IRS standard-mileage deduction at the current year's rate via the per-year
+  lookup — 2026 = $0.725/mi; Lifetime adds a "spans tax years — see the CSV export" note). How to tell it's working:
   the online split ≈ the time you spent online vs on drops for the dash, deadhead miles look sane
   (small on a busy dash, larger if you drove a lot between/after drops), the on-time % and margin match
   how you did against the app's deadlines, and the mileage matches the odometer miles for the period.
