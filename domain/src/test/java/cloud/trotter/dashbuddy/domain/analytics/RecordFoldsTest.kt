@@ -739,6 +739,73 @@ class RecordFoldsTest {
         assertNull(d.realizedMiles)
     }
 
+    @Test
+    fun `a stamped estimate on a 0-coerced pseudo-receipt folds OFFER_PAY, not RECEIPT_TOTAL 0-dollars (#691 FIX2)`() {
+        val s = "OP8"
+        // A transient delivery_summary_collapsed frame coerces totalPay to 0.0 (buildPostTask ?: 0.0)
+        // — a pseudo-receipt. With an offer-pay stamp present, OFFER_PAY must win over a $0.00
+        // RECEIPT_TOTAL (the estimate is not silenced by a non-pay-bearing total).
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 3_000, "J1", "T1", totalPay = 0.0, offerPayShare = 6.48, odo = 4.0),
+            ),
+        )
+        val d = outcomes[1].delivery!!
+        assertEquals(PayBasis.OFFER_PAY, d.payBasis)
+        assertEquals(6.48, d.realizedPay!!, 1e-9)
+    }
+
+    @Test
+    fun `a 0-coerced pseudo-receipt with NO stamp still folds RECEIPT_TOTAL 0-dollars (no-bump residual, #691 FIX2)`() {
+        val s = "OP9"
+        // The no-PROJECTOR_VERSION-bump guarantee: an un-stamped $0-coerced total is INDISTINGUISHABLE
+        // from a historical $0 RECEIPT_TOTAL row (offerPayShare is null on both), so it must refold to
+        // RECEIPT_TOTAL $0.00 byte-for-byte. The residual $0-pseudo-receipt rides to #703 (v11).
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 3_000, "J1", "T1", totalPay = 0.0, odo = 4.0),
+            ),
+        )
+        val d = outcomes[1].delivery!!
+        assertEquals(PayBasis.RECEIPT_TOTAL, d.payBasis)
+        assertEquals(0.0, d.realizedPay!!, 1e-9)
+    }
+
+    @Test
+    fun `a SUSPECT full-receipt sibling marks the job receipted and denies OFFER_PAY (#691 FIX3)`() {
+        val s = "OP10"
+        // T1: a normal delivered drop of J1 (adds J1 to deliveredJobIds, NONE pay). T2: an identity-less
+        // phantom full receipt of J1 → SUSPECT_FULL_RECEIPT (money nulled) — but the receipt HAPPENED,
+        // so J1 is now receipt-bearing. T3: a receipt-less offer-share sibling of J1 must be DENIED.
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                delivery(s, 2_000, "J1", "T1", odo = 4.0),
+                delivery(s, 2_500, "J1", "T2", totalPay = 10.0, parsedPay = parsedPay(7.0, 3.0), odo = 5.0, identityLess = true),
+                delivery(s, 3_000, "J1", "T3", offerPayShare = 6.0, odo = 6.0),
+            ),
+        )
+        assertEquals(PayBasis.SUSPECT_FULL_RECEIPT, outcomes[2].delivery!!.payBasis)
+        assertEquals("SUSPECT proves a receipt existed → job receipted", setOf("J1"), ctx!!.receiptedJobIds)
+        assertEquals("offer-share sibling denied by the SUSPECT-armed guard", PayBasis.NONE, outcomes[3].delivery!!.payBasis)
+    }
+
+    @Test
+    fun `offer-pay fails CLOSED with no session context — NONE, not an estimate (#691 FIX4)`() {
+        // A session-less DELIVERY_COMPLETED carrying an offer-pay share resolves no context, so the
+        // mixed-receipt guard cannot be consulted → the estimate is withheld (degraded-context
+        // under-count direction, never over-count).
+        val out = RecordFolds.foldEvent(
+            delivery(sid = null, at = 2_000, jobId = "J1", taskId = "T1", offerPayShare = 6.48, odo = 4.0),
+            context = null,
+            currentCostPerMile = 0.25,
+        )
+        assertEquals(PayBasis.NONE, out.delivery!!.payBasis)
+        assertNull(out.delivery!!.realizedPay)
+    }
+
     // ── User corrections (#650) ─────────────────────────────────────────
 
     private fun manualDelivery(
