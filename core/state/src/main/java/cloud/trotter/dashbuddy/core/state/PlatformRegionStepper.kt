@@ -395,8 +395,30 @@ class PlatformRegionStepper @Inject constructor() {
     private fun reconcileDropoffStore(region: PlatformRegion): PlatformRegion {
         val active = region.activeTask ?: return region
         if (active.phase != TaskPhase.DROPOFF) return region
-        val pickupStores = region.recentTasks
-            .filter { it.jobId == active.jobId && it.phase == TaskPhase.PICKUP && it.storeName != null }
+        val jobPickups = region.recentTasks
+            .filter { it.jobId == active.jobId && it.phase == TaskPhase.PICKUP }
+
+        // #526 D6 rule 1 — customer-hash join (priority): the dropoff carries the order's customer,
+        // and so does the pickup (pickup_arrival hashes it, #526 D6a — the SAME stripped/trimmed
+        // token, so the sha256s match). When this drop's customerNameHash matches EXACTLY ONE of the
+        // job's pickup-lineage tasks, attribute that pickup's canonical store — the reliable fix for a
+        // multi-store stack's null-store drop (F2), where the dropoff card parses no store and the
+        // token-match fallback below has no candidate text. Exact-hash, replay-stable, PII-free
+        // (hashes only). A mixed same-store stack keeps last-seen on the pickup, so an unjoined drop
+        // (0 matches) or an ambiguous one (>1) falls through to rule 2 — never a wrong store.
+        val dropHash = active.customerNameHash
+        if (dropHash != null) {
+            val matched = jobPickups.filter { it.customerNameHash == dropHash && it.storeName != null }
+            if (matched.size == 1) {
+                val resolved = matched.single().storeName!!
+                return if (resolved == active.storeName) region
+                else region.copy(activeTask = active.copy(storeName = resolved))
+            }
+        }
+
+        // Rule 2 (existing): store from the job's pickup lineage by name.
+        val pickupStores = jobPickups
+            .filter { it.storeName != null }
             .map { it.storeName!! }
             .distinctBy { it.lowercase(Locale.ROOT) }
         val resolved = when {

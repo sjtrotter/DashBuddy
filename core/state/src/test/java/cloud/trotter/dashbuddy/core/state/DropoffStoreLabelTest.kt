@@ -34,9 +34,9 @@ class DropoffStoreLabelTest {
     private val flowStepper = FlowRegionStepper()
     private val policy = TransitionPolicy()
 
-    private fun completedPickup(id: String, store: String) = Task(
+    private fun completedPickup(id: String, store: String, customer: String? = null) = Task(
         taskId = id, jobId = "job-1", phase = TaskPhase.PICKUP,
-        storeName = store, arrivedAt = 300L, startedAt = 200L, completedAt = 400L,
+        storeName = store, customerNameHash = customer, arrivedAt = 300L, startedAt = 200L, completedAt = 400L,
     )
 
     private fun region(pickups: List<Task>, activeTask: Task? = null) = PlatformRegion(
@@ -139,5 +139,71 @@ class DropoffStoreLabelTest {
             dropoffObs(1_000L, store = "Horizon Organic Half & Half", customer = "cust-x"),
         )
         assertNull("an unmatched candidate is rejected, not mis-assigned", r.activeTask?.storeName)
+    }
+
+    // =====================================================================
+    // #526 D6 — customer-hash join (priority rule 1)
+    // =====================================================================
+
+    @Test
+    fun `D6 join — a null-store drop resolves via its customer hash to the matching pickup (F2)`() {
+        // The 07-05 Bill Miller + Mama Margies stack: the drop card parses NO store, so the token
+        // fallback has nothing to match — but the customer hash joins it to its pickup.
+        val pickups = listOf(
+            completedPickup("p-bill", "Bill Miller BBQ", customer = "cx-bill"),
+            completedPickup("p-mama", "Mama Margies", customer = "cx-mama"),
+        )
+        val (rBill, _) = step(
+            region(pickups), FlowRegion(flow = Flow.Idle),
+            dropoffObs(1_000L, store = null, customer = "cx-bill"),
+        )
+        assertEquals("the drop joins its pickup by customer hash", "Bill Miller BBQ", rBill.activeTask?.storeName)
+
+        val (rMama, _) = step(
+            region(pickups), FlowRegion(flow = Flow.Idle),
+            dropoffObs(2_000L, store = null, customer = "cx-mama"),
+        )
+        assertEquals("Mama Margies", rMama.activeTask?.storeName)
+    }
+
+    @Test
+    fun `D6 join — no pickup carries the drop's hash — falls through to the token rules`() {
+        val pickups = listOf(
+            completedPickup("p-target", "Target", customer = "cx-target"),
+            completedPickup("p-maple", "Maple Street Biscuit Company", customer = "cx-maple"),
+        )
+        // The drop's customer matches no pickup hash → rule 1 no-ops; the token rule resolves it.
+        val (r, _) = step(
+            region(pickups), FlowRegion(flow = Flow.Idle),
+            dropoffObs(1_000L, store = "Target (02426)", customer = "cx-unknown"),
+        )
+        assertEquals("falls through to the token match", "Target", r.activeTask?.storeName)
+    }
+
+    @Test
+    fun `D6 join — ambiguous (two pickups share the drop's hash) falls through to the token rules`() {
+        // Two pickups with the SAME customer hash → the join is ambiguous and must not pick one.
+        val pickups = listOf(
+            completedPickup("p-target", "Target", customer = "cx-dup"),
+            completedPickup("p-maple", "Maple Street Biscuit Company", customer = "cx-dup"),
+        )
+        val (r, _) = step(
+            region(pickups), FlowRegion(flow = Flow.Idle),
+            // No store candidate → the token fallback also can't resolve → null, never a wrong store.
+            dropoffObs(1_000L, store = null, customer = "cx-dup"),
+        )
+        assertNull("ambiguous join → no attribution (never a wrong store)", r.activeTask?.storeName)
+    }
+
+    @Test
+    fun `D6 join — a #499 single-store job still resolves via rule 2 regardless of the hash`() {
+        val (r, _) = step(
+            region(pickups = listOf(completedPickup("p-heb", "H-E-B", customer = "cx-1"))),
+            FlowRegion(flow = Flow.Idle),
+            // A different customer (the second order of a same-store 2-order offer) → rule 1 no-ops,
+            // rule 2's single-distinct-store arm still attributes H-E-B.
+            dropoffObs(1_000L, store = null, customer = "cx-2"),
+        )
+        assertEquals("single distinct pickup store → every drop is that store", "H-E-B", r.activeTask?.storeName)
     }
 }
