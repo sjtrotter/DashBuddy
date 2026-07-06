@@ -189,6 +189,103 @@ class AnalyticsProjectorTest {
         assertEquals(0.40, delivery.frozenCostPerMile!!, 1e-9)
     }
 
+    /** A two-drop job: T1 receipted (DROP_SHARE), T2 receipt-less carrying an offer-pay estimate. */
+    private suspend fun seedMixedReceiptJob(sid: String = "S1") {
+        insert(
+            AppEventType.DASH_START, sid, 1_000,
+            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, sid, 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        // T1 (seq 3): a receipt-derived share → marks jobId J1 receipted.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, sid, 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
+                phaseStartedAt = 2_400, completedAt = 3_000, dropRealizedPay = 6.0,
+            ),
+            odometer = 104.0,
+        )
+        // T2 (seq 4): a receipt-less sibling carrying an offer-pay estimate. The mixed-receipt guard
+        // must DENY it (job already receipted) → NONE — even though a batch boundary splits it from T1.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, sid, 3_500,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T2", storeName = "StoreX", customerHash = "c2",
+                phaseStartedAt = 3_100, completedAt = 3_500, offerPayShare = 6.48,
+            ),
+            odometer = 106.0,
+        )
+    }
+
+    @Test
+    fun `receiptedJobIds hydrates across a batch boundary — live order == from-zero refold (#691)`() = runBlocking {
+        seedMixedReceiptJob()
+
+        // Batch 1 stops after T1 (watermark → 3); T2 is left for a fresh projector to resume.
+        projector().processBatch(limit = 3)
+        assertEquals(3L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+
+        // The resumed projector has empty in-memory state — it must SELECT the receipted jobId back
+        // out of delivery_records to keep the guard armed across the boundary.
+        val resumed = projector()
+        resumed.processBatch(limit = 100)
+        assertNull(resumed.processBatch(limit = 100))
+
+        val liveT2 = analyticsDao.deliveryRecord(4)!!
+        assertEquals("guard survives the boundary → the sibling gets no estimate", "NONE", liveT2.payBasis)
+        assertNull(liveT2.realizedPay)
+
+        // From-zero refold (one drain, no boundary) must reproduce the SAME row — proof the live path
+        // is rebuild-faithful. A broken hydration would make liveT2 OFFER_PAY (6.48) here but NONE below.
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 4, projectorVersion = 99))
+        projector().catchUp()
+        val refoldT2 = analyticsDao.deliveryRecord(4)!!
+        assertEquals("live order == from-zero refold", liveT2.payBasis, refoldT2.payBasis)
+        assertEquals(liveT2.realizedPay, refoldT2.realizedPay)
+    }
+
+    @Test
+    fun `a wholly receipt-less job folds an OFFER_PAY row from the offer-pay share (#691)`() = runBlocking {
+        // No receipt anywhere on the job: T1 carries only an offer-pay estimate → OFFER_PAY, real net.
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, "S1", 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
+            DeliveryPayload(
+                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
+                phaseStartedAt = 2_400, completedAt = 3_000, offerPayShare = 12.95,
+            ),
+            odometer = 105.0,
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(3)!!
+        assertEquals("OFFER_PAY", d.payBasis)
+        assertEquals(12.95, d.realizedPay!!, 1e-9)
+        assertEquals("net = pay − 5mi × 0.25", 12.95 - 5.0 * 0.25, d.netProfit!!, 1e-9)
+    }
+
     @Test
     fun `re-running a drained log rewrites identical tables`() = runBlocking {
         seedFullSession()

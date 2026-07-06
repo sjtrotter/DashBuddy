@@ -350,6 +350,19 @@ interface AnalyticsDao {
     suspend fun deliveredJobIdsInSession(id: String): List<String>
 
     /**
+     * The distinct jobIds already recorded with **receipt-derived** pay (`DROP_SHARE` /
+     * `RECEIPT_TOTAL`) for a session — rehydrates the fold's #691 mixed-receipt guard set across a
+     * drain/batch boundary (mirrors [deliveredJobIdsInSession]), so a receipt-less sibling folded in
+     * a LATER batch is still denied the offer-pay estimate. Deliberately excludes `USER_CORRECTED`
+     * (a documented hydration wrinkle, #691 VET F1) and the estimate/none bases.
+     */
+    @Query(
+        "SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id " +
+            "AND payBasis IN ('DROP_SHARE', 'RECEIPT_TOTAL')"
+    )
+    suspend fun receiptedJobIdsInSession(id: String): List<String>
+
+    /**
      * The most recent closing offer's frozen operating-cost-per-mile in a session — rehydrates the
      * fold's session-uniform frozen-economy basis on a mid-session restart so a delivery folded
      * after the restart still resolves `OFFER_FROZEN` (PR2). Prefers offer provenance, never a
