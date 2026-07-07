@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,9 +19,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -45,13 +51,32 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Deep-link target route pushed by an external launcher (the bubble's "Vehicle" just-in-time
+     * action, #693). Held as a one-shot: the NavHost consumes it once and clears it, so a
+     * config-change recomposition doesn't re-navigate. `onNewIntent` re-arms it when an already-open
+     * instance is brought forward.
+     */
+    private val pendingRoute = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pendingRoute.value = intent?.getStringExtra(EXTRA_ROUTE)
 
         setContent {
             DashBuddyTheme {
                 val navController = rememberNavController()
+
+                // Consume a deep-link route once, then clear it (#693 vehicle action).
+                val route by pendingRoute.collectAsStateWithLifecycle()
+                LaunchedEffect(route) {
+                    route?.let {
+                        navController.navigate(it)
+                        pendingRoute.value = null
+                    }
+                }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     NavHost(
@@ -184,6 +209,27 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingRoute.value = intent.getStringExtra(EXTRA_ROUTE)
+    }
+
+    companion object {
+        /** Extra carrying a [Screen.route] to open on launch (the bubble's deep-link actions, #693). */
+        const val EXTRA_ROUTE = "cloud.trotter.dashbuddy.extra.ROUTE"
+
+        /**
+         * Build an [Intent] that opens [MainActivity] on [route]. Used by the bubble overlay (a
+         * separate task) to deep-link into settings, so it carries [Intent.FLAG_ACTIVITY_NEW_TASK].
+         */
+        fun routeIntent(context: Context, route: String): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                putExtra(EXTRA_ROUTE, route)
+            }
     }
 }
 

@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,9 +12,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
@@ -68,53 +72,64 @@ internal fun SessionMetricsActions(
     region: PlatformRegion?,
     earnings: Double,
     miles: Double,
-    lastSessionSummary: SessionSummary?
+    lastSession: SessionRecord?
 ) {
     val isActive = region?.mode == Mode.Online || region?.mode == Mode.Paused
 
-    val displayEarnings: Double?
-    val displayMiles: Double?
+    val displayEarnings: Double
+    val displayMiles: Double
     val dimmed: Boolean
+    val captionRes: Int
 
     when {
         isActive -> {
             displayEarnings = earnings
             displayMiles = miles
             dimmed = false
+            captionRes = R.string.bubble_status_this_session
         }
-        region?.mode == Mode.Offline && lastSessionSummary != null -> {
-            displayEarnings = lastSessionSummary.earnings
-            displayMiles = lastSessionSummary.miles
+        region?.mode == Mode.Offline && lastSession != null -> {
+            // Last-dash review: dimmed to signal it's history, not a live session (#693).
+            displayEarnings = lastSession.reportedEarnings ?: 0.0
+            displayMiles = lastSession.miles ?: 0.0
             dimmed = true
+            captionRes = R.string.bubble_status_last_session
         }
         else -> return
     }
 
-    Row(
-        modifier = Modifier.padding(end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        val textColor = if (dimmed)
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-        else
-            MaterialTheme.colorScheme.onSurface
+    val textColor = if (dimmed)
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+    else
+        MaterialTheme.colorScheme.onSurface
 
+    Column(
+        modifier = Modifier.padding(end = 12.dp),
+        horizontalAlignment = Alignment.End,
+    ) {
         Text(
-            text = Formats.money(displayEarnings),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = textColor
+            text = stringResource(captionRes),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
         )
-        Text(
-            text = "  ·  ",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
-        )
-        Text(
-            text = "${Formats.decimal(displayMiles)} mi",
-            style = MaterialTheme.typography.titleSmall,
-            color = textColor
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = Formats.money(displayEarnings),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = textColor
+            )
+            Text(
+                text = "  ·  ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+            )
+            Text(
+                text = "${Formats.decimal(displayMiles)} mi",
+                style = MaterialTheme.typography.titleSmall,
+                color = textColor
+            )
+        }
     }
 }
 

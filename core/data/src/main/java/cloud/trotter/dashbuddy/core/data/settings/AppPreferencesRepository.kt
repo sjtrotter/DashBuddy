@@ -183,6 +183,14 @@ class AppPreferencesRepository @Inject constructor(
     // WRITE ACTIONS
     // ============================================================================================
     suspend fun updateGasPrice(price: Float) = dataSource.updateGasPrice(price)
+
+    /**
+     * Manual pump-price override that also disables auto (EIA) fetching (#693) — the bubble's
+     * between-dash quick edit routes here so the value survives the daily worker. Frozen-economics
+     * invariant (#314): this only affects FUTURE evaluations; already-recorded deliveries keep their
+     * frozen cost basis.
+     */
+    suspend fun updateGasPriceManual(price: Float) = dataSource.updateGasPriceManual(price)
     suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
     suspend fun setProMode(enabled: Boolean) = dataSource.setProMode(enabled)

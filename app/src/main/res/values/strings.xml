@@ -136,8 +136,21 @@
     <string name="bubble_mode_idle_last_session_label">Last session</string>
     <string name="bubble_mode_idle_miles_label">Miles</string>
     <string name="bubble_mode_idle_duration_label">Duration</string>
-    <string name="bubble_mode_idle_status_label">Status</string>
-    <string name="bubble_mode_idle_offline_value">Offline</string>
+    <string name="bubble_mode_idle_acceptance_label">Acceptance</string>
+    <string name="bubble_mode_idle_deliveries_label">Deliveries</string>
+    <string name="bubble_mode_idle_no_session">No dashes yet</string>
+    <!-- %1$s is a duration, e.g. "12m" -->
+    <string name="bubble_mode_idle_ended_ago">ended %1$s ago</string>
+    <string name="bubble_mode_idle_gas_content_desc">Gas price</string>
+    <string name="bubble_mode_idle_gas_decrease">Lower gas price</string>
+    <string name="bubble_mode_idle_gas_increase">Raise gas price</string>
+    <string name="bubble_mode_idle_gas_auto">AUTO</string>
+    <string name="bubble_mode_idle_gas_manual">MANUAL</string>
+    <string name="bubble_mode_idle_vehicle_action">Vehicle</string>
+
+    <!-- bubble/StatusBar.kt -->
+    <string name="bubble_status_this_session">THIS SESSION</string>
+    <string name="bubble_status_last_session">LAST SESSION</string>
 
     <!-- setup/wizard/components/WizardBottomBar.kt -->
     <string name="wizard_bottom_bar_back">Back</string>

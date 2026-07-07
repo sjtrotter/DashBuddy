@@ -38,11 +38,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.ui.bubble.cards.FlowCardItem
+import cloud.trotter.dashbuddy.ui.main.MainActivity
+import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,7 +62,9 @@ fun BubbleScreen(
     val focusedRegion by viewModel.focusedRegion.collectAsStateWithLifecycle()
     val sessionMiles by viewModel.sessionMiles.collectAsStateWithLifecycle()
     val sessionEarnings by viewModel.sessionEarnings.collectAsStateWithLifecycle()
-    val lastSessionSummary by viewModel.lastSessionSummary.collectAsStateWithLifecycle()
+    val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
+    val gasPrice by viewModel.gasPrice.collectAsStateWithLifecycle()
+    val isGasPriceAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
     val cardStack by viewModel.cardStack.collectAsStateWithLifecycle()
     var showFullChat by remember { mutableStateOf(false) }
 
@@ -66,6 +72,11 @@ fun BubbleScreen(
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         viewModel.collapse.collect { context.findActivity()?.finish() }
+    }
+
+    // Vehicle just-in-time action (#693): deep-link into the main app's economy/vehicle settings.
+    val onOpenVehicleSettings: () -> Unit = {
+        context.startActivity(MainActivity.routeIntent(context, Screen.EconomySettings.route))
     }
 
     val flow = appState.regions.flow
@@ -102,7 +113,7 @@ fun BubbleScreen(
                             region = focusedRegion,
                             earnings = sessionEarnings,
                             miles = sessionMiles,
-                            lastSessionSummary = lastSessionSummary
+                            lastSession = lastSession
                         )
                     }
                 }
@@ -117,7 +128,12 @@ fun BubbleScreen(
                     cardStack = cardStack,
                     region = focusedRegion,
                     messages = messages,
-                    lastSessionSummary = lastSessionSummary,
+                    lastSession = lastSession,
+                    focusedPlatform = focusedPlatform,
+                    gasPrice = gasPrice,
+                    isGasPriceAuto = isGasPriceAuto,
+                    onSetGasPrice = viewModel::setGasPrice,
+                    onOpenVehicleSettings = onOpenVehicleSettings,
                     onOpenChat = { showFullChat = true },
                     onAccept = { viewModel.acceptOffer() },
                     onDecline = { viewModel.declineOffer() },
@@ -146,7 +162,12 @@ fun DashboardView(
     cardStack: CardStack,
     region: PlatformRegion?,
     messages: List<ChatMessage>,
-    lastSessionSummary: SessionSummary?,
+    lastSession: SessionRecord?,
+    focusedPlatform: Platform?,
+    gasPrice: Float?,
+    isGasPriceAuto: Boolean,
+    onSetGasPrice: (Float) -> Unit,
+    onOpenVehicleSettings: () -> Unit,
     onOpenChat: () -> Unit,
     onAccept: () -> Unit = {},
     onDecline: () -> Unit = {},
@@ -174,7 +195,14 @@ fun DashboardView(
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 ) {
                     Box(modifier = Modifier.padding(16.dp)) {
-                        ModeIdle(lastSessionSummary)
+                        ModeIdle(
+                            session = lastSession,
+                            focusedPlatform = focusedPlatform,
+                            gasPrice = gasPrice,
+                            isGasPriceAuto = isGasPriceAuto,
+                            onSetGasPrice = onSetGasPrice,
+                            onOpenVehicleSettings = onOpenVehicleSettings,
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
