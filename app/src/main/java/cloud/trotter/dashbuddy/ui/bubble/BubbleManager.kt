@@ -94,16 +94,19 @@ class BubbleManager @Inject constructor(
          * the reserved [OFFER_NOTIFICATION_ID] — self-consistent post/cancel, and the sweep id for a
          * stale pre-B4 banner.
          *
-         * Collision posture (documented, accepted for the single-user alpha): `hashCode()` is a
-         * 32-bit space. Two live offers colliding on the same id → one banner replaces the other
-         * (no data loss; the state layer still resolves each tap by carried (platform, offerHash),
-         * B3). Probability ≈ 1/4e9 for two concurrent offers. Ids that would land on the reserved
-         * bubble (1) / offer (2) ids are nudged clear so a hash can never dismiss the wrong surface.
+         * Collision posture (documented, accepted for the single-user alpha): the id is the hash
+         * folded into the **disjoint namespace [2^30, 2^31)** — so it can NEVER land on any app
+         * fixed id (the bubble's 1, the reserved offer 2, the odometer handler's 101, or any
+         * future small constant; an enumerated "nudge" list would silently rot as ids are added —
+         * adversarial-review MED-1). Two live offers colliding within the 30-bit space → one
+         * banner replaces the other (no data loss; the state layer still resolves each tap by
+         * carried (platform, offerHash), B3). Probability ≈ 1/1e9 for two concurrent offers.
+         * The per-offer PendingIntents are released in `cancelOfferNotification` (LOW-1); an
+         * OS-side 90s [OFFER_HEADS_UP_TIMEOUT_MS] self-dismiss backstops any missed cancel.
          */
         fun offerNotificationId(offerHash: String?): Int {
             if (offerHash == null) return OFFER_NOTIFICATION_ID
-            val h = offerHash.hashCode()
-            return if (h == BUBBLE_NOTIFICATION_ID || h == OFFER_NOTIFICATION_ID) h + 2 else h
+            return (offerHash.hashCode() and 0x3FFF_FFFF) or 0x4000_0000
         }
 
         /**
@@ -481,6 +484,25 @@ class BubbleManager @Inject constructor(
      */
     fun cancelOfferNotification(offerHash: String?) {
         notificationManager.cancel(offerNotificationId(offerHash))
+        if (offerHash == null) return
+        // Release the offer's Accept/Decline PendingIntent records (adversarial-review LOW-1):
+        // cancelling a notification does NOT release its PIs, and per-offer URIs would otherwise
+        // accrue two system-server records per offer until process death. The cancel effect
+        // carries only the hash, not the platform the URI path needs — probe every registry
+        // platform with FLAG_NO_CREATE (a handful of lookups; keyed on the registry, no
+        // literals). filterEquals ignores extras, so action + data + component is enough to match.
+        for (platform in Platform.entries) {
+            for (action in listOf(OfferIntent.ACCEPT, OfferIntent.DECLINE)) {
+                val intent = Intent(context, OfferActionReceiver::class.java).apply {
+                    this.action = OfferActionReceiver.ACTION
+                    data = offerActionUri(platform, offerHash, action)
+                }
+                PendingIntent.getBroadcast(
+                    context, 0, intent,
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+                )?.cancel()
+            }
+        }
     }
 
     /**

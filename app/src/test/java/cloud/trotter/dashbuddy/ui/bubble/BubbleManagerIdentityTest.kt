@@ -46,16 +46,22 @@ class BubbleManagerIdentityTest {
     }
 
     @Test
-    fun `an offer id never collides with the reserved bubble or offer ids`() {
-        // Two 2-char strings whose hashCode() (s[0]*31 + s[1]) equals exactly 1 and 2 — the reserved
-        // bubble / offer ids. The helper must nudge them clear so a hash can't dismiss the wrong
-        // surface (the chathead / a legacy banner).
+    fun `an offer id can never equal ANY app fixed id - the disjoint-namespace property`() {
+        // Adversarial-review MED-1: an enumerated "nudge" list (1, 2) missed the odometer's 101 and
+        // would rot as ids are added. The property, not magic values: every derived id lives in
+        // [2^30, 2^31), disjoint from every small fixed constant — including hashes that land
+        // exactly ON a fixed id.
         val hashTo1 = String(charArrayOf(0.toChar(), 1.toChar())) // hashCode == 1
         val hashTo2 = String(charArrayOf(0.toChar(), 2.toChar())) // hashCode == 2
         assertEquals(BubbleManager.BUBBLE_NOTIFICATION_ID, hashTo1.hashCode()) // guard the fixture
         assertEquals(BubbleManager.OFFER_NOTIFICATION_ID, hashTo2.hashCode())
-        assertNotEquals(BubbleManager.BUBBLE_NOTIFICATION_ID, BubbleManager.offerNotificationId(hashTo1))
-        assertNotEquals(BubbleManager.OFFER_NOTIFICATION_ID, BubbleManager.offerNotificationId(hashTo2))
+        for (hash in listOf(hashTo1, hashTo2, "dd-1", "uber-2", "x")) {
+            val id = BubbleManager.offerNotificationId(hash)
+            assertTrue(
+                "derived id $id for '$hash' must sit in the disjoint [2^30, 2^31) namespace",
+                id >= 0x4000_0000,
+            )
+        }
     }
 
     // --- intent identity (data URI) ---
