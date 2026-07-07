@@ -35,4 +35,18 @@ sealed class Screen(val route: String) {
     data object GeneralSettings : Screen("settings/general")
     data object DeveloperSettings : Screen("settings/developer")
     data object PlatformSettings : Screen("settings/platforms")
+
+    companion object {
+        /**
+         * The static routes an external deep link (MainActivity.EXTRA_ROUTE, #693) may target —
+         * the fail-closed allowlist for the exported-activity seam. Parameterized routes
+         * (e.g. [SessionDetail]) are deliberately excluded: deep links carry no args.
+         */
+        val allRoutes: Set<String> = setOf(
+            Dashboard.route, Analytics.route, SettingsHome.route, AboutSettings.route,
+            StrategySettings.route, EvidenceSettings.route, DataExport.route,
+            EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,
+            PlatformSettings.route,
+        )
+    }
 }

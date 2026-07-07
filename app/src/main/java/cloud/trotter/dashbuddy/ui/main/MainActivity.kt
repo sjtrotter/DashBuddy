@@ -35,6 +35,7 @@ import cloud.trotter.dashbuddy.ui.main.analytics.AnalyticsScreen
 import cloud.trotter.dashbuddy.ui.main.analytics.SessionDetailScreen
 import cloud.trotter.dashbuddy.ui.main.dashboard.DashboardScreen
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import timber.log.Timber
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
@@ -63,7 +64,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Consume-once (#693 review F2b): getIntent() is sticky across recreation — without
+        // removing the extra, a rotation re-reads it in the new instance's onCreate and pushes a
+        // duplicate destination onto the restored back stack.
         pendingRoute.value = intent?.getStringExtra(EXTRA_ROUTE)
+        intent?.removeExtra(EXTRA_ROUTE)
 
         setContent {
             DashBuddyTheme {
@@ -73,7 +78,11 @@ class MainActivity : ComponentActivity() {
                 val route by pendingRoute.collectAsStateWithLifecycle()
                 LaunchedEffect(route) {
                     route?.let {
-                        navController.navigate(it)
+                        // #693 review F3: MainActivity is exported (launcher) — a forged extra
+                        // carrying a non-route string would crash navigate() with
+                        // IllegalArgumentException. Fail closed: navigate only to known routes.
+                        if (it in Screen.allRoutes) navController.navigate(it)
+                        else Timber.tag("Main").w("Dropped unknown deep-link route (#693)")
                         pendingRoute.value = null
                     }
                 }
@@ -215,6 +224,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingRoute.value = intent.getStringExtra(EXTRA_ROUTE)
+        intent.removeExtra(EXTRA_ROUTE)
     }
 
     companion object {
@@ -227,7 +237,15 @@ class MainActivity : ComponentActivity() {
          */
         fun routeIntent(context: Context, route: String): Intent =
             Intent(context, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                // SINGLE_TOP (#693 review F2a): without it, standard-launchMode + CLEAR_TOP
+                // DESTROYS an open MainActivity and delivers to a fresh instance's onCreate —
+                // onNewIntent never fires and the user's back stack is lost on every Vehicle tap.
+                // With it, the single-activity app's task-top instance receives onNewIntent live.
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
                 putExtra(EXTRA_ROUTE, route)
             }
     }

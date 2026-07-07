@@ -138,7 +138,7 @@
     <string name="bubble_mode_idle_duration_label">Duration</string>
     <string name="bubble_mode_idle_acceptance_label">Acceptance</string>
     <string name="bubble_mode_idle_deliveries_label">Deliveries</string>
-    <string name="bubble_mode_idle_no_session">No dashes yet</string>
+    <string name="bubble_mode_idle_no_session">No sessions yet</string>
     <!-- %1$s is a duration, e.g. "12m" -->
     <string name="bubble_mode_idle_ended_ago">ended %1$s ago</string>
     <string name="bubble_mode_idle_gas_content_desc">Gas price</string>
