@@ -146,6 +146,10 @@
     <string name="bubble_mode_idle_gas_increase">Raise gas price</string>
     <string name="bubble_mode_idle_gas_auto">AUTO</string>
     <string name="bubble_mode_idle_gas_manual">MANUAL</string>
+    <string name="bubble_mode_idle_gas_refresh">Refresh gas price</string>
+    <string name="bubble_mode_idle_gas_take_control">Set gas price manually</string>
+    <string name="bubble_mode_idle_gas_resume_auto">Resume auto</string>
+    <string name="bubble_mode_idle_gas_refresh_error">Couldn\'t refresh</string>
     <string name="bubble_mode_idle_vehicle_action">Vehicle</string>
 
     <!-- bubble/StatusBar.kt -->

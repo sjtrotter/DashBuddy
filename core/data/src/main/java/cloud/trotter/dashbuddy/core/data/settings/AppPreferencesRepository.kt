@@ -191,6 +191,13 @@ class AppPreferencesRepository @Inject constructor(
      * frozen cost basis.
      */
     suspend fun updateGasPriceManual(price: Float) = dataSource.updateGasPriceManual(price)
+
+    /**
+     * "Resume auto" (#722) — re-enables auto (EIA) fetching AND applies a freshly-fetched price in
+     * one atomic write; the bubble's MANUAL-mode "Resume auto" chip routes here. The inverse of
+     * [updateGasPriceManual]. Frozen-economics invariant (#314): affects only FUTURE evaluations.
+     */
+    suspend fun updateGasPriceAuto(price: Float) = dataSource.updateGasPriceAuto(price)
     suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
     suspend fun setProMode(enabled: Boolean) = dataSource.setProMode(enabled)

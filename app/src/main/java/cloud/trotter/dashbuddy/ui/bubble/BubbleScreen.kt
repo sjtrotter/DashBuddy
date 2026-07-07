@@ -50,6 +50,7 @@ import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +66,7 @@ fun BubbleScreen(
     val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
     val gasPrice by viewModel.gasPrice.collectAsStateWithLifecycle()
     val isGasPriceAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
+    val isGasPriceRefreshing by viewModel.isGasPriceRefreshing.collectAsStateWithLifecycle()
     val cardStack by viewModel.cardStack.collectAsStateWithLifecycle()
     var showFullChat by remember { mutableStateOf(false) }
 
@@ -72,6 +74,19 @@ fun BubbleScreen(
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         viewModel.collapse.collect { context.findActivity()?.finish() }
+    }
+
+    // Transient "couldn't refresh" flash for the gas quick-edit (#722) — a one-shot signal, not
+    // a toast (the worker's WARN already logs the reason, #692 levels). Composable-owned local
+    // state is appropriate here: it's a self-clearing visual flash, not a fact the dasher could be
+    // misled by if lost to a config change.
+    var showGasPriceRefreshError by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        viewModel.gasPriceRefreshFailed.collect {
+            showGasPriceRefreshError = true
+            delay(3_000)
+            showGasPriceRefreshError = false
+        }
     }
 
     // Vehicle just-in-time action (#693): deep-link into the main app's economy/vehicle settings.
@@ -132,7 +147,11 @@ fun BubbleScreen(
                     focusedPlatform = focusedPlatform,
                     gasPrice = gasPrice,
                     isGasPriceAuto = isGasPriceAuto,
+                    isGasPriceRefreshing = isGasPriceRefreshing,
+                    showGasPriceRefreshError = showGasPriceRefreshError,
                     onSetGasPrice = viewModel::setGasPrice,
+                    onRefreshGasPrice = viewModel::refreshGasPrice,
+                    onResumeAutoGasPrice = viewModel::resumeAutoGasPrice,
                     onOpenVehicleSettings = onOpenVehicleSettings,
                     onOpenChat = { showFullChat = true },
                     onAccept = { viewModel.acceptOffer() },
@@ -166,7 +185,11 @@ fun DashboardView(
     focusedPlatform: Platform?,
     gasPrice: Float?,
     isGasPriceAuto: Boolean,
+    isGasPriceRefreshing: Boolean = false,
+    showGasPriceRefreshError: Boolean = false,
     onSetGasPrice: (Float) -> Unit,
+    onRefreshGasPrice: () -> Unit = {},
+    onResumeAutoGasPrice: () -> Unit = {},
     onOpenVehicleSettings: () -> Unit,
     onOpenChat: () -> Unit,
     onAccept: () -> Unit = {},
@@ -200,7 +223,11 @@ fun DashboardView(
                             focusedPlatform = focusedPlatform,
                             gasPrice = gasPrice,
                             isGasPriceAuto = isGasPriceAuto,
+                            isGasPriceRefreshing = isGasPriceRefreshing,
+                            showGasPriceRefreshError = showGasPriceRefreshError,
                             onSetGasPrice = onSetGasPrice,
+                            onRefreshGasPrice = onRefreshGasPrice,
+                            onResumeAutoGasPrice = onResumeAutoGasPrice,
                             onOpenVehicleSettings = onOpenVehicleSettings,
                         )
                     }

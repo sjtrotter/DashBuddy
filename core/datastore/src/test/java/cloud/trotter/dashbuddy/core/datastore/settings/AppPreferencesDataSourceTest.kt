@@ -54,4 +54,34 @@ class AppPreferencesDataSourceTest {
         advanceUntilIdle()
         assertEquals(false, source.glanceMode.first())
     }
+
+    // #722 — the bubble's mode-adaptive gas quick-edit write paths.
+
+    @Test
+    fun `updateGasPriceManual writes the price and disables auto in one atomic edit`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val source = newSource(dispatcher, "prefs3.preferences_pb")
+
+        source.updateGasPriceManual(3.29f)
+        advanceUntilIdle()
+
+        assertEquals(3.29f, source.gasPrice.first())
+        assertEquals(false, source.isGasPriceAuto.first())
+    }
+
+    @Test
+    fun `updateGasPriceAuto writes the price and re-enables auto in one atomic edit`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val source = newSource(dispatcher, "prefs4.preferences_pb")
+
+        // Start manual (as the stepper would leave it), then "Resume auto" should flip both back.
+        source.updateGasPriceManual(3.29f)
+        advanceUntilIdle()
+
+        source.updateGasPriceAuto(3.61f)
+        advanceUntilIdle()
+
+        assertEquals(3.61f, source.gasPrice.first())
+        assertEquals(true, source.isGasPriceAuto.first())
+    }
 }

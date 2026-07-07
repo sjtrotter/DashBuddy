@@ -3,10 +3,12 @@ package cloud.trotter.dashbuddy.ui.bubble
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
+import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.Dispatchers
@@ -21,12 +23,14 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -47,6 +51,7 @@ class BubbleViewModelTest {
     private val stateManager: StateManagerV2 = mock()
     private val appEventRepo: AppEventRepo = mock()
     private val appPreferencesRepository: AppPreferencesRepository = mock()
+    private val fuelPriceRepository: FuelPriceRepository = mock()
     private val analyticsRepository: AnalyticsRepository = mock()
 
     private val dispatcher = StandardTestDispatcher()
@@ -62,6 +67,7 @@ class BubbleViewModelTest {
         whenever(appPreferencesRepository.glanceMode).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.gasPrice).thenReturn(flowOf(3.50f))
         whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flowOf(true))
+        whenever(appPreferencesRepository.fuelType).thenReturn(flowOf(FuelType.REGULAR))
     }
 
     @After
@@ -74,6 +80,7 @@ class BubbleViewModelTest {
         stateManager = stateManager,
         appEventRepo = appEventRepo,
         appPreferencesRepository = appPreferencesRepository,
+        fuelPriceRepository = fuelPriceRepository,
         analyticsRepository = analyticsRepository,
     )
 
@@ -133,5 +140,64 @@ class BubbleViewModelTest {
         advanceUntilIdle()
 
         verify(appPreferencesRepository).updateGasPriceManual(eq(3.49f))
+    }
+
+    // --- #722 mode-adaptive gas quick-edit: refresh (AUTO) vs Resume auto (MANUAL) ---
+
+    @Test
+    fun `refreshGasPrice routes through the one fetch path and stays auto`() = runTest {
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
+        whenever(fuelPriceRepository.fetchAndSaveCurrentGasPrice(any())).thenReturn(Result.success(3.60f))
+        val vm = viewModel()
+
+        vm.refreshGasPrice()
+        advanceUntilIdle()
+
+        verify(fuelPriceRepository).fetchAndSaveCurrentGasPrice(eq(FuelType.REGULAR))
+        // The AUTO-mode refresh never calls the manual OR resume-auto write paths — staying auto
+        // is a side effect of NOT touching the auto flag, not an explicit write.
+        verify(appPreferencesRepository, never()).updateGasPriceManual(any())
+        verify(appPreferencesRepository, never()).updateGasPriceAuto(any())
+    }
+
+    @Test
+    fun `refreshGasPrice resets the loading flag once the fetch completes`() = runTest {
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
+        whenever(fuelPriceRepository.fetchAndSaveCurrentGasPrice(any())).thenReturn(Result.success(3.60f))
+        val vm = viewModel()
+
+        assertFalse(vm.isGasPriceRefreshing.value)
+        vm.refreshGasPrice()
+        advanceUntilIdle()
+        assertFalse(vm.isGasPriceRefreshing.value)
+    }
+
+    @Test
+    fun `refreshGasPrice failure signals a transient error, no exception propagates`() = runTest {
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
+        whenever(fuelPriceRepository.fetchAndSaveCurrentGasPrice(any()))
+            .thenReturn(Result.failure(IllegalStateException("Location not available")))
+        val vm = viewModel()
+
+        val job = launch { vm.gasPriceRefreshFailed.collect {} }
+        vm.refreshGasPrice()
+        advanceUntilIdle()
+
+        assertFalse(vm.isGasPriceRefreshing.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `resumeAutoGasPrice routes through fetchAndResumeAutoGasPrice, the atomic auto-flip inverse`() = runTest {
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
+        whenever(fuelPriceRepository.fetchAndResumeAutoGasPrice(any())).thenReturn(Result.success(3.55f))
+        val vm = viewModel()
+
+        vm.resumeAutoGasPrice()
+        advanceUntilIdle()
+
+        verify(fuelPriceRepository).fetchAndResumeAutoGasPrice(eq(FuelType.REGULAR))
+        // Resume-auto never routes through the manual (stepper) write path.
+        verify(appPreferencesRepository, never()).updateGasPriceManual(any())
     }
 }

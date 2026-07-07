@@ -15,23 +15,21 @@ class FuelPriceRepository @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository
 ) {
     suspend fun fetchAndSaveCurrentGasPrice(fuelType: FuelType): Result<Float> {
-        return try {
-            // Note: Make sure to add `suspend fun getLastKnownLocation(): Location?` to your LocationDataSource interface!
-            val userLocation = locationDataSource.getUserLocation() ?: return Result.failure(
-                IllegalStateException("Location not available")
-            )
-            val priceResult = gasDataSource.getFuelPrice(userLocation, fuelType)
+        val priceResult = fetchCurrentGasPrice(fuelType)
+        priceResult.onSuccess { newPrice -> appPreferencesRepository.updateGasPrice(newPrice) }
+        return priceResult
+    }
 
-            if (priceResult.isSuccess) {
-                val newPrice = priceResult.getOrThrow()
-                appPreferencesRepository.updateGasPrice(newPrice)
-            }
-
-            priceResult
-        } catch (e: Exception) {
-            Timber.Forest.e(e, "GasPriceRepository failed to update price")
-            Result.failure(e)
-        }
+    /**
+     * "Resume auto" (#722) — the bubble's MANUAL-mode chip. Routes through the SAME fetch as
+     * [fetchAndSaveCurrentGasPrice] (no second fetch path); only the save differs — it re-enables
+     * auto atomically with the fetched price via [AppPreferencesRepository.updateGasPriceAuto],
+     * the inverse of the stepper's [AppPreferencesRepository.updateGasPriceManual] flip.
+     */
+    suspend fun fetchAndResumeAutoGasPrice(fuelType: FuelType): Result<Float> {
+        val priceResult = fetchCurrentGasPrice(fuelType)
+        priceResult.onSuccess { newPrice -> appPreferencesRepository.updateGasPriceAuto(newPrice) }
+        return priceResult
     }
 
     suspend fun fetchGasPriceOnly(fuelType: FuelType): Result<Float> {
@@ -40,6 +38,20 @@ class FuelPriceRepository @Inject constructor(
             gasDataSource.getFuelPrice(userLocation, fuelType)
         } catch (e: Exception) {
             Timber.Forest.e(e, "GasPriceRepository failed to fetch price only")
+            Result.failure(e)
+        }
+    }
+
+    /** The one EIA fetch path both save variants above route through — SSOT (#722). */
+    private suspend fun fetchCurrentGasPrice(fuelType: FuelType): Result<Float> {
+        return try {
+            // Note: Make sure to add `suspend fun getLastKnownLocation(): Location?` to your LocationDataSource interface!
+            val userLocation = locationDataSource.getUserLocation() ?: return Result.failure(
+                IllegalStateException("Location not available")
+            )
+            gasDataSource.getFuelPrice(userLocation, fuelType)
+        } catch (e: Exception) {
+            Timber.Forest.e(e, "GasPriceRepository failed to update price")
             Result.failure(e)
         }
     }
