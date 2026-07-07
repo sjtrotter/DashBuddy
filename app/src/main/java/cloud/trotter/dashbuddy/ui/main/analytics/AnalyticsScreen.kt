@@ -21,10 +21,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
@@ -52,15 +54,21 @@ fun AnalyticsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Analytics") },
+                title = { Text(stringResource(R.string.analytics_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = onExportCsv) {
-                        Icon(Icons.Default.FileDownload, contentDescription = "Export data (CSV)")
+                        Icon(
+                            Icons.Default.FileDownload,
+                            contentDescription = stringResource(R.string.analytics_screen_content_desc_export_csv),
+                        )
                     }
                 },
             )
@@ -126,11 +134,12 @@ fun AnalyticsScreen(
 /** The review windows offered by the Money period selector, in display order. */
 private data class PeriodOption(val period: AnalyticsPeriod, val label: String)
 
-private val PERIOD_OPTIONS = listOf(
-    PeriodOption(AnalyticsPeriod.TODAY, "Today"),
-    PeriodOption(AnalyticsPeriod.THIS_WEEK, "Week"),
-    PeriodOption(AnalyticsPeriod.THIS_MONTH, "Month"),
-    PeriodOption(AnalyticsPeriod.LIFETIME, "Lifetime"),
+@Composable
+private fun periodOptions(): List<PeriodOption> = listOf(
+    PeriodOption(AnalyticsPeriod.TODAY, stringResource(R.string.common_period_today)),
+    PeriodOption(AnalyticsPeriod.THIS_WEEK, stringResource(R.string.common_period_week)),
+    PeriodOption(AnalyticsPeriod.THIS_MONTH, stringResource(R.string.common_period_month)),
+    PeriodOption(AnalyticsPeriod.LIFETIME, stringResource(R.string.common_period_lifetime)),
 )
 
 @Composable
@@ -138,12 +147,13 @@ private fun PeriodSelector(
     selectedPeriod: AnalyticsPeriod,
     onSelectPeriod: (AnalyticsPeriod) -> Unit,
 ) {
-    val selectedLabel = PERIOD_OPTIONS.first { it.period == selectedPeriod }.label
+    val periodOptions = periodOptions()
+    val selectedLabel = periodOptions.first { it.period == selectedPeriod }.label
     AppSegmented(
-        options = PERIOD_OPTIONS.map { it.label },
+        options = periodOptions.map { it.label },
         selected = selectedLabel,
         onSelect = { label ->
-            PERIOD_OPTIONS.firstOrNull { it.label == label }?.let { onSelectPeriod(it.period) }
+            periodOptions.firstOrNull { it.label == label }?.let { onSelectPeriod(it.period) }
         },
         modifier = Modifier.fillMaxWidth(),
     )
@@ -153,13 +163,13 @@ private fun PeriodSelector(
 private fun ComingSoonCard(tab: AnalyticsTab) {
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "${tab.label} — coming soon",
+            text = stringResource(R.string.analytics_screen_coming_soon_title, tab.label),
             style = MaterialTheme.typography.titleMedium,
             color = AppTheme.colors.text,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "This tab lands in a later Analytics phase.",
+            text = stringResource(R.string.analytics_screen_coming_soon_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = AppTheme.colors.text3,
         )

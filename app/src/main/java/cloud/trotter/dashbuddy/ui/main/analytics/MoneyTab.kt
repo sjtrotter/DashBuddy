@@ -21,8 +21,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppBar
 import cloud.trotter.dashbuddy.core.designsystem.component.AppBarChart
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCallout
@@ -68,8 +70,7 @@ fun MoneyTab(
         StatTiles(economics)
         if (economics.unattributedPay > UNATTRIBUTED_EPSILON) {
             AppCallout(
-                text = "${Formats.money(economics.unattributedPay)} not attributed to any " +
-                    "delivery — bonuses/adjustments; review coming (#650)",
+                text = stringResource(R.string.money_tab_unattributed_callout_format, Formats.money(economics.unattributedPay)),
                 container = AppTheme.colors.warnBg,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -86,18 +87,18 @@ private fun EarningsHero(economics: PeriodEconomics) {
     val c = AppTheme.colors
     val netColor = if (economics.netProfit >= 0.0) c.good else c.bad
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "GROSS EARNINGS", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.money_tab_gross_earnings_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(4.dp))
         Text(text = Formats.money(economics.grossEarnings), style = AppTheme.num.heroNum, color = c.text)
         Spacer(Modifier.height(10.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AppChip(
-                text = "True net ${Formats.money(economics.netProfit)}",
+                text = stringResource(R.string.money_tab_true_net_chip_format, Formats.money(economics.netProfit)),
                 color = netColor,
                 container = if (economics.netProfit >= 0.0) c.goodBg else c.badBg,
             )
             AppChip(
-                text = "Net/hr ${economics.netPerHour?.let { Formats.money(it) } ?: EMPTY_VALUE}",
+                text = stringResource(R.string.money_tab_net_per_hour_chip_format, economics.netPerHour?.let { Formats.money(it) } ?: EMPTY_VALUE),
                 color = c.accent,
                 container = c.accentDim,
             )
@@ -114,10 +115,10 @@ private fun EarningsHero(economics: PeriodEconomics) {
 private fun EarningsByDayCard(days: List<DailyEarnings>) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "EARNINGS BY DAY", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.money_tab_earnings_by_day_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (days.all { it.gross <= 0.0 }) {
-            EmptyRow("No earnings in this period yet.")
+            EmptyRow(stringResource(R.string.money_tab_no_earnings_yet))
         } else {
             // Highlight the first day that hit the period's peak gross (only when someone earned).
             val bestDay = days.maxByOrNull { it.gross }?.takeIf { it.gross > 0.0 }?.date
@@ -132,7 +133,7 @@ private fun EarningsByDayCard(days: List<DailyEarnings>) {
             AppBarChart(bars = bars, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "gross per day · dashes count on their start day",
+                text = stringResource(R.string.money_tab_earnings_by_day_caption),
                 style = MaterialTheme.typography.bodySmall,
                 color = c.text3,
             )
@@ -224,7 +225,7 @@ private fun TrueNetWaterfall(economics: PeriodEconomics) {
     val scale = (listOf(0.0) + steps.map { it.amount }).max().takeIf { it > 0.0 } ?: 1.0
 
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "TRUE NET", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.money_tab_true_net_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         steps.forEachIndexed { index, step ->
             if (index > 0) Spacer(Modifier.height(8.dp))
@@ -279,24 +280,24 @@ private fun StatTiles(economics: PeriodEconomics) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppStatTile(
-                label = "Net/hr",
+                label = stringResource(R.string.money_tab_stat_net_per_hour),
                 value = economics.netPerHour?.let { Formats.money(it) } ?: EMPTY_VALUE,
                 modifier = Modifier.weight(1f),
             )
             AppStatTile(
-                label = "Net/mi",
+                label = stringResource(R.string.money_tab_stat_net_per_mile),
                 value = economics.netPerMile?.let { Formats.money(it) } ?: EMPTY_VALUE,
                 modifier = Modifier.weight(1f),
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppStatTile(
-                label = "Miles",
+                label = stringResource(R.string.money_tab_stat_miles),
                 value = Formats.decimal(economics.totals.miles),
                 modifier = Modifier.weight(1f),
             )
             AppStatTile(
-                label = "Deliveries",
+                label = stringResource(R.string.money_tab_stat_deliveries),
                 value = Formats.commaInt(economics.totals.deliveries),
                 modifier = Modifier.weight(1f),
             )
@@ -309,23 +310,24 @@ private fun StatTiles(economics: PeriodEconomics) {
 private fun TopStoresCard(stores: List<StoreEconomics>) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "TOP STORES", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.money_tab_top_stores_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (stores.isEmpty()) {
-            EmptyRow("No store earnings in this period yet.")
+            EmptyRow(stringResource(R.string.money_tab_no_store_earnings_yet))
         } else {
             stores.forEachIndexed { index, store ->
                 if (index > 0) Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = store.storeName ?: "Unknown store",
+                            text = store.storeName ?: stringResource(R.string.money_tab_unknown_store),
                             style = MaterialTheme.typography.bodyMedium,
                             color = c.text,
                         )
                         Text(
                             text = "${Formats.commaInt(store.deliveries)} " +
-                                if (store.deliveries == 1) "delivery" else "deliveries",
+                                if (store.deliveries == 1) stringResource(R.string.time_tab_delivery_singular)
+                                else stringResource(R.string.time_tab_delivery_plural),
                             style = MaterialTheme.typography.bodySmall,
                             color = c.text3,
                         )
@@ -353,10 +355,10 @@ private fun TopStoresCard(stores: List<StoreEconomics>) {
 private fun RecentDashesCard(sessions: List<SessionRecord>, onOpenSession: (String) -> Unit) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "RECENT DASHES", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.money_tab_recent_sessions_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (sessions.isEmpty()) {
-            EmptyRow("No dashes recorded yet.")
+            EmptyRow(stringResource(R.string.money_tab_no_sessions_recorded_yet))
         } else {
             sessions.forEachIndexed { index, session ->
                 if (index > 0) Spacer(Modifier.height(10.dp))
@@ -374,7 +376,8 @@ private fun RecentDashesCard(sessions: List<SessionRecord>, onOpenSession: (Stri
                         )
                         Text(
                             text = "${Formats.commaInt(session.deliveries)} " +
-                                if (session.deliveries == 1) "delivery" else "deliveries",
+                                if (session.deliveries == 1) stringResource(R.string.time_tab_delivery_singular)
+                                else stringResource(R.string.time_tab_delivery_plural),
                             style = MaterialTheme.typography.bodySmall,
                             color = c.text3,
                         )
@@ -391,7 +394,7 @@ private fun RecentDashesCard(sessions: List<SessionRecord>, onOpenSession: (Stri
                         // Additive-only cash marker (#688 F7) — never folded into the reported number.
                         if (session.cashTips > UNATTRIBUTED_EPSILON) {
                             Text(
-                                text = "+${Formats.money(session.cashTips)} cash",
+                                text = stringResource(R.string.money_tab_cash_marker_format, Formats.money(session.cashTips)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.good,
                             )

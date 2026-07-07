@@ -32,10 +32,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.EconomyCostsCard
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.cards.GasPriceCard
@@ -72,6 +74,17 @@ fun WizardScreen(
     // Skip writes nothing (#347).
     var skippedSetup by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Pre-fetch string resources OUTSIDE the pager's plain (non-@Composable) formatter lambdas.
+    val shoppingItemsFormat = stringResource(R.string.wizard_screen_shopping_value_format)
+    val hourlyValueFormat = stringResource(R.string.wizard_screen_hourly_value_format)
+    val distanceValueFormat = stringResource(R.string.wizard_screen_distance_value_format)
+    val minPayoutFooterAuto = stringResource(R.string.wizard_screen_min_payout_footer_auto)
+    val minPayoutFooterFlag = stringResource(R.string.wizard_screen_min_payout_footer_flag)
+    val hourlyFooterAuto = stringResource(R.string.wizard_screen_hourly_footer_auto)
+    val hourlyFooterFlag = stringResource(R.string.wizard_screen_hourly_footer_flag)
+    val distanceFooterAuto = stringResource(R.string.wizard_screen_distance_footer_auto)
+    val distanceFooterFlag = stringResource(R.string.wizard_screen_distance_footer_flag)
 
     Scaffold(
         topBar = {
@@ -167,12 +180,12 @@ fun WizardScreen(
                     WizardStep.GOAL -> {
                         SelectionCard(
                             step = currentStep,
-                            option1Title = "Cherry Picker",
-                            option1Desc = "Maximize profit. Auto-decline unprofitable offers.",
-                            option2Title = "Protect Platinum",
-                            option2Desc = "Maintain high acceptance rate. Do not auto-decline anything.",
-                            option3Title = "Manual Mode",
-                            option3Desc = "Just show me the math. I will make my own decisions.",
+                            option1Title = stringResource(R.string.wizard_screen_goal_option1_title),
+                            option1Desc = stringResource(R.string.wizard_screen_goal_option1_desc),
+                            option2Title = stringResource(R.string.wizard_screen_goal_option2_title),
+                            option2Desc = stringResource(R.string.wizard_screen_goal_option2_desc),
+                            option3Title = stringResource(R.string.wizard_screen_goal_option3_title),
+                            option3Desc = stringResource(R.string.wizard_screen_goal_option3_desc),
                             selectedIndex = when (state.strategy) {
                                 OfferStrategy.CHERRY_PICKER -> 0
                                 OfferStrategy.PROTECT_PLATINUM -> 1
@@ -193,9 +206,9 @@ fun WizardScreen(
                     WizardStep.SHOPPING -> {
                         MetricSliderCard(
                             step = currentStep, value = state.maxItems, valueRange = 1f..100f,
-                            valueFormatter = { "${Formats.decimal(it.toDouble(), 0)} items" },
+                            valueFormatter = { shoppingItemsFormat.format(Formats.decimal(it.toDouble(), 0)) },
                             onValueChange = viewModel::updateMaxItems,
-                            footerText = "We'll use this to score shopping offers on the HUD."
+                            footerText = stringResource(R.string.wizard_screen_shopping_footer)
                         )
                     }
 
@@ -204,25 +217,25 @@ fun WizardScreen(
                             step = currentStep, value = state.minPayout, valueRange = 2f..20f,
                             valueFormatter = { Formats.money(it.toDouble()) },
                             onValueChange = viewModel::updateMinPayout,
-                            footerText = if (isCherryPicker) "We will auto-decline offers below this amount." else "We will flag offers below this amount in red."
+                            footerText = if (isCherryPicker) minPayoutFooterAuto else minPayoutFooterFlag
                         )
                     }
 
                     WizardStep.TARGET_HOURLY -> {
                         MetricSliderCard(
                             step = currentStep, value = state.targetHourly, valueRange = 10f..40f,
-                            valueFormatter = { "${Formats.money0(it.toDouble())} / hr" },
+                            valueFormatter = { hourlyValueFormat.format(Formats.money0(it.toDouble())) },
                             onValueChange = viewModel::updateTargetHourly,
-                            footerText = if (isCherryPicker) "We will auto-decline offers below this rate." else "We will flag offers below this rate in red."
+                            footerText = if (isCherryPicker) hourlyFooterAuto else hourlyFooterFlag
                         )
                     }
 
                     WizardStep.MAX_DISTANCE -> {
                         MetricSliderCard(
                             step = currentStep, value = state.maxDistance, valueRange = 1f..25f,
-                            valueFormatter = { "${Formats.decimal(it.toDouble())} mi" },
+                            valueFormatter = { distanceValueFormat.format(Formats.decimal(it.toDouble())) },
                             onValueChange = viewModel::updateMaxDistance,
-                            footerText = if (isCherryPicker) "We will auto-decline offers exceeding this distance." else "We will flag offers exceeding this distance in red."
+                            footerText = if (isCherryPicker) distanceFooterAuto else distanceFooterFlag
                         )
                     }
                 }
@@ -250,14 +263,14 @@ fun WizardScreen(
                 ) {
                     Icon(
                         Icons.Default.Check,
-                        contentDescription = "Success",
+                        contentDescription = stringResource(R.string.wizard_screen_content_desc_success),
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    "You're all set!",
+                    stringResource(R.string.wizard_screen_all_set_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -265,9 +278,9 @@ fun WizardScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     if (skippedSetup) {
-                        "Setup skipped — nothing was changed. You can run the wizard anytime from the Settings menu."
+                        stringResource(R.string.wizard_screen_skipped_desc)
                     } else {
-                        "Your setup is complete. Remember, you can always tweak these targets, change your vehicle, or adjust your automation strategy later in the Settings menu."
+                        stringResource(R.string.wizard_screen_completed_desc)
                     },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -290,7 +303,7 @@ fun WizardScreen(
                         .fillMaxWidth()
                         .height(56.dp)
                 ) {
-                    Text("Let's Go Dash", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.wizard_screen_lets_go), style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }

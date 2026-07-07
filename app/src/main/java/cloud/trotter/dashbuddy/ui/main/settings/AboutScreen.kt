@@ -30,10 +30,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.BuildConfig
+import cloud.trotter.dashbuddy.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +46,8 @@ fun AboutScreen(
     val clicks by viewModel.versionClickCount.collectAsStateWithLifecycle()
     val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsStateWithLifecycle(initialValue = false)
     val context = LocalContext.current
+    val devModeCountdownTemplate = stringResource(R.string.about_screen_dev_mode_countdown)
+    val devModeEnabledText = stringResource(R.string.about_screen_dev_mode_enabled)
 
     // Hold a reference to the toast so we can cancel it instantly on rapid clicks
     var currentToast by remember { mutableStateOf<Toast?>(null) }
@@ -53,13 +57,13 @@ fun AboutScreen(
             currentToast?.cancel()
             currentToast = Toast.makeText(
                 context,
-                "You are ${7 - clicks} steps away from being a developer.",
+                devModeCountdownTemplate.format(7 - clicks),
                 Toast.LENGTH_SHORT
             )
             currentToast?.show()
         } else if (clicks == 7 && !isDevUnlocked) {
             currentToast?.cancel()
-            currentToast = Toast.makeText(context, "Developer Mode Enabled!", Toast.LENGTH_LONG)
+            currentToast = Toast.makeText(context, devModeEnabledText, Toast.LENGTH_LONG)
             currentToast?.show()
             viewModel.unlockDeveloperMode()
         }
@@ -68,10 +72,13 @@ fun AboutScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About") },
+                title = { Text(stringResource(R.string.about_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 }
             )
@@ -86,7 +93,7 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(48.dp))
 
             Text(
-                text = "DashBuddy",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.primary
@@ -103,11 +110,11 @@ fun AboutScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Version ${BuildConfig.VERSION_NAME}",
+                    text = stringResource(R.string.about_screen_version_format, BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    text = "Build ${BuildConfig.VERSION_CODE}",
+                    text = stringResource(R.string.about_screen_build_format, BuildConfig.VERSION_CODE.toString()),
                     style = MaterialTheme.typography.bodySmall,
                     color = AppTheme.colors.text3
                 )
@@ -118,17 +125,17 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "Developer",
+                text = stringResource(R.string.about_screen_developer_label),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Trotter Cloud Solutions", // Update with your actual info
+                text = stringResource(R.string.about_screen_developer_name),
                 style = MaterialTheme.typography.bodyLarge
             )
             Text(
-                text = "support@dashbuddy.app",
+                text = stringResource(R.string.about_screen_developer_email),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

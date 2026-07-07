@@ -206,7 +206,7 @@ class BubbleManager @Inject constructor(
         val channel = NotificationChannel(
             channelId, "DashBuddy Stream", NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Live updates from your Dash"
+            description = "Live updates from your session"
             setAllowBubbles(true)
         }
         notificationManager.createNotificationChannel(channel)
@@ -291,7 +291,7 @@ class BubbleManager @Inject constructor(
         )
 
         val style = NotificationCompat.MessagingStyle(senderPerson)
-            .setConversationTitle("Current Dash")
+            .setConversationTitle("Current Session")
             .setGroupConversation(true)
             .addMessage(text, System.currentTimeMillis(), senderPerson)
 

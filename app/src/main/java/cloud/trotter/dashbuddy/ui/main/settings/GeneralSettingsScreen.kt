@@ -14,9 +14,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cloud.trotter.dashbuddy.R
 
 /**
  * General app settings. Currently just the driving / glance-mode toggle (#318); Theme and
@@ -33,10 +35,13 @@ fun GeneralSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("General") },
+                title = { Text(stringResource(R.string.general_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 }
             )
@@ -44,14 +49,14 @@ fun GeneralSettingsScreen(
     ) { padding ->
         Column(Modifier.padding(padding).padding(horizontal = 16.dp)) {
             Text(
-                "Driving",
+                stringResource(R.string.general_settings_section_driving),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
             )
             SwitchRow(
-                label = "Driving glance mode",
-                subtitle = "Larger HUD text while dashing",
+                label = stringResource(R.string.general_settings_glance_mode_label),
+                subtitle = stringResource(R.string.general_settings_glance_mode_subtitle),
                 checked = glanceMode,
                 onCheckedChange = { viewModel.setGlanceMode(it) }
             )

@@ -19,6 +19,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -39,6 +40,7 @@ import cloud.trotter.dashbuddy.ui.main.settings.SettingsHomeScreen
 import cloud.trotter.dashbuddy.ui.main.settings.StrategySettingsScreen
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.WizardScreen
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
+import cloud.trotter.dashbuddy.R
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -167,7 +169,7 @@ class MainActivity : ComponentActivity() {
                         // 5. Developer Options
                         composable(Screen.DeveloperSettings.route) {
                             PlaceholderScreen(
-                                title = "Developer Options",
+                                title = stringResource(R.string.main_activity_developer_options_title),
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -198,7 +200,10 @@ fun PlaceholderScreen(title: String, onBack: () -> Unit) {
                 title = { Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 }
             )
@@ -211,7 +216,7 @@ fun PlaceholderScreen(title: String, onBack: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Construction Area 🚧\nComing Soon",
+                text = stringResource(R.string.main_activity_placeholder_construction),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.secondary
             )

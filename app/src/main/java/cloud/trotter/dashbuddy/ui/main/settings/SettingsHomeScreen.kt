@@ -35,9 +35,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.domain.format.Formats
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,7 +64,7 @@ fun SettingsHomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Settings",
+                        stringResource(R.string.settings_home_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -79,11 +81,11 @@ fun SettingsHomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Section 0: Monitoring
-            SettingsGroup(title = "Monitoring") {
+            SettingsGroup(title = stringResource(R.string.settings_home_group_monitoring)) {
                 SettingsNavItem(
                     icon = Icons.Default.Apps,
-                    title = "Gig Apps",
-                    subtitle = "Choose which apps to monitor",
+                    title = stringResource(R.string.settings_home_item_gig_apps_title),
+                    subtitle = stringResource(R.string.settings_home_item_gig_apps_subtitle),
                     onClick = { onNavigate(Screen.PlatformSettings.route) }
                 )
             }
@@ -91,11 +93,11 @@ fun SettingsHomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Section 1: The Brain
-            SettingsGroup(title = "Automation & Intelligence") {
+            SettingsGroup(title = stringResource(R.string.settings_home_group_automation)) {
                 SettingsNavItem(
                     icon = Icons.Default.Tune,
-                    title = "Strategy Config",
-                    subtitle = "Rules, Pricing, and Simulation",
+                    title = stringResource(R.string.settings_home_item_strategy_title),
+                    subtitle = stringResource(R.string.settings_home_item_strategy_subtitle),
                     onClick = { onNavigate(Screen.StrategySettings.route) }
                 )
                 val eco = userEconomy
@@ -103,14 +105,14 @@ fun SettingsHomeScreen(
                     val costPerMi = eco.operatingCostPerMile
                     val defaultsCount = cloud.trotter.dashbuddy.domain.evaluation.EconomyField.entries.size -
                         eco.userSetFields.size
-                    "True cost: ${Formats.money(costPerMi)}/mi" +
-                        if (defaultsCount > 0) " · $defaultsCount defaults" else ""
+                    stringResource(R.string.settings_home_economy_true_cost_format, Formats.money(costPerMi)) +
+                        if (defaultsCount > 0) stringResource(R.string.settings_home_economy_defaults_suffix_format, defaultsCount) else ""
                 } else {
-                    "Tires, oil, depreciation, insurance, phone"
+                    stringResource(R.string.settings_home_economy_fallback_subtitle)
                 }
                 SettingsNavItem(
                     icon = Icons.Default.AttachMoney,
-                    title = "Personal Economy",
+                    title = stringResource(R.string.settings_home_item_economy_title),
                     subtitle = ecoSubtitle,
                     onClick = { onNavigate(Screen.EconomySettings.route) }
                 )
@@ -119,17 +121,17 @@ fun SettingsHomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Section 2: Data
-            SettingsGroup(title = "Data & Privacy") {
+            SettingsGroup(title = stringResource(R.string.settings_home_group_data_privacy)) {
                 SettingsNavItem(
                     icon = Icons.Default.Folder,
-                    title = "Evidence Locker",
-                    subtitle = "Manage screenshots and logs",
+                    title = stringResource(R.string.settings_home_item_evidence_title),
+                    subtitle = stringResource(R.string.settings_home_item_evidence_subtitle),
                     onClick = { onNavigate(Screen.EvidenceSettings.route) }
                 )
                 SettingsNavItem(
                     icon = Icons.Default.FileDownload,
-                    title = "Export Data (CSV)",
-                    subtitle = "Mileage & earnings for a spreadsheet or tax prep",
+                    title = stringResource(R.string.settings_home_item_export_title),
+                    subtitle = stringResource(R.string.settings_home_item_export_subtitle),
                     onClick = { onNavigate(Screen.DataExport.route) }
                 )
             }
@@ -137,25 +139,25 @@ fun SettingsHomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Section 3: General
-            SettingsGroup(title = "App System") {
+            SettingsGroup(title = stringResource(R.string.settings_home_group_app_system)) {
                 SettingsNavItem(
                     icon = Icons.Default.Settings,
-                    title = "General",
-                    subtitle = "Theme, Pro Mode, and Defaults",
+                    title = stringResource(R.string.settings_home_item_general_title),
+                    subtitle = stringResource(R.string.settings_home_item_general_subtitle),
                     onClick = { onNavigate(Screen.GeneralSettings.route) }
                 )
 
                 SettingsNavItem(
                     icon = Icons.Default.RocketLaunch,
-                    title = "Re-run Setup Wizard",
-                    subtitle = "Adjust vehicle and base targets",
+                    title = stringResource(R.string.settings_home_item_rerun_wizard_title),
+                    subtitle = stringResource(R.string.settings_home_item_rerun_wizard_subtitle),
                     onClick = { onNavigate(Screen.Wizard.route) }
                 )
 
                 SettingsNavItem(
                     icon = Icons.Default.Info,
-                    title = "About",
-                    subtitle = "Version, Support, and Developer info",
+                    title = stringResource(R.string.settings_home_item_about_title),
+                    subtitle = stringResource(R.string.settings_home_item_about_subtitle),
                     onClick = { onNavigate(Screen.AboutSettings.route) }
                 )
             }
@@ -167,11 +169,11 @@ fun SettingsHomeScreen(
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(16.dp))
-                    SettingsGroup(title = "Developer Options") {
+                    SettingsGroup(title = stringResource(R.string.main_activity_developer_options_title)) {
                         SettingsNavItem(
                             icon = Icons.Default.BugReport,
-                            title = "Debug Menu",
-                            subtitle = "Log levels & Snapshot whitelist",
+                            title = stringResource(R.string.settings_home_item_debug_menu_title),
+                            subtitle = stringResource(R.string.settings_home_item_debug_menu_subtitle),
                             onClick = { onNavigate(Screen.DeveloperSettings.route) }
                         )
                     }

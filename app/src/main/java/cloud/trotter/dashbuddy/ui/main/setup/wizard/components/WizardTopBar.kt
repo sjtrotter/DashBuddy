@@ -14,7 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 
 @Composable
 fun WizardTopBar(
@@ -39,12 +41,12 @@ fun WizardTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Step ${currentStep + 1} of $totalSteps",
+                text = stringResource(R.string.wizard_top_bar_step_of_total, currentStep + 1, totalSteps),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )
             TextButton(onClick = onSkip) {
-                Text("Skip Setup")
+                Text(stringResource(R.string.wizard_top_bar_skip_setup))
             }
         }
         LinearProgressIndicator(

@@ -160,13 +160,13 @@ class DashboardViewModelTest {
         assertEquals("Looking for offers...", onlineVm.uiState.value.statusText)
         onlineJob.cancel()
 
-        // Offline → not dashing + "ready to dash".
+        // Offline → not dashing + "ready to start a session".
         whenever(stateManager.state).thenReturn(MutableStateFlow(offlineState()))
         val offlineVm = buildViewModel()
         val offlineJob = launch { offlineVm.uiState.collect {} }
         testScheduler.advanceUntilIdle()
         assertFalse(offlineVm.uiState.value.isDashing)
-        assertEquals("Ready to Dash", offlineVm.uiState.value.statusText)
+        assertEquals("Ready to start a session", offlineVm.uiState.value.statusText)
         offlineJob.cancel()
     }
 }

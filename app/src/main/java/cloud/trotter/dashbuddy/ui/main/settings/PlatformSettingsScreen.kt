@@ -25,9 +25,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.R
 
 @Composable
 fun PlatformSettingsScreen(
@@ -46,11 +48,14 @@ fun PlatformSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "Gig Apps",
+                        stringResource(R.string.platform_settings_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -75,9 +80,7 @@ fun PlatformSettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Choose which gig apps DashBuddy monitors. " +
-                        "Only apps with full rule support will provide live session tracking. " +
-                        "Other enabled apps will capture data for future updates.",
+                    stringResource(R.string.platform_settings_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 8.dp),
@@ -112,7 +115,8 @@ private fun PlatformRow(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        if (state.isInstalled) "Installed" else "Not installed",
+                        if (state.isInstalled) stringResource(R.string.platform_settings_installed)
+                        else stringResource(R.string.platform_settings_not_installed),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (state.isInstalled) {
                             MaterialTheme.colorScheme.primary

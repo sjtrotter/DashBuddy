@@ -23,8 +23,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
@@ -53,7 +55,7 @@ fun GasPriceCard(
         Spacer(modifier = Modifier.height(32.dp))
 
         Text(
-            text = "What type of fuel do you use?",
+            text = stringResource(R.string.wizard_gas_price_fuel_type_question),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -77,9 +79,9 @@ fun GasPriceCard(
 
         if (fuelType == FuelType.ELECTRICITY) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Manual EV Charging Costs", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.wizard_gas_price_ev_title), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "Because public Superchargers and home charging rates vary wildly, please set your average equivalent 'per-gallon' cost manually.",
+                    text = stringResource(R.string.wizard_gas_price_ev_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -91,9 +93,9 @@ fun GasPriceCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Auto-Update Gas Prices", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.wizard_gas_price_auto_update_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "We'll fetch the regional average for your fuel type daily.",
+                        text = stringResource(R.string.wizard_gas_price_auto_update_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -120,7 +122,7 @@ fun GasPriceCard(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "Current Regional Average",
+                    text = stringResource(R.string.wizard_gas_price_current_regional_average),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

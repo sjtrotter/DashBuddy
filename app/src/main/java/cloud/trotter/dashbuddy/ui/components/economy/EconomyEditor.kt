@@ -15,9 +15,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
@@ -54,15 +56,15 @@ fun EconomyEditor(
 
     // -------- Tires --------
     EconomyAccordionRow(
-        title = "Tires",
-        summary = "${Formats.money3(economy.tireCostPerMile)}/mi",
+        title = stringResource(R.string.economy_editor_tires_title),
+        summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.tireCostPerMile)),
         isUserSet = EconomyField.TIRE_COST in userSet || EconomyField.TIRE_LIFETIME in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
-            costLabel = "Set of 4",
+            costLabel = stringResource(R.string.economy_editor_tires_cost_label),
             costValue = economy.tireSetCost,
             onCostChange = { onTiresChange(it, economy.tireLifetimeMi) },
-            intervalLabel = "Lifetime",
+            intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
             intervalValue = economy.tireLifetimeMi,
             onIntervalChange = { onTiresChange(economy.tireSetCost, it) },
         )
@@ -70,15 +72,15 @@ fun EconomyEditor(
 
     // -------- Oil changes --------
     EconomyAccordionRow(
-        title = "Oil changes",
-        summary = "${Formats.money3(economy.oilCostPerMile)}/mi",
+        title = stringResource(R.string.economy_editor_oil_title),
+        summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.oilCostPerMile)),
         isUserSet = EconomyField.OIL_COST in userSet || EconomyField.OIL_INTERVAL in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
-            costLabel = "Each",
+            costLabel = stringResource(R.string.economy_editor_each_label),
             costValue = economy.oilCost,
             onCostChange = { onOilChange(it, economy.oilIntervalMi) },
-            intervalLabel = "Every",
+            intervalLabel = stringResource(R.string.economy_editor_every_label),
             intervalValue = economy.oilIntervalMi,
             onIntervalChange = { onOilChange(economy.oilCost, it) },
         )
@@ -86,15 +88,15 @@ fun EconomyEditor(
 
     // -------- Brakes --------
     EconomyAccordionRow(
-        title = "Brakes",
-        summary = "${Formats.money3(economy.brakesCostPerMile)}/mi",
+        title = stringResource(R.string.economy_editor_brakes_title),
+        summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.brakesCostPerMile)),
         isUserSet = EconomyField.BRAKES_COST in userSet || EconomyField.BRAKES_INTERVAL in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
-            costLabel = "Each",
+            costLabel = stringResource(R.string.economy_editor_each_label),
             costValue = economy.brakesCost,
             onCostChange = { onBrakesChange(it, economy.brakesIntervalMi) },
-            intervalLabel = "Every",
+            intervalLabel = stringResource(R.string.economy_editor_every_label),
             intervalValue = economy.brakesIntervalMi,
             onIntervalChange = { onBrakesChange(economy.brakesCost, it) },
         )
@@ -102,15 +104,15 @@ fun EconomyEditor(
 
     // -------- Fluids --------
     EconomyAccordionRow(
-        title = "Fluids",
-        summary = "${Formats.money3(economy.fluidsCostPerMile)}/mi",
+        title = stringResource(R.string.economy_editor_fluids_title),
+        summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.fluidsCostPerMile)),
         isUserSet = EconomyField.FLUIDS_COST in userSet || EconomyField.FLUIDS_INTERVAL in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
-            costLabel = "Each",
+            costLabel = stringResource(R.string.economy_editor_each_label),
             costValue = economy.fluidsCost,
             onCostChange = { onFluidsChange(it, economy.fluidsIntervalMi) },
-            intervalLabel = "Every",
+            intervalLabel = stringResource(R.string.economy_editor_every_label),
             intervalValue = economy.fluidsIntervalMi,
             onIntervalChange = { onFluidsChange(economy.fluidsCost, it) },
         )
@@ -118,36 +120,36 @@ fun EconomyEditor(
 
     // -------- Misc repairs --------
     EconomyAccordionRow(
-        title = "Misc repairs",
-        summary = "${Formats.money3(economy.miscCostPerMile)}/mi",
+        title = stringResource(R.string.economy_editor_misc_title),
+        summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.miscCostPerMile)),
         isUserSet = EconomyField.MISC_YEARLY in userSet || EconomyField.MISC_YEARLY_MI in userSet,
     ) {
         PairedCurrencyAndIntervalInput(
-            costLabel = "Yearly budget",
+            costLabel = stringResource(R.string.economy_editor_misc_cost_label),
             costValue = economy.miscYearly,
             onCostChange = { onMiscChange(it, economy.miscYearlyMi) },
-            intervalLabel = "Driving",
+            intervalLabel = stringResource(R.string.economy_editor_misc_interval_label),
             intervalValue = economy.miscYearlyMi,
             onIntervalChange = { onMiscChange(economy.miscYearly, it) },
-            intervalSuffix = "mi/yr",
-            helperText = "Annual catch-all for repairs not in oil/brakes/fluids.",
+            intervalSuffix = stringResource(R.string.economy_editor_misc_interval_suffix),
+            helperText = stringResource(R.string.economy_editor_misc_helper),
         )
     }
 
     // -------- Depreciation --------
     EconomyAccordionRow(
-        title = "Depreciation",
+        title = stringResource(R.string.economy_editor_depreciation_title),
         summary = if (economy.includeDepreciation) {
-            "${Formats.money3(economy.depreciationCostPerMile)}/mi"
+            stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.depreciationCostPerMile))
         } else {
-            "off"
+            stringResource(R.string.economy_editor_depreciation_off)
         },
         isUserSet = EconomyField.INCLUDE_DEPRECIATION in userSet ||
             EconomyField.PURCHASE_PRICE in userSet ||
             EconomyField.TOTAL_LIFETIME_MI in userSet,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Include depreciation", modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.economy_editor_depreciation_include_label), modifier = Modifier.weight(1f))
             Switch(
                 checked = economy.includeDepreciation,
                 onCheckedChange = {
@@ -157,32 +159,31 @@ fun EconomyEditor(
         }
         if (economy.includeDepreciation) {
             PairedCurrencyAndIntervalInput(
-                costLabel = "Purchase price",
+                costLabel = stringResource(R.string.economy_editor_purchase_price_label),
                 costValue = economy.purchasePrice,
                 onCostChange = { onDepreciationChange(true, it, economy.totalLifetimeMi) },
-                intervalLabel = "Lifetime",
+                intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
                 intervalValue = economy.totalLifetimeMi,
                 onIntervalChange = { onDepreciationChange(true, economy.purchasePrice, it) },
-                helperText = "Total expected miles from new to retirement, " +
-                    "e.g. 200,000 for a typical sedan.",
+                helperText = stringResource(R.string.economy_editor_depreciation_helper),
             )
         }
     }
 
     // -------- Insurance --------
     EconomyAccordionRow(
-        title = "Insurance",
-        summary = "${Formats.money3(economy.insuranceCostPerMile)}/mi*",
+        title = stringResource(R.string.economy_editor_insurance_title),
+        summary = stringResource(R.string.economy_editor_per_mile_asterisk_format, Formats.money3(economy.insuranceCostPerMile)),
         isUserSet = EconomyField.INSURANCE_DELTA in userSet,
     ) {
         CurrencyInput(
-            label = "Extra for gig work",
+            label = stringResource(R.string.economy_editor_insurance_label),
             value = economy.insuranceDeltaPerMonth,
             onValueChange = onInsuranceChange,
-            suffix = "/mo",
+            suffix = stringResource(R.string.economy_editor_per_month_suffix),
         )
         Text(
-            text = "Monthly add-on for rideshare/delivery rider above your personal policy.",
+            text = stringResource(R.string.economy_editor_insurance_helper),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -190,19 +191,18 @@ fun EconomyEditor(
 
     // -------- Registration --------
     EconomyAccordionRow(
-        title = "Registration",
-        summary = "${Formats.money3(economy.registrationCostPerMile)}/mi*",
+        title = stringResource(R.string.economy_editor_registration_title),
+        summary = stringResource(R.string.economy_editor_per_mile_asterisk_format, Formats.money3(economy.registrationCostPerMile)),
         isUserSet = EconomyField.REGISTRATION_DELTA in userSet,
     ) {
         CurrencyInput(
-            label = "Commercial delta",
+            label = stringResource(R.string.economy_editor_registration_label),
             value = economy.registrationDeltaPerYear,
             onValueChange = onRegistrationChange,
-            suffix = "/yr",
+            suffix = stringResource(R.string.economy_editor_per_year_suffix),
         )
         Text(
-            text = "Annual fee above your personal registration (commercial " +
-                "registration / inspection / endorsement).",
+            text = stringResource(R.string.economy_editor_registration_helper),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -210,24 +210,24 @@ fun EconomyEditor(
 
     // -------- Phone & data --------
     EconomyAccordionRow(
-        title = "Phone & data",
-        summary = "${Formats.money3(economy.phoneCostPerMile)}/mi*",
+        title = stringResource(R.string.economy_editor_phone_title),
+        summary = stringResource(R.string.economy_editor_per_mile_asterisk_format, Formats.money3(economy.phoneCostPerMile)),
         isUserSet = EconomyField.PHONE_PLAN_TOTAL in userSet ||
             EconomyField.PHONE_PLAN_LINES in userSet ||
             EconomyField.PHONE_BUSINESS_PERCENT in userSet,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CurrencyInput(
-                label = "Plan total",
+                label = stringResource(R.string.economy_editor_phone_plan_total_label),
                 value = economy.phonePlanTotal,
                 onValueChange = {
                     onPhoneChange(it, economy.phonePlanLines, economy.phoneBusinessPercent)
                 },
-                suffix = "/mo",
+                suffix = stringResource(R.string.economy_editor_per_month_suffix),
                 modifier = Modifier.weight(1f),
             )
             IntegerInput(
-                label = "Lines",
+                label = stringResource(R.string.economy_editor_phone_lines_label),
                 value = economy.phonePlanLines,
                 onValueChange = {
                     onPhoneChange(economy.phonePlanTotal, it, economy.phoneBusinessPercent)
@@ -235,7 +235,7 @@ fun EconomyEditor(
                 modifier = Modifier.weight(1f),
             )
         }
-        Text("% for gig work: ${economy.phoneBusinessPercent.toInt()}%")
+        Text(stringResource(R.string.economy_editor_phone_business_percent_format, economy.phoneBusinessPercent.toInt()))
         Slider(
             value = economy.phoneBusinessPercent.toFloat(),
             onValueChange = {
@@ -245,9 +245,12 @@ fun EconomyEditor(
         )
         val perLine = economy.phonePlanTotal / economy.phonePlanLines.coerceAtLeast(1)
         Text(
-            text = "Your line: ${Formats.money(perLine)}/mo" +
-                " × ${economy.phoneBusinessPercent.toInt()}%" +
-                " = ${Formats.money(perLine * economy.phoneBusinessPercent / 100.0)}/mo for gig work",
+            text = stringResource(
+                R.string.economy_editor_phone_per_line_format,
+                Formats.money(perLine),
+                economy.phoneBusinessPercent.toInt(),
+                Formats.money(perLine * economy.phoneBusinessPercent / 100.0),
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -255,12 +258,12 @@ fun EconomyEditor(
 
     // -------- Expected annual gig miles --------
     EconomyAccordionRow(
-        title = "Expected gig miles / yr",
-        summary = "${Formats.commaInt(economy.expectedAnnualMiles.toInt())} mi",
+        title = stringResource(R.string.economy_editor_annual_miles_title),
+        summary = stringResource(R.string.economy_editor_annual_miles_summary_format, Formats.commaInt(economy.expectedAnnualMiles.toInt())),
         isUserSet = EconomyField.EXPECTED_ANNUAL_MI in userSet,
     ) {
         Text(
-            text = "${Formats.commaInt(economy.expectedAnnualMiles.toInt())} miles per year",
+            text = stringResource(R.string.economy_editor_annual_miles_value_format, Formats.commaInt(economy.expectedAnnualMiles.toInt())),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
         )
@@ -271,8 +274,7 @@ fun EconomyEditor(
             steps = 58, // 500-mile increments
         )
         Text(
-            text = "Used to amortize fixed costs (insurance, registration, phone) into " +
-                "a per-mile rate. Bigger number → smaller per-mile share.",
+            text = stringResource(R.string.economy_editor_annual_miles_helper),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -286,7 +288,7 @@ fun VehicleClassPicker(
     onClassChange: (VehicleClass) -> Unit,
 ) {
     Text(
-        text = "Vehicle class",
+        text = stringResource(R.string.economy_editor_vehicle_class_title),
         style = MaterialTheme.typography.titleSmall,
         modifier = Modifier.padding(bottom = 4.dp),
     )
@@ -316,12 +318,12 @@ fun TrueCostFooter(operatingCostPerMile: Double) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Your true cost: ${Formats.money(operatingCostPerMile)}/mi",
+                text = stringResource(R.string.economy_editor_true_cost_format, Formats.money(operatingCostPerMile)),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "IRS standard mileage rate: \$0.67/mi",
+                text = stringResource(R.string.economy_editor_irs_rate_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

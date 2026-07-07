@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">DashBuddy</string>
+    <string name="app_name" translatable="false">DashBuddy</string>
     <string name="this_is_the_bubble">This is the Bubble!</string>
     <string name="log_level">Log Level</string>
     <string name="save_log">Save Log</string>
@@ -63,7 +63,7 @@
 
     <string name="perm_title_location">Background Location</string>
     <string name="perm_pitch_location">DashBuddy tracks your miles while you are dashing so you can calculate your actual profit after gas and wear-and-tear.</string>
-    <string name="perm_hood_location">We only ping your GPS while an active Dash is running. Once you hit \'End Dash\', our Odometer shuts down completely to save your battery and protect your privacy.</string>
+    <string name="perm_hood_location">We only ping your GPS while an active session is running. Once you end the session, our Odometer shuts down completely to save your battery and protect your privacy.</string>
     <string name="perm_action_location">Grant Location</string>
 
     <string name="perm_title_post_notif">Bubble Alerts</string>
@@ -108,4 +108,456 @@
 
     <string name="wizard_title_distance">Max Distance</string>
     <string name="wizard_desc_distance">How many miles are you willing to drive for a single order?</string>
+
+    <!-- ========================================================================= -->
+    <!-- #57 extraction pass — new entries below follow <screen>_<component>_<property>. -->
+    <!-- Pre-existing entries above predate the convention and were left as-is to avoid -->
+    <!-- unrelated churn across their existing call sites (PermissionCard/BottomSheet/Type, -->
+    <!-- WizardPhase/WizardStep). -->
+    <!-- ========================================================================= -->
+
+    <string name="common_content_desc_back">Back</string>
+
+    <string name="common_period_today">Today</string>
+    <string name="common_period_week">Week</string>
+    <string name="common_period_month">Month</string>
+    <string name="common_period_lifetime">Lifetime</string>
+
+    <!-- bubble/BubbleScreen.kt -->
+    <string name="bubble_screen_chat_history_title">Chat History</string>
+    <string name="bubble_screen_content_desc_close_chat">Close chat</string>
+    <string name="bubble_screen_waiting_for_activity">Waiting for activity…</string>
+
+    <!-- bubble/ChatViews.kt -->
+    <string name="bubble_chat_no_messages_yet">No messages yet</string>
+    <string name="bubble_chat_content_desc_open_chat">Open chat</string>
+
+    <!-- bubble/ModeCards.kt -->
+    <string name="bubble_mode_idle_last_session_label">Last session</string>
+    <string name="bubble_mode_idle_miles_label">Miles</string>
+    <string name="bubble_mode_idle_duration_label">Duration</string>
+    <string name="bubble_mode_idle_status_label">Status</string>
+    <string name="bubble_mode_idle_offline_value">Offline</string>
+
+    <!-- setup/wizard/components/WizardBottomBar.kt -->
+    <string name="wizard_bottom_bar_back">Back</string>
+    <string name="wizard_bottom_bar_finish_and_save">Finish &amp; Save</string>
+    <string name="wizard_bottom_bar_next">Next</string>
+
+    <!-- setup/wizard/components/WizardTopBar.kt -->
+    <string name="wizard_top_bar_step_of_total">Step %1$d of %2$d</string>
+    <string name="wizard_top_bar_skip_setup">Skip Setup</string>
+
+    <!-- setup/wizard/cards/MetricSliderCard.kt -->
+    <string name="wizard_metric_slider_default_footer">We\'ll use this to score your offers on the HUD.</string>
+
+    <!-- settings/GeneralSettingsScreen.kt -->
+    <string name="general_settings_title">General</string>
+    <string name="general_settings_section_driving">Driving</string>
+    <string name="general_settings_glance_mode_label">Driving glance mode</string>
+    <string name="general_settings_glance_mode_subtitle">Larger HUD text while on a session</string>
+
+    <!-- components/economy/EconomyAccordionRow.kt -->
+    <string name="economy_accordion_content_desc_collapse">Collapse</string>
+    <string name="economy_accordion_content_desc_expand">Expand</string>
+    <string name="economy_accordion_default_hint">(default)</string>
+
+    <!-- settings/EconomySettingsScreen.kt -->
+    <string name="economy_settings_title">Personal Economy</string>
+    <string name="economy_settings_reset_defaults">Reset to defaults</string>
+    <string name="economy_settings_intro">Enter your real numbers so DashBuddy can show your true net pay. Defaults are sensible estimates for your vehicle class but will be off — tap any section to set actual values.</string>
+
+    <!-- settings/AboutScreen.kt -->
+    <string name="about_screen_title">About</string>
+    <string name="about_screen_dev_mode_countdown">You are %1$d steps away from being a developer.</string>
+    <string name="about_screen_dev_mode_enabled">Developer Mode Enabled!</string>
+    <string name="about_screen_version_format">Version %1$s</string>
+    <string name="about_screen_build_format">Build %1$s</string>
+    <string name="about_screen_developer_label">Developer</string>
+    <string name="about_screen_developer_name">Trotter Cloud Solutions</string>
+    <string name="about_screen_developer_email" translatable="false">support@dashbuddy.app</string>
+
+    <!-- settings/PlatformSettingsScreen.kt -->
+    <string name="platform_settings_title">Gig Apps</string>
+    <string name="platform_settings_description">Choose which gig apps DashBuddy monitors. Only apps with full rule support will provide live session tracking. Other enabled apps will capture data for future updates.</string>
+    <string name="platform_settings_installed">Installed</string>
+    <string name="platform_settings_not_installed">Not installed</string>
+
+    <!-- settings/components/ReorderableRule.kt -->
+    <string name="reorderable_rule_content_desc_reorder">Reorder</string>
+    <string name="reorderable_rule_merchant_coming_soon">Merchant Rule (Coming Soon)</string>
+    <string name="reorderable_rule_dollar_per_mile_format" translatable="false">%1$s/mi</string>
+    <string name="reorderable_rule_distance_format" translatable="false">%1$s mi</string>
+    <string name="reorderable_rule_item_count_format">%1$d items</string>
+
+    <!-- setup/wizard/cards/GasPriceCard.kt -->
+    <string name="wizard_gas_price_fuel_type_question">What type of fuel do you use?</string>
+    <string name="wizard_gas_price_ev_title">Manual EV Charging Costs</string>
+    <string name="wizard_gas_price_ev_desc">Because public Superchargers and home charging rates vary wildly, please set your average equivalent \'per-gallon\' cost manually.</string>
+    <string name="wizard_gas_price_auto_update_title">Auto-Update Gas Prices</string>
+    <string name="wizard_gas_price_auto_update_desc">We\'ll fetch the regional average for your fuel type daily.</string>
+    <string name="wizard_gas_price_current_regional_average">Current Regional Average</string>
+
+    <!-- main/analytics/AnalyticsScreen.kt -->
+    <string name="analytics_screen_title">Analytics</string>
+    <string name="analytics_screen_content_desc_export_csv">Export data (CSV)</string>
+    <string name="analytics_screen_coming_soon_title">%1$s — coming soon</string>
+    <string name="analytics_screen_coming_soon_desc">This tab lands in a later Analytics phase.</string>
+
+    <!-- setup/permissions/PermissionCard.kt -->
+    <string name="permission_card_content_desc_privacy">Privacy</string>
+    <string name="permission_card_content_desc_expand">Expand</string>
+
+    <!-- settings/DataExportScreen.kt -->
+    <string name="data_export_title">Export Data</string>
+    <string name="data_export_csv_heading">Export your mileage &amp; earnings to CSV</string>
+    <string name="data_export_csv_desc">Pick a folder and DashBuddy writes three spreadsheet files into it:\n• deliveries.csv — one row per delivery\n• sessions.csv — one row per session\n• summary.csv — totals + estimated IRS mileage deduction\n\nThis is your own data, on-device — nothing is uploaded. Exports all history (a date-range picker is coming later).</string>
+    <string name="data_export_csv_button">"  Choose folder &amp; export"</string>
+    <string name="data_export_csv_success_format">Exported %1$d files to the chosen folder.</string>
+    <string name="data_export_csv_error_format">Export failed: %1$s</string>
+    <string name="data_export_log_heading">Export a bug report</string>
+    <string name="data_export_log_desc">Pick a folder and DashBuddy writes dashbuddy-log.txt into it — the log the developer needs to diagnose an issue.\n\nINFO+ milestones only — no raw store, customer, or address text. Every line is auto-scrubbed at the sink before it\'s written, so a leaked name can\'t reach the file. On-device, nothing is uploaded.</string>
+    <string name="data_export_log_button">"  Choose folder &amp; export log"</string>
+    <string name="data_export_log_success_format">Exported dashbuddy-log.txt — %1$d line(s) were auto-scrubbed.</string>
+    <string name="data_export_log_error_format">Log export failed: %1$s</string>
+
+    <!-- settings/components/FakeOfferCard.kt -->
+    <string name="fake_offer_score_format" translatable="false">"%1$s  ·  %2$dpts"</string>
+    <string name="fake_offer_pay_line_format" translatable="false">"%1$s gross  →  %2$s net"</string>
+    <string name="fake_offer_pay_line_estimate_format" translatable="false">"%1$s gross  →  %2$s net (est.)"</string>
+    <string name="fake_offer_fuel_cost_format" translatable="false">−%1$s fuel</string>
+    <string name="fake_offer_nonfuel_cost_format">−%1$s wear &amp; fixed costs</string>
+    <string name="fake_offer_metric_dollar_per_mile_label" translatable="false">$/mi</string>
+    <string name="fake_offer_metric_dollar_per_hour_label" translatable="false">$/hr</string>
+    <string name="fake_offer_metric_items_label">items</string>
+    <string name="fake_offer_metric_miles_label">miles</string>
+    <string name="fake_offer_metric_est_time_label">est. time</string>
+    <string name="fake_offer_metric_est_time_value_format" translatable="false">~%1$d min</string>
+    <string name="fake_offer_warning_format" translatable="false">⚠️ %1$s</string>
+
+    <!-- main/analytics/DecisionsTab.kt -->
+    <string name="decisions_tab_offer_funnel_title">OFFER FUNNEL</string>
+    <string name="decisions_tab_no_offers_yet">No offers in this period yet.</string>
+    <string name="decisions_tab_acceptance_rate_caption">acceptance rate · %1$s %2$s</string>
+    <string name="decisions_tab_offer_singular">offer</string>
+    <string name="decisions_tab_offer_plural">offers</string>
+    <string name="decisions_tab_segment_accepted">Accepted</string>
+    <string name="decisions_tab_segment_declined">Declined</string>
+    <string name="decisions_tab_segment_timed_out">Timed out</string>
+    <string name="decisions_tab_value_of_no_title">VALUE OF SAYING NO</string>
+    <string name="decisions_tab_no_declines_yet">No declines in this period.</string>
+    <string name="decisions_tab_est_net_skipped_format" translatable="false">~%1$s</string>
+    <string name="decisions_tab_est_net_skipped_caption">est. net skipped across %1$s declined %2$s</string>
+    <string name="decisions_tab_score_vs_outcome_title">SCORE VS OUTCOME</string>
+    <string name="decisions_tab_avg_score_header">Avg score</string>
+    <string name="decisions_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
+
+    <!-- main/ratings/RatingsScreen.kt -->
+    <string name="ratings_screen_title">Ratings</string>
+    <string name="ratings_screen_gauge_customer">Customer</string>
+    <string name="ratings_screen_gauge_on_time">On-time</string>
+    <string name="ratings_screen_gauge_completion">Completion</string>
+    <string name="ratings_screen_tile_acceptance">Acceptance</string>
+    <string name="ratings_screen_tile_deliveries_30d">Deliveries (30d)</string>
+    <string name="ratings_screen_tile_lifetime_deliveries">Lifetime deliveries</string>
+    <string name="ratings_screen_shopping_quality_header">Shopping quality</string>
+    <string name="ratings_screen_tile_original_items_found">Original items found</string>
+    <string name="ratings_screen_tile_total_items_found">Total items found</string>
+    <string name="ratings_screen_tile_substitution_issues">Substitution issues</string>
+    <string name="ratings_screen_tile_quality_issues">Quality issues</string>
+    <string name="ratings_screen_tile_wrong_or_missing">Wrong or missing</string>
+    <string name="ratings_screen_tile_lifetime_shops">Lifetime shops</string>
+    <string name="ratings_screen_empty_title">No ratings yet</string>
+    <string name="ratings_screen_empty_fallback_platform">platform</string>
+    <string name="ratings_screen_empty_desc_format">Open your %1$s Ratings screen while DashBuddy is running and they\'ll show up here.</string>
+
+    <!-- main/MainActivity.kt -->
+    <string name="main_activity_developer_options_title">Developer Options</string>
+    <string name="main_activity_placeholder_construction">Construction Area 🚧\nComing Soon</string>
+
+    <!-- setup/wizard/cards/VehicleCard.kt -->
+    <string name="wizard_vehicle_card_type_car">🚗 Car</string>
+    <string name="wizard_vehicle_card_type_ebike">🚲 E-Bike</string>
+    <string name="wizard_vehicle_card_year_label">Year</string>
+    <string name="wizard_vehicle_card_make_label">Make</string>
+    <string name="wizard_vehicle_card_model_label">Model</string>
+    <string name="wizard_vehicle_card_trim_label">Trim / Options</string>
+    <string name="wizard_vehicle_card_content_desc_search">Search</string>
+    <string name="wizard_vehicle_card_lookup_mpg">Lookup my MPG on Google</string>
+    <string name="wizard_vehicle_card_mpg_format" translatable="false">%1$s MPG</string>
+    <string name="wizard_vehicle_card_mpg_slider_hint">Slide to match your vehicle\'s combined MPG.</string>
+    <string name="wizard_vehicle_card_ebike_note">Awesome! We will ignore gas expenses and set your cost-per-mile to $0.</string>
+
+    <!-- settings/SettingsHomeScreen.kt -->
+    <string name="settings_home_title">Settings</string>
+    <string name="settings_home_group_monitoring">Monitoring</string>
+    <string name="settings_home_item_gig_apps_title">Gig Apps</string>
+    <string name="settings_home_item_gig_apps_subtitle">Choose which apps to monitor</string>
+    <string name="settings_home_group_automation">Automation &amp; Intelligence</string>
+    <string name="settings_home_item_strategy_title">Strategy Config</string>
+    <string name="settings_home_item_strategy_subtitle">Rules, Pricing, and Simulation</string>
+    <string name="settings_home_economy_true_cost_format" translatable="false">True cost: %1$s/mi</string>
+    <string name="settings_home_economy_defaults_suffix_format">" · %1$d defaults"</string>
+    <string name="settings_home_economy_fallback_subtitle">Tires, oil, depreciation, insurance, phone</string>
+    <string name="settings_home_item_economy_title">Personal Economy</string>
+    <string name="settings_home_group_data_privacy">Data &amp; Privacy</string>
+    <string name="settings_home_item_evidence_title">Evidence Locker</string>
+    <string name="settings_home_item_evidence_subtitle">Manage screenshots and logs</string>
+    <string name="settings_home_item_export_title">Export Data (CSV)</string>
+    <string name="settings_home_item_export_subtitle">Mileage &amp; earnings for a spreadsheet or tax prep</string>
+    <string name="settings_home_group_app_system">App System</string>
+    <string name="settings_home_item_general_title">General</string>
+    <string name="settings_home_item_general_subtitle">Theme, Pro Mode, and Defaults</string>
+    <string name="settings_home_item_rerun_wizard_title">Re-run Setup Wizard</string>
+    <string name="settings_home_item_rerun_wizard_subtitle">Adjust vehicle and base targets</string>
+    <string name="settings_home_item_about_title">About</string>
+    <string name="settings_home_item_about_subtitle">Version, Support, and Developer info</string>
+    <string name="settings_home_item_debug_menu_title">Debug Menu</string>
+    <string name="settings_home_item_debug_menu_subtitle">Log levels &amp; Snapshot whitelist</string>
+
+    <!-- settings/StrategySettingsScreen.kt -->
+    <string name="strategy_settings_the_lab_title">The Lab</string>
+    <string name="strategy_settings_sim_pay_format">Pay: %1$s</string>
+    <string name="strategy_settings_sim_dist_format">Dist: %1$s mi</string>
+    <string name="strategy_settings_global_overrides_title">Global Overrides</string>
+    <string name="strategy_settings_protect_stats_label">🛡️ Protect Stats Mode</string>
+    <string name="strategy_settings_protect_stats_subtitle">Auto-accept everything</string>
+    <string name="strategy_settings_allow_shopping_label">🛒 Allow Shopping Orders</string>
+    <string name="strategy_settings_allow_shopping_subtitle">If off, Red Card orders are auto-declined</string>
+    <string name="strategy_settings_quick_declines_label">⚡ Single-click declines</string>
+    <string name="strategy_settings_quick_declines_subtitle">Auto-confirm DoorDash\'s \'are you sure?\' so a decline is one tap</string>
+    <string name="strategy_settings_priorities_title">Priorities (Rack &amp; Stack)</string>
+    <string name="strategy_settings_priorities_hint">Drag to reorder. Top rules matter most.</string>
+
+    <!-- main/analytics/TimeTab.kt -->
+    <string name="time_tab_time_split_title">TIME SPLIT</string>
+    <string name="time_tab_no_sessions_yet">No sessions in this period yet.</string>
+    <string name="time_tab_online_across_format">online across %1$s %2$s</string>
+    <string name="time_tab_session_singular">session</string>
+    <string name="time_tab_session_plural">sessions</string>
+    <string name="time_tab_sessions_stat_label">Sessions</string>
+    <string name="time_tab_avg_session_stat_label">Avg session</string>
+    <string name="time_tab_segment_on_delivery">On delivery</string>
+    <string name="time_tab_segment_unattributed">Unattributed</string>
+    <string name="time_tab_deadhead_title">DEADHEAD</string>
+    <string name="time_tab_no_miles_measured_yet">No miles measured in this period yet.</string>
+    <string name="time_tab_deadhead_caption">miles with no delivery attached — after the last drop, or sessions with none</string>
+    <string name="time_tab_segment_deadhead">Deadhead</string>
+    <string name="time_tab_on_time_title">ON TIME</string>
+    <string name="time_tab_no_deadline_deliveries_yet">No deliveries carried a deadline in this period.</string>
+    <string name="time_tab_gauge_on_time_label">on time</string>
+    <string name="time_tab_deadline_caption_format">%1$s of %2$s %3$s with a deadline</string>
+    <string name="time_tab_delivery_singular">delivery</string>
+    <string name="time_tab_delivery_plural">deliveries</string>
+    <string name="time_tab_margin_early_format">typically %1$s early</string>
+    <string name="time_tab_margin_late_format">typically %1$s late</string>
+    <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
+    <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
+
+    <!-- setup/wizard/WizardScreen.kt -->
+    <string name="wizard_screen_goal_option1_title">Cherry Picker</string>
+    <string name="wizard_screen_goal_option1_desc">Maximize profit. Auto-decline unprofitable offers.</string>
+    <string name="wizard_screen_goal_option2_title">Protect Platinum</string>
+    <string name="wizard_screen_goal_option2_desc">Maintain high acceptance rate. Do not auto-decline anything.</string>
+    <string name="wizard_screen_goal_option3_title">Manual Mode</string>
+    <string name="wizard_screen_goal_option3_desc">Just show me the math. I will make my own decisions.</string>
+    <string name="wizard_screen_shopping_value_format" translatable="false">%1$s items</string>
+    <string name="wizard_screen_shopping_footer">We\'ll use this to score shopping offers on the HUD.</string>
+    <string name="wizard_screen_hourly_value_format" translatable="false">%1$s / hr</string>
+    <string name="wizard_screen_distance_value_format" translatable="false">%1$s mi</string>
+    <string name="wizard_screen_min_payout_footer_auto">We will auto-decline offers below this amount.</string>
+    <string name="wizard_screen_min_payout_footer_flag">We will flag offers below this amount in red.</string>
+    <string name="wizard_screen_hourly_footer_auto">We will auto-decline offers below this rate.</string>
+    <string name="wizard_screen_hourly_footer_flag">We will flag offers below this rate in red.</string>
+    <string name="wizard_screen_distance_footer_auto">We will auto-decline offers exceeding this distance.</string>
+    <string name="wizard_screen_distance_footer_flag">We will flag offers exceeding this distance in red.</string>
+    <string name="wizard_screen_content_desc_success">Success</string>
+    <string name="wizard_screen_all_set_title">You\'re all set!</string>
+    <string name="wizard_screen_skipped_desc">Setup skipped — nothing was changed. You can run the wizard anytime from the Settings menu.</string>
+    <string name="wizard_screen_completed_desc">Your setup is complete. Remember, you can always tweak these targets, change your vehicle, or adjust your automation strategy later in the Settings menu.</string>
+    <string name="wizard_screen_lets_go">Let\'s Go</string>
+
+    <!-- main/dashboard/DashboardScreen.kt -->
+    <string name="dashboard_screen_content_desc_settings">Settings</string>
+    <string name="dashboard_screen_permissions_required_title">Permissions Required</string>
+    <string name="dashboard_screen_permissions_required_subtitle">DashBuddy needs your attention. Please complete the popup.</string>
+    <string name="dashboard_screen_first_run_title">You have the Keys!</string>
+    <string name="dashboard_screen_first_run_subtitle">Permissions granted. Let\'s personalize your strategy so DashBuddy knows what offers you like.</string>
+    <string name="dashboard_screen_personalize_strategy_button">Personalize Strategy</string>
+    <string name="dashboard_screen_skip_for_now_button">Skip for now</string>
+    <string name="dashboard_screen_dashing_subtitle">You\'re on the clock.</string>
+    <string name="dashboard_screen_ready_subtitle">All systems go.</string>
+    <string name="dashboard_screen_show_bubble_button">Show Bubble</string>
+    <string name="dashboard_screen_stat_true_net">True Net</string>
+    <string name="dashboard_screen_stat_net_per_hour">Net/hr</string>
+    <string name="dashboard_screen_stat_miles">Miles</string>
+    <string name="dashboard_screen_entry_analytics">Analytics</string>
+    <string name="dashboard_screen_entry_ratings">Ratings</string>
+    <string name="dashboard_screen_entry_strategy">Strategy</string>
+    <string name="dashboard_screen_entry_economy">Economy</string>
+
+    <!-- components/economy/EconomyEditor.kt -->
+    <string name="economy_editor_per_mile_format" translatable="false">%1$s/mi</string>
+    <string name="economy_editor_per_mile_asterisk_format" translatable="false">%1$s/mi*</string>
+    <string name="economy_editor_tires_title">Tires</string>
+    <string name="economy_editor_tires_cost_label">Set of 4</string>
+    <string name="economy_editor_lifetime_label">Lifetime</string>
+    <string name="economy_editor_oil_title">Oil changes</string>
+    <string name="economy_editor_each_label">Each</string>
+    <string name="economy_editor_every_label">Every</string>
+    <string name="economy_editor_brakes_title">Brakes</string>
+    <string name="economy_editor_fluids_title">Fluids</string>
+    <string name="economy_editor_misc_title">Misc repairs</string>
+    <string name="economy_editor_misc_cost_label">Yearly budget</string>
+    <string name="economy_editor_misc_interval_label">Driving</string>
+    <string name="economy_editor_misc_interval_suffix" translatable="false">mi/yr</string>
+    <string name="economy_editor_misc_helper">Annual catch-all for repairs not in oil/brakes/fluids.</string>
+    <string name="economy_editor_depreciation_title">Depreciation</string>
+    <string name="economy_editor_depreciation_off">off</string>
+    <string name="economy_editor_depreciation_include_label">Include depreciation</string>
+    <string name="economy_editor_purchase_price_label">Purchase price</string>
+    <string name="economy_editor_depreciation_helper">Total expected miles from new to retirement, e.g. 200,000 for a typical sedan.</string>
+    <string name="economy_editor_insurance_title">Insurance</string>
+    <string name="economy_editor_insurance_label">Extra for gig work</string>
+    <string name="economy_editor_per_month_suffix" translatable="false">/mo</string>
+    <string name="economy_editor_insurance_helper">Monthly add-on for rideshare/delivery rider above your personal policy.</string>
+    <string name="economy_editor_registration_title">Registration</string>
+    <string name="economy_editor_registration_label">Commercial delta</string>
+    <string name="economy_editor_per_year_suffix" translatable="false">/yr</string>
+    <string name="economy_editor_registration_helper">Annual fee above your personal registration (commercial registration / inspection / endorsement).</string>
+    <string name="economy_editor_phone_title">Phone &amp; data</string>
+    <string name="economy_editor_phone_plan_total_label">Plan total</string>
+    <string name="economy_editor_phone_lines_label">Lines</string>
+    <string name="economy_editor_phone_business_percent_format">%% for gig work: %1$d%%</string>
+    <string name="economy_editor_phone_per_line_format">Your line: %1$s/mo × %2$d%% = %3$s/mo for gig work</string>
+    <string name="economy_editor_annual_miles_title">Expected gig miles / yr</string>
+    <string name="economy_editor_annual_miles_summary_format" translatable="false">%1$s mi</string>
+    <string name="economy_editor_annual_miles_value_format">%1$s miles per year</string>
+    <string name="economy_editor_annual_miles_helper">Used to amortize fixed costs (insurance, registration, phone) into a per-mile rate. Bigger number → smaller per-mile share.</string>
+    <string name="economy_editor_vehicle_class_title">Vehicle class</string>
+    <string name="economy_editor_true_cost_format">Your true cost: %1$s/mi</string>
+    <string name="economy_editor_irs_rate_note" translatable="false">IRS standard mileage rate: $0.67/mi</string>
+
+    <!-- main/analytics/MoneyTab.kt -->
+    <string name="money_tab_gross_earnings_title">GROSS EARNINGS</string>
+    <string name="money_tab_true_net_chip_format">True net %1$s</string>
+    <string name="money_tab_net_per_hour_chip_format">Net/hr %1$s</string>
+    <string name="money_tab_earnings_by_day_title">EARNINGS BY DAY</string>
+    <string name="money_tab_no_earnings_yet">No earnings in this period yet.</string>
+    <string name="money_tab_earnings_by_day_caption">gross per day · sessions count on their start day</string>
+    <string name="money_tab_true_net_title">TRUE NET</string>
+    <string name="money_tab_stat_net_per_hour">Net/hr</string>
+    <string name="money_tab_stat_net_per_mile">Net/mi</string>
+    <string name="money_tab_stat_miles">Miles</string>
+    <string name="money_tab_stat_deliveries">Deliveries</string>
+    <string name="money_tab_top_stores_title">TOP STORES</string>
+    <string name="money_tab_no_store_earnings_yet">No store earnings in this period yet.</string>
+    <string name="money_tab_unknown_store">Unknown store</string>
+    <string name="money_tab_unattributed_callout_format">%1$s not attributed to any delivery — bonuses/adjustments; review coming (#650)</string>
+    <string name="money_tab_recent_sessions_title">RECENT SESSIONS</string>
+    <string name="money_tab_no_sessions_recorded_yet">No sessions recorded yet.</string>
+    <string name="money_tab_cash_marker_format">+%1$s cash</string>
+
+    <!-- main/analytics/SessionDetailScreen.kt -->
+    <string name="session_detail_title">Session detail</string>
+    <string name="session_detail_not_found">Session not found.</string>
+    <string name="session_detail_unaccounted_format">%1$s unaccounted on this session — the platform reported more than the captured deliveries.</string>
+    <string name="session_detail_add_missed_delivery">Add missed delivery</string>
+    <string name="session_detail_deliveries_title">DELIVERIES</string>
+    <string name="session_detail_no_deliveries_yet">No deliveries captured for this session.</string>
+    <string name="session_detail_gross_reported_label">Gross (reported)</string>
+    <string name="session_detail_gross_captured_label">Gross (captured)</string>
+    <string name="session_detail_stat_miles">Miles</string>
+    <string name="session_detail_stat_deliveries">Deliveries</string>
+    <string name="session_detail_duration_format">Duration %1$s</string>
+    <string name="session_detail_cash_tips_format">+%1$s cash tips</string>
+    <string name="session_detail_unknown_store">Unknown store</string>
+    <string name="session_detail_tip_included_format">incl. %1$s tip</string>
+    <string name="session_detail_cash_format">+%1$s cash</string>
+    <string name="session_detail_est_offer_pay">est. offer pay</string>
+    <string name="session_detail_net_format">net %1$s</string>
+    <string name="session_detail_content_desc_adjust">Adjust delivery</string>
+    <string name="session_detail_field_store_optional">Store (optional)</string>
+    <string name="session_detail_field_pay">Pay</string>
+    <string name="session_detail_field_tip_included">Tip (included in pay)</string>
+    <string name="session_detail_field_cash_tip_optional">Cash tip (optional)</string>
+    <string name="session_detail_field_note_optional">Note (optional)</string>
+    <string name="session_detail_add_button">Add</string>
+    <string name="session_detail_cancel_button">Cancel</string>
+    <string name="session_detail_adjust_dialog_title">Adjust delivery</string>
+    <string name="session_detail_field_store_name">Store name</string>
+    <string name="session_detail_field_pay_locked_supporting">de-duplicated receipt — edit the real drop\'s row</string>
+    <string name="session_detail_field_cash_tip">Cash tip</string>
+    <string name="session_detail_save_button">Save</string>
+
+    <!-- bubble/cards/FlowCardItem.kt -->
+    <string name="flow_card_content_desc_collapse">Collapse</string>
+    <string name="flow_card_content_desc_expand">Expand</string>
+    <string name="flow_card_awaiting_active_format">Waiting · %1$s</string>
+    <string name="flow_card_awaiting_frozen_format">Waited %1$s</string>
+    <string name="flow_card_offer_fallback_store">Offer</string>
+    <string name="flow_card_pickup_arrived_format">%1$s · arrived %2$s</string>
+    <string name="flow_card_delivery_delivered_format">%1$s · delivered %2$s</string>
+    <string name="flow_card_since_last_offer">since last offer</string>
+    <string name="flow_card_before_next_offer">before next offer</string>
+    <string name="flow_card_score_gauge_label">Score</string>
+    <string name="flow_card_hourly_hero_format" translatable="false">%1$s/hr</string>
+    <string name="flow_card_net_secondary_format">Net %1$s</string>
+    <string name="flow_card_distance_secondary_format" translatable="false">%1$s mi</string>
+    <string name="flow_card_per_mile_secondary_format" translatable="false">%1$s/mi</string>
+    <string name="flow_card_badge_shop_and_deliver">Shop &amp; Deliver</string>
+    <string name="flow_card_badge_high_pay">High pay</string>
+    <string name="flow_card_badge_priority">Priority</string>
+    <string name="flow_card_badge_red_card">Red Card</string>
+    <string name="flow_card_badge_alcohol">Alcohol</string>
+    <string name="flow_card_badge_large_order">Large order</string>
+    <string name="flow_card_badge_pizza_bag">Pizza bag</string>
+    <string name="flow_card_badge_same_store">Same store</string>
+    <string name="flow_card_badge_same_customer">Same customer</string>
+    <string name="flow_card_badge_add_ons_ok">Add-ons OK</string>
+    <string name="flow_card_timer_dwell_label">Dwell</string>
+    <string name="flow_card_timer_at_door_sub">at door</string>
+    <string name="flow_card_timer_at_store_sub">at store</string>
+    <string name="flow_card_timer_overdue_label">Overdue</string>
+    <string name="flow_card_timer_to_go_label">To go</string>
+    <string name="flow_card_timer_elapsed_label">Elapsed</string>
+    <string name="flow_card_timer_en_route_sub">en route</string>
+    <string name="flow_card_running_at_label">Running at</string>
+    <string name="flow_card_running_at_overdue_format" translatable="false">%1$s/hr ↓</string>
+    <string name="flow_card_running_at_dropping_sub">dropping</string>
+    <string name="flow_card_running_at_on_track_sub">on track</string>
+    <string name="flow_card_arrived_margin_format">"arrived %1$s %2$s · "</string>
+    <string name="flow_card_margin_early">early</string>
+    <string name="flow_card_margin_late">late</string>
+    <string name="flow_card_at_stop">at stop</string>
+    <string name="flow_card_en_route">en route</string>
+    <string name="flow_card_past_deadline_format">%1$s past %2$s-by</string>
+    <string name="flow_card_by_deadline_format">%1$s by %2$s</string>
+    <string name="flow_card_verb_deliver">deliver</string>
+    <string name="flow_card_verb_pickup">pickup</string>
+    <string name="flow_card_below_floor_warning">Below your floor — no longer worth the wait.</string>
+    <string name="flow_card_shop_progress_format" translatable="false">shop %1$d/%2$d</string>
+    <string name="flow_card_shop_pace_format" translatable="false">%1$s/min</string>
+    <string name="flow_card_detail_arrived_format">" · arrived %1$s"</string>
+    <string name="flow_card_detail_picked_up_format">" · picked up %1$s"</string>
+    <string name="flow_card_post_task_delivery_total">delivery total</string>
+    <string name="flow_card_post_task_tip_format">tip · %1$s</string>
+    <string name="flow_card_post_task_session_format">session %1$s</string>
+    <string name="flow_card_action_decline">Decline</string>
+    <string name="flow_card_action_accept">Accept</string>
+    <string name="flow_card_outcome_accepted">Accepted</string>
+    <string name="flow_card_outcome_declined">Declined</string>
+    <string name="flow_card_outcome_timed_out">Timed out</string>
+
+    <!-- settings/EvidenceSettingsScreen.kt -->
+    <string name="evidence_settings_title">Evidence Locker</string>
+    <string name="evidence_settings_master_label">Master Record</string>
+    <string name="evidence_settings_master_subtitle">Global kill-switch for all data recording</string>
+    <string name="evidence_settings_section_granular">Granular Controls</string>
+    <string name="evidence_settings_offers_label">Save Offers</string>
+    <string name="evidence_settings_offers_subtitle">Keep full JSON/Screenshots of incoming offers</string>
+    <string name="evidence_settings_deliveries_label">Save Deliveries</string>
+    <string name="evidence_settings_deliveries_subtitle">Track completion stats</string>
+    <string name="evidence_settings_session_label">Save Session Summary</string>
+    <string name="evidence_settings_session_subtitle">End of session earnings report</string>
 </resources>

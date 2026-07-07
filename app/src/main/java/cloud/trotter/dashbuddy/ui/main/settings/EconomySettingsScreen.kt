@@ -21,8 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
 import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
@@ -45,15 +47,18 @@ fun EconomySettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Personal Economy") },
+                title = { Text(stringResource(R.string.economy_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 },
                 actions = {
                     TextButton(onClick = { viewModel.resetDefaults() }) {
-                        Text("Reset to defaults")
+                        Text(stringResource(R.string.economy_settings_reset_defaults))
                     }
                 },
             )
@@ -67,9 +72,7 @@ fun EconomySettingsScreen(
                 .padding(16.dp),
         ) {
             Text(
-                text = "Enter your real numbers so DashBuddy can show your true net pay. " +
-                    "Defaults are sensible estimates for your vehicle class but will be off — " +
-                    "tap any section to set actual values.",
+                text = stringResource(R.string.economy_settings_intro),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

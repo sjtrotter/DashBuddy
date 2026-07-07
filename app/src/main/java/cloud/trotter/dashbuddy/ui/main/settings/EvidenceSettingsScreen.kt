@@ -15,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,10 +31,13 @@ fun EvidenceSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Evidence Locker") },
+                title = { Text(stringResource(R.string.evidence_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 }
             )
@@ -44,19 +49,19 @@ fun EvidenceSettingsScreen(
             // You might want to move SwitchRow to a shared 'Components.kt' file.
 
             SwitchRow(
-                label = "Master Record",
-                subtitle = "Global kill-switch for all data recording",
+                label = stringResource(R.string.evidence_settings_master_label),
+                subtitle = stringResource(R.string.evidence_settings_master_subtitle),
                 checked = config.masterEnabled,
                 onCheckedChange = { viewModel.setEvidenceMaster(it) }
             )
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-            Text("Granular Controls", modifier = Modifier.padding(16.dp))
+            Text(stringResource(R.string.evidence_settings_section_granular), modifier = Modifier.padding(16.dp))
 
             SwitchRow(
-                label = "Save Offers",
-                subtitle = "Keep full JSON/Screenshots of incoming offers",
+                label = stringResource(R.string.evidence_settings_offers_label),
+                subtitle = stringResource(R.string.evidence_settings_offers_subtitle),
                 checked = config.saveOffers,
                 onCheckedChange = {
                     viewModel.updateEvidenceConfig(
@@ -68,8 +73,8 @@ fun EvidenceSettingsScreen(
             )
 
             SwitchRow(
-                label = "Save Deliveries",
-                subtitle = "Track completion stats",
+                label = stringResource(R.string.evidence_settings_deliveries_label),
+                subtitle = stringResource(R.string.evidence_settings_deliveries_subtitle),
                 checked = config.saveDeliverySummaries,
                 onCheckedChange = {
                     viewModel.updateEvidenceConfig(config.saveOffers, it, config.saveSessionSummaries)
@@ -77,8 +82,8 @@ fun EvidenceSettingsScreen(
             )
 
             SwitchRow(
-                label = "Save Dash Summary",
-                subtitle = "End of dash earnings report",
+                label = stringResource(R.string.evidence_settings_session_label),
+                subtitle = stringResource(R.string.evidence_settings_session_subtitle),
                 checked = config.saveSessionSummaries,
                 onCheckedChange = {
                     viewModel.updateEvidenceConfig(
