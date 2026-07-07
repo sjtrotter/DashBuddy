@@ -29,9 +29,11 @@ class OdometerEffectHandler @Inject constructor(
     fun startUp() {
         Timber.i("Effect: Starting Odometer & Notification")
         try {
-            // 1. Start the Logic (Coroutines Job)
+            // 1. Start the Logic (Coroutines Job). #438 B5: NO resetSession() here — the odometer
+            // is arbitrated at the cross-platform tier (StartOdometer fires only on the 0→1
+            // live-session crossing), and the per-session anchor rides StartSession
+            // ([onSessionStarted]) so a second concurrent session can't zero the first's miles.
             odometerRepository.startTracking()
-            odometerRepository.resetSession()
 
             // 2. Post the Notification (User Trust UI)
             val notification = createNotification()
@@ -40,6 +42,15 @@ class OdometerEffectHandler @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to start Odometer")
         }
+    }
+
+    /**
+     * #438 B5: anchor a session's miles to the current odometer total at its start. Rides the
+     * per-platform StartSession effect (not the global StartOdometer), so each session gets its OWN
+     * anchor. Idempotent in the repository — a grace-resume re-arm never moves an existing anchor.
+     */
+    fun onSessionStarted(sessionId: String) {
+        odometerRepository.startSessionTracking(sessionId)
     }
 
     fun shutDown() {

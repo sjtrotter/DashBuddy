@@ -106,6 +106,20 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   now WARN-aborts to manual rather than acting on the wrong one). A banner that acts on the wrong
   offer, or a stale banner that survives its offer, is a B4 regression — capture it.
   - Confirmed: 0/2
+- **🆕 NEW — odometer arbitration holds single-platform (#438 B5 / PR).** The GPS odometer moved off
+  each platform's own diff onto one cross-platform decision (starts once when a dash opens, pauses
+  when parked at a stop, resumes on leaving, stops when the dash ends). Single-platform behavior
+  must feel **identical**. On a normal DoorDash dash, watch the odometer + session miles: (1) the
+  "Odometer Active" notification appears **once** at dash start (not re-created per offer/leg); (2)
+  the **session miles** in the bubble HUD climb during drives and hold steady while you're parked at
+  a pickup/dropoff, then resume climbing when you leave; (3) at dash end the miles look right for the
+  distance you actually drove (compare to your car's trip odometer if handy). One improvement to
+  watch for specifically: on a **stacked multi-drop** (two drops back-to-back) and on a **skipped/late
+  receipt**, the odometer should now keep counting the drive to the next stop even when the app's
+  active-task display lags on the previous drop (today's build wrongly paused there). Miles that look
+  far too low (odometer stuck paused through a drive) or a session-miles value that resets to ~0
+  mid-dash is a B5 regression — capture it. (#438 B5 / PR)
+  - Confirmed: 0/2
 - **🆕 NEW — edit a delivery directly + cash tips (#688 phase A / PR).** In **Analytics → a dash →
   the delivery drill-down**, **tap a delivery row** (or its pencil) → the **Adjust delivery** dialog:
   Store name / Pay / Tip / Cash tip / Miles / Note. This replaces the pay-only editor and is the real

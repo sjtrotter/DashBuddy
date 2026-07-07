@@ -39,6 +39,17 @@ class StateManagerV2 @Inject constructor(
     private val _state = MutableStateFlow(AppState())
     val state = _state.asStateFlow()
 
+    /**
+     * #438 B5 (item 9): armed by [restoreState] when a snapshot restore recovered a NON-fresh
+     * state; consumed on the first LIVE observation to reconcile the odometer. Odometer effects are
+     * recovery-suppressed externals ([SideEffectEngine] `isExternalEffect`), so after a crash GPS is
+     * dead — and a level-*crossing* Resume won't re-fire (the level is already "moving" at restore →
+     * no crossing → GPS stays dead until a full pause→resume cycle, losing IRS miles for the whole
+     * post-crash leg). The reconciliation re-establishes tracking for a still-live session directly,
+     * at the edge (never inside a pure reducer).
+     */
+    private var recoveryReconcilePending = false
+
     fun initialize() {
         Timber.i("Initializing V2 State Machine (multi-region)...")
         journal.start(scope, ioDispatcher)
@@ -72,6 +83,17 @@ class StateManagerV2 @Inject constructor(
         val obs = toObservation(stateEvent) ?: return
 
         val currentState = _state.value
+
+        // #438 B5: on the FIRST live observation after a crash recovery, re-establish the odometer
+        // for a still-live session (recovery suppressed the Start/Resume that normally would run).
+        // Emitted at the edge, keyed off the restored (pre-step) state, BEFORE the obs steps — the
+        // effects are idempotent (startTracking/stopTracking no-op if already in that state), so any
+        // crossing the incoming obs itself produces is harmless on top.
+        if (recoveryReconcilePending) {
+            recoveryReconcilePending = false
+            reconcileOdometerAfterRecovery(currentState)
+        }
+
         val transition = stateMachine.step(currentState, obs)
 
         // Update state
@@ -100,6 +122,21 @@ class StateManagerV2 @Inject constructor(
         }
     }
 
+    /**
+     * #438 B5: reconcile the odometer to the [restored] state after a crash. If any session is live
+     * (`activeSessionCount > 0`), re-emit [AppEffect.StartOdometer] (re-establishes GPS tracking +
+     * the ongoing notification; the per-session anchor persisted across the crash, so no reset), and
+     * — if EVERY live region is parked ([OdometerArbiter.allLiveStationary]) — a [AppEffect.PauseOdometer]
+     * so GPS matches the restored "stationary at a drop" level. A moving restore leaves GPS running.
+     * Emitted on the LIVE path (`recovering = false`), so it actually fires (recovery suppresses it).
+     */
+    private fun reconcileOdometerAfterRecovery(restored: AppState) {
+        val effects = OdometerArbiter.recoveryReconciliation(restored)
+        if (effects.isEmpty()) return
+        Timber.i("Recovery odometer reconciliation: %s", effects.map { it::class.simpleName })
+        effects.forEach { engine.process(it, correlationVersion = restored.correlationVersion) }
+    }
+
     companion object {
         /** Prune the observation journal every N accepted observations. */
         private const val JOURNAL_PRUNE_EVERY = 500L
@@ -124,6 +161,8 @@ class StateManagerV2 @Inject constructor(
             if (tail.isEmpty()) {
                 Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
                 _state.value = restored.state
+                // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
+                recoveryReconcilePending = true
                 return
             }
 
@@ -146,6 +185,8 @@ class StateManagerV2 @Inject constructor(
             }
 
             _state.value = finalState
+            // #438 B5: recovered a non-fresh state → reconcile the odometer on the first live obs.
+            recoveryReconcilePending = true
             Timber.i("Recovery complete — state at cv=%d", finalState.correlationVersion)
         } catch (e: Exception) {
             Timber.e(e, "State recovery failed — starting fresh")

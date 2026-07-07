@@ -92,6 +92,9 @@ class EffectMap @Inject constructor() {
         // #438 B3: a HUD accept/decline resolves by the tap's OWN carried (platform, offerHash)
         // against that platform's owned offers — no global-flow precondition (vet M4).
         addAll(diffOfferAction(obs, next))
+        // #438 B5 (item 9): odometer arbitration is a CROSS-PLATFORM decision — one GPS, one global
+        // total — so it diffs the aggregate ONCE, not per platform region.
+        addAll(diffCrossPlatform(prev, next))
         val allPlatforms = (prev.regions.platforms.keys + next.regions.platforms.keys).distinct()
         for (p in allPlatforms) {
             addAll(
@@ -104,6 +107,45 @@ class EffectMap @Inject constructor() {
                     obs,
                 )
             )
+        }
+    }
+
+    // =========================================================================
+    // CROSS-PLATFORM DIFFS
+    // =========================================================================
+
+    /**
+     * #438 B5 (item 9): the odometer arbitration. The four odometer effects moved OFF each
+     * platform's session/task diff — where a 2nd concurrent session's Start zeroed the 1st's
+     * miles, the 1st ending killed GPS under the 2nd, and one platform's arrival paused GPS on
+     * the other's drive — onto ONE cross-platform decision:
+     *  - **Start/Stop** on the live-session count crossing 0↔1 (`activeSessionCount`, derived by
+     *    [CrossPlatformRegionStepper]; the vet confirmed the count includes paused + grace-window
+     *    sessions — correct for "is any dash open").
+     *  - **Pause/Resume** on the [OdometerArbiter] stationary level, gated to a *continuously*-live
+     *    window (both counts > 0) so a session start/end edge routes through Start/Stop and never a
+     *    phantom Pause/Resume (e.g. ending a dash while parked at a drop must Stop, not Resume).
+     *    Pause fires when every live region becomes stationary; Resume when any starts moving.
+     *
+     * Single-platform behavior is byte-identical in GPS on/off state (proven against the replay
+     * fixtures, [cloud.trotter.dashbuddy] `OdometerPredicateEquivalenceTest`); the only difference
+     * is this elides today's redundant Resume-while-already-moving emissions (session-start pickup
+     * nav, PostTask entry from a non-arrived drive), which `startTracking()` already no-ops.
+     */
+    private fun diffCrossPlatform(prev: AppState, next: AppState): List<AppEffect> = buildList {
+        val prevCount = prev.regions.crossPlatform.activeSessionCount
+        val nextCount = next.regions.crossPlatform.activeSessionCount
+        when {
+            prevCount == 0 && nextCount > 0 -> add(AppEffect.StartOdometer)
+            prevCount > 0 && nextCount == 0 -> add(AppEffect.StopOdometer)
+        }
+        if (prevCount > 0 && nextCount > 0) {
+            val prevStationary = OdometerArbiter.allLiveStationary(prev.regions.platforms)
+            val nextStationary = OdometerArbiter.allLiveStationary(next.regions.platforms)
+            when {
+                !prevStationary && nextStationary -> add(AppEffect.PauseOdometer)
+                prevStationary && !nextStationary -> add(AppEffect.ResumeOdometer)
+            }
         }
     }
 
@@ -145,7 +187,7 @@ class EffectMap @Inject constructor() {
             addAll(diffMode(p, next, obs))
             addAll(diffGraceTimer(p, next, obs))
             addAll(diffModeResumeTimer(p, next, obs))
-            addAll(diffTask(p, next, actedPrevFlow, actedNextFlow, obs))
+            addAll(diffTask(p, next, obs))
             addAll(diffPostTask(p, next, actedNextFlow, obs))
             addAll(diffNotification(obs))
 
@@ -395,7 +437,10 @@ class EffectMap @Inject constructor() {
                                 ),
                             ),
                         )
-                        add(AppEffect.StopOdometer)
+                        // #438 B5: StopOdometer now emits from diffCrossPlatform on the
+                        // activeSessionCount 1→0 crossing (this session end is that crossing when
+                        // it's the last live session), so one platform ending can't kill GPS under
+                        // another still-live dash.
                         add(AppEffect.UpdateBubble("Session Ended. Total: $earnings", ChatPersona.Dispatcher))
                         // #606: no CaptureScreenshot here — the dash_summary
                         // rule effect (doordash.json) already owns the
@@ -419,7 +464,7 @@ class EffectMap @Inject constructor() {
                                 ),
                             ),
                         )
-                        add(AppEffect.StopOdometer)
+                        // #438 B5: StopOdometer arbitrated at the cross-platform tier (see above).
                     }
                     add(AppEffect.EndSession(prev.platform.name))
                 }
@@ -444,7 +489,10 @@ class EffectMap @Inject constructor() {
                             startScreen = "WaitingForOffer",
                         )
                         add(logEffect(nextSession.sessionId, AppEventType.DASH_START, obs.timestamp, payload))
-                        add(AppEffect.StartOdometer)
+                        // #438 B5: StartOdometer now emits from diffCrossPlatform on the
+                        // activeSessionCount 0→1 crossing, so a SECOND concurrent session starting
+                        // does NOT re-fire Start (which would zero the first's accrued miles). The
+                        // per-session anchor rides StartSession (odometerRepository.startSessionTracking).
                         add(AppEffect.StartSession(nextSession.sessionId, next.platform.name))
                     } else if (nextSession != null && prevSession?.sessionId == nextSession.sessionId) {
                         // Grace resume — same session, no start effects needed
@@ -581,15 +629,13 @@ class EffectMap @Inject constructor() {
     private fun diffTask(
         prev: PlatformRegion,
         next: PlatformRegion,
-        actedPrevFlow: Flow,
-        actedNextFlow: Flow,
         obs: Observation,
     ): List<AppEffect> {
         // Diffs are computed from prev/next region state for EVERY observation type:
         // lazy expiry can retire a task on a non-flow observation (a routed timeout,
         // #342), and that closure must still emit DELIVERY_CONFIRMED (#345).
-        // #438 item 5: the flow reads below are THIS region's own acted flow, not the global R0.
-        val nextFlowVal = actedNextFlow
+        // #438 B5: the acted-flow reads that drove the (now cross-platform-arbitrated) odometer
+        // Pause/Resume were removed here — the task edges below emit only log events + bubbles.
         val sessionId = next.session?.sessionId ?: prev.session?.sessionId
 
         return buildList {
@@ -621,7 +667,8 @@ class EffectMap @Inject constructor() {
                     val storeName = nextTask.storeName ?: UNKNOWN_STORE
                     val payload = pickupPayload(nextTask, storeName)
                     add(logEffect(sessionId, AppEventType.PICKUP_NAV_STARTED, obs.timestamp, payload))
-                    add(AppEffect.ResumeOdometer)
+                    // #438 B5: ResumeOdometer is arbitrated by the cross-platform stationary
+                    // predicate (diffCrossPlatform), no longer emitted per pickup-nav edge.
 
                     val persona = determinePickupPersona(
                         nextTask.activity,
@@ -690,7 +737,9 @@ class EffectMap @Inject constructor() {
                 if (arrivedOverride != null) {
                     addAll(arrivedOverride)
                 } else {
-                    add(AppEffect.PauseOdometer)
+                    // #438 B5: PauseOdometer is arbitrated by the cross-platform stationary
+                    // predicate (diffCrossPlatform) — it fires only when ALL live regions are
+                    // parked, so one platform's arrival can't pause GPS mid-drive on another's leg.
 
                     when (nextTask.phase) {
                         TaskPhase.PICKUP -> add(
@@ -751,10 +800,10 @@ class EffectMap @Inject constructor() {
                 }
             }
 
-            // Post-task: delivery completed (this region's own PostTask entry, #438 item 5).
-            if (nextFlowVal == Flow.PostTask && actedPrevFlow != Flow.PostTask) {
-                add(AppEffect.ResumeOdometer)
-            }
+            // #438 B5: the PostTask-entry ResumeOdometer moved to the cross-platform stationary
+            // predicate (diffCrossPlatform). Leaving an arrived drop for PostTask is a
+            // stationary→moving crossing there; entering PostTask from a non-arrived drive was a
+            // redundant no-op Resume (GPS already running) and is correctly elided.
         }
     }
 
@@ -784,7 +833,9 @@ class EffectMap @Inject constructor() {
                 deliveryPhasePayload(task = task, phaseStartedAt = obs.timestamp),
             ),
         )
-        add(AppEffect.ResumeOdometer)
+        // #438 B5: ResumeOdometer arbitrated by the cross-platform stationary predicate
+        // (diffCrossPlatform) — leaving an arrived pickup/drop for the next leg is the
+        // stationary→moving crossing that resumes GPS there.
         // #568: store-flavored label ("Heading to H-E-B's customer") — friendlier
         // than the raw 6-char hash, and it disambiguates a multi-store stack's drops.
         val customer = customerLabel(task.storeName)
