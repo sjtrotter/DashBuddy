@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.core.pipeline.CaptureBackstopCorpusTest
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.view.clicked.ClickClassifierTest
 import cloud.trotter.dashbuddy.core.pipeline.notification.NotificationClassifierTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.GoldenSnapshotRegressionTest
+import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.OfferPipelineTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
@@ -45,11 +46,17 @@ import org.junit.runners.Suite
  *   PII across the corpus + notification redact blocks mask name/body, keep store.
  * - [CaptureBackstopCorpusTest] — the #624 recognized-frame customer-marker
  *   backstop finds ZERO leaks over the redacted corpus (false-positive pin).
+ * - [OfferPipelineTest] — Layer 2 (#105): a real `offer_popup/` snapshot through the SAME
+ *   production ruleset, feeding the recognized `ParsedOffer` into `OfferEvaluator` and pinning the
+ *   resulting `OfferEvaluation` — proves the recognition→parse→evaluate wiring, not just the
+ *   evaluator math (Layer 1, `:domain`'s `OfferEvaluatorTest`). Pure/side-effect-free like the rest
+ *   of this suite (no state machine, DB, or UI).
  */
 @RunWith(Suite::class)
 @Suite.SuiteClasses(
     GoldenSnapshotRegressionTest::class,
     ParseOutputGoldenTest::class,
+    OfferPipelineTest::class,
     ScreenRulesetTest::class,
     ClickRulesetTest::class,
     NotificationRulesetTest::class,
