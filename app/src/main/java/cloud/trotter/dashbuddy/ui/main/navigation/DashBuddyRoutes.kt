@@ -42,11 +42,13 @@ sealed class Screen(val route: String) {
          * the fail-closed allowlist for the exported-activity seam. Parameterized routes
          * (e.g. [SessionDetail]) are deliberately excluded: deep links carry no args.
          */
-        val allRoutes: Set<String> = setOf(
+        // lazy: a plain initializer runs during Screen's class-init, BEFORE the nested data
+        // objects exist (touching any Screen.X triggers it) → ExceptionInInitializerError.
+        val allRoutes: Set<String> by lazy { setOf(
             Dashboard.route, Analytics.route, SettingsHome.route, AboutSettings.route,
             StrategySettings.route, EvidenceSettings.route, DataExport.route,
             EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,
             PlatformSettings.route,
-        )
+        ) }
     }
 }
