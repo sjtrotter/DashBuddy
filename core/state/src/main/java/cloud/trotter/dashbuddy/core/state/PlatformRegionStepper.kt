@@ -21,7 +21,6 @@ import cloud.trotter.dashbuddy.domain.state.StoreNameMatch
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
-import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -280,7 +279,6 @@ class PlatformRegionStepper @Inject constructor() {
             // resume grace (#605): the modal is still up, the online flap was noise.
             impliedMode == current.mode -> current.copy(
                 lastObservedAt = obs.timestamp,
-                lastTransitionKind = TransitionKind.Confirmed,
                 pendingModeResume = if (impliedMode == Mode.Paused) null else current.pendingModeResume,
             )
 
@@ -312,16 +310,13 @@ class PlatformRegionStepper @Inject constructor() {
 
             // Screen or Notification — authoritative, apply immediately
             else -> {
-                val kind = policy.classify(
-                    current.mode, impliedMode, flowObs.expectedOutcomes, flowObs,
-                )
-                val transitioned = applyModeTransition(current, impliedMode, obs, kind, policy)
+                val transitioned = applyModeTransition(current, impliedMode, obs, policy)
                 // Heal lifecycle when coming Online from Offline (app restart
-                // mid-task) or on any Unexpected transition. healActiveLifecycle
-                // self-guards: only acts if the flow is a task flow with no
-                // active job, so it's safe to call broadly.
-                if (kind == TransitionKind.Unexpected ||
-                    (current.mode == Mode.Offline && impliedMode == Mode.Online)) {
+                // mid-task) — the live path (#715 struck the former Unexpected-
+                // transition gate: no ruleset ever declared `outcomes`, so that arm
+                // never fired). healActiveLifecycle self-guards: only acts if the
+                // flow is a task flow with no active job, so it's safe to call broadly.
+                if (current.mode == Mode.Offline && impliedMode == Mode.Online) {
                     healActiveLifecycle(transitioned, obs)
                 } else {
                     transitioned
@@ -341,13 +336,11 @@ class PlatformRegionStepper @Inject constructor() {
         prev: PlatformRegion,
         newMode: Mode,
         obs: Observation,
-        kind: TransitionKind,
         policy: TransitionPolicy,
     ): PlatformRegion {
         var region = prev.copy(
             mode = newMode,
             lastObservedAt = obs.timestamp,
-            lastTransitionKind = kind,
         )
 
         // Session lifecycle on mode transitions. An authoritative `session:ended`
@@ -418,10 +411,10 @@ class PlatformRegionStepper @Inject constructor() {
         obs: Observation,
         policy: TransitionPolicy,
     ): PlatformRegion =
-        applyModeTransition(region, Mode.Online, obs, TransitionKind.Expected, policy)
+        applyModeTransition(region, Mode.Online, obs, policy)
 
     /**
-     * When an unexpected transition fires (e.g., app launched mid-pickup),
+     * When the app comes Online from Offline (e.g., launched mid-pickup),
      * synthesize missing lifecycle entities so the state is consistent.
      */
     private fun healActiveLifecycle(region: PlatformRegion, obs: Observation): PlatformRegion {
@@ -474,9 +467,7 @@ class PlatformRegionStepper @Inject constructor() {
                 // Pause timer expired — transition to offline via applyModeTransition
                 // so it gets grace treatment
                 if (prev.mode == Mode.Paused) {
-                    applyModeTransition(
-                        prev, Mode.Offline, obs, TransitionKind.Expected, policy,
-                    )
+                    applyModeTransition(prev, Mode.Offline, obs, policy)
                 } else prev
             }
             else -> prev // Automation timeouts handled by EffectMap
