@@ -12,6 +12,5 @@ data class Session(
     val startedAt: Long,
     val earningMode: SessionType? = null,
     val runningEarnings: Double = 0.0,
-    val runningMiles: Double = 0.0,
     val accumulatedDeliveryPay: Double = 0.0,
 )

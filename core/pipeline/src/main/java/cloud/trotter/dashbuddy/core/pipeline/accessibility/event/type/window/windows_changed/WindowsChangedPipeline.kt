@@ -71,7 +71,6 @@ class WindowsChangedPipeline @Inject constructor(
 
                     TreeSnapshot(
                         tree = tree,
-                        source = TreeSnapshot.Source.WINDOWS_CHANGED,
                         packageName = pkg,
                         windowContext = TreeSnapshot.WindowContext(
                             windowId = w.id,

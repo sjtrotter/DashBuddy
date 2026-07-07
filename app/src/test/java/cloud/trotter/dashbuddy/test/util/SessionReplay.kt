@@ -108,7 +108,7 @@ object SessionReplay {
             val event = PipelineEvent.Screen(
                 timestamp = frame.capturedAtMs,
                 tree = frame.node,
-                snapshot = TreeSnapshot(frame.node, TreeSnapshot.Source.WINDOWS_CHANGED, packageName = pkg),
+                snapshot = TreeSnapshot(frame.node, packageName = pkg),
                 packageName = pkg,
             )
             classifier.classify(event).copy(timestamp = frame.capturedAtMs)
@@ -267,7 +267,7 @@ object SessionReplay {
                         PipelineEvent.Screen(
                             timestamp = f.capturedAtMs,
                             tree = f.node,
-                            snapshot = TreeSnapshot(f.node, TreeSnapshot.Source.WINDOWS_CHANGED, packageName = pkg),
+                            snapshot = TreeSnapshot(f.node, packageName = pkg),
                             packageName = pkg,
                         ),
                     ).copy(timestamp = f.capturedAtMs)
