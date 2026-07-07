@@ -211,7 +211,14 @@ fun DashboardView(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         when {
-            cardStack.isEmpty && (region == null || region.mode == Mode.Offline) -> {
+            // Idle/offline with no ACTIVE dash → the idle dashboard card (gas/vehicle
+            // just-in-time actions + last-session summary). Keyed on `active == null`, NOT
+            // `cardStack.isEmpty`: a completed session's timeline (non-active cards) must not
+            // suppress the idle card, or the gas quick-edit becomes unreachable after the first
+            // dash — `displayedSessionId` falls back to the most-recent session forever, so the
+            // stack is never empty again (#722/#693 reachability). The full completed timeline
+            // still shows while actively dashing and via the analytics drill-down.
+            (region == null || region.mode == Mode.Offline) && cardStack.active == null -> {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
