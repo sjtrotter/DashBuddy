@@ -14,11 +14,8 @@ class FuelPriceRepository @Inject constructor(
     private val locationDataSource: LocationDataSource,
     private val appPreferencesRepository: AppPreferencesRepository
 ) {
-    suspend fun fetchAndSaveCurrentGasPrice(fuelType: FuelType): Result<Float> {
-        val priceResult = fetchCurrentGasPrice(fuelType)
-        priceResult.onSuccess { newPrice -> appPreferencesRepository.updateGasPrice(newPrice) }
-        return priceResult
-    }
+    suspend fun fetchAndSaveCurrentGasPrice(fuelType: FuelType): Result<Float> =
+        fetchAndPersist(fuelType) { appPreferencesRepository.updateGasPrice(it) }
 
     /**
      * "Resume auto" (#722) — the bubble's MANUAL-mode chip. Routes through the SAME fetch as
@@ -26,11 +23,24 @@ class FuelPriceRepository @Inject constructor(
      * auto atomically with the fetched price via [AppPreferencesRepository.updateGasPriceAuto],
      * the inverse of the stepper's [AppPreferencesRepository.updateGasPriceManual] flip.
      */
-    suspend fun fetchAndResumeAutoGasPrice(fuelType: FuelType): Result<Float> {
-        val priceResult = fetchCurrentGasPrice(fuelType)
-        priceResult.onSuccess { newPrice -> appPreferencesRepository.updateGasPriceAuto(newPrice) }
-        return priceResult
-    }
+    suspend fun fetchAndResumeAutoGasPrice(fuelType: FuelType): Result<Float> =
+        fetchAndPersist(fuelType) { appPreferencesRepository.updateGasPriceAuto(it) }
+
+    /**
+     * A failed persist is a failed [Result], never an uncaught throw — callers rely on the
+     * no-throw contract (the bubble's `viewModelScope.launch` has no exception handler, and the
+     * daily worker treats a failure Result as a retry signal).
+     */
+    private suspend fun fetchAndPersist(fuelType: FuelType, save: suspend (Float) -> Unit): Result<Float> =
+        fetchCurrentGasPrice(fuelType).mapCatching { newPrice ->
+            try {
+                save(newPrice)
+            } catch (e: Exception) {
+                Timber.Forest.e(e, "GasPriceRepository failed to persist fetched price")
+                throw e
+            }
+            newPrice
+        }
 
     suspend fun fetchGasPriceOnly(fuelType: FuelType): Result<Float> {
         return try {
