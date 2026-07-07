@@ -81,7 +81,7 @@ fun DataExportScreen(
             Text(
                 "Pick a folder and DashBuddy writes three spreadsheet files into it:\n" +
                     "• deliveries.csv — one row per delivery\n" +
-                    "• sessions.csv — one row per dash\n" +
+                    "• sessions.csv — one row per session\n" +
                     "• summary.csv — totals + estimated IRS mileage deduction\n\n" +
                     "This is your own data, on-device — nothing is uploaded. Exports all history " +
                     "(a date-range picker is coming later).",

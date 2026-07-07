@@ -77,8 +77,8 @@ fun EvidenceSettingsScreen(
             )
 
             SwitchRow(
-                label = "Save Dash Summary",
-                subtitle = "End of dash earnings report",
+                label = "Save Session Summary",
+                subtitle = "End of session earnings report",
                 checked = config.saveSessionSummaries,
                 onCheckedChange = {
                     viewModel.updateEvidenceConfig(

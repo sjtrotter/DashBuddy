@@ -195,7 +195,7 @@ private fun periodLabel(period: AnalyticsPeriod): String =
 private fun DashingStatusRow(onTap: () -> Unit) {
     AppCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onTap)) {
         Text(
-            text = "🟢 Dashing — tap for the bubble",
+            text = "🟢 Session active — tap for the bubble",
             style = MaterialTheme.typography.titleMedium,
             color = AppTheme.colors.text,
         )

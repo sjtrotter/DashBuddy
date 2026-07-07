@@ -132,7 +132,7 @@ private fun EarningsByDayCard(days: List<DailyEarnings>) {
             AppBarChart(bars = bars, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "gross per day · dashes count on their start day",
+                text = "gross per day · sessions count on their start day",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.text3,
             )
@@ -353,10 +353,10 @@ private fun TopStoresCard(stores: List<StoreEconomics>) {
 private fun RecentDashesCard(sessions: List<SessionRecord>, onOpenSession: (String) -> Unit) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "RECENT DASHES", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = "RECENT SESSIONS", style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (sessions.isEmpty()) {
-            EmptyRow("No dashes recorded yet.")
+            EmptyRow("No sessions recorded yet.")
         } else {
             sessions.forEachIndexed { index, session ->
                 if (index > 0) Spacer(Modifier.height(10.dp))

@@ -51,7 +51,7 @@ fun GeneralSettingsScreen(
             )
             SwitchRow(
                 label = "Driving glance mode",
-                subtitle = "Larger HUD text while dashing",
+                subtitle = "Larger HUD text while on a session",
                 checked = glanceMode,
                 onCheckedChange = { viewModel.setGlanceMode(it) }
             )

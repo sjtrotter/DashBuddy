@@ -290,7 +290,7 @@ fun WizardScreen(
                         .fillMaxWidth()
                         .height(56.dp)
                 ) {
-                    Text("Let's Go Dash", style = MaterialTheme.typography.titleMedium)
+                    Text("Let's Go", style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }

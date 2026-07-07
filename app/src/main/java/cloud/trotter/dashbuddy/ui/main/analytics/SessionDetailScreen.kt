@@ -78,7 +78,7 @@ fun SessionDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dash detail") },
+                title = { Text("Session detail") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -100,7 +100,7 @@ fun SessionDetailScreen(
                     .fillMaxSize(),
             )
             // Post-load, a null detail means no session row exists for this id.
-            !uiState.loading -> CenteredMessage("Dash not found.", Modifier.padding(padding))
+            !uiState.loading -> CenteredMessage("Session not found.", Modifier.padding(padding))
             // Pre-first-emission: keep the frame empty (the read-model emits promptly).
             else -> Box(Modifier.padding(padding).fillMaxSize())
         }
@@ -133,7 +133,7 @@ private fun DashDetailContent(
         if (hasCallout) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AppCallout(
-                    text = "${Formats.money(detail.unattributedPay)} unaccounted on this dash — the " +
+                    text = "${Formats.money(detail.unattributedPay)} unaccounted on this session — the " +
                         "platform reported more than the captured deliveries.",
                     container = AppTheme.colors.warnBg,
                     modifier = Modifier.fillMaxWidth(),
@@ -257,7 +257,7 @@ private fun DeliveriesCard(
         Text(text = "DELIVERIES", style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (deliveries.isEmpty()) {
-            EmptyRow("No deliveries captured for this dash.")
+            EmptyRow("No deliveries captured for this session.")
         } else {
             deliveries.forEachIndexed { index, delivery ->
                 if (index > 0) Spacer(Modifier.height(14.dp))

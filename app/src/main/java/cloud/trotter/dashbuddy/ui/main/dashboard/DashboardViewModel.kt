@@ -30,7 +30,7 @@ import javax.inject.Inject
  * live mirror of the bubble HUD (#657). Exposes one immutable [DashboardUiState]
  * (Principle 1 — UDF) assembled reactively from:
  *  - [StateManagerV2] `AppState` — the flow/mode used for the status line + the slim
- *    "🟢 Dashing — tap for the bubble" pointer ([DashboardUiState.isDashing]),
+ *    "🟢 Session active — tap for the bubble" pointer ([DashboardUiState.isDashing]),
  *  - [AppStateRepository.isFirstRun] — the setup gate,
  *  - [AnalyticsRepository.periodEconomics] — the durable read-model totals for the
  *    user-selected window (frozen net, re-emits as the projector folds each delivery and
@@ -83,7 +83,7 @@ class DashboardViewModel @Inject constructor(
 
     fun showWelcomeBubble() {
         bubbleManager.postMessage(
-            text = "DashBuddy is ready. Open your platform and start a dash — I'll track everything from here.",
+            text = "DashBuddy is ready. Open your platform and start a session — I'll track everything from here.",
             ChatPersona.Dispatcher,
             expand = true
         )
@@ -99,8 +99,8 @@ class DashboardViewModel @Inject constructor(
     private fun statusText(flow: Flow, mode: Mode?): String {
         if (mode == null || mode == Mode.Offline) {
             return when (flow) {
-                Flow.SessionEnded -> "Dash Complete"
-                else -> "Ready to Dash"
+                Flow.SessionEnded -> "Session Complete"
+                else -> "Ready to start a session"
             }
         }
         if (mode == Mode.Paused) return "Paused"
@@ -111,7 +111,7 @@ class DashboardViewModel @Inject constructor(
             Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> "Heading to Pickup"
             Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> "Heading to Drop-off"
             Flow.PostTask -> "Delivery Complete"
-            Flow.SessionEnded -> "Dash Complete"
+            Flow.SessionEnded -> "Session Complete"
         }
     }
 }

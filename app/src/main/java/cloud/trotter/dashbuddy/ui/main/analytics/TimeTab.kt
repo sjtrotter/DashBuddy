@@ -68,7 +68,7 @@ private fun TimeSplitCard(time: TimeEconomics) {
         Text(text = "TIME SPLIT", style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (time.onlineMillis == 0L) {
-            EmptyRow("No dashes in this period yet.")
+            EmptyRow("No sessions in this period yet.")
             return@AppCard
         }
 
@@ -76,7 +76,7 @@ private fun TimeSplitCard(time: TimeEconomics) {
         Spacer(Modifier.height(2.dp))
         Text(
             text = "online across ${Formats.commaInt(time.sessions)} " +
-                if (time.sessions == 1) "dash" else "dashes",
+                if (time.sessions == 1) "session" else "sessions",
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
@@ -94,12 +94,12 @@ private fun TimeSplitCard(time: TimeEconomics) {
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppStatTile(
-                label = "Dashes",
+                label = "Sessions",
                 value = Formats.commaInt(time.sessions),
                 modifier = Modifier.weight(1f),
             )
             AppStatTile(
-                label = "Avg dash",
+                label = "Avg session",
                 value = time.avgDashMillis?.let { formatDuration(it) } ?: EMPTY_VALUE,
                 modifier = Modifier.weight(1f),
             )
@@ -128,7 +128,7 @@ private fun DeadheadCard(time: TimeEconomics) {
         Text(text = "$deadheadPct%", style = AppTheme.num.heroNum, color = c.text)
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "miles with no delivery attached — after the last drop, or dashes with none",
+            text = "miles with no delivery attached — after the last drop, or sessions with none",
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
