@@ -26,7 +26,7 @@ class EiaFuelPrice @Inject constructor(
             }
             val regionCode = getRegionCode(userLocation)
 
-            Timber.i("Fetching Gas Price for ${fuelType.name} in region: $regionCode")
+            Timber.tag("Network").i("Fetching Gas Price for ${fuelType.name} in region: $regionCode")
 
             val seriesId = buildSeriesId(fuelType, regionCode)
 
@@ -34,13 +34,21 @@ class EiaFuelPrice @Inject constructor(
             val latestPrice = response.response.data.firstOrNull()?.value
 
             if (latestPrice != null && latestPrice > 0f) {
-                Timber.i("Successfully fetched EIA gas price: $$latestPrice")
+                Timber.tag("Network").i("Successfully fetched EIA gas price: $$latestPrice")
                 Result.success(latestPrice)
             } else {
                 Result.failure(Exception("EIA API returned empty or invalid data"))
             }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to fetch from EIA API")
+            // #692 P7: this used to be its own ERROR line, double-reporting with the WorkManager
+            // caller's WARN ("Failed to fetch gas prices... will retry later") for the exact same
+            // failure. A WorkManager-retried fetch is neither lost data nor a crashed subsystem, so
+            // there is exactly ONE shareable line for this failure now — the caller's WARN, which
+            // carries this exception's message. This site keeps the full exception + stack trace on
+            // the DEBUG firehose only, for on-device diagnosis. (#348: no secret is logged here —
+            // the api_key never appears in an exception message; HTTP client secret redaction is
+            // separately enforced in NetworkClientFactory.)
+            Timber.tag("Network").d(e, "Failed to fetch from EIA API")
             Result.failure(e)
         }
     }
@@ -70,7 +78,7 @@ class EiaFuelPrice @Inject constructor(
         return if (!stateName.isNullOrEmpty()) {
             mapStateToPaddRegion(stateName)
         } else {
-            Timber.w("State not specified in UserLocation, falling back to National Average.")
+            Timber.tag("Network").w("State not specified in UserLocation, falling back to National Average.")
             "NUS"
         }
     }
@@ -101,7 +109,7 @@ class EiaFuelPrice @Inject constructor(
             "WASHINGTON", "OREGON", "CALIFORNIA", "NEVADA", "ARIZONA", "ALASKA", "HAWAII" -> "R50"
 
             else -> {
-                Timber.w("Unrecognized state ($stateName), falling back to National Average.")
+                Timber.tag("Network").w("Unrecognized state ($stateName), falling back to National Average.")
                 "NUS"
             }
         }

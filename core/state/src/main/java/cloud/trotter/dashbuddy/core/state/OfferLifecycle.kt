@@ -210,7 +210,16 @@ private fun PlatformRegionStepper.expireOffer(
 ): PlatformRegion {
     val hash = (obs.payload as? ObservationPayload.OfferExpiry)?.offerHash ?: return region
     val target = region.pendingOffers.firstOrNull { it.offerHash == hash } ?: return region
-    if (target.acceptedAt != null || target.isAcceptLatched()) return region
+    if (target.acceptedAt != null || target.isAcceptLatched()) {
+        // Defended invariant (Principle 7 WARN; #692 review F1): a phantom timeout was suppressed
+        // on an ACCEPTED offer — firing it would have logged a false OFFER_TIMEOUT and destroyed
+        // the mint (the #526 regression class). Hash only, no PII.
+        Timber.tag("StateMachine").w(
+            "OFFER_EXPIRY no-op (#438 B3): offer %s is accept-latched/accepted — phantom timeout suppressed",
+            hash,
+        )
+        return region
+    }
     return region.copy(pendingOffers = region.pendingOffers.filterNot {
         it.offerHash == hash && it.acceptedAt == null
     })
