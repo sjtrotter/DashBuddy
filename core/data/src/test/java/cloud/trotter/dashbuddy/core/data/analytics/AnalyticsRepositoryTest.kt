@@ -384,4 +384,53 @@ class AnalyticsRepositoryTest {
         assertEquals(1, life.deliveries)
         assertEquals(12.0, life.pay, 1e-9)
     }
+
+    /**
+     * #701: a session whose reported total is LESS than its Σ delivered pay surfaces the excess as
+     * [PeriodEconomics.overAttributedPay] — never floored to zero, and never subtracted from
+     * `netProfit` (which stays Σ frozen delivery net + cash, with `unattributed` at 0 since reported
+     * did not exceed delivered).
+     */
+    @Test
+    fun `over-attributed session surfaces the positive delta without touching unattributed or net (#701)`() = runBlocking {
+        // Reported 30 < delivered 45 (25 + 20) → 15 over-attributed; unattributed stays 0.
+        dao.upsertSession(session("S1", base, reportedEarnings = 30.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 2, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 25.0, net = 20.0, completedAt = base + hour))
+        dao.upsertDelivery(delivery(2, "S1", "J1", "Wendys", pay = 20.0, net = 16.0, completedAt = base + 2 * hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("over-attribution = delivered 45 − reported 30", 15.0, eco.overAttributedPay, 1e-9)
+        assertEquals("unattributed stays 0 — reported did not exceed delivered", 0.0, eco.unattributedPay, 1e-9)
+        // Net = Σ frozen delivery net (20 + 16) + unattributed (0) + cash (0) = 36 — the over-attribution
+        // is NOT subtracted.
+        assertEquals(36.0, eco.netProfit, 1e-9)
+    }
+
+    /**
+     * #701: a period mixing one over-attributed and one under-attributed session — `unattributed` and
+     * `overAttributed` are independent per-session SUMs; neither direction cancels the other.
+     */
+    @Test
+    fun `mixed period sums unattributed and overAttributed independently (#701)`() = runBlocking {
+        // S1: reported 50 > delivered 40 → 10 unattributed.
+        dao.upsertSession(session("S1", base, reportedEarnings = 50.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 40.0, net = 35.0, completedAt = base + hour))
+        // S2: reported 10 < delivered 18 → 8 over-attributed.
+        dao.upsertSession(session("S2", base + 10 * hour, reportedEarnings = 10.0, durationMillis = hour, startOdo = 0.0, lastOdo = 5.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(2, "S2", "J2", "Chipotle", pay = 18.0, net = 15.0, completedAt = base + 11 * hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("S1's 10 unattributed, unaffected by S2's over-attribution", 10.0, eco.unattributedPay, 1e-9)
+        assertEquals("S2's 8 over-attributed, unaffected by S1's unattributed", 8.0, eco.overAttributedPay, 1e-9)
+    }
+
+    /** #701 x #688: a cash tip on an over-attributed session does not shrink/grow overAttributedPay (cash-free comparison). */
+    @Test
+    fun `cash tip does not change overAttributedPay (#701, #688 cash-free invariant)`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = 10.0, durationMillis = hour, startOdo = 0.0, lastOdo = 5.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 18.0, net = 15.0, completedAt = base + hour, cashTip = 4.0))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("overAttributed compares cash-free delivered pay: 18 − 10 = 8, cash never counted", 8.0, eco.overAttributedPay, 1e-9)
+    }
 }

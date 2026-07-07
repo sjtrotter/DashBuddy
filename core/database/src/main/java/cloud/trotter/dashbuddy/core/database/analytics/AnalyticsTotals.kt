@@ -79,18 +79,22 @@ data class StoreTotalsRow(
  * Reported-authoritative gross + the unattributed delta for a period (#314 PR3).
  * Computed per session (reported summary total when present, else that session's Σ
  * delivered pay), then summed. [unattributed] is the excess of reported over delivered
- * — bonuses/adjustments/a missed capture; a review flag (#650).
+ * — bonuses/adjustments/a missed capture; a review flag (#650). [overAttributed] is the
+ * mirror excess of delivered over reported (#701) — a **display-only** review signal, never
+ * folded into [unattributed]/`netProfit`.
  */
 data class GrossTotalsRow(
     val gross: Double,
     val unattributed: Double,
+    val overAttributed: Double,
 )
 
-/** Per-platform gross + unattributed (GROUP BY platform). */
+/** Per-platform gross + unattributed + overAttributed (GROUP BY platform, #701). */
 data class PlatformGrossTotalsRow(
     val platform: String,
     val gross: Double,
     val unattributed: Double,
+    val overAttributed: Double,
 )
 
 /**

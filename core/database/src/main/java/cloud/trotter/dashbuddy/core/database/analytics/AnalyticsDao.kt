@@ -178,6 +178,12 @@ interface AnalyticsDao {
      * [deliveryTotals]'s null-session-inclusive `cash`) and into `gross` here (session-join only) is
      * the same amount; a null-session cash row would leak into net but not gross, which the invariant
      * forbids.
+     *
+     * **`overAttributed` (#701):** the mirror signal `deliveredPay − reportedEarnings` for sessions
+     * where delivered exceeds reported (the opposite excess from `unattributed`) — surfaced as a
+     * **positive magnitude**, never folded into `netProfit`/`unattributed`. Same cash-free comparison
+     * (`d.deliveredPay`, never `+ d.cashTip`) as `unattributed`, so the #688 cash exclusion holds for
+     * both directions. `unattributed` is left byte-for-byte untouched.
      */
     @Query(
         """SELECT COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
@@ -185,7 +191,12 @@ interface AnalyticsDao {
                     CASE WHEN s.reportedEarnings IS NOT NULL
                               AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
                          THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
-                         ELSE 0 END), 0) AS unattributed
+                         ELSE 0 END), 0) AS unattributed,
+                  COALESCE(SUM(
+                    CASE WHEN s.reportedEarnings IS NOT NULL
+                              AND s.reportedEarnings < COALESCE(d.deliveredPay, 0)
+                         THEN COALESCE(d.deliveredPay, 0) - s.reportedEarnings
+                         ELSE 0 END), 0) AS overAttributed
            FROM session_records s
            LEFT JOIN (
              SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip
@@ -195,6 +206,7 @@ interface AnalyticsDao {
     )
     fun grossAndUnattributed(start: Long, end: Long): Flow<GrossTotalsRow>
 
+    /** Per-platform variant of [grossAndUnattributed] — same `overAttributed` mirror aggregate (#701). */
     @Query(
         """SELECT s.platform AS platform,
                   COALESCE(SUM(COALESCE(s.reportedEarnings, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
@@ -202,7 +214,12 @@ interface AnalyticsDao {
                     CASE WHEN s.reportedEarnings IS NOT NULL
                               AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
                          THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
-                         ELSE 0 END), 0) AS unattributed
+                         ELSE 0 END), 0) AS unattributed,
+                  COALESCE(SUM(
+                    CASE WHEN s.reportedEarnings IS NOT NULL
+                              AND s.reportedEarnings < COALESCE(d.deliveredPay, 0)
+                         THEN COALESCE(d.deliveredPay, 0) - s.reportedEarnings
+                         ELSE 0 END), 0) AS overAttributed
            FROM session_records s
            LEFT JOIN (
              SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip

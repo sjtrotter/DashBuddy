@@ -41,4 +41,17 @@ data class SessionDetail(
             val reported = session.reportedEarnings ?: return 0.0
             return (reported - deliveredPay).coerceAtLeast(0.0)
         }
+
+    /**
+     * `delivered − reported` when captured delivery pay exceeds the platform-reported total, else
+     * `0` (never negative) — the mirror of [unattributedPay] (#701), a **display-only** per-dash
+     * review signal for an over-count (never folded into [unattributedPay] or any net figure). Same
+     * cash-free [deliveredPay] comparison as [unattributedPay], so the #688 cash exclusion holds for
+     * both directions; `0` when [session] carries no `reportedEarnings` (nothing to compare against).
+     */
+    val overAttributedPay: Double
+        get() {
+            val reported = session.reportedEarnings ?: return 0.0
+            return (deliveredPay - reported).coerceAtLeast(0.0)
+        }
 }
