@@ -307,7 +307,13 @@ class SideEffectEngine @Inject constructor(
 
             is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.evaluation)
 
-            is AppEffect.StartSession -> bubbleManager.startSession(effect.sessionId, effect.platformName)
+            is AppEffect.StartSession -> {
+                bubbleManager.startSession(effect.sessionId, effect.platformName)
+                // #438 B5: anchor THIS session's odometer miles (per-session anchor). External
+                // effect → suppressed on recovery, which is correct: the anchor persisted across
+                // the crash, so recovery reconciliation re-establishes tracking without re-anchoring.
+                odometerEffectHandler.onSessionStarted(effect.sessionId)
+            }
             is AppEffect.EndSession -> bubbleManager.endSession(effect.platformName)
             is AppEffect.StartOdometer -> odometerEffectHandler.startUp()
             is AppEffect.StopOdometer -> odometerEffectHandler.shutDown()
@@ -455,10 +461,13 @@ class SideEffectEngine @Inject constructor(
             // --- Lifecycle verbs ---
             EffectVerb.SESSION_START -> sessionStartFromArgs(e.args)
             EffectVerb.SESSION_END -> sessionEndFromArgs(e.args)
-            EffectVerb.ODOMETER_START -> odometerEffectHandler.startUp()
-            EffectVerb.ODOMETER_STOP -> odometerEffectHandler.shutDown()
-            EffectVerb.ODOMETER_PAUSE -> odometerEffectHandler.pause()
-            EffectVerb.ODOMETER_RESUME -> odometerEffectHandler.resume()
+            // #438 B5 (vet L6): the odometer is arbitrated at the cross-platform tier
+            // (EffectMap.diffCrossPlatform). RETIRED as rule verbs — a rule must not be able to
+            // command the odometer directly (a future ruleset could otherwise zero a live session,
+            // bypassing the arbiter). No shipped rule declares these; the branches are inert no-ops.
+            EffectVerb.ODOMETER_START, EffectVerb.ODOMETER_STOP,
+            EffectVerb.ODOMETER_PAUSE, EffectVerb.ODOMETER_RESUME ->
+                Timber.w("Rule verb %s is retired — the odometer is cross-platform arbitrated (#438 B5)", e.verb)
             EffectVerb.SCHEDULE_TIMEOUT -> scheduleTimeoutFromArgs(
                 e.args,
                 Platform.fromRuleId(e.ruleId).takeIf { it != Platform.Unknown },

@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.RequestedEffect
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.CrossPlatformRegion
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
@@ -546,7 +547,10 @@ class EffectMapTest {
         ))
 
         val newSession = Session("sess-new", startedAt = 1000L)
+        // #438 B5: StartOdometer now fires from the cross-platform activeSessionCount 0→1 crossing —
+        // the StateMachine derives this region; the test sets it to exercise the arbitration.
         val next = AppState(regions = Regions(
+            crossPlatform = CrossPlatformRegion(activeSessionCount = 1),
             platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = newSession)),
         ))
 
@@ -561,10 +565,13 @@ class EffectMapTest {
     fun `session end emits DASH_STOP, StopOdometer, EndSession`() {
         val (platform, onlineRegion) = stateWithPlatform(mode = Mode.Online, sessionId = "sess-1")
         val prev = AppState(regions = Regions(
+            crossPlatform = CrossPlatformRegion(activeSessionCount = 1),
             platforms = mapOf(platform to onlineRegion),
         ))
 
+        // #438 B5: StopOdometer now fires from the cross-platform activeSessionCount 1→0 crossing.
         val next = AppState(regions = Regions(
+            crossPlatform = CrossPlatformRegion(activeSessionCount = 0),
             platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Offline)),
         ))
 
@@ -706,7 +713,7 @@ class EffectMapTest {
     // =========================================================================
 
     @Test
-    fun `pickup start emits PICKUP_NAV_STARTED and ResumeOdometer`() {
+    fun `pickup start emits PICKUP_NAV_STARTED`() {
         val (platform, _) = stateWithPlatform()
         val prevRegion = PlatformRegion(platform, mode = Mode.Online, session = Session("sess-1", startedAt = 100L))
         val prev = AppState(regions = Regions(
@@ -726,7 +733,9 @@ class EffectMapTest {
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskPickupNavigation, parsed = ParsedFields.TaskFields(storeName = "Chipotle", phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION)))
 
         assertTrue("Should emit PICKUP_NAV_STARTED", effects.logEventTypes().contains(AppEventType.PICKUP_NAV_STARTED))
-        assertTrue("Should emit ResumeOdometer", effects.any { it is AppEffect.ResumeOdometer })
+        // #438 B5: odometer Resume is no longer emitted per pickup-nav edge — it's cross-platform
+        // arbitrated (offer→nav is moving→moving, no stationary crossing; today's Resume here was a
+        // redundant no-op). See OdometerArbitrationTest.
         assertTrue("Should emit UpdateBubble with store name", effects.any {
             it is AppEffect.UpdateBubble && it.text.contains("Chipotle")
         })
@@ -853,7 +862,7 @@ class EffectMapTest {
     }
 
     @Test
-    fun `stacked pickup transition fires PICKUP_NAV_STARTED and ResumeOdometer for the new task`() {
+    fun `stacked pickup transition fires PICKUP_NAV_STARTED for the new task`() {
         // Costa Pacifica pickup completed (moved to recentTasks) and a new
         // Chili's pickup task minted by the stepper. The diff-task gate must
         // fire even though prevTask is non-null — it now keys on "taskId changed".
@@ -898,10 +907,8 @@ class EffectMapTest {
             "Stacked transition should emit PICKUP_NAV_STARTED for the new task",
             effects.logEventTypes().contains(AppEventType.PICKUP_NAV_STARTED),
         )
-        assertTrue(
-            "Stacked transition should emit ResumeOdometer for the inter-store leg",
-            effects.any { it is AppEffect.ResumeOdometer },
-        )
+        // #438 B5: the inter-store leg's odometer Resume is cross-platform arbitrated (the
+        // arrived→nav stationary→moving crossing) — see OdometerArbitrationTest, not this per-edge diff.
         assertTrue(
             "Bubble should announce the new store",
             effects.any { it is AppEffect.UpdateBubble && it.text.contains("Chili") },
@@ -1019,7 +1026,8 @@ class EffectMapTest {
 
         assertTrue("Should emit PICKUP_CONFIRMED", effects.logEventTypes().contains(AppEventType.PICKUP_CONFIRMED))
         assertTrue("Should emit DELIVERY_NAV_STARTED", effects.logEventTypes().contains(AppEventType.DELIVERY_NAV_STARTED))
-        assertTrue("Should emit ResumeOdometer", effects.any { it is AppEffect.ResumeOdometer })
+        // #438 B5: the drive's odometer Resume is cross-platform arbitrated (arrived→nav crossing) —
+        // see OdometerArbitrationTest, not this per-edge diff.
         assertTrue(
             "Should NOT emit DELIVERY_CONFIRMED on a pickup-leaving transition",
             !effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
@@ -1070,11 +1078,12 @@ class EffectMapTest {
     }
 
     @Test
-    fun `stacked leg-2 dropoff (dropoff to a new dropoff) mints DELIVERY_NAV_STARTED, ResumeOdometer, and a Heading-to bubble (#603)`() {
+    fun `stacked leg-2 dropoff (dropoff to a new dropoff) mints DELIVERY_NAV_STARTED and a Heading-to bubble (#603)`() {
         // A multi-drop stack: leg-1's drop is retired and leg-2's drop becomes active — a
         // different taskId, freshly minted on THIS frame (startedAt == obs.timestamp). Both
         // sides are DROPOFF, so the pickup→dropoff branch never sees it; before #603 leg-2 was
-        // a silent drop (no nav event, no odometer resume, no bubble).
+        // a silent drop (no nav event, no bubble). #438 B5: the odometer resume for its drive is
+        // cross-platform arbitrated now (see OdometerArbitrationTest), no longer a per-edge emit.
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
         val leg1 = Task(
@@ -1100,7 +1109,6 @@ class EffectMapTest {
         ))
 
         assertTrue("leg-2 must mint DELIVERY_NAV_STARTED", effects.logEventTypes().contains(AppEventType.DELIVERY_NAV_STARTED))
-        assertTrue("leg-2 must resume the odometer for its drive", effects.any { it is AppEffect.ResumeOdometer })
         assertTrue(
             "leg-1's drop is confirmed as the active task moves on",
             effects.logEventTypes().contains(AppEventType.DELIVERY_CONFIRMED),
@@ -1144,7 +1152,7 @@ class EffectMapTest {
     }
 
     @Test
-    fun `arrival at pickup emits PauseOdometer and PICKUP_ARRIVED`() {
+    fun `arrival at pickup emits PICKUP_ARRIVED`() {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
         val navTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.PICKUP, storeName = "Chipotle", startedAt = 900L, arrivedAt = null)
@@ -1161,12 +1169,13 @@ class EffectMapTest {
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskPickupArrived, parsed = ParsedFields.TaskFields(storeName = "Chipotle", phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.ARRIVED)))
 
-        assertTrue("Should emit PauseOdometer", effects.any { it is AppEffect.PauseOdometer })
+        // #438 B5: PauseOdometer is cross-platform arbitrated (all-live-stationary crossing) — see
+        // OdometerArbitrationTest, not this per-edge diff.
         assertTrue("Should emit PICKUP_ARRIVED", effects.logEventTypes().contains(AppEventType.PICKUP_ARRIVED))
     }
 
     @Test
-    fun `arrival at dropoff emits PauseOdometer and DELIVERY_ARRIVED`() {
+    fun `arrival at dropoff emits DELIVERY_ARRIVED`() {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
         val navTask = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L, arrivedAt = null)
@@ -1183,7 +1192,7 @@ class EffectMapTest {
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskDropoffArrived, parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.ARRIVED)))
 
-        assertTrue("Should emit PauseOdometer", effects.any { it is AppEffect.PauseOdometer })
+        // #438 B5: PauseOdometer is cross-platform arbitrated — see OdometerArbitrationTest.
         assertTrue("Should emit DELIVERY_ARRIVED", effects.logEventTypes().contains(AppEventType.DELIVERY_ARRIVED))
     }
 
@@ -2100,6 +2109,7 @@ class EffectMapTest {
 
         val newSession = Session("sess-new", startedAt = 1000L)
         val next = AppState(regions = Regions(
+            crossPlatform = CrossPlatformRegion(activeSessionCount = 1),
             platforms = mapOf(platform to PlatformRegion(platform, mode = Mode.Online, session = newSession)),
         ))
 

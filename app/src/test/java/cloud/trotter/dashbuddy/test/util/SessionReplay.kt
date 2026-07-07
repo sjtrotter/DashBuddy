@@ -120,12 +120,14 @@ object SessionReplay {
         replayRecognition(loadSession(pathFromResources))
 
     /** One replayed step: the source frame (null for an injected synthetic obs), what it recognized
-     *  as, the state after, and the events it emitted. */
+     *  as, the state after, the events it emitted, and the full [AppEffect] list (for effect-level
+     *  assertions like the #438 B5 odometer-arbitration equivalence proof). */
     data class ReplayStep(
         val frame: ReplayFrame?,
         val observation: Observation,
         val stateAfter: AppState,
         val events: List<AppEvent>,
+        val effects: List<AppEffect> = emptyList(),
     )
 
     /**
@@ -290,6 +292,7 @@ object SessionReplay {
                 observation = obs,
                 stateAfter = state,
                 events = transition.effects.filterIsInstance<AppEffect.LogEvent>().map { it.event },
+                effects = transition.effects,
             )
         }
     }
