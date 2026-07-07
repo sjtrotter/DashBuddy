@@ -62,7 +62,9 @@ class EffectMap @Inject constructor(
     /**
      * Per-platform grace/timing snapshot (#438 item 6, vet M7). Same
      * eagerly-materialized synchronous value provider `TransitionPolicy` takes —
-     * read once per [diff], never collected inside a reducer; defaults to code
+     * one atomic read at each use site, never collected inside a reducer (each
+     * value is stored into state/a timer immediately, so a mid-[diff] config flip
+     * is equivalent to the edit landing between steps); defaults to code
      * constants when unbound so `EffectMap()` in tests is behavior-identical.
      * Replay-determinism tradeoff pre-accepted (see [GraceConfigProvider]).
      */

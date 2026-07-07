@@ -48,8 +48,11 @@ data class GraceConfig(
  * item 6, vet M7). The Hilt-bound implementation reads
  * [PlatformPreferences.graceConfig]`.value` — the same eagerly-materialized
  * `.value` snapshot pattern the engine already uses for `evidenceConfig` — so
- * the pure steppers and `EffectMap` read it exactly ONCE per `step()` / `diff()`
- * and never collect a Flow inside a reducer.
+ * the pure steppers and `EffectMap` never collect a Flow inside a reducer. Each
+ * use site reads one atomic snapshot **synchronously at the moment it computes a
+ * deadline/duration**, and every value is immediately stored in state or a timer
+ * — so a config flip landing mid-step is observationally identical to the edit
+ * landing between two steps (the five fields carry no cross-field invariant).
  *
  * REPLAY-DETERMINISM TRADEOFF (pre-accepted, #438 design doc §B6): a grace edited
  * between a live run and its crash replay changes the replayed commit timing — a
@@ -61,7 +64,7 @@ data class GraceConfig(
  */
 fun interface GraceConfigProvider {
 
-    /** The current per-platform override snapshot. Read once per step/diff. */
+    /** The current per-platform override snapshot — one atomic read per use site. */
     fun snapshot(): Map<Platform, GraceConfig>
 
     /** The config for [platform], falling back to [GraceConfig.DEFAULT]. */

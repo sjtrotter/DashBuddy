@@ -56,6 +56,10 @@ class PlatformPreferencesRepository @Inject constructor(
      * every platform resolves to [GraceConfig.DEFAULT] (behavior identical to the
      * former compile-time constants). When a dev-settings editor lands it swaps
      * this for a DataStore-backed flow; the read seam is already in place.
+     * CONSTRAINT: that swap MUST use `stateIn(scope, SharingStarted.Eagerly, …)`
+     * like [enabledPackages] above — the consumer is a synchronous `.value` read
+     * with NO collector, so a `WhileSubscribed` flow would freeze it at the
+     * initial empty map forever (adversarial-review INFO-3).
      */
     override val graceConfig: StateFlow<Map<Platform, GraceConfig>> =
         MutableStateFlow(emptyMap())
