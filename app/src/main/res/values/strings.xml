@@ -63,7 +63,7 @@
 
     <string name="perm_title_location">Background Location</string>
     <string name="perm_pitch_location">DashBuddy tracks your miles while you are dashing so you can calculate your actual profit after gas and wear-and-tear.</string>
-    <string name="perm_hood_location">We only ping your GPS while an active Dash is running. Once you hit \'End Dash\', our Odometer shuts down completely to save your battery and protect your privacy.</string>
+    <string name="perm_hood_location">We only ping your GPS while an active session is running. Once you end the session, our Odometer shuts down completely to save your battery and protect your privacy.</string>
     <string name="perm_action_location">Grant Location</string>
 
     <string name="perm_title_post_notif">Bubble Alerts</string>
@@ -212,19 +212,19 @@
     <string name="data_export_title">Export Data</string>
     <string name="data_export_csv_heading">Export your mileage &amp; earnings to CSV</string>
     <string name="data_export_csv_desc">Pick a folder and DashBuddy writes three spreadsheet files into it:\n• deliveries.csv — one row per delivery\n• sessions.csv — one row per session\n• summary.csv — totals + estimated IRS mileage deduction\n\nThis is your own data, on-device — nothing is uploaded. Exports all history (a date-range picker is coming later).</string>
-    <string name="data_export_csv_button">  Choose folder &amp; export</string>
+    <string name="data_export_csv_button">"  Choose folder &amp; export"</string>
     <string name="data_export_csv_success_format">Exported %1$d files to the chosen folder.</string>
     <string name="data_export_csv_error_format">Export failed: %1$s</string>
     <string name="data_export_log_heading">Export a bug report</string>
     <string name="data_export_log_desc">Pick a folder and DashBuddy writes dashbuddy-log.txt into it — the log the developer needs to diagnose an issue.\n\nINFO+ milestones only — no raw store, customer, or address text. Every line is auto-scrubbed at the sink before it\'s written, so a leaked name can\'t reach the file. On-device, nothing is uploaded.</string>
-    <string name="data_export_log_button">  Choose folder &amp; export log</string>
+    <string name="data_export_log_button">"  Choose folder &amp; export log"</string>
     <string name="data_export_log_success_format">Exported dashbuddy-log.txt — %1$d line(s) were auto-scrubbed.</string>
     <string name="data_export_log_error_format">Log export failed: %1$s</string>
 
     <!-- settings/components/FakeOfferCard.kt -->
-    <string name="fake_offer_score_format" translatable="false">%1$s  ·  %2$dpts</string>
-    <string name="fake_offer_pay_line_format" translatable="false">%1$s gross  →  %2$s net</string>
-    <string name="fake_offer_pay_line_estimate_format" translatable="false">%1$s gross  →  %2$s net (est.)</string>
+    <string name="fake_offer_score_format" translatable="false">"%1$s  ·  %2$dpts"</string>
+    <string name="fake_offer_pay_line_format" translatable="false">"%1$s gross  →  %2$s net"</string>
+    <string name="fake_offer_pay_line_estimate_format" translatable="false">"%1$s gross  →  %2$s net (est.)"</string>
     <string name="fake_offer_fuel_cost_format" translatable="false">−%1$s fuel</string>
     <string name="fake_offer_nonfuel_cost_format">−%1$s wear &amp; fixed costs</string>
     <string name="fake_offer_metric_dollar_per_mile_label" translatable="false">$/mi</string>
@@ -297,7 +297,7 @@
     <string name="settings_home_item_strategy_title">Strategy Config</string>
     <string name="settings_home_item_strategy_subtitle">Rules, Pricing, and Simulation</string>
     <string name="settings_home_economy_true_cost_format" translatable="false">True cost: %1$s/mi</string>
-    <string name="settings_home_economy_defaults_suffix_format"> · %1$d defaults</string>
+    <string name="settings_home_economy_defaults_suffix_format">" · %1$d defaults"</string>
     <string name="settings_home_economy_fallback_subtitle">Tires, oil, depreciation, insurance, phone</string>
     <string name="settings_home_item_economy_title">Personal Economy</string>
     <string name="settings_home_group_data_privacy">Data &amp; Privacy</string>
@@ -428,7 +428,7 @@
     <string name="economy_editor_phone_title">Phone &amp; data</string>
     <string name="economy_editor_phone_plan_total_label">Plan total</string>
     <string name="economy_editor_phone_lines_label">Lines</string>
-    <string name="economy_editor_phone_business_percent_format">% for gig work: %1$d%%</string>
+    <string name="economy_editor_phone_business_percent_format">%% for gig work: %1$d%%</string>
     <string name="economy_editor_phone_per_line_format">Your line: %1$s/mo × %2$d%% = %3$s/mo for gig work</string>
     <string name="economy_editor_annual_miles_title">Expected gig miles / yr</string>
     <string name="economy_editor_annual_miles_summary_format" translatable="false">%1$s mi</string>
@@ -526,7 +526,7 @@
     <string name="flow_card_running_at_overdue_format" translatable="false">%1$s/hr ↓</string>
     <string name="flow_card_running_at_dropping_sub">dropping</string>
     <string name="flow_card_running_at_on_track_sub">on track</string>
-    <string name="flow_card_arrived_margin_format">arrived %1$s %2$s · </string>
+    <string name="flow_card_arrived_margin_format">"arrived %1$s %2$s · "</string>
     <string name="flow_card_margin_early">early</string>
     <string name="flow_card_margin_late">late</string>
     <string name="flow_card_at_stop">at stop</string>
@@ -538,8 +538,8 @@
     <string name="flow_card_below_floor_warning">Below your floor — no longer worth the wait.</string>
     <string name="flow_card_shop_progress_format" translatable="false">shop %1$d/%2$d</string>
     <string name="flow_card_shop_pace_format" translatable="false">%1$s/min</string>
-    <string name="flow_card_detail_arrived_format"> · arrived %1$s</string>
-    <string name="flow_card_detail_picked_up_format"> · picked up %1$s</string>
+    <string name="flow_card_detail_arrived_format">" · arrived %1$s"</string>
+    <string name="flow_card_detail_picked_up_format">" · picked up %1$s"</string>
     <string name="flow_card_post_task_delivery_total">delivery total</string>
     <string name="flow_card_post_task_tip_format">tip · %1$s</string>
     <string name="flow_card_post_task_session_format">session %1$s</string>
