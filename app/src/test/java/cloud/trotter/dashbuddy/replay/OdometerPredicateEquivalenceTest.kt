@@ -44,12 +44,18 @@ class OdometerPredicateEquivalenceTest {
 
     private enum class Gps { ON, OFF }
 
+    // The FULL session corpus — every fixture under snapshots/sessions/ (adversarial-review MED:
+    // the first cut listed 5 and silently dodged an oracle-ordering artifact on teardown_ghost;
+    // the corpus-wide claim needs the corpus).
     private val fixtures = listOf(
+        "snapshots/sessions/addon_phantom_2026_06_21",
+        "snapshots/sessions/decline_race_2026_06_30",
+        "snapshots/sessions/ghost_offer_2026_06_14",
+        "snapshots/sessions/receipt_skip_2026_06_29",
         "snapshots/sessions/single_delivery_2026_06_16",
+        "snapshots/sessions/teardown_ghost_2026_06_28",
         "snapshots/sessions/two_pickup_stack_2026_07_05",
         "snapshots/sessions/walgreens_placeholder_2026_06_21",
-        "snapshots/sessions/receipt_skip_2026_06_29",
-        "snapshots/sessions/addon_phantom_2026_06_21",
     )
 
     /** The NEW arbitration's GPS timeline — fold the emitted odometer effects, one state per step. */
@@ -86,9 +92,13 @@ class OdometerPredicateEquivalenceTest {
         if (!nextLive) return@buildList
         val pt = prev?.activeTask
         val nt = next?.activeTask
-        if (nt?.arrivedAt != null && pt?.arrivedAt == null) add(Gps.OFF)                          // PauseOdometer (arrival)
+        // Emission ORDER is faithful to master's diffTask (adversarial-review MED): the task-change
+        // Resumes fire BEFORE the arrival Pause, so a mint+arrive-in-one-frame step (teardown_ghost's
+        // offer → pickup_shopping) folds to OFF — Resume then Pause — exactly as real master did.
+        // The first-cut oracle applied the Pause first and manufactured phantom "regressions" there.
         if (nt != null && nt.phase == TaskPhase.PICKUP && pt?.taskId != nt.taskId) add(Gps.ON)    // Resume (new pickup nav)
         if (nt?.phase == TaskPhase.DROPOFF && nt.taskId != pt?.taskId) add(Gps.ON)                // Resume (new dropoff leg)
+        if (nt?.arrivedAt != null && pt?.arrivedAt == null) add(Gps.OFF)                          // PauseOdometer (arrival)
         if (next?.lastActedFlow == Flow.PostTask && prev?.lastActedFlow != Flow.PostTask) add(Gps.ON) // Resume (PostTask entry)
     }
 
@@ -134,14 +144,14 @@ class OdometerPredicateEquivalenceTest {
 
     @Test
     fun `every divergence from today's edges is GPS-on during an active drive (an improvement)`() {
-        var divergences = 0
+        val divergences = mutableListOf<Pair<String, Int>>()
         for (fixture in fixtures) {
             val steps = SessionReplay.reduce(fixture)
             val actual = actualTimeline(steps)
             val oracle = oracleTimeline(steps)
             actual.indices.forEach { i ->
                 if (actual[i] != oracle[i]) {
-                    divergences++
+                    divergences += fixture.substringAfterLast('/') to i
                     assertTrue(
                         "$fixture step $i: a divergence must be predicate=ON, today=OFF",
                         actual[i] == Gps.ON && oracle[i] == Gps.OFF,
@@ -153,9 +163,19 @@ class OdometerPredicateEquivalenceTest {
                 }
             }
         }
-        // Exactly THREE known improvements across the corpus (see class doc): two_pickup_stack's
-        // mamamargies-drive frame + receipt_skip's two waiting/offer frames, all today-left-paused
-        // during a live moving flow. Pinned so a NEW divergence (or any regression) trips this test.
-        assertEquals("exactly the three known task-lag GPS-during-drive improvements", 3, divergences)
+        // EXACTLY these three known improvements across the whole corpus (see class doc):
+        // two_pickup_stack's mamamargies-drive final frame + receipt_skip's waiting/offer frames,
+        // all today-left-paused during a live moving flow. Pinned as (fixture, step) pairs —
+        // not a bare count (adversarial-review LOW) — so a NEW divergence appearing while an old
+        // one vanishes cannot pass silently.
+        assertEquals(
+            "exactly the three known task-lag GPS-during-drive improvements",
+            listOf(
+                "receipt_skip_2026_06_29" to 2,
+                "receipt_skip_2026_06_29" to 3,
+                "two_pickup_stack_2026_07_05" to 9,
+            ),
+            divergences.sortedWith(compareBy({ it.first }, { it.second })),
+        )
     }
 }
