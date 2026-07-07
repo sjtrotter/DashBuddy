@@ -24,8 +24,8 @@ import timber.log.Timber
  * `internal`/`private` extensions on [EffectMap] (mirroring the [OfferEffects]/[JobAcceptFlow]
  * precedent) for direct access to [EffectMap.logEffect] and [EffectMap.triggerOverrideEffects]
  * (both widened `private` → `internal` on [EffectMap] for this split). Pure move: no behavior
- * change. Also owns [EffectMap.pickupConfirmSweepEffects] via [TaskEffects.kt] (called from the
- * #596 close-out here to confirm a job that closed without ever reaching a dropoff).
+ * change. Calls [EffectMap.pickupConfirmSweepEffects] (owned by TaskEffects.kt) from the #596
+ * close-out to confirm a job that closed without ever reaching a dropoff.
  */
 internal fun EffectMap.diffDeliveryCompletion(
     p: PlatformRegion,

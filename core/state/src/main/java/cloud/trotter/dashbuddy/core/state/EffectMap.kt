@@ -211,7 +211,7 @@ class EffectMap @Inject constructor(
             addAll(diffNotification(obs))
 
             // #438 B5/#240: the DELIVERY_COMPLETED mint (PostTask-exit + the #596 close-out
-            // sweep) extracted to TaskEffects.kt as one unit — both blocks share the
+            // sweep) extracted to DeliveryCompletionEffects.kt as one unit — both blocks share the
             // emittedThisStep dual-mint-exclusivity set (amdt #2), so they moved together.
             addAll(diffDeliveryCompletion(p, next, actedPrevFlow, actedNextFlow, obs))
         }
