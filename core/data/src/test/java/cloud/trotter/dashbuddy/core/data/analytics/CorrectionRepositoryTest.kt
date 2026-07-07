@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.analytics
+package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
