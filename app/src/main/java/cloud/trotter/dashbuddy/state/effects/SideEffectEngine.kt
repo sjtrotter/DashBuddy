@@ -393,8 +393,9 @@ class SideEffectEngine @Inject constructor(
                 // #457: the offer heads-up is now a SEPARATE notification (its own id), not the
                 // self-replacing bubble — so if it already posted, dismiss it explicitly when the
                 // offer resolves (accept/decline/timeout) so an Accept/Decline banner can't outlive
-                // the offer.
-                bubbleManager.cancelOfferNotification()
+                // the offer. #438 B4: pass the resolved offer's hash through so we dismiss ONLY that
+                // offer's banner (concurrent/replacement offers each keep their own).
+                bubbleManager.cancelOfferNotification(effect.offerHash)
             }
 
             // --- TIMING LOGIC (Pure Coroutines) ---

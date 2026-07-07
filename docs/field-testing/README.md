@@ -94,6 +94,18 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   decline" still stands as Declined. Any offer that fails to card/speak/notify, an accept that mints a
   **bare** job (no offer pay), or a wrong/absent outcome card is a B3 regression — capture it.
   - Confirmed: 0/2
+- **🆕 NEW — heads-up banner acts on the RIGHT offer (#438 B4 / PR).** Each offer's heads-up
+  notification now has its own id + its own Accept/Decline intents (distinct per offer), so
+  concurrent or fast-replacement offers no longer clobber one another. On a normal DoorDash dash,
+  confirm single-offer behavior is unchanged: the banner posts, **Accept/Decline still fire the
+  verified click**, and the banner **disappears the moment the offer resolves** (accept / decline /
+  timeout) — no stale Accept/Decline banner lingering after the offer is gone. The multi-offer edge
+  (best seen if a second offer arrives while the first banner is still up, or an offer is replaced
+  same-platform): tapping the current banner acts on the **current** offer, and resolving one offer
+  leaves the other's banner untouched — a tap must never act on a **replaced/older** offer (that path
+  now WARN-aborts to manual rather than acting on the wrong one). A banner that acts on the wrong
+  offer, or a stale banner that survives its offer, is a B4 regression — capture it.
+  - Confirmed: 0/2
 - **🆕 NEW — edit a delivery directly + cash tips (#688 phase A / PR).** In **Analytics → a dash →
   the delivery drill-down**, **tap a delivery row** (or its pencil) → the **Adjust delivery** dialog:
   Store name / Pay / Tip / Cash tip / Miles / Note. This replaces the pay-only editor and is the real
