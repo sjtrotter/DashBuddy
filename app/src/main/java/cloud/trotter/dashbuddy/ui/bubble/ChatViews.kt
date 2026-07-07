@@ -36,10 +36,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.ui.formatters.getIconResId
@@ -85,7 +87,7 @@ fun LatestMessageTicker(messages: List<ChatMessage>, onClick: () -> Unit) {
             )
         } else {
             Text(
-                text = "No messages yet",
+                text = stringResource(R.string.bubble_chat_no_messages_yet),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.weight(1f),
@@ -95,7 +97,7 @@ fun LatestMessageTicker(messages: List<ChatMessage>, onClick: () -> Unit) {
         Spacer(modifier = Modifier.width(4.dp))
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = "Open chat",
+            contentDescription = stringResource(R.string.bubble_chat_content_desc_open_chat),
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         )

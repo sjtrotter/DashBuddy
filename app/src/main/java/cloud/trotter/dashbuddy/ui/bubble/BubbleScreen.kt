@@ -34,8 +34,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -73,7 +75,7 @@ fun BubbleScreen(
             TopAppBar(
                 title = {
                     if (showFullChat) {
-                        Text("Chat History")
+                        Text(stringResource(R.string.bubble_screen_chat_history_title))
                     } else {
                         StatusBadgeTitle(
                             region = focusedRegion,
@@ -91,7 +93,7 @@ fun BubbleScreen(
                         IconButton(onClick = { showFullChat = false }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close chat",
+                                contentDescription = stringResource(R.string.bubble_screen_content_desc_close_chat),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -179,7 +181,7 @@ fun DashboardView(
             }
             cardStack.isEmpty -> {
                 Text(
-                    text = "Waiting for activity…",
+                    text = stringResource(R.string.bubble_screen_waiting_for_activity),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -14,9 +14,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.model.WizardStep
 
@@ -27,7 +29,7 @@ fun MetricSliderCard(
     valueRange: ClosedFloatingPointRange<Float>,
     valueFormatter: (Float) -> String,
     onValueChange: (Float) -> Unit,
-    footerText: String = "We'll use this to score your offers on the HUD."
+    footerText: String = stringResource(R.string.wizard_metric_slider_default_footer)
 ) {
     Column(
         modifier = Modifier

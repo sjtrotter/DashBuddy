@@ -27,9 +27,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.ui.main.setup.wizard.components.VehicleDropdown
@@ -77,13 +79,13 @@ fun VehicleCard(
             FilterChip(
                 selected = vehicleClass == VehicleClass.SEDAN,
                 onClick = { onTypeSelected(VehicleClass.SEDAN) },
-                label = { Text("🚗 Car") }
+                label = { Text(stringResource(R.string.wizard_vehicle_card_type_car)) }
             )
             Spacer(modifier = Modifier.padding(8.dp))
             FilterChip(
                 selected = vehicleClass == VehicleClass.E_BIKE,
                 onClick = { onTypeSelected(VehicleClass.E_BIKE) },
-                label = { Text("🚲 E-Bike") }
+                label = { Text(stringResource(R.string.wizard_vehicle_card_type_ebike)) }
             )
         }
 
@@ -96,7 +98,7 @@ fun VehicleCard(
         ) {
             Column {
                 VehicleDropdown(
-                    label = "Year",
+                    label = stringResource(R.string.wizard_vehicle_card_year_label),
                     value = year,
                     options = availableYears,
                     onValueChanged = onYearSelected
@@ -105,7 +107,7 @@ fun VehicleCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 VehicleDropdown(
-                    label = "Make",
+                    label = stringResource(R.string.wizard_vehicle_card_make_label),
                     value = make,
                     options = availableMakes,
                     onValueChanged = onMakeSelected,
@@ -118,7 +120,7 @@ fun VehicleCard(
                 AnimatedVisibility(visible = make.isNotBlank() && make != VEHICLE_NOT_LISTED) {
                     Column {
                         VehicleDropdown(
-                            label = "Model",
+                            label = stringResource(R.string.wizard_vehicle_card_model_label),
                             value = model,
                             options = availableModels,
                             onValueChanged = onModelSelected,
@@ -130,7 +132,7 @@ fun VehicleCard(
                         // Hide Trim dropdown if they clicked Not Listed for Model
                         AnimatedVisibility(visible = model.isNotBlank() && model != VEHICLE_NOT_LISTED) {
                             VehicleDropdown(
-                                label = "Trim / Options",
+                                label = stringResource(R.string.wizard_vehicle_card_trim_label),
                                 value = trim,
                                 options = availableTrims,
                                 onValueChanged = onTrimSelected,
@@ -169,17 +171,17 @@ fun VehicleCard(
                 ) {
                     Icon(
                         Icons.Default.Search,
-                        contentDescription = "Search",
+                        contentDescription = stringResource(R.string.wizard_vehicle_card_content_desc_search),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.size(8.dp))
-                    Text("Lookup my MPG on Google")
+                    Text(stringResource(R.string.wizard_vehicle_card_lookup_mpg))
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = "${Formats.decimal(mpg.toDouble())} MPG",
+                    text = stringResource(R.string.wizard_vehicle_card_mpg_format, Formats.decimal(mpg.toDouble())),
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary
@@ -203,7 +205,7 @@ fun VehicleCard(
                 }
 
                 Text(
-                    text = "Slide to match your vehicle's combined MPG.",
+                    text = stringResource(R.string.wizard_vehicle_card_mpg_slider_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
@@ -213,7 +215,7 @@ fun VehicleCard(
 
         if (vehicleClass == VehicleClass.E_BIKE) {
             Text(
-                text = "Awesome! We will ignore gas expenses and set your cost-per-mile to $0.",
+                text = stringResource(R.string.wizard_vehicle_card_ebike_note),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center,

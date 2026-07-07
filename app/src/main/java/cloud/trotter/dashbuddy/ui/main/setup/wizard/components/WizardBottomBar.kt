@@ -10,7 +10,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 
 @Composable
 fun WizardBottomBar(
@@ -27,13 +29,14 @@ fun WizardBottomBar(
     ) {
         if (showBack) {
             OutlinedButton(onClick = onBackClick) {
-                Text("Back")
+                Text(stringResource(R.string.wizard_bottom_bar_back))
             }
         }
 
         Button(onClick = onNextClick) {
             Text(
-                text = if (isLastStep) "Finish & Save" else "Next",
+                text = if (isLastStep) stringResource(R.string.wizard_bottom_bar_finish_and_save)
+                else stringResource(R.string.wizard_bottom_bar_next),
                 style = MaterialTheme.typography.titleMedium
             )
         }

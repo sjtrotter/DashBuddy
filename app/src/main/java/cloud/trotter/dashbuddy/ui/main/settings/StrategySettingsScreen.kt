@@ -35,10 +35,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.ui.main.settings.components.DraggableRuleRow
 import cloud.trotter.dashbuddy.ui.main.settings.components.FakeOfferCard
@@ -95,7 +97,7 @@ fun StrategySettingsScreen(
         ) {
             Column(Modifier.padding(16.dp)) {
                 Text(
-                    "The Lab",
+                    stringResource(R.string.strategy_settings_the_lab_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -118,7 +120,7 @@ fun StrategySettingsScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Pay: ${Formats.money(simPay.toDouble())}",
+                            stringResource(R.string.strategy_settings_sim_pay_format, Formats.money(simPay.toDouble())),
                             style = MaterialTheme.typography.labelSmall
                         )
                         Slider(
@@ -130,7 +132,7 @@ fun StrategySettingsScreen(
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Dist: ${Formats.decimal(simDist.toDouble())} mi",
+                            stringResource(R.string.strategy_settings_sim_dist_format, Formats.decimal(simDist.toDouble())),
                             style = MaterialTheme.typography.labelSmall
                         )
                         Slider(
@@ -155,26 +157,26 @@ fun StrategySettingsScreen(
             // Index 0
             item {
                 Text(
-                    "Global Overrides",
+                    stringResource(R.string.strategy_settings_global_overrides_title),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.height(8.dp))
                 SwitchRow(
-                    label = "🛡️ Protect Stats Mode",
-                    subtitle = "Auto-accept everything",
+                    label = stringResource(R.string.strategy_settings_protect_stats_label),
+                    subtitle = stringResource(R.string.strategy_settings_protect_stats_subtitle),
                     checked = config.protectStatsMode,
                     onCheckedChange = { viewModel.toggleProtectStats(it) }
                 )
                 SwitchRow(
-                    label = "🛒 Allow Shopping Orders",
-                    subtitle = "If off, Red Card orders are auto-declined",
+                    label = stringResource(R.string.strategy_settings_allow_shopping_label),
+                    subtitle = stringResource(R.string.strategy_settings_allow_shopping_subtitle),
                     checked = config.allowShopping,
                     onCheckedChange = { viewModel.toggleAllowShopping(it) }
                 )
                 SwitchRow(
-                    label = "⚡ Single-click declines",
-                    subtitle = "Auto-confirm DoorDash's 'are you sure?' so a decline is one tap",
+                    label = stringResource(R.string.strategy_settings_quick_declines_label),
+                    subtitle = stringResource(R.string.strategy_settings_quick_declines_subtitle),
                     checked = automation.quickDeclinesEnabled,
                     onCheckedChange = { viewModel.toggleQuickDeclines(it) }
                 )
@@ -184,12 +186,12 @@ fun StrategySettingsScreen(
             // Index 1
             item {
                 Text(
-                    "Priorities (Rack & Stack)",
+                    stringResource(R.string.strategy_settings_priorities_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Drag to reorder. Top rules matter most.",
+                    stringResource(R.string.strategy_settings_priorities_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = AppTheme.colors.text3
                 )

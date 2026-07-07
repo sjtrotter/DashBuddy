@@ -123,7 +123,11 @@ fun PermissionCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Security, contentDescription = "Privacy", tint = AppTheme.colors.good)
+            Icon(
+                Icons.Default.Security,
+                contentDescription = stringResource(R.string.permission_card_content_desc_privacy),
+                tint = AppTheme.colors.good,
+            )
             Text(
                 text = stringResource(id = R.string.perm_privacy_guarantee),
                 style = MaterialTheme.typography.bodySmall,
@@ -155,7 +159,7 @@ fun PermissionCard(
                 )
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = "Expand",
+                    contentDescription = stringResource(R.string.permission_card_content_desc_expand),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }

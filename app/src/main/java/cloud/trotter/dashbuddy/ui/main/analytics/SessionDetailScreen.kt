@@ -33,11 +33,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCallout
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
@@ -78,10 +80,13 @@ fun SessionDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Session detail") },
+                title = { Text(stringResource(R.string.session_detail_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 },
             )
@@ -100,7 +105,7 @@ fun SessionDetailScreen(
                     .fillMaxSize(),
             )
             // Post-load, a null detail means no session row exists for this id.
-            !uiState.loading -> CenteredMessage("Session not found.", Modifier.padding(padding))
+            !uiState.loading -> CenteredMessage(stringResource(R.string.session_detail_not_found), Modifier.padding(padding))
             // Pre-first-emission: keep the frame empty (the read-model emits promptly).
             else -> Box(Modifier.padding(padding).fillMaxSize())
         }
@@ -133,12 +138,11 @@ private fun DashDetailContent(
         if (hasCallout) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AppCallout(
-                    text = "${Formats.money(detail.unattributedPay)} unaccounted on this session — the " +
-                        "platform reported more than the captured deliveries.",
+                    text = stringResource(R.string.session_detail_unaccounted_format, Formats.money(detail.unattributedPay)),
                     container = AppTheme.colors.warnBg,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                TextButton(onClick = { showAddDialog = true }) { Text("Add missed delivery") }
+                TextButton(onClick = { showAddDialog = true }) { Text(stringResource(R.string.session_detail_add_missed_delivery)) }
             }
         }
         // With no callout, the add entry point lives at the bottom of the deliveries card — a missed
@@ -199,24 +203,28 @@ private fun HeaderCard(detail: SessionDetail) {
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Duration ${dashDuration(session.startedAt, session.endedAt, session.reportedDurationMillis)}",
+            text = stringResource(
+                R.string.session_detail_duration_format,
+                dashDuration(session.startedAt, session.endedAt, session.reportedDurationMillis),
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppStatTile(
-                label = if (hasReported) "Gross (reported)" else "Gross (captured)",
+                label = if (hasReported) stringResource(R.string.session_detail_gross_reported_label)
+                else stringResource(R.string.session_detail_gross_captured_label),
                 value = Formats.money(gross),
                 modifier = Modifier.weight(1f),
             )
             AppStatTile(
-                label = "Miles",
+                label = stringResource(R.string.session_detail_stat_miles),
                 value = session.miles?.let { Formats.decimal(it) } ?: EMPTY_VALUE,
                 modifier = Modifier.weight(1f),
             )
             AppStatTile(
-                label = "Deliveries",
+                label = stringResource(R.string.session_detail_stat_deliveries),
                 value = Formats.commaInt(session.deliveries),
                 modifier = Modifier.weight(1f),
             )
@@ -226,7 +234,7 @@ private fun HeaderCard(detail: SessionDetail) {
         if (detail.cashTips > UNATTRIBUTED_EPSILON) {
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "+${Formats.money(detail.cashTips)} cash tips",
+                text = stringResource(R.string.session_detail_cash_tips_format, Formats.money(detail.cashTips)),
                 style = MaterialTheme.typography.bodySmall,
                 color = c.good,
             )
@@ -254,10 +262,10 @@ private fun DeliveriesCard(
 ) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "DELIVERIES", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.session_detail_deliveries_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (deliveries.isEmpty()) {
-            EmptyRow("No deliveries captured for this session.")
+            EmptyRow(stringResource(R.string.session_detail_no_deliveries_yet))
         } else {
             deliveries.forEachIndexed { index, delivery ->
                 if (index > 0) Spacer(Modifier.height(14.dp))
@@ -266,7 +274,7 @@ private fun DeliveriesCard(
         }
         if (showAddButton) {
             Spacer(Modifier.height(6.dp))
-            TextButton(onClick = onAddMissed) { Text("Add missed delivery") }
+            TextButton(onClick = onAddMissed) { Text(stringResource(R.string.session_detail_add_missed_delivery)) }
         }
     }
 }
@@ -284,7 +292,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = delivery.storeName ?: "Unknown store",
+                text = delivery.storeName ?: stringResource(R.string.session_detail_unknown_store),
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.text,
             )
@@ -305,7 +313,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
             )
             delivery.tip?.let {
                 Text(
-                    text = "incl. ${Formats.money(it)} tip",
+                    text = stringResource(R.string.session_detail_tip_included_format, Formats.money(it)),
                     style = MaterialTheme.typography.bodySmall,
                     color = c.text3,
                 )
@@ -313,7 +321,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
             // Driver-entered cash tip (#688) — its own line; added to net below (display-level only).
             delivery.cashTip?.takeIf { it > UNATTRIBUTED_EPSILON }?.let {
                 Text(
-                    text = "+${Formats.money(it)} cash",
+                    text = stringResource(R.string.session_detail_cash_format, Formats.money(it)),
                     style = MaterialTheme.typography.bodySmall,
                     color = c.good,
                 )
@@ -322,7 +330,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
             // offer, not a captured receipt — disclose it (never-silent, the #689 precedent).
             if (delivery.payBasis == PayBasis.OFFER_PAY) {
                 Text(
-                    text = "est. offer pay",
+                    text = stringResource(R.string.session_detail_est_offer_pay),
                     style = MaterialTheme.typography.bodySmall,
                     color = c.text3,
                 )
@@ -331,7 +339,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
             // cash-free); a null-net row (no cost basis) stays an em dash even with cash present.
             val net = delivery.netProfit?.let { it + (delivery.cashTip ?: 0.0) }
             Text(
-                text = "net ${net?.let { Formats.money(it) } ?: EMPTY_VALUE}",
+                text = stringResource(R.string.session_detail_net_format, net?.let { Formats.money(it) } ?: EMPTY_VALUE),
                 style = MaterialTheme.typography.bodySmall,
                 color = when {
                     net == null -> c.text3
@@ -344,7 +352,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
         IconButton(onClick = onAdjust) {
             Icon(
                 Icons.Default.Edit,
-                contentDescription = "Adjust delivery",
+                contentDescription = stringResource(R.string.session_detail_content_desc_adjust),
                 tint = AppTheme.colors.text3,
             )
         }
@@ -415,14 +423,14 @@ private fun AddMissedDeliveryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add missed delivery") },
+        title = { Text(stringResource(R.string.session_detail_add_missed_delivery)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                MoneyField(store, { store = it }, "Store (optional)", numeric = false)
-                MoneyField(pay, { pay = it }, "Pay")
-                MoneyField(tip, { tip = it }, "Tip (included in pay)")
-                MoneyField(cashTip, { cashTip = it }, "Cash tip (optional)")
-                MoneyField(note, { note = it }, "Note (optional)", numeric = false)
+                MoneyField(store, { store = it }, stringResource(R.string.session_detail_field_store_optional), numeric = false)
+                MoneyField(pay, { pay = it }, stringResource(R.string.session_detail_field_pay))
+                MoneyField(tip, { tip = it }, stringResource(R.string.session_detail_field_tip_included))
+                MoneyField(cashTip, { cashTip = it }, stringResource(R.string.session_detail_field_cash_tip_optional))
+                MoneyField(note, { note = it }, stringResource(R.string.session_detail_field_note_optional), numeric = false)
             }
         },
         confirmButton = {
@@ -437,9 +445,9 @@ private fun AddMissedDeliveryDialog(
                         note.trim().takeIf { it.isNotBlank() },
                     )
                 },
-            ) { Text("Add") }
+            ) { Text(stringResource(R.string.session_detail_add_button)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.session_detail_cancel_button)) } },
     )
 }
 
@@ -508,19 +516,19 @@ private fun AdjustDeliveryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Adjust delivery") },
+        title = { Text(stringResource(R.string.session_detail_adjust_dialog_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                MoneyField(store, { store = it }, "Store name", numeric = false)
+                MoneyField(store, { store = it }, stringResource(R.string.session_detail_field_store_name), numeric = false)
                 MoneyField(
-                    pay, { pay = it }, "Pay",
+                    pay, { pay = it }, stringResource(R.string.session_detail_field_pay),
                     enabled = !payLocked,
-                    supportingText = if (payLocked) "de-duplicated receipt — edit the real drop's row" else null,
+                    supportingText = if (payLocked) stringResource(R.string.session_detail_field_pay_locked_supporting) else null,
                 )
-                MoneyField(tip, { tip = it }, "Tip (included in pay)", enabled = !payLocked)
-                MoneyField(cashTip, { cashTip = it }, "Cash tip")
-                MoneyField(miles, { miles = it }, "Miles")
-                MoneyField(note, { note = it }, "Note (optional)", numeric = false)
+                MoneyField(tip, { tip = it }, stringResource(R.string.session_detail_field_tip_included), enabled = !payLocked)
+                MoneyField(cashTip, { cashTip = it }, stringResource(R.string.session_detail_field_cash_tip))
+                MoneyField(miles, { miles = it }, stringResource(R.string.session_detail_stat_miles))
+                MoneyField(note, { note = it }, stringResource(R.string.session_detail_field_note_optional), numeric = false)
             }
         },
         confirmButton = {
@@ -536,9 +544,9 @@ private fun AdjustDeliveryDialog(
                         noteParsed,
                     )
                 },
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.session_detail_save_button)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.session_detail_cancel_button)) } },
     )
 }
 

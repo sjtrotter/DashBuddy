@@ -23,9 +23,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 
 /**
  * A collapsible row used to organize Personal Economy inputs into compact
@@ -58,7 +60,8 @@ fun EconomyAccordionRow(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = if (expanded) stringResource(R.string.economy_accordion_content_desc_collapse)
+                else stringResource(R.string.economy_accordion_content_desc_expand),
                 modifier = Modifier.rotate(rotation),
             )
             Text(
@@ -80,7 +83,7 @@ fun EconomyAccordionRow(
                 )
                 if (!isUserSet) {
                     Text(
-                        text = "(default)",
+                        text = stringResource(R.string.economy_accordion_default_hint),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                         fontStyle = FontStyle.Italic,

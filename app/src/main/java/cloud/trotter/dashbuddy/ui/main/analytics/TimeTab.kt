@@ -11,7 +11,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppGaugeRing
 import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
@@ -65,27 +67,32 @@ fun TimeTab(
 private fun TimeSplitCard(time: TimeEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "TIME SPLIT", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.time_tab_time_split_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (time.onlineMillis == 0L) {
-            EmptyRow("No sessions in this period yet.")
+            EmptyRow(stringResource(R.string.time_tab_no_sessions_yet))
             return@AppCard
         }
 
         Text(text = formatDuration(time.onlineMillis), style = AppTheme.num.heroNum, color = c.text)
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "online across ${Formats.commaInt(time.sessions)} " +
-                if (time.sessions == 1) "session" else "sessions",
+            text = stringResource(
+                R.string.time_tab_online_across_format,
+                Formats.commaInt(time.sessions),
+                if (time.sessions == 1) stringResource(R.string.time_tab_session_singular)
+                else stringResource(R.string.time_tab_session_plural),
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
         Spacer(Modifier.height(14.dp))
 
+        val onDeliveryLabel = stringResource(R.string.time_tab_segment_on_delivery)
         val onDeliveryMillis = time.deliveryMillis ?: 0L
         val segments = listOf(
-            AppSegment("On delivery", onDeliveryMillis.toFloat(), c.good, note = formatDuration(onDeliveryMillis)),
-            AppSegment("Unattributed", time.unattributedMillis.toFloat(), c.neutral, note = formatDuration(time.unattributedMillis)),
+            AppSegment(onDeliveryLabel, onDeliveryMillis.toFloat(), c.good, note = formatDuration(onDeliveryMillis)),
+            AppSegment(stringResource(R.string.time_tab_segment_unattributed), time.unattributedMillis.toFloat(), c.neutral, note = formatDuration(time.unattributedMillis)),
         )
         AppStackBar(segments, height = 14.dp)
         Spacer(Modifier.height(10.dp))
@@ -94,12 +101,12 @@ private fun TimeSplitCard(time: TimeEconomics) {
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppStatTile(
-                label = "Sessions",
+                label = stringResource(R.string.time_tab_sessions_stat_label),
                 value = Formats.commaInt(time.sessions),
                 modifier = Modifier.weight(1f),
             )
             AppStatTile(
-                label = "Avg session",
+                label = stringResource(R.string.time_tab_avg_session_stat_label),
                 value = time.avgDashMillis?.let { formatDuration(it) } ?: EMPTY_VALUE,
                 modifier = Modifier.weight(1f),
             )
@@ -117,10 +124,10 @@ private fun TimeSplitCard(time: TimeEconomics) {
 private fun DeadheadCard(time: TimeEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "DEADHEAD", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.time_tab_deadhead_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (time.miles <= 0.0) {
-            EmptyRow("No miles measured in this period yet.")
+            EmptyRow(stringResource(R.string.time_tab_no_miles_measured_yet))
             return@AppCard
         }
 
@@ -128,7 +135,7 @@ private fun DeadheadCard(time: TimeEconomics) {
         Text(text = "$deadheadPct%", style = AppTheme.num.heroNum, color = c.text)
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "miles with no delivery attached — after the last drop, or sessions with none",
+            text = stringResource(R.string.time_tab_deadhead_caption),
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
@@ -138,8 +145,8 @@ private fun DeadheadCard(time: TimeEconomics) {
         // sums to the period's odometer miles cleanly.
         val onDeliveryMiles = time.miles - time.unattributedMiles
         val segments = listOf(
-            AppSegment("On delivery", onDeliveryMiles.toFloat(), c.good, note = "${Formats.decimal(onDeliveryMiles, 1)} mi"),
-            AppSegment("Deadhead", time.unattributedMiles.toFloat(), c.neutral, note = "${Formats.decimal(time.unattributedMiles, 1)} mi"),
+            AppSegment(stringResource(R.string.time_tab_segment_on_delivery), onDeliveryMiles.toFloat(), c.good, note = "${Formats.decimal(onDeliveryMiles, 1)} mi"),
+            AppSegment(stringResource(R.string.time_tab_segment_deadhead), time.unattributedMiles.toFloat(), c.neutral, note = "${Formats.decimal(time.unattributedMiles, 1)} mi"),
         )
         AppStackBar(segments, height = 14.dp)
         Spacer(Modifier.height(10.dp))
@@ -152,24 +159,29 @@ private fun DeadheadCard(time: TimeEconomics) {
 private fun OnTimeCard(time: TimeEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "ON TIME", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.time_tab_on_time_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         val rate = time.onTimeRate
         if (rate == null) {
-            EmptyRow("No deliveries carried a deadline in this period.")
+            EmptyRow(stringResource(R.string.time_tab_no_deadline_deliveries_yet))
             return@AppCard
         }
 
         AppGaugeRing(
             progress = rate.toFloat(),
             value = "${(rate * 100.0).roundToInt()}%",
-            label = "on time",
+            label = stringResource(R.string.time_tab_gauge_on_time_label),
             color = c.good,
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "${Formats.commaInt(time.onTimeDeliveries)} of ${Formats.commaInt(time.deliveriesWithDeadline)} " +
-                (if (time.deliveriesWithDeadline == 1) "delivery" else "deliveries") + " with a deadline",
+            text = stringResource(
+                R.string.time_tab_deadline_caption_format,
+                Formats.commaInt(time.onTimeDeliveries),
+                Formats.commaInt(time.deliveriesWithDeadline),
+                if (time.deliveriesWithDeadline == 1) stringResource(R.string.time_tab_delivery_singular)
+                else stringResource(R.string.time_tab_delivery_plural),
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
@@ -180,8 +192,8 @@ private fun OnTimeCard(time: TimeEconomics) {
             val early = margin >= 0.0
             val magnitude = kotlin.math.abs(margin).roundToLong()
             Text(
-                text = if (early) "typically ${formatDuration(magnitude)} early"
-                else "typically ${formatDuration(magnitude)} late",
+                text = if (early) stringResource(R.string.time_tab_margin_early_format, formatDuration(magnitude))
+                else stringResource(R.string.time_tab_margin_late_format, formatDuration(magnitude)),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (early) c.good else c.bad,
             )
@@ -194,10 +206,10 @@ private fun OnTimeCard(time: TimeEconomics) {
 private fun MileageTaxCard(time: TimeEconomics, period: AnalyticsPeriod) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "MILEAGE & TAX", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.time_tab_mileage_tax_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (time.miles <= 0.0) {
-            EmptyRow("No miles measured in this period yet.")
+            EmptyRow(stringResource(R.string.time_tab_no_miles_measured_yet))
             return@AppCard
         }
 
@@ -222,7 +234,7 @@ private fun MileageTaxCard(time: TimeEconomics, period: AnalyticsPeriod) {
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "standard-mileage method — not the app's operating-cost model; confirm with a tax preparer.",
+            text = stringResource(R.string.time_tab_mileage_tax_disclosure),
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )

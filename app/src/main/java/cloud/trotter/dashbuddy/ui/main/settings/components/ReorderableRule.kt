@@ -22,9 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import java.util.Locale
@@ -54,7 +56,7 @@ fun DraggableRuleRow(
             // FIX 2: Apply the drag logic ONLY to this Icon
             Icon(
                 imageVector = Icons.Default.DragHandle,
-                contentDescription = "Reorder",
+                contentDescription = stringResource(R.string.reorderable_rule_content_desc_reorder),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = modifier // <--- The magic happens here
                     .size(24.dp)
@@ -66,7 +68,7 @@ fun DraggableRuleRow(
             Column(modifier = Modifier.weight(1f)) {
                 when (rule) {
                     is ScoringRule.MetricRule -> MetricContent(rule, onUpdate)
-                    is ScoringRule.MerchantRule -> Text("Merchant Rule (Coming Soon)")
+                    is ScoringRule.MerchantRule -> Text(stringResource(R.string.reorderable_rule_merchant_coming_soon))
                 }
             }
 
@@ -109,9 +111,18 @@ fun MetricContent(
         if (rule.isEnabled) {
             val formatted = when (type) {
                 MetricType.PAYOUT, MetricType.ACTIVE_HOURLY -> Formats.money(value.toDouble())
-                MetricType.DOLLAR_PER_MILE -> "${Formats.money(value.toDouble())}/mi"
-                MetricType.MAX_DISTANCE -> "${Formats.decimal(value.toDouble())} mi"
-                MetricType.ITEM_COUNT -> "${value.toInt()} items"
+                MetricType.DOLLAR_PER_MILE -> stringResource(
+                    R.string.reorderable_rule_dollar_per_mile_format,
+                    Formats.money(value.toDouble()),
+                )
+                MetricType.MAX_DISTANCE -> stringResource(
+                    R.string.reorderable_rule_distance_format,
+                    Formats.decimal(value.toDouble()),
+                )
+                MetricType.ITEM_COUNT -> stringResource(
+                    R.string.reorderable_rule_item_count_format,
+                    value.toInt(),
+                )
             }
             Text(
                 formatted,

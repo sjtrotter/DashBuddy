@@ -25,10 +25,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppGaugeRing
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
@@ -52,10 +54,13 @@ fun RatingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ratings") },
+                title = { Text(stringResource(R.string.ratings_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 },
             )
@@ -90,7 +95,7 @@ fun RatingsScreen(
 
             if (state.hasShoppingQuality) {
                 Text(
-                    "Shopping quality",
+                    stringResource(R.string.ratings_screen_shopping_quality_header),
                     style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                     color = AppTheme.colors.text2,
                 )
@@ -113,7 +118,7 @@ private fun HeadlineGauges(state: RatingsUiState) {
             AppGaugeRing(
                 progress = (it / 5.0).toFloat(),
                 value = Formats.decimal(it, digits = 2),
-                label = "Customer",
+                label = stringResource(R.string.ratings_screen_gauge_customer),
                 color = AppTheme.colors.accent,
             )
         }
@@ -121,7 +126,7 @@ private fun HeadlineGauges(state: RatingsUiState) {
             AppGaugeRing(
                 progress = (it / 100.0).toFloat(),
                 value = percentText(it),
-                label = "On-time",
+                label = stringResource(R.string.ratings_screen_gauge_on_time),
                 color = AppTheme.colors.accent,
             )
         }
@@ -129,7 +134,7 @@ private fun HeadlineGauges(state: RatingsUiState) {
             AppGaugeRing(
                 progress = (it / 100.0).toFloat(),
                 value = percentText(it),
-                label = "Completion",
+                label = stringResource(R.string.ratings_screen_gauge_completion),
                 color = AppTheme.colors.accent,
             )
         }
@@ -140,9 +145,9 @@ private fun HeadlineGauges(state: RatingsUiState) {
 @Composable
 private fun StandingTiles(state: RatingsUiState) {
     val tiles = buildList {
-        state.acceptanceRate?.let { add("Acceptance" to percentText(it)) }
-        state.deliveriesLast30Days?.let { add("Deliveries (30d)" to Formats.commaInt(it)) }
-        state.lifetimeDeliveries?.let { add("Lifetime deliveries" to Formats.commaInt(it)) }
+        state.acceptanceRate?.let { add(stringResource(R.string.ratings_screen_tile_acceptance) to percentText(it)) }
+        state.deliveriesLast30Days?.let { add(stringResource(R.string.ratings_screen_tile_deliveries_30d) to Formats.commaInt(it)) }
+        state.lifetimeDeliveries?.let { add(stringResource(R.string.ratings_screen_tile_lifetime_deliveries) to Formats.commaInt(it)) }
     }
     TileGrid(tiles)
 }
@@ -151,12 +156,12 @@ private fun StandingTiles(state: RatingsUiState) {
 @Composable
 private fun ShoppingQualityTiles(state: RatingsUiState) {
     val tiles = buildList {
-        state.originalItemsFoundRate?.let { add("Original items found" to percentText(it)) }
-        state.totalItemsFoundRate?.let { add("Total items found" to percentText(it)) }
-        state.substitutionIssuesRate?.let { add("Substitution issues" to percentText(it)) }
-        state.itemsWithQualityIssuesRate?.let { add("Quality issues" to percentText(it)) }
-        state.itemsWrongOrMissingRate?.let { add("Wrong or missing" to percentText(it)) }
-        state.lifetimeShoppingOrders?.let { add("Lifetime shops" to Formats.commaInt(it)) }
+        state.originalItemsFoundRate?.let { add(stringResource(R.string.ratings_screen_tile_original_items_found) to percentText(it)) }
+        state.totalItemsFoundRate?.let { add(stringResource(R.string.ratings_screen_tile_total_items_found) to percentText(it)) }
+        state.substitutionIssuesRate?.let { add(stringResource(R.string.ratings_screen_tile_substitution_issues) to percentText(it)) }
+        state.itemsWithQualityIssuesRate?.let { add(stringResource(R.string.ratings_screen_tile_quality_issues) to percentText(it)) }
+        state.itemsWrongOrMissingRate?.let { add(stringResource(R.string.ratings_screen_tile_wrong_or_missing) to percentText(it)) }
+        state.lifetimeShoppingOrders?.let { add(stringResource(R.string.ratings_screen_tile_lifetime_shops) to Formats.commaInt(it)) }
     }
     TileGrid(tiles)
 }
@@ -188,17 +193,16 @@ private fun RatingsEmpty(platformName: String?, modifier: Modifier = Modifier) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         AppCard {
             Text(
-                text = "No ratings yet",
+                text = stringResource(R.string.ratings_screen_empty_title),
                 style = AppTheme.num.lgNum,
                 color = AppTheme.colors.text,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = buildString {
-                    append("Open your ")
-                    append(platformName ?: "platform")
-                    append(" Ratings screen while DashBuddy is running and they'll show up here.")
-                },
+                text = stringResource(
+                    R.string.ratings_screen_empty_desc_format,
+                    platformName ?: stringResource(R.string.ratings_screen_empty_fallback_platform),
+                ),
                 style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 color = AppTheme.colors.text2,
                 textAlign = TextAlign.Center,

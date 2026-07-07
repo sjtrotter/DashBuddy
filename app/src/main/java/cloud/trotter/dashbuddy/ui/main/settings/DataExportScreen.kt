@@ -24,9 +24,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cloud.trotter.dashbuddy.R
 
 /**
  * Free-tier CSV data export (#319). One folder pick → three CSVs (deliveries, sessions, summary)
@@ -57,10 +59,13 @@ fun DataExportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Export Data") },
+                title = { Text(stringResource(R.string.data_export_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
                     }
                 }
             )
@@ -74,17 +79,12 @@ fun DataExportScreen(
         ) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "Export your mileage & earnings to CSV",
+                stringResource(R.string.data_export_csv_heading),
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Pick a folder and DashBuddy writes three spreadsheet files into it:\n" +
-                    "• deliveries.csv — one row per delivery\n" +
-                    "• sessions.csv — one row per session\n" +
-                    "• summary.csv — totals + estimated IRS mileage deduction\n\n" +
-                    "This is your own data, on-device — nothing is uploaded. Exports all history " +
-                    "(a date-range picker is coming later).",
+                stringResource(R.string.data_export_csv_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -97,7 +97,7 @@ fun DataExportScreen(
             ) {
                 Icon(Icons.Default.FileDownload, contentDescription = null)
                 Spacer(Modifier.height(0.dp))
-                Text("  Choose folder & export")
+                Text(stringResource(R.string.data_export_csv_button))
             }
 
             Spacer(Modifier.height(16.dp))
@@ -108,14 +108,14 @@ fun DataExportScreen(
                 }
                 is DataExportViewModel.ExportState.Success -> {
                     Text(
-                        "Exported ${s.filesWritten} files to the chosen folder.",
+                        stringResource(R.string.data_export_csv_success_format, s.filesWritten),
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
                 is DataExportViewModel.ExportState.Error -> {
                     Text(
-                        "Export failed: ${s.message}",
+                        stringResource(R.string.data_export_csv_error_format, s.message),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -127,16 +127,12 @@ fun DataExportScreen(
 
             // --- Bug-report (shareable log) export (#551) ---
             Text(
-                "Export a bug report",
+                stringResource(R.string.data_export_log_heading),
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Pick a folder and DashBuddy writes dashbuddy-log.txt into it — the log the " +
-                    "developer needs to diagnose an issue.\n\n" +
-                    "INFO+ milestones only — no raw store, customer, or address text. Every line is " +
-                    "auto-scrubbed at the sink before it's written, so a leaked name can't reach the " +
-                    "file. On-device, nothing is uploaded.",
+                stringResource(R.string.data_export_log_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -148,7 +144,7 @@ fun DataExportScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Default.FileDownload, contentDescription = null)
-                Text("  Choose folder & export log")
+                Text(stringResource(R.string.data_export_log_button))
             }
 
             Spacer(Modifier.height(16.dp))
@@ -159,14 +155,14 @@ fun DataExportScreen(
                 }
                 is DataExportViewModel.LogExportState.Success -> {
                     Text(
-                        "Exported dashbuddy-log.txt — ${s.scrubbedLines} line(s) were auto-scrubbed.",
+                        stringResource(R.string.data_export_log_success_format, s.scrubbedLines),
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
                 is DataExportViewModel.LogExportState.Error -> {
                     Text(
-                        "Log export failed: ${s.message}",
+                        stringResource(R.string.data_export_log_error_format, s.message),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium,
                     )

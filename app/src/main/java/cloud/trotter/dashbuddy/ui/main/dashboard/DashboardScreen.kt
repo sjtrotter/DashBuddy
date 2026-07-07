@@ -38,10 +38,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
@@ -88,7 +90,7 @@ fun DashboardScreen(
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = onNavigateToSettings) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings")
+                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.dashboard_screen_content_desc_settings))
             }
         }
     ) { padding ->
@@ -108,8 +110,8 @@ fun DashboardScreen(
                 // CASE 1: Permissions Missing (The Gate)
                 hasPermissions == false -> {
                     StatusCard(
-                        title = "Permissions Required",
-                        subtitle = "DashBuddy needs your attention. Please complete the popup.",
+                        title = stringResource(R.string.dashboard_screen_permissions_required_title),
+                        subtitle = stringResource(R.string.dashboard_screen_permissions_required_subtitle),
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         textColor = MaterialTheme.colorScheme.onErrorContainer
                     )
@@ -118,20 +120,20 @@ fun DashboardScreen(
                 // CASE 2: Permissions Granted, first run (The Guide)
                 uiState.isFirstRun -> {
                     StatusCard(
-                        title = "You have the Keys!",
-                        subtitle = "Permissions granted. Let's personalize your strategy so DashBuddy knows what offers you like.",
+                        title = stringResource(R.string.dashboard_screen_first_run_title),
+                        subtitle = stringResource(R.string.dashboard_screen_first_run_subtitle),
                         containerColor = MaterialTheme.colorScheme.secondaryContainer
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onNavigateToWizard
-                    ) { Text("Personalize Strategy") }
+                    ) { Text(stringResource(R.string.dashboard_screen_personalize_strategy_button)) }
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { viewModel.completeSetup() }
-                    ) { Text("Skip for now") }
+                    ) { Text(stringResource(R.string.dashboard_screen_skip_for_now_button)) }
                 }
 
                 // CASE 3: Ready — status card, a slim "tap for the bubble" pointer while
@@ -140,7 +142,8 @@ fun DashboardScreen(
                 else -> {
                     StatusCard(
                         title = uiState.statusText,
-                        subtitle = if (uiState.isDashing) "You're on the clock." else "All systems go.",
+                        subtitle = if (uiState.isDashing) stringResource(R.string.dashboard_screen_dashing_subtitle)
+                        else stringResource(R.string.dashboard_screen_ready_subtitle),
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -163,7 +166,7 @@ fun DashboardScreen(
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { viewModel.showWelcomeBubble() }
-                    ) { Text("Show Bubble") }
+                    ) { Text(stringResource(R.string.dashboard_screen_show_bubble_button)) }
                 }
             }
         }
@@ -176,15 +179,13 @@ private const val EMPTY_VALUE = "—"
 /** The review windows offered by the period selector, in display order. */
 private data class PeriodOption(val period: AnalyticsPeriod, val label: String)
 
-private val PERIOD_OPTIONS = listOf(
-    PeriodOption(AnalyticsPeriod.TODAY, "Today"),
-    PeriodOption(AnalyticsPeriod.THIS_WEEK, "Week"),
-    PeriodOption(AnalyticsPeriod.THIS_MONTH, "Month"),
-    PeriodOption(AnalyticsPeriod.LIFETIME, "Lifetime"),
+@Composable
+private fun periodOptions(): List<PeriodOption> = listOf(
+    PeriodOption(AnalyticsPeriod.TODAY, stringResource(R.string.common_period_today)),
+    PeriodOption(AnalyticsPeriod.THIS_WEEK, stringResource(R.string.common_period_week)),
+    PeriodOption(AnalyticsPeriod.THIS_MONTH, stringResource(R.string.common_period_month)),
+    PeriodOption(AnalyticsPeriod.LIFETIME, stringResource(R.string.common_period_lifetime)),
 )
-
-private fun periodLabel(period: AnalyticsPeriod): String =
-    PERIOD_OPTIONS.first { it.period == period }.label
 
 /**
  * Slim online pointer (#657): while a dash is active the review surface just points
@@ -217,12 +218,13 @@ private fun PeriodReview(
     economics: PeriodEconomics,
     onSelectPeriod: (AnalyticsPeriod) -> Unit,
 ) {
-    val selectedLabel = periodLabel(selectedPeriod)
+    val periodOptions = periodOptions()
+    val selectedLabel = periodOptions.first { it.period == selectedPeriod }.label
     AppSegmented(
-        options = PERIOD_OPTIONS.map { it.label },
+        options = periodOptions.map { it.label },
         selected = selectedLabel,
         onSelect = { label ->
-            PERIOD_OPTIONS.firstOrNull { it.label == label }?.let { onSelectPeriod(it.period) }
+            periodOptions.firstOrNull { it.label == label }?.let { onSelectPeriod(it.period) }
         },
         modifier = Modifier.fillMaxWidth(),
     )
@@ -232,20 +234,20 @@ private fun PeriodReview(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AppStatTile(
-            label = "True Net",
+            label = stringResource(R.string.dashboard_screen_stat_true_net),
             value = Formats.money(economics.netProfit),
             sub = selectedLabel,
             valueColor = if (economics.netProfit >= 0.0) AppTheme.colors.good else AppTheme.colors.bad,
             modifier = Modifier.weight(1f),
         )
         AppStatTile(
-            label = "Net/hr",
+            label = stringResource(R.string.dashboard_screen_stat_net_per_hour),
             value = economics.netPerHour?.let { Formats.money(it) } ?: EMPTY_VALUE,
             sub = selectedLabel,
             modifier = Modifier.weight(1f),
         )
         AppStatTile(
-            label = "Miles",
+            label = stringResource(R.string.dashboard_screen_stat_miles),
             value = Formats.decimal(economics.totals.miles),
             sub = selectedLabel,
             modifier = Modifier.weight(1f),
@@ -263,14 +265,14 @@ private fun EntryTileGrid(onNavigate: (String) -> Unit) {
         ) {
             EntryTile(
                 icon = Icons.Filled.BarChart,
-                label = "Analytics",
+                label = stringResource(R.string.dashboard_screen_entry_analytics),
                 modifier = Modifier.weight(1f),
                 // #315 H1: routes to the Analytics hub (Money tab v1); other tabs stubbed.
                 onClick = { onNavigate(Screen.Analytics.route) },
             )
             EntryTile(
                 icon = Icons.Filled.Star,
-                label = "Ratings",
+                label = stringResource(R.string.dashboard_screen_entry_ratings),
                 modifier = Modifier.weight(1f),
                 onClick = { onNavigate(Screen.Ratings.route) },
             )
@@ -281,13 +283,13 @@ private fun EntryTileGrid(onNavigate: (String) -> Unit) {
         ) {
             EntryTile(
                 icon = Icons.Filled.Tune,
-                label = "Strategy",
+                label = stringResource(R.string.dashboard_screen_entry_strategy),
                 modifier = Modifier.weight(1f),
                 onClick = { onNavigate(Screen.StrategySettings.route) },
             )
             EntryTile(
                 icon = Icons.Filled.AttachMoney,
-                label = "Economy",
+                label = stringResource(R.string.dashboard_screen_entry_economy),
                 modifier = Modifier.weight(1f),
                 onClick = { onNavigate(Screen.EconomySettings.route) },
             )

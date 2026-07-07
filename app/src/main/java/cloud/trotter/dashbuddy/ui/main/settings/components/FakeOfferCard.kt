@@ -20,9 +20,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.format.Formats
@@ -72,7 +74,11 @@ fun FakeOfferCard(
             ) {
                 // --- Recommendation + Score ---
                 Text(
-                    text = "${evaluation.action.recommendationLabel()}  ·  ${evaluation.score.toInt()}pts",
+                    text = stringResource(
+                        R.string.fake_offer_score_format,
+                        evaluation.action.recommendationLabel(),
+                        evaluation.score.toInt(),
+                    ),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = borderColor
@@ -82,30 +88,37 @@ fun FakeOfferCard(
 
                 // --- Pay line ---
                 if (hasAnyCost) {
-                    val netSuffix = if (evaluation.isUsingDefaults) " (est.)" else ""
+                    val payLineFormat = if (evaluation.isUsingDefaults)
+                        R.string.fake_offer_pay_line_estimate_format
+                    else
+                        R.string.fake_offer_pay_line_format
                     Text(
-                        text = "${Formats.money(evaluation.payAmount)} gross  →  ${Formats.money(evaluation.netPayAmount)} net$netSuffix",
+                        text = stringResource(
+                            payLineFormat,
+                            Formats.money(evaluation.payAmount),
+                            Formats.money(evaluation.netPayAmount),
+                        ),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = animatedContentColor
                     )
                     if (hasFuelCost) {
                         Text(
-                            text = "−${Formats.money(evaluation.fuelCostEstimate)} fuel",
+                            text = stringResource(R.string.fake_offer_fuel_cost_format, Formats.money(evaluation.fuelCostEstimate)),
                             style = MaterialTheme.typography.bodySmall,
                             color = animatedContentColor.copy(alpha = 0.65f)
                         )
                     }
                     if (hasNonFuelCost) {
                         Text(
-                            text = "−${Formats.money(evaluation.nonFuelCostEstimate)} wear & fixed costs",
+                            text = stringResource(R.string.fake_offer_nonfuel_cost_format, Formats.money(evaluation.nonFuelCostEstimate)),
                             style = MaterialTheme.typography.bodySmall,
                             color = animatedContentColor.copy(alpha = 0.65f)
                         )
                     }
                 } else {
                     Text(
-                        text = "${Formats.money(evaluation.payAmount)}",
+                        text = Formats.money(evaluation.payAmount),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = animatedContentColor
@@ -122,17 +135,17 @@ fun FakeOfferCard(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     MetricCell(
-                        label = "\$/mi",
-                        value = "${Formats.money(evaluation.dollarsPerMile)}",
+                        label = stringResource(R.string.fake_offer_metric_dollar_per_mile_label),
+                        value = Formats.money(evaluation.dollarsPerMile),
                         color = animatedContentColor
                     )
                     MetricCell(
-                        label = "\$/hr",
-                        value = "${Formats.money(evaluation.dollarsPerHour)}",
+                        label = stringResource(R.string.fake_offer_metric_dollar_per_hour_label),
+                        value = Formats.money(evaluation.dollarsPerHour),
                         color = animatedContentColor
                     )
                     MetricCell(
-                        label = "items",
+                        label = stringResource(R.string.fake_offer_metric_items_label),
                         value = evaluation.itemCount.toInt().toString(),
                         color = animatedContentColor
                     )
@@ -146,13 +159,13 @@ fun FakeOfferCard(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     MetricCell(
-                        label = "miles",
+                        label = stringResource(R.string.fake_offer_metric_miles_label),
                         value = Formats.decimal(evaluation.distanceMiles),
                         color = animatedContentColor
                     )
                     MetricCell(
-                        label = "est. time",
-                        value = "~${evaluation.estimatedTimeMinutes.toInt()} min",
+                        label = stringResource(R.string.fake_offer_metric_est_time_label),
+                        value = stringResource(R.string.fake_offer_metric_est_time_value_format, evaluation.estimatedTimeMinutes.toInt()),
                         color = animatedContentColor
                     )
                 }
@@ -164,7 +177,7 @@ fun FakeOfferCard(
             Spacer(modifier = Modifier.height(8.dp))
             evaluation.warnings.forEach { warning ->
                 Text(
-                    text = "\u26a0\ufe0f $warning",
+                    text = stringResource(R.string.fake_offer_warning_format, warning),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)

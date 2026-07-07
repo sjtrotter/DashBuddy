@@ -13,8 +13,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppLegend
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegment
@@ -55,10 +57,10 @@ fun DecisionsTab(
 private fun OfferFunnelCard(decisions: DecisionEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "OFFER FUNNEL", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.decisions_tab_offer_funnel_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (decisions.received == 0) {
-            EmptyRow("No offers in this period yet.")
+            EmptyRow(stringResource(R.string.decisions_tab_no_offers_yet))
             return@AppCard
         }
 
@@ -66,8 +68,12 @@ private fun OfferFunnelCard(decisions: DecisionEconomics) {
         Text(text = rate, style = AppTheme.num.heroNum, color = c.text)
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "acceptance rate · ${Formats.commaInt(decisions.received)} " +
-                if (decisions.received == 1) "offer" else "offers",
+            text = stringResource(
+                R.string.decisions_tab_acceptance_rate_caption,
+                Formats.commaInt(decisions.received),
+                if (decisions.received == 1) stringResource(R.string.decisions_tab_offer_singular)
+                else stringResource(R.string.decisions_tab_offer_plural),
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
@@ -75,9 +81,9 @@ private fun OfferFunnelCard(decisions: DecisionEconomics) {
 
         // Counts drive the bar; the legend surfaces the raw count per segment (the rate is the hero).
         val segments = listOf(
-            AppSegment("Accepted", decisions.accepted.toFloat(), c.good, note = Formats.commaInt(decisions.accepted)),
-            AppSegment("Declined", decisions.declined.toFloat(), c.bad, note = Formats.commaInt(decisions.declined)),
-            AppSegment("Timed out", decisions.timedOut.toFloat(), c.neutral, note = Formats.commaInt(decisions.timedOut)),
+            AppSegment(stringResource(R.string.decisions_tab_segment_accepted), decisions.accepted.toFloat(), c.good, note = Formats.commaInt(decisions.accepted)),
+            AppSegment(stringResource(R.string.decisions_tab_segment_declined), decisions.declined.toFloat(), c.bad, note = Formats.commaInt(decisions.declined)),
+            AppSegment(stringResource(R.string.decisions_tab_segment_timed_out), decisions.timedOut.toFloat(), c.neutral, note = Formats.commaInt(decisions.timedOut)),
         )
         AppStackBar(segments, height = 14.dp)
         Spacer(Modifier.height(10.dp))
@@ -93,19 +99,27 @@ private fun OfferFunnelCard(decisions: DecisionEconomics) {
 private fun ValueOfSayingNoCard(decisions: DecisionEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "VALUE OF SAYING NO", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.decisions_tab_value_of_no_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (decisions.declined == 0) {
             Text(text = EMPTY_VALUE, style = AppTheme.num.heroNum, color = c.text2)
             Spacer(Modifier.height(2.dp))
-            EmptyRow("No declines in this period.")
+            EmptyRow(stringResource(R.string.decisions_tab_no_declines_yet))
             return@AppCard
         }
-        Text(text = "~${Formats.money(decisions.declinedEstNet)}", style = AppTheme.num.heroNum, color = c.text)
+        Text(
+            text = stringResource(R.string.decisions_tab_est_net_skipped_format, Formats.money(decisions.declinedEstNet)),
+            style = AppTheme.num.heroNum,
+            color = c.text,
+        )
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "est. net skipped across ${Formats.commaInt(decisions.declined)} declined " +
-                if (decisions.declined == 1) "offer" else "offers",
+            text = stringResource(
+                R.string.decisions_tab_est_net_skipped_caption,
+                Formats.commaInt(decisions.declined),
+                if (decisions.declined == 1) stringResource(R.string.decisions_tab_offer_singular)
+                else stringResource(R.string.decisions_tab_offer_plural),
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = c.text3,
         )
@@ -121,30 +135,30 @@ private fun ValueOfSayingNoCard(decisions: DecisionEconomics) {
 private fun ScoreVsOutcomeCard(decisions: DecisionEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "SCORE VS OUTCOME", style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.decisions_tab_score_vs_outcome_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (decisions.received == 0) {
-            EmptyRow("No offers in this period yet.")
+            EmptyRow(stringResource(R.string.decisions_tab_no_offers_yet))
             return@AppCard
         }
         // Header
         ComparisonRow(
             label = "",
-            score = "Avg score",
-            perHour = "Est. \$/hr",
+            score = stringResource(R.string.decisions_tab_avg_score_header),
+            perHour = stringResource(R.string.decisions_tab_est_per_hour_header),
             labelColor = c.text3,
             valueStyleHeader = true,
         )
         Spacer(Modifier.height(8.dp))
         ComparisonRow(
-            label = "Accepted",
+            label = stringResource(R.string.decisions_tab_segment_accepted),
             score = decisions.avgScoreAccepted?.let { Formats.decimal(it, 1) } ?: EMPTY_VALUE,
             perHour = decisions.avgEstPerHourAccepted?.let { Formats.money(it) } ?: EMPTY_VALUE,
             labelColor = c.good,
         )
         Spacer(Modifier.height(8.dp))
         ComparisonRow(
-            label = "Declined",
+            label = stringResource(R.string.decisions_tab_segment_declined),
             score = decisions.avgScoreDeclined?.let { Formats.decimal(it, 1) } ?: EMPTY_VALUE,
             perHour = decisions.avgEstPerHourDeclined?.let { Formats.money(it) } ?: EMPTY_VALUE,
             labelColor = c.bad,

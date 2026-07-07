@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
@@ -155,7 +156,8 @@ private fun CardHeader(
             Icon(
                 imageVector = if (expanded) Icons.Default.KeyboardArrowDown
                 else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = if (expanded) stringResource(R.string.flow_card_content_desc_collapse)
+                else stringResource(R.string.flow_card_content_desc_expand),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
@@ -205,11 +207,13 @@ private fun cardSummary(snapshot: FlowCardSnapshot, isActive: Boolean): String =
 private fun awaitingSummary(snap: FlowCardSnapshot.Awaiting, isActive: Boolean): String {
     val now = if (isActive) rememberNow().value else (snap.phaseEndedAt ?: snap.phaseStartedAt)
     val elapsed = now - snap.phaseStartedAt
-    return if (isActive) "Waiting · ${formatDuration(elapsed)}" else "Waited ${formatDuration(elapsed)}"
+    return if (isActive) stringResource(R.string.flow_card_awaiting_active_format, formatDuration(elapsed))
+    else stringResource(R.string.flow_card_awaiting_frozen_format, formatDuration(elapsed))
 }
 
+@Composable
 private fun offerSummary(snap: FlowCardSnapshot.Offer): String {
-    val store = snap.storeNames.firstOrNull()?.takeIf { it.isNotBlank() } ?: "Offer"
+    val store = snap.storeNames.firstOrNull()?.takeIf { it.isNotBlank() } ?: stringResource(R.string.flow_card_offer_fallback_store)
     val pay = snap.payAmount?.let { " · ${Formats.money(it)}" } ?: ""
     // Outcome is rendered as a trailing chip in the header — see
     // CardHeader — so we omit it from the summary text.
@@ -222,7 +226,7 @@ private fun pickupSummary(snap: FlowCardSnapshot.Pickup, isActive: Boolean): Str
     val arrivedAt = snap.arrivedAt
     return when {
         isActive -> store
-        arrivedAt != null -> "$store · arrived ${formatTime(arrivedAt)}"
+        arrivedAt != null -> stringResource(R.string.flow_card_pickup_arrived_format, store, formatTime(arrivedAt))
         else -> store
     }
 }
@@ -233,11 +237,12 @@ private fun deliverySummary(snap: FlowCardSnapshot.Delivery, isActive: Boolean):
     val arrivedAt = snap.arrivedAt
     return when {
         isActive -> customer
-        arrivedAt != null -> "$customer · delivered ${formatTime(arrivedAt)}"
+        arrivedAt != null -> stringResource(R.string.flow_card_delivery_delivered_format, customer, formatTime(arrivedAt))
         else -> customer
     }
 }
 
+@Composable
 private fun postTaskSummary(snap: FlowCardSnapshot.PostTask): String {
     val store = snap.storeName?.let { "$it · " } ?: ""
     return store + Formats.money(snap.totalPay)
@@ -269,8 +274,8 @@ private fun AwaitingBody(snap: FlowCardSnapshot.Awaiting, isActive: Boolean) {
     ) {
         HeroBig(formatDuration(elapsed))
         Caption(
-            if (isActive) "since last offer"
-            else "before next offer"
+            if (isActive) stringResource(R.string.flow_card_since_last_offer)
+            else stringResource(R.string.flow_card_before_next_offer)
         )
     }
 }
@@ -321,7 +326,7 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                 AppGaugeRing(
                     progress = (score / 100.0).toFloat(),
                     value = score.toInt().toString(),
-                    label = "Score",
+                    label = stringResource(R.string.flow_card_score_gauge_label),
                     color = sc,
                     diameter = 60.dp,
                 )
@@ -329,19 +334,25 @@ private fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
             Column(modifier = Modifier.weight(1f)) {
                 val hourly = snap.dollarsPerHour
                 when {
-                    hourly != null -> Text("${Formats.money0(hourly)}/hr", style = AppTheme.num.heroNum, color = c.text, maxLines = 1)
+                    hourly != null -> Text(
+                        stringResource(R.string.flow_card_hourly_hero_format, Formats.money0(hourly)),
+                        style = AppTheme.num.heroNum, color = c.text, maxLines = 1,
+                    )
                     snap.payAmount != null -> Text(Formats.money(snap.payAmount!!), style = AppTheme.num.heroNum, color = c.text, maxLines = 1)
                 }
                 val net = snap.netPayAmount ?: snap.payAmount
+                val netLabel = stringResource(R.string.flow_card_net_secondary_format, net?.let { Formats.money(it) } ?: "")
+                val distanceLabel = snap.distanceMiles?.let { stringResource(R.string.flow_card_distance_secondary_format, Formats.decimal(it)) }
+                val perMileLabel = snap.dollarsPerMile?.let { stringResource(R.string.flow_card_per_mile_secondary_format, Formats.money(it)) }
                 val secondary = buildString {
-                    if (net != null) append("Net ${Formats.money(net)}")
-                    snap.distanceMiles?.let {
+                    if (net != null) append(netLabel)
+                    distanceLabel?.let {
                         if (isNotEmpty()) append(" · ")
-                        append("${Formats.decimal(it)} mi")
+                        append(it)
                     }
-                    snap.dollarsPerMile?.let {
+                    perMileLabel?.let {
                         if (isNotEmpty()) append(" · ")
-                        append("${Formats.money(it)}/mi")
+                        append(it)
                     }
                 }
                 if (secondary.isNotBlank()) {
@@ -468,17 +479,18 @@ private fun BadgeIcon(
 }
 
 /** Maps a badge enum name to a short label + brand color for the pill row. */
+@Composable
 private fun badgeMeta(name: String, c: AppColors): Pair<String, Color> = when (name) {
-    "SHOP" -> "Shop & Deliver" to c.stPickup
-    "HIGH_PAYING" -> "High pay" to c.good
-    "PRIORITY_ACCESS" -> "Priority" to c.stOffer
-    "RED_CARD" -> "Red Card" to c.bad
-    "ALCOHOL" -> "Alcohol" to c.warn
-    "LARGE_ORDER" -> "Large order" to c.neutral
-    "PIZZA_BAG" -> "Pizza bag" to c.neutral
-    "ALL_ORDERS_SAME_STORE" -> "Same store" to c.neutral
-    "BOTH_ORDERS_SAME_CUSTOMER" -> "Same customer" to c.neutral
-    "ITEMS_CAN_BE_ADDED" -> "Add-ons OK" to c.neutral
+    "SHOP" -> stringResource(R.string.flow_card_badge_shop_and_deliver) to c.stPickup
+    "HIGH_PAYING" -> stringResource(R.string.flow_card_badge_high_pay) to c.good
+    "PRIORITY_ACCESS" -> stringResource(R.string.flow_card_badge_priority) to c.stOffer
+    "RED_CARD" -> stringResource(R.string.flow_card_badge_red_card) to c.bad
+    "ALCOHOL" -> stringResource(R.string.flow_card_badge_alcohol) to c.warn
+    "LARGE_ORDER" -> stringResource(R.string.flow_card_badge_large_order) to c.neutral
+    "PIZZA_BAG" -> stringResource(R.string.flow_card_badge_pizza_bag) to c.neutral
+    "ALL_ORDERS_SAME_STORE" -> stringResource(R.string.flow_card_badge_same_store) to c.neutral
+    "BOTH_ORDERS_SAME_CUSTOMER" -> stringResource(R.string.flow_card_badge_same_customer) to c.neutral
+    "ITEMS_CAN_BE_ADDED" -> stringResource(R.string.flow_card_badge_add_ons_ok) to c.neutral
     else -> name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() } to c.neutral
 }
 
@@ -552,7 +564,7 @@ private fun TaskBody(
     val c = AppTheme.colors
     val now = if (isActive) rememberNow().value else (phaseEndedAt ?: phaseStartedAt)
     val arrived = arrivedAt != null
-    val verb = if (isDrop) "deliver" else "pickup"
+    val verb = if (isDrop) stringResource(R.string.flow_card_verb_deliver) else stringResource(R.string.flow_card_verb_pickup)
     val overdue = deadlineMillis != null && now > deadlineMillis
     // Live realized $/hr — ticks with `now` (erodes past the deadline), so it is recomputed here
     // each tick from the snapshot's anchors via the TaskEconomics SSOT, never frozen at reduce
@@ -575,21 +587,21 @@ private fun TaskBody(
             val timerColor: Color
             when {
                 arrived -> {
-                    timerLabel = "Dwell"
+                    timerLabel = stringResource(R.string.flow_card_timer_dwell_label)
                     timerValue = formatCountdown(now - arrivedAt)
-                    timerSub = if (isDrop) "at door" else "at store"
+                    timerSub = if (isDrop) stringResource(R.string.flow_card_timer_at_door_sub) else stringResource(R.string.flow_card_timer_at_store_sub)
                     timerColor = deadlineMillis?.let { deadlineColor(it - arrivedAt) } ?: c.text
                 }
                 deadlineMillis != null -> {
-                    timerLabel = if (overdue) "Overdue" else "To go"
+                    timerLabel = if (overdue) stringResource(R.string.flow_card_timer_overdue_label) else stringResource(R.string.flow_card_timer_to_go_label)
                     timerValue = formatCountdown(deadlineMillis - now)
                     timerSub = null
                     timerColor = deadlineColor(deadlineMillis - now)
                 }
                 else -> {
-                    timerLabel = "Elapsed"
+                    timerLabel = stringResource(R.string.flow_card_timer_elapsed_label)
                     timerValue = formatDuration(now - phaseStartedAt)
-                    timerSub = "en route"
+                    timerSub = stringResource(R.string.flow_card_timer_en_route_sub)
                     timerColor = c.text
                 }
             }
@@ -606,11 +618,15 @@ private fun TaskBody(
             TaskMetric(
                 modifier = Modifier.weight(1f),
                 live = isActive && hourly != null,
-                label = "Running at",
-                value = if (hourly != null) "${Formats.money0(hourly)}/hr${if (overdue) " ↓" else ""}" else "—",
+                label = stringResource(R.string.flow_card_running_at_label),
+                value = if (hourly != null) {
+                    if (overdue) stringResource(R.string.flow_card_running_at_overdue_format, Formats.money0(hourly))
+                    else stringResource(R.string.flow_card_hourly_hero_format, Formats.money0(hourly))
+                } else "—",
                 // Sub line prefers the fixed $/mi efficiency; falls back to the erosion status.
-                sub = perMile?.let { "${Formats.money(it)}/mi" }
-                    ?: if (hourly == null) null else if (overdue) "dropping" else "on track",
+                sub = perMile?.let { stringResource(R.string.flow_card_per_mile_secondary_format, Formats.money(it)) }
+                    ?: if (hourly == null) null else if (overdue) stringResource(R.string.flow_card_running_at_dropping_sub)
+                    else stringResource(R.string.flow_card_running_at_on_track_sub),
                 color = hourly?.let { hourlyColor(it, c) } ?: c.text3,
             )
         }
@@ -619,12 +635,18 @@ private fun TaskBody(
         val caption = buildString {
             if (arrived && deadlineMillis != null) {
                 val margin = deadlineMillis - arrivedAt
-                append("arrived ${formatCountdown(kotlin.math.abs(margin))} ${if (margin >= 0) "early" else "late"} · ")
+                append(
+                    stringResource(
+                        R.string.flow_card_arrived_margin_format,
+                        formatCountdown(kotlin.math.abs(margin)),
+                        if (margin >= 0) stringResource(R.string.flow_card_margin_early) else stringResource(R.string.flow_card_margin_late),
+                    ),
+                )
             }
             when {
-                deadlineMillis == null -> append(if (arrived) "at stop" else "en route")
-                overdue -> append("${formatCountdown(now - deadlineMillis)} past $verb-by")
-                else -> append("$verb by ${formatTime(deadlineMillis)}")
+                deadlineMillis == null -> append(if (arrived) stringResource(R.string.flow_card_at_stop) else stringResource(R.string.flow_card_en_route))
+                overdue -> append(stringResource(R.string.flow_card_past_deadline_format, formatCountdown(now - deadlineMillis), verb))
+                else -> append(stringResource(R.string.flow_card_by_deadline_format, verb, formatTime(deadlineMillis)))
             }
         }
         Caption(caption)
@@ -639,7 +661,7 @@ private fun TaskBody(
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null, tint = c.bad, modifier = Modifier.size(16.dp))
                     Text(
-                        "Below your floor — no longer worth the wait.",
+                        stringResource(R.string.flow_card_below_floor_warning),
                         style = MaterialTheme.typography.labelMedium,
                         color = c.bad,
                         fontWeight = FontWeight.SemiBold,
@@ -661,8 +683,14 @@ private fun TaskBody(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("shop $shopped/$total", style = AppTheme.num.smNum, color = c.text, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Text("${Formats.decimal(pace)}/min", style = AppTheme.num.smNum, color = c.stPickup, fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(R.string.flow_card_shop_progress_format, shopped, total),
+                            style = AppTheme.num.smNum, color = c.text, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            stringResource(R.string.flow_card_shop_pace_format, Formats.decimal(pace)),
+                            style = AppTheme.num.smNum, color = c.stPickup, fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
             }
@@ -671,8 +699,8 @@ private fun TaskBody(
         // ---- detail line — store/customer + lifecycle times ----
         val detail = buildString {
             append(primary)
-            arrivedAt?.let { append(" · arrived ${formatTime(it)}") }
-            confirmedAt?.let { append(" · picked up ${formatTime(it)}") }
+            arrivedAt?.let { append(stringResource(R.string.flow_card_detail_arrived_format, formatTime(it))) }
+            confirmedAt?.let { append(stringResource(R.string.flow_card_detail_picked_up_format, formatTime(it))) }
             if (arrivedAt == null && phaseEndedAt != null && !isActive) {
                 append(" · ${formatDuration(phaseEndedAt - phaseStartedAt)}")
             }
@@ -734,7 +762,7 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         HeroBig(Formats.money(snap.totalPay))
-        Caption("delivery total")
+        Caption(stringResource(R.string.flow_card_post_task_delivery_total))
         snap.parsedPay?.let { pay ->
             Column(
                 modifier = Modifier.padding(top = 6.dp),
@@ -744,12 +772,12 @@ private fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
                     BreakdownRow(item.type, Formats.money(item.amount))
                 }
                 pay.customerTips.forEach { tip ->
-                    BreakdownRow("tip · ${tip.displayLabel}", Formats.money(tip.amount))
+                    BreakdownRow(stringResource(R.string.flow_card_post_task_tip_format, tip.displayLabel), Formats.money(tip.amount))
                 }
             }
         }
         snap.sessionEarningsAtCompletion?.let {
-            Caption("session ${Formats.money(it)}")
+            Caption(stringResource(R.string.flow_card_post_task_session_format, Formats.money(it)))
         }
     }
 }
@@ -771,12 +799,12 @@ private fun OfferActionRow(onAccept: () -> Unit, onDecline: () -> Unit) {
             modifier = Modifier.weight(1f),
             border = BorderStroke(1.5.dp, c.bad),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = c.bad),
-        ) { Text("Decline", fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.flow_card_action_decline), fontWeight = FontWeight.Bold) }
         Button(
             onClick = onAccept,
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.buttonColors(containerColor = c.good, contentColor = c.textInv),
-        ) { Text("Accept", fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.flow_card_action_accept), fontWeight = FontWeight.Bold) }
     }
 }
 
@@ -815,9 +843,9 @@ private fun BreakdownRow(label: String, value: String) {
 private fun OutcomeChip(outcome: AppEventType) {
     val c = AppTheme.colors
     val (text, color) = when (outcome) {
-        AppEventType.OFFER_ACCEPTED -> "Accepted" to c.good
-        AppEventType.OFFER_DECLINED -> "Declined" to c.bad
-        AppEventType.OFFER_TIMEOUT -> "Timed out" to c.neutral
+        AppEventType.OFFER_ACCEPTED -> stringResource(R.string.flow_card_outcome_accepted) to c.good
+        AppEventType.OFFER_DECLINED -> stringResource(R.string.flow_card_outcome_declined) to c.bad
+        AppEventType.OFFER_TIMEOUT -> stringResource(R.string.flow_card_outcome_timed_out) to c.neutral
         else -> outcome.name to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(
