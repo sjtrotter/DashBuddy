@@ -4,10 +4,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import cloud.trotter.dashbuddy.core.datastore.settings.PlatformPreferencesDataSource
+import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -47,6 +49,20 @@ class PlatformPreferencesRepository @Inject constructor(
             SharingStarted.Eagerly,
             enabledPlatforms.value.mapNotNull { it.packageName }.toSet(),
         )
+
+    /**
+     * Per-platform grace/timing overrides (#438 item 6). No persistence store or
+     * settings-UI writer exists yet, so this materializes to an empty map today —
+     * every platform resolves to [GraceConfig.DEFAULT] (behavior identical to the
+     * former compile-time constants). When a dev-settings editor lands it swaps
+     * this for a DataStore-backed flow; the read seam is already in place.
+     * CONSTRAINT: that swap MUST use `stateIn(scope, SharingStarted.Eagerly, …)`
+     * like [enabledPackages] above — the consumer is a synchronous `.value` read
+     * with NO collector, so a `WhileSubscribed` flow would freeze it at the
+     * initial empty map forever (adversarial-review INFO-3).
+     */
+    override val graceConfig: StateFlow<Map<Platform, GraceConfig>> =
+        MutableStateFlow(emptyMap())
 
     /** Check which supported platforms are installed on device. */
     fun detectInstalledPlatforms(): Set<Platform> =

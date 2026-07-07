@@ -18,6 +18,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.pay.displayLabel
+import cloud.trotter.dashbuddy.domain.settings.GraceConfig
+import cloud.trotter.dashbuddy.domain.settings.GraceConfigProvider
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ParsedFieldsGate
@@ -56,23 +58,40 @@ import cloud.trotter.dashbuddy.domain.state.customerLabel
  * Cross-platform transitions → aggregate bookkeeping (currently none).
  */
 @Singleton
-class EffectMap @Inject constructor() {
+class EffectMap @Inject constructor(
+    /**
+     * Per-platform grace/timing snapshot (#438 item 6, vet M7). Same
+     * eagerly-materialized synchronous value provider `TransitionPolicy` takes —
+     * one atomic read at each use site, never collected inside a reducer (each
+     * value is stored into state/a timer immediately, so a mid-[diff] config flip
+     * is equivalent to the edit landing between steps); defaults to code
+     * constants when unbound so `EffectMap()` in tests is behavior-identical.
+     * Replay-determinism tradeoff pre-accepted (see [GraceConfigProvider]).
+     */
+    private val graceConfig: GraceConfigProvider,
+) {
+
+    /** Test/default convenience — code-constant timing for every platform. */
+    constructor() : this(GraceConfigProvider.Defaults)
 
     companion object {
         /**
          * Safety buffer added to the platform's reported pause countdown
          * before scheduling the offline timeout. Accounts for clock skew
-         * between the parsed timestamp and the actual timer start.
+         * between the parsed timestamp and the actual timer start. Re-exported
+         * from [GraceConfig] (the SSOT) for comment/test back-compat; the live
+         * value is now per-platform via [graceConfig].
          */
-        const val PAUSE_TIMEOUT_BUFFER_MS = 1000L
+        const val PAUSE_TIMEOUT_BUFFER_MS = GraceConfig.PAUSE_TIMEOUT_BUFFER_MS
 
         /**
          * Settle delay before the EXPAND_EARNINGS tap (#425) — lets the
          * post-delivery summary finish animating so the bound chevron's
          * fingerprint still matches what gets tapped. Carried over from the
-         * former rule-declared click's `delayMs`.
+         * former rule-declared click's `delayMs`. Re-exported from [GraceConfig]
+         * (the SSOT); the live value is now per-platform via [graceConfig].
          */
-        const val EXPAND_SETTLE_MS = 500L
+        const val EXPAND_SETTLE_MS = GraceConfig.EXPAND_SETTLE_MS
 
         /**
          * #438 B3 (vet H1/L5): de-facto offer TTL when the offer rule parses no countdown (none do
@@ -535,7 +554,8 @@ class EffectMap @Inject constructor() {
                     } else {
                         val flowObs = obs as? Observation.FlowObservation
                         val pausedFields = flowObs?.parsed as? ParsedFields.PausedFields
-                        val durationMs = (pausedFields?.remainingMillis ?: 0L) + PAUSE_TIMEOUT_BUFFER_MS
+                        val durationMs = (pausedFields?.remainingMillis ?: 0L) +
+                            graceConfig.forPlatform(next.platform).pauseTimeoutBufferMs
 
                         val pausePayload = SessionPausedPayload(
                             sessionId = sessionId,
@@ -1059,7 +1079,7 @@ class EffectMap @Inject constructor() {
         if (!collapsed) return emptyList()
         return listOf(
             AppEffect.ScheduleTimeout(
-                durationMs = EXPAND_SETTLE_MS,
+                durationMs = graceConfig.forPlatform(flowObs.platform).expandSettleMs,
                 type = TimeoutType.SETTLE_UI,
                 platform = flowObs.platform.takeIf { it != Platform.Unknown },
                 payload = ObservationPayload.DeferredAction(
@@ -1093,7 +1113,7 @@ class EffectMap @Inject constructor() {
         if (!hasLiveOffer) return emptyList()
         return listOf(
             AppEffect.ScheduleTimeout(
-                durationMs = EXPAND_SETTLE_MS,
+                durationMs = graceConfig.forPlatform(flowObs.platform).expandSettleMs,
                 type = TimeoutType.SETTLE_UI,
                 platform = flowObs.platform.takeIf { it != Platform.Unknown },
                 payload = ObservationPayload.DeferredAction(
