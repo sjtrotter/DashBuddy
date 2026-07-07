@@ -379,13 +379,11 @@ object RuleCompiler {
                 }
                 // #293 item 5: unknown branch keys are a typed reject naming them.
                 validateKnownKeys(branchObj, knownBranchKeys(context), scope = "branch", ruleId = id)
-                compileBranch(branchObj, context, ruleState.flow, ruleState.modeHint,
-                    ruleOutcomes = ruleState.outcomes, ruleId = id,
+                compileBranch(branchObj, context, ruleState.flow, ruleState.modeHint, ruleId = id,
                     ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj)
             }
         } else {
-            listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint,
-                ruleOutcomes = ruleState.outcomes, ruleId = id))
+            listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint, ruleId = id))
         }
 
         // #419: bound the total effect count across all branches (own effects +
@@ -498,7 +496,6 @@ object RuleCompiler {
         context: RuleContext,
         ruleFlow: Flow? = null,
         ruleModeHint: Mode? = null,
-        ruleOutcomes: Set<Flow>? = null,
         ruleId: String? = null,
         ruleParseBlock: JsonObject? = null,
         ruleParseAs: String? = null,
@@ -599,7 +596,6 @@ object RuleCompiler {
             intent = intent,
             flow = branchState.flow ?: ruleFlow,
             modeHint = branchState.modeHint ?: ruleModeHint,
-            outcomes = branchState.outcomes ?: ruleOutcomes,
             screenIs = screenIs,
             transitionOverrides = transitionOverrides,
         )
@@ -653,7 +649,6 @@ object RuleCompiler {
     data class ParsedStateBlock(
         val flow: Flow? = null,
         val modeHint: Mode? = null,
-        val outcomes: Set<Flow>? = null,
     )
 
     fun parseStateBlock(stateObj: JsonObject?, ruleId: String): ParsedStateBlock {
@@ -671,13 +666,8 @@ object RuleCompiler {
             Mode.fromWire(it)
                 ?: throw RuleCompileException("Rule '$ruleId': unknown mode value '$it'")
         }
-        val outcomes = stateObj["outcomes"]?.jsonArray?.map { elem ->
-            val wire = elem.jsonPrimitive.content
-            Flow.fromWire(wire)
-                ?: throw RuleCompileException("Rule '$ruleId': unknown outcome flow '$wire'")
-        }?.toSet()
 
-        return ParsedStateBlock(flow, modeHint, outcomes)
+        return ParsedStateBlock(flow, modeHint)
     }
 
     // ==========================================================================

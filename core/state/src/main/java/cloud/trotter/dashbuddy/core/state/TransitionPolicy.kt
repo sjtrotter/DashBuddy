@@ -1,12 +1,10 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.settings.GraceConfigProvider
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
-import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,7 +14,6 @@ import javax.inject.Singleton
  * Replaces [HealingPolicy]. Key differences:
  * - Screens apply mode **immediately** — no threshold counting.
  * - Clicks record user intent — they do NOT drive mode.
- * - [classify] is diagnostic only — it never blocks a transition.
  * - Session grace period protects sessions from brief offline blips.
  */
 @Singleton
@@ -97,27 +94,5 @@ class TransitionPolicy @Inject constructor(
             Flow.Idle -> null // Idle is ambiguous — could be offline or between offers
             null -> null
         }
-    }
-
-    /**
-     * Classify a transition for logging and lifecycle decisions.
-     *
-     * When [prevOutcomes] is null (rule declared no outcomes), mode changes
-     * default to [TransitionKind.Expected] for backward compatibility.
-     */
-    fun classify(
-        prevMode: Mode,
-        impliedMode: Mode?,
-        prevOutcomes: Set<Flow>?,
-        obs: Observation.FlowObservation,
-    ): TransitionKind {
-        if (impliedMode == null) return TransitionKind.NoSignal
-        if (impliedMode == prevMode) return TransitionKind.Confirmed
-
-        // Mode is changing. Check if the new flow was expected.
-        if (prevOutcomes == null) return TransitionKind.Expected // no outcomes declared — compat
-
-        val obsFlow = obs.flow ?: return TransitionKind.Expected // no flow to check against
-        return if (obsFlow in prevOutcomes) TransitionKind.Expected else TransitionKind.Unexpected
     }
 }

@@ -64,7 +64,6 @@ data class CompiledBranch<TInput>(
     val intent: String? = null,
     val flow: Flow? = null,
     val modeHint: Mode? = null,
-    val outcomes: Set<Flow>? = null,
     val screenIs: String? = null,
     val transitionOverrides: Map<String, List<CompiledEffect>> = emptyMap(),
 )
@@ -261,7 +260,6 @@ data class RuleMatchResult(
     val shape: String? = null,
     val flow: Flow? = null,
     val modeHint: Mode? = null,
-    val outcomes: Set<Flow>? = null,
     val fields: Map<String, Any?> = emptyMap(),
     val effects: List<RequestedEffect> = emptyList(),
     val targets: Map<String, cloud.trotter.dashbuddy.domain.pipeline.NodeRef> = emptyMap(),

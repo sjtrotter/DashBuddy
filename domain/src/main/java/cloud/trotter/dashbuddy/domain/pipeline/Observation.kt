@@ -46,8 +46,6 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         val targets: Map<String, NodeRef>
         /** Per-trigger overrides that replace built-in transition defaults. */
         val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>>
-        /** Plausible next flows declared by the matched rule's `outcomes` field. */
-        val expectedOutcomes: Set<Flow>?
     }
 
     /** A screen classification from the accessibility window pipeline. */
@@ -63,7 +61,6 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val effects: List<RequestedEffect> = emptyList(),
         override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
-        override val expectedOutcomes: Set<Flow>? = null,
     ) : FlowObservation
 
     /** A click/tap event classified by the click pipeline. */
@@ -79,7 +76,6 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val effects: List<RequestedEffect> = emptyList(),
         override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
-        override val expectedOutcomes: Set<Flow>? = null,
         /** The last classified screen target when this click occurred. */
         val screenTarget: String? = null,
     ) : FlowObservation
@@ -97,7 +93,6 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         override val effects: List<RequestedEffect> = emptyList(),
         override val targets: Map<String, NodeRef> = emptyMap(),
         override val transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
-        override val expectedOutcomes: Set<Flow>? = null,
     ) : FlowObservation
 
     /** A timeout fired by the state machine's internal timer system. */

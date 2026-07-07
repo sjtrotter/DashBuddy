@@ -107,9 +107,14 @@ matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:
 - **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
   (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.
 - **`:core:state`** — Multi-region state machine (StateMachine, FlowRegionStepper,
-  PlatformRegionStepper, CrossPlatformRegionStepper), effect map, `TransitionPolicy` (the
-  expected/unexpected classification + commit graces; replaced the old `HealingPolicy`), crash
-  recovery (StateManagerV2). Defines `EffectExecutor` and `MetadataProvider` interfaces.
+  PlatformRegionStepper, CrossPlatformRegionStepper), effect map, `TransitionPolicy` (screen-
+  authoritative mode resolution + commit graces; replaced the old `HealingPolicy`), crash
+  recovery (StateManagerV2). Defines `EffectExecutor` and `MetadataProvider` interfaces. (#715
+  struck the former Expected/Unexpected `outcomes` classification — schema key, compiler support,
+  `TransitionPolicy.classify()`, `TransitionKind`, `PlatformRegion.lastTransitionKind` — as dormant:
+  no ruleset ever declared `outcomes`, so `Unexpected` was unreachable and its two "consumers"
+  (`SessionStartSource.RECOVERY`, the healing gate) always fell to their other arm. `#438`'s
+  Offline→Online healing edge is unaffected — it never depended on the classification.)
 - **`:core:database`** — Room entities, DAOs, and database setup. **Data-safety posture (#690):
   no `fallbackToDestructiveMigration`.** `app_events` is the analytics source of truth (the
   read-model tables are a rebuildable projection of it), so an upgrade that Room has no path for must
