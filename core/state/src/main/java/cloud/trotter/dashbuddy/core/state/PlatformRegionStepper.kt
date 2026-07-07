@@ -305,7 +305,7 @@ class PlatformRegionStepper @Inject constructor() {
                     lastObservedAt = obs.timestamp,
                     pendingModeResume = PendingModeResume(
                         since = since,
-                        deadline = since + policy.pauseResumeGraceMs,
+                        deadline = since + policy.pauseResumeGraceMs(current.platform),
                     ),
                 )
             }
@@ -388,7 +388,7 @@ class PlatformRegionStepper @Inject constructor() {
                         pendingDestructive = PendingDestructive(
                             kind = DestructiveKind.SESSION_END,
                             since = obs.timestamp,
-                            deadline = obs.timestamp + policy.gracePeriodMs,
+                            deadline = obs.timestamp + policy.gracePeriodMs(region.platform),
                         ),
                     )
                 }
@@ -508,7 +508,7 @@ class PlatformRegionStepper @Inject constructor() {
         // shows AFTER the idle/offline screen, mid-grace.
         if (obs.flow == Flow.SessionEnded && region.session != null) {
             val endFields = obs.parsed as? ParsedFields.SessionEndedFields
-            val newDeadline = obs.timestamp + policy.authoritativeGraceMs
+            val newDeadline = obs.timestamp + policy.authoritativeGraceMs(region.platform)
             val existing = region.pendingDestructive
             val pend = if (existing?.kind == DestructiveKind.SESSION_END) {
                 // Offline-grace already armed (idle/offline before summary) —
@@ -1052,7 +1052,7 @@ class PlatformRegionStepper @Inject constructor() {
         // dashing" (single-slot pending — noted on the issue).
         val postTask = region.activeTask
         if (nextFlowVal == Flow.PostTask && postTask != null) {
-            val newDeadline = obs.timestamp + policy.authoritativeGraceMs
+            val newDeadline = obs.timestamp + policy.authoritativeGraceMs(region.platform)
             val existing = region.pendingDestructive
             val pend = if (existing?.kind == DestructiveKind.TASK_RETIRE) {
                 // Already armed (idle-grace, or an earlier receipt frame) —
@@ -1089,8 +1089,8 @@ class PlatformRegionStepper @Inject constructor() {
                     pendingDestructive = PendingDestructive(
                         kind = DestructiveKind.TASK_RETIRE,
                         since = obs.timestamp,
-                        // Through the injected policy (#406): the static constant ignored overrides.
-                        deadline = obs.timestamp + policy.gracePeriodMs,
+                        // Through the injected policy (#406/#438 item 6): per-platform grace.
+                        deadline = obs.timestamp + policy.gracePeriodMs(region.platform),
                         // #596: record where the task was left FOR. A retire armed by the dasher
                         // deliberating on a mid-route add-on offer (`OfferPresented`) must NOT let
                         // T1/T2 close-out fire on the still-undelivered final drop; an idle/waiting

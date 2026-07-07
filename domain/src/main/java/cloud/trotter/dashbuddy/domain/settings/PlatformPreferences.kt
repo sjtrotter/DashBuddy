@@ -20,4 +20,15 @@ interface PlatformPreferences {
 
     /** Package names of the enabled platforms (listener-level event filtering). */
     val enabledPackages: StateFlow<Set<String>>
+
+    /**
+     * Per-platform grace / timing overrides (#438 item 6). Materialized ONCE
+     * (#356); the timing consumers read `.value` synchronously at their step /
+     * diff via [GraceConfigProvider]. A platform absent from the map uses
+     * [GraceConfig.DEFAULT] (the code constants). No settings UI writes this yet
+     * — the seam ships ahead of the editor, so today the map is empty and every
+     * platform resolves to defaults (behavior identical to the former
+     * compile-time constants).
+     */
+    val graceConfig: StateFlow<Map<Platform, GraceConfig>>
 }

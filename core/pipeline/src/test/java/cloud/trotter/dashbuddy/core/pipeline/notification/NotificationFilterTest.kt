@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.notification
 
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,8 @@ class NotificationFilterTest {
             get() = MutableStateFlow(
                 enabledPlatforms.value.mapNotNull { it.packageName }.toSet()
             )
+        override val graceConfig: StateFlow<Map<Platform, GraceConfig>> =
+            MutableStateFlow(emptyMap())
     }
 
     private fun raw(packageName: String) = RawNotificationData(

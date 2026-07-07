@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -136,6 +137,6 @@ class TransitionPolicyTest {
 
     @Test
     fun `grace period defaults to 10 seconds`() {
-        assertEquals(10_000L, policy.gracePeriodMs)
+        assertEquals(10_000L, policy.gracePeriodMs(Platform.DoorDash))
     }
 }
