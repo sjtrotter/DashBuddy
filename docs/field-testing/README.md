@@ -79,14 +79,27 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   one order then unassign, or just go online→offline with no completions), collapse the bubble, then reopen
   it. The idle card AND the dimmed top-bar "LAST SESSION" must reflect **that** dash (earnings, miles,
   duration, deliveries, acceptance %), **not** an older moneyed dash. The "ended Xm ago" caption should tick
-  up live. A live dash shows full-opacity "THIS SESSION". **Gas quick-edit:** tap −/+ on the card's gas
-  stepper → the value changes, the caption flips AUTO→MANUAL, and reopening **Settings → Personal Economy**
-  shows the same price (it persisted to the real store; the daily EIA worker won't clobber it). **Vehicle:**
-  tap Vehicle → the main app opens directly on the Personal Economy screen. Frozen-economics: a gas edit must
-  only change FUTURE offer $/hr, never a past delivery's recorded net. Anything stale, a $0 dash getting
-  skipped, or a gas edit that doesn't stick is a regression — capture it.
+  up live. A live dash shows full-opacity "THIS SESSION". **Vehicle:**
+  tap Vehicle → the main app opens directly on the Personal Economy screen. Anything stale, or a $0 dash
+  getting skipped, is a regression — capture it. (The gas quick-edit sub-check is superseded by the
+  mode-adaptive #722 item below — the plain stepper-tap-flips-mode UI this item originally described no
+  longer exists in AUTO mode.)
   - Confirmed: 0/2
   - Desk replay fixture: `~/dashbuddy/logs/2026/07/06/` (the 07-05 $0 session `session-doordash-1783294721320-15`).
+- **🆕 NEW — bubble gas quick-edit is mode-adaptive: refresh (AUTO) vs. Resume auto (MANUAL) (#722 / PR).**
+  The idle card's gas control now shows ONE control set per mode instead of a stepper+refresh combo, because
+  each action's meaning flips with mode. **AUTO mode:** price + "AUTO" caption + a refresh icon (no stepper
+  visible) — tapping refresh fetches today's EIA price and stays auto (price updates in place, no mode
+  change); tapping the price itself (or its small pencil) is the "take manual control" gesture — the
+  stepper should appear and the caption should flip to MANUAL. **MANUAL mode:** stepper + "MANUAL" caption +
+  a labeled **"Resume auto"** chip (never a bare refresh icon) — tapping it should re-enable auto AND pull a
+  fresh price in one action, flipping the caption back to AUTO and hiding the stepper. Watch for: a spinner
+  during the fetch, a small transient error indicator if the fetch fails (offline/no location — no toast
+  spam), and that **Settings → Personal Economy** always agrees with whatever the bubble shows afterward.
+  Frozen-economics invariant: any of this only changes FUTURE offer $/hr, never a past delivery's recorded
+  net. Anything that shows a bare icon changing modes silently, a stepper visible in AUTO mode, or a refresh
+  icon visible in MANUAL mode is a regression — capture it.
+  - Confirmed: 0/2
 - **🆕 NEW — over-attribution review flag on the Money tab + per-dash drill-down (#701).**
   The Money tab's unattributed-pay callout ("$X not attributed…") now has a mirror: when a
   session's **captured delivery pay exceeds** the platform's reported summary total (the

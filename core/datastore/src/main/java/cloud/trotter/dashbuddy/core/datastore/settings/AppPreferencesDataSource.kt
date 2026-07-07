@@ -163,6 +163,19 @@ class AppPreferencesDataSource @Inject constructor(
         }
     }
 
+    /**
+     * "Resume auto" (#722): the inverse of [updateGasPriceManual] — re-enables auto (EIA) fetching
+     * AND applies a freshly-fetched price in one atomic write, so the bubble's MANUAL-mode chip
+     * can't leave auto=true paired with a stale/pre-fetch price. Same store/keys — no second
+     * gas-price copy.
+     */
+    suspend fun updateGasPriceAuto(price: Float) {
+        ds.edit {
+            it[Keys.GAS_PRICE] = price
+            it[Keys.IS_GAS_PRICE_AUTO] = true
+        }
+    }
+
     suspend fun updateFuelType(type: String) {
         ds.edit { it[Keys.FUEL_TYPE] = type }
     }
