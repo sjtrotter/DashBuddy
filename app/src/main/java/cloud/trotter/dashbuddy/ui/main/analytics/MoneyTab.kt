@@ -75,6 +75,16 @@ fun MoneyTab(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        // Mirror signal (#701): attributed pay exceeded the reported total — display-only, never
+        // folded into netProfit/unattributedPay. badBg (not warnBg) since an over-count is a stronger
+        // review flag than an unattributed bonus/adjustment.
+        if (economics.overAttributedPay > UNATTRIBUTED_EPSILON) {
+            AppCallout(
+                text = stringResource(R.string.money_tab_over_attributed_callout_format, Formats.money(economics.overAttributedPay)),
+                container = AppTheme.colors.badBg,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         TopStoresCard(topStores)
         RecentDashesCard(recentSessions, onOpenSession)
     }

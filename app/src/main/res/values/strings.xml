@@ -467,6 +467,7 @@
     <string name="money_tab_no_store_earnings_yet">No store earnings in this period yet.</string>
     <string name="money_tab_unknown_store">Unknown store</string>
     <string name="money_tab_unattributed_callout_format">%1$s not attributed to any delivery — bonuses/adjustments; review coming (#650)</string>
+    <string name="money_tab_over_attributed_callout_format">attributed exceeds reported by %1$s — review estimates/corrections</string>
     <string name="money_tab_recent_sessions_title">RECENT SESSIONS</string>
     <string name="money_tab_no_sessions_recorded_yet">No sessions recorded yet.</string>
     <string name="money_tab_cash_marker_format">+%1$s cash</string>
@@ -475,6 +476,7 @@
     <string name="session_detail_title">Session detail</string>
     <string name="session_detail_not_found">Session not found.</string>
     <string name="session_detail_unaccounted_format">%1$s unaccounted on this session — the platform reported more than the captured deliveries.</string>
+    <string name="session_detail_over_attributed_format">attributed exceeds reported by %1$s on this session — review estimates/corrections.</string>
     <string name="session_detail_add_missed_delivery">Add missed delivery</string>
     <string name="session_detail_deliveries_title">DELIVERIES</string>
     <string name="session_detail_no_deliveries_yet">No deliveries captured for this session.</string>

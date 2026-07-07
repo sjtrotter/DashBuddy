@@ -87,6 +87,20 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   skipped, or a gas edit that doesn't stick is a regression — capture it.
   - Confirmed: 0/2
   - Desk replay fixture: `~/dashbuddy/logs/2026/07/06/` (the 07-05 $0 session `session-doordash-1783294721320-15`).
+- **🆕 NEW — over-attribution review flag on the Money tab + per-dash drill-down (#701).**
+  The Money tab's unattributed-pay callout ("$X not attributed…") now has a mirror: when a
+  session's **captured delivery pay exceeds** the platform's reported summary total (the
+  opposite direction — e.g. a phantom offer-pay estimate or a mixed-receipt over-stamp), a
+  second callout appears ("attributed exceeds reported by $X — review estimates/corrections"),
+  tinted with the stronger `badBg` (not the softer `warnBg` the unattributed one uses). The
+  per-dash drill-down (tap a session in Recent Dashes) shows the same mirror callout when that
+  ONE dash is over-attributed. **What to watch:** on a normal dash where reported ≈ delivered,
+  neither callout (or only the unattributed one) should appear — the new callout is a **display-only**
+  signal and must never move the True-Net waterfall's Net figure or the stat tiles. If you ever see
+  a dash where delivered pay looks higher than the platform's own reported total (rare — usually a
+  DoorDash shop/Drive job with an estimate involved), confirm the new callout fires with the correct
+  dollar amount and that Net/hr, Net/mi, and the waterfall are unaffected.
+  - Confirmed: 0/2
 - **🆕 NEW — per-region lifecycle edges hold single-platform behavior (#438 B1 / PR #707).** The
   state machine's job/task edges now fire off each platform's OWN last-acted flow instead of the
   global screen flow (a latent multi-platform fix — single-platform behavior should be **byte
