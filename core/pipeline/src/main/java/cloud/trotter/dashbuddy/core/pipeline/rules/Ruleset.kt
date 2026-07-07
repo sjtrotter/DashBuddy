@@ -157,7 +157,6 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     shape = branch.shape,
                     flow = branch.flow,
                     modeHint = branch.modeHint,
-                    outcomes = branch.outcomes,
                     fields = fieldsWithIntent,
                     effects = resolvedEffects,
                     targets = targets,

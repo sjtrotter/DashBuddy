@@ -76,7 +76,7 @@ class AnalyticsRepository @Inject constructor(
                     assemble(
                         deliveredPay = d.pay, deliveryNet = d.net, deliveries = d.deliveries,
                         jobs = d.jobs, miles = s.miles, onlineMillis = s.onlineMillis,
-                        gross = g.gross, unattributed = g.unattributed,
+                        gross = g.gross, unattributed = g.unattributed, overAttributed = g.overAttributed,
                         fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost, cash = d.cash,
                     )
                 }
@@ -95,6 +95,7 @@ class AnalyticsRepository @Inject constructor(
                         deliveries = d?.deliveries ?: 0, jobs = d?.jobs ?: 0,
                         miles = s?.miles ?: 0.0, onlineMillis = s?.onlineMillis ?: 0L,
                         gross = g?.gross ?: 0.0, unattributed = g?.unattributed ?: 0.0,
+                        overAttributed = g?.overAttributed ?: 0.0,
                         fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost, cash = d?.cash ?: 0.0,
                     )
                 }
@@ -276,6 +277,7 @@ class AnalyticsRepository @Inject constructor(
         onlineMillis: Long,
         gross: Double,
         unattributed: Double,
+        overAttributed: Double,
         fuelCost: Double?,
         nonFuelCost: Double?,
         cash: Double,
@@ -284,6 +286,7 @@ class AnalyticsRepository @Inject constructor(
         // cash sum (folded in the DAO's `grossAndUnattributed`); net adds it here (it is deliberately
         // OUTSIDE the frozen delivery `netProfit`, so it can't be lost to a null-net row). The
         // waterfall's cost = gross − net is unchanged (cash cancels), so the 4-step reconcile holds.
+        // [overAttributed] (#701) is deliberately NOT folded into [net] — display-only review signal.
         val net = deliveryNet + unattributed + cash
         val hours = onlineMillis / 3_600_000.0
         return PeriodEconomics(
@@ -303,6 +306,7 @@ class AnalyticsRepository @Inject constructor(
             // nullable SUMs (null = no frozen split coverage → the UI falls back to 3-step, #659).
             fuelCost = fuelCost,
             nonFuelCost = nonFuelCost,
+            overAttributedPay = overAttributed,
         )
     }
 

@@ -15,7 +15,6 @@ import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
-import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import timber.log.Timber
 
 /**
@@ -138,11 +137,12 @@ internal fun EffectMap.diffMode(
                         sessionId = nextSession.sessionId,
                         platform = next.platform.name,
                         startedAt = nextSession.startedAt,
-                        source = if (next.lastTransitionKind == TransitionKind.Unexpected) {
-                            SessionStartSource.RECOVERY
-                        } else {
-                            SessionStartSource.INTERACTION
-                        },
+                        // #715: this used to branch on `lastTransitionKind == Unexpected` to
+                        // distinguish a crash-recovery start from a normal one, but that kind
+                        // was unreachable (no ruleset ever declared `outcomes`) — the branch
+                        // always evaluated to INTERACTION. Struck along with the rest of the
+                        // dormant Expected/Unexpected classification machinery.
+                        source = SessionStartSource.INTERACTION,
                         startScreen = "WaitingForOffer",
                     )
                     add(logEffect(nextSession.sessionId, AppEventType.DASH_START, obs.timestamp, payload))

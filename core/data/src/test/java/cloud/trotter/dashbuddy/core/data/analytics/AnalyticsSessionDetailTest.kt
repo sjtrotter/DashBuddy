@@ -161,4 +161,43 @@ class AnalyticsSessionDetailTest {
 
         assertEquals(0.0, repo.sessionDetail("S").first()!!.unattributedPay, 1e-9)
     }
+
+    /** #701: the mirror signal — delivered exceeds reported ⇒ overAttributedPay is the positive delta. */
+    @Test
+    fun `overAttributedPay is delivered minus reported when delivered exceeds reported (#701)`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = 5.0))
+        dao.upsertDelivery(delivery(1, "S", completedAt = base + hour, realizedPay = 8.0))
+
+        val detail = repo.sessionDetail("S").first()!!
+        assertEquals(3.0, detail.overAttributedPay, 1e-9)   // 8 − 5
+        assertEquals("unattributedPay stays 0 — reported did not exceed delivered", 0.0, detail.unattributedPay, 1e-9)
+    }
+
+    /** #701: overAttributedPay is 0 when reportedEarnings is null (nothing to compare against). */
+    @Test
+    fun `overAttributedPay is zero when reported is null (#701)`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = null))
+        dao.upsertDelivery(delivery(1, "S", completedAt = base + hour, realizedPay = 8.0))
+
+        assertEquals(0.0, repo.sessionDetail("S").first()!!.overAttributedPay, 1e-9)
+    }
+
+    /** #701: overAttributedPay never goes negative when reported exceeds delivered. */
+    @Test
+    fun `overAttributedPay never goes negative when reported exceeds delivered (#701)`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = 25.0))
+        dao.upsertDelivery(delivery(1, "S", completedAt = base + hour, realizedPay = 8.0))
+
+        assertEquals(0.0, repo.sessionDetail("S").first()!!.overAttributedPay, 1e-9)
+    }
+
+    /** #701 x #688: a cash tip does not shrink/grow overAttributedPay (cash-free comparison, mirrors unattributedPay). */
+    @Test
+    fun `cash tip does not change overAttributedPay (#701, #688 cash-free invariant)`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = 5.0))
+        dao.upsertDelivery(delivery(1, "S", completedAt = base + hour, realizedPay = 8.0, cashTip = 3.0))
+
+        val detail = repo.sessionDetail("S").first()!!
+        assertEquals("overAttributed compares cash-free deliveredPay: 8 − 5 = 3", 3.0, detail.overAttributedPay, 1e-9)
+    }
 }

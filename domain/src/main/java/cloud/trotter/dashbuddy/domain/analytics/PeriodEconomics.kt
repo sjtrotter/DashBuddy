@@ -41,6 +41,14 @@ data class PeriodEconomics(
     val fuelCost: Double? = null,
     /** Σ frozen non-fuel dollars over the period's deliveries, or `null` when no frozen split exists (#659). */
     val nonFuelCost: Double? = null,
+    /**
+     * Σ (deliveredPay − reportedEarnings) where delivered exceeds reported (#701) — the mirror of
+     * [unattributedPay], surfaced as a positive magnitude so an over-count (a phantom offer-pay
+     * estimate, a mixed-receipt over-stamp) is never silently floored to zero. **Display-only**: this
+     * is NEVER added to/subtracted from [netProfit] or [unattributedPay] — it is a review flag the
+     * Money tab renders alongside the unattributed callout, nothing more.
+     */
+    val overAttributedPay: Double = 0.0,
 ) {
     companion object {
         val EMPTY = PeriodEconomics(
@@ -52,6 +60,7 @@ data class PeriodEconomics(
             netPerMile = null,
             fuelCost = null,
             nonFuelCost = null,
+            overAttributedPay = 0.0,
         )
     }
 }

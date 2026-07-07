@@ -32,7 +32,6 @@ data class PlatformRegion(
      * Replaces the former separate sessionGraceDeadline / taskClearGraceDeadline.
      */
     val pendingDestructive: PendingDestructive? = null,
-    val lastTransitionKind: TransitionKind? = null,
     val zoneName: String? = null,
     val sessionType: SessionType? = null,
     val ratings: RatingsSnapshot? = null,
@@ -190,24 +189,4 @@ enum class DestructiveKind {
 
     /** Retire the active task — a task flow gave way to idle/offer mid-delivery. */
     TASK_RETIRE,
-}
-
-/**
- * Classification of a mode transition for logging and lifecycle decisions.
- * Stored on [PlatformRegion.lastTransitionKind] so downstream (EffectMap)
- * can distinguish recovery starts from normal starts.
- *
- * This type lives in :domain so PlatformRegion can reference it without
- * depending on :core:state. The policy logic that produces these values
- * lives in TransitionPolicy (:core:state).
- */
-enum class TransitionKind {
-    /** Observation carries no mode signal. */
-    NoSignal,
-    /** Observation confirms the current mode — no change. */
-    Confirmed,
-    /** Mode change to a flow that was in the declared outcomes (or no outcomes). */
-    Expected,
-    /** Mode change to a flow NOT in the declared outcomes. */
-    Unexpected,
 }

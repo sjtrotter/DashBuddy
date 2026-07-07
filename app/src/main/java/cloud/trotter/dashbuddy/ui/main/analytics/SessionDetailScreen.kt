@@ -132,6 +132,10 @@ private fun DashDetailContent(
     var adjustTarget by remember { mutableStateOf<DeliveryRecord?>(null) }
 
     val hasCallout = detail.unattributedPay > UNATTRIBUTED_EPSILON
+    // Mirror flag (#701): captured delivery pay exceeded the reported total — display-only, never
+    // folded into unattributedPay/net. Independent of [hasCallout] (a missed-delivery add doesn't
+    // apply here), so it doesn't affect the deliveries-card add-button placement below.
+    val hasOverAttributedCallout = detail.overAttributedPay > UNATTRIBUTED_EPSILON
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         HeaderCard(detail)
@@ -144,6 +148,15 @@ private fun DashDetailContent(
                 )
                 TextButton(onClick = { showAddDialog = true }) { Text(stringResource(R.string.session_detail_add_missed_delivery)) }
             }
+        }
+        if (hasOverAttributedCallout) {
+            // badBg (not warnBg) — an over-count is a stronger review flag than an unattributed
+            // bonus/adjustment; no add-missed-delivery button (that entry point doesn't apply here).
+            AppCallout(
+                text = stringResource(R.string.session_detail_over_attributed_format, Formats.money(detail.overAttributedPay)),
+                container = AppTheme.colors.badBg,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         // With no callout, the add entry point lives at the bottom of the deliveries card — a missed
         // delivery can exist without a reported excess.

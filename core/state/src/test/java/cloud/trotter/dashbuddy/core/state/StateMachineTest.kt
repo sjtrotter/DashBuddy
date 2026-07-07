@@ -19,7 +19,6 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
-import cloud.trotter.dashbuddy.domain.state.TransitionKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -69,7 +68,6 @@ class StateMachineTest {
         parsed: ParsedFields = ParsedFields.None,
         ruleId: String = "doordash.screen.test",
         timestamp: Long = tick(),
-        expectedOutcomes: Set<Flow>? = null,
     ) = Observation.Screen(
         timestamp = timestamp,
         captureId = "cap-$timestamp",
@@ -78,7 +76,6 @@ class StateMachineTest {
         flow = flow,
         modeHint = modeHint,
         parsed = parsed,
-        expectedOutcomes = expectedOutcomes,
     )
 
     private fun clickObs(
@@ -867,12 +864,13 @@ class StateMachineTest {
     // =========================================================================
 
     @Test
-    fun `unexpected transition — app restart mid-task synthesizes lifecycle`() {
+    fun `app restart mid-task synthesizes lifecycle on the Offline to Online edge`() {
         var state = AppState()
 
-        // Cold start: first screen is a pickup navigation (app launched mid-delivery)
-        // This is Offline→Online which is an unexpected transition when outcomes
-        // don't include the observed flow
+        // Cold start: first screen is a pickup navigation (app launched mid-delivery).
+        // healActiveLifecycle fires on the Offline→Online edge (#715 struck the former
+        // Unexpected-transition gate — no ruleset ever declared `outcomes`, so that arm
+        // never fired; this edge alone is the live path).
         state = machine.step(state, screenObs(
             flow = Flow.TaskPickupNavigation,
             parsed = taskFields(),
@@ -884,25 +882,6 @@ class StateMachineTest {
         assertNotNull(dd.activeJob)
         assertNotNull(dd.activeTask)
         assertTrue(dd.activeTask!!.recovered)
-    }
-
-    @Test
-    fun `transition kind is Confirmed when mode stays the same`() {
-        var state = AppState()
-
-        // Get Online
-        state = machine.step(state, screenObs(
-            flow = Flow.OfferPresented, parsed = offerFields(),
-        )).newState
-
-        // Another Online screen — confirms mode
-        state = machine.step(state, screenObs(
-            flow = Flow.OfferPresented, parsed = offerFields(),
-        )).newState
-
-        val dd = state.regions.platforms[Platform.DoorDash]!!
-        assertEquals(Mode.Online, dd.mode)
-        assertEquals(TransitionKind.Confirmed, dd.lastTransitionKind)
     }
 
     // =========================================================================

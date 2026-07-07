@@ -12,11 +12,13 @@
 > **Amendment (2026-06-13, #440).** Two parts of the original design were not built as
 > written — the as-implemented system diverges as follows:
 > - **Lifecycle healing is `TransitionPolicy`, not `ModeConfidence` thresholds.** The
->   confidence-threshold healing in §5.5/§5.8 was abandoned. Healing is now an
->   expected/unexpected transition classification plus commit graces (`TransitionPolicy`),
->   and in practice rides on the Offline→Online edge — there is no `ModeConfidence`
->   accumulator. (The expected/unexpected `outcomes` machinery is itself currently dormant —
->   no ruleset declares `outcomes` — see #439.)
+>   confidence-threshold healing in §5.5/§5.8 was abandoned. Healing rides on the
+>   Offline→Online edge plus commit graces (`TransitionPolicy`) — there is no `ModeConfidence`
+>   accumulator. (The expected/unexpected `outcomes` machinery once layered on top of this was
+>   flagged dormant — no ruleset ever declared `outcomes` — see #439, and **struck entirely by
+>   #715 (2026-07-07)**: `TransitionPolicy.classify()`, `TransitionKind`, and
+>   `PlatformRegion.lastTransitionKind` are gone. The Offline→Online healing edge itself never
+>   depended on that classification and is unaffected.)
 > - **A single set of steppers, not a per-platform stepper map.** `FlowRegionStepper` /
 >   `PlatformRegionStepper` / `CrossPlatformRegionStepper` are pure functions applied per
 >   region; the per-platform map of stepper instances described here was never built.

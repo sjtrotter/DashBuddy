@@ -134,7 +134,6 @@ class ObservationClassifier @Inject constructor(
             effects = DedupeTokens.resolve(result.effects, parsed),
             targets = result.targets,
             transitionOverrides = result.transitionOverrides,
-            expectedOutcomes = result.outcomes,
         )
 
         // Cache last non-sensitive screen for click enrichment, keyed by THIS
@@ -157,7 +156,6 @@ class ObservationClassifier @Inject constructor(
         effects: List<RequestedEffect> = emptyList(),
         targets: Map<String, NodeRef> = emptyMap(),
         transitionOverrides: Map<TransitionTrigger, List<RequestedEffect>> = emptyMap(),
-        expectedOutcomes: Set<Flow>? = null,
     ) = Observation.Screen(
         timestamp = now,
         captureId = null,
@@ -170,7 +168,6 @@ class ObservationClassifier @Inject constructor(
         effects = effects,
         targets = targets,
         transitionOverrides = transitionOverrides,
-        expectedOutcomes = expectedOutcomes,
     )
 
     // ── Click ───────────────────────────────────────────────────────────
@@ -198,7 +195,6 @@ class ObservationClassifier @Inject constructor(
                     target = result.intent,
                     effects = DedupeTokens.resolve(result.effects, parsed),
                     transitionOverrides = result.transitionOverrides,
-                    expectedOutcomes = result.outcomes,
                     screenTarget = screenTarget,
                 )
             }
@@ -247,7 +243,6 @@ class ObservationClassifier @Inject constructor(
                     target = result.intent,
                     effects = DedupeTokens.resolve(result.effects, parsed),
                     transitionOverrides = result.transitionOverrides,
-                    expectedOutcomes = result.outcomes,
                 )
             }
         }
