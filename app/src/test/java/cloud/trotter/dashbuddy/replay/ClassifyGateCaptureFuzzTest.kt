@@ -123,7 +123,7 @@ class ClassifyGateCaptureFuzzTest {
     private fun event(tree: UiNode) = PipelineEvent.Screen(
         timestamp = 1_000L,
         tree = tree,
-        snapshot = TreeSnapshot(tree, packageName = pkg, source = TreeSnapshot.Source.STATE_CHANGED),
+        snapshot = TreeSnapshot(tree, packageName = pkg),
         packageName = pkg,
     )
 

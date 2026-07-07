@@ -32,8 +32,6 @@ class StateChangedPipeline @Inject constructor(
             }
             TreeSnapshot(
                 tree = snapshot.tree,
-                source = TreeSnapshot.Source.STATE_CHANGED,
-                contentChangeTypes = event.contentChangeTypes,
                 packageName = snapshot.packageName,
             )
         }

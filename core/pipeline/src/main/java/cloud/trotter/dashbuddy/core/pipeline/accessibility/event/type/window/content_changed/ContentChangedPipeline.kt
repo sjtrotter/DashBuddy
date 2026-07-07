@@ -34,7 +34,9 @@ class ContentChangedPipeline @Inject constructor(
             Timber.d("💧 DRIP: triggered by %s, accumulated types=0x%02x", it.className, pendingChangeTypes.get())
         }
         .mapNotNull { event ->
-            val types = pendingChangeTypes.getAndSet(0)
+            // Reset for the next debounce window; the accumulated bitmask itself is
+            // logged above (#439 — TreeSnapshot no longer carries it, never consumed).
+            pendingChangeTypes.set(0)
             val snapshot = source.getCurrentRootSnapshot() ?: return@mapNotNull null
             // Attribute to the window actually on screen, not the triggering event. Drop snapshots
             // of non-target windows (our own bubble overlay, launcher, etc.) so we never recognize
@@ -51,8 +53,6 @@ class ContentChangedPipeline @Inject constructor(
             }
             TreeSnapshot(
                 tree = snapshot.tree,
-                source = TreeSnapshot.Source.CONTENT_CHANGED,
-                contentChangeTypes = types,
                 packageName = snapshot.packageName,
             )
         }

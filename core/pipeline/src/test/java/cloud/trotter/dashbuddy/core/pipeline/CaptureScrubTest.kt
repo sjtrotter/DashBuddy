@@ -37,7 +37,6 @@ class CaptureScrubTest {
         snapshot = TreeSnapshot(
             tree = tree,
             packageName = "com.doordash.driverapp",
-            source = TreeSnapshot.Source.STATE_CHANGED,
         ),
         packageName = "com.doordash.driverapp",
     )

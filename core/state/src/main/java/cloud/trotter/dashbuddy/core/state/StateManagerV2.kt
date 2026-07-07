@@ -96,10 +96,10 @@ class StateManagerV2 @Inject constructor(
 
         val transition = stateMachine.step(currentState, obs)
 
-        // Update state
-        if (transition.newState != currentState) {
-            _state.value = transition.newState
-        }
+        // Update state. `correlationVersion` increments unconditionally in
+        // StateMachine.step (#439) — newState is NEVER structurally equal to
+        // currentState, so the old `!=` guard here was always true; removed.
+        _state.value = transition.newState
 
         // Persist observation to the append-only log (ordered single writer, #352)
         journal.append(obs, transition.newState)
