@@ -480,7 +480,7 @@ class SideEffectEngineTest {
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()
-        verify(bubbleManager, times(1)).cancelOfferNotification()
+        verify(bubbleManager, times(1)).cancelOfferNotification("hash-9")
     }
 
     @Test

@@ -37,7 +37,10 @@ class OfferActionReceiver : BroadcastReceiver() {
         Timber.tag("Effects").i("OfferActionReceiver: %s on %s", uiInput.action, uiInput.targetPlatform?.wire ?: "?")
         // #457: dismiss the heads-up immediately — the dasher acted. (Offer resolution also fires
         // CancelOfferNotification, but cancel now so the banner/shade entry doesn't linger.)
-        NotificationManagerCompat.from(context).cancel(BubbleManager.OFFER_NOTIFICATION_ID)
+        // #438 B4: dismiss ONLY this offer's banner (per-offer id from the tap's own carried hash),
+        // not every offer heads-up — a concurrent/replacement offer keeps its banner.
+        NotificationManagerCompat.from(context)
+            .cancel(BubbleManager.offerNotificationId(uiInput.offerHash))
         val deps = EntryPointAccessors.fromApplication(context.applicationContext, Deps::class.java)
         deps.stateManager().dispatch(uiInput)
     }

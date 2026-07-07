@@ -64,24 +64,65 @@ class BubbleManager @Inject constructor(
         const val BUBBLE_NOTIFICATION_ID = 1
 
         /**
-         * The separate heads-up OFFER notification id (#457). A NORMAL (non-bubble) notification so
+         * The reserved heads-up OFFER notification id (#457). A NORMAL (non-bubble) notification so
          * the dasher can act from the heads-up banner WITHOUT pulling the shade: pulling the shade
          * makes SystemUI foreground, which drops DoorDash's offer window from the accessibility
          * live-window set, failing the fail-closed verified click (the #457 field symptom). A
          * heads-up banner floats over DoorDash without displacing it, so the click lands.
+         *
+         * #438 B4: this fixed id is now the **null-hash fallback** for [offerNotificationId] —
+         * per-offer banners key on their offer hash so two concurrent offers get distinct ids and
+         * resolving one cancels only its own. It is also the id any pre-B4 stale banner was posted
+         * under, so a hash-less cancel sweeps it (and any stale banner self-dismisses via
+         * [OFFER_HEADS_UP_TIMEOUT_MS] regardless).
          */
         const val OFFER_NOTIFICATION_ID = 2
 
         /** Bubble expanded-view height (dp). */
         const val BUBBLE_DESIRED_HEIGHT_DP = 600
 
-        /** PendingIntent request codes for the offer notification actions (#367). */
-        const val REQUEST_CODE_ACCEPT = 10
-        const val REQUEST_CODE_DECLINE = 11
+        /** PendingIntent request code for the "open bubble" content intent (#367). */
         const val REQUEST_CODE_OFFER_CONTENT = 12
 
         /** Backstop auto-dismiss for the offer heads-up if a resolution cancel is somehow missed. */
         const val OFFER_HEADS_UP_TIMEOUT_MS = 90_000L
+
+        /**
+         * The stable per-offer heads-up notification id (#438 B4). Derived from the offer's hash so
+         * two concurrent offers (multi-platform or fast replacement) render as **distinct** banners
+         * and resolving one dismisses only its own. A null hash (legacy / hash-less offer) maps to
+         * the reserved [OFFER_NOTIFICATION_ID] — self-consistent post/cancel, and the sweep id for a
+         * stale pre-B4 banner.
+         *
+         * Collision posture (documented, accepted for the single-user alpha): `hashCode()` is a
+         * 32-bit space. Two live offers colliding on the same id → one banner replaces the other
+         * (no data loss; the state layer still resolves each tap by carried (platform, offerHash),
+         * B3). Probability ≈ 1/4e9 for two concurrent offers. Ids that would land on the reserved
+         * bubble (1) / offer (2) ids are nudged clear so a hash can never dismiss the wrong surface.
+         */
+        fun offerNotificationId(offerHash: String?): Int {
+            if (offerHash == null) return OFFER_NOTIFICATION_ID
+            val h = offerHash.hashCode()
+            return if (h == BUBBLE_NOTIFICATION_ID || h == OFFER_NOTIFICATION_ID) h + 2 else h
+        }
+
+        /**
+         * The per-offer Accept/Decline intent **identity** URI (#438 B4):
+         * `dashbuddy://offer/<platform-wire>/<offerHash>?action=<offer-intent>`. The scheme/host are
+         * fixed; the platform wire, offer hash, and action make it unique per (offer, button). Unlike
+         * extras, a `data` URI participates in [Intent.filterEquals], so two concurrent offers'
+         * PendingIntents no longer collide/clobber under `FLAG_UPDATE_CURRENT`. Built via
+         * [android.net.Uri.Builder] so the hash/wire are percent-encoded. The extras still carry the
+         * payload (B2); this is identity only.
+         */
+        fun offerActionUri(platform: Platform, offerHash: String, action: String): android.net.Uri =
+            android.net.Uri.Builder()
+                .scheme("dashbuddy")
+                .authority("offer")
+                .appendPath(platform.wire)
+                .appendPath(offerHash)
+                .appendQueryParameter("action", action)
+                .build()
     }
     // 1. ADDED: CoroutineScope for the suspend database calls
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -321,7 +362,8 @@ class BubbleManager @Inject constructor(
         // (wired via setOnClickPendingIntent in buildOfferCardView), not the system action row —
         // the two can't coexist without doubling the buttons. Field-gated: if a dash shows the
         // in-card buttons don't fire from the floating heads-up, revert to addAction(offerAction(…)).
-        notificationManager.notify(OFFER_NOTIFICATION_ID, builder.build())
+        // #438 B4: per-offer id so two concurrent offers don't clobber each other's banner.
+        notificationManager.notify(offerNotificationId(offer.offerHash), builder.build())
     }
 
     /**
@@ -395,11 +437,11 @@ class BubbleManager @Inject constructor(
         // Brand-styled Accept/Decline (both layouts) — fire the same broadcast as the old action row.
         rv.setOnClickPendingIntent(
             R.id.notif_btn_decline,
-            offerActionPendingIntent(OfferIntent.DECLINE, REQUEST_CODE_DECLINE, platform, offer.offerHash),
+            offerActionPendingIntent(OfferIntent.DECLINE, platform, offer.offerHash),
         )
         rv.setOnClickPendingIntent(
             R.id.notif_btn_accept,
-            offerActionPendingIntent(OfferIntent.ACCEPT, REQUEST_CODE_ACCEPT, platform, offer.offerHash),
+            offerActionPendingIntent(OfferIntent.ACCEPT, platform, offer.offerHash),
         )
 
         if (expanded) {
@@ -432,31 +474,38 @@ class BubbleManager @Inject constructor(
         return rv
     }
 
-    /** #457: dismiss the heads-up offer notification — on offer resolution or after the dasher acts. */
-    fun cancelOfferNotification() {
-        notificationManager.cancel(OFFER_NOTIFICATION_ID)
+    /**
+     * #457: dismiss the heads-up offer notification — on offer resolution or after the dasher acts.
+     * #438 B4: keyed per-offer by [offerNotificationId] so resolving offer A does not touch offer
+     * B's banner. A null hash maps to the reserved id (also sweeps any stale pre-B4 banner).
+     */
+    fun cancelOfferNotification(offerHash: String?) {
+        notificationManager.cancel(offerNotificationId(offerHash))
     }
 
     /**
      * #583: the Accept/Decline broadcast, wired onto the in-card buttons via setOnClickPendingIntent.
-     * #438 item 8a: the acted offer's platform wire + offerHash ride the extras so the dispatched
-     * `UiInput` carries a real target platform (identity-less taps step no region post-#682). The
-     * fixed request codes stay — per-offer PendingIntent identity is B4 (#438 item 8b).
+     * #438 B4: per-offer PendingIntent **identity** via an [offerActionUri] `data` URI — URIs
+     * participate in [Intent.filterEquals] (extras don't), so under `FLAG_UPDATE_CURRENT` two
+     * concurrent offers no longer collide/clobber each other's Accept/Decline intents. A single
+     * fixed request code is enough since the URI already makes each (offer, button) intent distinct.
+     * The extras still carry the payload (#438 item 8a: platform wire + offerHash → the dispatched
+     * `UiInput`'s target identity; identity-less taps step no region post-#682).
      */
     private fun offerActionPendingIntent(
         action: String,
-        requestCode: Int,
         platform: Platform,
         offerHash: String,
     ): PendingIntent {
         val intent = Intent(context, OfferActionReceiver::class.java).apply {
             this.action = OfferActionReceiver.ACTION
+            data = offerActionUri(platform, offerHash, action)
             putExtra(OfferActionReceiver.EXTRA_ACTION, action)
             putExtra(OfferActionReceiver.EXTRA_PLATFORM, platform.wire)
             putExtra(OfferActionReceiver.EXTRA_OFFER_HASH, offerHash)
         }
         return PendingIntent.getBroadcast(
-            context, requestCode, intent,
+            context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
