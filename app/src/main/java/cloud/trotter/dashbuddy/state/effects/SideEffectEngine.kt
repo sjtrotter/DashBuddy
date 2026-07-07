@@ -129,7 +129,7 @@ class SideEffectEngine @Inject constructor(
      * uncaught failure must never reach the default handler and kill the process (#341).
      */
     private val effectExceptionHandler = CoroutineExceptionHandler { _, t ->
-        Timber.e(t, "SideEffectEngine: effect coroutine crashed (isolated)")
+        Timber.tag("Effects").e(t, "SideEffectEngine: effect coroutine crashed (isolated)")
     }
 
     /**
@@ -164,7 +164,7 @@ class SideEffectEngine @Inject constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Timber.e(e, "Effect failed (isolated): %s", item.effect::class.simpleName)
+                    Timber.tag("Effects").e(e, "Effect failed (isolated): %s", item.effect::class.simpleName)
                 }
             }
         }
@@ -182,13 +182,13 @@ class SideEffectEngine @Inject constructor(
         // window (matching the snapshot horizon recovery replays over).
         val key = effect.effectKey
         if (key != null && effectsFiredDao.hasBeenFired(key)) {
-            Timber.d("Skipping already-fired effect: %s", key)
+            Timber.tag("Effects").d("Skipping already-fired effect: %s", key)
             return
         }
 
         // Suppress external effects during recovery
         if (recovering && isExternalEffect(effect)) {
-            Timber.d("Suppressing external effect during recovery: %s", effect::class.simpleName)
+            Timber.tag("Effects").d("Suppressing external effect during recovery: %s", effect::class.simpleName)
             return
         }
         when (effect) {
@@ -228,20 +228,20 @@ class SideEffectEngine @Inject constructor(
                     // .i not .v (#457): a throttled USER offer tap would otherwise be
                     // invisible under release log filtering — one of the silent drop
                     // points a shade Accept/Decline could die at.
-                    Timber.i(
+                    Timber.tag("Effects").i(
                         "Throttled action %s (%s) — within %dms of the last fire",
                         throttleKey, effect.trigger, RULE_ACTION_THROTTLE_MS,
                     )
                     return
                 }
                 if (!permissionTierChecker.isGranted(PermissionTier.ACCESSIBILITY)) {
-                    Timber.w("Denied %s — ACCESSIBILITY tier not granted (fail closed)", effect.action.wire)
+                    Timber.tag("Effects").w("Denied %s — ACCESSIBILITY tier not granted (fail closed)", effect.action.wire)
                     return
                 }
                 if (effect.trigger == ActionTrigger.AUTOMATION &&
                     !capabilityGrants.isActionGranted(effect.sourceRuleId, effect.action)
                 ) {
-                    Timber.w(
+                    Timber.tag("Effects").w(
                         "Denied %s — no granted capability for rule '%s' (fail closed)",
                         effect.action.wire, effect.sourceRuleId,
                     )
@@ -254,11 +254,11 @@ class SideEffectEngine @Inject constructor(
                 if (effect.action == RuleAction.CONFIRM_DECLINE &&
                     !strategyRepository.automationConfig.first().quickDeclinesEnabled
                 ) {
-                    Timber.i("Skipped %s — quick declines off (dasher confirms manually)", effect.action.wire)
+                    Timber.tag("Effects").i("Skipped %s — quick declines off (dasher confirms manually)", effect.action.wire)
                     return
                 }
                 stampThrottle(throttleKey, now)
-                Timber.i("Performing %s on %s", effect.action.wire, effect.platform.wire)
+                Timber.tag("Effects").i("Performing %s on %s", effect.action.wire, effect.platform.wire)
                 // #602: performVerifiedClick is suspend because it bounded-retries a
                 // transient "no live windows" read (a SystemUI shade/lock takeover
                 // between a notification tap and the re-resolve). We're already inside
@@ -281,7 +281,7 @@ class SideEffectEngine @Inject constructor(
                 // at completion so the 1000ms spacing anchors to the actual dispatch.
                 stampThrottle(throttleKey, System.currentTimeMillis())
                 if (!clicked) {
-                    Timber.w(
+                    Timber.tag("Effects").w(
                         "%s did not fire — target failed resolution/verification (fail closed, user acts manually)",
                         effect.action.wire,
                     )
@@ -294,7 +294,7 @@ class SideEffectEngine @Inject constructor(
                 val throttle = effect.effect.throttleMs ?: DEFAULT_ACTION_THROTTLE_MS
                 val lastFired = actionLastFiredAt[effectKey] ?: 0L
                 if (lastFired + throttle > now) {
-                    Timber.v("Throttled effect: %s", effectKey)
+                    Timber.tag("Effects").v("Throttled effect: %s", effectKey)
                     return
                 }
                 stampThrottle(effectKey, now)
@@ -445,7 +445,7 @@ class SideEffectEngine @Inject constructor(
      */
     private suspend fun dispatchRuleEffect(e: RequestedEffect): Boolean {
         if (!permissionTierChecker.isGranted(e.verb.tier)) {
-            Timber.w("Denied effect %s — permission tier %s not granted", e.verb, e.verb.tier)
+            Timber.tag("Effects").w("Denied effect %s — permission tier %s not granted", e.verb, e.verb.tier)
             return false
         }
         when (e.verb) {
@@ -456,7 +456,7 @@ class SideEffectEngine @Inject constructor(
             // Deliberate no-ops (#359): offer evaluation + speech fire from
             // EffectMap's eval-landing diff, never from rule verbs.
             EffectVerb.EVALUATE_OFFER, EffectVerb.SPEAK ->
-                Timber.d("Rule verb %s is EffectMap-driven — no-op at the engine", e.verb)
+                Timber.tag("Effects").d("Rule verb %s is EffectMap-driven — no-op at the engine", e.verb)
 
             // --- Lifecycle verbs ---
             EffectVerb.SESSION_START -> sessionStartFromArgs(e.args)
@@ -467,7 +467,7 @@ class SideEffectEngine @Inject constructor(
             // bypassing the arbiter). No shipped rule declares these; the branches are inert no-ops.
             EffectVerb.ODOMETER_START, EffectVerb.ODOMETER_STOP,
             EffectVerb.ODOMETER_PAUSE, EffectVerb.ODOMETER_RESUME ->
-                Timber.w("Rule verb %s is retired — the odometer is cross-platform arbitrated (#438 B5)", e.verb)
+                Timber.tag("Effects").w("Rule verb %s is retired — the odometer is cross-platform arbitrated (#438 B5)", e.verb)
             EffectVerb.SCHEDULE_TIMEOUT -> scheduleTimeoutFromArgs(
                 e.args,
                 Platform.fromRuleId(e.ruleId).takeIf { it != Platform.Unknown },
@@ -505,7 +505,7 @@ class SideEffectEngine @Inject constructor(
     private fun captureEvidence(effect: AppEffect.CaptureScreenshot): Boolean {
         val config = strategyRepository.evidenceConfig.value
         if (!config.allows(effect.category)) {
-            Timber.i(
+            Timber.tag("Effects").i(
                 "Evidence capture suppressed (%s, category=%s) — EvidenceConfig denies it",
                 effect.filenamePrefix, effect.category,
             )
@@ -566,7 +566,7 @@ class SideEffectEngine @Inject constructor(
         val type = try {
             TimeoutType.valueOf(typeWire)
         } catch (_: IllegalArgumentException) {
-            Timber.w("Unknown timeout type: %s", typeWire)
+            Timber.tag("Effects").w("Unknown timeout type: %s", typeWire)
             return
         }
         val durationMs = args["durationMs"]?.toLongOrNull() ?: return
@@ -594,7 +594,28 @@ class SideEffectEngine @Inject constructor(
         activeTimers[key]?.cancel()
         val job = engineScope.launch(start = CoroutineStart.LAZY) {
             delay(durationMs)
-            Timber.w("Timer Expired: %s", type)
+            // #692 P7: level is per-type, not one blanket WARN under the catch-all `App` tag.
+            // GRACE_COMMIT/MODE_RESUME_COMMIT/SESSION_PAUSED_SAFETY are all "a grace timer waking
+            // a commit" verbatim — the taxonomy's defended-invariant WARN bucket (a graced
+            // destructive commit, a graced mode resume, and the paused-too-long safety net all
+            // fire because an expected screen-driven transition never showed up). SETTLE_UI and
+            // OFFER_EXPIRY are routine steps of their OWN normal lifecycle, not invariants firing:
+            // SETTLE_UI expired ~8x in one field dash as its ordinary debounce-settle path, and
+            // OFFER_EXPIRY's common case is an offer overlay vanishing without a confirming frame
+            // (expected — most offers resolve via an explicit screen/click well before this
+            // fallback fires). The accept-latched no-op branch (a defended invariant in its own
+            // right) lives downstream in OfferLifecycle/EffectMap and isn't distinguishable at
+            // this call site, so it isn't logged here.
+            when (type) {
+                TimeoutType.GRACE_COMMIT,
+                TimeoutType.MODE_RESUME_COMMIT,
+                TimeoutType.SESSION_PAUSED_SAFETY,
+                -> Timber.tag("Effects").w("Timer Expired: %s", type)
+
+                TimeoutType.SETTLE_UI,
+                TimeoutType.OFFER_EXPIRY,
+                -> Timber.tag("Effects").d("Timer Expired: %s", type)
+            }
             _events.emit(
                 TimeoutEvent(
                     timestamp = System.currentTimeMillis(),
@@ -614,7 +635,7 @@ class SideEffectEngine @Inject constructor(
         val type = try {
             TimeoutType.valueOf(typeWire)
         } catch (_: IllegalArgumentException) {
-            Timber.w("Unknown timeout type: %s", typeWire)
+            Timber.tag("Effects").w("Unknown timeout type: %s", typeWire)
             return
         }
         // Untracking happens via the job's self-removing completion handler.
