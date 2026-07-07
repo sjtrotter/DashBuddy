@@ -151,6 +151,18 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit { it[Keys.GAS_PRICE] = price }
     }
 
+    /**
+     * Driver override of the pump price (e.g. the bubble's between-dash quick edit, #693): writes the
+     * price AND flips auto OFF in one edit, so the daily EIA worker won't clobber the manual value on
+     * its next run. Same store / same keys the economy wizard owns — no second gas-price copy.
+     */
+    suspend fun updateGasPriceManual(price: Float) {
+        ds.edit {
+            it[Keys.GAS_PRICE] = price
+            it[Keys.IS_GAS_PRICE_AUTO] = false
+        }
+    }
+
     suspend fun updateFuelType(type: String) {
         ds.edit { it[Keys.FUEL_TYPE] = type }
     }

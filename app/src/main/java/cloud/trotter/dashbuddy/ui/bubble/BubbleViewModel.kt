@@ -2,19 +2,18 @@ package cloud.trotter.dashbuddy.ui.bubble
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.designsystem.theme.DRIVING_GLANCE_MULTIPLIER
+import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.state.AppState
-import cloud.trotter.dashbuddy.domain.state.Flow
-import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.Platform
-import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.ui.bubble.cards.FlowCardMapper
@@ -31,16 +30,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-data class SessionSummary(
-    val sessionId: String,
-    val earnings: Double,
-    val miles: Double,
-    /** Anchors (#367): the UI derives duration — the frozen summary can't drift. */
-    val startedAt: Long,
-    val endedAt: Long,
-)
 
 @HiltViewModel
 class BubbleViewModel @Inject constructor(
@@ -49,7 +40,8 @@ class BubbleViewModel @Inject constructor(
     odometerRepository: OdometerRepository,
     private val stateManager: StateManagerV2,
     appEventRepo: AppEventRepo,
-    appPreferencesRepository: AppPreferencesRepository,
+    private val appPreferencesRepository: AppPreferencesRepository,
+    analyticsRepository: AnalyticsRepository,
 ) : ViewModel() {
 
     // Current app state — drives the mode card in the HUD
@@ -152,35 +144,34 @@ class BubbleViewModel @Inject constructor(
     val sessionMiles = odometerRepository.sessionMilesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    // Snapshot of the last completed dash — populated when session ends,
-    // persists through idle.
-    val lastSessionSummary = combine(
-        stateManager.state, focusedPlatform, odometerRepository.sessionMilesFlow
-    ) { state, platform, miles ->
-        Triple(state, platform, miles)
-    }
-        .scan(null as SessionSummary?) { last, (state, platform, miles) ->
-            val region = platform?.let { state.regions.platforms[it] }
-            val session = region?.session
-            // Capture summary when flow is SessionEnded
-            if (state.regions.flow.flow == Flow.SessionEnded && session != null &&
-                last?.sessionId != session.sessionId
-            ) {
-                // Captured ONCE per session (#367): the old scan re-stamped a
-                // wall-clock duration on every upstream emission, so the
-                // "frozen" summary grew while idle.
-                SessionSummary(
-                    sessionId = session.sessionId,
-                    earnings = session.runningEarnings,
-                    miles = miles,
-                    startedAt = session.startedAt,
-                    endedAt = state.timestamp,
-                )
-            } else {
-                last
-            }
-        }
+    // The most-recent dash, straight off the analytics read-model (#693). This REPLACED the old
+    // in-memory `SessionSummary` scan whose liveness-gated capture (SharingStarted.WhileSubscribed +
+    // the transient Flow.SessionEnded frame) silently missed any dash that ended while the bubble was
+    // collapsed — the post-dash HUD then showed the last dash it happened to catch (the stale
+    // "last dash with money"), not the true last one. `recentSessions(1)` is a Room-invalidation Flow
+    // over `session_records`: the row exists from DASH_START's fold and finalizes when DASH_STOP folds,
+    // survives process restart, and is the TRUE most-recent session — the $0 unassign dash included.
+    // Cross-platform by construction (P8): whichever platform dashed last, labeled by its own chip.
+    val lastSession = analyticsRepository.recentSessions(1)
+        .map { it.firstOrNull() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // Gas price for the idle-card quick edit (#693) — read straight off the economy SSOT the settings
+    // screen owns; the write path (setGasPrice) flips auto OFF so the daily EIA worker won't clobber it.
+    val gasPrice = appPreferencesRepository.gasPrice
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val isGasPriceAuto = appPreferencesRepository.isGasPriceAuto
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /**
+     * Persist a driver override of the pump price from the bubble quick-edit (#693). Writes the SAME
+     * economy store the settings wizard owns (no second copy) and disables auto so the value sticks.
+     * Frozen-economics invariant (#314): this changes only FUTURE offer evaluations.
+     */
+    fun setGasPrice(price: Float) {
+        viewModelScope.launch { appPreferencesRepository.updateGasPriceManual(price) }
+    }
 
     // --- Offer actions (bubble Accept/Decline) ---
 

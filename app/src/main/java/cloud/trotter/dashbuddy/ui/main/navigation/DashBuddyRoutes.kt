@@ -35,4 +35,20 @@ sealed class Screen(val route: String) {
     data object GeneralSettings : Screen("settings/general")
     data object DeveloperSettings : Screen("settings/developer")
     data object PlatformSettings : Screen("settings/platforms")
+
+    companion object {
+        /**
+         * The static routes an external deep link (MainActivity.EXTRA_ROUTE, #693) may target —
+         * the fail-closed allowlist for the exported-activity seam. Parameterized routes
+         * (e.g. [SessionDetail]) are deliberately excluded: deep links carry no args.
+         */
+        // lazy: a plain initializer runs during Screen's class-init, BEFORE the nested data
+        // objects exist (touching any Screen.X triggers it) → ExceptionInInitializerError.
+        val allRoutes: Set<String> by lazy { setOf(
+            Dashboard.route, Analytics.route, SettingsHome.route, AboutSettings.route,
+            StrategySettings.route, EvidenceSettings.route, DataExport.route,
+            EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,
+            PlatformSettings.route,
+        ) }
+    }
 }

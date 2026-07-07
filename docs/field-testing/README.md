@@ -73,6 +73,20 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — bubble post-dash card shows the TRUE last session + gas/vehicle quick actions (#693 / PR).**
+  The idle bubble card now reads the analytics read-model (`recentSessions(1)`) instead of an in-memory
+  capture that could miss a dash. **Primary check — the $0 repro:** end a dash that earned nothing (accept
+  one order then unassign, or just go online→offline with no completions), collapse the bubble, then reopen
+  it. The idle card AND the dimmed top-bar "LAST SESSION" must reflect **that** dash (earnings, miles,
+  duration, deliveries, acceptance %), **not** an older moneyed dash. The "ended Xm ago" caption should tick
+  up live. A live dash shows full-opacity "THIS SESSION". **Gas quick-edit:** tap −/+ on the card's gas
+  stepper → the value changes, the caption flips AUTO→MANUAL, and reopening **Settings → Personal Economy**
+  shows the same price (it persisted to the real store; the daily EIA worker won't clobber it). **Vehicle:**
+  tap Vehicle → the main app opens directly on the Personal Economy screen. Frozen-economics: a gas edit must
+  only change FUTURE offer $/hr, never a past delivery's recorded net. Anything stale, a $0 dash getting
+  skipped, or a gas edit that doesn't stick is a regression — capture it.
+  - Confirmed: 0/2
+  - Desk replay fixture: `~/dashbuddy/logs/2026/07/06/` (the 07-05 $0 session `session-doordash-1783294721320-15`).
 - **🆕 NEW — per-region lifecycle edges hold single-platform behavior (#438 B1 / PR #707).** The
   state machine's job/task edges now fire off each platform's OWN last-acted flow instead of the
   global screen flow (a latent multi-platform fix — single-platform behavior should be **byte
