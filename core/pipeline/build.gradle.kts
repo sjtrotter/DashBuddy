@@ -55,6 +55,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockito.kotlin)
+    // #244 — UiNodeTest (relocated from :app) exercises android.graphics.Rect via
+    // toBoundingBox(); needs a real android_all jar, not the default stub.
+    testImplementation(libs.robolectric)
     // #590 — standalone kotest-property (Arb/checkAll/forAll), runner-agnostic:
     // it runs inside plain JUnit-4 @Test bodies via runTest/runBlocking. NOT the
     // Kotest runner, NOT jqwik/Jazzer (both JUnit-Platform-only; this repo is JUnit 4).

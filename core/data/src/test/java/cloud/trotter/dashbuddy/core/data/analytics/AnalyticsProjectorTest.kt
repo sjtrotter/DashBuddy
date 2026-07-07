@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.analytics
+package cloud.trotter.dashbuddy.core.data.analytics
 
 import androidx.room.Room
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsProjector

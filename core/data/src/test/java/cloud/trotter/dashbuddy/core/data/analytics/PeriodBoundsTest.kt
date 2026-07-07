@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.analytics
+package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.data.analytics.PeriodBounds
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod

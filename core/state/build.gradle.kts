@@ -50,4 +50,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // #244 — StateManagerV2RestoreBufferTest (relocated from :app) mocks ObservationDao /
+    // AppStateSnapshotDao with mockito-kotlin.
+    testImplementation(libs.mockito.kotlin)
 }
