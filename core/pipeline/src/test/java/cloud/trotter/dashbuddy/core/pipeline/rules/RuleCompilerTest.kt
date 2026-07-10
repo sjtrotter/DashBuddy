@@ -904,7 +904,7 @@ class RuleCompilerTest {
             "priority": 10,
             "require": { "exists": { "hasTextStartsWith": "Deliver to" } },
             "redact": [
-                { "find": { "hasTextStartsWith": "Deliver to" }, "keepPrefix": ["Deliver to "] }
+                { "find": { "hasTextStartsWith": "Deliver to" }, "keepPrefix": ["Deliver to "], "normalize": "customerName" }
             ],
             "parse": {
                 "as": "task",
@@ -912,7 +912,7 @@ class RuleCompilerTest {
                     "customerNameHash": {
                         "find": { "hasTextStartsWith": "Deliver to" },
                         "read": "text",
-                        "transform": [ { "stripPrefixes": ["Deliver to "] }, "sha256" ]
+                        "transform": [ { "stripPrefixes": ["Deliver to "] }, "normalizeCustomerName", "sha256" ]
                     }
                 }
             }

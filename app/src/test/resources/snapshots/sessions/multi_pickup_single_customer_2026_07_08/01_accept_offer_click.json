@@ -1,0 +1,76 @@
+{
+    "captureId": "b69a7254-73b4-4928-9d57-1d44370f6a30",
+    "pipelineId": "accessibility.click",
+    "schemaId": "click_context.v1",
+    "timestamp": 1783555879016,
+    "platform": "doordash",
+    "ruleId": "doordash.click.accept_offer",
+    "classificationName": "accept_offer",
+    "metadata": {
+        "engineVersion": 1,
+        "rulesetFormatVersion": 2,
+        "pipelineVersions": {
+            "accessibility": 1,
+            "accessibility.window": 1,
+            "accessibility.click": 1,
+            "accessibility.long_click": 1,
+            "accessibility.scroll": 1,
+            "accessibility.focus": 1,
+            "notification": 1
+        },
+        "stateMachineApiVersion": "1.0",
+        "appVersion": "0.230.0",
+        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+    },
+    "payload": {
+        "node": {
+            "id": "com.doordash.driverapp:id/accept_button",
+            "class": "android.widget.Button",
+            "isClickable": true,
+            "bounds": {
+                "left": 36,
+                "top": 2187,
+                "right": 1044,
+                "bottom": 2311
+            },
+            "children": [
+                {
+                    "text": "Accept",
+                    "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                    "class": "android.widget.TextView",
+                    "bounds": {
+                        "left": 467,
+                        "top": 2216,
+                        "right": 613,
+                        "bottom": 2282
+                    }
+                },
+                {
+                    "id": "com.doordash.driverapp:id/textSwitcher_prism_button_end_text",
+                    "class": "android.widget.TextSwitcher",
+                    "isEnabled": true,
+                    "bounds": {
+                        "left": 967,
+                        "top": 2219,
+                        "right": 1008,
+                        "bottom": 2279
+                    },
+                    "children": [
+                        {
+                            "text": "2",
+                            "id": "com.doordash.driverapp:id/textView_prism_button_end_text_2",
+                            "class": "android.widget.TextView",
+                            "bounds": {
+                                "left": 985,
+                                "top": 2219,
+                                "right": 1008,
+                                "bottom": 2279
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "screenTarget": "offer_popup"
+    }
+}
