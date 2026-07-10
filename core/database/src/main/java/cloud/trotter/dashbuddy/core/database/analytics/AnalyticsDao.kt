@@ -424,6 +424,51 @@ interface AnalyticsDao {
     fun grossAndUnattributedByPlatform(start: Long, end: Long): Flow<List<PlatformGrossTotalsRow>>
 
     /**
+     * The "(No session)" bucket (#660 piece 1): Σ realized pay + Σ cash tip + count for deliveries
+     * whose source event carried NO `sessionId` at all, in the window of their own `completedAt` —
+     * the exact null-session population [deliveryTotals] already folds into net (#655's documented
+     * edge), but that [grossAndUnattributed] never sees (it iterates `session_records`, and a
+     * null-session row joins to nothing there). The repository adds this into `grossEarnings` so a
+     * session-less completion can no longer make displayed net exceed gross, and surfaces the same
+     * totals as an explicit data-quality signal.
+     */
+    @Query(
+        """SELECT COALESCE(SUM(realizedPay), 0) AS pay,
+                  COALESCE(SUM(cashTip), 0) AS cash,
+                  COUNT(*) AS deliveries
+           FROM delivery_records
+           WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end"""
+    )
+    fun noSessionTotals(start: Long, end: Long): Flow<NoSessionTotalsRow>
+
+    /** Per-platform variant of [noSessionTotals] — same null-session `completedAt` window, grouped on
+     *  the delivery's own denormalized `platform` column. */
+    @Query(
+        """SELECT platform,
+                  COALESCE(SUM(realizedPay), 0) AS pay,
+                  COALESCE(SUM(cashTip), 0) AS cash,
+                  COUNT(*) AS deliveries
+           FROM delivery_records
+           WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end
+           GROUP BY platform"""
+    )
+    fun noSessionTotalsByPlatform(start: Long, end: Long): Flow<List<PlatformNoSessionTotalsRow>>
+
+    /**
+     * Every session-less delivery's own completion instant + gross (pay + cash) in a period — the
+     * "(No session)" bucket's per-day chart input (#660), mirroring [sessionGrossRows] for rows that
+     * join to no session at all. The repository buckets each onto the LOCAL DAY of its own
+     * `completedAt` (there is no session start to anchor on).
+     */
+    @Query(
+        """SELECT completedAt,
+                  (COALESCE(realizedPay, 0) + COALESCE(cashTip, 0)) AS gross
+           FROM delivery_records
+           WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end"""
+    )
+    fun noSessionDailyRows(start: Long, end: Long): Flow<List<NoSessionDailyRow>>
+
+    /**
      * Per-session start + reported-authoritative gross for the sessions started in `[start, end)` — the
      * per-day earnings chart input (#315 H6). Gross per session = `reportedEarnings` when present else
      * that session's Σ delivered pay (same definition as [grossAndUnattributed]; the LEFT JOIN is onto a

@@ -493,6 +493,7 @@
     <string name="money_tab_unknown_store">Unknown store</string>
     <string name="money_tab_unattributed_callout_format">%1$s not attributed to any delivery — bonuses/adjustments; review coming (#650)</string>
     <string name="money_tab_over_attributed_callout_format">attributed exceeds reported by %1$s — review estimates/corrections</string>
+    <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash — data-quality flag (#660)</string>
     <string name="money_tab_recent_sessions_title">RECENT SESSIONS</string>
     <string name="money_tab_no_sessions_recorded_yet">No sessions recorded yet.</string>
     <string name="money_tab_cash_marker_format">+%1$s cash</string>

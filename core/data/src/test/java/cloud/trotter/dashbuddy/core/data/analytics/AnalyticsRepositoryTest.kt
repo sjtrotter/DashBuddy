@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -383,6 +384,55 @@ class AnalyticsRepositoryTest {
         val life = dao.deliveryTotals(0, Long.MAX_VALUE).first()
         assertEquals(1, life.deliveries)
         assertEquals(12.0, life.pay, 1e-9)
+    }
+
+    /**
+     * #660 piece 1: a `sessionId IS NULL` delivery's pay used to be invisible to [grossAndUnattributed]
+     * (session-anchored, iterates `session_records`) while still counting in net (via [deliveryTotals]'s
+     * own-`completedAt` fallback, #655) — the seam that let displayed net exceed gross. Proves the fix:
+     * the orphan pay is folded into [PeriodEconomics.grossEarnings] and surfaced as its own
+     * [PeriodEconomics.noSessionPay]/[PeriodEconomics.noSessionDeliveries] "(No session)" bucket.
+     */
+    @Test
+    fun `a null-session delivery's pay is folded into gross as the (No session) bucket (#660)`() = runBlocking {
+        // No session at all — an orphan delivery, pay 12 + cash 3, net 9.
+        dao.upsertDelivery(delivery(1, sessionId = null, jobId = "J1", storeName = "Wendys", pay = 12.0, net = 9.0, completedAt = base + hour, cashTip = 3.0))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        // Before the fix: gross = 0 (no sessions), net = 9 (deliveryNet) + 3 (cash) = 12 — net > gross.
+        // After the fix: gross also includes the orphan's pay + cash (12 + 3 = 15) ⇒ gross ≥ net.
+        assertEquals("gross folds in the orphan pay + cash", 15.0, eco.grossEarnings, 1e-9)
+        assertEquals("net unchanged: frozen 9 + cash 3", 12.0, eco.netProfit, 1e-9)
+        assertTrue("gross can no longer read below net from this seam", eco.grossEarnings >= eco.netProfit)
+        assertEquals("the bucket surfaces its own pay+cash total", 15.0, eco.noSessionPay, 1e-9)
+        assertEquals("the bucket surfaces its own delivery count", 1, eco.noSessionDeliveries)
+    }
+
+    /** A period with no session-less deliveries reports a zero "(No session)" bucket. */
+    @Test
+    fun `noSessionPay and noSessionDeliveries are zero when every delivery has a session (#660)`() = runBlocking {
+        dao.upsertSession(session("S1", base, reportedEarnings = null, durationMillis = hour, startOdo = 0.0, lastOdo = 5.0, deliveries = 1, jobsCompleted = 1))
+        dao.upsertDelivery(delivery(1, "S1", "J1", "Wendys", pay = 10.0, net = 8.0, completedAt = base + hour))
+
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals(0.0, eco.noSessionPay, 1e-9)
+        assertEquals(0, eco.noSessionDeliveries)
+        assertEquals(10.0, eco.grossEarnings, 1e-9)
+    }
+
+    /** The per-platform periodEconomics variant folds the "(No session)" bucket for that platform only. */
+    @Test
+    fun `per-platform periodEconomics folds the (No session) bucket for its own platform (#660)`() = runBlocking {
+        dao.upsertDelivery(delivery(1, sessionId = null, jobId = "J1", storeName = "Wendys", pay = 10.0, net = 8.0, completedAt = base + hour, platform = "doordash"))
+        dao.upsertDelivery(delivery(2, sessionId = null, jobId = "J2", storeName = "McD", pay = 20.0, net = 15.0, completedAt = base + hour, platform = "uber"))
+
+        val dd = repo.periodEconomics(AnalyticsPeriod.LIFETIME, cloud.trotter.dashbuddy.domain.state.Platform.DoorDash).first()
+        assertEquals(10.0, dd.grossEarnings, 1e-9)
+        assertEquals(1, dd.noSessionDeliveries)
+
+        val uber = repo.periodEconomics(AnalyticsPeriod.LIFETIME, cloud.trotter.dashbuddy.domain.state.Platform.Uber).first()
+        assertEquals(20.0, uber.grossEarnings, 1e-9)
+        assertEquals(1, uber.noSessionDeliveries)
     }
 
     /**

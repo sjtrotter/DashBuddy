@@ -153,6 +153,41 @@ data class SessionGrossRow(
     val gross: Double,
 )
 
+/**
+ * The "(No session)" bucket (#660 piece 1): Σ realized pay + Σ cash tip + count for deliveries whose
+ * source event carried NO `sessionId` at all — the same null-session population [DeliveryTotalsRow]
+ * already folds into net via its own `completedAt` (#655), but that [GrossTotalsRow]/[SessionGrossRow]
+ * never see because those iterate `session_records` and a null-session row joins to nothing. The
+ * repository adds [pay] + [cash] into `grossEarnings` so gross can no longer read below the net that
+ * already counts this pay, and exposes the same totals as an explicit review signal so an orphaned
+ * delivery is a visible data-quality flag, never a silent inconsistency.
+ */
+data class NoSessionTotalsRow(
+    val pay: Double,
+    val cash: Double,
+    val deliveries: Int,
+)
+
+/** Per-platform variant of [NoSessionTotalsRow] (GROUP BY platform) — grouped on the delivery's own
+ *  denormalized `platform` column, since there is no session to derive it from. */
+data class PlatformNoSessionTotalsRow(
+    val platform: String,
+    val pay: Double,
+    val cash: Double,
+    val deliveries: Int,
+)
+
+/**
+ * One session-less delivery's own completion instant + gross (pay + cash) — the "(No session)"
+ * bucket's per-day chart input (#660), mirroring [SessionGrossRow] for rows that join to no session.
+ * The repository buckets each onto the LOCAL DAY of its own [completedAt] (there is no session start
+ * to anchor on, so this mirrors [DeliveryTotalsRow]'s null-session `completedAt` fallback).
+ */
+data class NoSessionDailyRow(
+    val completedAt: Long,
+    val gross: Double,
+)
+
 /** Cross-platform session totals for a period: miles = Σ odo delta, onlineMillis = Σ duration, sessions = COUNT. */
 data class SessionTotalsRow(
     val miles: Double,
