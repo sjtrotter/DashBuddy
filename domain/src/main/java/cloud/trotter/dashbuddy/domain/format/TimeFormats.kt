@@ -64,6 +64,19 @@ fun formatShortDate(
         .format(Instant.ofEpochMilli(millis).atZone(zone))
 
 /**
+ * Compact 12-hour clock label for an **hour-of-day** (0..23): `0→"12a"`, `6→"6a"`, `12→"12p"`,
+ * `18→"6p"`. Not a timestamp — a fixed axis/label token for the hour-of-week heatmap (#315 H5), so it
+ * takes no zone/locale: the `a`/`p` suffix is a compact machine marker, not localized display copy. The
+ * one owner for this label (Principle 5) — the heatmap grid axis and its best-hour callout both call it.
+ */
+fun hourOfDayLabel(hour: Int): String {
+    val h24 = ((hour % 24) + 24) % 24
+    val suffix = if (h24 < 12) "a" else "p"
+    val h = (h24 % 12).let { if (it == 0) 12 else it }
+    return "$h$suffix"
+}
+
+/**
  * "5:42 PM" / "17:42" — a localized clock time for a review surface (the per-delivery rows of the
  * #650 drill-down). Same display policy as [formatShortDate]: the localized SHORT time in [locale],
  * resolved against the device [zone] — display copy the dasher reads in their own locale, not a

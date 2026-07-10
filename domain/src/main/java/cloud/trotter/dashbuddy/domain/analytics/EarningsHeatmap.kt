@@ -9,15 +9,23 @@ import java.time.temporal.ChronoUnit
  * (day-of-week × hour-of-day) grid of *their own* earning experience, not any platform-pay claim.
  *
  * Semantics (locked at review tier):
- *  - **Denominator (coverage):** each session's `[startMillis, endMillis)` span is apportioned across
- *    the hour-of-week cells it overlaps in **fractional hours** (a dash 6:40–7:20pm contributes 1/3h to
- *    the 6pm cell and 1/3h to the 7pm cell). Summed over every session.
+ *  - **Denominator (coverage):** the sessions are first merged into a **wall-clock union** — overlapping
+ *    or adjacent `[startMillis, endMillis)` spans (concurrent platforms, or a crashed-open session that
+ *    overlaps its successor) collapse into one, so an hour the driver was online is counted **once**, never
+ *    double-billed into the denominator. The union spans are then apportioned across the hour-of-week
+ *    cells they overlap in **fractional hours** (a dash 6:40–7:20pm contributes 1/3h to the 6pm cell and
+ *    1/3h to the 7pm cell).
  *  - **Numerator (net):** each delivery's (frozen `netProfit` + `cashTip`) lands **whole** in the cell
  *    of its `completedAt`.
  *  - **Cell rate = Σnet ÷ ΣcoverageHours**, but only where coverage clears [minCoverageHours]
  *    ([EarningsHeatmapCell.dollarsPerHour] is null below it) — a single delivery over 3 minutes of
  *    coverage is a noisy 20×/hr artifact, not a pattern. A masked cell is visually distinct from a
- *    *genuinely-zero* cell (enough coverage, no earnings → rate `0.0`).
+ *    *genuinely-zero* cell (enough coverage, no earnings → rate `0.0`). This is deliberately a **rate**
+ *    surface: a delivery can land in a cell with zero/thin coverage (a `MANUAL` correction is stamped at
+ *    the session's *exclusive* endpoint, and an inverted-timestamp session — #732 — has its span dropped
+ *    while its deliveries survive), so such a cell's net is present but its rate is masked (the money is
+ *    invisible, never wrong — the rate is only ever computed where coverage clears the floor, so it can
+ *    never be `Infinity`/`NaN`).
  *
  * Lifetime-scoped (Patterns hides the period — it is rate-based, #315). Cells are in the **device-local
  * timezone at read time**: [EarningsHeatmapCalculator.compute] takes the [ZoneId] and buckets by
@@ -36,8 +44,15 @@ data class EarningsHeatmap(
     /** The cell at ([dayIndex] 0=Monday..6=Sunday, [hour] 0..23). */
     fun cell(dayIndex: Int, hour: Int): EarningsHeatmapCell = cells[dayIndex * HOURS + hour]
 
+    /**
+     * The single highest-rate non-masked cell (the driver's own best earning hour), or null when no cell
+     * has cleared coverage — the one owner for both the UI's best-hour callout AND the color-scale top
+     * (Principle 5: the callout and the ramp read the same cell, never two separate scans).
+     */
+    val bestCell: EarningsHeatmapCell? get() = cells.filter { it.dollarsPerHour != null }.maxByOrNull { it.dollarsPerHour!! }
+
     /** The largest non-masked cell rate, or null when no cell has cleared coverage — the UI's color-scale top. */
-    val maxDollarsPerHour: Double? get() = cells.mapNotNull { it.dollarsPerHour }.maxOrNull()
+    val maxDollarsPerHour: Double? get() = bestCell?.dollarsPerHour
 
     /** True once any cell has cleared the coverage floor — the UI shows an empty state otherwise. */
     val hasData: Boolean get() = cells.any { it.dollarsPerHour != null }
@@ -88,10 +103,21 @@ object EarningsHeatmapCalculator {
     private const val MILLIS_PER_HOUR = 3_600_000.0
 
     /**
-     * Build the grid. [spans] are apportioned across cells by wall-clock hour in [zone] (DST-safe:
-     * iteration advances one wall-clock hour at a time, so a 23h/25h DST day attributes each real
-     * millisecond to the cell of the hour it fell in); [deliveries]' net lands whole in the cell of
-     * each `completedAt`. A span with `endMillis <= startMillis` contributes nothing (guarded).
+     * Sanity cap on a single span (14 days). A corrupt row — a seconds-vs-millis mix-up, or an
+     * epoch-zero `startMillis` — would otherwise apportion ~490k `ZonedDateTime` iterations across the
+     * grid. No legitimate dash approaches this, so an over-cap span is dropped silently (it contributes
+     * zero coverage); dropping it *before* the union merge also stops one corrupt span from swallowing
+     * every real one.
+     */
+    private const val MAX_SPAN_MILLIS = 14L * 24L * 3_600_000L
+
+    /**
+     * Build the grid. [spans] are first merged into a **wall-clock union** (overlapping/adjacent spans
+     * collapse, so a concurrent-platform or crashed-open overlap is counted once, not twice), then
+     * apportioned across cells by wall-clock hour in [zone] (DST-safe: iteration advances one wall-clock
+     * hour at a time, so a 23h/25h DST day attributes each real millisecond to the cell of the hour it
+     * fell in); [deliveries]' net lands whole in the cell of each `completedAt`. A span with
+     * `endMillis <= startMillis`, or one longer than [MAX_SPAN_MILLIS], contributes nothing (guarded).
      */
     fun compute(
         spans: List<SessionSpan>,
@@ -102,7 +128,7 @@ object EarningsHeatmapCalculator {
         val coverage = DoubleArray(EarningsHeatmap.DAYS * EarningsHeatmap.HOURS)
         val net = DoubleArray(EarningsHeatmap.DAYS * EarningsHeatmap.HOURS)
 
-        for (span in spans) apportionSpan(span, zone, coverage)
+        for (span in unionOf(spans)) apportionSpan(span, zone, coverage)
         for (d in deliveries) {
             net[cellIndex(d.completedAtMillis, zone)] += d.netDollars
         }
@@ -114,10 +140,36 @@ object EarningsHeatmapCalculator {
                 hour = i % EarningsHeatmap.HOURS,
                 netDollars = net[i],
                 coverageHours = hours,
-                dollarsPerHour = if (hours >= minCoverageHours) net[i] / hours else null,
+                // Rate only where coverage clears the floor AND is strictly positive — so a net-in-a-
+                // zero-coverage cell (MANUAL correction / dropped inverted span) stays masked, never
+                // an Infinity/NaN division.
+                dollarsPerHour = if (hours >= minCoverageHours && hours > 0.0) net[i] / hours else null,
             )
         }
         return EarningsHeatmap(cells, minCoverageHours)
+    }
+
+    /**
+     * Merge [spans] into a wall-clock union: drop empty/malformed and over-[MAX_SPAN_MILLIS] spans, sort
+     * by start, and collapse each span whose start is `<=` the running span's end into it (overlapping or
+     * exactly-adjacent). The result is a set of disjoint spans whose total length is the real online
+     * wall-clock time — so two concurrent sessions never double-count an hour into the denominator.
+     */
+    private fun unionOf(spans: List<SessionSpan>): List<SessionSpan> {
+        val valid = spans
+            .filter { it.endMillis > it.startMillis && it.endMillis - it.startMillis <= MAX_SPAN_MILLIS }
+            .sortedBy { it.startMillis }
+        if (valid.isEmpty()) return emptyList()
+        val merged = ArrayList<SessionSpan>(valid.size)
+        for (s in valid) {
+            val last = merged.lastOrNull()
+            if (last != null && s.startMillis <= last.endMillis) {
+                merged[merged.lastIndex] = SessionSpan(last.startMillis, maxOf(last.endMillis, s.endMillis))
+            } else {
+                merged.add(s)
+            }
+        }
+        return merged
     }
 
     /** Split one span's milliseconds across the wall-clock hour cells it overlaps, in fractional hours. */
