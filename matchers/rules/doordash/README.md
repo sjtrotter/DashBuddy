@@ -44,7 +44,12 @@ That said, several real surfaces blend into each other and need care:
 - **Shared anchors across adjacent screens.** The dropoff arrival card and the pickup arrival
   card both carry the text `"Delivery for"`; a dropoff-specific discriminator (`"Hand it to
   recipient"` / the `complete_delivery_steps_button` id) is required alongside it so the pickup
-  card doesn't get stolen (`dropoff.json5`, the `dropoff_navigation`/arrival-card rule).
+  card doesn't get stolen — that's `dropoff.json5`'s `dropoff_pre_arrival` rule, whose own comment
+  documents the three require branches (#462/#460/#549). `dropoff_navigation` (the earlier,
+  en-route rule) has the opposite relationship to that same CTA set: it `reject`s
+  `complete_delivery_steps_button`/"Continue"/"Complete Delivery"/"Mark as delivered" (the #603
+  arrival discriminator), so an at-the-door frame falls through to `dropoff_pre_arrival` instead of
+  being claimed early by the en-route rule.
 - **Priority ordering as a disambiguator, not just a tie-break.** Several `pickup.json5` rules
   are commented with explicit priority reasoning — e.g. the GoPuff zone-arrival rule's anchors
   (`go_to_store_action_view` + an "Arrived at store" label) also appear on every regular
@@ -81,9 +86,12 @@ the rules' job is just to recognize each screen and extract its fields.
 ## Field extraction notes
 
 - **Customer identity is hashed at the edge, never stored raw.** Where a rule parses customer
-  name/address, the field's `transform` is `sha256` (e.g. `dropoff.json5`'s handoff/receipt
-  parses) — this is how customers are differentiated for dedup/correlation without keeping their
-  actual info (the Pledges' "customers are hashed, not blocked").
+  name/address, the field hashes it via a `sha256`-terminated transform chain — e.g.
+  `dropoff.json5`'s `dropoff_navigation`, `dropoff_pre_arrival`, and
+  `dropoff_pre_arrival_completion` rules, the dropoff task-phase parses that actually extract
+  `customerNameHash`/`customerAddressHash` — this is how customers are differentiated for
+  dedup/correlation without keeping their actual info (the Pledges' "customers are hashed, not
+  blocked").
 - **The capture envelope is redacted independently of the parse.** Every rule that hashes PII in
   its `parse` also declares a `redact` block (compiler-enforced, #598) masking the same node text
   in the serialized capture, so a debug capture of a recognized screen never carries plaintext

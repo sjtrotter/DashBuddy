@@ -85,11 +85,25 @@ Same two-tier posture as DoorDash, applied to Uber's own screens:
   identity screens. `uber.screen.sensitive.known` is priority 0, `overrideable: false`
   (structurally first); `sensitive.catchall` is the low-confidence backstop (priority 998,
   `overrideable: true`) for anything the specific rules miss.
-- **Recognized and hashed** — customer-facing delivery screens (`customer_chat`,
-  `delivery_confirmation`, the per-leg trip notifications). Customer name/address fields go through
-  `sha256` in the `parse`, with a matching `redact` block masking the same text in the capture
-  envelope (e.g. `trip_en_route_dropoff`/`trip_at_dropoff` redact their title with a `keepPrefix`
-  marker so recognition on replay is unchanged, per #598/#623).
+- **Recognized, not (yet) hashed — `customer_chat`/`delivery_confirmation` are recognize-only.**
+  `uber.screen.customer_chat` and `uber.screen.delivery_confirmation` are recognized (so they
+  graduate out of `UNKNOWN` capture) but declare no `parse` block at all — nothing is extracted
+  from either screen today, so there's no customer name/address field to hash. `uber.json5` has
+  zero `sha256` transforms; the file's only masking lives on the two per-leg trip
+  **notifications**, `trip_en_route_dropoff`/`trip_at_dropoff`, which `redact` their title
+  directly (not derived from any parsed/hashed field). The two differ in shape: `trip_at_dropoff`
+  masks with a `keepPrefix` (`"Leave the order at "`/`"Meet at door for "`) so its own require (a
+  literal-text match) still recognizes the redacted title on replay — the #598/#623 replay-
+  fidelity property. `trip_en_route_dropoff` instead masks the **whole title, no keepPrefix** —
+  deliberately, because its require is `titleMatchesRegex: "^Going to \\d"` (digit-anchored, to
+  distinguish a dropoff address from the pickup notification's `^Going to (?!\d)` store name); if
+  the mask kept the `"Going to "` prefix, the character right after it would be the
+  `[redacted:…]` marker rather than a digit, and the rule's own require could no longer re-match
+  the redacted envelope on replay — so whole-masking is the only replay-safe choice here, not an
+  oversight. If/when a customer field is ever parsed off a Uber screen, follow the DoorDash
+  hash+redact pattern (a `sha256`-terminated transform plus a matching `redact` block) — see
+  [`doordash/README.md`](doordash/README.md)'s "Field extraction notes" — rather than inventing a
+  second scheme.
 
 A recognition change to either family must not blur this line — see CLAUDE.md's "Security &
 privacy first" principle and the load-time sensitive-coverage guard that fails closed if a platform
