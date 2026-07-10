@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
@@ -157,7 +158,7 @@ class DashboardViewModelTest {
         val onlineJob = launch { onlineVm.uiState.collect {} }
         testScheduler.advanceUntilIdle()
         assertTrue(onlineVm.uiState.value.isDashing)
-        assertEquals("Looking for offers...", onlineVm.uiState.value.statusText)
+        assertEquals(R.string.dashboard_status_looking_for_offers, onlineVm.uiState.value.statusText)
         onlineJob.cancel()
 
         // Offline → not dashing + "ready to start a session".
@@ -166,7 +167,7 @@ class DashboardViewModelTest {
         val offlineJob = launch { offlineVm.uiState.collect {} }
         testScheduler.advanceUntilIdle()
         assertFalse(offlineVm.uiState.value.isDashing)
-        assertEquals("Ready to start a session", offlineVm.uiState.value.statusText)
+        assertEquals(R.string.dashboard_status_ready, offlineVm.uiState.value.statusText)
         offlineJob.cancel()
     }
 }

@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
+import androidx.annotation.StringRes
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 
@@ -23,7 +25,13 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
  */
 data class DashboardUiState(
     val isFirstRun: Boolean = true,
-    val statusText: String = "Offline",
+    /**
+     * The home status headline — a `@StringRes` id (#428 Half A), resolved with
+     * `stringResource(...)` at the Compose layer so this Context-free `@HiltViewModel` never
+     * carries resolved copy. Not i18n: the app still ships English-only; this is a string-
+     * ownership move (SSOT), not locale selection.
+     */
+    @StringRes val statusText: Int = R.string.dashboard_status_offline,
     /**
      * True while a dash session is active (focused region present, mode != Offline),
      * registry-resolved (never a `== DoorDash` literal). Drives the bubble pointer only.

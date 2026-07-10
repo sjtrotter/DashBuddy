@@ -6,6 +6,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -90,17 +91,27 @@ class TtsEffectHandler @Inject constructor(
     }
 
     private fun formatEvaluation(eval: OfferEvaluation): String {
-        val verdict = when (eval.action) {
-            OfferAction.ACCEPT -> "Accept"
-            OfferAction.DECLINE -> "Decline"
-            OfferAction.MANUAL_REVIEW -> "Review"
-            else -> "Offer"
-        }
-        return "$verdict. ${eval.merchantName.trim()}. " +
-            "${Formats.decimal(eval.dollarsPerHour, 0)} dollars an hour net. " +
-            "Net ${Formats.decimal(eval.netPayAmount, 2)}, " +
-            "${Formats.decimal(eval.distanceMiles)} miles, " +
-            "score ${eval.score.toInt()}."
+        // #428 Half A: the verdict word + template connectives moved to strings.xml (string
+        // ownership, NOT locale-selected TTS — the engine still speaks Locale.US regardless of
+        // device locale; per-language reading is a separate, out-of-scope design issue).
+        // Formats.decimal(...) numeric formatting is unchanged — only the literal words moved.
+        val verdict = context.getString(
+            when (eval.action) {
+                OfferAction.ACCEPT -> R.string.tts_verdict_accept
+                OfferAction.DECLINE -> R.string.tts_verdict_decline
+                OfferAction.MANUAL_REVIEW -> R.string.tts_verdict_review
+                else -> R.string.tts_verdict_offer
+            }
+        )
+        return context.getString(
+            R.string.tts_offer_evaluation_template,
+            verdict,
+            eval.merchantName.trim(),
+            Formats.decimal(eval.dollarsPerHour, 0),
+            Formats.decimal(eval.netPayAmount, 2),
+            Formats.decimal(eval.distanceMiles),
+            eval.score.toInt().toString(),
+        )
     }
 
 }

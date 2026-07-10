@@ -1,11 +1,12 @@
 package cloud.trotter.dashbuddy.ui.main.dashboard
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
-import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -82,11 +83,9 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun showWelcomeBubble() {
-        bubbleManager.postMessage(
-            text = "DashBuddy is ready. Open your platform and start a session — I'll track everything from here.",
-            ChatPersona.Dispatcher,
-            expand = true
-        )
+        // #428 Half A: the copy itself is owned by BubbleManager (which has Context) — this
+        // ViewModel stays Context-free.
+        bubbleManager.postWelcomeMessage()
     }
 
     /** The platform the home status attributes to — registry-resolved, not a literal. */
@@ -96,22 +95,23 @@ class DashboardViewModel @Inject constructor(
         return platform?.let { state.regions.platforms[it] }
     }
 
-    private fun statusText(flow: Flow, mode: Mode?): String {
+    @StringRes
+    private fun statusText(flow: Flow, mode: Mode?): Int {
         if (mode == null || mode == Mode.Offline) {
             return when (flow) {
-                Flow.SessionEnded -> "Session Complete"
-                else -> "Ready to start a session"
+                Flow.SessionEnded -> R.string.dashboard_status_session_complete
+                else -> R.string.dashboard_status_ready
             }
         }
-        if (mode == Mode.Paused) return "Paused"
+        if (mode == Mode.Paused) return R.string.dashboard_status_paused
 
         return when (flow) {
-            Flow.Idle -> "Looking for offers..."
-            Flow.OfferPresented -> "Reviewing Offer"
-            Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> "Heading to Pickup"
-            Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> "Heading to Drop-off"
-            Flow.PostTask -> "Delivery Complete"
-            Flow.SessionEnded -> "Session Complete"
+            Flow.Idle -> R.string.dashboard_status_looking_for_offers
+            Flow.OfferPresented -> R.string.dashboard_status_reviewing_offer
+            Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> R.string.dashboard_status_heading_to_pickup
+            Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> R.string.dashboard_status_heading_to_dropoff
+            Flow.PostTask -> R.string.dashboard_status_delivery_complete
+            Flow.SessionEnded -> R.string.dashboard_status_session_complete
         }
     }
 }

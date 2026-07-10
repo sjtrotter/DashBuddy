@@ -78,11 +78,16 @@ fun AnalyticsScreen(
                 .padding(16.dp)
                 .fillMaxSize(),
         ) {
+            val tabOptions = tabOptions()
+            val selectedTabLabel = tabOptions.first { it.tab == uiState.selectedTab }.label
             AppSegmented(
-                options = AnalyticsTab.entries.map { it.label },
-                selected = uiState.selectedTab.label,
+                options = tabOptions.map { it.label },
+                selected = selectedTabLabel,
                 onSelect = { label ->
-                    AnalyticsTab.entries.firstOrNull { it.label == label }?.let(viewModel::setTab)
+                    // Lookup happens against this already-resolved pairs list (#428 Half A), so
+                    // selection stays keyed off the enum — not a raw resolved-string comparison
+                    // that could collide across locales/tabs.
+                    tabOptions.firstOrNull { it.label == label }?.let { viewModel.setTab(it.tab) }
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -131,6 +136,13 @@ fun AnalyticsScreen(
         }
     }
 }
+
+/** The hub tabs paired with their resolved label (#428 Half A) — identity stays the enum. */
+private data class TabOption(val tab: AnalyticsTab, val label: String)
+
+@Composable
+private fun tabOptions(): List<TabOption> =
+    AnalyticsTab.entries.map { TabOption(it, stringResource(it.labelRes)) }
 
 /** The review windows offered by the Money period selector, in display order. */
 private data class PeriodOption(val period: AnalyticsPeriod, val label: String)

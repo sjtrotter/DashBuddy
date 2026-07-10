@@ -156,13 +156,26 @@ class BubbleManager @Inject constructor(
     /** Session chat copy only — the dash id derives from state (#437). */
     fun startSession(sessionId: String, platformName: String) {
         val verb = sessionVerb(platformName)
-        postMessage("Started $verb!", ChatPersona.Dispatcher)
+        postMessage(context.getString(R.string.bubble_chat_session_started, verb), ChatPersona.Dispatcher)
     }
 
     /** Session chat copy only — the dash id derives from state (#437). */
     fun endSession(platformName: String? = null) {
         val verb = sessionVerb(platformName)
-        postMessage("Done $verb!", ChatPersona.Dispatcher)
+        postMessage(context.getString(R.string.bubble_chat_session_done, verb), ChatPersona.Dispatcher)
+    }
+
+    /**
+     * The first-run/ready-to-dash welcome chat line (#428 Half A). Owned here (not
+     * [cloud.trotter.dashbuddy.ui.main.dashboard.DashboardViewModel]) because [BubbleManager] already
+     * carries a [Context] and a `@HiltViewModel` should not inject one.
+     */
+    fun postWelcomeMessage() {
+        postMessage(
+            text = context.getString(R.string.bubble_welcome_message),
+            persona = ChatPersona.Dispatcher,
+            expand = true,
+        )
     }
 
     /**
@@ -204,9 +217,9 @@ class BubbleManager @Inject constructor(
 
     private fun createChannel() {
         val channel = NotificationChannel(
-            channelId, "DashBuddy Stream", NotificationManager.IMPORTANCE_HIGH
+            channelId, context.getString(R.string.bubble_channel_stream_name), NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Live updates from your session"
+            description = context.getString(R.string.bubble_channel_stream_description)
             setAllowBubbles(true)
         }
         notificationManager.createNotificationChannel(channel)
@@ -216,9 +229,9 @@ class BubbleManager @Inject constructor(
         // — forcing a shade-pull that breaks the Accept/Decline verified click. This channel never
         // bubbles, so an offer posts as a normal high-importance heads-up over DoorDash.
         val offerChannel = NotificationChannel(
-            offerChannelId, "Offer Alerts", NotificationManager.IMPORTANCE_HIGH
+            offerChannelId, context.getString(R.string.bubble_channel_offer_name), NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Heads-up offer alerts with Accept / Decline"
+            description = context.getString(R.string.bubble_channel_offer_description)
             setAllowBubbles(false)
         }
         notificationManager.createNotificationChannel(offerChannel)
@@ -238,7 +251,7 @@ class BubbleManager @Inject constructor(
         val shortcut = ShortcutInfoCompat.Builder(context, shortcutId)
             .setLongLived(true)
             .setIntent(activityIntent)
-            .setShortLabel("DashBuddy")
+            .setShortLabel(context.getString(R.string.app_name))
             .setIcon(
                 IconCompat.createWithResource(
                     context,
@@ -291,7 +304,7 @@ class BubbleManager @Inject constructor(
         )
 
         val style = NotificationCompat.MessagingStyle(senderPerson)
-            .setConversationTitle("Current Session")
+            .setConversationTitle(context.getString(R.string.bubble_notification_conversation_title))
             .setGroupConversation(true)
             .addMessage(text, System.currentTimeMillis(), senderPerson)
 
@@ -401,11 +414,17 @@ class BubbleManager @Inject constructor(
             )
             rv.setInt(R.id.notif_offer_verdict, "setBackgroundColor", verdictArgb)
         }
-        rv.setTextViewText(R.id.notif_offer_rate, "${money0(offer.dollarsPerHour)}/hr")
+        rv.setTextViewText(
+            R.id.notif_offer_rate,
+            context.getString(R.string.bubble_offer_card_rate_per_hr, money0(offer.dollarsPerHour)),
+        )
         if (!expanded) {
             rv.setTextViewText(
                 R.id.notif_offer_sub,
-                "Net ${money(offer.netPayAmount)} · ${money(offer.dollarsPerMile)}/mi · ${miles(offer.distanceMiles)}",
+                context.getString(
+                    R.string.bubble_offer_card_sub_compact,
+                    money(offer.netPayAmount), money(offer.dollarsPerMile), miles(offer.distanceMiles),
+                ),
             )
         }
 
@@ -450,8 +469,11 @@ class BubbleManager @Inject constructor(
         if (expanded) {
             rv.setTextViewText(
                 R.id.notif_offer_metrics,
-                "Net ${money(offer.netPayAmount)} · Gross ${money(offer.payAmount)} · " +
-                    "${miles(offer.distanceMiles)} · ${money(offer.dollarsPerMile)}/mi",
+                context.getString(
+                    R.string.bubble_offer_card_metrics_expanded,
+                    money(offer.netPayAmount), money(offer.payAmount),
+                    miles(offer.distanceMiles), money(offer.dollarsPerMile),
+                ),
             )
             // Badges into fixed slots, tinted with the verdict color so they're visible on any
             // notification background (theme-attr fills don't resolve in the remote process).
@@ -471,7 +493,9 @@ class BubbleManager @Inject constructor(
                 }
             }
             val stores = offer.storeNames.joinToString(" + ")
-            val items = if (offer.itemCount > 1) " · ${offer.itemCount} items" else ""
+            val items = if (offer.itemCount > 1) {
+                context.getString(R.string.bubble_offer_card_items_suffix, offer.itemCount)
+            } else ""
             rv.setTextViewText(R.id.notif_offer_store, (stores + items).trim())
         }
         return rv
