@@ -606,12 +606,14 @@
          separate, out-of-scope design issue). -->
 
     <!-- state/effects/TtsEffectHandler.kt -->
-    <string name="tts_verdict_accept">Accept</string>
-    <string name="tts_verdict_decline">Decline</string>
-    <string name="tts_verdict_review">Review</string>
-    <string name="tts_verdict_offer">Offer</string>
+    <!-- Locale-locked by design: the TTS engine speaks Locale.US regardless of device locale
+         (see the in-code comment on TtsEffectHandler), so these are NOT translation candidates. -->
+    <string name="tts_verdict_accept" translatable="false">Accept</string>
+    <string name="tts_verdict_decline" translatable="false">Decline</string>
+    <string name="tts_verdict_review" translatable="false">Review</string>
+    <string name="tts_verdict_offer" translatable="false">Offer</string>
     <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score -->
-    <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dollars an hour net. Net %4$s, %5$s miles, score %6$s.</string>
+    <string name="tts_offer_evaluation_template" translatable="false">%1$s. %2$s. %3$s dollars an hour net. Net %4$s, %5$s miles, score %6$s.</string>
 
     <!-- state/effects/TipEffectHandler.kt -->
     <!-- %1$s tip amount, %2$s store name -->
@@ -626,11 +628,20 @@
     <!-- %1$s is Platform.sessionVerb (or its displayName fallback) — never a hardcoded platform word (Principle 8). -->
     <string name="bubble_chat_session_started">Started %1$s!</string>
     <string name="bubble_chat_session_done">Done %1$s!</string>
+    <!-- BubbleManager.sessionVerb() fallbacks when a Platform has no sessionVerb of its own —
+         %1$s is the platform's displayName (or the raw, unresolved platform id). -->
+    <string name="bubble_session_verb_fallback_named">driving for %1$s</string>
+    <string name="bubble_session_verb_fallback_unnamed">driving</string>
     <string name="bubble_welcome_message">DashBuddy is ready. Open your platform and start a session — I\'ll track everything from here.</string>
     <string name="bubble_offer_card_rate_per_hr">%1$s/hr</string>
     <string name="bubble_offer_card_sub_compact">Net %1$s · %2$s/mi · %3$s</string>
     <string name="bubble_offer_card_metrics_expanded">Net %1$s · Gross %2$s · %3$s · %4$s/mi</string>
     <string name="bubble_offer_card_items_suffix">" · %1$d items"</string>
+    <!-- BubbleManager.miles() — %1$s is the formatted distance. -->
+    <string name="bubble_offer_card_miles">%1$s mi</string>
+    <!-- Null-safe metric placeholder for the offer card's money()/money0()/miles() helpers when a
+         value didn't parse. -->
+    <string name="bubble_offer_card_metric_placeholder" translatable="false">—</string>
 
     <!-- ui/main/dashboard/DashboardViewModel.kt -->
     <string name="dashboard_status_offline">Offline</string>

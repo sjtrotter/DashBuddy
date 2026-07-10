@@ -190,9 +190,9 @@ class BubbleManager @Inject constructor(
         val platform = Platform.fromName(platformName)
         return when {
             platform?.sessionVerb != null -> platform.sessionVerb!!
-            platform != null -> "driving for ${platform.displayName}"
-            platformName != null -> "driving for $platformName"
-            else -> "driving"
+            platform != null -> context.getString(R.string.bubble_session_verb_fallback_named, platform.displayName)
+            platformName != null -> context.getString(R.string.bubble_session_verb_fallback_named, platformName)
+            else -> context.getString(R.string.bubble_session_verb_fallback_unnamed)
         }
     }
 
@@ -389,10 +389,11 @@ class BubbleManager @Inject constructor(
      * `setImageViewBitmap` (RemoteViews can't draw an arc); countdown → a self-ticking
      * [Chronometer]; Accept/Decline → brand-styled `TextView`s wired with `setOnClickPendingIntent`.
      */
-    // Null-safe money/distance for the notification card — "—" when a metric didn't parse.
-    private fun money(d: Double?) = d?.let { Formats.money(it) } ?: "—"
-    private fun money0(d: Double?) = d?.let { Formats.money0(it) } ?: "—"
-    private fun miles(d: Double?) = d?.let { "${Formats.decimal(it)} mi" } ?: "—"
+    // Null-safe money/distance for the notification card — the placeholder when a metric didn't parse.
+    private fun money(d: Double?) = d?.let { Formats.money(it) } ?: context.getString(R.string.bubble_offer_card_metric_placeholder)
+    private fun money0(d: Double?) = d?.let { Formats.money0(it) } ?: context.getString(R.string.bubble_offer_card_metric_placeholder)
+    private fun miles(d: Double?) = d?.let { context.getString(R.string.bubble_offer_card_miles, Formats.decimal(it)) }
+        ?: context.getString(R.string.bubble_offer_card_metric_placeholder)
 
     private fun buildOfferCardView(
         offer: FlowCardSnapshot.Offer,
