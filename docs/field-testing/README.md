@@ -1583,6 +1583,13 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   delivery's own completion day should include its pay. If you can't force this edge case, this
   item can be validated desk-side by inspecting `delivery_records` for any `sessionId IS NULL` row
   after a dash and confirming the Money tab reflects it as above.
+  - **Known caveat (desk-verifiable, not a bug to report):** if the orphan delivery's pay was
+    ALSO already inside a surviving session's captured `reportedEarnings` (e.g. the restart
+    happened mid-dash and the dash's summary screen still got captured afterward), gross will
+    double-count those dollars — expect to see them flagged in BOTH the unattributed callout
+    and the "(No session)" callout at once. This is a known, documented overstatement (mirrors
+    the pre-existing net-side overlap) that piece 2 (categorizing an orphan into its real
+    session) is the actual fix for — no action needed beyond noting it if seen.
   - Confirmed: 0/2.
 
 ---

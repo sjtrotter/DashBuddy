@@ -409,6 +409,20 @@ class AnalyticsRepository @Inject constructor(
         // (deliveryTotals counts a null-session row by its own completedAt, #655) — it is folded into
         // [gross] here (which was otherwise purely session-anchored and never saw it) so gross can no
         // longer read below net purely from this seam; it is NOT added a second time to net.
+        //
+        // KNOWN OVERSTATEMENT (#660 piece 1, adjudicated): this fold assumes the orphan delivery's pay
+        // is genuinely NOT already inside any surviving session's `reportedEarnings`. That assumption can
+        // be wrong — e.g. a mid-dash accessibility-service/app restart that loses this one delivery's
+        // `sessionId` while the dash's summary screen still gets captured afterward: the summary's
+        // `reportedEarnings` (folded via [grossAndUnattributed]) already reflects that delivery's pay, so
+        // adding [noSessionPay] on top double-counts those dollars into [PeriodEconomics.grossEarnings],
+        // and the SAME dollars surface in both the unattributed-review callout AND the "(No session)"
+        // callout on the Money tab. This mirrors the pre-existing net-side overlap (an orphan's frozen net
+        // was always folded via [deliveryTotals], with the identical correlated-restart caveat) — it is
+        // not a new class of bug, just newly visible on the gross side now that this bucket folds in. The
+        // real fix is #660 piece 2 (categorize an orphan delivery into its real session via a correction
+        // event), which removes the row from this bucket entirely rather than trying to detect the overlap
+        // here; until then this is a documented, desk-verifiable edge, not a defect to patch in piece 1.
         val net = deliveryNet + unattributed + cash
         val hours = onlineMillis / 3_600_000.0
         return PeriodEconomics(

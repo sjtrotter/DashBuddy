@@ -138,7 +138,9 @@ private fun EarningsHero(economics: PeriodEconomics) {
 /**
  * Earnings-by-day bar chart (#315 H6): one bar per local calendar day of the period, gap days at
  * zero, the best day highlighted. Session-anchored (#655) — a dash's whole gross sits on its start
- * day. Only rendered when [days] is non-empty (Today/Lifetime pass an empty list; see [MoneyTab]).
+ * day. **Exception (#660):** a "(No session)" delivery has no session start to anchor on, so it
+ * counts on its own completion day instead (the caption states this). Only rendered when [days] is
+ * non-empty (Today/Lifetime pass an empty list; see [MoneyTab]).
  */
 @Composable
 private fun EarningsByDayCard(days: List<DailyEarnings>) {

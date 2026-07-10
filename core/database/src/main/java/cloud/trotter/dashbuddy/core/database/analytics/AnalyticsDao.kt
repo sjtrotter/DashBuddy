@@ -366,11 +366,17 @@ interface AnalyticsDao {
      * `cashTip` alias) — cash is real earnings, so it belongs in gross. The `unattributed` CASE stays
      * **untouched** (it still compares `reportedEarnings` against the cash-free `deliveredPay`), so a
      * recorded cash tip raises gross/net without shrinking the reported-vs-captured reconciliation.
-     * **Invariant (#688 F3):** every cash-bearing row is sessionful (the drill-down writes only
-     * sessionful targets, MANUAL carries a sessionId) — so the cash counted into `net` (via
-     * [deliveryTotals]'s null-session-inclusive `cash`) and into `gross` here (session-join only) is
-     * the same amount; a null-session cash row would leak into net but not gross, which the invariant
-     * forbids.
+     * **Composition with the "(No session)" bucket (#660 piece 1):** this query is deliberately
+     * session-anchored ONLY — a `sessionId IS NULL` delivery joins to no `session_records` row here and
+     * contributes nothing to `gross`/`unattributed`/`overAttributed`, even though it already reaches
+     * `net` via [deliveryTotals]'s own-`completedAt` fallback (#655). That used to be an asymmetry
+     * (#688 F3 called the null-session-cash case "forbidden" back when nothing folded a null-session row
+     * into gross at all); it no longer is — [AnalyticsRepository.periodEconomics] separately reads
+     * [noSessionTotals] and adds its pay+cash on top of this query's `gross`, so the null-session
+     * population reaches gross too, just via a different query. This query's own cash sum
+     * (`d.cashTip`) therefore only ever covers **sessionful** cash-bearing rows (the drill-down writes
+     * only sessionful targets, MANUAL carries a sessionId) — a null-session cash row is picked up by
+     * [noSessionTotals]'s own `cashTip` sum instead, not by this one.
      *
      * **`overAttributed` (#701):** the mirror signal `deliveredPay − reportedEarnings` for sessions
      * where delivered exceeds reported (the opposite excess from `unattributed`) — surfaced as a

@@ -482,7 +482,7 @@
     <string name="money_tab_net_per_hour_chip_format">Net/hr %1$s</string>
     <string name="money_tab_earnings_by_day_title">EARNINGS BY DAY</string>
     <string name="money_tab_no_earnings_yet">No earnings in this period yet.</string>
-    <string name="money_tab_earnings_by_day_caption">gross per day · sessions count on their start day</string>
+    <string name="money_tab_earnings_by_day_caption">gross per day · sessions count on their start day · (No session) deliveries count on their own completion day</string>
     <string name="money_tab_true_net_title">TRUE NET</string>
     <string name="money_tab_stat_net_per_hour">Net/hr</string>
     <string name="money_tab_stat_net_per_mile">Net/mi</string>
