@@ -30,8 +30,8 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 
 /**
- * The Analytics hub (#315). Money / Decisions / Time all render real content; Patterns (H5) still
- * shows a "coming soon" card. A **review** surface: UDF state in, `setTab`/`setPeriod` intents out
+ * The Analytics hub (#315). Money / Decisions / Time / Patterns (H5) all render real content. A
+ * **review** surface: UDF state in, `setTab`/`setPeriod` intents out
  * (Principle 1); reactive-fresh via the read-model Flows, no `rememberNow()` tick (a historical
  * period's figures are fixed).
  *

@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +27,6 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
@@ -37,6 +38,7 @@ import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
+import cloud.trotter.dashbuddy.domain.format.hourOfDayLabel
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
@@ -118,12 +120,21 @@ private fun HeatmapCard(heatmap: EarningsHeatmap) {
                     ) {
                         for (hour in 0 until EarningsHeatmap.HOURS) {
                             val cell = heatmap.cell(day.value - 1, hour)
+                            val rate = cell.dollarsPerHour
+                            // A covered-but-≤$0 cell ("worked, no net") gets a `bad` border on its badBg
+                            // fill so it reads as a distinct third state, not a dim tint (legible in both
+                            // themes with the fixed palette).
+                            val zeroRate = rate != null && rate <= 0.0
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .aspectRatio(1f)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(cellColor(cell, maxRate, c)),
+                                    .background(cellColor(cell, maxRate, c))
+                                    .then(
+                                        if (zeroRate) Modifier.border(1.dp, c.bad, RoundedCornerShape(2.dp))
+                                        else Modifier,
+                                    ),
                             )
                         }
                     }
@@ -135,13 +146,14 @@ private fun HeatmapCard(heatmap: EarningsHeatmap) {
         Spacer(Modifier.height(12.dp))
         HeatmapLegend(maxRate)
 
-        // Best-hour callout — the single most-earning cell (driver's own experience).
-        heatmap.cells.filter { it.dollarsPerHour != null }.maxByOrNull { it.dollarsPerHour!! }?.let { best ->
+        // Best-hour callout — the single most-earning cell (driver's own experience). Reads the domain
+        // SSOT [EarningsHeatmap.bestCell], the same cell the color ramp is scaled to (Principle 5).
+        heatmap.bestCell?.let { best ->
             Spacer(Modifier.height(10.dp))
             Text(
                 text = stringResource(
                     R.string.patterns_tab_heatmap_best_format,
-                    "${DayOfWeek.of(best.dayIndex + 1).getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${hourLabel12(best.hour)}",
+                    "${DayOfWeek.of(best.dayIndex + 1).getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${hourOfDayLabel(best.hour)}",
                     Formats.money(best.dollarsPerHour!!),
                 ),
                 style = MaterialTheme.typography.bodyMedium,
@@ -164,15 +176,20 @@ private fun HourAxis() {
     Row(Modifier.fillMaxWidth()) {
         Spacer(Modifier.width(30.dp))
         Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
+            // labelSmall, no raw fontSize override — matches the sibling AppBarChart axis-label treatment.
             listOf(0, 6, 12, 18).forEach { h ->
-                Text(text = hourLabel12(h), style = MaterialTheme.typography.labelSmall, color = c.text3, fontSize = 9.sp)
+                Text(text = hourOfDayLabel(h), style = MaterialTheme.typography.labelSmall, color = c.text3)
             }
-            Text(text = hourLabel12(0), style = MaterialTheme.typography.labelSmall, color = c.text3, fontSize = 9.sp)
+            Text(text = hourOfDayLabel(0), style = MaterialTheme.typography.labelSmall, color = c.text3)
         }
     }
 }
 
-/** Color-scale legend: the insufficient swatch + a low→high ramp keyed to the driver's own best hour. */
+/**
+ * Color-scale legend, three states so the grid is readable: the *insufficient* swatch ("too little
+ * time"), the covered-but-≤$0 swatch ("worked, no net" — badBg + a `bad` border, matching the grid),
+ * and the low→high positive ramp keyed to the driver's own best hour.
+ */
 @Composable
 private fun HeatmapLegend(maxRate: Double) {
     val c = AppTheme.colors
@@ -180,49 +197,50 @@ private fun HeatmapLegend(maxRate: Double) {
         LegendSwatch(c.surface3)
         Text(text = stringResource(R.string.patterns_tab_heatmap_legend_insufficient), style = MaterialTheme.typography.labelSmall, color = c.text3)
         Spacer(Modifier.width(8.dp))
+        LegendSwatch(c.badBg, border = c.bad)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_zero), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Spacer(Modifier.width(8.dp))
         Text(text = stringResource(R.string.patterns_tab_heatmap_legend_low), style = MaterialTheme.typography.labelSmall, color = c.text3)
-        listOf(0.0, 0.5, 1.0).forEach { f -> LegendSwatch(lerp(c.goodBg, c.good, f.toFloat())) }
+        listOf(0.0, 0.5, 1.0).forEach { f -> LegendSwatch(positiveRamp(f.toFloat(), c)) }
         Text(text = stringResource(R.string.patterns_tab_heatmap_legend_high), style = MaterialTheme.typography.labelSmall, color = c.text3)
     }
 }
 
 @Composable
-private fun LegendSwatch(color: Color) {
+private fun LegendSwatch(color: Color, border: Color? = null) {
     Box(
         modifier = Modifier
-            .size12()
+            .size(12.dp)
             .clip(RoundedCornerShape(2.dp))
-            .background(color),
+            .background(color)
+            .then(if (border != null) Modifier.border(1.dp, border, RoundedCornerShape(2.dp)) else Modifier),
     )
 }
-
-private fun Modifier.size12(): Modifier = this.width(12.dp).height(12.dp)
 
 /**
  * The tint for one cell (pure — takes the palette in). Insufficient coverage ([EarningsHeatmapCell.dollarsPerHour]
  * null) → a dim `surface3` (reads as "no data"); a rate ≤ 0 with enough coverage → the cold `badBg`
- * ("worked, earned ~nothing"); a positive rate → a `goodBg`→`good` ramp scaled to [maxRate]. The
- * insufficient and genuinely-zero cells are deliberately different so a masked cell never reads as a
- * real zero.
+ * ("worked, earned ~nothing", paired with a `bad` border at the call site); a positive rate → the
+ * [positiveRamp] scaled to [maxRate]. The insufficient and genuinely-zero cells are deliberately
+ * different so a masked cell never reads as a real zero.
  */
 private fun cellColor(cell: EarningsHeatmapCell, maxRate: Double, c: AppColors): Color {
     val rate = cell.dollarsPerHour ?: return c.surface3
     if (rate <= 0.0) return c.badBg
     val fraction = if (maxRate > 0.0) (rate / maxRate).coerceIn(0.0, 1.0) else 1.0
-    return lerp(c.goodBg, c.good, fraction.toFloat())
+    return positiveRamp(fraction.toFloat(), c)
 }
 
-/** Compact 12-hour clock label: 0→"12a", 6→"6a", 12→"12p", 18→"6p". */
-private fun hourLabel12(hour: Int): String {
-    val suffix = if (hour < 12) "a" else "p"
-    val h = when (hour % 12) { 0 -> 12; else -> hour % 12 }
-    return "$h$suffix"
-}
+/**
+ * The positive-rate ramp `goodBg → good`, but starting at **0.3** of the way up rather than at the raw
+ * ~12–14%-alpha `goodBg` — otherwise a low-positive cell is an indistinguishable faint tint next to the
+ * `surface3`/`badBg` cells in light mode. The lowest positive rate is thus a clearly-green swatch, and
+ * the best hour is solid `good`.
+ */
+private fun positiveRamp(fraction: Float, c: AppColors): Color =
+    lerp(c.goodBg, c.good, 0.3f + 0.7f * fraction.coerceIn(0f, 1f))
 
 // ── Store report cards ──────────────────────────────────────────────────
-
-/** Placeholder for a stat with no measurable value yet (Money/Time-tab parity). */
-private const val EMPTY_VALUE = "—"
 
 /** The per-store report cards, newest-visited first (the repository already orders by last-seen). */
 @Composable
@@ -230,6 +248,15 @@ private fun StoresCard(cards: List<StoreReportCard>) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(text = stringResource(R.string.patterns_tab_stores_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Spacer(Modifier.height(4.dp))
+        // v1 asymmetry (Money vs Patterns): manually-added + unresolved deliveries are in the Money
+        // totals but don't surface as store cards here yet. State it plainly so the lists don't look
+        // inconsistent to the driver.
+        Text(
+            text = stringResource(R.string.patterns_tab_stores_manual_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = c.text3,
+        )
         Spacer(Modifier.height(10.dp))
         if (cards.isEmpty()) {
             Text(

@@ -377,7 +377,9 @@
     <string name="patterns_tab_heatmap_legend_low">lower</string>
     <string name="patterns_tab_heatmap_legend_high">higher</string>
     <string name="patterns_tab_heatmap_legend_insufficient">too little time</string>
+    <string name="patterns_tab_heatmap_legend_zero">worked, no net</string>
     <string name="patterns_tab_stores_title">YOUR STORES</string>
+    <string name="patterns_tab_stores_manual_note">Manually-added deliveries and history we couldn\'t match to a store still count in your Money totals — they just don\'t show up as a store card here yet.</string>
     <string name="patterns_tab_no_stores">No stores visited yet.</string>
     <string name="patterns_tab_location_unknown">location unknown</string>
     <string name="patterns_tab_stats_partial">per-location stats partial — blends every %1$s you\'ve visited on payout-less jobs</string>

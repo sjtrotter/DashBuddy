@@ -11,6 +11,13 @@ import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 
 /**
+ * The placeholder shown for a stat with no measurable value yet — the em-dash. ONE owner across every
+ * analytics-hub tab (Money / Decisions / Time / Patterns / SessionDetail), Principle 5: a per-file copy
+ * is a divergence bug waiting to fire.
+ */
+internal const val EMPTY_VALUE = "—"
+
+/**
  * The Analytics hub tabs (#315). [Money], [Decisions] (H3), [Time] (H4), and [Patterns] (H5) all
  * render real content.
  */

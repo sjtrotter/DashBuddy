@@ -41,8 +41,6 @@ import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import java.time.format.TextStyle
 import java.util.Locale
 
-/** Placeholder shown for a rate figure that has no measurable denominator yet (dashboard parity). */
-private const val EMPTY_VALUE = "—"
 
 /** Below this the unattributed pay is effectively zero — no callout (avoids a "$0.00" flag). */
 private const val UNATTRIBUTED_EPSILON = 0.005

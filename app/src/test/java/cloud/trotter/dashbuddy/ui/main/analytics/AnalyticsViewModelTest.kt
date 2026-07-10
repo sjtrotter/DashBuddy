@@ -102,6 +102,25 @@ class AnalyticsViewModelTest {
     private fun store(name: String, net: Double, deliveries: Int) =
         StoreEconomics(storeName = name, net = net, gross = net, deliveries = deliveries)
 
+    private fun storeReportCard(chainDisplay: String) = StoreReportCard(
+        storeKey = "doordash|${chainDisplay.lowercase()}|02426",
+        platform = "doordash",
+        normalizedChain = chainDisplay.lowercase(),
+        chainDisplay = chainDisplay,
+        runningKey = "02426",
+        address = "123 Main St",
+        locationKnown = true,
+        pickups = 4,
+        deliveries = 6,
+        gross = 88.0,
+        net = 61.0,
+        avgDwellMillis = 300_000.0,
+        p50DwellMillis = 280_000L,
+        p95DwellMillis = 540_000L,
+        firstSeenAt = 1_700_000_000_000L,
+        lastSeenAt = 1_700_100_000_000L,
+    )
+
     private fun session(id: String, reported: Double?) = SessionRecord(
         sessionId = id, platform = Platform.DoorDash, startedAt = 1_700_000_000_000L, endedAt = null,
         reportedEarnings = reported, reportedDurationMillis = null, miles = 10.0,
@@ -186,6 +205,28 @@ class AnalyticsViewModelTest {
         assertEquals(5, ui.decisions.declined)
         assertEquals(0.3, ui.decisions.acceptanceRate!!, 1e-9)
         assertEquals(12.5, ui.decisions.declinedEstNet, 1e-9)
+        job.cancel()
+    }
+
+    @Test
+    fun `patterns-tab sources (store cards + heatmap) are wired into state`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubPeriod(AnalyticsPeriod.THIS_WEEK, economics(net = 100.0, netPerHour = 20.0))
+        stubSessions(emptyList())
+        // Override the @Before defaults with NON-DEFAULT values so the assertion is falsifiable — an
+        // empty stub would equal the UiState defaults and prove nothing about the wiring.
+        val heatmap = EarningsHeatmap.EMPTY.copy(minCoverageHours = 0.75)
+        whenever(analyticsRepository.storeReportCards())
+            .thenReturn(flowOf(listOf(storeReportCard("Wendys"))))
+        whenever(analyticsRepository.earningsHeatmap(anyOrNull())).thenReturn(flowOf(heatmap))
+
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+
+        val ui = viewModel.uiState.value
+        assertEquals("Wendys", ui.storeReportCards.single().chainDisplay)
+        assertEquals(0.75, ui.earningsHeatmap.minCoverageHours, 1e-9)
         job.cancel()
     }
 
