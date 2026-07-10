@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
@@ -285,6 +286,9 @@ internal fun EffectMap.pickupConfirmSweepEffects(
         addAll(
             pickupConfirmedEffects(
                 sessionId, task, obs,
+                // #588: the region owns the platform — a shop's measured pace folds into THIS
+                // platform's learned rate, never a shared global.
+                platform = region.platform,
                 confirmedAt = task.completedAt ?: obs.timestamp,
                 jobOfferHashes = jobOfferHashes,
             ),
@@ -303,6 +307,7 @@ private fun EffectMap.pickupConfirmedEffects(
     sessionId: String?,
     prevTask: Task,
     obs: Observation,
+    platform: Platform,
     confirmedAt: Long = obs.timestamp,
     jobOfferHashes: List<String> = emptyList(),
 ): List<AppEffect> = buildList {
@@ -327,6 +332,7 @@ private fun EffectMap.pickupConfirmedEffects(
     if (prevTask.activity == PickupActivity.SHOPPING && shopItems > 0 && shopArrivedAt != null) {
         add(
             AppEffect.RecordShopRate(
+                platform = platform,
                 itemsShopped = shopItems,
                 shopDurationMs = confirmedAt - shopArrivedAt,
                 storeName = prevTask.storeName,

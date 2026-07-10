@@ -73,6 +73,17 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — per-platform shop-rate learning; shop offers price sanely after the reset (#588 / PR).**
+  The learned shopping pace (items/min) is now keyed per platform, and the old global learned value was
+  **dropped** (restart-learning, no migration) — every platform relearns from its 0.8/min seed over ~5 shops.
+  **How to tell it's working (on a DoorDash dash):** a Shop & Deliver offer should still read a sane
+  handling time / $/hr immediately (the seed ≈ the discarded global, so no visible regression); after ~5
+  real shops the learned pace takes over again. **Desk-side after the dash:** the shareable INFO log's
+  `ShopRate` lines now carry a `[doordash]` platform tag; there should be no cross-platform bleed if a
+  second platform (Uber/Instacart) is ever shopped. Watch for any shop offer suddenly reading an absurd
+  $/hr (would mean the seed/reset went wrong).
+  - Confirmed: 0/2
+
 - **🆕 NEW — store entity resolution keys real stores from live dashes (#159 / PR).**
   The read-model now resolves each job's stores (`stores` + `pickup_records` tables) from captured
   pickup/dropoff/payout surfaces. **How to tell it's working (desk-side, after a dash):** on a job with a

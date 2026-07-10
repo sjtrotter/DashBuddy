@@ -1074,7 +1074,12 @@ class EffectMapTest {
         assertEquals(24, rec.itemsShopped)
         assertEquals(30 * 60_000L, rec.shopDurationMs)
         assertEquals("task-1", rec.taskId)
-        assertEquals("the sample is idempotent per pickup task", "shop_rate:task-1", rec.effectKey)
+        // #588: the effect carries the region's platform so the pace folds into THAT platform's rate.
+        assertEquals(platform, rec.platform)
+        assertEquals(
+            "the sample is idempotent per platform-scoped pickup task",
+            "shop_rate:doordash:task-1", rec.effectKey,
+        )
     }
 
     @Test
