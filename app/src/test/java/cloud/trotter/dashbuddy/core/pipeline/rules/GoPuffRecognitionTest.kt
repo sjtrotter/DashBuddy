@@ -55,6 +55,30 @@ class GoPuffRecognitionTest {
     }
 
     /**
+     * #501 item 2 — the multi-order drop-off confirmation card. Recognize-only (dev decision
+     * 2026-07-07): no state.flow — the dropoff-navigation phase is already established before this
+     * transient modal appears, so recognizing it only graduates the frame out of UNKNOWN. Both
+     * committed corpus frames are REAL redacted 2026-06-14 captures: a GoPuff (Drive) warehouse
+     * drop AND an ordinary Sprouts multi-merchant drop — proving the card is NOT GoPuff-specific
+     * (it's the generic DoorDash multi-order confirm). The id-less customer-name line was masked
+     * by SnapshotRedactor's FIRST_LAST_INITIAL masker (#501 item 1), which is why these frames
+     * could be committed at all; the rule's own `redact` masks the same node at runtime.
+     */
+    @Test
+    fun `the GoPuff multi-order drop-off confirm recognizes without changing phase (#501 item 2)`() {
+        val r = rules.matchFirst(load("dropoff_multi_order_confirm/gopuff_multi_order_confirm.json"))
+        assertEquals("dropoff_multi_order_confirm", r?.intent)
+        assertNull("the multi-order confirm card is recognize-only — it must not perturb the dropoff phase", r?.flow)
+    }
+
+    @Test
+    fun `a regular multi-merchant drop-off confirm recognizes the same intent (#501 item 2, not GoPuff-specific)`() {
+        val r = rules.matchFirst(load("dropoff_multi_order_confirm/sprouts_multi_order_confirm.json"))
+        assertEquals("dropoff_multi_order_confirm", r?.intent)
+        assertNull("the multi-order confirm card is recognize-only — it must not perturb the dropoff phase", r?.flow)
+    }
+
+    /**
      * #501 item 3 — the GoPuff (Drive) zone-arrival CTA card, recognize-only (dev decision
      * 2026-07-07): no parse, no state.flow — nav is already established before this frame
      * appears, and its button is an affordance, not the arrival anchor (`pickup_steps`'s
