@@ -84,7 +84,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   getting skipped, is a regression — capture it. (The gas quick-edit sub-check is superseded by the
   mode-adaptive #722 item below — the plain stepper-tap-flips-mode UI this item originally described no
   longer exists in AUTO mode.)
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (07-07 on-device screenshot, post-reachability-fix: the idle card showed the TRUE
+    last session — the 07-05 **$0** dash, `$0.00 · 6.9 mi · ended 43h ago`, exactly matching
+    `session_records` — i.e. the primary $0-repro check passed: a $0 dash was NOT skipped for an
+    older moneyed one.)
   - Desk replay fixture: `~/dashbuddy/logs/2026/07/06/` (the 07-05 $0 session `session-doordash-1783294721320-15`).
 - **🆕 NEW — bubble gas quick-edit is mode-adaptive: refresh (AUTO) vs. Resume auto (MANUAL) (#722 / PR).**
   **Where to find it:** the idle dashboard card, shown whenever OFFLINE with no active dash (the
@@ -116,16 +119,10 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   a dash where delivered pay looks higher than the platform's own reported total (rare — usually a
   DoorDash shop/Drive job with an estimate involved), confirm the new callout fires with the correct
   dollar amount and that Net/hr, Net/mi, and the waterfall are unaffected.
-  - Confirmed: 0/2
-- **🆕 NEW — per-region lifecycle edges hold single-platform behavior (#438 B1 / PR #707).** The
-  state machine's job/task edges now fire off each platform's OWN last-acted flow instead of the
-  global screen flow (a latent multi-platform fix — single-platform behavior should be **byte
-  identical**). Watch that a normal DoorDash dash is unchanged: accepts still mint jobs **with
-  economics** (offer $ visible on the job/receipt), exactly one "Saved: $X" receipt bubble per
-  delivery, no spurious/premature completions, dash summary ends the session normally. Anything
-  that looks like a missing accept (job with no offer pay) or a doubled/missing completion is a
-  B1 regression — capture it.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (07-07 + 07-08 desk analysis: the negative path — all 5 moneyed sessions
+    reconciled EXACTLY (Σ delivered = reported), so no false callout was possible on either dash
+    and none was reported. The positive-fire path — a genuinely over-attributed dash — remains
+    unobserved; rare by nature.)
 - **🆕 NEW — offer lifecycle unchanged single-platform after the platform-owned-offers move (#438 B3 / PR).**
   Offers moved off the shared global screen slot onto each platform's own region (the concurrency
   fix), and the whole accept-stash mechanism was replaced by an owned accepted-pending-consumption
@@ -137,7 +134,11 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   logs the right outcome (Declined/Timed Out), and the #594 "Review offer→Accept after a committed
   decline" still stands as Declined. Any offer that fails to card/speak/notify, an accept that mints a
   **bare** job (no offer pay), or a wrong/absent outcome card is a B3 regression — capture it.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (07-07 + 07-08 desk analysis: the machine half — (4) accepts mint jobs WITH
+    economics (every delivery costed OFFER_FROZEN), (5) outcomes correct incl. a first-fielded
+    OFFER_TIMEOUT, and the Sonic+Willie's two-pickup stack minted both pickup placeholders —
+    clean on BOTH dashes. Second confirmation should be dev-eyes on (1)–(3): card visuals,
+    heads-up notification, TTS.)
 - **🆕 NEW — heads-up banner acts on the RIGHT offer (#438 B4 / PR).** Each offer's heads-up
   notification now has its own id + its own Accept/Decline intents (distinct per offer), so
   concurrent or fast-replacement offers no longer clobber one another. On a normal DoorDash dash,
@@ -163,7 +164,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   active-task display lags on the previous drop (today's build wrongly paused there). Miles that look
   far too low (odometer stuck paused through a drive) or a session-miles value that resets to ~0
   mid-dash is a B5 regression — capture it. (#438 B5 / PR)
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (07-07 + 07-08 desk analysis: partition deltas sane on every delivery — 5.9 mi
+    single-drop, 24.5 mi session-spanning — no stuck-paused zeros, no mid-dash reset, session
+    odometer deltas consistent. The "feels identical" + trip-odometer comparison needs dev eyes.)
 - **🆕 NEW — edit a delivery directly + cash tips (#688 phase A / PR).** In **Analytics → a dash →
   the delivery drill-down**, **tap a delivery row** (or its pencil) → the **Adjust delivery** dialog:
   Store name / Pay / Tip / Cash tip / Miles / Note. This replaces the pay-only editor and is the real
@@ -194,6 +197,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   **NOTE (expected, not a bug):** net for a receipt-less shop is now **pay − mileage cost**, which is
   **LOWER** than the old unattributed-callout number (that number was raw pay with no cost) — a lower,
   more honest figure is correct. (#691 / PR)
+  - Confirmed (mechanism): 1/2 — 07-08 desk analysis: first live firing. The H-E-B shop delivery
+    folded **payBasis OFFER_PAY at $14.25** (not a $0-unattributed row), session reconciled exactly.
+    The drill-down's "est. offer pay" qualifier display still needs dev eyes; (2)/(4)/(5) unexercised.
   - **(4) 🆕 UBER SCOPE (PR #702 round 2): Uber deliveries now show est. offer pay platform-wide.**
     Uber has no post-trip receipt rules at all (`uber.screen.post_trip` has no parse), so EVERY Uber
     delivery now folds an OFFER_PAY estimate (the platform-agnostic mechanism working as designed, P8).
@@ -1507,6 +1513,60 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - Confirmed: 0/2.
 
 ---
+
+## 2026-07-09 — desk analysis of the 07-07 & 07-08 dashes (pulled db/logs/captures; no in-field narration)
+
+- **Date:** 2026-07-09 (dashes analyzed: 07-07 afternoon/evening — 3 sessions; 07-08 evening — 3 sessions)
+- **Platform(s) tested:** DoorDash
+- **Branch under test:** 07-07 = `master` post-#726 (mode-adaptive gas build); 07-08 =
+  `fix/722-693-idle-gas-reachability` build (same + the idle-card reachability fix, merged as PR #729)
+- **Field conditions:** dev reported noticing nothing anomalous either dash; this entry is pure desk
+  synthesis of `~/dashbuddy/logs/2026/07/08` + `07/09` (db+WAL, logs, ~900 captures)
+
+### Bugs (all filed 07-09)
+
+1. **#731 — NotificationListener flapping.** 129 disconnect/reconnect cycles on 07-07, 240 on
+   07-08; bursts to 6/min. Each rebind is a notification-miss window.
+   - **Status:** Open (filed #731).
+2. **#732 — graced-commit seq/occurredAt inversion, 2nd sighting.** 07-07 seq 70/71 (DASH_STOP
+   appended before an earlier-occurredAt PICKUP_CONFIRMED); 07-08 seq 116/117 (Willie's
+   PICKUP_CONFIRMED occurredAt 19:24 appended after Sonic's 19:35 PICKUP_ARRIVED — an 11-min
+   inversion from the pickup-confirm grace). Not corrupting today (folds are seq-ordered), a
+   latent event-sourcing fidelity trap.
+   - **Status:** Open (filed #732).
+3. **#733 — D6 join miss → NULL-store delivery (TOP finding).** The Sonic Drive-In + Willie's
+   Grill & Icehouse two-pickup single-customer job ($19.50): the dropoff's customer hash matched
+   **0 of 2** pickup-lineage hashes ("possible pickup/dropoff hash-format drift" per the WARN,
+   ×23) → `delivery_records.storeName = NULL` → the $19.50 buckets under "Unknown store" in every
+   per-store view. Replay captures on disk (`dropoff_pre_arrival` 19:42:44 + both pickups).
+   - **Status:** Open (filed #733).
+4. **#734 — actuation 2-candidate label ties.** `confirm_decline` (×4) and `expand_earnings` (×3)
+   across the two dashes resolved 2 verified candidates and clicked the first. No observed
+   misfire, but a tie should abort to manual per the #425 posture.
+   - **Status:** Open (filed #734).
+
+### Validations (data-side)
+
+5. **#438 B1 retired here — 2/2.** Both dashes: accepts minted jobs with economics (every
+   delivery costed `OFFER_FROZEN`), exactly one `DELIVERY_COMPLETED` per drop, sessions ended
+   normally. Single-platform behavior byte-identical at the event-log level.
+6. **#691 OFFER_PAY estimate — first live firing, correct.** 07-08 receipt-less H-E-B shop folded
+   `payBasis OFFER_PAY` at $14.25; session reconciled exactly.
+7. **Reconciliation exact on all 5 moneyed sessions** across both dashes (Σ delivered = reported:
+   $104.47 / $32.24 / $14.25 / $19.50; two $0 sessions clean) — no false #701 callout possible.
+8. **#605 MODE_RESUME_COMMIT** debounced a real pause cleanly (07-08 16:25 DASH_PAUSED).
+9. **Pipeline health:** 0 restarts, 0 mapping failures, sensitive gate dropped 23–24 frames/dash,
+   UNKNOWN captured for triage (163 on 07-08 — ~65 window frames to sort).
+
+### Open questions / investigations
+
+10. **The 07-07 15:43 picked-up-then-dash-ended $21.75 H-E-B order.** Confirmed from captures:
+    pickup confirmed 15:43:18, `end_dash_confirm` dialog 15:43:30, DASH_STOP 15:43:44 — no
+    delivery leg. The dasher then started a new dash 15:54 and accepted a *different-priced*
+    H-E-B offer ($32.24, delivered 17:09). **Question for the dev:** was the $21.75 order
+    unassigned/returned, or delivered off-app, or was the $32.24 the same order re-offered?
+    Determines whether a "stranded across dash-restart" tracking gap exists (#527/#274 family).
+    Second occurrence of the shape (07-05 `320-15` was the first).
 
 ## 2026-07-05 — DoorDash session (afternoon/evening dash; desk synthesis 07-06 from db/logs/captures)
 
