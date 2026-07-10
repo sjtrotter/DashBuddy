@@ -39,6 +39,38 @@ class StoreKeysTest {
         assertEquals("h-e-b", StoreKeys.normalizedChain("H-E-B"))
     }
 
+    @Test
+    fun `normalizedChain strips only the LAST dash suffix, keeping a brand's internal dash (FIX 5a)`() {
+        // A brand whose name contains " - " keeps its brand core when a location is appended — the strip
+        // is trailing-only (last occurrence), never a split at the FIRST " - ".
+        assertEquals("roli - poli", StoreKeys.normalizedChain("Roli - Poli - Alamo Ranch"))
+        // The single-dash location case still reduces to the brand.
+        assertEquals("maple street biscuit", StoreKeys.normalizedChain("Maple Street Biscuit - Alamo Ranch"))
+    }
+
+    @Test
+    fun `normalizedChain strips stacked qualifiers to stability (FIX 5b)`() {
+        assertEquals("panda express", StoreKeys.normalizedChain("Panda Express (Loop 410) - San Antonio"))
+    }
+
+    @Test
+    fun `normalizedChain strips the pipe delimiter so a merchant string cannot forge a key segment (FIX 5c)`() {
+        assertEquals("foo bar", StoreKeys.normalizedChain("foo|bar"))
+        // Forgery is impossible: a chain carrying the delimiter can't collide with a chain+key split.
+        val forged = StoreKeys.storeKey("p", StoreKeys.normalizedChain("foo|bar"), StoreKeys.normalizeRunningKey(null))
+        val real = StoreKeys.storeKey("p", StoreKeys.normalizedChain("foo"), StoreKeys.normalizeRunningKey("bar|"))
+        assert(forged != real) { "delimiter-stripped chains/keys cannot forge a colliding storeKey" }
+    }
+
+    @Test
+    fun `normalizedChain falls back to the unstripped form for an all-qualifier input (FIX 5d)`() {
+        // An all-qualifier name would strip to empty; the fallback keeps distinct names distinct instead
+        // of merging them into an empty `platform||` bucket.
+        assertEquals("(0164-0045)", StoreKeys.normalizedChain("(0164-0045)"))
+        assertEquals("#161", StoreKeys.normalizedChain("#161"))
+        assert(StoreKeys.normalizedChain("(0164-0045)") != StoreKeys.normalizedChain("#161"))
+    }
+
     // ── extractRunningKey (D4 hardening + F7 precedence) ────────────────
 
     @Test
