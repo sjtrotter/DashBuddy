@@ -389,6 +389,40 @@
       }
     },
     {
+      "comment": "#501 item 2 — the DoorDash multi-order drop-off CONFIRMATION card ('Confirm you have the correct order before drop-off' / 'Mix-ups frequently occur at drop-off when there are multiple orders in a Dash.'), shown before a drop when a Dash carries multiple orders. It appears for BOTH a GoPuff (Drive) warehouse batch AND an ordinary multi-merchant grocery batch — the two committed corpus frames are a GoPuff drop and a Sprouts drop, so this is NOT GoPuff-specific (it's the generic DoorDash multi-order confirm). RECOGNIZE-ONLY (dev decision 2026-07-07, same posture as pickup_wait_survey / the item-3 pickup_zone_arrival rule): no state.flow, no parse — the task:dropoff:navigation flow is already established before this transient modal appears and the card is a confirmation, not a lifecycle anchor, so recognizing it only graduates the frame out of UNKNOWN (silencing the recurring capture) without any risk of a double-mint or phase perturbation. Anchors are unique to this card (grep of the corpus shows no other snapshot carries them), so priority is behaviorally inert. PRIVACY: the card carries an id-LESS customer-name line (first-name + last-initial, e.g. 'Brandon C') that no other control covers — it has no viewId (so the by-id redact misses it) and no 'Deliver to '/'Message from ' marker (so CustomerTextMarkers misses it, the documented split-node residual). The redact below masks it by SHAPE so the recognized capture envelope is PII-clean at the edge (#598); the store name (merchant, driver-owned) and warehouse zone code are kept. The two committed corpus frames were redacted the SAME way by SnapshotRedactor's matching FIRST_LAST_INITIAL masker (#501 item 1).",
+      "id": "doordash.screen.dropoff_multi_order_confirm",
+      "priority": 77,
+      "redact": [
+        {
+          "comment": "The id-less first-name + last-initial customer name. Whole-value anchored (^...$) so it masks ONLY the bare name node, never the multi-word merchant anchor, the zone code, a count, or the 'Confirm ...'/'Mix-ups ...' copy.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^[A-Z][a-z]{1,20}( [A-Z][a-z]{1,20}){0,3} [A-Z]\\.?$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "correct order before drop-off"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Mix-ups frequently occur at drop-off"
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "doordash.screen.dropoff_pre_arrival",
       "priority": 73,
       "redact": [

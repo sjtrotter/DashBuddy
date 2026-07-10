@@ -73,6 +73,19 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — GoPuff / multi-order drop-off confirm card recognized (#501 items 1-2 / this PR).**
+  The "Confirm you have the correct order before drop-off / Mix-ups frequently occur…" card that
+  appears before a drop on a **multi-order Dash** (GoPuff Drive batches AND ordinary multi-merchant
+  grocery batches) is now a recognized screen (`dropoff_multi_order_confirm`) instead of falling to
+  UNKNOWN. It's recognize-only (no state change) — its only job is to stop hitting the UNKNOWN
+  capture folder. **How to tell it's working (desk-side, after a multi-order dash):** the
+  `Confirm…correct order before drop-off` frames should NO LONGER appear under
+  `captures/.../accessibility.window/UNKNOWN/`; they should sort into
+  `accessibility.window/dropoff_multi_order_confirm/`, and the redacted capture must show the
+  customer name line masked (`[redacted:...]`), with the store name + item count kept. Completes
+  #501 (all 3 items). This is the last recognition piece of #501; watch that it doesn't perturb the
+  dropoff flow (no phantom re-mint around the confirm card).
+  - Confirmed: 0/2
 - **🆕 NEW — store entity resolution keys real stores from live dashes (#159 / PR).**
   The read-model now resolves each job's stores (`stores` + `pickup_records` tables) from captured
   pickup/dropoff/payout surfaces. **How to tell it's working (desk-side, after a dash):** on a job with a

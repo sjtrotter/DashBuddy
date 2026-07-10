@@ -77,6 +77,19 @@ object SnapshotRedactor {
      * or "$15.15 Guaranteed"; requires a capitalized street word, not a unit/count.
      */
     private val BARE_STREET = Regex("""^\d{2,6}\s+[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z0-9.'-]+){0,3}$""")
+    /**
+     * An **id-less first-name + last-initial** customer name line, e.g. "Brandon C" / "Gilberto U."
+     * — the shape on the multi-order drop-off confirm card (#501), whose name node ships **no
+     * viewId** so it escapes [PII_ID_SUFFIXES] and carries **no** "Deliver to "/"Message from "
+     * marker so the [NAME_PREFIXES] pass and the runtime CustomerTextMarkers backstop both miss it
+     * (the documented split-node residual). Whole-value anchored so it can't eat a multi-word
+     * merchant anchor ("SPROUTS FARMERS MARKET #118"), a warehouse zone code ("SAT_San-Antonio_187"),
+     * or a count ("2 items"): first name(s) are `Capitalized` words, the last token is a single
+     * capital letter (optionally with a period). Masking a shape this specific is the privacy-safe
+     * direction — a rare over-mask (a "Word X" UI label) is caught by the diff review + the
+     * [GoldenSnapshotRegressionTest] anchor guard; leaking a customer name is the dangerous one.
+     */
+    private val FIRST_LAST_INITIAL = Regex("""^[A-Z][a-z]{1,20}(?: [A-Z][a-z]{1,20}){0,3} [A-Z]\.?$""")
     private val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
     /** A quoted free-text customer note, e.g. "Corner House, please leave at door." — customer-entered, mask whole. */
     private val QUOTED_NOTE = Regex(""""[^"]{6,}"""")
@@ -149,6 +162,10 @@ object SnapshotRedactor {
         // A whole-value bare street line ("7610 Flecthers") with no recognized suffix — mask outright
         // before the token-level passes, so a residual unsuffixed street can't leak.
         if (BARE_STREET.matches(text.trim())) return "[address]"
+        // A whole-value id-less first-name + last-initial customer name ("Brandon C") — the
+        // multi-order drop-off confirm card residual (#501). Whole-value, so it fires only on a
+        // node that IS just the name, never on a longer line that merely contains one.
+        if (FIRST_LAST_INITIAL.matches(text.trim())) return MASK
         var t = text
         t = EMAIL.replace(t, "[email]")
         t = PHONE.replace(t, "[phone]")
