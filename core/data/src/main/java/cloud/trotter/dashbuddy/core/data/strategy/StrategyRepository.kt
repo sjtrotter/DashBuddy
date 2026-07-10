@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.MerchantAction
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
+import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -174,24 +175,25 @@ class StrategyRepository @Inject constructor(
         protectStatsMode,
         allowShopping,
         appPreferencesRepository.userEconomy,
-        dataSource.learnedShopRate,
-    ) { rules, protect, shop, economy, shopRate ->
+        dataSource.learnedShopRates,
+    ) { rules, protect, shop, economy, shopRates ->
         EvaluationConfig(
             protectStatsMode = protect,
             rules = rules,
             allowShopping = shop,
-            // #556: fold the learned shopping pace into the economy here (it lives in the strategy
-            // store, not the user-economy store, so it's never reseeded by a vehicle-class change).
-            userEconomy = economy.copy(
-                learnedShopItemsPerMinute = shopRate.itemsPerMin,
-                shopRateSampleCount = shopRate.sampleCount,
-            ),
+            userEconomy = economy,
+            // #588: carry the per-platform learned pace; the offer's own platform selects its entry at
+            // eval time via EvaluationConfig.forPlatform (a DoorDash-learned pace can no longer price an
+            // Instacart shop). It lives in the strategy store, not the user-economy store, so it's never
+            // reseeded by a vehicle-class change (#556).
+            shopRates = shopRates,
         )
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
 
-    /** #556: fold a completed shop's measured pace into the learned overall items/min (atomic). */
-    suspend fun recordShopRate(items: Int, minutes: Double) = dataSource.recordShopRate(items, minutes)
+    /** #556/#588: fold a completed shop's measured pace into [platform]'s learned items/min (atomic). */
+    suspend fun recordShopRate(platform: Platform, items: Int, minutes: Double) =
+        dataSource.recordShopRate(platform, items, minutes)
 
     suspend fun clearPreferences() {
         Timber.w("Clearing Strategy Preferences")

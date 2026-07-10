@@ -79,9 +79,13 @@ class SettingsViewModel @Inject constructor(
             payAmount = pay,
             distanceMiles = miles,
             itemCount = 5, // Default average workload
-            orders = emptyList()
+            orders = emptyList() // non-shop by construction (no SHOP order) — never exercises shop pace
         )
 
+        // #588: intentionally NOT calling evaluationConfig.value.forPlatform(...) — this simulator has
+        // no platform to resolve against. Safe only because fakeOffer is never a shop offer (see
+        // EvaluationConfig.userEconomy KDoc); a shop-capable simulator would need to pick a platform
+        // and call forPlatform() first, or it would silently price off seed-only shop pace.
         val currentConfig = evaluationConfig.value
         return offerEvaluator.evaluate(fakeOffer, currentConfig)
     }

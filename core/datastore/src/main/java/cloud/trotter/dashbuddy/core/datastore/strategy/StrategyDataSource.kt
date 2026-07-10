@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.core.datastore.di.StrategyPreferences
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
 import cloud.trotter.dashbuddy.domain.evaluation.ShopRate
+import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.InternalSerializationApi
@@ -47,12 +48,24 @@ class StrategyDataSource @Inject constructor(
         val PROTECT_STATS_MODE = booleanPreferencesKey("protect_stats_mode")
         val ALLOW_SHOPPING = booleanPreferencesKey("allow_shopping")
 
-        // #556: learned overall shopping pace (running mean items/min + sample count). Not a
-        // user-set economy field — a measured value, kept here so a vehicle-class reseed never
-        // touches it; folded into the evaluator's UserEconomy by StrategyRepository.
-        val LEARNED_SHOP_RATE = doublePreferencesKey("learned_shop_items_per_min")
-        val SHOP_RATE_SAMPLES = intPreferencesKey("shop_rate_sample_count")
     }
+
+    // #588: learned shopping pace, now keyed **per platform** (was a single global pair — a
+    // DoorDash-learned pace could price an Instacart/Uber shop and pollute the shared mean). Not a
+    // user-set economy field — a measured value, kept in the strategy store so a vehicle-class reseed
+    // never touches it; folded into the evaluator's UserEconomy by StrategyRepository. The keys derive
+    // from the registry [Platform.wire], so a new platform needs zero datastore change (P8).
+    private fun shopRateKey(platform: Platform) =
+        doublePreferencesKey("learned_shop_items_per_min:${platform.wire}")
+    private fun shopSamplesKey(platform: Platform) =
+        intPreferencesKey("shop_rate_sample_count:${platform.wire}")
+
+    // #588 FIX 3b: the pre-#588 GLOBAL un-suffixed keys (one shared mean before shop-rate learning
+    // went per-platform). Deliberately DROPPED, not migrated (#588 design decision — an old global
+    // mean isn't reliably any one platform's pace, so it's discarded rather than guessed onto one).
+    // Kept here only so [recordShopRate] can tidy them off disk; no reader ever consults them again.
+    private val legacyGlobalShopRateKey = doublePreferencesKey("learned_shop_items_per_min")
+    private val legacyGlobalShopSamplesKey = intPreferencesKey("shop_rate_sample_count")
 
     val evidenceMaster: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_MASTER] ?: EvidenceConfig.DEFAULT_MASTER }
     val evidenceOffers: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_OFFERS] ?: EvidenceConfig.DEFAULT_SAVE_OFFERS }
@@ -88,23 +101,37 @@ class StrategyDataSource @Inject constructor(
     val protectStatsMode: Flow<Boolean> = ds.data.map { it[Keys.PROTECT_STATS_MODE] ?: false }
     val allowShopping: Flow<Boolean> = ds.data.map { it[Keys.ALLOW_SHOPPING] ?: true }
 
-    /** #556: the learned overall shopping pace + how many shops back it (null pace until first sample). */
-    val learnedShopRate: Flow<LearnedShopRate> = ds.data.map {
-        LearnedShopRate(it[Keys.LEARNED_SHOP_RATE], it[Keys.SHOP_RATE_SAMPLES] ?: 0)
+    /**
+     * #588: the learned shopping pace per platform (running mean items/min + sample count). A platform
+     * with no recorded shops is omitted from the map — the eval seam ([EvaluationConfig.forPlatform])
+     * owns the per-platform seed fallback, so a missing entry is the seed, never another platform's
+     * rate.
+     */
+    val learnedShopRates: Flow<Map<Platform, LearnedShopRate>> = ds.data.map { prefs ->
+        Platform.entries.mapNotNull { platform ->
+            val avg = prefs[shopRateKey(platform)]
+            val n = prefs[shopSamplesKey(platform)] ?: 0
+            if (avg == null && n == 0) null else platform to LearnedShopRate(avg, n)
+        }.toMap()
     }
 
     /**
-     * #556: fold one measured shop ([items] over [minutes] in-store) into the running mean, atomically
-     * (read-modify-write inside one edit, so back-to-back stacked shops can't race). Out-of-band
-     * samples (below the [ShopRate] floors) are no-ops.
+     * #556/#588: fold one measured shop ([items] over [minutes] in-store) into [platform]'s running
+     * mean, atomically (read-modify-write inside one edit, so back-to-back stacked shops can't race).
+     * Out-of-band samples (below the [ShopRate] floors) are no-ops. Only [platform]'s key pair moves.
      */
-    suspend fun recordShopRate(items: Int, minutes: Double) {
+    suspend fun recordShopRate(platform: Platform, items: Int, minutes: Double) {
         ds.edit { p ->
-            val (avg, n) = ShopRate.fold(p[Keys.LEARNED_SHOP_RATE], p[Keys.SHOP_RATE_SAMPLES] ?: 0, items, minutes)
+            val (avg, n) = ShopRate.fold(p[shopRateKey(platform)], p[shopSamplesKey(platform)] ?: 0, items, minutes)
             if (avg != null) {
-                p[Keys.LEARNED_SHOP_RATE] = avg
-                p[Keys.SHOP_RATE_SAMPLES] = n
+                p[shopRateKey(platform)] = avg
+                p[shopSamplesKey(platform)] = n
             }
+            // #588 FIX 3b: one-time tidy — drop the old un-suffixed global keys now that shop-rate
+            // learning is per-platform. Idempotent (a no-op once they're gone); rides the next fold
+            // rather than a dedicated migration step since a fold happens on every real shop anyway.
+            p.remove(legacyGlobalShopRateKey)
+            p.remove(legacyGlobalShopSamplesKey)
         }
     }
 

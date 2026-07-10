@@ -43,6 +43,15 @@ data class UserEconomy(
     /** Number of measured shops behind [learnedShopItemsPerMinute]; gates trusting it (#556). */
     val shopRateSampleCount: Int = 0,
 
+    /**
+     * The cold-start seed pace (items/min) for the offer's platform (#588), used until this platform
+     * has its own [MIN_SHOP_SAMPLES] measured shops. Resolved from [ShopRateSeeds] by
+     * [EvaluationConfig.forPlatform] at eval time; defaults to the generic corpus median off-config so
+     * a hand-built economy (and every existing test) behaves exactly as before. Keeps the seed
+     * per-platform without widening [OfferEvaluator]'s signature.
+     */
+    val shopSeedItemsPerMin: Double = DEFAULT_SHOP_ITEMS_PER_MIN,
+
     // Maintenance (paired: cost + interval/lifetime). Defaults are zero so a
     // hand-constructed UserEconomy is cost-free for tests. Production paths
     // populate these from the VehicleClass preset via the repository.
@@ -106,13 +115,14 @@ data class UserEconomy(
     val operatingCostPerMile: Double get() = fuelCostPerMile + nonFuelCostPerMile
 
     /**
-     * Items/minute for the Shop & Deliver time estimate (#556): the learned overall pace once
-     * [MIN_SHOP_SAMPLES] shops have been measured, else the data-derived seed. Always > 0.
+     * Items/minute for the Shop & Deliver time estimate (#556): the learned pace once
+     * [MIN_SHOP_SAMPLES] shops have been measured for this platform, else this platform's
+     * [shopSeedItemsPerMin] seed (#588). Always > 0.
      */
     val effectiveShopItemsPerMinute: Double
         get() = learnedShopItemsPerMinute
             ?.takeIf { shopRateSampleCount >= MIN_SHOP_SAMPLES && it > 0.0 }
-            ?: DEFAULT_SHOP_ITEMS_PER_MIN
+            ?: shopSeedItemsPerMin
 
     fun isUserSet(field: EconomyField): Boolean = field in userSetFields
 
