@@ -11,7 +11,7 @@ data class LearnedShopRate(val itemsPerMin: Double?, val sampleCount: Int)
  * estimate falls back to that platform's seed here — a DoorDash-learned pace can never seed an
  * Instacart / Uber shop, and vice-versa.
  *
- * Today only DoorDash carries a bespoke corpus-derived entry (0.8/min, 48 real shops, 2026-06); every
+ * Today only DoorDash carries a bespoke corpus-derived entry ([DOORDASH_CORPUS_SEED]); every
  * other platform resolves to [DEFAULT]. The value is **data, not logic** — the shape is
  * `Map<Platform, Double>`, so a second platform's measured seed (Instacart bin-scan / staging overhead
  * differs) drops in as one map entry, never a `when (platform)`. This is the same `(platform, …)`
@@ -19,12 +19,24 @@ data class LearnedShopRate(val itemsPerMin: Double?, val sampleCount: Int)
  */
 object ShopRateSeeds {
 
-    /** Generic fallback pace for a platform with no bespoke seed; equals the DoorDash corpus median. */
-    const val DEFAULT: Double = UserEconomy.DEFAULT_SHOP_ITEMS_PER_MIN
+    /**
+     * DoorDash's own measured corpus seed — median 0.79 (rounded to 0.8), IQR 0.66–0.92, across 48
+     * real shops in the 2026-06 capture corpus (#556). This is the ONE anchor for that fact; every
+     * other constant/comment that wants "the DoorDash corpus seed" should point here, not
+     * re-declare the literal.
+     */
+    const val DOORDASH_CORPUS_SEED: Double = 0.8
+
+    /**
+     * Generic fallback pace for a platform with no bespoke seed of its own. Today this simply
+     * ADOPTS [DOORDASH_CORPUS_SEED] wholesale — the only measured corpus we have — not because a
+     * non-DoorDash shop is known to pace the same; it's a placeholder fallback until that platform
+     * earns its own bespoke, independently-measured entry (#588).
+     */
+    const val DEFAULT: Double = DOORDASH_CORPUS_SEED
 
     private val byPlatform: Map<Platform, Double> = mapOf(
-        // DoorDash: median 0.79 (IQR 0.66–0.92) across 48 real shops, 2026-06 capture corpus (#556).
-        Platform.DoorDash to UserEconomy.DEFAULT_SHOP_ITEMS_PER_MIN,
+        Platform.DoorDash to DOORDASH_CORPUS_SEED,
     )
 
     /** The seed pace for [platform] — its bespoke corpus entry, else the generic [DEFAULT]. */

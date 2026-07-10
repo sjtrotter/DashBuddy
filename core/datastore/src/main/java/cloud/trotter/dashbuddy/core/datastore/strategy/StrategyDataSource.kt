@@ -60,6 +60,13 @@ class StrategyDataSource @Inject constructor(
     private fun shopSamplesKey(platform: Platform) =
         intPreferencesKey("shop_rate_sample_count:${platform.wire}")
 
+    // #588 FIX 3b: the pre-#588 GLOBAL un-suffixed keys (one shared mean before shop-rate learning
+    // went per-platform). Deliberately DROPPED, not migrated (#588 design decision — an old global
+    // mean isn't reliably any one platform's pace, so it's discarded rather than guessed onto one).
+    // Kept here only so [recordShopRate] can tidy them off disk; no reader ever consults them again.
+    private val legacyGlobalShopRateKey = doublePreferencesKey("learned_shop_items_per_min")
+    private val legacyGlobalShopSamplesKey = intPreferencesKey("shop_rate_sample_count")
+
     val evidenceMaster: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_MASTER] ?: EvidenceConfig.DEFAULT_MASTER }
     val evidenceOffers: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_OFFERS] ?: EvidenceConfig.DEFAULT_SAVE_OFFERS }
     val evidenceDelivery: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DELIVERY] ?: EvidenceConfig.DEFAULT_SAVE_DELIVERIES }
@@ -120,6 +127,11 @@ class StrategyDataSource @Inject constructor(
                 p[shopRateKey(platform)] = avg
                 p[shopSamplesKey(platform)] = n
             }
+            // #588 FIX 3b: one-time tidy — drop the old un-suffixed global keys now that shop-rate
+            // learning is per-platform. Idempotent (a no-op once they're gone); rides the next fold
+            // rather than a dedicated migration step since a fold happens on every real shop anyway.
+            p.remove(legacyGlobalShopRateKey)
+            p.remove(legacyGlobalShopSamplesKey)
         }
     }
 

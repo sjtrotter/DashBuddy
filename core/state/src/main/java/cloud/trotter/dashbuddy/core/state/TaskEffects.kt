@@ -327,6 +327,11 @@ private fun EffectMap.pickupConfirmedEffects(
     )
     // #556: a completed SHOP pickup feeds the learned items/min. In-store time is measured
     // arrived→confirmed (the 0.8/min seed basis); the handler floors out noise.
+    // Residual (pre-existing #556 exposure, traced during #588 review): a #736-style unassigned
+    // shop (a few items measured, then unassign) can still fold one garbage pace sample here once
+    // the close-out sweep (pickupConfirmSweepEffects, above) fires for a job that never reached
+    // dropoff. Mitigated today by MIN_SHOP_SAMPLES=5 diluting a single bad sample, and expected to
+    // tighten once #736's unassignedAt guard lands — see #736.
     val shopItems = prevTask.itemsShopped ?: 0
     val shopArrivedAt = prevTask.arrivedAt
     if (prevTask.activity == PickupActivity.SHOPPING && shopItems > 0 && shopArrivedAt != null) {

@@ -157,10 +157,15 @@ class EffectMapTest {
         sessionId: String? = "sess-1",
         activeTask: Task? = null,
         recentTasks: List<Task> = emptyList(),
+        // Defaults to DoorDash (matches every pre-existing call site); a non-default platform lets a
+        // test prove a platform value was genuinely THREADED from region.platform rather than
+        // hardcoded, since Platform.DoorDash can't distinguish "read from the region" from "hardcoded"
+        // (see the #588 shop-rate tests below).
+        platform: Platform = Platform.DoorDash,
     ): Pair<Platform, PlatformRegion> {
         val session = sessionId?.let { Session(it, startedAt = 100L) }
-        return Platform.DoorDash to PlatformRegion(
-            platform = Platform.DoorDash,
+        return platform to PlatformRegion(
+            platform = platform,
             mode = mode,
             session = session,
             activeTask = activeTask,
@@ -1043,8 +1048,12 @@ class EffectMapTest {
     }
 
     @Test
-    fun `a completed SHOP pickup emits RecordShopRate with measured items and duration (#556)`() {
-        val (platform, _) = stateWithPlatform()
+    fun `a completed SHOP pickup emits RecordShopRate with measured items and duration (#556, #588)`() {
+        // #588 review: this MUST be a non-DoorDash platform. `stateWithPlatform()`'s old DoorDash
+        // default made `rec.platform == DoorDash` an A==A tautology that stays green even if
+        // TaskEffects hardcoded Platform.DoorDash instead of reading region.platform — Instacart
+        // proves the value is genuinely threaded.
+        val (platform, _) = stateWithPlatform(platform = Platform.Instacart)
         val session = Session("sess-1", startedAt = 100L)
         val arrivedAt = 100_000L
         val confirmAt = arrivedAt + 30 * 60_000L  // 30 min in-store → 24 items = 0.8/min
@@ -1078,8 +1087,51 @@ class EffectMapTest {
         assertEquals(platform, rec.platform)
         assertEquals(
             "the sample is idempotent per platform-scoped pickup task",
-            "shop_rate:doordash:task-1", rec.effectKey,
+            "shop_rate:instacart:task-1", rec.effectKey,
         )
+    }
+
+    @Test
+    fun `a SHOP pickup that closes WITHOUT ever reaching a dropoff mints RecordShopRate via the #596 close-out sweep (#556, #588)`() {
+        // Coverage gap the #588 review flagged: the test above only drives the pickup→dropoff edge
+        // (TaskEffects.diffTask calling pickupConfirmSweepEffects). A pickup-only job that closes
+        // without ever reaching a dropoff — an unassign mid-shop is the #736 case this pattern
+        // shares — is instead confirmed by the SEPARATE close-out sweep in
+        // DeliveryCompletionEffects.diffDeliveryCompletion. Proves RecordShopRate fires from THAT
+        // site too, again on a non-DoorDash platform so platform threading is a real assertion.
+        val (platform, _) = stateWithPlatform(platform = Platform.Instacart)
+        val session = Session("sess-1", startedAt = 100L)
+        val arrivedAt = 100_000L
+        val closedAt = arrivedAt + 10 * 60_000L  // 10 min in-store → 5 items = 0.5/min
+        val job = Job("job-shop", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 900L)
+        val shopPickup = Task(
+            taskId = "task-shop-1", jobId = "job-shop", phase = TaskPhase.PICKUP, storeName = "Trader Joe's",
+            activity = PickupActivity.SHOPPING, itemsShopped = 5, arrivedAt = arrivedAt, startedAt = 900L,
+        )
+        val prev = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.TaskPickupArrived),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session, activeJob = job, activeTask = shopPickup,
+            )),
+        ))
+        // The job closes WITHOUT ever reaching a dropoff — activeJob clears, the pickup is displaced
+        // into recentTasks (completed, never a dropoff task on this job at all).
+        val next = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.Idle),
+            platforms = mapOf(platform to PlatformRegion(
+                platform, mode = Mode.Online, session = session, activeJob = null, activeTask = null,
+                recentTasks = listOf(shopPickup.copy(completedAt = closedAt)),
+            )),
+        ))
+
+        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle, timestamp = closedAt))
+
+        val rec = effects.filterIsInstance<AppEffect.RecordShopRate>().single()
+        assertEquals(5, rec.itemsShopped)
+        assertEquals(10 * 60_000L, rec.shopDurationMs)
+        assertEquals("task-shop-1", rec.taskId)
+        assertEquals("the close-out sweep threads THIS region's platform too (#588)", platform, rec.platform)
+        assertEquals("shop_rate:instacart:task-shop-1", rec.effectKey)
     }
 
     @Test

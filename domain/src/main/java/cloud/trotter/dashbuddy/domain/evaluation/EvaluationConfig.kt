@@ -9,6 +9,16 @@ data class EvaluationConfig(
     val protectStatsMode: Boolean = false,
     val rules: List<ScoringRule> = emptyList(),
     val allowShopping: Boolean = true,
+    /**
+     * #588: **unresolved** shop-pace fields until [forPlatform] runs. [shopRates] is per-platform, so
+     * a raw [EvaluationConfig] can't know which platform's learned pace/seed belongs in
+     * [UserEconomy.learnedShopItemsPerMinute] / [UserEconomy.shopSeedItemsPerMin] — those fields on
+     * THIS [userEconomy] are whatever the last [forPlatform] call (if any) stamped, which for a
+     * freshly-constructed/raw config is the domain default seed, not any platform's real pace. A
+     * consumer that scores a SHOP offer against the raw config (skipping [forPlatform]) silently gets
+     * seed-only pricing — see `SettingsViewModel.simulateOffer`, which is safe today only because its
+     * simulated offer is never a shop offer.
+     */
     val userEconomy: UserEconomy = UserEconomy(),
     /**
      * #588: the learned shopping pace **per platform** — an offer's own platform selects its entry at
@@ -25,6 +35,10 @@ data class EvaluationConfig(
      * the returned economy mean "the resolved pair for this offer's platform", which is exactly what the
      * single evaluator consumer already reads. A platform with no samples yields its seed, never
      * another platform's learned rate (even one past the trust gate).
+     *
+     * **Contract:** call this before scoring ANY shop offer. Skipping it (evaluating against the raw
+     * [userEconomy]) is not an error — it just means shop-pace fields are whatever they were on this
+     * config already (seed-only for a freshly-built one), never a platform's real learned pace.
      */
     fun forPlatform(platform: Platform): EvaluationConfig {
         val learned = shopRates[platform]

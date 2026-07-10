@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.core.datastore.strategy
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import cloud.trotter.dashbuddy.domain.evaluation.ShopRate
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CoroutineScope
@@ -79,5 +82,28 @@ class StrategyDataSourceShopRateTest {
         advanceUntilIdle()
 
         assertTrue("no entry from noise", src.learnedShopRates.first().isEmpty())
+    }
+
+    @Test
+    fun `the old un-suffixed GLOBAL keys are dropped, not migrated onto any platform (#588 FIX 3a)`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val ds = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(dispatcher + Job()),
+            produceFile = { File(tmp.root, "strategy3.preferences_pb") },
+        )
+        // Seed the pre-#588 GLOBAL pair directly — as if this datastore file predates the
+        // per-platform migration and still carries the old shared mean.
+        ds.edit { p ->
+            p[doublePreferencesKey("learned_shop_items_per_min")] = 0.8
+            p[intPreferencesKey("shop_rate_sample_count")] = 12
+        }
+        advanceUntilIdle()
+
+        val src = StrategyDataSource(ds)
+        assertTrue(
+            "the design decision is DROP, not migrate — the old global pair must not surface " +
+                "under DoorDash or any other platform",
+            src.learnedShopRates.first().isEmpty(),
+        )
     }
 }
