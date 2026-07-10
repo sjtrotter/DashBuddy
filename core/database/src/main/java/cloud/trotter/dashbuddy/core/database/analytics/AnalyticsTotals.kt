@@ -66,19 +66,29 @@ data class PlatformDeliveryTotalsRow(
 )
 
 /**
- * Per-store delivery totals grouped on the resolved `storeKey` (#159 — was raw `storeName`). One row
- * per (storeKey, storeName) group; [storeKey] is null for an unresolved row, which the repository
- * re-folds by the shared `normalizedChain(storeName)` (F9). [storeName] is a representative raw form
- * of the group (arbitrary for a keyed multi-form group — the display name comes from `stores`).
+ * Per-(storeKey, storeName, platform) delivery totals (#159 F9 raw input). [storeKey] is null for an
+ * unresolved row; [platform] lets the repository fold every row to `platform + "|" + normalizedChain`
+ * (chain from the storeKey's middle segment when keyed, else the normalizer over [storeName]), merging
+ * a resolved keyed location and its unresolved chain form into ONE bucket. [storeName] is a
+ * representative raw form of the group (the display name prefers `stores.chainDisplay`).
  */
 data class StoreTotalsRow(
     val storeKey: String?,
     val storeName: String?,
+    val platform: String,
     val pay: Double,
     val net: Double,
     val deliveries: Int,
     /** Σ driver-entered cash tips for the store's period rows (#688) — see [DeliveryTotalsRow.cash]. */
     val cash: Double,
+)
+
+/** First-observed chain-display capitalization per (platform, normalizedChain) — the F9 rollup's
+ *  display-name source (#159). */
+data class StoreChainDisplayRow(
+    val platform: String,
+    val normalizedChain: String,
+    val chainDisplay: String,
 )
 
 /**

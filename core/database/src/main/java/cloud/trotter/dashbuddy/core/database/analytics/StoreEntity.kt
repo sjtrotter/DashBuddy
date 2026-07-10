@@ -10,10 +10,12 @@ import androidx.room.PrimaryKey
  * has been observed and coexists with keyed rows once one is learned. Reads that want chain-level
  * rollups group by [normalizedChain]; reads that want per-location detail group by [storeKey].
  *
- * No stats columns (D1): pickup/delivery counts, dwell, p50/p95 are all **derived at read time** by
- * `GROUP BY` over `pickup_records` / `delivery_records` (SSOT — and percentiles can't be folded
- * incrementally anyway). The one denormalization kept is [firstSeenAt]/[lastSeenAt] (cheap,
- * deterministic, saves a MIN/MAX join on every list read).
+ * No stats columns (D1): pickup/delivery counts, dwell, p50/p95 — AND first/last-seen (FIX 3) — are all
+ * **derived at read time** by `GROUP BY` / `MIN`/`MAX` over `pickup_records` / `delivery_records` (SSOT;
+ * percentiles can't be folded incrementally anyway). first/last-seen were briefly denormalized columns
+ * here, but per-trigger resolution rewrote every store row of a job on every trigger (churning Room
+ * observers mid-dash) and the values diverged between an incremental fold and a batch-split refold, so
+ * they were removed — the report-card query derives them with a read-time MIN/MAX over the visit rows.
  *
  * Store names/addresses are **MERCHANT** data, not customer PII — fine at rest, never in INFO+ logs
  * (P7). No customer hashes live here.
@@ -46,7 +48,4 @@ data class StoreEntity(
     val payoutNameForm: String?,
     /** First-observed non-null store address (enriched `PickupPayload`; null for all historical rows). */
     val address: String?,
-    /** Maintained by the fold from `obs`-derived event timestamps (never wall clock). */
-    val firstSeenAt: Long,
-    val lastSeenAt: Long,
 )

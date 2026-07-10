@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 12,
-    "identityHash": "9721699725291acd1b698dc5916b3c4f",
+    "identityHash": "ef72ae74f079bf1e63ce89b439fb2343",
     "entities": [
       {
         "tableName": "app_events",
@@ -912,7 +912,7 @@
       },
       {
         "tableName": "stores",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`storeKey` TEXT NOT NULL, `platform` TEXT NOT NULL, `normalizedChain` TEXT NOT NULL, `chainDisplay` TEXT NOT NULL, `runningKey` TEXT, `offerNameForm` TEXT, `pickupNameForm` TEXT, `payoutNameForm` TEXT, `address` TEXT, `firstSeenAt` INTEGER NOT NULL, `lastSeenAt` INTEGER NOT NULL, PRIMARY KEY(`storeKey`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`storeKey` TEXT NOT NULL, `platform` TEXT NOT NULL, `normalizedChain` TEXT NOT NULL, `chainDisplay` TEXT NOT NULL, `runningKey` TEXT, `offerNameForm` TEXT, `pickupNameForm` TEXT, `payoutNameForm` TEXT, `address` TEXT, PRIMARY KEY(`storeKey`))",
         "fields": [
           {
             "fieldPath": "storeKey",
@@ -962,18 +962,6 @@
             "fieldPath": "address",
             "columnName": "address",
             "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "firstSeenAt",
-            "columnName": "firstSeenAt",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "lastSeenAt",
-            "columnName": "lastSeenAt",
-            "affinity": "INTEGER",
-            "notNull": true
           }
         ],
         "primaryKey": {
@@ -1109,7 +1097,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9721699725291acd1b698dc5916b3c4f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ef72ae74f079bf1e63ce89b439fb2343')"
     ]
   }
 }

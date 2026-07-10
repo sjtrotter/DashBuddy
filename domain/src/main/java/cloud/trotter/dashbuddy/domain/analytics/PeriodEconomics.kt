@@ -66,18 +66,19 @@ data class PeriodEconomics(
 }
 
 /**
- * Per-store economics for a period (#314/#159) — grouped on the resolved [storeKey], falling back to
- * the shared `normalizedChain(storeName)` for unresolved rows (#159 F9). [gross] is Σ realized delivery
- * pay (+ cash) for the store; [net] is Σ frozen delivery net (+ cash). [storeName] is a representative
- * raw form of the group (the richer chain/location display lives on [StoreReportCard]); [storeKey] is
- * null for an unresolved (chain-folded) bucket.
+ * Per-**chain** economics for a period (#314/#159 F9) — the top-stores list, rolled up to the chain
+ * level: both a resolved keyed location and its unresolved/MANUAL raw form on the same platform fold
+ * into one bucket. [gross] is Σ realized delivery pay (+ cash) for the chain; [net] is Σ frozen delivery
+ * net (+ cash). [storeName] is the chain's display name (first-observed `stores.chainDisplay`, else a
+ * representative raw form). Per-LOCATION detail lives on [StoreReportCard]; this is the chain rollup.
  */
 data class StoreEconomics(
     val storeName: String?,
     val net: Double,
     val gross: Double,
     val deliveries: Int,
-    /** The resolved entity key (#159); null for an unresolved row folded by normalizedChain (F9). */
+    /** The chain-level bucket identity `platform + "|" + normalizedChain` (#159 F9) — NOT a
+     *  per-location storeKey (that granularity is [StoreReportCard]). */
     val storeKey: String? = null,
 )
 

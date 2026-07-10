@@ -135,6 +135,12 @@ data class DeliveryRecordEntity(
      * reads the running keys from ROWS (never a trigger event), keeping every store keyed and the key
      * monotonic across a payout-less re-run. Merchant strings — fine at rest, never an INFO+ log
      * surface (P7).
+     *
+     * **Named residual (FIX 13):** these strings come from the receipt-partition heuristic
+     * (`parsedPay.customerTips[].type`) and are merchant-shaped ONLY under the fielded DoorDash receipt.
+     * A future/unfielded platform that itemizes tips *per customer* would land customer-shaped text here,
+     * so any consumer that ever surfaces this column (a CSV/UI export) MUST scrub it — it is not
+     * guaranteed to be merchant-only for every platform. No consumer exports it today.
      */
     val payoutStoreForms: String? = null,
     /**

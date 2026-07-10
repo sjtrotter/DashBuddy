@@ -106,33 +106,40 @@ class AnalyticsRepository @Inject constructor(
         }
 
     /**
-     * Per-store economics for [period], highest-**gross** store first — frozen net + realized gross.
-     * Cash tips (#688 F5) are added to BOTH gross and net (`gross = realized pay + cash`, `net =
-     * frozen net + cash`) — explicit adds here, mirroring the period-level locked accounting.
+     * Per-store economics for [period], highest-**gross** store first — frozen net + realized gross,
+     * rolled up to CHAIN level (#159 F9). Both a resolved keyed location (`…|target|02426`) and an
+     * unresolved/MANUAL raw row (`Target`) on the same platform fold into ONE bucket keyed
+     * `platform + "|" + normalizedChain` (chain from the storeKey's middle segment when keyed, else the
+     * shared `:domain` normalizer over `storeName`). This is the F9 sentence — "Target" (unresolved) and
+     * "doordash|target|02426" share a bucket — the cross-platform parity (F5), and the fix for multiple
+     * identical-"Target" rows fragmenting the list. Per-LOCATION detail stays the report card's job
+     * ([storeReportCards], grouped by `storeKey`).
      *
-     * **Cash-inclusive ordering (F8):** the DAO's `ORDER BY pay DESC` is a cash-free **stable
-     * pre-sort**; the final rank is re-sorted here by the cash-inclusive [StoreEconomics.gross] so a
-     * cash-heavy store isn't ranked below a lower-gross one whose cash the SQL sort key ignored. The
-     * repository owns the mapped-value ordering because cash is added here, not in SQL (Principle 5 —
-     * one owner for the gross number, one owner for the sort that uses it).
+     * Display name prefers the chain's first-observed `stores.chainDisplay` (a single extra reactive DAO
+     * read), else the first row's raw `storeName`.
      *
-     * **Null-net + cash presentation:** a store whose only row has a null frozen `net` (no cost basis)
-     * but a recorded `cashTip` surfaces as `net = 0 + cash` — i.e. "net = cash". Accepted: cash has no
-     * cost term to net out, so the driver-attested cash IS the honest net contribution of that row.
+     * Cash tips (#688 F5) add to BOTH gross and net (explicit adds here, per the locked accounting). The
+     * DAO's `ORDER BY pay DESC` is a cash-free pre-sort; the final rank is re-sorted here by the
+     * cash-inclusive [StoreEconomics.gross].
+     *
+     * **Null-net + cash presentation:** a bucket whose rows all have a null frozen `net` (no cost basis)
+     * but a recorded `cashTip` surfaces as `net = 0 + cash`. Accepted: cash has no cost term to net out.
      */
     fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
-            analyticsDao.deliveryTotalsByStore(start, end).map { rows ->
-                // #159 F9: fold the DAO's (storeKey, storeName) groups onto ONE entity per resolved
-                // storeKey; an unresolved row (storeKey null) folds by the shared
-                // `normalizedChain(storeName)` so `"Target"` and `"…|target|02426"` don't fragment as a
-                // raw-text entry. The representative storeName is the group's first row.
-                rows.groupBy { it.storeKey ?: StoreKeys.normalizedChain(it.storeName.orEmpty()) }
-                    .map { (_, group) ->
+            combine(
+                analyticsDao.deliveryTotalsByStore(start, end),
+                analyticsDao.storeChainDisplays(),
+            ) { rows, displays ->
+                val displayByBucket = displays.associate {
+                    (it.platform + "|" + it.normalizedChain) to it.chainDisplay
+                }
+                rows.groupBy { chainBucket(it) }
+                    .map { (bucket, group) ->
                         val first = group.first()
                         StoreEconomics(
-                            storeKey = first.storeKey,
-                            storeName = first.storeName,
+                            storeKey = bucket, // chain-level bucket identity (not a per-location storeKey)
+                            storeName = displayByBucket[bucket] ?: first.storeName,
                             net = group.sumOf { it.net + it.cash },
                             gross = group.sumOf { it.pay + it.cash },
                             deliveries = group.sumOf { it.deliveries },
@@ -140,6 +147,14 @@ class AnalyticsRepository @Inject constructor(
                     }.sortedByDescending { it.gross }
             }
         }
+
+    /** The F9 chain bucket for a store totals row: `platform + "|" + normalizedChain`, chain taken from
+     *  the storeKey's middle segment when keyed, else the shared `:domain` normalizer over storeName. */
+    private fun chainBucket(row: cloud.trotter.dashbuddy.core.database.analytics.StoreTotalsRow): String {
+        val chain = row.storeKey?.split("|")?.getOrNull(1)?.takeIf { it.isNotEmpty() }
+            ?: StoreKeys.normalizedChain(row.storeName.orEmpty())
+        return row.platform + "|" + chain
+    }
 
     /**
      * The store report cards (#159, the #315 Patterns tab) — one per **referenced** resolved store
