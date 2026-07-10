@@ -27,11 +27,14 @@ import cloud.trotter.dashbuddy.domain.state.StoreKeys
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.ceil
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -208,12 +211,15 @@ class AnalyticsRepository @Inject constructor(
      * rate = Σnet ÷ Σhours with a coverage mask) — this repository stays DAO-only and holds no second
      * copy of that math (Principle 5).
      *
-     * **Lifetime-scoped** (no period): the tab is rate-based and hides the period. **Timezone:** cells
-     * are bucketed in [zone] (the device zone by default; injectable for a fixed-zone test) — a timezone
-     * move re-buckets history, acceptable since driver-local patterns are the point. No economy
-     * dependency (net is the frozen stored value); no new PII surface (aggregate net + time only).
+     * **Lifetime-scoped** (no period): the tab is rate-based and hides the period. **Timezone:**
+     * [zoneProvider] is evaluated **per emission** inside the combine (not captured once at flow
+     * construction), so a timezone move re-buckets history on the very next projector commit — the
+     * device zone by default; a fixed-zone supplier is injected in tests. The apportionment + union is
+     * off-main ([Dispatchers.Default]) since it iterates the 168-cell grid; [distinctUntilChanged]
+     * suppresses re-emitting an identical grid on an unrelated Room invalidation. No economy dependency
+     * (net is the frozen stored value); no new PII surface (aggregate net + time only).
      */
-    fun earningsHeatmap(zone: ZoneId = ZoneId.systemDefault()): Flow<EarningsHeatmap> =
+    fun earningsHeatmap(zoneProvider: () -> ZoneId = { ZoneId.systemDefault() }): Flow<EarningsHeatmap> =
         combine(
             analyticsDao.sessionSpans(),
             analyticsDao.deliveryNets(),
@@ -221,9 +227,9 @@ class AnalyticsRepository @Inject constructor(
             EarningsHeatmapCalculator.compute(
                 spans = spans.map { SessionSpan(it.startMillis, it.endMillis) },
                 deliveries = nets.map { DeliveryNet(it.completedAt, it.netDollars) },
-                zone = zone,
+                zone = zoneProvider(),
             )
-        }
+        }.flowOn(Dispatchers.Default).distinctUntilChanged()
 
     /**
      * Offer-decision economics for [period] (#315 H3, Decisions tab): the funnel counts, the frozen

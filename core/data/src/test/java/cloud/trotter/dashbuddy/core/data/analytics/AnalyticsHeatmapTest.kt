@@ -113,7 +113,7 @@ class AnalyticsHeatmapTest {
         dao.upsertSession(session("A", mon0 + 10 * hour, endedAt = mon0 + 11 * hour, lastEventAt = mon0 + 11 * hour))
         dao.upsertDelivery(delivery(1, "A", completedAt = mon0 + 10 * hour + 30 * minute, netProfit = 20.0, cashTip = 5.0))
 
-        val h = repo.earningsHeatmap(utc).first()
+        val h = repo.earningsHeatmap { utc }.first()
         val cell = h.cell(0, 10)
         assertEquals(1.0, cell.coverageHours, 1e-9)
         assertEquals(25.0, cell.netDollars, 1e-9)   // 20 frozen net + 5 cash
@@ -129,7 +129,7 @@ class AnalyticsHeatmapTest {
         dao.upsertSession(session("B", mon0 + 24 * hour + 14 * hour, endedAt = null, lastEventAt = mon0 + 24 * hour + 15 * hour))
         dao.upsertDelivery(delivery(2, "B", completedAt = mon0 + 24 * hour + 14 * hour + 30 * minute, netProfit = null, cashTip = 3.0))
 
-        val h = repo.earningsHeatmap(utc).first()
+        val h = repo.earningsHeatmap { utc }.first()
         val cell = h.cell(1, 14) // Tuesday 14:00
         assertEquals(1.0, cell.coverageHours, 1e-9)   // fell back to lastEventAt, not 0
         assertEquals(3.0, cell.netDollars, 1e-9)       // cash only (null frozen net → 0)
@@ -140,7 +140,7 @@ class AnalyticsHeatmapTest {
     @Test
     fun `no session coverage masks every cell`() = runBlocking {
         dao.upsertDelivery(delivery(3, "Z", completedAt = mon0 + 3 * hour, netProfit = 9.0))
-        val h = repo.earningsHeatmap(utc).first()
+        val h = repo.earningsHeatmap { utc }.first()
         assertNull(h.cell(0, 3).dollarsPerHour)
         assertTrue(h.cells.none { it.dollarsPerHour != null })
     }
