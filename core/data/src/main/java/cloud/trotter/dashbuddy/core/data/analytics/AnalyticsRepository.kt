@@ -8,11 +8,15 @@ import cloud.trotter.dashbuddy.core.database.analytics.SessionTotalsRow
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
+import cloud.trotter.dashbuddy.domain.analytics.DeliveryNet
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
+import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
+import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
@@ -193,6 +197,32 @@ class AnalyticsRepository @Inject constructor(
                     lastSeenAt = r.lastSeenAt,
                 )
             }
+        }
+
+    /**
+     * The driver's own realized net **$/hr by hour-of-week** (#159/#315 H5, Patterns heatmap) — a 7×24
+     * grid of *their own* earning experience, never a platform-pay claim. Combines the two lifetime DAO
+     * reads: session spans ([AnalyticsDao.sessionSpans], the coverage denominator) and delivery nets
+     * ([AnalyticsDao.deliveryNets], the numerator). The apportionment math is the pure `:domain`
+     * [EarningsHeatmapCalculator] (span → fractional hour cells, net → the cell of its `completedAt`,
+     * rate = Σnet ÷ Σhours with a coverage mask) — this repository stays DAO-only and holds no second
+     * copy of that math (Principle 5).
+     *
+     * **Lifetime-scoped** (no period): the tab is rate-based and hides the period. **Timezone:** cells
+     * are bucketed in [zone] (the device zone by default; injectable for a fixed-zone test) — a timezone
+     * move re-buckets history, acceptable since driver-local patterns are the point. No economy
+     * dependency (net is the frozen stored value); no new PII surface (aggregate net + time only).
+     */
+    fun earningsHeatmap(zone: ZoneId = ZoneId.systemDefault()): Flow<EarningsHeatmap> =
+        combine(
+            analyticsDao.sessionSpans(),
+            analyticsDao.deliveryNets(),
+        ) { spans, nets ->
+            EarningsHeatmapCalculator.compute(
+                spans = spans.map { SessionSpan(it.startMillis, it.endMillis) },
+                deliveries = nets.map { DeliveryNet(it.completedAt, it.netDollars) },
+                zone = zone,
+            )
         }
 
     /**

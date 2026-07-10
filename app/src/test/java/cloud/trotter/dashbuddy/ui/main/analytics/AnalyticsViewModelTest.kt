@@ -4,10 +4,12 @@ import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
+import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +23,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -38,6 +41,18 @@ import org.mockito.kotlin.whenever
 class AnalyticsViewModelTest {
 
     private val analyticsRepository: AnalyticsRepository = mock()
+
+    /**
+     * The Patterns-tab sources (#315 H5) are LIFETIME-scoped and collected unconditionally in the
+     * combine, so every test must supply them or the combine folds a null Flow. They're period-
+     * independent, so a single default stub covers all tests (the Patterns behavior has its own
+     * repository/domain tests).
+     */
+    @Before
+    fun stubPatternsSources() {
+        whenever(analyticsRepository.storeReportCards()).thenReturn(flowOf(emptyList<StoreReportCard>()))
+        whenever(analyticsRepository.earningsHeatmap(anyOrNull())).thenReturn(flowOf(EarningsHeatmap.EMPTY))
+    }
 
     private fun stubPeriod(
         period: AnalyticsPeriod,

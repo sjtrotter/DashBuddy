@@ -218,8 +218,6 @@
     <!-- main/analytics/AnalyticsScreen.kt -->
     <string name="analytics_screen_title">Analytics</string>
     <string name="analytics_screen_content_desc_export_csv">Export data (CSV)</string>
-    <string name="analytics_screen_coming_soon_title">%1$s — coming soon</string>
-    <string name="analytics_screen_coming_soon_desc">This tab lands in a later Analytics phase.</string>
 
     <!-- setup/permissions/PermissionCard.kt -->
     <string name="permission_card_content_desc_privacy">Privacy</string>
@@ -370,6 +368,27 @@
     <string name="time_tab_margin_late_format">typically %1$s late</string>
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
     <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
+
+    <!-- main/analytics/PatternsTab.kt (#315 H5) -->
+    <string name="patterns_tab_heatmap_title">YOUR NET $/HR BY HOUR</string>
+    <string name="patterns_tab_heatmap_caption">your own realized net $/hr, by hour and day — where your time actually pays. Lifetime.</string>
+    <string name="patterns_tab_heatmap_no_data">Not enough dashing yet to show a pattern. Dash a few more hours and your best times will fill in here.</string>
+    <string name="patterns_tab_heatmap_best_format">Your best hour so far: %1$s — %2$s/hr</string>
+    <string name="patterns_tab_heatmap_legend_low">lower</string>
+    <string name="patterns_tab_heatmap_legend_high">higher</string>
+    <string name="patterns_tab_heatmap_legend_insufficient">too little time</string>
+    <string name="patterns_tab_stores_title">YOUR STORES</string>
+    <string name="patterns_tab_no_stores">No stores visited yet.</string>
+    <string name="patterns_tab_location_unknown">location unknown</string>
+    <string name="patterns_tab_stats_partial">per-location stats partial — blends every %1$s you\'ve visited on payout-less jobs</string>
+    <string name="patterns_tab_store_pickups_label">Pickups</string>
+    <string name="patterns_tab_store_deliveries_label">Deliveries</string>
+    <string name="patterns_tab_store_gross_label">Gross</string>
+    <string name="patterns_tab_store_net_label">Net</string>
+    <string name="patterns_tab_store_dwell_format">dwell avg %1$s · median %2$s · p95 %3$s</string>
+    <string name="patterns_tab_store_dwell_partial_suffix"> (partial)</string>
+    <string name="patterns_tab_store_dwell_none">no pickup dwell recorded yet</string>
+    <string name="patterns_tab_store_seen_format">first %1$s · last %2$s</string>
 
     <!-- setup/wizard/WizardScreen.kt -->
     <string name="wizard_screen_goal_option1_title">Cherry Picker</string>

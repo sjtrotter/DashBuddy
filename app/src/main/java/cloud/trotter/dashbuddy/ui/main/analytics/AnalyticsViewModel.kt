@@ -25,7 +25,9 @@ import javax.inject.Inject
  * [AnalyticsUiState] (Principle 1 — UDF). Over the read-model repository surface:
  * `periodEconomics` (frozen-net totals), `perStoreEconomics` (top stores), `recentSessions`
  * (recent dashes), `decisionEconomics` (H3 funnel/verdicts), and `timeEconomics` (H4 time/mileage) —
- * every source session-anchored (#655) via the DAO join, which owns the bucketing.
+ * every *period* source session-anchored (#655) via the DAO join, which owns the bucketing. The
+ * Patterns tab's `storeReportCards` (#159) + `earningsHeatmap` (H5) are LIFETIME-scoped and sit
+ * outside the period `flatMapLatest`, so a period switch never re-queries them.
  *
  * Reactive by construction: every source is a Room-invalidation `Flow`, so the tiles re-emit
  * as the projector folds each delivery and at midnight/week/month rollover (the boundary
@@ -66,7 +68,11 @@ class AnalyticsViewModel @Inject constructor(
             }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
-    ) { tab, data, sessions ->
+        // The Patterns tab (H5, #159) is LIFETIME-scoped by design — its sources sit OUTSIDE the
+        // period flatMapLatest so switching the Money/Decisions/Time period never re-queries them.
+        analyticsRepository.storeReportCards(),
+        analyticsRepository.earningsHeatmap(),
+    ) { tab, data, sessions, storeCards, heatmap ->
         AnalyticsUiState(
             selectedTab = tab,
             selectedPeriod = data.period,
@@ -76,6 +82,8 @@ class AnalyticsViewModel @Inject constructor(
             decisions = data.decisions,
             time = data.time,
             dailyEarnings = data.dailyEarnings,
+            storeReportCards = storeCards,
+            earningsHeatmap = heatmap,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState())
 

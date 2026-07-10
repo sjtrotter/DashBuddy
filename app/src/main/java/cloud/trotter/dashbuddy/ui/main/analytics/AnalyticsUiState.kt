@@ -3,15 +3,16 @@ package cloud.trotter.dashbuddy.ui.main.analytics
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
+import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 
 /**
- * The Analytics hub tabs (#315). [Money], [Decisions] (H3), and [Time] (H4) render real content;
- * [Patterns] (H5) still ships as the real tab-bar structure with a "coming soon" placeholder so it
- * slots in without reshaping navigation.
+ * The Analytics hub tabs (#315). [Money], [Decisions] (H3), [Time] (H4), and [Patterns] (H5) all
+ * render real content.
  */
 enum class AnalyticsTab(val label: String) {
     Money("Money"),
@@ -50,4 +51,14 @@ data class AnalyticsUiState(
     val decisions: DecisionEconomics = DecisionEconomics.EMPTY,
     /** Time / mileage economics for [selectedPeriod] — the Time tab (#315 H4, measured). */
     val time: TimeEconomics = TimeEconomics.EMPTY,
+    /**
+     * Per-store report cards — the Patterns tab (#315 H5, #159), newest-visited first. **Lifetime-scoped**,
+     * NOT period-filtered: the Patterns tab hides the period selector (it is rate/pattern-based).
+     */
+    val storeReportCards: List<StoreReportCard> = emptyList(),
+    /**
+     * The driver's own realized net $/hr by hour-of-week — the Patterns tab heatmap (#315 H5).
+     * Lifetime-scoped (no period). Empty grid until data accrues.
+     */
+    val earningsHeatmap: EarningsHeatmap = EarningsHeatmap.EMPTY,
 )
