@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
+import androidx.annotation.StringRes
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
@@ -20,12 +22,16 @@ internal const val EMPTY_VALUE = "—"
 /**
  * The Analytics hub tabs (#315). [Money], [Decisions] (H3), [Time] (H4), and [Patterns] (H5) all
  * render real content.
+ *
+ * [labelRes] is a `@StringRes` id (#428 Half A), resolved at the Compose layer — see
+ * `AnalyticsScreen.tabOptions()`. The [AppSegmented][cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented]
+ * selection there is keyed off the enum itself, never the resolved label string.
  */
-enum class AnalyticsTab(val label: String) {
-    Money("Money"),
-    Patterns("Patterns"),
-    Decisions("Decisions"),
-    Time("Time"),
+enum class AnalyticsTab(@StringRes val labelRes: Int) {
+    Money(R.string.analytics_tab_money),
+    Patterns(R.string.analytics_tab_patterns),
+    Decisions(R.string.analytics_tab_decisions),
+    Time(R.string.analytics_tab_time),
 }
 
 /**

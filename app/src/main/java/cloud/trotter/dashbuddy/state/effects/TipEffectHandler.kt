@@ -1,9 +1,12 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import android.content.Context
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -13,7 +16,8 @@ import javax.inject.Singleton
 
 @Singleton
 class TipEffectHandler @Inject constructor(
-    private val bubbleManager: BubbleManager
+    private val bubbleManager: BubbleManager,
+    @param:ApplicationContext private val context: Context,
 ) {
 
     fun process(scope: CoroutineScope, effect: AppEffect.ProcessTipNotification) {
@@ -26,7 +30,11 @@ class TipEffectHandler @Inject constructor(
                     "Tip received: %s from %s", Formats.money(effect.amount), effect.storeName,
                 )
                 bubbleManager.postMessage(
-                    text = "Nice! ${Formats.money(effect.amount)} tip from ${effect.storeName}",
+                    text = context.getString(
+                        R.string.tip_effect_chat_message,
+                        Formats.money(effect.amount),
+                        effect.storeName,
+                    ),
                     persona = ChatPersona.Dispatcher
                 )
             } catch (e: Exception) {

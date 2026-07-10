@@ -75,6 +75,10 @@ android {
     }
 
     testOptions {
+        // Robolectric needs the compiled app resources (not just the SDK's) to resolve a
+        // @StringRes id via a real Context — e.g. AnalyticsTabTest's resolved-label guard (#428).
+        // Without this, Context.getString() throws Resources.NotFoundException in a unit test.
+        unitTests.isIncludeAndroidResources = true
         unitTests.all { test ->
             test.jvmArgs("-XX:+EnableDynamicAgentLoading")
 

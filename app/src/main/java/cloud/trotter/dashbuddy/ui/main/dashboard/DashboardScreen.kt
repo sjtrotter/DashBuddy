@@ -141,7 +141,7 @@ fun DashboardScreen(
                 // entry tiles, and a manual bubble trigger.
                 else -> {
                     StatusCard(
-                        title = uiState.statusText,
+                        title = stringResource(uiState.statusText),
                         subtitle = if (uiState.isDashing) stringResource(R.string.dashboard_screen_dashing_subtitle)
                         else stringResource(R.string.dashboard_screen_ready_subtitle),
                         containerColor = MaterialTheme.colorScheme.primaryContainer
