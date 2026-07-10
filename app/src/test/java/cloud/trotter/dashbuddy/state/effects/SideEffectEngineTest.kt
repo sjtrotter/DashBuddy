@@ -781,6 +781,7 @@ class SideEffectEngineTest {
         try {
             engine.process(
                 AppEffect.RecordShopRate(
+                    platform = Platform.DoorDash,
                     itemsShopped = 24,
                     shopDurationMs = 18 * 60_000L,
                     storeName = "H-E-B",
@@ -793,6 +794,8 @@ class SideEffectEngineTest {
             // The shareable INFO stream carries the pace math but never the merchant name.
             tree.assertNoInfoPlusContains("H-E-B")
             tree.assertLevelContains(Log.INFO, "24 items")
+            // #588: the platform wire is a registry token (PII-safe) and rides the INFO milestone.
+            tree.assertLevelContains(Log.INFO, "doordash")
             // The DEBUG firehose still names the store.
             tree.assertLevelContains(Log.DEBUG, "H-E-B")
         } finally {

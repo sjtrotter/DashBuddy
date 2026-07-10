@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.state.Platform
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -57,6 +58,36 @@ class ShopTimeModelTest {
         val cold = economy.copy(learnedShopItemsPerMinute = 1.0, shopRateSampleCount = 2) // below floor
         assertEquals(UserEconomy.DEFAULT_SHOP_ITEMS_PER_MIN, cold.effectiveShopItemsPerMinute, 0.0)
         assertEquals(UserEconomy.DEFAULT_SHOP_ITEMS_PER_MIN, economy.effectiveShopItemsPerMinute, 0.0)
+    }
+
+    @Test
+    fun `forPlatform resolves a platform with no samples to its seed, never another platform's learned rate (#588)`() {
+        // DoorDash is well past the trust gate at a fast learned pace; Instacart has no samples.
+        val cfg = config.copy(
+            shopRates = mapOf(
+                Platform.DoorDash to LearnedShopRate(itemsPerMin = 2.0, sampleCount = UserEconomy.MIN_SHOP_SAMPLES + 3),
+            ),
+        )
+
+        // DoorDash resolves to its own learned pace.
+        assertEquals(2.0, cfg.forPlatform(Platform.DoorDash).userEconomy.effectiveShopItemsPerMinute, 0.0)
+
+        // Instacart — absent from the map — resolves to the SEED, never DoorDash's 2.0/min.
+        val ic = cfg.forPlatform(Platform.Instacart).userEconomy
+        assertEquals(ShopRateSeeds.seedFor(Platform.Instacart), ic.effectiveShopItemsPerMinute, 0.0)
+        assertEquals(0, ic.shopRateSampleCount)
+    }
+
+    @Test
+    fun `forPlatform selects each platform's own learned mean independently (#588)`() {
+        val cfg = config.copy(
+            shopRates = mapOf(
+                Platform.DoorDash to LearnedShopRate(0.8, UserEconomy.MIN_SHOP_SAMPLES),
+                Platform.Instacart to LearnedShopRate(1.5, UserEconomy.MIN_SHOP_SAMPLES),
+            ),
+        )
+        assertEquals(0.8, cfg.forPlatform(Platform.DoorDash).userEconomy.effectiveShopItemsPerMinute, 0.0)
+        assertEquals(1.5, cfg.forPlatform(Platform.Instacart).userEconomy.effectiveShopItemsPerMinute, 0.0)
     }
 
     @Test

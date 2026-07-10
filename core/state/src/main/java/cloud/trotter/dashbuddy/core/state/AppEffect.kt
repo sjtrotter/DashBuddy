@@ -127,13 +127,16 @@ sealed class AppEffect {
      * re-observed confirm can't double-count (mirrors the #518 DELIVERY_COMPLETED keying).
      */
     data class RecordShopRate(
+        val platform: Platform,
         val itemsShopped: Int,
         val shopDurationMs: Long,
         val storeName: String?,
         val jobId: String,
         val taskId: String,
     ) : AppEffect() {
-        override val effectKey: String get() = "shop_rate:$taskId"
+        // #588: platform-namespaced dedup key — a per-platform learned rate; the taskId is
+        // per-platform-unique already, the wire prefix keeps the namespace disjoint (mirrors #438-B4).
+        override val effectKey: String get() = "shop_rate:${platform.wire}:$taskId"
     }
     /**
      * Evaluate the pending offer. [offerHash] rides the async round-trip so the result
