@@ -9,8 +9,16 @@ corrections) drove the row-sourced key + pinned corrections. Pass 3's B2 HIGH (p
 extraction discarded sibling-store keys in a stack — the Target+Maple case) drove persisting the
 **full receipt** store-form set on the row + all-anchor matching. All findings in the resolution
 table at the bottom; pass 3 declared H1 + M1–M5 + L1–L2 converged. **Note (tiering):** the
-design/vet loop ran at the Opus fallback tier because Fable was unavailable this session; a Fable
-confirmation pass before build is the ideal, per the project's reserve-Fable-for-design policy.
+design/vet loop ran at the Opus fallback tier because Fable was unavailable this session.
+**Fable confirmation pass: DONE 2026-07-09 — CONFIRMED, build-ready.** The converged design was
+re-verified at the reserved tier against the code (fold transaction shape, payload carriage,
+resolver behavior): resolve-from-rows holds against the projector's real per-batch structure; the
+row-sourced `payoutStoreForms` makes resolution monotonic and refold-deterministic; the pin
+composes with re-stamping and with the receipt evidence (a pinned drop's `payoutStoreForms` still
+keys its siblings). Three checklist-grade notes were folded into the body: the pin predicate is
+delivery-records-only (step 3), no-op re-stamps should value-compare to avoid Room invalidation
+churn (step 3), and the same-chain-two-locations-in-one-job collapse is a named inherited residual
+(Key determinism §).
 **Blocks:** #315 Patterns tab (store report card). **Related:** #554 (shadow projector, the
 design proof), #526-family (stacked attribution), #655 (session-anchored bucketing), #314
 (read-model), #688/#691/#703 (fold provenance).
@@ -219,9 +227,12 @@ per batch, same watermark. No second projector, no second watermark, **no new fo
      name forms kept, `lastSeenAt` advanced from `obs.timestamp`. The key is monotonic by
      construction now (row-sourced), so the running key never regresses.
    - **`UPDATE storeKey` onto the job's `pickup_records` + `delivery_records` by
-     `jobId`/`taskId`, `WHERE storeKeyPinned = 0`** — an upgrade re-stamp (chain-only→keyed)
-     overwrites the prior key, but a driver-pinned row (H1) is skipped and keeps its
-     `normalizedChain` grouping.
+     `jobId`/`taskId`** — an upgrade re-stamp (chain-only→keyed) overwrites the prior key. The
+     pin predicate (`WHERE storeKeyPinned = 0`, H1) applies to the **`delivery_records` UPDATE
+     only** — `pickup_records` has no pin column (pins come from `DELIVERY_ADJUSTMENT`, which
+     targets delivery rows); don't write one shared UPDATE against both tables. Guard both
+     UPDATEs with a value-compare (`AND (storeKey IS NULL OR storeKey != :new)`) so a no-op
+     re-run doesn't rewrite identical rows and churn Room invalidation on every trigger.
    - Stamp `offer_records.storeKey` + `linkedJobId` on the matched offer (offer link below, F4).
    - **No orphan chain-only rows (M4):** when a re-stamp upgrades a job's rows from
      `platform|chain|` to `platform|chain|key`, the chain-only `stores` row is left referenced by
@@ -295,6 +306,12 @@ The `storeKey` must be a pure, stable function of the resolved surfaces or refol
 - **Accepted residual (no alias table, D2):** a store whose payout form flips between
   `(02426)`-style and ` - Area`-style across sessions forks into two entities. Named, not fixed —
   a phase-2 alias table (or the OTA lookup) is the home for cross-form unification.
+- **Accepted residual (inherited from the shadow resolver):** two different locations of the
+  SAME chain in ONE job (two "H-E-B" pickups in a stack) collapse to one anchor — the resolver
+  anchors on *distinct* pickup store names — so at most one running key attaches and the other
+  location's visits share it (or stay chain-only). Parity with the field-verified
+  `StoreChainProjector` is preserved (it has the same shape); unfielded so far; a fix would need
+  per-task (not per-name) anchoring — phase 2 if it ever fields.
 
 ### Store-name correction interplay (F2 + H1)
 
