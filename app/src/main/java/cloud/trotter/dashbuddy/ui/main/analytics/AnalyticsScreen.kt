@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -27,14 +26,12 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
-import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 
 /**
- * The Analytics hub (#315). Money / Decisions / Time all render real content; Patterns (H5) still
- * shows a "coming soon" card. A **review** surface: UDF state in, `setTab`/`setPeriod` intents out
+ * The Analytics hub (#315). Money / Decisions / Time / Patterns (H5) all render real content. A
+ * **review** surface: UDF state in, `setTab`/`setPeriod` intents out
  * (Principle 1); reactive-fresh via the read-model Flows, no `rememberNow()` tick (a historical
  * period's figures are fixed).
  *
@@ -125,7 +122,11 @@ fun AnalyticsScreen(
                     TimeTab(time = uiState.time, period = uiState.selectedPeriod)
                 }
 
-                AnalyticsTab.Patterns -> ComingSoonCard(uiState.selectedTab)
+                // Patterns (H5) is LIFETIME-scoped (rate/pattern-based) — deliberately NO period selector.
+                AnalyticsTab.Patterns -> PatternsTab(
+                    storeCards = uiState.storeReportCards,
+                    heatmap = uiState.earningsHeatmap,
+                )
             }
         }
     }
@@ -157,21 +158,4 @@ private fun PeriodSelector(
         },
         modifier = Modifier.fillMaxWidth(),
     )
-}
-
-@Composable
-private fun ComingSoonCard(tab: AnalyticsTab) {
-    AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.analytics_screen_coming_soon_title, tab.label),
-            style = MaterialTheme.typography.titleMedium,
-            color = AppTheme.colors.text,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.analytics_screen_coming_soon_desc),
-            style = MaterialTheme.typography.bodyMedium,
-            color = AppTheme.colors.text3,
-        )
-    }
 }

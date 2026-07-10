@@ -32,8 +32,6 @@ import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
-/** Placeholder shown for a figure with no measurable input yet (Money/Decisions-tab parity). */
-private const val EMPTY_VALUE = "—"
 
 /**
  * Time tab (#315 H4): the measured time / mileage review for the selected period, top→bottom — the

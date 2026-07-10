@@ -26,8 +26,6 @@ import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
 import cloud.trotter.dashbuddy.domain.format.Formats
 import kotlin.math.roundToInt
 
-/** Placeholder shown for a figure with no measurable input yet (Money-tab parity). */
-private const val EMPTY_VALUE = "—"
 
 /**
  * Decisions tab (#315 H3): the frozen-decision review for the selected period, top→bottom — the

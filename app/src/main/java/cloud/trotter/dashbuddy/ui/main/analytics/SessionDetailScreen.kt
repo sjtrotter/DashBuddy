@@ -57,8 +57,6 @@ import kotlin.math.roundToInt
 /** Below this the unattributed pay is effectively zero — no callout (avoids a "$0.00" flag). */
 private const val UNATTRIBUTED_EPSILON = 0.005
 
-/** Placeholder shown for a figure that has no measurable value yet (dashboard parity). */
-private const val EMPTY_VALUE = "—"
 
 /**
  * The read-only per-dash drill-down (#650 PR A): one dash expanded top→bottom — a header card

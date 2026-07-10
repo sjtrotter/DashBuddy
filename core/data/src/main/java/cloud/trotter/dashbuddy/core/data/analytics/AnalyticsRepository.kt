@@ -8,11 +8,15 @@ import cloud.trotter.dashbuddy.core.database.analytics.SessionTotalsRow
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
+import cloud.trotter.dashbuddy.domain.analytics.DeliveryNet
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
+import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
+import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
@@ -23,11 +27,14 @@ import cloud.trotter.dashbuddy.domain.state.StoreKeys
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.ceil
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -194,6 +201,35 @@ class AnalyticsRepository @Inject constructor(
                 )
             }
         }
+
+    /**
+     * The driver's own realized net **$/hr by hour-of-week** (#159/#315 H5, Patterns heatmap) — a 7×24
+     * grid of *their own* earning experience, never a platform-pay claim. Combines the two lifetime DAO
+     * reads: session spans ([AnalyticsDao.sessionSpans], the coverage denominator) and delivery nets
+     * ([AnalyticsDao.deliveryNets], the numerator). The apportionment math is the pure `:domain`
+     * [EarningsHeatmapCalculator] (span → fractional hour cells, net → the cell of its `completedAt`,
+     * rate = Σnet ÷ Σhours with a coverage mask) — this repository stays DAO-only and holds no second
+     * copy of that math (Principle 5).
+     *
+     * **Lifetime-scoped** (no period): the tab is rate-based and hides the period. **Timezone:**
+     * [zoneProvider] is evaluated **per emission** inside the combine (not captured once at flow
+     * construction), so a timezone move re-buckets history on the very next projector commit — the
+     * device zone by default; a fixed-zone supplier is injected in tests. The apportionment + union is
+     * off-main ([Dispatchers.Default]) since it iterates the 168-cell grid; [distinctUntilChanged]
+     * suppresses re-emitting an identical grid on an unrelated Room invalidation. No economy dependency
+     * (net is the frozen stored value); no new PII surface (aggregate net + time only).
+     */
+    fun earningsHeatmap(zoneProvider: () -> ZoneId = { ZoneId.systemDefault() }): Flow<EarningsHeatmap> =
+        combine(
+            analyticsDao.sessionSpans(),
+            analyticsDao.deliveryNets(),
+        ) { spans, nets ->
+            EarningsHeatmapCalculator.compute(
+                spans = spans.map { SessionSpan(it.startMillis, it.endMillis) },
+                deliveries = nets.map { DeliveryNet(it.completedAt, it.netDollars) },
+                zone = zoneProvider(),
+            )
+        }.flowOn(Dispatchers.Default).distinctUntilChanged()
 
     /**
      * Offer-decision economics for [period] (#315 H3, Decisions tab): the funnel counts, the frozen

@@ -516,6 +516,29 @@ interface AnalyticsDao {
     )
     fun deliveryTimeTotals(start: Long, end: Long): Flow<DeliveryTimeTotalsRow>
 
+    // ── Patterns-tab heatmap reads (#315 H5) ────────────────────────────
+
+    /**
+     * Every session's online span — the hour×day net-$/hr heatmap **coverage denominator** (#315 H5).
+     * [SessionSpanRow.startMillis] is `startedAt`; [SessionSpanRow.endMillis] is the effective end
+     * `COALESCE(endedAt, lastEventAt)` (a still-open session falls back to its last observed event, the
+     * same effective-end definition [sessionTotals] uses for online duration). **Lifetime-scoped** — the
+     * Patterns tab is rate-based and hides the period, so this is deliberately unbounded (no start/end
+     * predicate). The repository apportions each span across the wall-clock hour cells it overlaps.
+     */
+    @Query("SELECT startedAt AS startMillis, COALESCE(endedAt, lastEventAt) AS endMillis FROM session_records")
+    fun sessionSpans(): Flow<List<SessionSpanRow>>
+
+    /**
+     * Every completed delivery's net + completion instant — the heatmap **numerator** (#315 H5).
+     * [DeliveryNetRow.netDollars] = `COALESCE(netProfit, 0) + COALESCE(cashTip, 0)` (the frozen realized
+     * net plus the driver-entered cash tip; #688 keeps cash outside `netProfit`, added at the read site).
+     * Lifetime-scoped (unbounded) like [sessionSpans]. The repository lands each delivery's net whole in
+     * the cell of its `completedAt`.
+     */
+    @Query("SELECT completedAt AS completedAt, (COALESCE(netProfit, 0) + COALESCE(cashTip, 0)) AS netDollars FROM delivery_records")
+    fun deliveryNets(): Flow<List<DeliveryNetRow>>
+
     // ── Drill-down list reads (future hub / #650) ────────────────────────
 
     /**

@@ -161,6 +161,28 @@ data class SessionTotalsRow(
     val sessions: Int,
 )
 
+/**
+ * One session's online span (#315 H5 Patterns heatmap) — [startMillis] = `startedAt`, [endMillis] =
+ * effective end `COALESCE(endedAt, lastEventAt)` (a still-open session uses its last event). The
+ * repository apportions this span across the hour-of-week grid's coverage denominator. Lifetime-scoped
+ * (the heatmap has no period selector), so the query is unbounded.
+ */
+data class SessionSpanRow(
+    val startMillis: Long,
+    val endMillis: Long,
+)
+
+/**
+ * One completed delivery's net + completion instant (#315 H5 Patterns heatmap numerator).
+ * [netDollars] = `COALESCE(netProfit, 0) + COALESCE(cashTip, 0)` — the frozen realized net plus the
+ * driver-entered cash tip (#688; cash lives outside `netProfit`, added at the read site). A null-net
+ * (no cost basis) row contributes its cash only — the frozen-net philosophy, never recomputed.
+ */
+data class DeliveryNetRow(
+    val completedAt: Long,
+    val netDollars: Double,
+)
+
 /** Per-platform session totals (GROUP BY platform). */
 data class PlatformSessionTotalsRow(
     val platform: String,

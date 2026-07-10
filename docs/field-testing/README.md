@@ -83,6 +83,19 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   And a payout-less close (`DASH_STOP` with no summary) must NOT downgrade an already-keyed store back to
   chain-only. No UI yet (the #315 Patterns tab is the consumer) — verify via the DB / a CSV-adjacent read.
   - Confirmed: 0/2
+- **🆕 NEW — Analytics → Patterns tab: store report cards + net-$/hr heatmap (#315 H5 / PR).**
+  The Patterns tab (Analytics hub, no period selector — it's lifetime/rate-based) now renders two real
+  sections: (A) **store report cards** newest-visited-first, one per resolved store — chain name + a
+  location chip (the running key, or a "location unknown" chip for chain-only entities), pickup/delivery
+  counts, cash-inclusive gross/net, avg/median/p95 pickup dwell, and first/last-seen; and (B) a **7×24
+  hour×day heatmap** of the driver's OWN realized net $/hr, best-hour callout on top. **How to tell it's
+  working (open Analytics → Patterns after a few dashes):** the store cards should list the actual stores
+  from recent dashes with running keys that match reality and **sane dwell numbers** (minutes, not
+  seconds/hours — dwell = confirm − arrive on real pickups); the heatmap's warmer cells should fall on the
+  hours/days you actually earn the most, cells you barely dashed should read as "too little time" (dim,
+  distinct from a worked-but-earned-nothing cell), and the "best hour so far" line should feel right.
+  Framing check: all copy is "YOUR net $/hr" — flag any wording that reads as a platform-pay claim.
+  - Confirmed: 0/2
 - **🆕 NEW — GoPuff zone-arrival screens recognized (recognize-only, no state effect) (#501 item 3 / PR #738).**
   The GoPuff "Navigate to zone" / "Arrived at store" screens (the `go_to_store_action_view` CTA card)
   are now recognized as `pickup_zone_arrival` instead of landing in UNKNOWN. **How to tell it's working

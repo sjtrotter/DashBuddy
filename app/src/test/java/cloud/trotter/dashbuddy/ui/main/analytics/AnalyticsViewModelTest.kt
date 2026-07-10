@@ -4,10 +4,12 @@ import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.DailyEarnings
 import cloud.trotter.dashbuddy.domain.analytics.DecisionEconomics
+import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +23,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -38,6 +41,18 @@ import org.mockito.kotlin.whenever
 class AnalyticsViewModelTest {
 
     private val analyticsRepository: AnalyticsRepository = mock()
+
+    /**
+     * The Patterns-tab sources (#315 H5) are LIFETIME-scoped and collected unconditionally in the
+     * combine, so every test must supply them or the combine folds a null Flow. They're period-
+     * independent, so a single default stub covers all tests (the Patterns behavior has its own
+     * repository/domain tests).
+     */
+    @Before
+    fun stubPatternsSources() {
+        whenever(analyticsRepository.storeReportCards()).thenReturn(flowOf(emptyList<StoreReportCard>()))
+        whenever(analyticsRepository.earningsHeatmap(anyOrNull())).thenReturn(flowOf(EarningsHeatmap.EMPTY))
+    }
 
     private fun stubPeriod(
         period: AnalyticsPeriod,
@@ -86,6 +101,25 @@ class AnalyticsViewModelTest {
 
     private fun store(name: String, net: Double, deliveries: Int) =
         StoreEconomics(storeName = name, net = net, gross = net, deliveries = deliveries)
+
+    private fun storeReportCard(chainDisplay: String) = StoreReportCard(
+        storeKey = "doordash|${chainDisplay.lowercase()}|02426",
+        platform = "doordash",
+        normalizedChain = chainDisplay.lowercase(),
+        chainDisplay = chainDisplay,
+        runningKey = "02426",
+        address = "123 Main St",
+        locationKnown = true,
+        pickups = 4,
+        deliveries = 6,
+        gross = 88.0,
+        net = 61.0,
+        avgDwellMillis = 300_000.0,
+        p50DwellMillis = 280_000L,
+        p95DwellMillis = 540_000L,
+        firstSeenAt = 1_700_000_000_000L,
+        lastSeenAt = 1_700_100_000_000L,
+    )
 
     private fun session(id: String, reported: Double?) = SessionRecord(
         sessionId = id, platform = Platform.DoorDash, startedAt = 1_700_000_000_000L, endedAt = null,
@@ -171,6 +205,28 @@ class AnalyticsViewModelTest {
         assertEquals(5, ui.decisions.declined)
         assertEquals(0.3, ui.decisions.acceptanceRate!!, 1e-9)
         assertEquals(12.5, ui.decisions.declinedEstNet, 1e-9)
+        job.cancel()
+    }
+
+    @Test
+    fun `patterns-tab sources (store cards + heatmap) are wired into state`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubPeriod(AnalyticsPeriod.THIS_WEEK, economics(net = 100.0, netPerHour = 20.0))
+        stubSessions(emptyList())
+        // Override the @Before defaults with NON-DEFAULT values so the assertion is falsifiable — an
+        // empty stub would equal the UiState defaults and prove nothing about the wiring.
+        val heatmap = EarningsHeatmap.EMPTY.copy(minCoverageHours = 0.75)
+        whenever(analyticsRepository.storeReportCards())
+            .thenReturn(flowOf(listOf(storeReportCard("Wendys"))))
+        whenever(analyticsRepository.earningsHeatmap(anyOrNull())).thenReturn(flowOf(heatmap))
+
+        val viewModel = buildViewModel()
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+
+        val ui = viewModel.uiState.value
+        assertEquals("Wendys", ui.storeReportCards.single().chainDisplay)
+        assertEquals(0.75, ui.earningsHeatmap.minCoverageHours, 1e-9)
         job.cancel()
     }
 
