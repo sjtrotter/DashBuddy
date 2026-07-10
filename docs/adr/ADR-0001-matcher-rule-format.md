@@ -10,19 +10,25 @@ envelope header with pipeline declarations.
 
 ---
 
-> **Implementation status (2026-06-13, #440).** The **rule format / engine** half of this ADR
-> is implemented and shipping; the **distribution** half is aspirational. Read the spec below
+> **Implementation status (2026-07-10, #241).** The **rule format / engine** half of this ADR
+> is implemented and shipping; the **distribution** half is aspirational. #241 re-verified every
+> claim below against the current compiler (`RuleCompiler` + its extracted sub-compilers
+> `PredicateCompiler`/`ParseExpressionCompiler`/`EffectEntryCompiler`/`TransformRegistry`,
+> post-#714 split) and corrected the DSL examples throughout this document to match — the
+> compiler is the source of truth; this ADR describes it, never the reverse. Read the spec below
 > with this table in mind:
 >
 > | Area | Status |
 > |---|---|
-> | Compiled rule format, 5-phase evaluation, named bindings, reject entries, `on` modifier, parse sub-language, engine-owned transforms | **Implemented** — see `RuleCompiler` / `Ruleset` / `JsonRuleInterpreter`, `docs/rules.schema.json` |
-> | Platform envelope header (`platform_id` / `format_version` / `pipelines`) | **Implemented** (in the bundled `assets/rules/*.json`) |
-> | JSON5 authoring → canonical JSON tooling | **Future** — rules are hand-authored as JSON today; no JSON5 toolchain |
+> | Compiled rule format, 5-phase evaluation (bind → reject → require → parse → validate), reject/require predicates, parse sub-language, engine-owned `TransformRegistry`/`ValidateRegistry` | **Implemented** — see `RuleCompiler` / `Ruleset` / `JsonRuleInterpreter`, `docs/rules.schema.json` |
+> | Named bindings (`bind:`) | **Implemented, but narrower than this ADR originally proposed** — bindings compile only for SCREEN rules and are consumable only from the `parse` phase (`from: "$name"`). `reject`/`require` predicates operate directly on the tree/node; there is no `on: "$name"` modifier or `bound: "$name"` predicate (never implemented — see the Predicate Vocabulary sections below) |
+> | Platform header: flat `format_version` (integer) + `platform_id` (string) | **Implemented** — see `RulesetLoader`, every file under `matchers/rules/**` |
+> | Platform header: nested `platform: { id, display_name, packages, pipelines }` envelope object, `engine_version` | **Not implemented** — the loader reads only the two flat fields above; no rule file declares `pipelines` |
+> | JSON5 authoring → canonicalized JSON | **Implemented** (ADR-0009) — rules are authored as JSON5 under `matchers/rules/` (an included Gradle build) and canonicalized to JSON consumed by the app/tests; there is no runtime JSON5 parser (the in-app interpreter still only ever sees compiled JSON, per the Security Considerations section below) |
 > | Signing / integrity verification before compile | **Future** — hard prerequisite for any remote source (#416) |
-> | CDN / OTA delivery, dual-running, forkable sources | **Future** — the #192 matchers split; rules are bundled in-APK today (`assets/rules/`) |
+> | CDN / OTA delivery, dual-running, forkable sources | **Future/deferred** — the #192 matchers split; the ruleset is deliberately kept in-tree for now (2026-07-03 decision) and rules ship bundled in-APK (generated `assets/rules/*.json`) |
 >
-> The DSL↔schema discrepancies are tracked separately in #241.
+> The DSL↔schema discrepancies this revision fixed are tracked in #241 (closed by this edit).
 
 ## Context
 
@@ -95,8 +101,16 @@ fallbacks — any fix must be shippable OTA without a Play Store release.
 
 ## Rule File Structure
 
+> **Not implemented (see the status table above).** The nested `platform: {...}` envelope and
+> `engine_version` below are the *original v2 proposal* — kept here as design rationale for a
+> future distribution format. What ships today is flatter: `format_version` (integer) and
+> `platform_id` (string) as top-level scalar fields, read by `RulesetLoader`. There is no
+> `engine_version`, no nested `platform` object, and no `pipelines` declaration anywhere in a
+> shipping rule file (`matchers/rules/**/*.json5`) or in the loader.
+
 ```json5
-// rules.doordash.json5 — human-authored source
+// rules.doordash.json5 — human-authored source (PROPOSED future distribution format —
+// not what matchers/rules/doordash/_manifest.json5 looks like today; see the note above)
 // Tooled to produce rules.doordash.json (canonical JSON) for distribution
 {
   format_version: 2,           // integer; bumped on breaking DSL changes
@@ -202,42 +216,55 @@ are evaluated in ascending `priority` order; the first match wins.
   id: "doordash.screen.pickup_navigation",
   priority: 10,
   overrideable: true,
-  target: "PICKUP_NAVIGATION",
+  // No explicit "target"/"intent" field — the match name is derived from the rule id
+  // by stripping the platform + rule-type prefix (RuleCompiler.deriveTargetFromId):
+  // "doordash.screen.pickup_navigation" -> "pickup_navigation". Set an explicit
+  // "intent" (see Shape: multi-branch below) only when a rule's branches must produce
+  // DIFFERENT names than the one the shared rule id derives.
 
-  // Phase 1: bind — find nodes and name them for later phases
+  // Phase 1: bind — find nodes and name them for the parse phase (see Bind semantics
+  // below — bind is SCREEN-rule-only, and reject/require cannot reference a binding)
   bind: {
-    taskTitle: { find: { id: "bottom_sheet_task_title" } },
-    arriveBy:  { find: { id: "arrive_by_text" }, optional: true },
+    taskTitle: { find: { hasIdSuffix: "bottom_sheet_task_title" } },
+    arriveBy:  { find: { hasIdSuffix: "arrive_by_text" }, optional: true },
   },
 
-  // Phase 2: reject — fail-fast negative checks (any fires → skip rule)
+  // Phase 2: reject — fail-fast negative checks (any fires → skip rule). Reject/require
+  // predicates always run over the WHOLE tree — there is no bound-node modifier (see
+  // Reject entries below); re-anchor to the same node with hasIdSuffix instead.
   reject: [
-    { on: "$taskTitle", hasTextContaining: "Deliver to" },
-    { on: "$arriveBy",  hasTextContaining: "Deliver by" },
+    { exists: { all: [{ hasIdSuffix: "bottom_sheet_task_title" }, { hasTextContaining: "Deliver to" }] } },
+    { exists: { all: [{ hasIdSuffix: "arrive_by_text" }, { hasTextContaining: "Deliver by" }] } },
   ],
 
   // Phase 3: require — positive match conditions (all must pass)
-  require: { bound: "$taskTitle" },  // taskTitle must exist (already true since mandatory)
+  require: { exists: { hasIdSuffix: "bottom_sheet_task_title" } },
 
   // Phase 4: parse — extract fields
   parse: { /* see Parse Sub-Language section */ },
 
   // Phase 5: validate — (optional) assert conditions on parsed values
-  // validate: [ { assert: "...", args: {...}, onFail: "skip" } ],
+  // validate: [ { assert: "...", field: "...", onFail: "skip" } ],
 }
 ```
 
 **Bind semantics:** Each bind entry runs `findNode` on the tree using the given predicate.
 By default bindings are mandatory — if the node is not found, the rule does not match
 (skipped before reject even runs). Add `optional: true` for nodes that may or may not exist;
-optional bindings resolve to null. Bound names are referenced as `$name` in reject, require,
-and parse.
+optional bindings resolve to null. `bind` compiles only for **SCREEN** rules, and bound names
+are referenced as `$name` **only in the `parse` phase** (`from: "$name"` — see Parse
+Sub-Language below). `reject`/`require` predicates operate directly over the tree/node and
+cannot reference a binding by name — there is no `on`/`bound` modifier (see the next two
+sections).
 
 ### Shape: multi-branch
 
-For matchers that can return one of several screens based on tree content, use `branches`
-instead of `target`. Each branch has its own reject/require/parse/validate. The first branch
-whose full pipeline succeeds (including validate) wins.
+For matchers that can return one of several screens based on tree content, use `branches`.
+Each branch has its own reject/require/parse/validate. The first branch whose full pipeline
+succeeds (including validate) wins. A branch's name still derives from the RULE's id by
+default (branches don't have their own id) — set an explicit `intent` per branch when the
+branches represent genuinely different outputs, or every branch would otherwise produce the
+same derived name:
 
 ```json5
 {
@@ -246,13 +273,13 @@ whose full pipeline succeeds (including validate) wins.
   overrideable: true,
   branches: [
     {
-      target: "OFFER_POPUP_CONFIRM_DECLINE",
+      intent: "offer_popup_confirm_decline",
       require: { exists: { hasTextContaining: "sure you want to decline" } },
     },
     {
-      target: "OFFER_POPUP",
+      intent: "offer_popup",
       reject: [
-        { exists: { id: "progress_bar" } },
+        { exists: { hasIdSuffix: "progress_bar" } },
       ],
       require: { all: [
         { exists: { hasText: "Decline" } },
@@ -268,51 +295,44 @@ Rule-level `bind` is shared across all branches. Branch-level `bind` is scoped t
 
 ### Reject entries
 
-A reject entry can be either:
-
-1. **Tree-level predicate** (no `on`): searches the entire tree.
-   `{ exists: { hasText: "Return to dash" } }` — "if any node has this text, reject."
-   `{ allTextContains: "looking for offers" }` — "if joined text contains this, reject."
-
-2. **Bound-node predicate** (with `on`): checks a specific bound node.
-   `{ on: "$taskTitle", hasTextContaining: "Deliver to" }` — "if $taskTitle's text contains
-   this, reject."
+A reject entry is always a **tree-level predicate** — it searches the entire tree; there is
+no bound-node form.
+`{ exists: { hasText: "Return to dash" } }` — "if any node has this text, reject."
+`{ allTextContains: "looking for offers" }` — "if joined text contains this, reject."
 
 Reject entries are OR — if **any** entry fires, the rule is rejected. Each entry can use the
 full predicate vocabulary including `all`/`any`/`not` combinators for complex conditions.
 
-If a bound-node predicate references an optional binding that resolved to null, the predicate
-evaluates to false (no rejection — can't reject on a node that doesn't exist).
+### Anchoring a check to a specific node
 
-### The `on` modifier in require
-
-The `on: "$name"` modifier also works in `require` — use it to assert conditions on a bound
-node's content as a positive match requirement:
+There is no `on: "$name"` modifier and no `bound: "$name"` predicate in `reject`/`require` —
+a proposal from the original v2 design that was never implemented (bindings only reach the
+`parse` phase; see Bind semantics above). To require or reject on a *specific* node's content
+(not just "this text appears somewhere"), combine `exists`/`all` to re-anchor by id, exactly
+as if the node were bound:
 
 ```json5
 // DropoffNavigationMatcher: REQUIRE that task title says "Deliver to"
 // (the inverse of PickupNavigationMatcher's reject)
-bind: {
-  taskTitle: { find: { id: "bottom_sheet_task_title" } },
-},
 require: { any: [
-  { on: "$taskTitle", hasTextContaining: "Deliver to" },
+  { exists: { all: [{ hasIdSuffix: "bottom_sheet_task_title" }, { hasTextContaining: "Deliver to" }] } },
   { all: [
-    { on: "$taskTitle", hasTextContaining: "Heading to" },
-    { exists: { all: [{ id: "arrive_by_text" }, { hasTextContaining: "Deliver by" }] } },
+    { exists: { all: [{ hasIdSuffix: "bottom_sheet_task_title" }, { hasTextContaining: "Heading to" }] } },
+    { exists: { all: [{ hasIdSuffix: "arrive_by_text" }, { hasTextContaining: "Deliver by" }] } },
   ]},
 ]},
 ```
 
-In reject, `on` fires a NEGATIVE check (if true → skip). In require, `on` fires a POSITIVE
-check (must be true to match).
+In `reject`, this pattern fires a NEGATIVE check (if true → skip). In `require`, the same
+pattern is a POSITIVE check (must be true to match). See `matchers/rules/doordash/dropoff.json5`
+(`doordash.screen.dropoff_navigation`) for the shipping version of this exact rule.
 
 ---
 
 ## Predicate Vocabulary — Tree-Level
 
-These predicates operate on the full `UiNode` tree. Used in `reject` (without `on`) and
-`require`.
+These predicates operate on the full `UiNode` tree. Used in `reject` and `require` (there is
+no bound-node scoping — see Anchoring a check to a specific node above).
 
 | Predicate                           | Meaning                                               | Kotlin equivalent                                 |
 |-------------------------------------|-------------------------------------------------------|---------------------------------------------------|
@@ -321,43 +341,51 @@ These predicates operate on the full `UiNode` tree. Used in `reject` (without `o
 | `{ allTextContains: "s" }`          | Joined lowercase text contains `s` (case-insensitive) | `tree.allTextLowerJoined.contains(s.lowercase())` |
 | `{ allTextContainsAll: ["a","b"] }` | All strings present in joined text                    | AND of `allTextContains`                          |
 | `{ allTextContainsAny: ["a","b"] }` | Any string present in joined text                     | OR of `allTextContains`                           |
-| `{ bound: "$name" }`                | Named binding resolved to a non-null node             | `bindings["name"] != null`                        |
 | `{ all: [ pred, ... ] }`            | All child predicates must pass                        | logical AND                                       |
 | `{ any: [ pred, ... ] }`            | At least one child predicate must pass                | logical OR                                        |
 | `{ not: pred }`                     | Negate                                                | logical NOT                                       |
+
+There is no `{ bound: "$name" }` predicate — bindings are consumed only by the `parse` phase
+(see Bind semantics above); a tree/node predicate has no way to test binding resolution.
 
 ---
 
 ## Predicate Vocabulary — Node-Level
 
-These predicates operate on a single `UiNode`. Used inside `exists`/`notExists`, in reject
-entries with `on`, or combined with `all`/`any` at the node level.
+These predicates operate on a single `UiNode`. Used inside `exists`/`notExists`, or combined
+with `all`/`any`/`not` at the node level. Every predicate object carries exactly one key.
 
 | Predicate                                | Meaning                                                                  | Kotlin equivalent                   |
 |------------------------------------------|--------------------------------------------------------------------------|-------------------------------------|
-| `{ id: "s" }`                            | Node ID is `s` (suffix match — Android fully-qualifies IDs with package) | `.endsWith("s")`                    |
+| `{ hasIdSuffix: "s" }`                   | `viewIdResourceName` ends with `s`, case-insensitive (Android fully-qualifies IDs with package) | `.endsWith(s, ignoreCase=true)`     |
 | `{ hasIdExact: "s" }`                    | Full `viewIdResourceName` equals `s` (rare — includes package prefix)    | `== "s"`                            |
 | `{ hasIdContaining: "s" }`               | `viewIdResourceName` contains `s`                                        | `.contains("s")`                    |
-| `{ hasNoId }`                            | `viewIdResourceName` is null or blank                                    | null/blank check                    |
+| `{ hasNoId: true }`                      | `viewIdResourceName` is null or blank (`false` inverts: node HAS an id)  | `isNullOrBlank() == want`           |
 | `{ hasText: "s" }`                       | `text` equals `s` **(case-insensitive)**                                 | `.equals("s", ignoreCase=true)`     |
 | `{ hasTextCaseSensitive: "s" }`          | `text` exactly equals `s`                                                | `== "s"`                            |
 | `{ hasTextContaining: "s" }`             | `text` contains `s` (case-insensitive)                                   | `.contains("s", ignoreCase=true)`   |
 | `{ hasTextStartsWith: "s" }`             | `text` starts with `s` (case-insensitive)                                | `.startsWith("s", ignoreCase=true)` |
-| `{ hasTextMatchesRegex: "p" }`           | `text` matches regex pattern `p`                                         | `Regex(p).containsMatchIn(text)`    |
+| `{ hasTextMatchesRegex: "p" }`           | `text` matches regex pattern `p` (bounded — max 200 chars, #418)         | `Regex(p).containsMatchIn(text)`    |
+| `{ hasAnyText: "s" }`                    | Some text anywhere in this subtree (node or any descendant's text/contentDescription) equals `s` (case-insensitive) — for buttons whose visible label lives in a nested child | `node.allText.any { it.equals(s, ignoreCase=true) }` |
 | `{ hasDesc: "s" }`                       | `contentDescription` equals `s` (case-insensitive)                       | `.equals("s", ignoreCase=true)`     |
 | `{ hasDescContaining: "s" }`             | `contentDescription` contains `s` (case-insensitive)                     | `.contains("s", ignoreCase=true)`   |
 | `{ hasStateDescription: "s" }`           | `stateDescription` equals `s` (case-insensitive)                         | `.equals("s", ignoreCase=true)`     |
 | `{ hasStateDescriptionContaining: "s" }` | `stateDescription` contains `s` (case-insensitive)                       | `.contains("s", ignoreCase=true)`   |
 | `{ hasClassName: "s" }`                  | `className` exactly equals `s`                                           | `== "s"`                            |
 | `{ hasClassNameEndsWith: "s" }`          | `className` ends with `s` (case-insensitive)                             | `.endsWith("s", ignoreCase=true)`   |
-| `{ isClickable }`                        | node is clickable                                                        | `node.isClickable == true`          |
-| `{ isEnabled }`                          | node is enabled                                                          | `node.isEnabled == true`            |
-| `{ isChecked }`                          | node is in checked state                                                 | `node.isChecked == 1`               |
-| `{ hasChildren }`                        | node has at least one child                                              | `node.children.isNotEmpty()`        |
-| `{ isLeaf }`                             | node has no children                                                     | `node.children.isEmpty()`           |
+| `{ isClickable: true }`                  | node's clickable state equals the given boolean (`false` matches NON-clickable nodes) | `node.isClickable == want`          |
+| `{ isEnabled: true }`                    | node's enabled state equals the given boolean                            | `node.isEnabled == want`            |
+| `{ isChecked: true }`                    | node's checked state equals the given boolean                            | `(node.isChecked != 0) == want`     |
+| `{ hasChildren: true }`                  | node has children iff the given boolean (`false` matches childless nodes)| `node.children.isNotEmpty() == want`|
+| `{ isLeaf: true }`                       | node has no children iff the given boolean                               | `node.children.isEmpty() == want`   |
 | `{ all: [ nodePred, ... ] }`             | All node predicates must pass                                            | logical AND within a node           |
 | `{ any: [ nodePred, ... ] }`             | At least one node predicate must pass                                    | logical OR within a node            |
 | `{ not: nodePred }`                      | Negate a node predicate                                                  | logical NOT within a node           |
+
+All five boolean predicates (`hasNoId`/`isClickable`/`isEnabled`/`isChecked`/`hasChildren`/
+`isLeaf`) require an explicit JSON boolean value — `{ isClickable }` with no value is invalid
+JSON and rejected at compile time. The value is honored both ways (`false` is a meaningful,
+different assertion from omitting the predicate), never silently coerced to `true`.
 
 The table covers the **complete** `UiNode` data model surface. Every field exposed by
 `AccessibilityNodeInfo` that DashBuddy captures is addressable via a predicate, so community
@@ -393,7 +421,7 @@ Each field in the `parse` block is an extraction expression built from these pri
 
 | Primitive         | Purpose                                        | Example                                                        |
 |-------------------|------------------------------------------------|----------------------------------------------------------------|
-| `find`            | Locate a node by predicate                     | `{ find: { id: "store_name" } }`                               |
+| `find`            | Locate a node by predicate                     | `{ find: { hasIdSuffix: "store_name" } }`                               |
 | `findAll`         | Locate all matching nodes                      | `{ findAll: { hasTextStartsWith: "Pickup for " } }`            |
 | `read`            | Read a field from the found node               | `read: "text"` / `read: "contentDescription"`                  |
 | `transform`       | Apply named function(s) from TransformRegistry | `transform: "parseCurrency"` / `transform: ["trim", "sha256"]` |
@@ -412,20 +440,20 @@ Each field in the `parse` block is an extraction expression built from these pri
 ```json5
 // Find node by ID suffix, read its text, apply transform
 storeName: {
-find: {id: "store_name"},
+find: {hasIdSuffix: "store_name"},
 read: "text",
 }
 
 // Find node by ID, read text, transform to typed value
 deadline: {
-find: { id: "deadline_text"},
+find: { hasIdSuffix: "deadline_text"},
 read: "text",
 transform: "parseDeadline",
 }
 
 // Hash PII
 customerNameHash: {
-find: { id: "customer_name"},
+find: { hasIdSuffix: "customer_name"},
 read: "text",
 transform: "sha256",
 }
@@ -439,7 +467,7 @@ transform: "parseCurrency",
 
 // Parse leading integer from "4 items" text
 itemCount: {
-find: {id: "items_title_v2"},
+find: {hasIdSuffix: "items_title_v2"},
 read: "text",
 transform: "parseLeadingInt",
 }
@@ -447,24 +475,26 @@ transform: "parseLeadingInt",
 
 ### Navigate primitive
 
-Navigate walks the tree from a found node:
+Navigate walks the tree from a found node. Every form is a single **string** — including
+`findChild`/`findDescendant`, which take their id-suffix argument inside the string, not as a
+nested predicate object:
 
 | Expression                        | Meaning                                                      |
 |-----------------------------------|--------------------------------------------------------------|
 | `"parent"`                        | `node.parent`                                                |
 | `"ancestor(N)"`                   | `node.ancestor(N)` — walk N levels up                        |
 | `"sibling(N)"`                    | `node.sibling(N)` — sibling at offset N in parent's children |
-| `{ findChild: { id: "s" } }`      | First direct child matching predicate                        |
-| `{ findDescendant: { id: "s" } }` | First descendant matching predicate                          |
+| `"findChild(s)"`                  | First direct child whose id ends with `s`                    |
+| `"findDescendant(s)"`             | First descendant whose id ends with `s`                      |
 
 ```json5
 // WaitingForOfferParser: find button, then read its child's text
 waitTime: {
-find: {id: "wait_time_button"},
-navigate: {findChild: {id: "textView_prism_button_title"}},
+find: {hasIdSuffix: "wait_time_button"},
+navigate: "findChild(textView_prism_button_title)",
 read: "text",
 transform: {
-replace: "est. ", with: ""},
+replace: { pattern: "est. ", replacement: "" } },
 }
 
 // TimelineViewParser: each task node's deadline is the next sibling
@@ -478,7 +508,9 @@ transform: [{extractBefore: " \u2022 "}, "parseDeadline"],
 ### Coalesce (layout variant fallbacks)
 
 Screens with multiple layout variants use `coalesce` to try sources in order, taking the
-first non-null result:
+first non-null result. A top-level `transform` directly on `coalesce` is rejected at compile
+time (a PII transform there would silently drop instead of running, leaking a raw value) —
+put the transform inside each branch instead:
 
 ```json5
 // WaitingForOffer: new layout uses label/value pair; legacy uses button child
@@ -488,11 +520,11 @@ coalesce: [
 {textAfterLabel: "Zone offer wait", offset: 1},
 // Legacy — button with child text node
 {
-find: {id: "wait_time_button"},
-navigate: {findChild: {id: "textView_prism_button_title"}},
+find: {hasIdSuffix: "wait_time_button"},
+navigate: "findChild(textView_prism_button_title)",
 read: "text",
 transform: {
-replace: "est. ", with: ""},
+replace: { pattern: "est. ", replacement: "" } },
 },
 ],
 }
@@ -500,19 +532,17 @@ replace: "est. ", with: ""},
 
 ### Join (address construction)
 
+`join` is an **array of parse expressions** whose stringified results are concatenated —
+`separator`/`skipNulls` sit as sibling keys, not nested inside a `parts` object:
+
 ```json5
 address: {
-join: {
-parts: [
-{find: {id: "store_address_line1"}, read: "text"
-},
-{
-find: {
-id: "store_address_line2"}, read: "text"},
+join: [
+{ find: { hasIdSuffix: "store_address_line1" }, read: "text" },
+{ find: { hasIdSuffix: "store_address_line2" }, read: "text" },
 ],
 separator: ", ",
 skipNulls: true,
-},
 transform: "sha256",
 }
 ```
@@ -522,7 +552,7 @@ transform: "sha256",
 ```json5
 // Boolean: is a specific node present?
 hasRedCard: {
-  presence: { exists: { all: [{ id: "tag" }, { hasTextContaining: "Red Card" }] } },
+  presence: { exists: { all: [{ hasIdSuffix: "tag" }, { hasTextContaining: "Red Card" }] } },
 }
 
 // Enum: first matching condition determines value
@@ -536,8 +566,8 @@ dashType: {
 // Status from button text
 status: {
   conditionalEnum: [
-    { if: { exists: { all: [{ id: "primary_action_button" }, { hasTextContaining: "Confirm" }] } }, then: "CONFIRMING" },
-    { if: { exists: { all: [{ id: "primary_action_button" }, { hasTextContaining: "Continue" }] } }, then: "CONTINUING" },
+    { if: { exists: { all: [{ hasIdSuffix: "primary_action_button" }, { hasTextContaining: "Confirm" }] } }, then: "CONFIRMING" },
+    { if: { exists: { all: [{ hasIdSuffix: "primary_action_button" }, { hasTextContaining: "Continue" }] } }, then: "CONTINUING" },
     { else: "UNKNOWN" },
   ],
 }
@@ -548,7 +578,7 @@ status: {
 ```json5
 // PickupArrivalParser: instructions_title is sometimes "Parking instructions" — reject those
 storeName: {
-  find: { id: "instructions_title" },
+  find: { hasIdSuffix: "instructions_title" },
   read: "text",
   rejectIf: { any: [{ hasTextContaining: "instructions" }, { hasTextContaining: "notes" }] },
 }
@@ -556,36 +586,36 @@ storeName: {
 
 ### Collection extraction with `each`
 
-`each` iterates over all tree nodes matching a predicate and extracts one structured object
-per matched node. The result is a typed list.
+`each` takes the ITERATION predicate directly — not wrapped in a `findAll` key — and iterates
+over all tree nodes matching it, extracting one structured object per matched node. The
+result is a typed list. Capped at 50 matches (#590 DoS bound).
 
-`scope` optionally walks up from the matched node to a container. Sources in the `extract`
-block then search within that container, not the whole tree.
+`scope` is a **string**, `"ancestor(N)"` — not a nested object — and optionally walks up from
+the matched node to a container. Sources in the `extract` block then search within that
+container, not the whole tree.
 
 ```json5
 // OfferParser: each display_name node is inside a per-order card 2 levels up
 orders: {
-  each: {
-    findAll: { id: "display_name" },
-    scope: { ancestor: 2 },
-    exclude: { any: [{ hasText: "Customer dropoff" }, { hasText: "Business handoff" }] },
-    extract: {
-      storeName: { read: "text" },
-      orderType: {
-        conditionalEnum: [
-          { if: { exists: { all: [{ id: "work_unit_type" }, { hasTextContaining: "Shop" }] } }, then: "SHOP_FOR_ITEMS" },
-          { else: "PICKUP" },
-        ],
-      },
-      itemCount: {
-        find: { id: "display_name_secondary" },
-        read: "text",
-        transform: "parseItemCount",
-        fallback: 1,
-      },
-      hasRedCard: {
-        presence: { exists: { all: [{ id: "tag" }, { hasTextContaining: "Red Card" }] } },
-      },
+  each: { hasIdSuffix: "display_name" },
+  scope: "ancestor(2)",
+  exclude: { any: [{ hasText: "Customer dropoff" }, { hasText: "Business handoff" }] },
+  extract: {
+    storeName: { read: "text" },
+    orderType: {
+      conditionalEnum: [
+        { if: { exists: { all: [{ hasIdSuffix: "work_unit_type" }, { hasTextContaining: "Shop" }] } }, then: "SHOP_FOR_ITEMS" },
+        { else: "PICKUP" },
+      ],
+    },
+    itemCount: {
+      find: { hasIdSuffix: "display_name_secondary" },
+      read: "text",
+      transform: "parseItemCount",
+      fallback: 1,
+    },
+    hasRedCard: {
+      presence: { exists: { all: [{ hasIdSuffix: "tag" }, { hasTextContaining: "Red Card" }] } },
     },
   },
 }
@@ -594,34 +624,37 @@ orders: {
 ```json5
 // TimelineViewParser: task chain extraction
 tasks: {
-  each: {
-    findAll: { any: [
-      { hasTextStartsWith: "Pickup for " },
-      { hasTextStartsWith: "Deliver to " },
-      { hasTextStartsWith: "Pickup from " },
-    ]},
-    extract: {
-      taskType: {
-        read: "text",
-        transform: { extractMatchingPrefix: ["Pickup for ", "Deliver to ", "Pickup from "] },
-      },
-      nameHash: {
-        read: "text",
-        transform: [{ stripPrefixes: ["Pickup for ", "Deliver to ", "Pickup from "] }, "trim", "sha256"],
-      },
-      deadline: {
-        navigate: "sibling(1)",
-        read: "text",
-        transform: [{ extractBefore: " \u2022 " }, "parseDeadline"],
-      },
-      storeHint: {
-        navigate: "sibling(1)",
-        read: "text",
-        transform: { extractAfter: " \u2022 " },
-      },
-      isCurrent: {
-        presence: { exists: { hasText: "Current task" } },
-      },
+  each: { any: [
+    { hasTextStartsWith: "Pickup for " },
+    { hasTextStartsWith: "Deliver to " },
+    { hasTextStartsWith: "Pickup from " },
+  ]},
+  extract: {
+    // No "extractMatchingPrefix" transform exists — derive the enum with conditionalEnum
+    // instead, the same pattern "orderType" uses above.
+    taskType: {
+      conditionalEnum: [
+        { if: { allTextContains: "pickup for" }, then: "PICKUP" },
+        { if: { allTextContains: "pickup from" }, then: "PICKUP" },
+        { else: "DROPOFF" },
+      ],
+    },
+    nameHash: {
+      read: "text",
+      transform: [{ stripPrefixes: ["Pickup for ", "Deliver to ", "Pickup from "] }, "trim", "sha256"],
+    },
+    deadline: {
+      navigate: "sibling(1)",
+      read: "text",
+      transform: [{ extractBefore: " \u2022 " }, "parseDeadline"],
+    },
+    storeHint: {
+      navigate: "sibling(1)",
+      read: "text",
+      transform: { extractAfter: " \u2022 " },
+    },
+    isCurrent: {
+      presence: { exists: { hasText: "Current task" } },
     },
   },
 }
@@ -630,16 +663,14 @@ tasks: {
 ```json5
 // RatingsViewParser: pair-walking — find all title nodes, each paired with its next sibling
 metrics: {
-  each: {
-    findAll: { id: "textView_title" },
-    extract: {
-      label: { read: "text" },
-      value: {
-        navigate: "sibling(1)",
-        read: "text",
-        // Only read if the sibling is actually a description node (skip section headers)
-        rejectIf: { not: { id: "textView_description" } },
-      },
+  each: { hasIdSuffix: "textView_title" },
+  extract: {
+    label: { read: "text" },
+    value: {
+      navigate: "sibling(1)",
+      read: "text",
+      // Only read if the sibling is actually a description node (skip section headers)
+      rejectIf: { not: { hasIdSuffix: "textView_description" } },
     },
   },
 }
@@ -663,13 +694,15 @@ Parse fields can reference nodes from the `bind` phase via `$name`:
 ```json5
 {
   bind: {
-    taskTitle: { find: { id: "bottom_sheet_task_title" } },
+    taskTitle: { find: { hasIdSuffix: "bottom_sheet_task_title" } },
   },
   parse: {
-    storeName: {
-      from: "$taskTitle",
-      read: "text",
-      transform: { stripPrefix: "Pick up from " },
+    fields: {
+      storeName: {
+        from: "$taskTitle",
+        read: "text",
+        transform: { stripPrefix: "Pick up from " },
+      },
     },
   },
 }
@@ -684,21 +717,28 @@ parsed field values — confirming that the extracted data is consistent before 
 to its result. Validate needs parsed values to work with, which is why it comes after parse
 rather than before.
 
-If an assertion fails, the behavior depends on `onFail`:
+If an assertion fails, the behavior depends on `onFail` (only two values exist — there is no
+`"simple"`):
 
-- `"skip"` — try the next candidate. In a multi-branch rule, this means the next branch;
-  if no branches remain (or the rule is single-target), it means the next rule. The engine
-  knows the context — rule authors just say "skip."
-- `"simple"` — accept the match but return `ScreenInfo.Simple(target)` instead of the full
-  parsed result. Use when the screen identity is certain but parsed data may be incomplete.
+- `"skip"` (default) — try the next candidate. In a multi-branch rule, this means the next
+  branch; if no branches remain (or the rule is single-target), it means the next rule. The
+  engine knows the context — rule authors just say "skip."
+- `"dropParsed"` — accept the match (the rule still identifies the screen) but discard the
+  parsed fields, so the emitted observation carries no field data. Use when the screen
+  identity is certain but the parsed data failed its consistency check.
 
 Each branch in a multi-branch rule can have its own `validate`. If branch 1's validate fails,
 branch 2 gets its turn with its own parse and validate.
 
+Assertion arguments are **flat keys at the entry level** — there is no nested `args: {...}`
+wrapper, and each assertion has its own fixed key names (`sumApproxEquals` takes
+`fields`/`target`; `fieldsLe`/`fieldsGe` take `field`/`le`/`ge` — see the Validate assertion
+catalog below):
+
 ```json5
 // DashSummaryParser: dash total must not exceed weekly total (data quality gate)
 {
-  target: "DASH_SUMMARY",
+  // id/priority omitted for brevity — see Representative Examples for full rules
   require: { /* ... */ },
   parse: {
     fields: {
@@ -709,8 +749,9 @@ branch 2 gets its turn with its own parse and validate.
   validate: [
     {
       assert: "fieldsLe",
-      args: { a: "totalEarnings", b: "weeklyEarnings" },
-      onFail: "simple",
+      field: "totalEarnings",
+      le: "weeklyEarnings",
+      onFail: "dropParsed",
     },
   ],
 }
@@ -720,14 +761,14 @@ branch 2 gets its turn with its own parse and validate.
 {
   branches: [
     {
-      target: "DELIVERY_SUMMARY_EXPANDED",
+      intent: "delivery_summary_expanded",
       require: { all: [
-        { exists: { id: "final_value" } },
+        { exists: { hasIdSuffix: "final_value" } },
         { allTextContainsAll: ["doordash pay", "customer tips"] },
       ]},
       parse: {
         fields: {
-          totalPay:    { find: { id: "final_value" }, read: "text", transform: "parseCurrency" },
+          totalPay:    { find: { hasIdSuffix: "final_value" }, read: "text", transform: "parseCurrency" },
           doorDashPay: { textAfterLabel: "DoorDash pay", offset: 1, transform: "parseCurrency" },
           customerTips:{ textAfterLabel: "Customer tips", offset: 1, transform: "parseCurrency" },
         },
@@ -735,20 +776,22 @@ branch 2 gets its turn with its own parse and validate.
       validate: [
         {
           assert: "sumApproxEquals",
-          args: { parts: ["doorDashPay", "customerTips"], total: "totalPay", tolerance: 0.02 },
+          fields: ["doorDashPay", "customerTips"],
+          target: "totalPay",
+          tolerance: 0.02,
           onFail: "skip",
         },
       ],
     },
     {
-      target: "DELIVERY_SUMMARY_COLLAPSED",
+      intent: "delivery_summary_collapsed",
       require: { all: [
-        { exists: { id: "final_value" } },
+        { exists: { hasIdSuffix: "final_value" } },
         { not: { allTextContains: "doordash pay" } },
       ]},
       parse: {
         fields: {
-          totalPay: { find: { id: "final_value" }, read: "text", transform: "parseCurrency" },
+          totalPay: { find: { hasIdSuffix: "final_value" }, read: "text", transform: "parseCurrency" },
         },
       },
       // no validate — COLLAPSED has no breakdown to check
@@ -757,8 +800,9 @@ branch 2 gets its turn with its own parse and validate.
 }
 ```
 
-Validate assertion functions are registered in the TransformRegistry alongside transforms.
-They are a closed, auditable set — new assertions require an app update.
+Validate assertion functions are registered in their own closed, engine-owned `ValidateRegistry`
+(a sibling of `TransformRegistry` — they dispatch independently and share no state). They are a
+closed, auditable set — new assertions require an app update.
 
 ---
 
@@ -772,9 +816,12 @@ This makes the engine self-contained and the vocabulary discoverable.
 
 1. **Closed set.** Rule files can only invoke registered transforms. Unknown names fail at
    compile time with `RuleCompileException`.
-2. **Versioned.** The registry exposes a version string. Rule files declare `engine_version`
-   in their header. If the rule file's version exceeds the registry's version, the file is
-   rejected.
+2. **Versioned (not yet implemented — see the status table above).** The original design calls
+   for the registry to expose a version string and rule files to declare `engine_version` in
+   their header, rejecting a file whose declared version exceeds the registry's. Today
+   `TransformRegistry` has no version property and `RulesetLoader` never reads `engine_version`
+   — unknown transform NAMES still fail closed at compile time (principle 1), just not via a
+   version gate.
 3. **Testable.** Each transform is unit-testable in isolation through the registry API.
 4. **No external dependencies.** The registry depends only on the Kotlin stdlib and
    `java.security.MessageDigest` (for SHA-256). No Android framework, no third-party libraries.
@@ -783,55 +830,62 @@ This makes the engine self-contained and the vocabulary discoverable.
 
 | Transform               | Input -> Output                                                   | Notes                                                   |
 |-------------------------|-------------------------------------------------------------------|---------------------------------------------------------|
-| `parseCurrency`         | `"$5.00"`, `"+$4.00"`, `"$7.75+ Total"` -> `Double`               | Strips `$`, `+`, `,`; takes first space-delimited token |
-| `parseDistance`         | `"3.2 mi"`, `"500 ft"`, `"Additional 2.6 mi"` -> `Double` (miles) | Regex extracts number; converts ft to mi                |
-| `parseItemCount`        | `"(2 items)"`, `"(3 items \u2022 4 units)"` -> `Int`              | Regex extracts leading count                            |
-| `parseDeadline`         | `"Pick up by 17:39"`, `"by 6:10 PM"` -> `ParsedTime`              | Strips prefix, parses time, returns text + epoch ms     |
-| `parseTime`             | `"5:30 PM"`, `"17:30"` -> `Long` (epoch ms)                       | 12h or 24h format, rolls to next day if past            |
-| `parseDuration`         | `"35:00"` (MM:SS) -> `Long` (ms)                                  | Minutes:seconds to milliseconds                         |
-| `parseHrMin`            | `"2 hr 15 min"` -> `Long` (ms)                                    | Hours-and-minutes to milliseconds                       |
-| `parseLeadingInt`       | `"4 items"` -> `Int`                                              | Split on space, first token to Int                      |
-| `parsePercent`          | `"85.7%"` -> `Double`                                             | Strip `%` suffix, parse to Double                       |
-| `parseOffers`           | `"3 out of 5"` -> `{accepted: 3, total: 5}`                       | Regex extraction of numerator/denominator               |
-| `sha256`                | `String` -> `String` (hex)                                        | SHA-256 hash for PII redaction                          |
-| `trim`                  | strip whitespace                                                  |                                                         |
-| `lowercase`             | to lowercase                                                      |                                                         |
-| `toDouble`              | `String` -> `Double`                                              |                                                         |
-| `toInt`                 | `String` -> `Int`                                                 |                                                         |
-| `stripDeadlinePrefix`   | `"Pick up by 17:39"` -> `"17:39"`                                 | Strips known deadline prefixes                          |
-| `addressBetweenAnchors` | `(allText, startAnchor, endAnchor)` -> `String`                   | Positional address extraction                           |
+| `parseCurrency`         | `"$5.00"`, `"+$4.00"`, `"$7.75+ Total"` -> `Double?`               | Strips `$`, `+`, `,`; takes first space-delimited token |
+| `parseDistance`         | `"3.2 mi"`, `"500 ft"`, `"Additional 2.6 mi"` -> `Double?` (miles) | Regex extracts number; converts ft to mi                |
+| `parseItemCount`        | `"(2 items)"`, `"(3 items • 4 units)"` -> `Int?`                   | Regex extracts leading count                            |
+| `parseDeadline`         | `"Pick up by 17:39"`, `"by 6:10 PM"` -> `Long?` (epoch ms)         | Strips known prefixes, parses time, rolls to tomorrow if far enough past (#343) |
+| `parseTime`             | `"5:30 PM"`, `"17:30"` -> `Long?` (epoch ms)                       | 12h or 24h format, rolls to next day if far enough past |
+| `parseDuration`         | `"35:00"` (MM:SS) -> `Long?` (ms)                                  | Minutes:seconds to milliseconds; falls back to `parseHrMin` |
+| `parseHrMin`            | `"2 hr 15 min"` -> `Long?` (ms)                                    | Hours-and-minutes to milliseconds                       |
+| `parseLeadingInt`       | `"4 items"` -> `Int?`                                              | Split on space, first token to Int                      |
+| `parsePercent`          | `"85.7%"` -> `Double?`                                             | Strip `%` suffix, parse to Double                        |
+| `sha256`                | `String` -> `String?` (hex)                                        | SHA-256 hash for PII redaction; fails closed (never echoes plaintext) |
+| `trim`                  | strip whitespace                                                  |                                                          |
+| `lower`                 | to lowercase (`Locale.ROOT`)                                       |                                                          |
+| `upper`                 | to uppercase (`Locale.ROOT`)                                       |                                                          |
+| `toDouble`              | `String` -> `Double?`                                              |                                                          |
+| `toInt`                 | `String` -> `Int?`                                                 |                                                          |
+| `stripDeadlinePrefix`   | `"Pick up by 17:39"` -> `"17:39"`                                  | Strips known deadline prefixes                          |
 
-**Parameterized transforms** use object syntax:
+There is no `parseOffers` or `addressBetweenAnchors` transform — both were proposed in the
+original v2 design but never implemented; `TransformRegistry.knownPlainTransforms` is the
+closed, authoritative list above.
 
-| Transform               | Syntax                                              | Meaning                             |
-|-------------------------|-----------------------------------------------------|-------------------------------------|
-| `stripPrefix`           | `{ stripPrefix: "Pick up from " }`                  | Remove prefix if present            |
-| `stripSuffix`           | `{ stripSuffix: "%" }`                              | Remove suffix if present            |
-| `stripPrefixes`         | `{ stripPrefixes: ["Pickup for ", "Deliver to "] }` | Remove first matching prefix        |
-| `extractMatchingPrefix` | `{ extractMatchingPrefix: ["Pickup for ", ...] }`   | Return the prefix that matched      |
-| `extractBefore`         | `{ extractBefore: " \u2022 " }`                     | Substring before first delimiter    |
-| `extractAfter`          | `{ extractAfter: " \u2022 " }`                      | Substring after first delimiter     |
-| `replace`               | `{ replace: "est. ", with: "" }`                    | String replacement                  |
-| `split`                 | `{ split: " \u2022 ", index: 0 }`                   | Split on delimiter, return Nth part |
-| `regex`                 | `{ regex: "pattern", group: 1 }`                    | Regex capture group extraction      |
-| `regex`                 | `{ regex: "pattern", group: 1, then: "toInt" }`     | Capture group + chained transform   |
+**Parameterized transforms** use object syntax — every parameter lives inside the transform's
+own nested object, never as a sibling key of the transform name:
+
+| Transform               | Syntax                                                        | Meaning                             |
+|-------------------------|-----------------------------------------------------------------|-------------------------------------|
+| `stripPrefix`           | `{ stripPrefix: "Pick up from " }`                              | Remove prefix if present            |
+| `stripSuffix`           | `{ stripSuffix: "%" }`                                          | Remove suffix if present            |
+| `stripPrefixes`         | `{ stripPrefixes: ["Pickup for ", "Deliver to "] }`             | Remove first matching prefix        |
+| `extractBefore`         | `{ extractBefore: " • " }`                                      | Substring before first delimiter    |
+| `extractAfter`          | `{ extractAfter: " • " }`                                       | Substring after first delimiter     |
+| `replace`               | `{ replace: { pattern: "est. ", replacement: "" } }`            | String replacement (`replacement` defaults to `""`) |
+| `split`                 | `{ split: { separator: " • ", index: 0 } }`                     | Split on delimiter, return Nth part |
+| `regex`                 | `{ regex: { pattern: "pattern", group: 1 } }`                   | Regex capture group extraction (bounded — max 200 chars, #418) |
+| `regex`                 | `{ regex: { pattern: "pattern", group: 1, then: "toInt" } }`    | Capture group + chained transform   |
+
+There is no `extractMatchingPrefix` transform — it was proposed but never implemented; derive
+an equivalent enum value with `conditionalEnum` instead (see Collection extraction above).
 
 **Transform chaining** — array syntax applies transforms left to right:
 
 ```json5
 transform: ["stripDeadlinePrefix", "parseTime"]
 transform: [{ stripPrefixes: ["Pickup for ", "Deliver to "] }, "trim", "sha256"]
-transform: [{ replace: "est. ", with: "" }, "trim"]
+transform: [{ replace: { pattern: "est. ", replacement: "" } }, "trim"]
 ```
 
 ### Validate assertion catalog
 
-| Assertion         | Args                                                   | Meaning                                              |
-|-------------------|--------------------------------------------------------|------------------------------------------------------|
-| `fieldsLe`        | `{ a: "fieldA", b: "fieldB" }`                         | Parsed value of `fieldA` <= parsed value of `fieldB` |
-| `fieldsGe`        | `{ a: "fieldA", b: "fieldB" }`                         | `fieldA` >= `fieldB`                                 |
-| `sumApproxEquals` | `{ parts: ["f1","f2"], total: "f3", tolerance: 0.02 }` | `abs(sum(parts) - total) <= tolerance`               |
-| `fieldNotNull`    | `{ field: "fieldName" }`                               | Parsed field is not null                             |
+| Assertion         | Args                                                             | Meaning                                              |
+|-------------------|--------------------------------------------------------------------|------------------------------------------------------|
+| `fieldsLe`        | `{ field: "fieldA", le: "fieldB", tolerance: 0.0 }`                | Parsed value of `fieldA` <= parsed value of `fieldB` (+ tolerance) |
+| `fieldsGe`        | `{ field: "fieldA", ge: "fieldB", tolerance: 0.0 }`                | `fieldA` >= `fieldB` (- tolerance)                    |
+| `sumApproxEquals` | `{ fields: ["f1","f2"], target: "f3", tolerance: 0.02 }`           | `abs(sum(fields) - target) <= tolerance`              |
+| `fieldNotNull`    | `{ field: "fieldName" }`                                           | Parsed field is not null                              |
+| `fieldEquals`     | `{ field: "fieldName", value: <string, number, or boolean> }`      | Parsed field equals the given literal value           |
 
 ### Registry implementation sketch
 
@@ -894,16 +948,16 @@ class TransformRegistry @Inject constructor() {
   id: "doordash.screen.dash_paused",
   priority: 10,
   overrideable: true,
-  target: "DASH_PAUSED",
+  // Derived name: "dash_paused" (from the id, via deriveTargetFromId)
   require: { all: [
     { exists: { hasText: "Dash Paused" } },
-    { exists: { all: [{ id: "resumeButton" }, { hasDesc: "Resume dash" }] } },
-    { exists: { id: "progress_number" } },
+    { exists: { all: [{ hasIdSuffix: "resumeButton" }, { hasDesc: "Resume dash" }] } },
+    { exists: { hasIdSuffix: "progress_number" } },
   ]},
   parse: {
     fields: {
       timeRemaining: {
-        find: { id: "progress_number" },
+        find: { hasIdSuffix: "progress_number" },
         read: "text",
         transform: "parseDuration",
         fallback: "35:00",
@@ -920,7 +974,7 @@ class TransformRegistry @Inject constructor() {
   id: "doordash.screen.sensitive",
   priority: 0,
   overrideable: false,
-  target: "SENSITIVE",
+  // Derived name: "sensitive"
   require: { allTextContainsAny: [
     "Bank Account", "Routing Number", "Verify Identity", "Social Security",
     "Crimson", "Biometric", "Available Balance", "View card details",
@@ -938,7 +992,7 @@ class TransformRegistry @Inject constructor() {
   id: "doordash.screen.idle_map",
   priority: 1,
   overrideable: true,
-  target: "MAIN_MAP_IDLE",
+  // Derived name: "idle_map"
   reject: [
     { exists: { hasText: "Return to dash" } },
     { exists: { any: [
@@ -949,7 +1003,7 @@ class TransformRegistry @Inject constructor() {
   require: { all: [
     { exists: { hasDesc: "Earnings Mode Switcher" } },
     { exists: { any: [
-      { id: "side_nav_compose_view" },
+      { hasIdSuffix: "side_nav_compose_view" },
       { hasDesc: "Side Menu" },
     ]}},
   ]},
@@ -966,21 +1020,22 @@ class TransformRegistry @Inject constructor() {
 }
 ```
 
-### PickupNavigationMatcher (bind + reject on bound node)
+### PickupNavigationMatcher (bind used for parse; reject anchored by id)
 
 ```json5
 {
   id: "doordash.screen.pickup_navigation",
   priority: 10,
   overrideable: true,
-  target: "PICKUP_NAVIGATION",
+  // Derived name: "pickup_navigation"
   bind: {
-    taskTitle: { find: { id: "bottom_sheet_task_title" } },
-    arriveBy:  { find: { id: "arrive_by_text" }, optional: true },
+    taskTitle: { find: { hasIdSuffix: "bottom_sheet_task_title" } },
+    arriveBy:  { find: { hasIdSuffix: "arrive_by_text" }, optional: true },
   },
+  // No "on: $name" modifier — reject re-anchors by the same id the bind used
   reject: [
-    { on: "$taskTitle", hasTextContaining: "Deliver to" },
-    { on: "$arriveBy",  hasTextContaining: "Deliver by" },
+    { exists: { all: [{ hasIdSuffix: "bottom_sheet_task_title" }, { hasTextContaining: "Deliver to" }] } },
+    { exists: { all: [{ hasIdSuffix: "arrive_by_text" }, { hasTextContaining: "Deliver by" }] } },
   ],
   parse: {
     fields: {
@@ -990,18 +1045,16 @@ class TransformRegistry @Inject constructor() {
         transform: { stripPrefix: "Pick up from " },
       },
       address: {
-        join: {
-          parts: [
-            { find: { id: "contact_action_address_first_line" }, read: "text" },
-            { find: { id: "contact_action_address_second_line" }, read: "text" },
-          ],
-          separator: ", ",
-          skipNulls: true,
-        },
+        join: [
+          { find: { hasIdSuffix: "contact_action_address_first_line" }, read: "text" },
+          { find: { hasIdSuffix: "contact_action_address_second_line" }, read: "text" },
+        ],
+        separator: ", ",
+        skipNulls: true,
         transform: "sha256",
       },
       deadline: {
-        find: { id: "arrive_by_text" },
+        find: { hasIdSuffix: "arrive_by_text" },
         read: "text",
         transform: "parseDeadline",
       },
@@ -1018,16 +1071,16 @@ to EXPANDED. If validate fails, the next rule (COLLAPSED) is tried.
 
 ```json5
 // Rule 1: Expanded (pay breakdown visible — validate confirms consistency)
+// Derived name: "delivery_summary.expanded"
 {
   id: "doordash.screen.delivery_summary.expanded",
   priority: 15,
   overrideable: true,
-  target: "DELIVERY_SUMMARY_EXPANDED",
   reject: [
     { allTextContains: "pause orders" },
   ],
   require: { all: [
-    { exists: { id: "final_value" } },
+    { exists: { hasIdSuffix: "final_value" } },
     { allTextContainsAll: ["doordash pay", "customer tips"] },
     { any: [
       { allTextContains: "This offer" },
@@ -1036,8 +1089,8 @@ to EXPANDED. If validate fails, the next rule (COLLAPSED) is tried.
   ]},
   parse: {
     fields: {
-      totalPay:       { find: { id: "final_value" },     read: "text", transform: "parseCurrency" },
-      sessionEarnings:{ find: { id: "earnings_ticker" },  read: "text", transform: "parseCurrency" },
+      totalPay:       { find: { hasIdSuffix: "final_value" },     read: "text", transform: "parseCurrency" },
+      sessionEarnings:{ find: { hasIdSuffix: "earnings_ticker" },  read: "text", transform: "parseCurrency" },
       doorDashPay:    { textAfterLabel: "DoorDash pay",   offset: 1,    transform: "parseCurrency" },
       customerTips:   { textAfterLabel: "Customer tips",  offset: 1,    transform: "parseCurrency" },
     },
@@ -1045,22 +1098,24 @@ to EXPANDED. If validate fails, the next rule (COLLAPSED) is tried.
   validate: [
     {
       assert: "sumApproxEquals",
-      args: { parts: ["doorDashPay", "customerTips"], total: "totalPay", tolerance: 0.02 },
+      fields: ["doorDashPay", "customerTips"],
+      target: "totalPay",
+      tolerance: 0.02,
       onFail: "skip",  // try next rule (COLLAPSED)
     },
   ],
 },
 // Rule 2: Collapsed (pay breakdown not yet tapped open — no validate needed)
+// Derived name: "delivery_summary.collapsed"
 {
   id: "doordash.screen.delivery_summary.collapsed",
   priority: 16,
   overrideable: true,
-  target: "DELIVERY_SUMMARY_COLLAPSED",
   reject: [
     { allTextContains: "pause orders" },
   ],
   require: { all: [
-    { exists: { id: "final_value" } },
+    { exists: { hasIdSuffix: "final_value" } },
     { not: { allTextContains: "doordash pay" } },
     { any: [
       { allTextContains: "This offer" },
@@ -1069,8 +1124,8 @@ to EXPANDED. If validate fails, the next rule (COLLAPSED) is tried.
   ]},
   parse: {
     fields: {
-      totalPay:       { find: { id: "final_value" },     read: "text", transform: "parseCurrency" },
-      sessionEarnings:{ find: { id: "earnings_ticker" },  read: "text", transform: "parseCurrency" },
+      totalPay:       { find: { hasIdSuffix: "final_value" },     read: "text", transform: "parseCurrency" },
+      sessionEarnings:{ find: { hasIdSuffix: "earnings_ticker" },  read: "text", transform: "parseCurrency" },
     },
   },
 }
@@ -1083,21 +1138,19 @@ to EXPANDED. If validate fails, the next rule (COLLAPSED) is tried.
   id: "doordash.screen.ratings",
   priority: 25,
   overrideable: true,
-  target: "RATINGS_VIEW",
+  // Derived name: "ratings"
   require: { allTextContainsAll: ["acceptance rate", "completion rate", "on-time rate", "customer rating"] },
   parse: {
     fields: {
       // Pair-walk: each textView_title paired with its sibling textView_description
       metrics: {
-        each: {
-          findAll: { id: "textView_title" },
-          extract: {
-            label: { read: "text" },
-            value: {
-              navigate: "sibling(1)",
-              rejectIf: { not: { id: "textView_description" } },
-              read: "text",
-            },
+        each: { hasIdSuffix: "textView_title" },
+        extract: {
+          label: { read: "text" },
+          value: {
+            navigate: "sibling(1)",
+            rejectIf: { not: { hasIdSuffix: "textView_description" } },
+            read: "text",
           },
         },
       },
@@ -1121,23 +1174,27 @@ in ascending `priority` order; the first match wins.
 
 Clicks operate on a **single node** — the element that was tapped. There is no tree to traverse,
 so `exists`/`notExists`/`allTextContains*` are not available. Node predicates apply directly.
-The `require` block contains a node-level predicate (not tree-level). There is no `bind` or
-`reject` phase for click rules — the single-node context makes them unnecessary.
+The `require` block contains a node-level predicate (not tree-level). `reject` IS available for
+click rules — same node-level predicate vocabulary, evaluated before `require` — the single-node
+context just means there's nothing to "search" (no `exists`). `bind` is schema-legal on a click
+rule but has no effect: bindings compile for SCREEN rules only, so a `bind` block on a click rule
+is silently inert. There is no `parse` block either — `ClickInfo` subtypes carry no extracted
+data beyond `Unknown(nodeId, nodeText)`.
 
 ```json5
 {
   id: "doordash.click.accept_offer",
   priority: 10,
   overrideable: true,
-  target: "AcceptOffer",
-  require: { id: "accept_button" },
+  // Derived name: "accept_offer"
+  require: { hasIdSuffix: "accept_button" },
 }
 
 {
   id: "doordash.click.decline_offer",
   priority: 20,
   overrideable: true,
-  target: "DeclineOffer",
+  // Derived name: "decline_offer"
   require: { hasText: "Decline offer" },
 }
 
@@ -1145,9 +1202,9 @@ The `require` block contains a node-level predicate (not tree-level). There is n
   id: "doordash.click.arrived_at_store",
   priority: 30,
   overrideable: true,
-  target: "ArrivedAtStore",
+  // Derived name: "arrived_at_store"
   require: { all: [
-    { id: "primary_action_button" },
+    { hasIdSuffix: "primary_action_button" },
     { any: [{ hasText: "Arrived at store" }, { hasText: "Arrived" }] },
   ]},
 }
@@ -1156,7 +1213,7 @@ The `require` block contains a node-level predicate (not tree-level). There is n
   id: "doordash.click.sensitive",
   priority: 1,
   overrideable: false,
-  target: "Sensitive",
+  // Derived name: "sensitive"
   require: { any: [
     { hasTextContaining: "Bank Account" },
     { hasTextContaining: "Withdraw" },
@@ -1165,9 +1222,6 @@ The `require` block contains a node-level predicate (not tree-level). There is n
   ]},
 }
 ```
-
-Click rules do not have a `parse` block — `ClickInfo` subtypes carry no extracted data
-beyond `Unknown(nodeId, nodeText)`.
 
 ### Special Click Types
 
@@ -1192,14 +1246,15 @@ operate on those fields directly — no tree traversal, no bind/reject phases.
   id: "doordash.notification.additional_tip",
   priority: 10,
   overrideable: true,
-  target: "AdditionalTip",
+  // Derived name: "additional_tip"
   require: { anyFieldMatchesRegex: "added \\$([\\d.]+) tip on a past (.+?) order delivered at (.+)" },
-  // Named capture groups extracted from the matching regex
+  // Each field independently selects a source field + its OWN regex/group — a parse field
+  // does NOT reuse capture groups from the require regex (there is no "fromGroup" shorthand).
   parse: {
     fields: {
-      amount:      { fromGroup: 1, transform: "toDouble" },
-      storeName:   { fromGroup: 2, transform: "trim" },
-      deliveredAt: { fromGroup: 3, transform: "trim" },
+      amount:      { from: "fullString", find: "added \\$([\\d.]+) tip", group: 1, transform: "toDouble" },
+      storeName:   { from: "fullString", find: "on a past (.+?) order", group: 1, transform: "trim" },
+      deliveredAt: { from: "fullString", find: "delivered at (.+)", group: 1, transform: "trim" },
     },
   },
 }
@@ -1208,7 +1263,7 @@ operate on those fields directly — no tree traversal, no bind/reject phases.
   id: "doordash.notification.new_order",
   priority: 20,
   overrideable: true,
-  target: "NewOrder",
+  // Derived name: "new_order"
   require: { titleContains: "new order" },
 }
 
@@ -1216,7 +1271,7 @@ operate on those fields directly — no tree traversal, no bind/reject phases.
   id: "doordash.notification.scheduled_expired",
   priority: 30,
   overrideable: true,
-  target: "ScheduledDashExpired",
+  // Derived name: "scheduled_expired"
   require: { all: [
     { anyFieldContains: "scheduled" },
     { anyFieldContains: "expired" },
@@ -1227,7 +1282,7 @@ operate on those fields directly — no tree traversal, no bind/reject phases.
   id: "doordash.notification.sensitive",
   priority: 1,
   overrideable: false,
-  target: "Sensitive",
+  // Derived name: "sensitive"
   require: { anyFieldContainsAny: [
     "Bank Account", "Routing Number", "Social Security",
     "Verify Identity", "Biometric", "Account number",
@@ -1241,7 +1296,7 @@ operate on those fields directly — no tree traversal, no bind/reject phases.
 |--------------------------------------|---------------|----------------------------------------------------|
 | `{ titleEquals: "s" }`               | `title`       | case-insensitive equals                            |
 | `{ titleContains: "s" }`             | `title`       | case-insensitive contains                          |
-| `{ titleMatchesRegex: "p" }`         | `title`       | regex match                                        |
+| `{ titleMatchesRegex: "p" }`         | `title`       | regex match (bounded — max 200 chars)              |
 | `{ textEquals: "s" }`                | `text`        | case-insensitive equals                            |
 | `{ textContains: "s" }`              | `text`        | case-insensitive contains                          |
 | `{ textMatchesRegex: "p" }`          | `text`        | regex match                                        |
@@ -1249,7 +1304,12 @@ operate on those fields directly — no tree traversal, no bind/reject phases.
 | `{ bigTextMatchesRegex: "p" }`       | `bigText`     | regex match                                        |
 | `{ tickerTextContains: "s" }`        | `tickerText`  | case-insensitive contains                          |
 | `{ tickerTextMatchesRegex: "p" }`    | `tickerText`  | regex match                                        |
-| `{ isClearable }`                    | `isClearable` | persistent vs transient                            |
+| `{ isClearable: true }`              | `isClearable` | equals the given boolean (persistent vs transient) |
+| `{ isOngoing: true }`                | `isOngoing`   | equals the given boolean (ongoing/foreground-service notification vs not) |
+| `{ channelIdEquals: "s" }`           | `channelId`   | exact channel id match                             |
+| `{ channelIdContains: "s" }`         | `channelId`   | case-insensitive contains                          |
+| `{ categoryEquals: "s" }`            | `category`    | exact `Notification.category` match                |
+| `{ hasAction: "s" }`                 | `actionLabels`| Some action button's label contains `s` (case-insensitive) |
 | `{ anyFieldContains: "s" }`          | all           | Any field contains `s`                             |
 | `{ anyFieldContainsAll: ["a","b"] }` | all           | All strings present somewhere across fields        |
 | `{ anyFieldContainsAny: ["a","b"] }` | all           | At least one string present                        |
@@ -1257,6 +1317,9 @@ operate on those fields directly — no tree traversal, no bind/reject phases.
 | `{ all: [ pred, ... ] }`             | ---           | AND                                                |
 | `{ any: [ pred, ... ] }`             | ---           | OR                                                 |
 | `{ not: pred }`                      | ---           | NOT                                                |
+
+`isClearable`/`isOngoing` require an explicit boolean value (same rule as the node-level
+booleans above) — `false` is honored, not silently ignored.
 
 ### Special Notification Types
 
@@ -1370,17 +1433,21 @@ val fullText: String by lazy { toFullString() }
 
 | DSL construct                | Interpreter call                                  |
 |------------------------------|---------------------------------------------------|
-| `find: { id: "s" }`          | `tree.idIndex["s"]?.firstOrNull()`                |
-| `findAll: { id: "s" }`       | `tree.idIndex["s"].orEmpty()`                     |
+| `find: { hasIdSuffix: "s" }`          | `tree.idIndex["s"]?.firstOrNull()`                |
+| `findAll: { hasIdSuffix: "s" }`       | `tree.idIndex["s"].orEmpty()`                     |
 | `navigate: "sibling(N)"`     | `currentNode.sibling(N)`                          |
 | `navigate: "ancestor(N)"`    | `currentNode.ancestor(N)`                         |
 | `textAfterLabel: "label"`    | `tree.textAfterLabel("label", offset)`            |
 | `allTextContains: "s"`       | `tree.allTextLowerJoined.contains(s.lowercase())` |
 | `transform: "parseCurrency"` | `TransformRegistry.apply("parseCurrency", value)` |
-| `{ hasNoId }`                | `!node.hasViewId`                                 |
+| `{ hasNoId: true }`          | `node.viewIdResourceName.isNullOrBlank() == want` |
 | `presence: <pred>`           | compiled predicate returns `Boolean` directly     |
 
-### Dual-Running Validation (debug builds only)
+### Dual-Running Validation (historical — migration completed)
+
+> This section describes the Phase A3 migration mechanism, not the current state: there are no
+> Kotlin matcher classes left to dual-run against (per the JSON Rule Engine architecture — rules
+> are the only recognition implementation today). Kept for historical rationale.
 
 While both Kotlin matchers and JSON-interpreted rules are active, every event is classified by
 both. Disagreements are logged at WARN level. Agreement is logged at VERBOSE. Release builds
@@ -1506,14 +1573,14 @@ flat `parse.fields` with `source` objects). The v2 DSL is a superset:
 |--------------------------------------------------|-----------------------------------------|
 | `guards: [...]`                                  | `reject: [...]`                         |
 | `if: { ... }`                                    | `require: { ... }`                      |
-| `source: { nodeByIdSuffix: "s", field: "text" }` | `find: { id: "s" }, read: "text"`       |
+| `source: { nodeByIdSuffix: "s", field: "text" }` | `find: { hasIdSuffix: "s" }, read: "text"`       |
 | `source: { allTextAt: "label", offset: N }`      | `textAfterLabel: "label", offset: N`    |
 | `source: { forEach: { ... } }`                   | `each: { ... }`                         |
 | `source: { conditionalEnum: [...] }`             | `conditionalEnum: [...]`                |
 | `source: { presence: <pred> }`                   | `presence: <pred>`                      |
 | `source: { any: [...] }`                         | `coalesce: [...]`                       |
-| `source: { combineFields: [...] }`               | `join: { parts: [...] }`                |
-| `transform: "regexGroup:pat:N"`                  | `transform: { regex: "pat", group: N }` |
+| `source: { combineFields: [...] }`               | `join: [...]` (array, `separator` as a sibling key) |
+| `transform: "regexGroup:pat:N"`                  | `transform: { regex: { pattern: "pat", group: N } }` |
 | `transform: "stripPrefix:s"`                     | `transform: { stripPrefix: "s" }`       |
 
 The interpreter can support both vocabularies during migration (Phase A3). Once all rules are
