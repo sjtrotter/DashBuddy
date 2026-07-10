@@ -73,6 +73,16 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — store entity resolution keys real stores from live dashes (#159 / PR).**
+  The read-model now resolves each job's stores (`stores` + `pickup_records` tables) from captured
+  pickup/dropoff/payout surfaces. **How to tell it's working (desk-side, after a dash):** on a job with a
+  payout receipt, the `stores` table should hold one keyed row per store (`storeKey` ending in a real
+  running key like `…|target|02426`, not an empty `…|target|` segment) and the delivery/pickup rows for
+  that job should carry that `storeKey`. **Watch especially the multi-store stack** (e.g. the Target+Maple
+  case): BOTH stores should be keyed from the single end-of-job receipt, not one keyed + one chain-only.
+  And a payout-less close (`DASH_STOP` with no summary) must NOT downgrade an already-keyed store back to
+  chain-only. No UI yet (the #315 Patterns tab is the consumer) — verify via the DB / a CSV-adjacent read.
+  - Confirmed: 0/2
 - **🆕 NEW — GoPuff zone-arrival screens recognized (recognize-only, no state effect) (#501 item 3 / PR #738).**
   The GoPuff "Navigate to zone" / "Arrived at store" screens (the `go_to_store_action_view` CTA card)
   are now recognized as `pickup_zone_arrival` instead of landing in UNKNOWN. **How to tell it's working

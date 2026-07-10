@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.PickupRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryAdjustmentFold
@@ -15,8 +16,10 @@ import cloud.trotter.dashbuddy.domain.analytics.DeliveryFold
 import cloud.trotter.dashbuddy.domain.analytics.OfferFold
 import cloud.trotter.dashbuddy.domain.analytics.PayAdjustmentFold
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
+import cloud.trotter.dashbuddy.domain.analytics.PickupFold
 import cloud.trotter.dashbuddy.domain.analytics.RecordFolds
 import cloud.trotter.dashbuddy.domain.analytics.SessionFoldContext
+import cloud.trotter.dashbuddy.domain.analytics.StoreResolution
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CancellationException
@@ -64,6 +67,10 @@ class AnalyticsProjector @Inject constructor(
     private val analyticsDao: AnalyticsDao,
     private val appPreferencesRepository: AppPreferencesRepository,
 ) {
+
+    /** #159 store-resolution runner (row adapter over the pure `StoreResolver` core), run inside the
+     *  batch transaction against the job's committed rows. */
+    private val storeResolutionRunner = StoreResolutionRunner(analyticsDao)
 
     /** Started from `DashBuddyApplication.onCreate` (NOT debug-gated). */
     fun start(scope: CoroutineScope) {
@@ -165,6 +172,8 @@ class AnalyticsProjector @Inject constructor(
         val touched = LinkedHashSet<String>()
         val deliveries = ArrayList<DeliveryFold>()
         val offers = ArrayList<OfferFold>()
+        val pickups = ArrayList<PickupFold>()          // #159 visits rows
+        val resolutions = ArrayList<ResolutionTask>()  // #159 store-resolution triggers (seq-ordered)
         // FIX 1: one event-sequence-ordered stream of adjustment decisions (PAY_ADJUSTMENT +
         // DELIVERY_ADJUSTMENT interleaved), NOT two type-partitioned lists. Type-order apply mis-ordered
         // a PA sequenced after a DA on the same row when they shared a batch (incremental ≠ refold).
@@ -179,6 +188,8 @@ class AnalyticsProjector @Inject constructor(
             if (outcome.skip != null) skips++
             outcome.delivery?.let { deliveries += it }
             outcome.offer?.let { offers += it }
+            outcome.pickup?.let { pickups += it }
+            outcome.resolution?.let { resolutions += ResolutionTask(ev.sequenceId, it) }
             outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, it) }
             outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, it) }
             outcome.context?.let { ctx ->
@@ -188,16 +199,22 @@ class AnalyticsProjector @Inject constructor(
             // A fresh DASH_START infers the close of any still-open session on the same platform —
             // a crash-orphaned dash the next one ends. (freshSession is false for a RECOVERY
             // re-start of an already-started session, so that path does not re-close anything.)
+            // #159 F3: each inferred-closed session is also a store-resolution trigger.
             if (outcome.freshSession) {
-                outcome.context?.let { inferredCloseOpenSessions(it, contexts, touched) }
+                outcome.context?.let { inferredCloseOpenSessions(it, contexts, touched, resolutions, ev.sequenceId) }
             }
         }
 
         val lastSeq = events.last().sequenceId
         var adjustmentSkips = 0
         db.withTransaction {
+            // #159 transaction order (M1/M2): deliveries → offers → pickups → sessions → adjustments →
+            // resolutions → watermark. Pickups + offers + adjustments are strictly BEFORE resolutions,
+            // so a same-batch pickup is an available anchor, the same-batch offer is linkable, and a
+            // same-batch store correction is already pinned when resolution runs.
             deliveries.forEach { analyticsDao.upsertDelivery(it.toEntity()) }
             offers.forEach { analyticsDao.upsertOffer(it.toEntity()) }
+            pickups.forEach { analyticsDao.upsertPickup(it.toEntity()) }
             touched.forEach { sid -> contexts[sid]?.let { analyticsDao.upsertSession(it.toEntity()) } }
             // Apply the driver corrections AFTER the batch's own delivery upserts (so a same-batch
             // target is already written) and before the watermark, in ONE event-sequence order (FIX 1).
@@ -211,6 +228,10 @@ class AnalyticsProjector @Inject constructor(
                 }
                 if (skipped) adjustmentSkips++
             }
+            // #159: store resolution reads the just-committed rows for each triggered job and stamps the
+            // storeKey back onto them (resolve-from-rows, F1). sequenceId-ordered (M1) so incremental
+            // fold ≡ from-zero refold.
+            resolutions.sortedBy { it.sequenceId }.forEach { storeResolutionRunner.resolve(it.resolution) }
             analyticsDao.setWatermark(
                 AnalyticsProjectionStateEntity(watermarkSequenceId = lastSeq, projectorVersion = PROJECTOR_VERSION),
             )
@@ -236,6 +257,10 @@ class AnalyticsProjector @Inject constructor(
         data class Pay(override val sequenceId: Long, val fold: PayAdjustmentFold) : Adjustment
         data class Delivery(override val sequenceId: Long, val fold: DeliveryAdjustmentFold) : Adjustment
     }
+
+    /** A #159 store-resolution trigger carrying its source event's [sequenceId] for the seq-ordered
+     *  in-transaction apply (M1). */
+    private data class ResolutionTask(val sequenceId: Long, val resolution: StoreResolution)
 
     /**
      * Apply one legacy PAY_ADJUSTMENT re-price by-PK. Returns true iff the target row was missing (a
@@ -337,6 +362,13 @@ class AnalyticsProjector @Inject constructor(
                 NetProfit.net(newPay, newMiles, row.frozenCostPerMile!!)
             else -> null
         }
+        // #159 H1: a driver-supplied newStoreName NULLS the resolved storeKey AND sets the pin, so the
+        // driver's fix wins the report-card grouping (its grouping becomes read-side
+        // normalizedChain(newStoreName), F9) and store resolution NEVER re-keys it back to the pickup
+        // anchor (every resolution UPDATE carries `WHERE storeKeyPinned = 0`). The pin is derived from
+        // this event, so a from-zero refold re-derives it (F8 wipe clears it, the replayed event resets
+        // it) — rebuild-deterministic. A store-name-less edit leaves storeKey/pin untouched.
+        val storeChanged = adj.newStoreName != null
         analyticsDao.upsertDelivery(
             // originalPayBasis (+ every unmentioned column) is preserved by `row.copy`.
             row.copy(
@@ -347,6 +379,8 @@ class AnalyticsProjector @Inject constructor(
                 realizedMiles = newMiles,
                 payBasis = newBasis,
                 netProfit = net,
+                storeKey = if (storeChanged) null else row.storeKey,
+                storeKeyPinned = if (storeChanged) 1 else row.storeKeyPinned,
             ),
         )
         return false
@@ -365,6 +399,11 @@ class AnalyticsProjector @Inject constructor(
             analyticsDao.deleteAllDeliveries()
             analyticsDao.deleteAllSessions()
             analyticsDao.deleteAllOffers()
+            // #159 F8: the wipe MUST also clear the store tables, or stale `stores` first-observed fields
+            // survive the refold and become permanently wrong (the forgotten-edge class the data-safety
+            // posture exists to catch). The refold repopulates both from the immutable log.
+            analyticsDao.deleteAllStores()
+            analyticsDao.deleteAllPickupRecords()
             analyticsDao.setWatermark(
                 AnalyticsProjectionStateEntity(watermarkSequenceId = 0, projectorVersion = PROJECTOR_VERSION),
             )
@@ -417,20 +456,44 @@ class AnalyticsProjector @Inject constructor(
         fresh: SessionFoldContext,
         contexts: HashMap<String, SessionFoldContext>,
         touched: LinkedHashSet<String>,
+        resolutions: ArrayList<ResolutionTask>,
+        triggerSequenceId: Long,
     ) {
+        // Collect the newly inferred-closed sessions from both sources, then emit their resolutions in a
+        // deterministic order (FIX 10): all these tasks share the DASH_START's triggerSequenceId, so the
+        // transaction's stable `sortedBy { sequenceId }` would otherwise preserve HashMap/query iteration
+        // order among them — non-deterministic between incremental fold and refold. Sorting by sessionId
+        // pins it.
+        val inferred = ArrayList<Pair<String, String>>() // sessionId → platformWire
         // In-batch open contexts on the same platform.
         for (ctx in contexts.values.toList()) {
             if (ctx.sessionId == fresh.sessionId || ctx.platform != fresh.platform || ctx.endedAt != null) continue
             contexts[ctx.sessionId] = ctx.copy(endedAt = ctx.lastEventAt, endSource = INFERRED)
             touched += ctx.sessionId
+            inferred += ctx.sessionId to ctx.platform.wire
         }
         // DB rows still open for this platform, not already handled in this batch.
         for (row in analyticsDao.openSessions(fresh.platform.wire)) {
             if (row.sessionId == fresh.sessionId || contexts.containsKey(row.sessionId)) continue
             contexts[row.sessionId] = row.toContext().copy(endedAt = row.lastEventAt, endSource = INFERRED)
             touched += row.sessionId
+            inferred += row.sessionId to fresh.platform.wire
+        }
+        inferred.sortedBy { it.first }.forEach { (sessionId, platformWire) ->
+            resolutions += inferredResolution(sessionId, platformWire, triggerSequenceId)
         }
     }
+
+    /** #159 F3: an inferred session close is a store-resolution trigger too (session-level, jobId null),
+     *  carried under the triggering DASH_START's sequenceId for the seq-ordered in-transaction apply. */
+    private fun inferredResolution(
+        sessionId: String,
+        platformWire: String,
+        triggerSequenceId: Long,
+    ) = ResolutionTask(
+        triggerSequenceId,
+        StoreResolution(sessionId = sessionId, platform = platformWire, jobId = null, offerHashes = emptyList()),
+    )
 
     // ── Entity ↔ domain mapping (the storage boundary; :domain cannot see :core:database) ──
 
@@ -525,6 +588,27 @@ class AnalyticsProjector @Inject constructor(
         // preserves it via `row.copy`, so a re-priced row keeps its original receipt-evidence basis
         // for the #691 hydration COALESCE.
         originalPayBasis = payBasis,
+        // #159: storeKey is null at fold time (stamped later by resolution, in the same transaction);
+        // the full receipt store-form set is persisted here (serialized) as the row-sourced evidence.
+        storeKey = null,
+        payoutStoreForms = StoreResolutionRunner.encodeForms(payoutStoreForms),
+        storeKeyPinned = 0,
+    )
+
+    private fun PickupFold.toEntity() = PickupRecordEntity(
+        eventSequenceId = eventSequenceId,
+        sessionId = sessionId,
+        platform = platform,
+        jobId = jobId,
+        taskId = taskId,
+        storeName = storeName,
+        storeKey = null, // stamped later by resolution
+        phaseStartedAt = phaseStartedAt,
+        arrivedAt = arrivedAt,
+        confirmedAt = confirmedAt,
+        deadlineMillis = deadlineMillis,
+        activity = activity,
+        storeAddress = storeAddress,
     )
 
     private fun OfferFold.toEntity() = OfferRecordEntity(
@@ -579,7 +663,11 @@ class AnalyticsProjector @Inject constructor(
          * `CURRENT_FALLBACK` rows against today's economy (`CostBasis` is not rebuild-stable), so those
          * rows' fallback net shifts on the bump — the same behaviour as the v2/v3 bumps. `cashTip`
          * stays null in history (no cash events exist yet).
+         * v5 (#159): the from-zero refold populates the new `stores` + `pickup_records` tables and the
+         * `delivery_records.storeKey`/`payoutStoreForms` + `offer_records.storeKey`/`linkedJobId`
+         * columns for ALL history (rebuild ≡ backfill — the backfill is the first drain). The F8 wipe
+         * clears `stores`/`pickup_records` so the refold's first-observed store fields are correct.
          */
-        private const val PROJECTOR_VERSION = 4
+        private const val PROJECTOR_VERSION = 5
     }
 }

@@ -65,14 +65,59 @@ data class PlatformDeliveryTotalsRow(
     val nonFuelCost: Double?,
 )
 
-/** Per-store delivery totals (GROUP BY storeName) — per-store + future chain resolution (#159). */
+/**
+ * Per-(storeKey, storeName, platform) delivery totals (#159 F9 raw input). [storeKey] is null for an
+ * unresolved row; [platform] lets the repository fold every row to `platform + "|" + normalizedChain`
+ * (chain from the storeKey's middle segment when keyed, else the normalizer over [storeName]), merging
+ * a resolved keyed location and its unresolved chain form into ONE bucket. [storeName] is a
+ * representative raw form of the group (the display name prefers `stores.chainDisplay`).
+ */
 data class StoreTotalsRow(
+    val storeKey: String?,
     val storeName: String?,
+    val platform: String,
     val pay: Double,
     val net: Double,
     val deliveries: Int,
     /** Σ driver-entered cash tips for the store's period rows (#688) — see [DeliveryTotalsRow.cash]. */
     val cash: Double,
+)
+
+/** First-observed chain-display capitalization per (platform, normalizedChain) — the F9 rollup's
+ *  display-name source (#159). */
+data class StoreChainDisplayRow(
+    val platform: String,
+    val normalizedChain: String,
+    val chainDisplay: String,
+)
+
+/**
+ * One store's report-card rollup (#159, the #315 Patterns tab) — the `stores` metadata plus
+ * derived-at-read pickup/delivery counts and realized gross/net. Dwell percentiles are computed in the
+ * repository from [StoreDwellSample]. A [runningKey] of null is a **chain-only ("location unknown")**
+ * bucket (F6): its dwell population blends multiple physical locations, so per-location stats are
+ * partial by construction.
+ */
+data class StoreReportRow(
+    val storeKey: String,
+    val platform: String,
+    val normalizedChain: String,
+    val chainDisplay: String,
+    val runningKey: String?,
+    val address: String?,
+    val firstSeenAt: Long,
+    val lastSeenAt: Long,
+    val pickups: Int,
+    val deliveries: Int,
+    val gross: Double,
+    val net: Double,
+)
+
+/** One pickup dwell sample (`confirmedAt − arrivedAt`) keyed by storeKey — the raw input the repository
+ *  folds into per-store avg/p50/p95 (#159; SQLite has no native percentile). */
+data class StoreDwellSample(
+    val storeKey: String?,
+    val dwellMillis: Long,
 )
 
 /**

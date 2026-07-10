@@ -84,6 +84,22 @@ data class PickupPayload(
     val itemsShopped: Int? = null,
     val redCardTotal: Double? = null,
     val activity: String? = null,
+    /**
+     * The parsed store address (#159 D4), when the pickup screen surfaced one. First-observed
+     * non-null value seeds `stores.address` on the resolved entity — MERCHANT data, not customer
+     * PII (fine at rest, never in INFO+ logs, P7). Null on all historical events (nullable-with-
+     * default → old rows deserialize identically → no forced projector bump from this field).
+     */
+    val storeAddress: String? = null,
+    /**
+     * The job's contributing offer hashes (#159 D3, `Job.parentOfferHashes`) — the offer↔job link
+     * the log otherwise lacks (`OFFER_ACCEPTED` fires before the job is minted). Enables the resolver
+     * to stamp `offer_records.storeKey`/`linkedJobId` for the exact offer(s) of this job; degrades to
+     * the session-scoped temporal fallback when empty (a site that can't reach the job, or a historical
+     * event). NEVER used for money — the delivery `storeKey` comes from the pickup anchor, not the
+     * offer. Nullable-with-default ⇒ old events deserialize identically (F12).
+     */
+    val jobOfferHashes: List<String> = emptyList(),
 ) : AppEventPayload
 
 /**
@@ -142,6 +158,14 @@ data class DeliveryPayload(
     val offerPayShare: Double? = null,
     /** Session running total at the moment of completion. */
     val sessionEarningsAtCompletion: Double? = null,
+    /**
+     * The job's contributing offer hashes (#159 D3, `Job.parentOfferHashes`) — the offer↔job link the
+     * log otherwise lacks (`OFFER_ACCEPTED` fires before the job is minted). The resolver stamps
+     * `offer_records.storeKey`/`linkedJobId` for the exact offer(s) of this job; degrades to the
+     * temporal fallback when empty (F12). NEVER used for money. Nullable-with-default ⇒ old events
+     * deserialize identically.
+     */
+    val jobOfferHashes: List<String> = emptyList(),
 ) : AppEventPayload
 
 /**

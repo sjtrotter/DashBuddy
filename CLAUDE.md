@@ -321,7 +321,19 @@ payBasis)` so a re-priced `USER_CORRECTED` row keeps its original receipt eviden
 additive-only (five nullable columns — delivery +2, offer +2, session +1); the v10→v11 migration is likewise
 additive-only (delivery +2 — `cashTip`/`originalPayBasis`; `PROJECTOR_VERSION` 3→4 refolds them from the log,
 populating `originalPayBasis` for all history — the bump is #703's requirement, not a corrections one, and it
-also re-stamps `CURRENT_FALLBACK` rows against today's economy). `NetProfit`
+also re-stamps `CURRENT_FALLBACK` rows against today's economy). **Store entity resolution (#159, Room
+v11→v12 additive):** two new tables `stores` (identity/resolution only — deterministic `storeKey =
+platform|normalizedChain|runningKey`, D2/F5/F7) + `pickup_records` (the per-`PICKUP_CONFIRMED` visits table;
+dwell = `confirmedAt−arrivedAt` derived at read) plus `delivery_records.{storeKey,payoutStoreForms,
+storeKeyPinned}` + `offer_records.{storeKey,linkedJobId}`. Recognition is one pure `:domain` resolver core
+(`StoreResolver`/`StoreKeys`, shared with the field-verified shadow `StoreChainProjector` via a `Job` adapter);
+the projector runs it **resolve-from-rows** inside the batch transaction (`StoreResolutionRunner`, the row
+adapter) — a `DELIVERY_COMPLETED` persists the FULL receipt store-form set to `payoutStoreForms` (B1/B2), and
+resolution reads that from the committed rows so a payout-less `DASH_STOP` re-run recomputes the SAME keys, never
+a downgrade. A driver `newStoreName` correction sets a sticky `storeKeyPinned` (H1, never re-keyed). Per-store
+reads group on the resolved key, unresolved rows fall back to `normalizedChain(storeName)` (F9); the #315
+Patterns tab (store report card + dwell percentiles) is the consumer. `PROJECTOR_VERSION` 4→5 refolds all
+history and (F8) the version-bump wipe now also clears `stores`/`pickup_records`. `NetProfit`
 (`:domain`) is the one shared cost-math SSOT for both the offer estimate and the frozen realized net.
 `AnalyticsRepository` (`:core:data`, **DAO-only — no economy dependency**, so historical net is structurally
 immutable) serves period economics (`SUM(netProfit)` frozen + `unattributedPay`; all-pay gross =

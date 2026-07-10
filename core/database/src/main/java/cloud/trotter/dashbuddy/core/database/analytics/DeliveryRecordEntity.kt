@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.database.analytics
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -38,7 +39,9 @@ import androidx.room.PrimaryKey
         Index(value = ["platform", "completedAt"]), // per-platform ordering/charts (period bucketing is session-anchored, #655)
         Index("sessionId"),                         // per-dash drilldown + fold hydration
         Index(value = ["sessionId", "jobId"]),      // incremental distinct-job counting
+        Index("jobId"),                             // store resolution reads a job's rows by jobId (#159)
         Index("storeName"),                         // per-store aggregation + chain resolution (#159)
+        Index("storeKey"),                          // resolved per-store economics grouping (#159)
     ]
 )
 data class DeliveryRecordEntity(
@@ -115,4 +118,37 @@ data class DeliveryRecordEntity(
      * on legacy rows until the `PROJECTOR_VERSION` 3→4 refold populates it from the immutable log.
      */
     val originalPayBasis: String? = null,
+
+    // ── Store entity resolution (#159, v12) ─────────────────────────────────
+    /**
+     * The resolved store entity key (`StoreKeys.storeKey`, #159), stamped/re-stamped by store
+     * resolution against the pickup anchor; null until resolved (a MANUAL row never in a job, or a
+     * not-yet-resolved row). The per-store economics query groups on it, falling back to the read-side
+     * `normalizedChain(storeName)` for unresolved rows (F9). Refold-deterministic (row-sourced key).
+     */
+    val storeKey: String? = null,
+    /**
+     * The FULL receipt store-form set (#159 B1/B2) — every `parsedPay.customerTips[].type` on the ONE
+     * completion that carried `parsedPay`, serialized as a JSON string array (null on the sibling
+     * drops that carried no receipt). Persists ALL the receipt's store lines (not just this drop's),
+     * because a stacked job settles on one end-of-job receipt riding a single completion — so resolution
+     * reads the running keys from ROWS (never a trigger event), keeping every store keyed and the key
+     * monotonic across a payout-less re-run. Merchant strings — fine at rest, never an INFO+ log
+     * surface (P7).
+     *
+     * **Named residual (FIX 13):** these strings come from the receipt-partition heuristic
+     * (`parsedPay.customerTips[].type`) and are merchant-shaped ONLY under the fielded DoorDash receipt.
+     * A future/unfielded platform that itemizes tips *per customer* would land customer-shaped text here,
+     * so any consumer that ever surfaces this column (a CSV/UI export) MUST scrub it — it is not
+     * guaranteed to be merchant-only for every platform. No consumer exports it today.
+     */
+    val payoutStoreForms: String? = null,
+    /**
+     * Driver-correction sticky bit (#159 H1). Set to 1 when a `DELIVERY_ADJUSTMENT` supplies a
+     * `newStoreName`; resolution SKIPS re-stamping any pinned row (`WHERE storeKeyPinned = 0`), so a
+     * correction that disagrees with the pickup anchor is never re-keyed back. Derived from the
+     * `DELIVERY_ADJUSTMENT` event ⇒ a from-zero refold re-derives it. Default 0 (SQL column default so
+     * the additive AutoMigration back-fills existing rows).
+     */
+    @ColumnInfo(defaultValue = "0") val storeKeyPinned: Int = 0,
 )

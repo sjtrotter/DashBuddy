@@ -14,12 +14,15 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.StoreKeys
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.math.ceil
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -103,31 +106,92 @@ class AnalyticsRepository @Inject constructor(
         }
 
     /**
-     * Per-store economics for [period], highest-**gross** store first — frozen net + realized gross.
-     * Cash tips (#688 F5) are added to BOTH gross and net (`gross = realized pay + cash`, `net =
-     * frozen net + cash`) — explicit adds here, mirroring the period-level locked accounting.
+     * Per-store economics for [period], highest-**gross** store first — frozen net + realized gross,
+     * rolled up to CHAIN level (#159 F9). Both a resolved keyed location (`…|target|02426`) and an
+     * unresolved/MANUAL raw row (`Target`) on the same platform fold into ONE bucket keyed
+     * `platform + "|" + normalizedChain` (chain from the storeKey's middle segment when keyed, else the
+     * shared `:domain` normalizer over `storeName`). This is the F9 sentence — "Target" (unresolved) and
+     * "doordash|target|02426" share a bucket — the cross-platform parity (F5), and the fix for multiple
+     * identical-"Target" rows fragmenting the list. Per-LOCATION detail stays the report card's job
+     * ([storeReportCards], grouped by `storeKey`).
      *
-     * **Cash-inclusive ordering (F8):** the DAO's `ORDER BY pay DESC` is a cash-free **stable
-     * pre-sort**; the final rank is re-sorted here by the cash-inclusive [StoreEconomics.gross] so a
-     * cash-heavy store isn't ranked below a lower-gross one whose cash the SQL sort key ignored. The
-     * repository owns the mapped-value ordering because cash is added here, not in SQL (Principle 5 —
-     * one owner for the gross number, one owner for the sort that uses it).
+     * Display name prefers the chain's first-observed `stores.chainDisplay` (a single extra reactive DAO
+     * read), else the first row's raw `storeName`.
      *
-     * **Null-net + cash presentation:** a store whose only row has a null frozen `net` (no cost basis)
-     * but a recorded `cashTip` surfaces as `net = 0 + cash` — i.e. "net = cash". Accepted: cash has no
-     * cost term to net out, so the driver-attested cash IS the honest net contribution of that row.
+     * Cash tips (#688 F5) add to BOTH gross and net (explicit adds here, per the locked accounting). The
+     * DAO's `ORDER BY pay DESC` is a cash-free pre-sort; the final rank is re-sorted here by the
+     * cash-inclusive [StoreEconomics.gross].
+     *
+     * **Null-net + cash presentation:** a bucket whose rows all have a null frozen `net` (no cost basis)
+     * but a recorded `cashTip` surfaces as `net = 0 + cash`. Accepted: cash has no cost term to net out.
      */
     fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
-            analyticsDao.deliveryTotalsByStore(start, end).map { rows ->
-                rows.map {
-                    StoreEconomics(
-                        storeName = it.storeName,
-                        net = it.net + it.cash,
-                        gross = it.pay + it.cash,
-                        deliveries = it.deliveries,
-                    )
-                }.sortedByDescending { it.gross }
+            combine(
+                analyticsDao.deliveryTotalsByStore(start, end),
+                analyticsDao.storeChainDisplays(),
+            ) { rows, displays ->
+                val displayByBucket = displays.associate {
+                    (it.platform + "|" + it.normalizedChain) to it.chainDisplay
+                }
+                rows.groupBy { chainBucket(it) }
+                    .map { (bucket, group) ->
+                        val first = group.first()
+                        StoreEconomics(
+                            storeKey = bucket, // chain-level bucket identity (not a per-location storeKey)
+                            storeName = displayByBucket[bucket] ?: first.storeName,
+                            net = group.sumOf { it.net + it.cash },
+                            gross = group.sumOf { it.pay + it.cash },
+                            deliveries = group.sumOf { it.deliveries },
+                        )
+                    }.sortedByDescending { it.gross }
+            }
+        }
+
+    /** The F9 chain bucket for a store totals row: `platform + "|" + normalizedChain`, chain taken from
+     *  the storeKey's middle segment when keyed, else the shared `:domain` normalizer over storeName. */
+    private fun chainBucket(row: cloud.trotter.dashbuddy.core.database.analytics.StoreTotalsRow): String {
+        val chain = row.storeKey?.split("|")?.getOrNull(1)?.takeIf { it.isNotEmpty() }
+            ?: StoreKeys.normalizedChain(row.storeName.orEmpty())
+        return row.platform + "|" + chain
+    }
+
+    /**
+     * The store report cards (#159, the #315 Patterns tab) — one per **referenced** resolved store
+     * entity (M4, no phantom orphan rows), lifetime-scoped, newest-visited first. Combines the DAO
+     * rollup ([AnalyticsDao.storeReportRows] — metadata + pickup/delivery counts + gross/net) with the
+     * dwell samples ([AnalyticsDao.storeDwellSamples]); avg/p50/p95 dwell are computed HERE (SQLite has
+     * no native percentile; store visit counts are small). A chain-only row surfaces as
+     * `locationKnown = false` ("location unknown", F6). Reactive by construction (both sources are
+     * Room-invalidation Flows). No economy dependency (net is the frozen stored value); no new PII
+     * surface (merchant metadata + counts only).
+     */
+    fun storeReportCards(): Flow<List<StoreReportCard>> =
+        combine(
+            analyticsDao.storeReportRows(),
+            analyticsDao.storeDwellSamples(),
+        ) { rows, dwells ->
+            val dwellsByKey = dwells.groupBy { it.storeKey }
+            rows.map { r ->
+                val sorted = dwellsByKey[r.storeKey].orEmpty().map { it.dwellMillis }.sorted()
+                StoreReportCard(
+                    storeKey = r.storeKey,
+                    platform = r.platform,
+                    normalizedChain = r.normalizedChain,
+                    chainDisplay = r.chainDisplay,
+                    runningKey = r.runningKey,
+                    address = r.address,
+                    locationKnown = r.runningKey != null,
+                    pickups = r.pickups,
+                    deliveries = r.deliveries,
+                    gross = r.gross,
+                    net = r.net,
+                    avgDwellMillis = sorted.takeIf { it.isNotEmpty() }?.average(),
+                    p50DwellMillis = percentile(sorted, 0.50),
+                    p95DwellMillis = percentile(sorted, 0.95),
+                    firstSeenAt = r.firstSeenAt,
+                    lastSeenAt = r.lastSeenAt,
+                )
             }
         }
 
@@ -352,6 +416,17 @@ class AnalyticsRepository @Inject constructor(
      * derived split ([TimeEconomics.unattributedMillis]/[TimeEconomics.unattributedMiles] etc.) is the
      * DTO's own coerce-≥0 helper, so this repository stores no second copy of that math (Principle 5).
      */
+    /**
+     * The [p]-th percentile of an ASCENDING-sorted dwell list (#159 store report card) — nearest-rank
+     * (SQLite has no native percentile and store visit counts are small, so an exact in-Kotlin nearest-
+     * rank is honest and cheap). Null on an empty list. `p ∈ [0,1]`.
+     */
+    private fun percentile(sorted: List<Long>, p: Double): Long? {
+        if (sorted.isEmpty()) return null
+        val rank = ceil(p * sorted.size).toInt().coerceIn(1, sorted.size)
+        return sorted[rank - 1]
+    }
+
     private fun assembleTime(
         session: SessionTotalsRow,
         delivery: DeliveryTimeTotalsRow,

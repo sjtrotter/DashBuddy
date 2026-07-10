@@ -66,15 +66,45 @@ data class PeriodEconomics(
 }
 
 /**
- * Per-store economics for a period (#314) — GROUP BY store over the delivery
- * records. [gross] is Σ realized delivery pay for the store; [net] is Σ frozen
- * delivery net. Chain/entity resolution (folding "H-E-B #472" and "H-E-B #018"
- * into one merchant) is deferred to #159 — [storeName] is the raw captured name,
- * nullable when a delivery record carried none.
+ * Per-**chain** economics for a period (#314/#159 F9) — the top-stores list, rolled up to the chain
+ * level: both a resolved keyed location and its unresolved/MANUAL raw form on the same platform fold
+ * into one bucket. [gross] is Σ realized delivery pay (+ cash) for the chain; [net] is Σ frozen delivery
+ * net (+ cash). [storeName] is the chain's display name (first-observed `stores.chainDisplay`, else a
+ * representative raw form). Per-LOCATION detail lives on [StoreReportCard]; this is the chain rollup.
  */
 data class StoreEconomics(
     val storeName: String?,
     val net: Double,
     val gross: Double,
     val deliveries: Int,
+    /** The chain-level bucket identity `platform + "|" + normalizedChain` (#159 F9) — NOT a
+     *  per-location storeKey (that granularity is [StoreReportCard]). */
+    val storeKey: String? = null,
+)
+
+/**
+ * One store's report card (#159, the #315 Patterns tab consumer) — the resolved store entity plus its
+ * derived-at-read visit stats. A [runningKey] of null makes [locationKnown] false: this is a chain-only
+ * ("location unknown") bucket whose dwell population blends multiple physical locations, so its
+ * per-location [p50DwellMillis]/[p95DwellMillis] are partial by construction (F6). Store names /
+ * addresses are MERCHANT data — never customer PII.
+ */
+data class StoreReportCard(
+    val storeKey: String,
+    val platform: String,
+    val normalizedChain: String,
+    val chainDisplay: String,
+    val runningKey: String?,
+    val address: String?,
+    /** True when a running key has been observed — a real per-location entity (else "location unknown"). */
+    val locationKnown: Boolean,
+    val pickups: Int,
+    val deliveries: Int,
+    val gross: Double,
+    val net: Double,
+    val avgDwellMillis: Double?,
+    val p50DwellMillis: Long?,
+    val p95DwellMillis: Long?,
+    val firstSeenAt: Long,
+    val lastSeenAt: Long,
 )

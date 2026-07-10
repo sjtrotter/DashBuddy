@@ -85,7 +85,7 @@ keyed rows once one is learned — reads that want chain-level rollups group by
 | `pickupNameForm` | TEXT nullable | First-observed pickup/canonical form. |
 | `payoutNameForm` | TEXT nullable | First-observed payout form (`Target (02426)`) — the key carrier, kept for audit/re-resolution. |
 | `address` | TEXT nullable | First observed non-null `storeAddress` (from the enriched `PickupPayload`; null for all historical rows). Merchant data, not customer PII — fine at rest, never in INFO+ logs (P7). |
-| `firstSeenAt` / `lastSeenAt` | INTEGER | Maintained by the fold from `obs`-derived event timestamps (never wall clock). The one denormalization kept on the row (cheap, deterministic, saves a MIN/MAX join on every list read). |
+| ~~`firstSeenAt` / `lastSeenAt`~~ | — | **REMOVED (PR adversarial-review FIX 3).** The "cheap, deterministic" premise was falsified: per-trigger resolution rewrote every store row of a job on every trigger (churning Room observers mid-dash) and the values diverged between an incremental fold and a batch-split refold. They are now **derived at read** — a `MIN`/`MAX` over the store's `pickup_records` (`phaseStartedAt`/`confirmedAt`) UNION its `delivery_records` (`completedAt`) inside the report-card query. Refold-stable by construction; the `stores` row is now truly immutable across re-resolutions. |
 
 No stats columns (D1): `match_count`, `pickup_count`, `avg/p50/p95_wait_ms` from the issue's
 original schema are all **derived at read time**.

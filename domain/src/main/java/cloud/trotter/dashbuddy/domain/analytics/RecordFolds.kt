@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -135,6 +136,51 @@ data class DeliveryFold(
     val frozenNonFuelPerMile: Double?,
     val netProfit: Double?,
     val costBasis: String,
+    /**
+     * The FULL receipt store-form set (#159 B1/B2) — every `parsedPay.customerTips[].type` on the ONE
+     * completion that carried `parsedPay`; null on receipt-less drops. Persisted to
+     * `delivery_records.payoutStoreForms` (serialized), so store resolution reads the running keys from
+     * ROWS (never a trigger event), keeping every store of a multi-store stack keyed and monotonic.
+     */
+    val payoutStoreForms: List<String>? = null,
+)
+
+/**
+ * A completed-pickup read-model row as produced by the pure fold (#159) — mapped 1:1 onto
+ * `PickupRecordEntity`. Folded from `PICKUP_CONFIRMED` (the closing event of the pickup phase);
+ * `storeKey` is stamped later by store resolution, so it is not on this fold shape.
+ */
+data class PickupFold(
+    val eventSequenceId: Long,
+    val sessionId: String?,
+    val platform: String,
+    val jobId: String,
+    val taskId: String,
+    val storeName: String,
+    val phaseStartedAt: Long,
+    val arrivedAt: Long?,
+    val confirmedAt: Long?,
+    val deadlineMillis: Long?,
+    val activity: String?,
+    /** Enriched store address (#159 D4) — the only row source for `stores.address`. */
+    val storeAddress: String?,
+)
+
+/**
+ * A store-resolution trigger (#159) the pure fold emits for the orchestrator to run INSIDE the batch
+ * transaction against the job's committed rows (resolve-from-rows — there is NO per-job accumulator,
+ * F1). Emitted on every `DELIVERY_COMPLETED` (job-scoped) and `DASH_STOP` (session-scoped: [jobId]
+ * null ⇒ enumerate the session's jobs, L2); the projector also emits one for each inferred-closed
+ * session. Re-runnable and convergent: because resolution reads committed rows (never a single-event
+ * payout), a later trigger recomputes the SAME keys (B1).
+ */
+data class StoreResolution(
+    val sessionId: String?,
+    val platform: String,
+    /** null ⇒ session-level: enumerate the session's jobs and resolve each. */
+    val jobId: String?,
+    /** The job's offer hashes for the exact offer↔job link; empty ⇒ temporal fallback (F4/F12). */
+    val offerHashes: List<String>,
 )
 
 /** An offer read-model row as produced by the pure fold — mapped 1:1 onto `OfferRecordEntity`. */
@@ -189,6 +235,10 @@ data class FoldOutcome(
      * applies it by-PK inside the batch transaction after the upserts.
      */
     val deliveryAdjustment: DeliveryAdjustmentFold? = null,
+    /** A completed-pickup visit row (#159), from `PICKUP_CONFIRMED`. */
+    val pickup: PickupFold? = null,
+    /** A store-resolution trigger (#159) the orchestrator runs against the job's committed rows. */
+    val resolution: StoreResolution? = null,
 )
 
 /**
@@ -254,6 +304,7 @@ object RecordFolds {
             AppEventType.OFFER_DECLINED,
             AppEventType.OFFER_TIMEOUT -> foldOffer(event, context)
             AppEventType.DELIVERY_COMPLETED -> foldDeliveryCompleted(event, context, currentCostPerMile)
+            AppEventType.PICKUP_CONFIRMED -> foldPickupConfirmed(event, context)
             AppEventType.MANUAL_DELIVERY -> foldManualDelivery(event, context, currentCostPerMile)
             AppEventType.PAY_ADJUSTMENT -> foldPayAdjustment(event, context)
             AppEventType.DELIVERY_ADJUSTMENT -> foldDeliveryAdjustment(event, context)
@@ -526,6 +577,12 @@ object RecordFolds {
             frozenNonFuelPerMile = frozenNonFuelPerMile,
             netProfit = netProfit,
             costBasis = costBasis,
+            // #159 B1/B2: persist the FULL receipt store-form set on the one completion that carries
+            // parsedPay (null on receipt-less sibling drops), so resolution reads running keys from
+            // ROWS — every store of a multi-store stack stays keyed even after a payout-less re-run.
+            payoutStoreForms = p.parsedPay?.customerTips
+                ?.mapNotNull { it.type.takeIf { t -> t.isNotBlank() } }
+                ?.takeIf { it.isNotEmpty() },
         )
 
         // #691: mark the job receipted once any drop folds RECEIPT EVIDENCE, so a later receipt-less
@@ -545,7 +602,45 @@ object RecordFolds {
             lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
             lastOdometer = odo ?: ctx.lastOdometer,
         )
-        return FoldOutcome(context = newCtx, delivery = delivery)
+        // #159: every DELIVERY_COMPLETED re-triggers store resolution for its job (job-scoped). The
+        // payout is NOT threaded — resolution reads payoutStoreForms from the committed rows (B1).
+        val resolution = StoreResolution(
+            sessionId = sid,
+            platform = platformWire,
+            jobId = p.jobId,
+            offerHashes = p.jobOfferHashes,
+        )
+        return FoldOutcome(context = newCtx, delivery = delivery, resolution = resolution)
+    }
+
+    /**
+     * A completed pickup (#159) → one [PickupFold] visits row. `PICKUP_CONFIRMED` carries the full
+     * `phaseStartedAt/arrivedAt/confirmedAt` progression; `storeKey` is stamped later by resolution.
+     * Advances liveness like any session-attributed event (the pre-#159 `else` branch behaviour).
+     */
+    private fun foldPickupConfirmed(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val p = e.payload as? PickupPayload
+            ?: return FoldOutcome(context = context, skip = "PICKUP_CONFIRMED: missing/malformed payload")
+        val sid = e.sessionId
+        val ctx = sid?.let { resolveContext(context, it, e.occurredAt) }
+        val platformWire = ctx?.platform?.wire ?: Platform.Unknown.wire
+        val pickup = PickupFold(
+            eventSequenceId = event.sequenceId,
+            sessionId = sid,
+            platform = platformWire,
+            jobId = p.jobId,
+            taskId = p.taskId,
+            storeName = p.storeName,
+            phaseStartedAt = p.phaseStartedAt,
+            arrivedAt = p.arrivedAt,
+            confirmedAt = p.confirmedAt ?: e.occurredAt,
+            deadlineMillis = p.deadlineMillis,
+            activity = p.activity,
+            storeAddress = p.storeAddress,
+        )
+        val newCtx = ctx?.advance(e.occurredAt, event.metadata?.odometer)
+        return FoldOutcome(context = newCtx, pickup = pickup)
     }
 
     /**
@@ -685,16 +780,24 @@ object RecordFolds {
             ?: return FoldOutcome(context = context, skip = "DASH_STOP: no sessionId")
         val ctx = resolveContext(context, sid, e.occurredAt, platformName = p.platform)
         val odo = event.metadata?.odometer
-        return FoldOutcome(
-            context = ctx.copy(
-                endedAt = p.endedAt,
-                endSource = p.source,
-                reportedEarnings = p.totalEarnings ?: ctx.reportedEarnings,
-                reportedDurationMillis = p.sessionDurationMillis ?: ctx.reportedDurationMillis,
-                lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
-                lastOdometer = odo ?: ctx.lastOdometer,
-            ),
+        val newCtx = ctx.copy(
+            endedAt = p.endedAt,
+            endSource = p.source,
+            reportedEarnings = p.totalEarnings ?: ctx.reportedEarnings,
+            reportedDurationMillis = p.sessionDurationMillis ?: ctx.reportedDurationMillis,
+            lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
+            lastOdometer = odo ?: ctx.lastOdometer,
         )
+        // #159 F3: a session close re-resolves every job of the session (jobId null ⇒ session-level).
+        // Row-sourced resolution makes this payout-less trigger recompute the SAME keys, never a
+        // downgrade (B1). The offer link uses the temporal fallback here (no offer hashes on the stop).
+        val resolution = StoreResolution(
+            sessionId = sid,
+            platform = newCtx.platform.wire,
+            jobId = null,
+            offerHashes = emptyList(),
+        )
+        return FoldOutcome(context = newCtx, resolution = resolution)
     }
 
     /**

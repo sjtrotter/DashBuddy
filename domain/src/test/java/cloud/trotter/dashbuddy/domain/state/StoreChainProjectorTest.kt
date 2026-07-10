@@ -104,6 +104,43 @@ class StoreChainProjectorTest {
     }
 
     @Test
+    fun `M5 — the Job adapter and the row adapter produce identical resolutions over the same surfaces`() {
+        // The pure StoreResolver core is reached two ways: the Job adapter (StoreChainProjector, the
+        // shadow logger's path) and the row adapter (StoreResolutionRunner, over DB rows). Given the SAME
+        // surfaces, both MUST resolve identically — that parity is what makes the shadow log a valid field
+        // oracle for the persisted path. This test pins it.
+        val tasks = listOf(
+            pickup("p-target", "Target"),
+            pickup("p-maple", "Maple Street Biscuit Company"),
+            dropoff("d-target", "Target", "cust-A"),
+            dropoff("d-maple", "Maple Street Biscuit Company", "cust-B"),
+        )
+        val offerHints = listOf("Target", "Maple Street Biscuit Company")
+        val payout = ParsedPay(
+            appPayComponents = emptyList(),
+            customerTips = listOf(
+                ParsedPayItem("Maple Street Biscuit - Alamo Ranch", 6.50),
+                ParsedPayItem("Target (02426)", 2.25),
+            ),
+        )
+        // Job adapter.
+        val jobResolved = StoreChainProjector.project(job(tasks, offerHints), payout).links
+            .associate { it.canonicalStore to Triple(it.offerName, it.payoutName, it.runningKey) }
+        // Row adapter: the SAME surfaces flattened to neutral lists (what StoreResolutionRunner passes).
+        val rowResolved = StoreResolver.resolveAnchors(
+            anchors = listOf("Target", "Maple Street Biscuit Company"),
+            offerForms = offerHints,
+            dropoffForms = listOf("Target", "Maple Street Biscuit Company"),
+            payoutForms = listOf(
+                StoreResolver.PayoutForm("Maple Street Biscuit - Alamo Ranch", 6.50),
+                StoreResolver.PayoutForm("Target (02426)", 2.25),
+            ),
+        ).associate { it.canonical to Triple(it.offerForm, it.payoutForm, it.runningKey) }
+
+        assertEquals("row adapter ≡ Job adapter resolutions (M5 parity)", jobResolved, rowResolved)
+    }
+
+    @Test
     fun `null payout still yields the pickup-anchored links`() {
         val j = job(
             tasks = listOf(pickup("p1", "Chipotle"), dropoff("d1", "Chipotle", "cust-1")),
