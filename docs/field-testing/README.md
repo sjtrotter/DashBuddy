@@ -87,6 +87,9 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   - Confirmed: 0/2
   - Desk replay fixture: `~/dashbuddy/logs/2026/07/06/` (the 07-05 $0 session `session-doordash-1783294721320-15`).
 - **🆕 NEW — bubble gas quick-edit is mode-adaptive: refresh (AUTO) vs. Resume auto (MANUAL) (#722 / PR).**
+  **Where to find it:** the idle dashboard card, shown whenever OFFLINE with no active dash (the
+  #722/#693 reachability fix — a completed session's timeline no longer hides it; the full timeline
+  now appears only while actively dashing, plus in the analytics drill-down).
   The idle card's gas control now shows ONE control set per mode instead of a stepper+refresh combo, because
   each action's meaning flips with mode. **AUTO mode:** price + "AUTO" caption + a refresh icon (no stepper
   visible) — tapping refresh fetches today's EIA price and stays auto (price updates in place, no mode
