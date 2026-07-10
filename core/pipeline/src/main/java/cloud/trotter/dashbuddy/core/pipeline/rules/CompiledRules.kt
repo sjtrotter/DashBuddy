@@ -157,6 +157,16 @@ data class CompiledNotifRedact(
 }
 
 /**
+ * Optional canonicalization applied to a redact entry's masked token BEFORE the
+ * `<4hex>` distinctness hash (#733). Keeps the mask hex equal to the persisted
+ * `customerNameHash` when the parse normalizes the same token (the #623 invariant).
+ */
+enum class RedactNormalize {
+    /** Canonicalize a customer NAME via [customerNameKey] before hashing. */
+    CUSTOMER_NAME,
+}
+
+/**
  * A single compiled `redact` directive (#598). When [find] matches a node, that
  * node's `text` and `contentDescription` are masked in the serialized capture
  * envelope only. [keepPrefix] preserves a leading marker label so a replayed
@@ -164,10 +174,16 @@ data class CompiledNotifRedact(
  * "Deliver to [redacted:<4hex>]", keeping the "Deliver to " require anchor while
  * the customer name is dropped. An address node (no marker) takes no keepPrefix
  * and is masked whole. The `<4hex>` distinctness suffix is #623 — see [mask].
+ *
+ * [normalize] (#733) opts a customer-NAME entry into canonical-key hashing so the
+ * mask hex derives from the SAME token the parse's `normalizeCustomerName` +
+ * `sha256` chain persists. Set ONLY on name entries; addresses/instructions never
+ * normalize (canonicalizing an address would degrade its mask distinctness).
  */
 data class CompiledRedactEntry(
     val find: (UiNode) -> Boolean,
     val keepPrefix: List<String> = emptyList(),
+    val normalize: RedactNormalize? = null,
 )
 
 /**
@@ -193,9 +209,9 @@ data class CompiledRedact(
     private fun maskNode(node: UiNode): UiNode {
         val match = entries.firstOrNull { it.find(node) }
         val maskedText =
-            if (match != null) mask(node.text, match.keepPrefix) else node.text
+            if (match != null) mask(node.text, match.keepPrefix, match.normalize) else node.text
         val maskedDesc =
-            if (match != null) mask(node.contentDescription, match.keepPrefix) else node.contentDescription
+            if (match != null) mask(node.contentDescription, match.keepPrefix, match.normalize) else node.contentDescription
         return node.copy(
             text = maskedText,
             contentDescription = maskedDesc,
@@ -218,27 +234,39 @@ data class CompiledRedact(
          * of the sha256 of the keepPrefix-STRIPPED, TRIMMED token.
          *
          * Frame-invariance: the token hashed is the customer string itself (after
-         * stripping the marker prefix and trimming), NOT the whole node text — so
+         * stripping the marker prefix and trimming, and — when [normalize] is set —
+         * canonicalizing via [customerNameKey], #733), NOT the whole node text — so
          * the SAME customer under different frame prefixes ("Deliver to X" vs
-         * "Heading to X" vs "Verify items for X") redacts to the SAME suffix, and
-         * two DIFFERENT customers redact to DIFFERENT suffixes. The strip+trim
-         * mirrors the parse's `stripPrefixes`/`trim`/`sha256` chain, so the suffix
-         * equals the first 4 hex of the `customerNameHash` the parse already
-         * persists — 16 bits of an already-one-way hash, no new information (#623).
+         * "Heading to X" vs "Verify items for X") AND different name renderings
+         * ("Brandy S" vs "Brandy Smith") redacts to the SAME suffix, and two
+         * DIFFERENT customers redact to DIFFERENT suffixes. The strip/trim/normalize
+         * mirrors the parse's `stripPrefixes`/`trim`/`normalizeCustomerName`/`sha256`
+         * chain, so the suffix equals the first 4 hex of the `customerNameHash` the
+         * parse already persists — 16 bits of an already-one-way hash, no new
+         * information (#623).
          *
-         * FAIL CLOSED (#362): if [sha256OrNull] returns null, emit the plain
-         * [REDACTED] constant — never the raw [value]. The "[redacted" prefix is
-         * kept so any `contains("[redacted")`/`startsWith` check (the #624
-         * backstop, any test scanner) still classifies the output as redacted.
+         * FAIL CLOSED (#362): if [sha256OrNull] returns null (or the normalized key
+         * is blank), emit the plain [REDACTED] constant — never the raw [value]. The
+         * "[redacted" prefix is kept so any `contains("[redacted")`/`startsWith`
+         * check (the #624 backstop, any test scanner) still classifies the output as
+         * redacted.
          *
          * `internal` (not private) so the #620 notification per-field maskers
          * reuse this ONE definition (SSOT) instead of copying it.
          */
-        internal fun mask(value: String?, keepPrefix: List<String>): String? {
+        internal fun mask(
+            value: String?,
+            keepPrefix: List<String>,
+            normalize: RedactNormalize? = null,
+        ): String? {
             if (value == null) return null
             val prefix = keepPrefix.firstOrNull { value.startsWith(it, ignoreCase = true) }
-            val token = if (prefix != null) value.substring(prefix.length).trim() else value.trim()
-            val hex = sha256OrNull(token)?.take(4)
+            val stripped = if (prefix != null) value.substring(prefix.length).trim() else value.trim()
+            val token = when (normalize) {
+                RedactNormalize.CUSTOMER_NAME -> customerNameKey(stripped)
+                null -> stripped
+            }
+            val hex = token?.let { sha256OrNull(it) }?.take(4)
             val masked = if (hex != null) "[redacted:$hex]" else REDACTED
             return if (prefix != null) prefix + masked else masked
         }

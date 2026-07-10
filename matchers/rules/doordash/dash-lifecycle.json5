@@ -3,6 +3,7 @@
   "$schema": "../../../docs/rules.fragment.schema.json",
   "screens": [
     {
+      "comment": "#733: the customer-NAME lines ('Pickup for <name>' / 'Deliver to <name>') normalize so their capture mask matches the parse surfaces' canonical-key hash; the STORE line ('Pickup from <store>') is a SEPARATE entry with NO normalize (canonicalizing a store name would corrupt its mask). Two entries, no overlap — a 'Pickup from' node never startsWith 'Pickup for'/'Deliver to' and vice-versa.",
       "id": "doordash.screen.timeline",
       "priority": 10,
       "redact": [
@@ -14,15 +15,20 @@
               },
               {
                 "hasTextStartsWith": "Deliver to "
-              },
-              {
-                "hasTextStartsWith": "Pickup from "
               }
             ]
           },
           "keepPrefix": [
             "Pickup for ",
-            "Deliver to ",
+            "Deliver to "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasTextStartsWith": "Pickup from "
+          },
+          "keepPrefix": [
             "Pickup from "
           ]
         }

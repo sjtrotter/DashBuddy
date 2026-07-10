@@ -98,7 +98,8 @@
         {
           "find": {
             "hasIdSuffix": "customer_name"
-          }
+          },
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -170,6 +171,7 @@
             "read": "text",
             "transform": [
               "trim",
+              "normalizeCustomerName",
               "sha256"
             ]
           },
@@ -409,7 +411,8 @@
           },
           "keepPrefix": [
             "Verify items for "
-          ]
+          ],
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -600,7 +603,8 @@
           },
           "keepPrefix": [
             "For "
-          ]
+          ],
+          "normalize": "customerName"
         }
       ],
       "require": {

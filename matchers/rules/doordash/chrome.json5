@@ -5,7 +5,7 @@
     {
       "id": "doordash.screen.camera_capture",
       "priority": 86,
-      "comment": "#598 F1: the id-bearing 'bottom_instruction' node embeds customer PII ('...name: <name>', '...Apt/Suite: <apt>'); mask it whole (the 'title' label stays). The bare-name regex catches a stale bin-scan-overlay customer name (e.g. 'Kris K') among id-less product rows without touching those products; single-token all-caps bare names remain a structural residual (#623/#624).",
+      "comment": "#598 F1: the id-bearing 'bottom_instruction' node embeds customer PII ('...name: <name>', '...Apt/Suite: <apt>'); mask it whole, un-normalized — a canonical NAME key over a mixed 'name+apt' field would corrupt the apt token (the 'title' label stays). The bare-name regex catches a stale bin-scan-overlay customer name (e.g. 'Kris K') among id-less product rows without touching those products; #745: it IS a bare customer name, so it normalizes — the regex just selects the node, the canonical-key hash acts on the masked token, keeping its mask hex equal to the persisted customerNameHash. Single-token all-caps bare names remain a structural residual (#623/#624).",
       "redact": [
         {
           "find": {
@@ -22,7 +22,8 @@
                 "hasTextMatchesRegex": "^[A-Za-z]{2,}( [A-Z]\\.?){1,2}$"
               }
             ]
-          }
+          },
+          "normalize": "customerName"
         }
       ],
       "require": {

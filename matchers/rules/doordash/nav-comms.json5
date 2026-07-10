@@ -5,6 +5,7 @@
     {
       "id": "doordash.screen.nav_arriving",
       "priority": 69,
+      "comment": "#745: the arriving_at_title mask is a documented residual with NO normalize — it is store-ambiguous (renders a STORE on a pickup approach, an address/customer on a dropoff approach), so a customer-name canonical key would corrupt a store token; and this surface feeds no store-lineage join, so the mask hex never needs to equal a persisted customerNameHash. Whole-token mask, un-normalized.",
       "redact": [
         {
           "find": {
@@ -118,11 +119,13 @@
     {
       "id": "doordash.screen.chat_conversation",
       "priority": 89,
+      "comment": "#745: the chat nav-bar title IS the customer name → normalize so its mask hex matches the canonical-key customerNameHash the delivery surfaces persist (one customer masks identically across chat + dropoff). The message bodies are free customer text, not a name to join on — masked whole, un-normalized (canonicalizing a sentence would be meaningless).",
       "redact": [
         {
           "find": {
             "hasIdSuffix": "textView_navBar_title"
-          }
+          },
+          "normalize": "customerName"
         },
         {
           "find": {

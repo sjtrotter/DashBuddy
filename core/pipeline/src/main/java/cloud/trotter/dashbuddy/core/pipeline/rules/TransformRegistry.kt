@@ -107,6 +107,7 @@ object TransformRegistry {
             "parseLeadingInt" -> parseLeadingInt(value)
             "parsePercent" -> parsePercent(value)
             "sha256" -> sha256OrNull(value)
+            "normalizeCustomerName" -> customerNameKey(value)
             "trim" -> value.trim()
             "lower" -> value.lowercase(Locale.ROOT)
             "upper" -> value.uppercase(Locale.ROOT)
@@ -229,8 +230,8 @@ object TransformRegistry {
     private val knownPlainTransforms = setOf(
         "parseCurrency", "parseDistance", "parseItemCount", "parseDeadline",
         "parseTime", "parseDuration", "parseHrMin", "parseLeadingInt",
-        "parsePercent", "sha256", "trim", "lower", "upper", "toDouble", "toInt",
-        "stripDeadlinePrefix",
+        "parsePercent", "sha256", "normalizeCustomerName", "trim", "lower", "upper",
+        "toDouble", "toInt", "stripDeadlinePrefix",
     )
 
     private val knownParameterizedTransforms = setOf(

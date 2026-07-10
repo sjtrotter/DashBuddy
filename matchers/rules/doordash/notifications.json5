@@ -138,6 +138,7 @@
       ]
     },
     {
+      "comment": "#745: the notification redact path (per-field NotifFieldMask) is deliberately NOT normalized — a push envelope's customer name never feeds the store-lineage join (that runs on screen surfaces), so its mask hex has no persisted customerNameHash to match; and the body fields are free customer text, not a name token. Whole-field masks, un-normalized (documented residual).",
       "id": "doordash.notification.customer_message",
       "priority": 22,
       "intent": "customer_message",
@@ -194,7 +195,7 @@
       ]
     },
     {
-      "comment": "The order-ready push arrives on either the delivery-update channel OR the generic dasher-notification-background channel (#462, 2026-06-12 log). The 'ready for pickup' body is the real discriminator; the channelId is a coarse gate. Logs a constant ORDER_READY signal — the customer name in the body is never parsed.",
+      "comment": "The order-ready push arrives on either the delivery-update channel OR the generic dasher-notification-background channel (#462, 2026-06-12 log). The 'ready for pickup' body is the real discriminator; the channelId is a coarse gate. Logs a constant ORDER_READY signal — the customer name in the body is never parsed. #745: the redact path (per-field NotifFieldMask, regex maskGroup) is deliberately NOT normalized — the push customer name feeds no store-lineage join, so its mask hex has no persisted customerNameHash to match (documented residual).",
       "id": "doordash.notification.order_ready",
       "priority": 24,
       "intent": "order_ready_for_pickup",
