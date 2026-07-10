@@ -1560,13 +1560,20 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ### Open questions / investigations
 
-10. **The 07-07 15:43 picked-up-then-dash-ended $21.75 H-E-B order.** Confirmed from captures:
-    pickup confirmed 15:43:18, `end_dash_confirm` dialog 15:43:30, DASH_STOP 15:43:44 — no
-    delivery leg. The dasher then started a new dash 15:54 and accepted a *different-priced*
-    H-E-B offer ($32.24, delivered 17:09). **Question for the dev:** was the $21.75 order
-    unassigned/returned, or delivered off-app, or was the $32.24 the same order re-offered?
-    Determines whether a "stranded across dash-restart" tracking gap exists (#527/#274 family).
-    Second occurrence of the shape (07-05 `320-15` was the first).
+10. **The 07-07 15:43 $21.75 H-E-B order — RESOLVED (dev-answered + capture-verified): it was
+    UNASSIGNED via the help workflow, and the logged `PICKUP_CONFIRMED` is FABRICATED.** The
+    captures show the full flow: `arrived_at_store` 15:21 → shopping → `pickup_issue_menu` /
+    `pickup_resolution_options` (recognized) → support `chat_conversation` 15:24–15:26 → the
+    **unassign confirmation surfaces 15:43:03–15:43:17, all UNKNOWN** ("Unassign"/"Wait" tokens,
+    two UNKNOWN clicks) → `dash_along_the_way` 15:43:18 — which the state machine recorded as
+    `PICKUP_CONFIRMED` (fake 21.5-min `shopping` dwell). No stranded-order gap; instead a
+    state-vocabulary gap: unassignment has no representation, the exit fabricates a confirm, and
+    a continued dash would carry a ghost job (#596 shape) — plus fake dwell into #159's future
+    `pickup_records`. Same flow on 07-05 `320-15` (2nd occurrence, no fabricated confirm there —
+    unassigned pre-arrival).
+    - **Status:** Open (filed #736 — recognition rules for the unassign surfaces + an enumerated
+      unassign/abandon event through `StateMachineContract`; cross-linked #732, the seq-70/71
+      inversion instance being this very event).
 
 ## 2026-07-05 — DoorDash session (afternoon/evening dash; desk synthesis 07-06 from db/logs/captures)
 
