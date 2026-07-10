@@ -91,6 +91,18 @@ interface AnalyticsDao {
     @Query("SELECT * FROM stores WHERE storeKey = :storeKey")
     suspend fun store(storeKey: String): StoreEntity?
 
+    /** All store entities (resolution debug / rebuild-equivalence assertions). */
+    @Query("SELECT * FROM stores ORDER BY storeKey ASC")
+    suspend fun allStores(): List<StoreEntity>
+
+    /** Count of `stores` rows — F8 wipe verification. */
+    @Query("SELECT COUNT(*) FROM stores")
+    suspend fun storeCount(): Int
+
+    /** Count of `pickup_records` rows — F8 wipe verification. */
+    @Query("SELECT COUNT(*) FROM pickup_records")
+    suspend fun pickupRecordCount(): Int
+
     /** Distinct jobIds referenced by a session's pickup OR delivery rows — a session-level trigger
      *  (DASH_STOP / inferred close) enumerates its jobs to re-resolve each (#159 L2). */
     @Query(
@@ -511,6 +523,10 @@ interface AnalyticsDao {
      */
     @Query("SELECT * FROM delivery_records WHERE eventSequenceId = :eventSequenceId")
     suspend fun deliveryRecord(eventSequenceId: Long): DeliveryRecordEntity?
+
+    /** One delivery row by taskId (resolution/rebuild-equivalence assertions). */
+    @Query("SELECT * FROM delivery_records WHERE taskId = :taskId LIMIT 1")
+    suspend fun deliveryRecordByTask(taskId: String): DeliveryRecordEntity?
 
     /** Still-live sessions for a platform — the next DASH_START infers their close. */
     @Query("SELECT * FROM session_records WHERE platform = :platform AND endedAt IS NULL")
