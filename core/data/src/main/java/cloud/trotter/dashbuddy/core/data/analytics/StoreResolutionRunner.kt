@@ -6,12 +6,15 @@ import cloud.trotter.dashbuddy.core.database.analytics.PickupRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.StoreEntity
 import cloud.trotter.dashbuddy.domain.analytics.StoreResolution
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.StoreKeys
 import cloud.trotter.dashbuddy.domain.state.StoreNameMatch
 import cloud.trotter.dashbuddy.domain.state.StoreResolver
+import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import timber.log.Timber
 
 /**
  * The #159 read-model store-resolution runner — the **row adapter** over the pure
@@ -48,11 +51,16 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         // v1 (matches the field-verified shadow): anchors come from pickup rows; a job with delivery
         // rows but no pickup rows produces no store link.
         if (pickups.isEmpty()) return
-        val anchors = pickups.map { it.storeName }.filter { it.isNotBlank() }.distinct()
+        // FIX 2: exclude the UNKNOWN_STORE sentinel — a null-store pickup must not mint a
+        // `platform|unknown|` entity (the fielded #733 NULL-store shape). Same idiom as :domain's
+        // DisplayNames (import the constant, don't re-literal it).
+        val anchors = pickups.map { it.storeName }
+            .filter { it.isNotBlank() && it != UNKNOWN_STORE }.distinct()
         if (anchors.isEmpty()) return
         val deliveries = dao.deliveryRecordsForJob(jobId)
 
         val dropoffForms = deliveries.mapNotNull { it.storeName }
+            .filter { it.isNotBlank() && it != UNKNOWN_STORE } // FIX 2: never feed the sentinel to the resolver
         // Union of the receipt store forms across the job's delivery rows, ORDER BY eventSequenceId
         // (the DAO orders them) — on the fielded single-receipt shape exactly one row is non-null (B2).
         val payoutForms = deliveries
@@ -66,7 +74,11 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         val offerForms = offerRows.mapNotNull { it.merchantName }
 
         val resolved = StoreResolver.resolveAnchors(anchors, offerForms, dropoffForms, payoutForms)
-        val platform = pickups.first().platform
+        // FIX 7: key platform = the trigger's own platform when it is REAL, else the pickup row's
+        // platform. This makes `StoreResolution.platform` load-bearing: a DASH_STOP re-resolution of an
+        // `_unknown`-started session (its DASH_STOP carried the corrected platform) upgrades the key to
+        // the real platform and re-stamps, instead of keying under the stale `_unknown` pickup rows.
+        val platform = task.platform.takeIf { it != Platform.Unknown.wire } ?: pickups.first().platform
 
         // Build each anchor's deterministic storeKey + upsert the identity row (first-observed forms
         // preserved). No-op re-stamps are value-compared to avoid Room invalidation churn.
@@ -76,20 +88,23 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
             val runKey = StoreKeys.normalizeRunningKey(r.runningKey)
             val key = StoreKeys.storeKey(platform, normChain, runKey)
             anchorKey[r.canonical] = key
-            upsertStore(key, platform, normChain, runKey, r, task.at, pickups)
+            upsertStore(key, platform, normChain, runKey, r, pickups)
         }
 
-        // Stamp pickup rows by their own anchor (storeName == the anchor).
+        // Stamp pickup rows by their own anchor (storeName == the anchor). FIX 6 monotonic backstop:
+        // never re-stamp a keyed row down to a chain-only key of the same platform+chain.
         for (pu in pickups) {
             val key = anchorKey[pu.storeName] ?: continue
+            if (isMonotonicDowngrade(pu.storeKey, key)) continue
             dao.stampPickupStoreKey(pu.eventSequenceId, key)
         }
         // Stamp delivery rows by best-matching their dropoff form to an anchor (the dropoff form differs
         // from the pickup form). The SQL carries the pin predicate (H1) + value guard.
         for (d in deliveries) {
-            val store = d.storeName ?: continue
+            val store = d.storeName?.takeIf { it != UNKNOWN_STORE } ?: continue
             val anchor = StoreNameMatch.bestMatch(anchors, store) ?: continue
             val key = anchorKey[anchor] ?: continue
+            if (isMonotonicDowngrade(d.storeKey, key)) continue
             dao.stampDeliveryStoreKey(d.eventSequenceId, key)
         }
 
@@ -104,13 +119,37 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         }
     }
 
+    /**
+     * FIX 6 monotonic-key backstop: true iff [newKey] is CHAIN-ONLY (empty running-key segment) and the
+     * row's [current] key is a KEYED variant of the same platform+chain — i.e. this would downgrade an
+     * already-keyed row. Resolution is row-sourced and monotonic by design, so this only fires on a rare
+     * evidence loss; keeping the keyed value guards against a silent regression. The storeKey strings
+     * are merchant-derived, so the observability note is DEBUG (keys) + a merchant-free WARN counter (P7).
+     */
+    private fun isMonotonicDowngrade(current: String?, newKey: String): Boolean {
+        if (current == null || !newKey.endsWith("|")) return false
+        val downgrade = current != newKey && current.startsWith(newKey)
+        if (downgrade) {
+            Timber.tag(TAG).d("store-key: kept keyed %s over chain-only recompute %s", current, newKey)
+            Timber.tag(TAG).w("store-key downgrade averted (monotonic backstop)")
+        }
+        return downgrade
+    }
+
     private suspend fun candidateOffers(
         task: StoreResolution,
         jobId: String,
         jobFirstAt: Long,
     ): List<OfferRecordEntity> {
-        if (task.offerHashes.isNotEmpty()) return dao.offerRecordsByHashes(task.offerHashes)
         val sessionId = task.sessionId ?: return emptyList()
+        // Exact path: the job's OWN accepted offer rows, scoped to session + accepted outcome (FIX 1a).
+        if (task.offerHashes.isNotEmpty()) {
+            return dao.offerRecordsByHashes(task.offerHashes, sessionId, acceptedOutcome)
+        }
+        // FIX 1b: if the job already holds a claim (from an earlier trigger), don't nominate a second
+        // offer — the exact path stays convergent because its scoped lookup returns the same rows, but a
+        // DASH_STOP re-run of a temporal-linked job must not claim a different nearby offer.
+        if (dao.offerLinkCountForJob(jobId) > 0) return emptyList()
         return listOfNotNull(dao.nominateOfferForJob(sessionId, jobFirstAt, jobId, acceptedOutcome))
     }
 
@@ -120,7 +159,6 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         normalizedChain: String,
         runningKey: String?,
         r: StoreResolver.AnchorResolution,
-        at: Long,
         pickups: List<PickupRecordEntity>,
     ) {
         val prior = dao.store(storeKey)
@@ -136,14 +174,15 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
             pickupNameForm = prior?.pickupNameForm ?: r.canonical,
             payoutNameForm = prior?.payoutNameForm ?: r.payoutForm,
             address = address,
-            firstSeenAt = prior?.firstSeenAt ?: at,
-            lastSeenAt = maxOf(prior?.lastSeenAt ?: at, at),
         )
-        // Value-compare so an idempotent re-run (same `at`) doesn't churn Room invalidation (L1).
+        // Value-compare so an idempotent re-run doesn't churn Room invalidation (L1). first/last-seen are
+        // no longer row columns (FIX 3) — they derive at read — so the store row is now truly stable
+        // across per-trigger re-resolutions (no `lastSeenAt` bump on every trigger).
         if (store != prior) dao.upsertStore(store)
     }
 
     companion object {
+        private const val TAG = "Analytics"
         private val json = Json { encodeDefaults = true }
         private val formsSerializer = ListSerializer(String.serializer())
 
@@ -151,12 +190,17 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
         fun encodeForms(forms: List<String>?): String? =
             forms?.takeIf { it.isNotEmpty() }?.let { json.encodeToString(formsSerializer, it) }
 
-        /** Decode the persisted receipt store-form set; empty on null/blank/malformed (fail-soft). */
+        /**
+         * Decode the persisted receipt store-form set; empty on null/blank/malformed (fail-soft). A
+         * malformed payload is WARN'd (FIX 6) instead of silently swallowed — the raw string is
+         * merchant-derived, so the WARN carries the failure class only, never the payload (P7).
+         */
         fun decodeForms(raw: String?): List<String> {
             if (raw.isNullOrBlank()) return emptyList()
             return try {
                 json.decodeFromString(formsSerializer, raw)
             } catch (_: Exception) {
+                Timber.tag(TAG).w("payoutStoreForms decode failed; treating this row as no receipt evidence")
                 emptyList()
             }
         }

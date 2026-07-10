@@ -109,8 +109,14 @@ internal fun EffectMap.diffTask(
             addAll(
                 pickupConfirmSweepEffects(
                     sessionId, next, prevTask.jobId, obs,
-                    jobOfferHashes = next.activeJob
-                        ?.takeIf { it.jobId == prevTask.jobId }?.parentOfferHashes ?: emptyList(),
+                    // #159 FIX 9: source the job's offer hashes from the job matching prevTask.jobId in
+                    // PREV state first (next's active job may have already swapped to a stacked next job on
+                    // this edge, which would drop the hashes to empty); fall back to next's, then empty
+                    // only when the job is truly gone from both.
+                    jobOfferHashes = (
+                        prev.activeJob?.takeIf { it.jobId == prevTask.jobId }
+                            ?: next.activeJob?.takeIf { it.jobId == prevTask.jobId }
+                        )?.parentOfferHashes ?: emptyList(),
                 ),
             )
             addAll(deliveryNavStartedEffects(sessionId, nextTask, obs))

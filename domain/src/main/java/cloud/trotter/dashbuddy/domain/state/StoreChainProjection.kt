@@ -65,6 +65,14 @@ object StoreResolver {
      * (B2). A line matching no anchor is dropped (never mis-attributed). The running key is the first
      * non-null extraction across the store's matched lines; the store's [payoutForm] surfaces the line
      * that key came from.
+     *
+     * **Semantics note (FIX 13):** this per-line assignment + per-store tip-summing SUPERSEDES the older
+     * per-anchor best-line semantics (the spec's D4 intent), so the pre-PR shadow logs are NOT
+     * line-for-line comparable to this output.
+     *
+     * TODO(#159 phase-2): the unimplemented D4 bullet — match a payout line to a store by address / running
+     *  key when brand tokens share ZERO overlap (grocery payout lines that are bare order numbers). Today
+     *  such a line matches no anchor and is dropped; phase-2 adds the address/key fallback join.
      */
     fun resolveAnchors(
         anchors: List<String>,

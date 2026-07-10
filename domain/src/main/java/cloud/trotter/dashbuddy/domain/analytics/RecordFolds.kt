@@ -143,8 +143,6 @@ data class DeliveryFold(
      * ROWS (never a trigger event), keeping every store of a multi-store stack keyed and monotonic.
      */
     val payoutStoreForms: List<String>? = null,
-    /** The job's contributing offer hashes (#159 D3) — the offer↔job link for resolution; never money. */
-    val jobOfferHashes: List<String> = emptyList(),
 )
 
 /**
@@ -166,8 +164,6 @@ data class PickupFold(
     val activity: String?,
     /** Enriched store address (#159 D4) — the only row source for `stores.address`. */
     val storeAddress: String?,
-    /** The job's contributing offer hashes (#159 D3) — carried for the offer↔job link at resolution. */
-    val jobOfferHashes: List<String> = emptyList(),
 )
 
 /**
@@ -185,8 +181,6 @@ data class StoreResolution(
     val jobId: String?,
     /** The job's offer hashes for the exact offer↔job link; empty ⇒ temporal fallback (F4/F12). */
     val offerHashes: List<String>,
-    /** The triggering event's timestamp — advances `stores.lastSeenAt` (never a wall clock). */
-    val at: Long,
 )
 
 /** An offer read-model row as produced by the pure fold — mapped 1:1 onto `OfferRecordEntity`. */
@@ -589,7 +583,6 @@ object RecordFolds {
             payoutStoreForms = p.parsedPay?.customerTips
                 ?.mapNotNull { it.type.takeIf { t -> t.isNotBlank() } }
                 ?.takeIf { it.isNotEmpty() },
-            jobOfferHashes = p.jobOfferHashes,
         )
 
         // #691: mark the job receipted once any drop folds RECEIPT EVIDENCE, so a later receipt-less
@@ -616,7 +609,6 @@ object RecordFolds {
             platform = platformWire,
             jobId = p.jobId,
             offerHashes = p.jobOfferHashes,
-            at = e.occurredAt,
         )
         return FoldOutcome(context = newCtx, delivery = delivery, resolution = resolution)
     }
@@ -646,7 +638,6 @@ object RecordFolds {
             deadlineMillis = p.deadlineMillis,
             activity = p.activity,
             storeAddress = p.storeAddress,
-            jobOfferHashes = p.jobOfferHashes,
         )
         val newCtx = ctx?.advance(e.occurredAt, event.metadata?.odometer)
         return FoldOutcome(context = newCtx, pickup = pickup)
@@ -805,7 +796,6 @@ object RecordFolds {
             platform = newCtx.platform.wire,
             jobId = null,
             offerHashes = emptyList(),
-            at = e.occurredAt,
         )
         return FoldOutcome(context = newCtx, resolution = resolution)
     }

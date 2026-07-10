@@ -459,19 +459,28 @@ class AnalyticsProjector @Inject constructor(
         resolutions: ArrayList<ResolutionTask>,
         triggerSequenceId: Long,
     ) {
+        // Collect the newly inferred-closed sessions from both sources, then emit their resolutions in a
+        // deterministic order (FIX 10): all these tasks share the DASH_START's triggerSequenceId, so the
+        // transaction's stable `sortedBy { sequenceId }` would otherwise preserve HashMap/query iteration
+        // order among them — non-deterministic between incremental fold and refold. Sorting by sessionId
+        // pins it.
+        val inferred = ArrayList<Pair<String, String>>() // sessionId → platformWire
         // In-batch open contexts on the same platform.
         for (ctx in contexts.values.toList()) {
             if (ctx.sessionId == fresh.sessionId || ctx.platform != fresh.platform || ctx.endedAt != null) continue
             contexts[ctx.sessionId] = ctx.copy(endedAt = ctx.lastEventAt, endSource = INFERRED)
             touched += ctx.sessionId
-            resolutions += inferredResolution(ctx.sessionId, ctx.platform.wire, ctx.lastEventAt, triggerSequenceId)
+            inferred += ctx.sessionId to ctx.platform.wire
         }
         // DB rows still open for this platform, not already handled in this batch.
         for (row in analyticsDao.openSessions(fresh.platform.wire)) {
             if (row.sessionId == fresh.sessionId || contexts.containsKey(row.sessionId)) continue
             contexts[row.sessionId] = row.toContext().copy(endedAt = row.lastEventAt, endSource = INFERRED)
             touched += row.sessionId
-            resolutions += inferredResolution(row.sessionId, fresh.platform.wire, row.lastEventAt, triggerSequenceId)
+            inferred += row.sessionId to fresh.platform.wire
+        }
+        inferred.sortedBy { it.first }.forEach { (sessionId, platformWire) ->
+            resolutions += inferredResolution(sessionId, platformWire, triggerSequenceId)
         }
     }
 
@@ -480,11 +489,10 @@ class AnalyticsProjector @Inject constructor(
     private fun inferredResolution(
         sessionId: String,
         platformWire: String,
-        at: Long,
         triggerSequenceId: Long,
     ) = ResolutionTask(
         triggerSequenceId,
-        StoreResolution(sessionId = sessionId, platform = platformWire, jobId = null, offerHashes = emptyList(), at = at),
+        StoreResolution(sessionId = sessionId, platform = platformWire, jobId = null, offerHashes = emptyList()),
     )
 
     // ── Entity ↔ domain mapping (the storage boundary; :domain cannot see :core:database) ──

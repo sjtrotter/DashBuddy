@@ -91,6 +91,10 @@ interface AnalyticsDao {
     @Query("SELECT * FROM stores WHERE storeKey = :storeKey")
     suspend fun store(storeKey: String): StoreEntity?
 
+    /** One offer row by its source-event PK — offer↔job link assertions (#159). */
+    @Query("SELECT * FROM offer_records WHERE eventSequenceId = :eventSequenceId")
+    suspend fun offerRecord(eventSequenceId: Long): OfferRecordEntity?
+
     /** All store entities (resolution debug / rebuild-equivalence assertions). */
     @Query("SELECT * FROM stores ORDER BY storeKey ASC")
     suspend fun allStores(): List<StoreEntity>
@@ -108,7 +112,8 @@ interface AnalyticsDao {
     @Query(
         """SELECT DISTINCT jobId FROM (
               SELECT jobId FROM pickup_records WHERE sessionId = :sessionId
-              UNION SELECT jobId FROM delivery_records WHERE sessionId = :sessionId)"""
+              UNION SELECT jobId FROM delivery_records WHERE sessionId = :sessionId)
+           ORDER BY jobId ASC"""
     )
     suspend fun jobIdsForSession(sessionId: String): List<String>
 
@@ -130,9 +135,27 @@ interface AnalyticsDao {
     )
     suspend fun stampDeliveryStoreKey(eventSequenceId: Long, storeKey: String)
 
-    /** The offer rows for a job's exact offer hashes (#159 F4 exact link). */
-    @Query("SELECT * FROM offer_records WHERE offerHash IN (:offerHashes)")
-    suspend fun offerRecordsByHashes(offerHashes: List<String>): List<OfferRecordEntity>
+    /**
+     * The job's own ACCEPTED offer rows for the exact offer↔job link (#159 F4 exact path). Scoped to
+     * the job's [sessionId] AND the accepted [acceptedOutcome] (FIX 1a): a content `offerHash` recurs
+     * across sessions and on declined-then-re-presented twins, so only THIS session's accepted row(s)
+     * are this job's offers — an unscoped `offerHash IN (…)` would pull a foreign-session or declined
+     * twin. [acceptedOutcome] is `AppEventType.OFFER_ACCEPTED.name` (bound, not a magic literal).
+     */
+    @Query(
+        "SELECT * FROM offer_records WHERE offerHash IN (:offerHashes) " +
+            "AND sessionId = :sessionId AND outcome = :acceptedOutcome"
+    )
+    suspend fun offerRecordsByHashes(
+        offerHashes: List<String>,
+        sessionId: String,
+        acceptedOutcome: String,
+    ): List<OfferRecordEntity>
+
+    /** Count of offers already claimed by [jobId] (#159 FIX 1b) — the nomination guard: a job that
+     *  already holds a claim never nominates a second temporal offer (the DASH_STOP re-run defect). */
+    @Query("SELECT COUNT(*) FROM offer_records WHERE linkedJobId = :jobId")
+    suspend fun offerLinkCountForJob(jobId: String): Int
 
     /** Nominate the most recent accepted, not-already-claimed offer at-or-before [atOrBefore] in a
      *  session — the temporal fallback (#159 F4). Nomination is NOT a link; the projector stamps only
@@ -142,7 +165,7 @@ interface AnalyticsDao {
         """SELECT * FROM offer_records
            WHERE sessionId = :sessionId AND outcome = :acceptedOutcome AND decidedAt <= :atOrBefore
              AND (linkedJobId IS NULL OR linkedJobId = :jobId)
-           ORDER BY decidedAt DESC LIMIT 1"""
+           ORDER BY decidedAt DESC, eventSequenceId DESC LIMIT 1"""
     )
     suspend fun nominateOfferForJob(
         sessionId: String,
@@ -151,11 +174,13 @@ interface AnalyticsDao {
         acceptedOutcome: String,
     ): OfferRecordEntity?
 
-    /** Stamp an offer's storeKey + linkedJobId (the claimed-offer set, #159 F4). Idempotent guard so a
-     *  re-run over the same claim is a no-op. */
+    /** Stamp an offer's storeKey + linkedJobId (the claimed-offer set, #159 F4). Two guards: the claim
+     *  guard (only an unclaimed row or THIS job's) + a VALUE guard (FIX 1d) so an identical re-stamp
+     *  matches ZERO rows (no Room invalidation churn) — `IS NOT` handles the nullable [storeKey]. */
     @Query(
         "UPDATE offer_records SET storeKey = :storeKey, linkedJobId = :jobId " +
-            "WHERE eventSequenceId = :eventSequenceId AND (linkedJobId IS NULL OR linkedJobId = :jobId)"
+            "WHERE eventSequenceId = :eventSequenceId AND (linkedJobId IS NULL OR linkedJobId = :jobId) " +
+            "AND (storeKey IS NOT :storeKey OR linkedJobId IS NOT :jobId)"
     )
     suspend fun stampOfferLink(eventSequenceId: Long, storeKey: String?, jobId: String)
 
@@ -219,16 +244,19 @@ interface AnalyticsDao {
      * F5), not used as the sort key.
      */
     /**
-     * Per-store delivery totals grouped on the **resolved** `storeKey` (#159 — the fragmentation fix
-     * this issue exists for), not the raw `storeName`. An unresolved row (`storeKey IS NULL` — a MANUAL
-     * delivery never in a job, or a not-yet-resolved row) groups by its raw `storeName` HERE, then the
-     * repository re-folds those null-key buckets by the shared `:domain` `normalizedChain(storeName)`
-     * (F9) so `"Target"` and `"…|target|02426"` at least share a chain bucket. Each group carries a
-     * representative [StoreTotalsRow.storeKey] (null for the unresolved buckets) + `storeName`.
+     * Per-(storeKey, storeName, platform) delivery totals for a period — the raw input the repository
+     * folds to CHAIN level (#159 F9). It does NOT itself produce the final per-store buckets: the
+     * repository groups these rows by `platform + "|" + normalizedChain` (chain from the storeKey's
+     * middle segment when keyed, else the shared `:domain` normalizer over `storeName`), so a resolved
+     * `"…|target|02426"` and an unresolved `"Target"` on the same platform collapse into ONE chain
+     * bucket. Each row carries its [StoreTotalsRow.storeKey] (null when unresolved), `storeName`, and
+     * `platform` so the repository can compute that bucket. `ORDER BY pay DESC` is a cash-free stable
+     * pre-sort; the final cash-inclusive rank is the repository's.
      */
     @Query(
         """SELECT storeKey,
                   storeName,
+                  platform,
                   COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries,
@@ -237,10 +265,16 @@ interface AnalyticsDao {
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
               OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)
-           GROUP BY storeKey, storeName
+           GROUP BY storeKey, storeName, platform
            ORDER BY pay DESC"""
     )
     fun deliveryTotalsByStore(start: Long, end: Long): Flow<List<StoreTotalsRow>>
+
+    /** Chain-display metadata for the F9 chain-level rollup (#159): the first-observed capitalization
+     *  per (platform, normalizedChain). Combined reactively into `perStoreEconomics` for the bucket's
+     *  display name (else the first row's raw storeName). */
+    @Query("SELECT platform, normalizedChain, chainDisplay FROM stores")
+    fun storeChainDisplays(): Flow<List<StoreChainDisplayRow>>
 
     // ── Store report card reads (#159, the #315 Patterns tab consumer) ───
 
@@ -250,19 +284,36 @@ interface AnalyticsDao {
      * entry). Joined to `stores` metadata; pickup/delivery counts + realized gross/net derived at read.
      * Dwell percentiles are computed in the repository from [storeDwellSamples]. Lifetime-scoped (the
      * report card's default); a period-scoped variant can wrap the same shape later.
+     *
+     * **first/last seen derived at read (FIX 3):** `firstSeenAt`/`lastSeenAt` are MIN/MAX over the
+     * store's visit rows (pickup `phaseStartedAt`/`confirmedAt` UNION delivery `completedAt`), NOT
+     * denormalized `stores` columns — the removed columns rewrote every store row of a job on every
+     * per-trigger resolution (churning observers + diverging between incremental fold and refold at a
+     * batch boundary). The read-time derivation is refold-stable by construction.
+     *
+     * **cash-inclusive gross/net (FIX 4):** `gross = Σ realizedPay + Σ cashTip` and `net = Σ netProfit +
+     * Σ cashTip`, per the #688 rule that cash lives outside `realizedPay`/`netProfit` and is added at
+     * every read site (mirrors `deliveryTotalsByStore` + the repository mapper).
      */
     @Query(
         """SELECT s.storeKey AS storeKey, s.platform AS platform, s.normalizedChain AS normalizedChain,
                   s.chainDisplay AS chainDisplay, s.runningKey AS runningKey, s.address AS address,
-                  s.firstSeenAt AS firstSeenAt, s.lastSeenAt AS lastSeenAt,
+                  (SELECT MIN(x) FROM (
+                     SELECT phaseStartedAt AS x FROM pickup_records WHERE storeKey = s.storeKey
+                     UNION ALL SELECT completedAt FROM delivery_records WHERE storeKey = s.storeKey)) AS firstSeenAt,
+                  (SELECT MAX(x) FROM (
+                     SELECT confirmedAt AS x FROM pickup_records WHERE storeKey = s.storeKey
+                     UNION ALL SELECT completedAt FROM delivery_records WHERE storeKey = s.storeKey)) AS lastSeenAt,
                   (SELECT COUNT(*) FROM pickup_records p WHERE p.storeKey = s.storeKey) AS pickups,
                   (SELECT COUNT(*) FROM delivery_records d WHERE d.storeKey = s.storeKey) AS deliveries,
-                  (SELECT COALESCE(SUM(realizedPay), 0) FROM delivery_records d WHERE d.storeKey = s.storeKey) AS gross,
-                  (SELECT COALESCE(SUM(netProfit), 0) FROM delivery_records d WHERE d.storeKey = s.storeKey) AS net
+                  (SELECT COALESCE(SUM(realizedPay), 0) + COALESCE(SUM(cashTip), 0)
+                     FROM delivery_records d WHERE d.storeKey = s.storeKey) AS gross,
+                  (SELECT COALESCE(SUM(netProfit), 0) + COALESCE(SUM(cashTip), 0)
+                     FROM delivery_records d WHERE d.storeKey = s.storeKey) AS net
            FROM stores s
            WHERE EXISTS (SELECT 1 FROM pickup_records p WHERE p.storeKey = s.storeKey)
               OR EXISTS (SELECT 1 FROM delivery_records d WHERE d.storeKey = s.storeKey)
-           ORDER BY s.lastSeenAt DESC"""
+           ORDER BY lastSeenAt DESC"""
     )
     fun storeReportRows(): Flow<List<StoreReportRow>>
 
@@ -271,7 +322,8 @@ interface AnalyticsDao {
     @Query(
         """SELECT storeKey, (confirmedAt - arrivedAt) AS dwellMillis
            FROM pickup_records
-           WHERE storeKey IS NOT NULL AND arrivedAt IS NOT NULL AND confirmedAt IS NOT NULL"""
+           WHERE storeKey IS NOT NULL AND arrivedAt IS NOT NULL AND confirmedAt IS NOT NULL
+             AND confirmedAt >= arrivedAt"""
     )
     fun storeDwellSamples(): Flow<List<StoreDwellSample>>
 
