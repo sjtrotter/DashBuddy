@@ -66,6 +66,10 @@
         "state": { "$ref": "#/$defs/stateBlock" },
         "bind": { "$ref": "#/$defs/bindBlock" },
         "redact": { "$ref": "#/$defs/redactBlock" },
+        "intent": {
+          "type": "string",
+          "description": "Output intent string. Auto-derived from rule ID (RuleCompiler.deriveTargetFromId) if omitted."
+        },
         "reject": {
           "type": "array",
           "description": "Phase 2: Fail-fast negative checks. Any match skips this rule/branch.",
@@ -127,7 +131,7 @@
 
     "clickBranchObject": {
       "type": "object",
-      "description": "A single branch within a multi-branch click rule. No 'bind' property: RuleCompiler compiles bindings for SCREEN rules only, so a bind block on a click branch would silently have no effect (#241).",
+      "description": "A single branch within a multi-branch click rule. No 'bind' property: RuleCompiler compiles bindings for SCREEN rules only, so a bind block on a click branch would silently have no effect (#241). No 'parse' property either: RuleCompiler's CLICK branch always compiles the parser to an empty field map, so a parse block on a click branch is silently inert (#241).",
       "required": ["require"],
       "properties": {
         "screenIs": {
@@ -138,12 +142,12 @@
           "type": "string",
           "description": "Output intent string for this branch."
         },
+        "state": { "$ref": "#/$defs/stateBlock" },
         "reject": {
           "type": "array",
           "items": { "$ref": "#/$defs/nodePredicate" }
         },
         "require": { "$ref": "#/$defs/nodePredicate" },
-        "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }
@@ -186,7 +190,7 @@
 
     "clickRule": {
       "type": "object",
-      "description": "A click classification rule. Predicate operates on the single tapped UiNode. Supports reject -> require -> parse -> validate -> effects. No 'bind' property: RuleCompiler compiles bindings for SCREEN rules only, so a bind block here would silently have no effect (#241).",
+      "description": "A click classification rule. Predicate operates on the single tapped UiNode. Supports reject -> require -> validate -> effects. No 'bind' property: RuleCompiler compiles bindings for SCREEN rules only, so a bind block here would silently have no effect (#241). No 'parse' property either: RuleCompiler's CLICK branch always compiles the parser to an empty field map (RuleCompiler.kt), so a parse block on a click rule is silently inert (#241).",
       "required": ["id", "priority"],
       "properties": {
         "id": {
@@ -215,6 +219,7 @@
           "type": "string",
           "description": "Output intent string. Auto-derived from rule ID if omitted."
         },
+        "state": { "$ref": "#/$defs/stateBlock" },
         "reject": {
           "type": "array",
           "description": "Fail-fast negative checks. Any match skips this rule/branch.",
@@ -224,7 +229,6 @@
           "$ref": "#/$defs/nodePredicate",
           "description": "Positive match condition. Must pass for the rule to match."
         },
-        "parse": { "$ref": "#/$defs/parseBlock" },
         "validate": {
           "type": "array",
           "items": { "$ref": "#/$defs/validateEntry" }

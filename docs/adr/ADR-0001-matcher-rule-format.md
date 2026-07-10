@@ -190,9 +190,15 @@ next rule (or next branch within a multi-branch rule) is tried.
 
 **Why this order:**
 
-- **bind before reject** — PickupNavigationMatcher needs to find `bottom_sheet_task_title`
-  before it can reject based on the node's text content. Bind must precede reject so that
-  bound-node predicates are available.
+- **bind before reject** — historical/structural ordering, not a data dependency: `reject`/
+  `require` predicates operate directly on the tree/node and can NEVER reference a `$name`
+  binding (there is no `on: "$name"`/`bound: "$name"` modifier — never implemented, see Bind
+  semantics below and the status table at the top of this document); a rule that needs to
+  reject on the same node a binding found re-anchors independently with its own `hasIdSuffix`
+  (e.g. PickupNavigationMatcher re-matches `bottom_sheet_task_title` in its own `reject` entry).
+  Bindings are consumed only later, in `parse` (`from: "$name"`) — so the true reason bind
+  precedes reject/require is simply that it's phase 1 of a fixed pipeline order, not that a
+  later phase depends on its output.
 - **reject before require** — fail-fast. If the tree contains a disqualifying signal
   ("Return to dash", "Earnings Mode Switcher"), we skip immediately without evaluating the
   (often more expensive) positive match conditions.
@@ -1169,17 +1175,24 @@ to EXPANDED. If validate fails, the next rule (COLLAPSED) is tried.
 
 ## Click Rules
 
-A click rule classifies a single clicked `UiNode` into a `ClickInfo` subtype. Rules are evaluated
-in ascending `priority` order; the first match wins.
+A click rule classifies a single clicked `UiNode`. There is no `ClickInfo` type anywhere in the
+source — a match compiles to the same `RuleMatchResult` every rule context produces (`ruleId`,
+`intent`, `flow`/`modeHint`, `targets`, `effects`, `transitionOverrides`), which
+`ObservationClassifier.classifyClick` wraps into an `Observation.Click`. Rules are evaluated in
+ascending `priority` order; the first match wins.
 
 Clicks operate on a **single node** — the element that was tapped. There is no tree to traverse,
 so `exists`/`notExists`/`allTextContains*` are not available. Node predicates apply directly.
 The `require` block contains a node-level predicate (not tree-level). `reject` IS available for
 click rules — same node-level predicate vocabulary, evaluated before `require` — the single-node
-context just means there's nothing to "search" (no `exists`). `bind` is schema-legal on a click
-rule but has no effect: bindings compile for SCREEN rules only, so a `bind` block on a click rule
-is silently inert. There is no `parse` block either — `ClickInfo` subtypes carry no extracted
-data beyond `Unknown(nodeId, nodeText)`.
+context just means there's nothing to "search" (no `exists`). `bind` and `parse` are both
+compiler-tolerated (accepted by `RuleCompiler`'s known-key check) but inert on a click rule —
+bindings compile for SCREEN rules only, and `RuleCompiler`'s CLICK branch always compiles the
+parser to an empty field map — so both were removed from `docs/rules.schema.json`'s
+`clickRule`/`clickBranchObject` `$defs` by #241 (the schema no longer advertises either as a
+legal property, even though the compiler would silently no-op rather than reject them). There is
+no extracted parse data on a click match beyond what `ObservationClassifier` fills in for the
+UNKNOWN fallback itself: `ParsedFields.ClickFields(intent = "unknown", nodeId, nodeText)`.
 
 ```json5
 {
@@ -1229,7 +1242,7 @@ data beyond `Unknown(nodeId, nodeText)`.
 |--------------|---------------------------------------------------------------------------------|
 | `Sensitive`  | Click is suppressed; no `ClickEvent` emitted. `overrideable: false`.            |
 | `Irrelevant` | Click acknowledged but no `ClickEvent` emitted.                                 |
-| `Unknown`    | Implicit fallback — `ClickInfo.Unknown(nodeId, nodeText)` emitted for analysis. |
+| `Unknown`    | Implicit fallback — no rule matched; `ObservationClassifier.classifyClick` emits an `Observation.Click` with `parsed = ParsedFields.ClickFields(intent = "unknown", nodeId, nodeText)` for analysis. |
 
 ---
 
@@ -1364,8 +1377,10 @@ Store ScreenRuleset, ClickRuleset, NotificationRuleset in memory
   |
   v (hot path -- every accessibility event)
 
-ruleset.matchFirst(tree) -> target Screen / ClickInfo / NotificationInfo
+ruleset.matchFirst(tree) -> RuleMatchResult? (same shape for screen/click/notification)
   = iterate sorted rules, invoke pre-compiled lambdas, return on first match
+  ObservationClassifier then wraps the result into Observation.Screen / Observation.Click /
+  Observation.Notification (there is no ClickInfo/NotificationInfo type — one result shape)
 ```
 
 Compile time is ~10-50ms for a typical rule file. The hot path invokes pre-compiled JVM
@@ -1393,7 +1408,18 @@ fun textAfterLabel(label: String, offset: Int = 1): String?
 val hasViewId: Boolean
 ```
 
-**`UiNode` additions** (new for v2 — performance):
+**`UiNode` additions** (proposed for v2 — performance):
+
+> **Partially implemented (see the status table above).** `allTextLowerJoined` IS real — it ships
+> on `UiNode` (`domain/.../accessibility/UiNode.kt`, a memoized `by lazy` val) and is exactly what
+> `allTextContains`/`allTextContainsAll`/`allTextContainsAny` read (`PredicateCompiler`,
+> `ParseExpressionCompiler`). `idIndex` is **not implemented** — there is no such property
+> anywhere in the current source. Every `find`/`findAll` predicate — including
+> `hasIdSuffix`/`hasIdExact`/`hasIdContaining` — compiles to a plain recursive DFS tree walk
+> (`UiNode.findNode`/`findNodes`, O(n) per lookup, invoked from
+> `ParseExpressionCompiler`/`PredicateCompiler`/`RuleCompiler`). The `idIndex` block below is the
+> *original v2 performance proposal*, kept as design rationale for a future optimization pass, not
+> a description of what ships today (#241).
 
 ```kotlin
 // O(1) ID lookup: maps viewIdResourceName suffix to all matching nodes
@@ -1417,10 +1443,11 @@ val allTextLowerJoined: String by lazy {
 }
 ```
 
-The `idIndex` turns `findNode { it.matchesId("store_name") }` (O(n) tree walk) into
-`idIndex["store_name"]?.firstOrNull()` (O(1) map lookup). The `allTextLowerJoined` is
-computed once and reused across all `allTextContains*` predicates for the same tree — the
-current implementation recomputes the joined+lowercased string per rule.
+If built, the `idIndex` would turn `findNode { it.matchesId("store_name") }` (O(n) tree walk)
+into `idIndex["store_name"]?.firstOrNull()` (O(1) map lookup) — that part of the proposal never
+landed. `allTextLowerJoined` (memoized once per tree, reused across all `allTextContains*`
+predicates) already shipped as described. See the DSL-to-Interpreter Mapping table below for the
+ACTUAL dispatch of each construct.
 
 **`RawNotificationData` additions:**
 
@@ -1431,17 +1458,22 @@ val fullText: String by lazy { toFullString() }
 
 ### DSL-to-Interpreter Mapping
 
-| DSL construct                | Interpreter call                                  |
-|------------------------------|---------------------------------------------------|
-| `find: { hasIdSuffix: "s" }`          | `tree.idIndex["s"]?.firstOrNull()`                |
-| `findAll: { hasIdSuffix: "s" }`       | `tree.idIndex["s"].orEmpty()`                     |
-| `navigate: "sibling(N)"`     | `currentNode.sibling(N)`                          |
-| `navigate: "ancestor(N)"`    | `currentNode.ancestor(N)`                         |
-| `textAfterLabel: "label"`    | `tree.textAfterLabel("label", offset)`            |
-| `allTextContains: "s"`       | `tree.allTextLowerJoined.contains(s.lowercase())` |
-| `transform: "parseCurrency"` | `TransformRegistry.apply("parseCurrency", value)` |
-| `{ hasNoId: true }`          | `node.viewIdResourceName.isNullOrBlank() == want` |
-| `presence: <pred>`           | compiled predicate returns `Boolean` directly     |
+The right column is the ACTUAL dispatch (verified against `ParseExpressionCompiler`/
+`PredicateCompiler`/`RuleCompiler`, #241) — there is no `idIndex`; `find`/`findAll` compile a
+predicate and hand it to a plain recursive tree walk. `allTextLowerJoined` is the one performance
+helper from the proposal above that DID ship.
+
+| DSL construct                | Interpreter call                                                    |
+|------------------------------|-----------------------------------------------------------------------|
+| `find: { hasIdSuffix: "s" }`          | `startNode.findNode(compiledPredicate)` — recursive DFS, O(n)  |
+| `findAll: { hasIdSuffix: "s" }`       | `startNode.findNodes(compiledPredicate)` — recursive DFS, O(n) |
+| `navigate: "sibling(N)"`     | `currentNode.sibling(N)`                                             |
+| `navigate: "ancestor(N)"`    | `currentNode.ancestor(N)`                                            |
+| `textAfterLabel: "label"`    | `tree.textAfterLabel("label", offset)`                               |
+| `allTextContains: "s"`       | `tree.allTextLowerJoined.contains(s.lowercase())`                    |
+| `transform: "parseCurrency"` | `TransformRegistry.apply("parseCurrency", value)`                    |
+| `{ hasNoId: true }`          | `node.viewIdResourceName.isNullOrBlank() == want`                    |
+| `presence: <pred>`           | compiled predicate returns `Boolean` directly                        |
 
 ### Dual-Running Validation (historical — migration completed)
 
@@ -1599,7 +1631,8 @@ migrated and the agreement test (#213) is green, v1 support is dropped.
 - [x] Define TransformRegistry (engine-owned, closed vocabulary)
 - [x] Define platform envelope header
 - [x] Validate DSL completeness against all 31 matchers and 17 parsers
-- [x] Define data model enrichment (UiNode.idIndex, allTextLowerJoined)
+- [x] Define data model enrichment (`UiNode.allTextLowerJoined` — shipped; `UiNode.idIndex` —
+      **NOT IMPLEMENTED**, see the "Not implemented" note under Data Model Enrichment above, #241)
 
 ## Implementation Issues
 
