@@ -6,22 +6,30 @@ import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
+import cloud.trotter.dashbuddy.core.database.analytics.PickupRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.StoreEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
+import cloud.trotter.dashbuddy.domain.state.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -202,62 +210,83 @@ class StoreResolutionProjectorTest {
     // ── F1: incremental fold with a batch boundary splitting the job ≡ from-zero refold ──
 
     @Test
-    fun `F1 — incremental fold split across batches equals a from-zero refold`() = runBlocking {
+    fun `F1 — incremental fold with the batch boundary BETWEEN the two drops equals a from-zero refold`() = runBlocking {
+        // FIX 12b: the receipt rides the SECOND drop, with the batch boundary between the drops — the
+        // divergence-prone shape (drop1's early resolution keys chain-only; drop2's receipt upgrades it).
         insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
         insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
         insert(AppEventType.PICKUP_CONFIRMED, "S1", 1150, pickup("J1", "pM", "Maple Street Biscuit Company", 1150))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dT", "Target", 1200, dropRealizedPay = 4.5))
         insert(
-            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
             delivery(
-                "J1", "dT", "Target", 1200,
+                "J1", "dM", "Maple Street Biscuit Company", 1250,
                 parsedPay = receipt("Target (02426)" to 2.25, "Maple Street Biscuit - Alamo Ranch" to 6.50),
-                dropRealizedPay = 4.5,
+                dropRealizedPay = 4.25,
             ),
         )
-        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1250, delivery("J1", "dM", "Maple Street Biscuit Company", 1250, dropRealizedPay = 4.25))
         insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
 
-        // Incremental: force multi-batch (limit 2) so pickups, the receipt, and the close land in
-        // different batches (the exact case the accumulator design failed).
+        // Incremental: limit 2 lands DASH_START+pT in b1, pM+dT in b2, dM+DASH_STOP in b3 — so dT and dM
+        // (and their resolutions) fall in DIFFERENT batches.
         val p = projector()
         while (p.processBatch(limit = 2) != null) { /* drain */ }
-        val incrementalStores = dao.allStores()
-        val incrementalKeys = listOf("dT", "dM").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
+        val incrementalVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+        val incrementalDeliveryKeys = listOf("dT", "dM").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
+        val incrementalPickupKeys = dao.pickupRecordsForJob("J1").associate { it.taskId to it.storeKey }
 
         // From-zero refold in ONE drain.
         wipeAndResetWatermark()
         projector().catchUp()
-        val refoldStores = dao.allStores()
-        val refoldKeys = listOf("dT", "dM").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
+        val refoldVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+        val refoldDeliveryKeys = listOf("dT", "dM").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
+        val refoldPickupKeys = dao.pickupRecordsForJob("J1").associate { it.taskId to it.storeKey }
 
-        assertEquals("stores identical incremental vs refold", incrementalStores, refoldStores)
-        assertEquals("delivery storeKeys identical incremental vs refold", incrementalKeys, refoldKeys)
-        assertEquals(targetKey, incrementalKeys["dT"])
-        assertEquals(mapleKey, incrementalKeys["dM"])
+        // The READ-VISIBLE store set (M4 EXISTS-filtered) + ALL delivery + ALL pickup stamps converge.
+        // NOTE: the raw `stores` table can differ — the incremental path leaves an unreferenced chain-only
+        // orphan row (dT's early resolution before dM's receipt landed); that orphan is an ACCEPTED,
+        // read-invisible residual (M4 filters it out of every read), not a divergence that surfaces.
+        assertEquals("read-visible store set identical incremental vs refold", refoldVisible, incrementalVisible)
+        assertEquals("delivery storeKeys identical", refoldDeliveryKeys, incrementalDeliveryKeys)
+        assertEquals("pickup storeKeys identical", refoldPickupKeys, incrementalPickupKeys)
+        assertEquals(targetKey, incrementalDeliveryKeys["dT"])
+        assertEquals(mapleKey, incrementalDeliveryKeys["dM"])
+        assertEquals(setOf(targetKey, mapleKey), incrementalVisible)
     }
 
     // ── H1: a disagreeing driver correction pins the row; resolution never re-keys it ──
 
     @Test
-    fun `H1 — a store-name correction pins the row and resolution does not re-key it`() = runBlocking {
+    fun `H1 — a store-name correction pins the row and resolution does not re-key it (pin is load-bearing)`() = runBlocking {
         insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
         insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
         val d = insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 1200,
             delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
         )
-        // Driver corrects the store to a DIFFERENT chain — pins it.
+        // FIX 12a: correct to a name that STILL brand-matches the pickup anchor ("Target Cafe" shares the
+        // leading "target" token). Without the pin, resolution WOULD re-key it back to the Target entity —
+        // so the pin is genuinely load-bearing here (a disagreeing name would have stayed null regardless).
         insert(
             AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
-            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Panda Express"),
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Target Cafe"),
         )
         insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300)) // session-level re-resolution
         projector().catchUp()
 
         val row = dao.deliveryRecord(d)!!
-        assertEquals("driver name honored", "Panda Express", row.storeName)
+        assertEquals("driver name honored", "Target Cafe", row.storeName)
         assertEquals("pinned", 1, row.storeKeyPinned)
-        assertNull("storeKey stays null — resolution did NOT re-key it back to Target", row.storeKey)
+        assertNull("storeKey stays null — the pin blocks the brand-matching re-key", row.storeKey)
+
+        // FIX 12a refold half: a from-zero refold re-derives the pin (the DELIVERY_ADJUSTMENT replays
+        // after its target) → the pinned row's final state is identical to the incremental path.
+        wipeAndResetWatermark()
+        projector().catchUp()
+        val refold = dao.deliveryRecord(d)!!
+        assertEquals("Target Cafe", refold.storeName)
+        assertEquals(1, refold.storeKeyPinned)
+        assertNull(refold.storeKey)
     }
 
     // ── F8: a PROJECTOR_VERSION bump wipes stores + pickup_records ──
@@ -277,9 +306,18 @@ class StoreResolutionProjectorTest {
         val bogus = StoreEntity(
             storeKey = "doordash|ghost|999", platform = "doordash", normalizedChain = "ghost",
             chainDisplay = "Ghost", runningKey = "999", offerNameForm = null, pickupNameForm = "Ghost",
-            payoutNameForm = null, address = null, firstSeenAt = 1, lastSeenAt = 1,
+            payoutNameForm = null, address = null,
         )
         dao.upsertStore(bogus)
+        // FIX 12c: also seed a POISONED pickup_records row (a fake PK no refold recreates) to prove the
+        // F8 wipe clears pickup_records, not only stores.
+        dao.upsertPickup(
+            PickupRecordEntity(
+                eventSequenceId = 99_999, sessionId = "S1", platform = "doordash", jobId = "JGHOST",
+                taskId = "PTGHOST", storeName = "Ghost", storeKey = "doordash|ghost|999",
+                phaseStartedAt = 1, arrivedAt = 1, confirmedAt = 2, deadlineMillis = null, activity = "PICKUP",
+            ),
+        )
         // Force the version-mismatch rebuild by writing an OLD projectorVersion watermark.
         dao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 999, projectorVersion = 4))
 
@@ -287,5 +325,74 @@ class StoreResolutionProjectorTest {
 
         assertNull("stale bogus store wiped", dao.store("doordash|ghost|999"))
         assertNotNull("real store re-created by the refold", dao.store(targetKey))
+        assertEquals("poisoned pickup row gone after rebuild (F8)", 0, dao.pickupRecordsForJob("JGHOST").size)
     }
+
+    // ── FIX 12d: F4 offer-link guards ──
+
+    private fun offerAccepted(offerHash: String, merchant: String, at: Long) =
+        OfferPayload(
+            offerHash = offerHash,
+            parsedOffer = ParsedOffer(offerHash = offerHash),
+            evaluation = OfferEvaluation(
+                action = OfferAction.ACCEPT, score = 80.0, qualityLevel = OfferQuality.GOOD,
+                payAmount = 10.0, fuelCostEstimate = 0.0, nonFuelCostEstimate = 0.75,
+                operatingCostPerMile = 0.25, netPayAmount = 9.25, distanceMiles = 3.0,
+                dollarsPerMile = 3.0, dollarsPerHour = 20.0, estimatedTimeMinutes = 15.0,
+                itemCount = 1.0, merchantName = merchant,
+            ),
+            outcome = AppEventType.OFFER_ACCEPTED, presentedAt = at - 10, decidedAt = at,
+            returnFlow = Flow.Idle,
+        )
+
+    @Test
+    fun `F4 — a queued next-job offer that brand-DISAGREES is not linked by the temporal fallback`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        // A queued NEXT-job offer accepted mid-job for a DIFFERENT brand (Whataburger), no offer hashes
+        // on the job → temporal fallback only. It must NOT be linked to the Target job.
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1050, offerAccepted("HASHW", "Whataburger", 1050))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val offer = dao.offerRecord(offSeq)!!
+        assertNull("a brand-disagreeing queued offer is not linked (F4)", offer.linkedJobId)
+    }
+
+    @Test
+    fun `FIX 1b — a job already exactly-linked does not claim a second offer on the DASH_STOP re-run`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        // The job's OWN accepted offer (hash carried onto the job's events → exact link).
+        val ownSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Target", 1040))
+        // A SECOND accepted Target offer (a next job's), same brand → would temporally agree.
+        val nextSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1060, offerAccepted("HASH2", "Target", 1060))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickupWithHashes("J1", "pT", "Target", 1100, listOf("HASH1")))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            deliveryWithHashes("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), 8.0, listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300)) // session-level re-run, no hashes → temporal
+        projector().catchUp()
+
+        assertEquals("the exact-linked own offer is claimed", "J1", dao.offerRecord(ownSeq)!!.linkedJobId)
+        assertNull("the second Target offer is NOT claimed on the DASH_STOP re-run (FIX 1b)", dao.offerRecord(nextSeq)!!.linkedJobId)
+    }
+
+    private fun pickupWithHashes(jobId: String, taskId: String, store: String, at: Long, hashes: List<String>) =
+        PickupPayload(
+            jobId = jobId, taskId = taskId, storeName = store, phaseStartedAt = at - 100,
+            arrivedAt = at - 60, confirmedAt = at, activity = "PICKUP", jobOfferHashes = hashes,
+        )
+
+    private fun deliveryWithHashes(
+        jobId: String, taskId: String, store: String, at: Long, parsedPay: ParsedPay, totalPay: Double, hashes: List<String>,
+    ) = DeliveryPayload(
+        jobId = jobId, taskId = taskId, storeName = store, customerHash = "cust-$taskId",
+        addressHash = "addr-$taskId", phaseStartedAt = at - 200, arrivedAt = at - 30,
+        completedAt = at, totalPay = totalPay, parsedPay = parsedPay, jobOfferHashes = hashes,
+    )
 }

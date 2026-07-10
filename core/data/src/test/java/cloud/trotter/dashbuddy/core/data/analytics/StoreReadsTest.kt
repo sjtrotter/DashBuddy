@@ -51,6 +51,7 @@ class StoreReadsTest {
         pay: Double,
         net: Double,
         completedAt: Long = 1_000L,
+        cashTip: Double? = null,
     ) = DeliveryRecordEntity(
         eventSequenceId = seq,
         sessionId = null, // null-session rows fold by their own completedAt (in-window for LIFETIME)
@@ -74,10 +75,11 @@ class StoreReadsTest {
         frozenCostPerMile = 0.25,
         netProfit = net,
         costBasis = "OFFER_FROZEN",
+        cashTip = cashTip,
         storeKey = storeKey,
     )
 
-    private fun pickupRow(seq: Long, storeKey: String?, arrivedAt: Long, confirmedAt: Long) =
+    private fun pickupRow(seq: Long, storeKey: String?, arrivedAt: Long?, confirmedAt: Long?) =
         PickupRecordEntity(
             eventSequenceId = seq,
             sessionId = "S1",
@@ -86,7 +88,7 @@ class StoreReadsTest {
             taskId = "PT$seq",
             storeName = "Target",
             storeKey = storeKey,
-            phaseStartedAt = arrivedAt - 100,
+            phaseStartedAt = (arrivedAt ?: 0) - 100,
             arrivedAt = arrivedAt,
             confirmedAt = confirmedAt,
             deadlineMillis = null,
@@ -96,7 +98,7 @@ class StoreReadsTest {
     private fun storeRow(storeKey: String, chain: String, runningKey: String?) = StoreEntity(
         storeKey = storeKey, platform = "doordash", normalizedChain = chain, chainDisplay = "Target",
         runningKey = runningKey, offerNameForm = null, pickupNameForm = "Target", payoutNameForm = null,
-        address = null, firstSeenAt = 100, lastSeenAt = 200,
+        address = null,
     )
 
     @Test
@@ -112,14 +114,56 @@ class StoreReadsTest {
     }
 
     @Test
-    fun `F9 — a resolved keyed store and an unresolved chain bucket are distinct per-location entries`() = runBlocking {
+    fun `F9 — a resolved keyed store and its unresolved chain form MERGE into one chain bucket (FIX 8)`() = runBlocking {
         dao.upsertDelivery(deliveryRow(1, "Target (02426)", "doordash|target|02426", pay = 10.0, net = 8.0))
         dao.upsertDelivery(deliveryRow(2, "Target", null, pay = 5.0, net = 4.0))
 
         val stores = repo.perStoreEconomics(AnalyticsPeriod.LIFETIME).first()
-        assertEquals(2, stores.size)
-        assertTrue(stores.any { it.storeKey == "doordash|target|02426" })
-        assertTrue(stores.any { it.storeKey == null })
+        assertEquals("keyed + unresolved fold to ONE chain bucket (F9/FIX 8)", 1, stores.size)
+        assertEquals("doordash|target", stores.single().storeKey)
+        assertEquals(15.0, stores.single().gross, 0.001)
+        assertEquals(12.0, stores.single().net, 0.001)
+    }
+
+    @Test
+    fun `F9 — two keyed locations of one chain roll up to a single chain bucket (FIX 8)`() = runBlocking {
+        dao.upsertDelivery(deliveryRow(1, "Target (02426)", "doordash|target|02426", pay = 10.0, net = 8.0))
+        dao.upsertDelivery(deliveryRow(2, "Target (99999)", "doordash|target|99999", pay = 6.0, net = 5.0))
+        // A chainDisplay for the chain feeds the bucket's display name.
+        dao.upsertStore(storeRow("doordash|target|02426", "target", "02426"))
+
+        val stores = repo.perStoreEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals(1, stores.size)
+        assertEquals("doordash|target", stores.single().storeKey)
+        assertEquals("Target", stores.single().storeName) // chainDisplay preferred
+        assertEquals(16.0, stores.single().gross, 0.001)
+    }
+
+    @Test
+    fun `FIX 4 — the report card gross and net include cash tips`() = runBlocking {
+        val key = "doordash|target|02426"
+        dao.upsertStore(storeRow(key, "target", "02426"))
+        dao.upsertPickup(pickupRow(1, key, arrivedAt = 0, confirmedAt = 10_000))
+        dao.upsertDelivery(deliveryRow(100, "Target (02426)", key, pay = 12.0, net = 9.0, cashTip = 3.0))
+
+        val card = repo.storeReportCards().first().single()
+        assertEquals("gross includes cash (#688)", 15.0, card.gross, 0.001)
+        assertEquals("net includes cash (#688)", 12.0, card.net, 0.001)
+    }
+
+    @Test
+    fun `FIX 11 — a negative-dwell pickup row is excluded from the dwell samples`() = runBlocking {
+        val key = "doordash|target|02426"
+        dao.upsertStore(storeRow(key, "target", "02426"))
+        // One valid dwell (20s) and one inverted row (confirmed BEFORE arrived, #732 class).
+        dao.upsertPickup(pickupRow(1, key, arrivedAt = 0, confirmedAt = 20_000))
+        dao.upsertPickup(pickupRow(2, key, arrivedAt = 50_000, confirmedAt = 10_000))
+        dao.upsertDelivery(deliveryRow(100, "Target (02426)", key, pay = 12.0, net = 9.0))
+
+        val card = repo.storeReportCards().first().single()
+        // Only the valid 20s sample survives — the inverted row is filtered out (no negative dwell).
+        assertEquals(20_000.0, card.avgDwellMillis!!, 0.001)
+        assertEquals(20_000L, card.p50DwellMillis)
     }
 
     @Test
@@ -150,7 +194,6 @@ class StoreReadsTest {
                 storeKey = chainOnly, platform = "doordash", normalizedChain = "chipotle",
                 chainDisplay = "Chipotle", runningKey = null, offerNameForm = null,
                 pickupNameForm = "Chipotle", payoutNameForm = null, address = null,
-                firstSeenAt = 1, lastSeenAt = 2,
             ),
         )
         dao.upsertPickup(pickupRow(1, chainOnly, arrivedAt = 0, confirmedAt = 15_000))
