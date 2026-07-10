@@ -78,18 +78,40 @@ object SnapshotRedactor {
      */
     private val BARE_STREET = Regex("""^\d{2,6}\s+[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z0-9.'-]+){0,3}$""")
     /**
-     * An **id-less first-name + last-initial** customer name line, e.g. "Brandon C" / "Gilberto U."
-     * — the shape on the multi-order drop-off confirm card (#501), whose name node ships **no
-     * viewId** so it escapes [PII_ID_SUFFIXES] and carries **no** "Deliver to "/"Message from "
-     * marker so the [NAME_PREFIXES] pass and the runtime CustomerTextMarkers backstop both miss it
-     * (the documented split-node residual). Whole-value anchored so it can't eat a multi-word
-     * merchant anchor ("SPROUTS FARMERS MARKET #118"), a warehouse zone code ("SAT_San-Antonio_187"),
-     * or a count ("2 items"): first name(s) are `Capitalized` words, the last token is a single
-     * capital letter (optionally with a period). Masking a shape this specific is the privacy-safe
-     * direction — a rare over-mask (a "Word X" UI label) is caught by the diff review + the
-     * [GoldenSnapshotRegressionTest] anchor guard; leaking a customer name is the dangerous one.
+     * The canonical **id-less first-name + last-initial** customer-name shape, e.g. "Brandon C" /
+     * "Gilberto U." / "José R" / "O'Brien M" / "Mary-Jo K" / "McKenna B" — the line on the
+     * multi-order drop-off confirm card (#501), whose name node ships **no viewId** so it escapes
+     * [PII_ID_SUFFIXES] and carries **no** "Deliver to "/"Message from " marker so the
+     * [NAME_PREFIXES] pass and the runtime CustomerTextMarkers backstop both miss it (the
+     * documented split-node residual).
+     *
+     * **SSOT (#362 class):** [FIRST_LAST_INITIAL_PATTERN] is byte-identical to the rule-side
+     * `hasTextMatchesRegex` in `doordash.screen.dropoff_multi_order_confirm` (+ the FIX-3
+     * defense-in-depth copies on `dropoff_navigation`/`dropoff_handoff`), and BOTH compile
+     * `IGNORE_CASE` — so the committed corpus is scrubbed the SAME way the runtime redacts the live
+     * envelope. `CaptureRedactionCorpusTest` asserts the two pattern strings are equal so they
+     * can't drift.
+     *
+     * Whole-value anchored (`^…$`, whitespace-tolerant via `\s{0,8}` so a trailing space still
+     * matches — the runtime `containsMatchIn` on raw text and this `matches` then agree on
+     * "Brandon C "), so it can't eat a multi-word merchant anchor ("SPROUTS FARMERS MARKET #118"),
+     * a warehouse zone code ("SAT_San-Antonio_187"), or a count ("2 items"). Character classes are
+     * `\p{L}` (accented/Unicode letters — José, Muñoz; interior capitals — McKenna) plus `'` and
+     * `-` (O'Brien, D'Angelo, Mary-Jo); the last token is a single letter with an optional trailing
+     * period. Every quantifier is bounded ({0,20}/{0,3}/{0,8}) so it passes RegexSafety's ReDoS
+     * guard when the identical string is compiled on the rule side.
+     *
+     * **Accepted over-mask trade-off (privacy-first):** because it is case-insensitive and
+     * shape-only, a two-token UI label that happens to end in a single letter — "Vitamin C",
+     * "Terminal B", "Plan B" — would also be masked. That is deliberate: a rare over-mask of a
+     * non-PII label is caught by the snapshot diff review + the [GoldenSnapshotRegressionTest]
+     * anchor guard (a masked anchor a rule needs turns the test red), whereas leaking a real
+     * customer name is the dangerous, silent failure. The `hasNoId` conjunct on the rule side and
+     * the whole-value anchoring here keep the surface small.
      */
-    private val FIRST_LAST_INITIAL = Regex("""^[A-Z][a-z]{1,20}(?: [A-Z][a-z]{1,20}){0,3} [A-Z]\.?$""")
+    const val FIRST_LAST_INITIAL_PATTERN =
+        "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+    private val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
     private val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
     /** A quoted free-text customer note, e.g. "Corner House, please leave at door." — customer-entered, mask whole. */
     private val QUOTED_NOTE = Regex(""""[^"]{6,}"""")
@@ -163,9 +185,10 @@ object SnapshotRedactor {
         // before the token-level passes, so a residual unsuffixed street can't leak.
         if (BARE_STREET.matches(text.trim())) return "[address]"
         // A whole-value id-less first-name + last-initial customer name ("Brandon C") — the
-        // multi-order drop-off confirm card residual (#501). Whole-value, so it fires only on a
-        // node that IS just the name, never on a longer line that merely contains one.
-        if (FIRST_LAST_INITIAL.matches(text.trim())) return MASK
+        // multi-order drop-off confirm card residual (#501). Matched on RAW text (the pattern is
+        // whitespace-tolerant) so this agrees byte-for-byte with the runtime redact's
+        // containsMatchIn; whole-value anchored, so it fires only on a node that IS just the name.
+        if (FIRST_LAST_INITIAL.matches(text)) return MASK
         var t = text
         t = EMAIL.replace(t, "[email]")
         t = PHONE.replace(t, "[phone]")

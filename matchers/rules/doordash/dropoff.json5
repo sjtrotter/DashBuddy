@@ -66,6 +66,19 @@
           "find": {
             "hasIdSuffix": "bottom_sheet_instructions"
           }
+        },
+        {
+          "comment": "Defense-in-depth (FIX 3): a modal-over-handoff combined frame that carries the multi-order-confirm's id-less first-name+last-initial line could be claimed by THIS earlier-priority rule instead of dropoff_multi_order_confirm, whose id-keyed redacts wouldn't cover the id-less name node. Same canonical name-shape SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN so the leak closes regardless of which rule wins the frame; hasNoId keeps it off id-bearing nav anchors.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
         }
       ],
       "state": {
@@ -328,6 +341,19 @@
               }
             ]
           }
+        },
+        {
+          "comment": "Defense-in-depth (FIX 3): a modal-over-handoff combined frame carrying the multi-order-confirm's id-less first-name+last-initial line could be claimed by THIS earlier-priority rule instead of dropoff_multi_order_confirm. Same canonical name-shape SSOT as SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN so the leak closes regardless of which rule wins the frame; hasNoId keeps it off id-bearing handoff anchors.",
+          "find": {
+            "all": [
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
+              },
+              {
+                "hasNoId": true
+              }
+            ]
+          }
         }
       ],
       "state": {
@@ -389,16 +415,16 @@
       }
     },
     {
-      "comment": "#501 item 2 — the DoorDash multi-order drop-off CONFIRMATION card ('Confirm you have the correct order before drop-off' / 'Mix-ups frequently occur at drop-off when there are multiple orders in a Dash.'), shown before a drop when a Dash carries multiple orders. It appears for BOTH a GoPuff (Drive) warehouse batch AND an ordinary multi-merchant grocery batch — the two committed corpus frames are a GoPuff drop and a Sprouts drop, so this is NOT GoPuff-specific (it's the generic DoorDash multi-order confirm). RECOGNIZE-ONLY (dev decision 2026-07-07, same posture as pickup_wait_survey / the item-3 pickup_zone_arrival rule): no state.flow, no parse — the task:dropoff:navigation flow is already established before this transient modal appears and the card is a confirmation, not a lifecycle anchor, so recognizing it only graduates the frame out of UNKNOWN (silencing the recurring capture) without any risk of a double-mint or phase perturbation. Anchors are unique to this card (grep of the corpus shows no other snapshot carries them), so priority is behaviorally inert. PRIVACY: the card carries an id-LESS customer-name line (first-name + last-initial, e.g. 'Brandon C') that no other control covers — it has no viewId (so the by-id redact misses it) and no 'Deliver to '/'Message from ' marker (so CustomerTextMarkers misses it, the documented split-node residual). The redact below masks it by SHAPE so the recognized capture envelope is PII-clean at the edge (#598); the store name (merchant, driver-owned) and warehouse zone code are kept. The two committed corpus frames were redacted the SAME way by SnapshotRedactor's matching FIRST_LAST_INITIAL masker (#501 item 1).",
+      "comment": "#501 item 2 — the DoorDash multi-order drop-off CONFIRMATION card ('Confirm you have the correct order before drop-off' / 'Mix-ups frequently occur at drop-off when there are multiple orders in a Dash.'), shown before a drop when a Dash carries multiple orders. It appears for BOTH a GoPuff (Drive) warehouse batch AND an ordinary multi-merchant grocery batch — the two committed corpus frames are a GoPuff drop and a Sprouts drop, so this is NOT GoPuff-specific (it's the generic DoorDash multi-order confirm). RECOGNIZE-ONLY (dev decision 2026-07-07, same posture as pickup_wait_survey / the item-3 pickup_zone_arrival rule): no state.flow, no parse — the task:dropoff:navigation flow is already established before this transient modal appears and the card is a confirmation, not a lifecycle anchor, so recognizing it only graduates the frame out of UNKNOWN (silencing the recurring capture) without any risk of a double-mint or phase perturbation. Anchors are unique to this card (grep of the corpus shows no other snapshot carries them), so priority is behaviorally inert. PRIVACY: the card carries an id-LESS customer-name line (first-name + last-initial, e.g. 'Brandon C') that no other control covers — it has no viewId (so the by-id redact misses it) and no 'Deliver to '/'Message from ' marker (so CustomerTextMarkers misses it, the documented split-node residual). The redact below masks it by SHAPE so the recognized capture envelope is PII-clean at the edge (#598); the store name (merchant, driver-owned) and warehouse zone code are kept. The name-shape regex is the SSOT shared with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN — CaptureRedactionCorpusTest asserts the two pattern strings are byte-equal AND both compile IGNORE_CASE (so 'JOSE G'/'Brandon C ' redact identically at runtime and in the committed corpus), so the two copies can't drift (#362 class). RESIDUAL (FIX 5): the runtime redact `find` matches node.text only (there is no hasDescMatchesRegex predicate in the engine — deliberately not built); a name surfaced ONLY via contentDescription would escape this rule at runtime, but SnapshotRedactor already scrubs the desc field on the commit path, so the committed corpus stays clean regardless.",
       "id": "doordash.screen.dropoff_multi_order_confirm",
       "priority": 77,
       "redact": [
         {
-          "comment": "The id-less first-name + last-initial customer name. Whole-value anchored (^...$) so it masks ONLY the bare name node, never the multi-word merchant anchor, the zone code, a count, or the 'Confirm ...'/'Mix-ups ...' copy.",
+          "comment": "The id-less first-name + last-initial customer name. Whole-value anchored (^...$, whitespace-tolerant so a trailing space still masks) so it masks ONLY the bare name node, never the multi-word merchant anchor, the zone code, a count, or the 'Confirm ...'/'Mix-ups ...' copy. Char classes cover accented/Unicode letters (José, Muñoz), interior capitals (McKenna), hyphenated first names (Mary-Jo), and apostrophes (O'Brien, D'Angelo); every quantifier is bounded ({0,20}/{0,3}/{0,8}) so RegexSafety's ReDoS guard accepts it. Compiled IGNORE_CASE (all rule regexes are), so 'JOSE G' masks too. SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN.",
           "find": {
             "all": [
               {
-                "hasTextMatchesRegex": "^[A-Z][a-z]{1,20}( [A-Z][a-z]{1,20}){0,3} [A-Z]\\.?$"
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}( [\\p{L}][\\p{L}'-]{0,20}){0,3} [A-Z]\\.?\\s{0,8}$"
               },
               {
                 "hasNoId": true
