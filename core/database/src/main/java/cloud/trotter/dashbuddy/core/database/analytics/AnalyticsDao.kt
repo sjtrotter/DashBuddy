@@ -42,6 +42,14 @@ interface AnalyticsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOffer(record: OfferRecordEntity)
 
+    /** Upsert one resolved store entity (#159) — REPLACE-idempotent on the deterministic storeKey. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertStore(record: StoreEntity)
+
+    /** Upsert one completed-pickup visit row (#159) — REPLACE-idempotent on the source event PK. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPickup(record: PickupRecordEntity)
+
     /** Read the singleton watermark row, or null before the first fold. */
     @Query("SELECT * FROM analytics_projection_state WHERE id = 1")
     suspend fun getWatermark(): AnalyticsProjectionStateEntity?
@@ -59,6 +67,85 @@ interface AnalyticsDao {
 
     @Query("DELETE FROM offer_records")
     suspend fun deleteAllOffers()
+
+    /** #159 F8: the `PROJECTOR_VERSION` wipe MUST also clear these, or stale `stores` first-observed
+     *  fields survive and become permanently wrong. */
+    @Query("DELETE FROM stores")
+    suspend fun deleteAllStores()
+
+    @Query("DELETE FROM pickup_records")
+    suspend fun deleteAllPickupRecords()
+
+    // ── Store resolution: reads (#159, run inside the batch transaction) ──
+
+    /** A job's committed pickup rows — the resolution anchors + dwell, ordered for a stable union. */
+    @Query("SELECT * FROM pickup_records WHERE jobId = :jobId ORDER BY eventSequenceId ASC")
+    suspend fun pickupRecordsForJob(jobId: String): List<PickupRecordEntity>
+
+    /** A job's committed delivery rows — dropoff names, `payoutStoreForms`, `storeKeyPinned`. Ordered
+     *  by `eventSequenceId` so the union of `payoutStoreForms` is stable (M2). */
+    @Query("SELECT * FROM delivery_records WHERE jobId = :jobId ORDER BY eventSequenceId ASC")
+    suspend fun deliveryRecordsForJob(jobId: String): List<DeliveryRecordEntity>
+
+    /** One store entity by key (resolution reads the prior row to keep first-observed forms). */
+    @Query("SELECT * FROM stores WHERE storeKey = :storeKey")
+    suspend fun store(storeKey: String): StoreEntity?
+
+    /** Distinct jobIds referenced by a session's pickup OR delivery rows — a session-level trigger
+     *  (DASH_STOP / inferred close) enumerates its jobs to re-resolve each (#159 L2). */
+    @Query(
+        """SELECT DISTINCT jobId FROM (
+              SELECT jobId FROM pickup_records WHERE sessionId = :sessionId
+              UNION SELECT jobId FROM delivery_records WHERE sessionId = :sessionId)"""
+    )
+    suspend fun jobIdsForSession(sessionId: String): List<String>
+
+    // ── Store resolution: writes (#159, value-guarded to avoid Room invalidation churn) ──
+
+    /** Stamp/re-stamp a pickup row's storeKey. Value-compare guard (no-op re-run doesn't churn Room). */
+    @Query(
+        "UPDATE pickup_records SET storeKey = :storeKey " +
+            "WHERE eventSequenceId = :eventSequenceId AND (storeKey IS NULL OR storeKey != :storeKey)"
+    )
+    suspend fun stampPickupStoreKey(eventSequenceId: Long, storeKey: String)
+
+    /** Stamp/re-stamp a delivery row's storeKey — pin predicate (H1) + value guard. A pinned row
+     *  (driver correction) is never re-keyed; an identical re-stamp is a no-op. */
+    @Query(
+        "UPDATE delivery_records SET storeKey = :storeKey " +
+            "WHERE eventSequenceId = :eventSequenceId AND storeKeyPinned = 0 " +
+            "AND (storeKey IS NULL OR storeKey != :storeKey)"
+    )
+    suspend fun stampDeliveryStoreKey(eventSequenceId: Long, storeKey: String)
+
+    /** The offer rows for a job's exact offer hashes (#159 F4 exact link). */
+    @Query("SELECT * FROM offer_records WHERE offerHash IN (:offerHashes)")
+    suspend fun offerRecordsByHashes(offerHashes: List<String>): List<OfferRecordEntity>
+
+    /** Nominate the most recent accepted, not-already-claimed offer at-or-before [atOrBefore] in a
+     *  session — the temporal fallback (#159 F4). Nomination is NOT a link; the projector stamps only
+     *  on brand-token agreement. [acceptedOutcome] is `AppEventType.OFFER_ACCEPTED.name` (bound, not a
+     *  magic literal). */
+    @Query(
+        """SELECT * FROM offer_records
+           WHERE sessionId = :sessionId AND outcome = :acceptedOutcome AND decidedAt <= :atOrBefore
+             AND (linkedJobId IS NULL OR linkedJobId = :jobId)
+           ORDER BY decidedAt DESC LIMIT 1"""
+    )
+    suspend fun nominateOfferForJob(
+        sessionId: String,
+        atOrBefore: Long,
+        jobId: String,
+        acceptedOutcome: String,
+    ): OfferRecordEntity?
+
+    /** Stamp an offer's storeKey + linkedJobId (the claimed-offer set, #159 F4). Idempotent guard so a
+     *  re-run over the same claim is a no-op. */
+    @Query(
+        "UPDATE offer_records SET storeKey = :storeKey, linkedJobId = :jobId " +
+            "WHERE eventSequenceId = :eventSequenceId AND (linkedJobId IS NULL OR linkedJobId = :jobId)"
+    )
+    suspend fun stampOfferLink(eventSequenceId: Long, storeKey: String?, jobId: String)
 
     // ── Read-side aggregates (Flow ⇒ reactive via Room invalidation) ─────
 
@@ -119,8 +206,17 @@ interface AnalyticsDao {
      * pay only) on purpose — cash is added to the store's gross/net in the repository mapper (#688
      * F5), not used as the sort key.
      */
+    /**
+     * Per-store delivery totals grouped on the **resolved** `storeKey` (#159 — the fragmentation fix
+     * this issue exists for), not the raw `storeName`. An unresolved row (`storeKey IS NULL` — a MANUAL
+     * delivery never in a job, or a not-yet-resolved row) groups by its raw `storeName` HERE, then the
+     * repository re-folds those null-key buckets by the shared `:domain` `normalizedChain(storeName)`
+     * (F9) so `"Target"` and `"…|target|02426"` at least share a chain bucket. Each group carries a
+     * representative [StoreTotalsRow.storeKey] (null for the unresolved buckets) + `storeName`.
+     */
     @Query(
-        """SELECT storeName,
+        """SELECT storeKey,
+                  storeName,
                   COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
                   COUNT(*) AS deliveries,
@@ -129,10 +225,43 @@ interface AnalyticsDao {
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
               OR (sessionId IS NULL AND completedAt >= :start AND completedAt < :end)
-           GROUP BY storeName
+           GROUP BY storeKey, storeName
            ORDER BY pay DESC"""
     )
     fun deliveryTotalsByStore(start: Long, end: Long): Flow<List<StoreTotalsRow>>
+
+    // ── Store report card reads (#159, the #315 Patterns tab consumer) ───
+
+    /**
+     * One rollup row per **referenced** store entity (M4 — DISTINCT over the visit tables, so an
+     * upgraded-away chain-only provisional key with zero referencing visits never appears as a phantom
+     * entry). Joined to `stores` metadata; pickup/delivery counts + realized gross/net derived at read.
+     * Dwell percentiles are computed in the repository from [storeDwellSamples]. Lifetime-scoped (the
+     * report card's default); a period-scoped variant can wrap the same shape later.
+     */
+    @Query(
+        """SELECT s.storeKey AS storeKey, s.platform AS platform, s.normalizedChain AS normalizedChain,
+                  s.chainDisplay AS chainDisplay, s.runningKey AS runningKey, s.address AS address,
+                  s.firstSeenAt AS firstSeenAt, s.lastSeenAt AS lastSeenAt,
+                  (SELECT COUNT(*) FROM pickup_records p WHERE p.storeKey = s.storeKey) AS pickups,
+                  (SELECT COUNT(*) FROM delivery_records d WHERE d.storeKey = s.storeKey) AS deliveries,
+                  (SELECT COALESCE(SUM(realizedPay), 0) FROM delivery_records d WHERE d.storeKey = s.storeKey) AS gross,
+                  (SELECT COALESCE(SUM(netProfit), 0) FROM delivery_records d WHERE d.storeKey = s.storeKey) AS net
+           FROM stores s
+           WHERE EXISTS (SELECT 1 FROM pickup_records p WHERE p.storeKey = s.storeKey)
+              OR EXISTS (SELECT 1 FROM delivery_records d WHERE d.storeKey = s.storeKey)
+           ORDER BY s.lastSeenAt DESC"""
+    )
+    fun storeReportRows(): Flow<List<StoreReportRow>>
+
+    /** Every pickup dwell sample (`confirmedAt − arrivedAt`) keyed by storeKey — the repository computes
+     *  per-store avg/p50/p95 (SQLite has no percentile; store visit counts are small). */
+    @Query(
+        """SELECT storeKey, (confirmedAt - arrivedAt) AS dwellMillis
+           FROM pickup_records
+           WHERE storeKey IS NOT NULL AND arrivedAt IS NOT NULL AND confirmedAt IS NOT NULL"""
+    )
+    fun storeDwellSamples(): Flow<List<StoreDwellSample>>
 
     @Query(
         """SELECT COALESCE(SUM(MAX(lastOdometer - startOdometer, 0)), 0) AS miles,

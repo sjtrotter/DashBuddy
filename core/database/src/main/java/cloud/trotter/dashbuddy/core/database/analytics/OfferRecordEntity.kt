@@ -23,6 +23,7 @@ import androidx.room.PrimaryKey
         Index(value = ["platform", "decidedAt"]), // per-platform periods
         Index("sessionId"),
         Index("offerHash"),
+        Index("linkedJobId"),   // resolution's persistent claimed-offer set (#159 F4)
     ]
 )
 data class OfferRecordEntity(
@@ -60,4 +61,20 @@ data class OfferRecordEntity(
     val estFuelPerMile: Double? = null,
     /** Non-fuel component of [estOperatingCostPerMile] (per-mile) = `nonFuelCostEstimate ÷ distanceMiles` (#659). */
     val estNonFuelPerMile: Double? = null,
+
+    // ── Store entity resolution (#159, v12) ─────────────────────────────────
+    /**
+     * The PRIMARY store of the offer (first order's hint) for single-store offers; null for multi-store
+     * offers in v1 (a per-order offer↔store bridge is phase 2). Stamped by resolution when the offer is
+     * linked to a job AND its `merchantName` agrees by brand token with a resolved pickup anchor (F4).
+     */
+    val storeKey: String? = null,
+    /**
+     * The persistent claimed-offer set (#159 F4). Stamped at resolution when this offer is linked to a
+     * job (exact via `jobOfferHashes`, or the brand-token-guarded temporal fallback). Survives batch
+     * boundaries and is refold-deterministic, so the temporal fallback's "not already claimed" test is a
+     * durable `linkedJobId IS NULL OR = thisJob` predicate, not an ephemeral in-memory set. Never used
+     * for money.
+     */
+    val linkedJobId: String? = null,
 )

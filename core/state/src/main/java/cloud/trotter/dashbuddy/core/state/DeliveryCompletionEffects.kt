@@ -119,6 +119,7 @@ internal fun EffectMap.diffDeliveryCompletion(
                     sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                     dropRealizedPay = dropShare,
                     offerPayShare = offerShare,
+                    jobOfferHashes = p.activeJob?.parentOfferHashes ?: emptyList(),
                 )
                 // #518: scope idempotency to the completed task, not obs.timestamp, so a
                 // re-entered PostTask receipt can't re-fire (and double-count) the same
@@ -155,7 +156,12 @@ internal fun EffectMap.diffDeliveryCompletion(
         val jobHadDropoff = (next.recentTasks + listOfNotNull(next.activeTask))
             .any { it.jobId == closedJob.jobId && it.phase == TaskPhase.DROPOFF }
         if (!jobHadDropoff) {
-            addAll(pickupConfirmSweepEffects(sessionId, next, closedJob.jobId, obs))
+            addAll(
+                pickupConfirmSweepEffects(
+                    sessionId, next, closedJob.jobId, obs,
+                    jobOfferHashes = closedJob.parentOfferHashes,
+                ),
+            )
         }
         val retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE
         // #528: split the combined receipt across the job's delivered drops once, so each
@@ -204,6 +210,7 @@ internal fun EffectMap.diffDeliveryCompletion(
                 sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
                 dropRealizedPay = dropShares[task.taskId],
                 offerPayShare = offerShare,
+                jobOfferHashes = closedJob.parentOfferHashes,
             )
             add(
                 logEffect(
@@ -224,6 +231,7 @@ private fun EffectMap.deliveryCompletedPayload(
     sessionEarnings: Double?,
     dropRealizedPay: Double? = null,
     offerPayShare: Double? = null,
+    jobOfferHashes: List<String> = emptyList(),
 ): DeliveryPayload = DeliveryPayload(
     jobId = jobId ?: task?.jobId ?: "unknown",
     taskId = task?.taskId ?: "unknown",
@@ -241,6 +249,7 @@ private fun EffectMap.deliveryCompletedPayload(
     dropRealizedPay = dropRealizedPay,
     offerPayShare = offerPayShare,
     sessionEarningsAtCompletion = sessionEarnings,
+    jobOfferHashes = jobOfferHashes,
 )
 
 /**

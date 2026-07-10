@@ -8,7 +8,9 @@ import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.PickupRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.StoreEntity
 import cloud.trotter.dashbuddy.core.database.chat.ChatDao
 import cloud.trotter.dashbuddy.core.database.chat.ChatMessageEntity
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
@@ -32,6 +34,9 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         SessionRecordEntity::class,
         OfferRecordEntity::class,
         AnalyticsProjectionStateEntity::class,
+        // Store entity resolution (#159) — additive: identity table + per-pickup visits table.
+        StoreEntity::class,
+        PickupRecordEntity::class,
     ],
     version = DashBuddyDatabase.VERSION,
     exportSchema = true,
@@ -53,10 +58,17 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // the PROJECTOR_VERSION 3→4 refold this bump triggers (cashTip stays null in history —
     // no cash events exist; originalPayBasis is stamped for every row). Additive ⇒ never
     // wipes app_events or the existing analytics rows.
+    // v11→v12 (#159) is additive-only: two new tables (`stores` + `pickup_records`) plus new
+    // nullable/defaulted columns — delivery_records.{storeKey, payoutStoreForms, storeKeyPinned},
+    // offer_records.{storeKey, linkedJobId} — and new indices (delivery_records.jobId/storeKey,
+    // offer_records.linkedJobId). The `PROJECTOR_VERSION` 4→5 refold this bump triggers populates the
+    // two new tables + the storeKey columns for ALL history (rebuild ≡ backfill; the backfill is just
+    // the first drain). Additive ⇒ never wipes app_events or the existing analytics rows.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
+        AutoMigration(from = 11, to = 12),
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -84,7 +96,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 11
+        const val VERSION = 12
     }
 
 }

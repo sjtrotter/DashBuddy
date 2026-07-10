@@ -106,7 +106,13 @@ internal fun EffectMap.diffTask(
             // displaced prevTask + any earlier displaced pickups), each at its own completion
             // time, BEFORE the dropoff's DELIVERY_NAV_STARTED (CONFIRMED-before-NAV). Per-task
             // keys make this idempotent with the close-out sweep below.
-            addAll(pickupConfirmSweepEffects(sessionId, next, prevTask.jobId, obs))
+            addAll(
+                pickupConfirmSweepEffects(
+                    sessionId, next, prevTask.jobId, obs,
+                    jobOfferHashes = next.activeJob
+                        ?.takeIf { it.jobId == prevTask.jobId }?.parentOfferHashes ?: emptyList(),
+                ),
+            )
             addAll(deliveryNavStartedEffects(sessionId, nextTask, obs))
         }
 
@@ -261,13 +267,22 @@ internal fun EffectMap.pickupConfirmSweepEffects(
     region: PlatformRegion,
     jobId: String?,
     obs: Observation,
+    // #159 D3: the job's contributing offer hashes, carried onto each PICKUP_CONFIRMED payload for the
+    // offer↔job link. Passed by the caller (the job is in scope there); empty ⇒ temporal fallback (F12).
+    jobOfferHashes: List<String> = emptyList(),
 ): List<AppEffect> = buildList {
     if (jobId == null) return@buildList
     val lineage = (region.recentTasks + listOfNotNull(region.activeTask))
         .filter { it.jobId == jobId && it.phase == TaskPhase.PICKUP && it.arrivedAt != null }
         .distinctBy { it.taskId }
     for (task in lineage) {
-        addAll(pickupConfirmedEffects(sessionId, task, obs, confirmedAt = task.completedAt ?: obs.timestamp))
+        addAll(
+            pickupConfirmedEffects(
+                sessionId, task, obs,
+                confirmedAt = task.completedAt ?: obs.timestamp,
+                jobOfferHashes = jobOfferHashes,
+            ),
+        )
     }
 }
 
@@ -283,13 +298,19 @@ private fun EffectMap.pickupConfirmedEffects(
     prevTask: Task,
     obs: Observation,
     confirmedAt: Long = obs.timestamp,
+    jobOfferHashes: List<String> = emptyList(),
 ): List<AppEffect> = buildList {
     add(
         logEffect(
             sessionId,
             AppEventType.PICKUP_CONFIRMED,
             confirmedAt,
-            pickupPayload(task = prevTask, storeName = prevTask.storeName ?: UNKNOWN_STORE, confirmedAt = confirmedAt),
+            pickupPayload(
+                task = prevTask,
+                storeName = prevTask.storeName ?: UNKNOWN_STORE,
+                confirmedAt = confirmedAt,
+                jobOfferHashes = jobOfferHashes,
+            ),
             effectKeyOverride = "log:${AppEventType.PICKUP_CONFIRMED}:${prevTask.taskId}",
         ),
     )
@@ -383,6 +404,7 @@ private fun EffectMap.pickupPayload(
     task: Task,
     storeName: String,
     confirmedAt: Long? = null,
+    jobOfferHashes: List<String> = emptyList(),
 ): PickupPayload = PickupPayload(
     jobId = task.jobId,
     taskId = task.taskId,
@@ -397,6 +419,9 @@ private fun EffectMap.pickupPayload(
     itemsShopped = task.itemsShopped,
     redCardTotal = task.redCardTotal,
     activity = task.activity,
+    // #159 D4/D3: the parsed store address + the job's offer hashes for entity resolution.
+    storeAddress = task.storeAddress,
+    jobOfferHashes = jobOfferHashes,
 )
 
 private fun EffectMap.deliveryPhasePayload(

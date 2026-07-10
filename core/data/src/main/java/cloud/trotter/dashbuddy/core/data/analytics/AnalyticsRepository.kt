@@ -14,12 +14,15 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.StoreEconomics
+import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.StoreKeys
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.math.ceil
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -120,14 +123,60 @@ class AnalyticsRepository @Inject constructor(
     fun perStoreEconomics(period: AnalyticsPeriod): Flow<List<StoreEconomics>> =
         periodBoundariesFlow(period).flatMapLatest { (start, end) ->
             analyticsDao.deliveryTotalsByStore(start, end).map { rows ->
-                rows.map {
-                    StoreEconomics(
-                        storeName = it.storeName,
-                        net = it.net + it.cash,
-                        gross = it.pay + it.cash,
-                        deliveries = it.deliveries,
-                    )
-                }.sortedByDescending { it.gross }
+                // #159 F9: fold the DAO's (storeKey, storeName) groups onto ONE entity per resolved
+                // storeKey; an unresolved row (storeKey null) folds by the shared
+                // `normalizedChain(storeName)` so `"Target"` and `"…|target|02426"` don't fragment as a
+                // raw-text entry. The representative storeName is the group's first row.
+                rows.groupBy { it.storeKey ?: StoreKeys.normalizedChain(it.storeName.orEmpty()) }
+                    .map { (_, group) ->
+                        val first = group.first()
+                        StoreEconomics(
+                            storeKey = first.storeKey,
+                            storeName = first.storeName,
+                            net = group.sumOf { it.net + it.cash },
+                            gross = group.sumOf { it.pay + it.cash },
+                            deliveries = group.sumOf { it.deliveries },
+                        )
+                    }.sortedByDescending { it.gross }
+            }
+        }
+
+    /**
+     * The store report cards (#159, the #315 Patterns tab) — one per **referenced** resolved store
+     * entity (M4, no phantom orphan rows), lifetime-scoped, newest-visited first. Combines the DAO
+     * rollup ([AnalyticsDao.storeReportRows] — metadata + pickup/delivery counts + gross/net) with the
+     * dwell samples ([AnalyticsDao.storeDwellSamples]); avg/p50/p95 dwell are computed HERE (SQLite has
+     * no native percentile; store visit counts are small). A chain-only row surfaces as
+     * `locationKnown = false` ("location unknown", F6). Reactive by construction (both sources are
+     * Room-invalidation Flows). No economy dependency (net is the frozen stored value); no new PII
+     * surface (merchant metadata + counts only).
+     */
+    fun storeReportCards(): Flow<List<StoreReportCard>> =
+        combine(
+            analyticsDao.storeReportRows(),
+            analyticsDao.storeDwellSamples(),
+        ) { rows, dwells ->
+            val dwellsByKey = dwells.groupBy { it.storeKey }
+            rows.map { r ->
+                val sorted = dwellsByKey[r.storeKey].orEmpty().map { it.dwellMillis }.sorted()
+                StoreReportCard(
+                    storeKey = r.storeKey,
+                    platform = r.platform,
+                    normalizedChain = r.normalizedChain,
+                    chainDisplay = r.chainDisplay,
+                    runningKey = r.runningKey,
+                    address = r.address,
+                    locationKnown = r.runningKey != null,
+                    pickups = r.pickups,
+                    deliveries = r.deliveries,
+                    gross = r.gross,
+                    net = r.net,
+                    avgDwellMillis = sorted.takeIf { it.isNotEmpty() }?.average(),
+                    p50DwellMillis = percentile(sorted, 0.50),
+                    p95DwellMillis = percentile(sorted, 0.95),
+                    firstSeenAt = r.firstSeenAt,
+                    lastSeenAt = r.lastSeenAt,
+                )
             }
         }
 
@@ -352,6 +401,17 @@ class AnalyticsRepository @Inject constructor(
      * derived split ([TimeEconomics.unattributedMillis]/[TimeEconomics.unattributedMiles] etc.) is the
      * DTO's own coerce-≥0 helper, so this repository stores no second copy of that math (Principle 5).
      */
+    /**
+     * The [p]-th percentile of an ASCENDING-sorted dwell list (#159 store report card) — nearest-rank
+     * (SQLite has no native percentile and store visit counts are small, so an exact in-Kotlin nearest-
+     * rank is honest and cheap). Null on an empty list. `p ∈ [0,1]`.
+     */
+    private fun percentile(sorted: List<Long>, p: Double): Long? {
+        if (sorted.isEmpty()) return null
+        val rank = ceil(p * sorted.size).toInt().coerceIn(1, sorted.size)
+        return sorted[rank - 1]
+    }
+
     private fun assembleTime(
         session: SessionTotalsRow,
         delivery: DeliveryTimeTotalsRow,
