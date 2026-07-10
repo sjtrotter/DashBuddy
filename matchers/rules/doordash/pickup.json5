@@ -695,6 +695,49 @@
       }
     },
     {
+      "comment": "#501 item 3 — GoPuff (Drive) zone-arrival screen (the CTA card between pickup-nav and the bin-scan steps; its button label reads 'Navigate to zone' before entry and 'Arrived at store' once in range). Dev decision 2026-07-07: RECOGNIZE-ONLY, no parse, no state.flow — nav is already established before this frame appears, and 'Arrived at store' here is an affordance, not the arrival anchor (pickup_steps' bin-scan branch owns the one PICKUP_ARRIVED). This rule's only job is pulling the recurring zone-arrival UNKNOWN captures into a named intent. CAUTION — the anchors are NOT GoPuff-unique: `go_to_store_action_view` (+ a descendant 'Arrived at store' label) is on EVERY regular pickup_pre_arrival tree in the corpus, so a full regular pre-arrival frame is kept out of this rule only by priority order (71 evaluates first). The rejects are therefore load-bearing: a degraded/partial regular pickup frame that fails 71's 'Pickup from' conjunct must NOT fall through to this redact-less rule (its customer card — user_name_label/customer_name_label with a raw-name sibling — is exactly the split-node shape the CustomerTextMarkers backstop documents as rule-redact-only), and a mid-pickup expanded map must stay with on_dash_map (110, modeHint online) rather than be stolen by 106. The two require clauses are deliberately independent tree-wide exists — on the real tree the id node is a text-less ViewGroup and the label lives two levels down (primary_action_button > textView_prism_button_title), so a same-node compound would never match a device frame. The idle dash_along_the_way card shares 'Navigate to zone' text but never this id (corpus-verified).",
+      "id": "doordash.screen.pickup_zone_arrival",
+      "priority": 106,
+      "reject": [
+        {
+          "exists": {
+            "hasIdSuffix": "user_name_label"
+          }
+        },
+        {
+          "exists": {
+            "hasIdSuffix": "customer_name_label"
+          }
+        },
+        {
+          "exists": {
+            "hasText": "Return to dash"
+          }
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "go_to_store_action_view"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "Navigate to zone"
+                },
+                {
+                  "hasTextContaining": "Arrived at store"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "doordash.screen.pickup_qr_confirm",
       "priority": 53,
       "require": {

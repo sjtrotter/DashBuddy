@@ -188,6 +188,14 @@ class ParseOutputGoldenTest {
         "pickup_verification_items",
         "pickup_verification_pin",
         "pickup_verify",
+        // #501 item 3 — GoPuff (Drive) zone-arrival, recognize-only (dev decision 2026-07-07).
+        // Anchor strings are grounded (verbatim from issue #501's 2026-06-15 deep-dive over the
+        // real 06-14 captures), but the raw capture JSON itself was never committed to
+        // snapshots/INBOX before this build — only GoPuffRecognitionTest's hand-built UiNode
+        // covers it today. NOTE the anchors are NOT GoPuff-unique (every regular
+        // pickup_pre_arrival tree carries them); the rule leans on priority order + its rejects,
+        // so a real capture matters doubly here. Shrink this when one lands in the corpus.
+        "pickup_zone_arrival",
         "safety",
         "shop_and_pay_checkout",
         "shop_and_pay_list",
