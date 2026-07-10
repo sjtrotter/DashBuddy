@@ -366,11 +366,17 @@ interface AnalyticsDao {
      * `cashTip` alias) — cash is real earnings, so it belongs in gross. The `unattributed` CASE stays
      * **untouched** (it still compares `reportedEarnings` against the cash-free `deliveredPay`), so a
      * recorded cash tip raises gross/net without shrinking the reported-vs-captured reconciliation.
-     * **Invariant (#688 F3):** every cash-bearing row is sessionful (the drill-down writes only
-     * sessionful targets, MANUAL carries a sessionId) — so the cash counted into `net` (via
-     * [deliveryTotals]'s null-session-inclusive `cash`) and into `gross` here (session-join only) is
-     * the same amount; a null-session cash row would leak into net but not gross, which the invariant
-     * forbids.
+     * **Composition with the "(No session)" bucket (#660 piece 1):** this query is deliberately
+     * session-anchored ONLY — a `sessionId IS NULL` delivery joins to no `session_records` row here and
+     * contributes nothing to `gross`/`unattributed`/`overAttributed`, even though it already reaches
+     * `net` via [deliveryTotals]'s own-`completedAt` fallback (#655). That used to be an asymmetry
+     * (#688 F3 called the null-session-cash case "forbidden" back when nothing folded a null-session row
+     * into gross at all); it no longer is — [AnalyticsRepository.periodEconomics] separately reads
+     * [noSessionTotals] and adds its pay+cash on top of this query's `gross`, so the null-session
+     * population reaches gross too, just via a different query. This query's own cash sum
+     * (`d.cashTip`) therefore only ever covers **sessionful** cash-bearing rows (the drill-down writes
+     * only sessionful targets, MANUAL carries a sessionId) — a null-session cash row is picked up by
+     * [noSessionTotals]'s own `cashTip` sum instead, not by this one.
      *
      * **`overAttributed` (#701):** the mirror signal `deliveredPay − reportedEarnings` for sessions
      * where delivered exceeds reported (the opposite excess from `unattributed`) — surfaced as a
@@ -422,6 +428,51 @@ interface AnalyticsDao {
            GROUP BY s.platform"""
     )
     fun grossAndUnattributedByPlatform(start: Long, end: Long): Flow<List<PlatformGrossTotalsRow>>
+
+    /**
+     * The "(No session)" bucket (#660 piece 1): Σ realized pay + Σ cash tip + count for deliveries
+     * whose source event carried NO `sessionId` at all, in the window of their own `completedAt` —
+     * the exact null-session population [deliveryTotals] already folds into net (#655's documented
+     * edge), but that [grossAndUnattributed] never sees (it iterates `session_records`, and a
+     * null-session row joins to nothing there). The repository adds this into `grossEarnings` so a
+     * session-less completion can no longer make displayed net exceed gross, and surfaces the same
+     * totals as an explicit data-quality signal.
+     */
+    @Query(
+        """SELECT COALESCE(SUM(realizedPay), 0) AS pay,
+                  COALESCE(SUM(cashTip), 0) AS cash,
+                  COUNT(*) AS deliveries
+           FROM delivery_records
+           WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end"""
+    )
+    fun noSessionTotals(start: Long, end: Long): Flow<NoSessionTotalsRow>
+
+    /** Per-platform variant of [noSessionTotals] — same null-session `completedAt` window, grouped on
+     *  the delivery's own denormalized `platform` column. */
+    @Query(
+        """SELECT platform,
+                  COALESCE(SUM(realizedPay), 0) AS pay,
+                  COALESCE(SUM(cashTip), 0) AS cash,
+                  COUNT(*) AS deliveries
+           FROM delivery_records
+           WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end
+           GROUP BY platform"""
+    )
+    fun noSessionTotalsByPlatform(start: Long, end: Long): Flow<List<PlatformNoSessionTotalsRow>>
+
+    /**
+     * Every session-less delivery's own completion instant + gross (pay + cash) in a period — the
+     * "(No session)" bucket's per-day chart input (#660), mirroring [sessionGrossRows] for rows that
+     * join to no session at all. The repository buckets each onto the LOCAL DAY of its own
+     * `completedAt` (there is no session start to anchor on).
+     */
+    @Query(
+        """SELECT completedAt,
+                  (COALESCE(realizedPay, 0) + COALESCE(cashTip, 0)) AS gross
+           FROM delivery_records
+           WHERE sessionId IS NULL AND completedAt >= :start AND completedAt < :end"""
+    )
+    fun noSessionDailyRows(start: Long, end: Long): Flow<List<NoSessionDailyRow>>
 
     /**
      * Per-session start + reported-authoritative gross for the sessions started in `[start, end)` — the

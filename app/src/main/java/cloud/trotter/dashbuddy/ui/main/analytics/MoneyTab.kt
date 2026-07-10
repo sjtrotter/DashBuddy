@@ -83,6 +83,27 @@ fun MoneyTab(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        // "(No session)" bucket (#660 piece 1): deliveries whose source event carried no sessionId at
+        // all. Already folded into [economics.grossEarnings]/[netProfit] above (so gross can't read
+        // below net from this seam) — this callout is the visible data-quality signal, same pattern as
+        // the unattributed/over-attributed flags. Categorizing the bucket into a session is #660 piece 2.
+        if (economics.noSessionPay > UNATTRIBUTED_EPSILON) {
+            val deliveryWord = if (economics.noSessionDeliveries == 1) {
+                stringResource(R.string.time_tab_delivery_singular)
+            } else {
+                stringResource(R.string.time_tab_delivery_plural)
+            }
+            AppCallout(
+                text = stringResource(
+                    R.string.money_tab_no_session_callout_format,
+                    Formats.money(economics.noSessionPay),
+                    Formats.commaInt(economics.noSessionDeliveries),
+                    deliveryWord,
+                ),
+                container = AppTheme.colors.warnBg,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         TopStoresCard(topStores)
         RecentDashesCard(recentSessions, onOpenSession)
     }
@@ -117,7 +138,9 @@ private fun EarningsHero(economics: PeriodEconomics) {
 /**
  * Earnings-by-day bar chart (#315 H6): one bar per local calendar day of the period, gap days at
  * zero, the best day highlighted. Session-anchored (#655) — a dash's whole gross sits on its start
- * day. Only rendered when [days] is non-empty (Today/Lifetime pass an empty list; see [MoneyTab]).
+ * day. **Exception (#660):** a "(No session)" delivery has no session start to anchor on, so it
+ * counts on its own completion day instead (the caption states this). Only rendered when [days] is
+ * non-empty (Today/Lifetime pass an empty list; see [MoneyTab]).
  */
 @Composable
 private fun EarningsByDayCard(days: List<DailyEarnings>) {
