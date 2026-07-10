@@ -695,6 +695,32 @@
       }
     },
     {
+      "comment": "#501 item 3 — GoPuff (Drive) zone-arrival screen (the CTA card between pickup-nav and the bin-scan steps; its button label reads 'Navigate to zone' before entry and 'Arrived at store' once in range). Dev decision 2026-07-07: RECOGNIZE-ONLY, no parse, no state.flow — nav is already established by pickup_navigation/pickup_pre_arrival before this frame appears, and 'Arrived at store' here is an affordance, not the arrival anchor (pickup_steps' bin-scan branch owns the one PICKUP_ARRIVED). This rule's only job is pulling the recurring zone-arrival UNKNOWN captures into a named intent. Keyed on the GoPuff-specific CTA id (`go_to_store_action_view`, not shared with any other DoorDash screen — the unrelated idle `dash_along_the_way` card also carries 'Navigate to zone' text but never this id) plus either button-label text. No PII: the CTA and its label are not customer data.",
+      "id": "doordash.screen.pickup_zone_arrival",
+      "priority": 106,
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "go_to_store_action_view"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasTextContaining": "Navigate to zone"
+                },
+                {
+                  "hasTextContaining": "Arrived at store"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "doordash.screen.pickup_qr_confirm",
       "priority": 53,
       "require": {
