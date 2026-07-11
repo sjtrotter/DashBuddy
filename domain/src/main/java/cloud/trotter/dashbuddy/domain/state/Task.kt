@@ -35,5 +35,15 @@ data class Task(
     val odometerAtArrival: Double? = null,
     val startedAt: Long,
     val completedAt: Long? = null,
+    /**
+     * The moment the dasher **abandoned** this task by unassigning the order (#736). Set by
+     * `PlatformRegionStepper.abandonActiveTask` when a `Flow.TaskUnassigned` frame lands; mutually
+     * exclusive with [completedAt] (an abandoned task is NEVER completed). Its presence makes the
+     * task structurally invisible to the #596 physical-completion check and the PICKUP_CONFIRMED
+     * close-out sweep, so an abandoned-but-arrived pickup can never fabricate a confirm. Cleared to
+     * null by the resume self-heal when a genuine same-order frame reactivates the task.
+     * `@Serializable` default-null ⇒ old snapshots/journals decode unchanged (no migration).
+     */
+    val unassignedAt: Long? = null,
     val recovered: Boolean = false,
 )

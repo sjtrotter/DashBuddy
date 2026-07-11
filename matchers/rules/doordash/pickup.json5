@@ -616,7 +616,77 @@
           },
           {
             "exists": {
-              "hasTextContaining": "Unassign with no pay"
+              "any": [
+                {
+                  "hasTextContaining": "Unassign with no pay"
+                },
+                {
+                  "hasTextContaining": "Wait for the order"
+                },
+                {
+                  "hasTextContaining": "unassign and move on to the next task"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#736 A1 — the platform's own authoritative statement that the dasher UNASSIGNED the order (via help/resolution). STATE-BEARING (task:unassigned) so the state machine can inline-abandon the active task instead of the retire-grace fabricating a PICKUP_CONFIRMED (the seq-71 bug). Requires BOTH anchors so it is structurally unambiguous: the help article ('Unassigning order …') and the resolution panel ('unassign and move on …') each match NEITHER. Uses 'been unassigned' (not 'You've been…') to dodge the apostrophe-variant risk. Priority 107 (< the survey's 108) so the combined confirmation-over-survey frame classifies here; the survey also rejects this anchor as a belt. No parse, no PII → no redact obligation.",
+      "id": "doordash.screen.pickup_unassigned_confirmation",
+      "priority": 107,
+      "state": {
+        "flow": "task:unassigned",
+        "modeHint": "online"
+      },
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "been unassigned from this order"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "continue to your next stop"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#736 A2 — the unassign survey ('Tell us what happened…'). Recognize-only (the pickup_wait_survey precedent: silences the UNKNOWN, cannot perturb the machine — the state-bearing confirmation is the authoritative signal). Rejects 'been unassigned from this order' as a belt so the combined confirmation-over-survey frame can never fall here even if priorities are later reshuffled. Redacts the 'For <customer> • <store>' line (same pattern as pickup_resolution_options).",
+      "id": "doordash.screen.pickup_unassign_survey",
+      "priority": 108,
+      "redact": [
+        {
+          "find": {
+            "hasTextStartsWith": "For "
+          },
+          "keepPrefix": [
+            "For "
+          ],
+          "normalize": "customerName"
+        }
+      ],
+      "reject": [
+        {
+          "exists": {
+            "hasTextContaining": "been unassigned from this order"
+          }
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasTextContaining": "Unassign order"
+            }
+          },
+          {
+            "exists": {
+              "hasTextContaining": "Tell us what happened so we can make the pickup experience better"
             }
           }
         ]

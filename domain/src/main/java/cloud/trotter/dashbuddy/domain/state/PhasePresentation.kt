@@ -87,6 +87,13 @@ val Flow.presentation: PhasePresentation
             longLabel = "DELIVERED", longColor = PhaseColor.GOOD,
             shortLabel = "PAID", shortColor = PhaseColor.GOOD,
         )
+        // #736: a transient teardown after the dasher unassigned the order — presented as the
+        // Idle-equivalent (neutral "waiting/await"); the machine closes the job on this frame and
+        // the next real frame is Idle proper.
+        Flow.TaskUnassigned -> PhasePresentation(
+            longLabel = "WAITING", longColor = PhaseColor.GOOD,
+            shortLabel = "AWAIT", shortColor = PhaseColor.NEUTRAL,
+        )
         Flow.SessionEnded -> PhasePresentation(
             longLabel = "DONE", longColor = PhaseColor.NEUTRAL,
             shortLabel = "DONE", shortColor = PhaseColor.NEUTRAL,

@@ -1,0 +1,52 @@
+{
+    "captureId": "7f893942-ca37-4a57-9f68-55a358500270",
+    "pipelineId": "accessibility.click",
+    "schemaId": "click_context.v1",
+    "timestamp": 1783455707962,
+    "platform": "doordash",
+    "ruleId": "doordash.click.arrived_at_store_pre_arrival",
+    "classificationName": "arrived_at_store",
+    "metadata": {
+        "engineVersion": 1,
+        "rulesetFormatVersion": 2,
+        "pipelineVersions": {
+            "accessibility": 1,
+            "accessibility.window": 1,
+            "accessibility.click": 1,
+            "accessibility.long_click": 1,
+            "accessibility.scroll": 1,
+            "accessibility.focus": 1,
+            "notification": 1
+        },
+        "stateMachineApiVersion": "1.0",
+        "appVersion": "0.230.0",
+        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+    },
+    "payload": {
+        "node": {
+            "id": "com.doordash.driverapp:id/primary_action_button",
+            "class": "android.widget.Button",
+            "isClickable": true,
+            "bounds": {
+                "left": 36,
+                "top": 2204,
+                "right": 1044,
+                "bottom": 2311
+            },
+            "children": [
+                {
+                    "text": "Arrived at store",
+                    "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                    "class": "android.widget.TextView",
+                    "bounds": {
+                        "left": 382,
+                        "top": 2225,
+                        "right": 699,
+                        "bottom": 2291
+                    }
+                }
+            ]
+        },
+        "screenTarget": "pickup_pre_arrival"
+    }
+}

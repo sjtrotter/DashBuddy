@@ -169,6 +169,31 @@ data class DeliveryPayload(
 ) : AppEventPayload
 
 /**
+ * Payload for `TASK_UNASSIGNED` (#736) — the dasher abandoned this task by unassigning the order
+ * mid-flow (via the pickup help / resolution flow). NOT a completion: no pay/miles ever attributes,
+ * so the read-model's [cloud.trotter.dashbuddy.domain.model.event.AppEventType.TASK_UNASSIGNED]
+ * routes to the projector's liveness-advance `else` arm (no `delivery_record`/`pickup_record`).
+ *
+ * A dedicated payload rather than reusing [PickupPayload]: an unassign can happen in EITHER phase
+ * (a pickup-phase or a dropoff-phase abandon), so it carries the abandoned task's [phase] and its
+ * generic identity/lifecycle anchors. All node text is already hashed/absent — [storeName] is
+ * MERCHANT data (fine at rest, never emitted in an INFO+ log line, P7); no customer PII is carried.
+ */
+@Serializable
+data class TaskUnassignedPayload(
+    val jobId: String,
+    val taskId: String,
+    val phase: cloud.trotter.dashbuddy.domain.state.TaskPhase,
+    /** Merchant name of the abandoned task, when known. Never in INFO+ logs (P7). */
+    val storeName: String? = null,
+    val arrivedAt: Long? = null,
+    val startedAt: Long,
+    val unassignedAt: Long,
+    /** The job's contributing offer hashes (the offer↔job link), mirroring the pickup/delivery payloads. */
+    val jobOfferHashes: List<String> = emptyList(),
+) : AppEventPayload
+
+/**
  * Payload for `MANUAL_DELIVERY` (#650) — a driver-entered missed delivery: a real drop the capture
  * pipeline never saw (an unrecognized screen, a crash, an offer taken outside the app). It is an
  * **event, never a destructive edit**: the projector folds it into a `delivery_record` (payBasis
