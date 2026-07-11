@@ -124,6 +124,21 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   sample. Try it on a shop order (H-E-B-style) where you've already started shopping.
   - Confirmed: 0/2
 
+- **🆕 NEW — unassign an order AFTER pickup (dropoff phase) also produces NO paid artifact (#752 / PR #757).**
+  Companion to #736: when the unassign happens while a **dropoff** is active (or was just grace-retired
+  en route to the customer — e.g. a help/idle screen interrupted the drive, the retire grace fired,
+  then you unassigned), the app now retro-marks **that drop** as unassigned instead of a sibling
+  pickup, so the close-out can't fabricate a `DELIVERY_COMPLETED` for an order you never delivered.
+  On the previous build this dropoff-phase cross-frame shape fabricated a paid delivery and suppressed
+  the pickup's legitimate confirmation.
+  **How to tell it's working (on-dash + desk-side):** unassign an order you've already picked up (mid
+  drive to the customer). Expect the **"Unassigned: <store>" bubble**, the card clears, and the next
+  offer works normally. Desk-side, the exported log / `app_events` should show **exactly one
+  `TASK_UNASSIGNED`** (phase DROPOFF) for that order and **no `DELIVERY_COMPLETED` / `DELIVERY_CONFIRMED`**
+  for it — no phantom "$0 PAID" delivery in the Money tab. The sibling pickup of a stacked job should
+  still show its normal `PICKUP_CONFIRMED`.
+  - Confirmed: 0/2
+
 - **🆕 NEW — multi-pickup job lands under a REAL store, no WARN storm (#733 / PR #745).**
   A multi-pickup job (a stacked stack, or a single customer whose order spans two stores like the
   07-08 Willie's + Sonic delivery) previously folded its delivery as "Unknown store" and spammed the
