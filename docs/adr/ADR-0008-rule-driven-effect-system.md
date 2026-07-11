@@ -7,6 +7,24 @@
 
 ---
 
+> **Implementation status (2026-07-11, #750).** #425 (landed after this ADR was written) removed
+> rule-declared actuation entirely: the compiler now **rejects** the `click` verb (and
+> `tap`/`swipe`/`scroll`/`set_text`/`long_click`) at compile time. #750 re-verified this ADR
+> against the current compiler (`EffectVerb` in `:domain`, `EffectEntryCompiler` in
+> `:core:pipeline`) and corrected the verb registry, the effect-flow note, and the permission-tier
+> table below to match — the compiler is the source of truth; this ADR describes it, never the
+> reverse. Corrections are made in place (with the removed verb's original entry struck through
+> and annotated, per this repo's ADR convention — see ADR-0001's 2026-07-10 revision) rather than
+> deleted, so the pre-#425 design stays legible as history:
+>
+> | Area | Status |
+> |---|---|
+> | Verb registry (all verbs except `click`), permission tiers other than the ACCESSIBILITY row, transition triggers, template interpolation, transition overrides | **Implemented as originally described** — see `EffectVerb.kt`, `EffectEntryCompiler.kt` |
+> | `click` verb | **Removed (#425).** Rules can no longer declare actuation of any kind — `EffectEntryCompiler.compileEffectEntry` rejects the wire values `click`/`tap`/`swipe`/`scroll`/`set_text`/`long_click` *before* verb lookup even runs. In its place, a screen rule's `bind:` block exposes well-known **target bindings** — `acceptButton`, `declineButton`, `confirmDeclineButton`, `expandButton` — that the app-owned `RuleAction` registry (`:domain`) consumes to perform verified taps. See `docs/design/rule-capability-consent.md` and `docs/effect-verbs.md` (both current) for the replacement model. |
+>
+> The corrections this revision made are tracked in #750 (closed by this edit); #744/#241 did the
+> equivalent pass for ADR-0001.
+
 ## Context
 
 ADR-0006 introduced rule-originated actions with a single verb (`click`).
@@ -39,11 +57,16 @@ for lifecycle transitions that rules can override per-platform.
 5. **Effects ride the existing Observation pipeline** — preserves replay
    determinism.
 
-### Verb Registry (14 verbs)
+### Verb Registry (13 verbs; originally proposed with 14 — see status note above)
 
-| Verb | Wire | Tier | Requires Target | Has Default |
+The "Requires Target" column below is struck through: it applied only to the now-removed `click`
+verb below (a bare target-string form). No verb in the current `EffectVerb` registry has a
+target-string form or a "requires target" attribute at all — every verb takes an args object
+(see Effect Flow below).
+
+| Verb | Wire | Tier | ~~Requires Target~~ | Has Default |
 |---|---|---|---|---|
-| CLICK | `click` | ACCESSIBILITY | Yes | No |
+| ~~CLICK~~ — **REMOVED (#425)**, see status note above | ~~`click`~~ | ~~ACCESSIBILITY~~ | ~~Yes~~ | ~~No~~ |
 | SCREENSHOT | `screenshot` | ACCESSIBILITY | No | No |
 | BUBBLE | `bubble` | NONE | No | No |
 | LOG | `log` | NONE | No | No |
@@ -58,10 +81,18 @@ for lifecycle transitions that rules can override per-platform.
 | SCHEDULE_TIMEOUT | `schedule_timeout` | NONE | No | Yes |
 | CANCEL_TIMEOUT | `cancel_timeout` | NONE | No | Yes |
 
+SCREENSHOT is now the **only** `EffectVerb` on the ACCESSIBILITY permission tier (see Permission
+Tiers below) — with CLICK gone, nothing else in the registry requires the accessibility service.
+
 ### Permission Tiers
 
 - **NONE** — always allowed (bubble, log, session lifecycle, timeouts)
-- **ACCESSIBILITY** — requires accessibility service (click, screenshot)
+- **ACCESSIBILITY** — requires accessibility service (~~click,~~ screenshot — `click` was removed
+  from the `EffectVerb` registry by #425; SCREENSHOT is the only verb left on this tier. The
+  accessibility-service tier concept still applies to *actuation* — `RuleAction` taps still check
+  the live accessibility-service handle — it's just enforced on the separate `RuleAction`/
+  `UiInteractionHandler` path now, not via any `EffectVerb`. See the status note at the top of
+  this document.)
 - **LOCATION** — requires location permission (odometer)
 - **AUDIO** — requires audio output (TTS)
 
@@ -89,8 +120,10 @@ Rule JSON               CompiledEffect          RequestedEffect         AppEffec
                                                                           dispatched by verb
 ```
 
-The verb name is the JSON key; its value holds the parameters directly
-(args object for most verbs, target string for `click`).
+The verb name is the JSON key; its value holds the parameters directly as an args object. (The
+original design had a second form — a bare target string for `click` — but `click` was removed
+by #425, so every verb in the current registry uses the args-object form; see `docs/effect-verbs.md`
+§"Effect Format" — "every verb below takes an args object, never a bare target string.")
 
 ### Template Interpolation
 
@@ -127,6 +160,7 @@ Override effects go through the same validation as observation effects.
 
 | Threat | Mitigation |
 |---|---|
+| Actuation verb injection (`click`/`tap`/`swipe`/`scroll`/`set_text`/`long_click`) | `EffectEntryCompiler`'s `rejectedActuationWires` check rejects at compile time — **before** `EffectVerb.fromWire()` even runs (#425, added after this ADR was written) |
 | Unknown verb injection | `EffectVerb.fromWire()` rejects at compile time |
 | Unknown arg keys | Per-verb `ALLOWED_ARGS` whitelist at compile time |
 | Template injection | One-pass resolution, no recursion |
