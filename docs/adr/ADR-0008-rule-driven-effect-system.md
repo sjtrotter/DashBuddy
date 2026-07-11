@@ -13,9 +13,10 @@
 > against the current compiler (`EffectVerb` in `:domain`, `EffectEntryCompiler` in
 > `:core:pipeline`) and corrected the verb registry, the effect-flow note, and the permission-tier
 > table below to match — the compiler is the source of truth; this ADR describes it, never the
-> reverse. Corrections are made in place (with the removed verb's original entry struck through
-> and annotated, per this repo's ADR convention — see ADR-0001's 2026-07-10 revision) rather than
-> deleted, so the pre-#425 design stays legible as history:
+> reverse. Corrections are made in place rather than deleted — the status-note + in-place-correction
+> pattern from ADR-0001's 2026-07-10 revision — with the removed verb's original entry additionally
+> struck through and annotated (new with this revision; no earlier ADR uses strikethrough) so the
+> pre-#425 design stays legible as history:
 >
 > | Area | Status |
 > |---|---|
@@ -52,8 +53,9 @@ for lifecycle transitions that rules can override per-platform.
    transition trigger. Override replaces (not merges).
 3. **Template interpolation is one-pass, whitelist-only** — no recursive
    resolution, no arbitrary field access.
-4. **Unknown verbs, malformed args, and ungated privileged verbs are rejected
-   at compile time.**
+4. **Unknown verbs and malformed args are rejected at compile time.** Privileged
+   verbs compile — the compiler *collects* their required tiers (`requiredTiers`);
+   the gate is at runtime, before execution (see Security Model).
 5. **Effects ride the existing Observation pipeline** — preserves replay
    determinism.
 
@@ -86,7 +88,7 @@ Tiers below) — with CLICK gone, nothing else in the registry requires the acce
 
 ### Permission Tiers
 
-- **NONE** — always allowed (bubble, log, session lifecycle, timeouts)
+- **NONE** — always allowed (bubble, log, evaluate_offer, session lifecycle, timeouts)
 - **ACCESSIBILITY** — requires accessibility service (~~click,~~ screenshot — `click` was removed
   from the `EffectVerb` registry by #425; SCREENSHOT is the only verb left on this tier. The
   accessibility-service tier concept still applies to *actuation* — `RuleAction` taps still check
@@ -191,6 +193,9 @@ Override effects go through the same validation as observation effects.
 
 - Migrate EVALUATE_OFFER and SPEAK to rule effects when the SideEffectEngine
   can pull ParsedOffer from state.
-- Add effects support to click and notification rulesets.
+- ~~Add effects support to click and notification rulesets.~~ **Shipped since** (annotated by #750):
+  click/notification rules carry `effects`/`transitionOverrides` (`RuleCompiler` allows the keys for
+  both contexts, `ObservationClassifier` attaches the resolved effects, `EffectMap.diffRuleEffects`
+  fires them for any `FlowObservation`).
 - DataStore-backed EffectPermissionPrefs for user-facing permission UI.
 - Flow coverage warnings at compile time for non-dev rulesets.
