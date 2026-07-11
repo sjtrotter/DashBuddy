@@ -78,6 +78,15 @@ data class SessionFoldContext(
      */
     val started: Boolean = false,
     /**
+     * Per-leg mileage accumulator (#688 phase B) — the leg anchor + the pending to-store / to-dropoff
+     * legs awaiting consumption at `DELIVERY_COMPLETED`. Persisted with the session row
+     * (`legStateJson`, [LegStateCodec]) because pending legs describe not-yet-completed drops and so
+     * cannot be re-derived from record rows on a batch-boundary rehydration. Default empty ⇒ a
+     * synthesized/mid-session-start context (or all pre-odometer history) folds legs unknown and each
+     * drop falls back to the legacy partition delta — byte-identical to today.
+     */
+    val legState: LegState = LegState(),
+    /**
      * Provenance of this session's start: the DASH_START payload's `source` (e.g. "interaction",
      * "recovery") once a real start has been seen; null for a synthesized `_unknown` placeholder that
      * has not (#659, retro finding 2). The persisted marker the projector rehydrates `started` from —

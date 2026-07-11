@@ -370,10 +370,22 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
     }
 }
 
-/** "3.2 mi · 14 min" — only the parts actually measured; null when neither is present. */
+/**
+ * "3.2 mi (→ store 0.5 · → door 2.4) · 14 min" — only the parts actually measured; null when
+ * neither is present. The per-leg parenthetical (#688 phase B) renders only when the fold measured
+ * legs; a driver miles edit keeps the machine legs, so the parenthetical may disagree with the
+ * total on a corrected row — that IS the visible edit trail, glance-only.
+ */
 private fun travelLine(delivery: DeliveryRecord): String? {
     val parts = buildList {
-        delivery.realizedMiles?.let { add("${Formats.decimal(it)} mi") }
+        delivery.realizedMiles?.let { miles ->
+            val legs = buildList {
+                delivery.milesToStore?.let { add("→ store ${Formats.decimal(it)}") }
+                delivery.milesToDropoff?.let { add("→ door ${Formats.decimal(it)}") }
+            }
+            val legSuffix = legs.takeIf { it.isNotEmpty() }?.joinToString(" · ", " (", ")") ?: ""
+            add("${Formats.decimal(miles)} mi$legSuffix")
+        }
         delivery.realizedMinutes?.let { add("${it.roundToInt()} min") }
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")

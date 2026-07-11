@@ -26,6 +26,8 @@ class CsvExporterTest {
         pay: Double? = 8.50,
         basis: String = "DROP_SHARE",
         cashTip: Double? = null,
+        milesToStore: Double? = null,
+        milesToDropoff: Double? = null,
     ) = DeliveryRecordEntity(
         eventSequenceId = seq,
         sessionId = "s1",
@@ -50,6 +52,8 @@ class CsvExporterTest {
         netProfit = 7.81,
         costBasis = "OFFER_FROZEN",
         cashTip = cashTip,
+        milesToStore = milesToStore,
+        milesToDropoff = milesToDropoff,
     )
 
     private fun session(
@@ -79,22 +83,30 @@ class CsvExporterTest {
     )
 
     @Test fun deliveries_headerAndRow_withPlatformDisplayName() {
-        val out = CsvExporter.export(listOf(delivery(1, "H-E-B", cashTip = 4.00)), emptyList(), utc, generatedAt)
+        val out = CsvExporter.export(
+            listOf(delivery(1, "H-E-B", cashTip = 4.00, milesToStore = 1.20, milesToDropoff = 3.00)),
+            emptyList(), utc, generatedAt,
+        )
         val lines = out.deliveriesCsv.trim().lines()
         assertEquals(
-            "date,time,platform,store,gross_pay,tip,base_pay,cash_tip,miles,minutes,frozen_cost_per_mile,net_profit,pay_basis,cost_basis",
+            "date,time,platform,store,gross_pay,tip,base_pay,cash_tip,miles,miles_to_store," +
+                "miles_to_dropoff,minutes,frozen_cost_per_mile,net_profit,pay_basis,cost_basis",
             lines[0],
         )
         assertEquals(
-            "2026-07-05,14:03:27,DoorDash,H-E-B,8.50,3.25,5.25,4.00,4.20,12.50,0.165,7.81,DROP_SHARE,OFFER_FROZEN",
+            "2026-07-05,14:03:27,DoorDash,H-E-B,8.50,3.25,5.25,4.00,4.20,1.20,3.00,12.50,0.165,7.81,DROP_SHARE,OFFER_FROZEN",
             lines[1],
         )
     }
 
-    @Test fun deliveries_nullCashTip_isEmptyField() {
+    @Test fun deliveries_nullPerLegMileage_isEmptyField() {
         val out = CsvExporter.export(listOf(delivery(1, "H-E-B")), emptyList(), utc, generatedAt)
-        // cash_tip is column index 7 (date,time,platform,store,gross_pay,tip,base_pay,cash_tip).
-        assertEquals("", out.deliveriesCsv.trim().lines()[1].split(",")[7])
+        val cells = out.deliveriesCsv.trim().lines()[1].split(",")
+        // cash_tip is column index 7 (date,time,platform,store,gross_pay,tip,base_pay,cash_tip); the
+        // per-leg columns are miles(8), miles_to_store(9), miles_to_dropoff(10) — null → empty.
+        assertEquals("", cells[7])
+        assertEquals("", cells[9])
+        assertEquals("", cells[10])
     }
 
     @Test fun summary_totalCashTips_line() {

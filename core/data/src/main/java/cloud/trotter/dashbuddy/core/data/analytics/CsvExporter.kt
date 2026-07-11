@@ -49,7 +49,8 @@ object CsvExporter {
 
     private val DELIVERY_HEADER = listOf(
         "date", "time", "platform", "store", "gross_pay", "tip", "base_pay", "cash_tip",
-        "miles", "minutes", "frozen_cost_per_mile", "net_profit", "pay_basis", "cost_basis",
+        "miles", "miles_to_store", "miles_to_dropoff", "minutes", "frozen_cost_per_mile",
+        "net_profit", "pay_basis", "cost_basis",
     )
 
     private val SESSION_HEADER = listOf(
@@ -98,6 +99,8 @@ object CsvExporter {
                         Csv.money(r.basePay),
                         Csv.money(r.cashTip),
                         Csv.decimal(r.realizedMiles),
+                        Csv.decimal(r.milesToStore),
+                        Csv.decimal(r.milesToDropoff),
                         Csv.decimal(r.realizedMinutes),
                         Csv.money(r.frozenCostPerMile, digits = 3),
                         Csv.money(r.netProfit),

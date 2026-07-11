@@ -370,8 +370,22 @@ dialog (store/pay/tip/cash-tip/miles/note) writing a single all-optional-fields 
 applies each non-null field by-PK (payBasis flips to `USER_CORRECTED` **iff pay changes** so a store/tip/cash
 edit never drops an "est. offer pay" disclosure; a MANUAL row stays MANUAL; net recomputes only when pay/miles
 change, against the row's OWN frozen cpm; `originalPayBasis` preserved via `row.copy`). Legacy `PAY_ADJUSTMENT`
-stays fully readable for history; new UI writes only `DELIVERY_ADJUSTMENT`. Phase B (per-leg mileage, #688) is
-deferred. Session-categorize of an unattributed remainder is deferred (#650 follow-up). Related: #653/#655/#703.
+stays fully readable for history; new UI writes only `DELIVERY_ADJUSTMENT`. **Per-leg mileage (#688 phase B,
+Room v12→v13 additive, `PROJECTOR_VERSION` 5→6):** the fold now consumes the lifecycle `metadata.odometer`
+stamps (PICKUP_ARRIVED closes a to-store leg; DELIVERY_ARRIVED closes a to-dropoff leg keyed by the drop's own
+taskId, re-arrivals accumulate; PICKUP_CONFIRMED/DELIVERY_CONFIRMED/DELIVERY_COMPLETED advance the anchor;
+null-odometer anchors don't advance — miles roll forward; per-leg floor at 0) into `delivery_records.
+{milesToStore,milesToDropoff}`; a drop's `milesToStore` claims one store leg of its job (exact store-form match,
+else FIFO; claim-once — a shared-store sibling gets null, no fabricated split) and `realizedMiles` becomes the
+leg SUM only when `milesToDropoff != null` (a lone store leg never replaces the legacy partition delta), so
+per-drop net redistributes within a stack while session/period/IRS/CSV mileage totals stay odometer-span-anchored
+(unchanged). Pending legs describe not-yet-completed drops, so the accumulator persists as
+`session_records.legStateJson` (`LegState`/`LegStateCodec` in `:domain`, fail-closed decode → legacy delta,
+`MAX_PENDING` 32 bounded) — that persistence is what keeps incremental ≡ from-zero refold across the projector's
+500-event page boundaries. A driver `newMiles` edit wins `realizedMiles`/net (log-order precedence); the machine
+leg columns are provenance and are never rewritten, so leg-sum ≠ realizedMiles IS the visible edit trail.
+CSV gains `miles_to_store`/`miles_to_dropoff`. `newCompletedAt` stays banned on `DELIVERY_ADJUSTMENT`.
+Session-categorize of an unattributed remainder is deferred (#650 follow-up). Related: #653/#655/#703.
 
 ## Development Principles
 

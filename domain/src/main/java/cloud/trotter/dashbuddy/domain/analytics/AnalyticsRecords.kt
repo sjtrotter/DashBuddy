@@ -41,6 +41,14 @@ data class DeliveryRecord(
      * read sites only (never inside [realizedPay]/[netProfit]); null on a machine completion.
      */
     val cashTip: Double? = null,
+    /**
+     * Machine-computed to-store driving leg (#688 phase B) — fold provenance for the drill-down's
+     * per-leg line. NOT rewritten by a driver miles edit, so it may disagree with [realizedMiles]
+     * on a corrected row (the visible edit trail). Null on anchorless/pre-phase-B rows.
+     */
+    val milesToStore: Double? = null,
+    /** Machine-computed to-dropoff driving leg (#688 phase B); same provenance rules as [milesToStore]. */
+    val milesToDropoff: Double? = null,
 )
 
 /** One dash session. */

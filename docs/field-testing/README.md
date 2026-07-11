@@ -73,6 +73,28 @@ card's **mechanical** half, #577 (re-confirmed, 24/24, ~0.55 s — with a new po
 that entry's Bug #1), the #457 path, and #554 ShadowProjector (2/2). The #462/#460 dropoff item
 was found **broken-in-part** (raw PII in capture envelopes) and moved to that entry's Bug #7.)_
 
+- **🆕 NEW — per-leg mileage: stacked drops each carry their own miles (#688 phase B).**
+  Delivery rows now fold `milesToStore`/`milesToDropoff` from the lifecycle odometer stamps, and a
+  drop's miles become the leg sum (to-store + to-dropoff) instead of the old lump-on-one-row
+  partition delta — the 07-05 Bill Miller/Mama Margies shape (6.76 mi on drop A, 0.0 on drop B)
+  should be gone, retroactively too (the `PROJECTOR_VERSION` 5→6 refold reworks history on first
+  launch after install; expect a one-time refold at startup).
+  **How to tell it's working (desk-side, after a dash with a stacked/multi-store job):** in the
+  per-dash drill-down (and `delivery_records`), each drop of a stack shows a plausible nonzero
+  `X mi` (not one lump + 0.0); **Σ per-drop miles ≤ the session odometer miles** — this is a
+  ONE-SIDED invariant: an undershoot is EXPECTED (the arrival→completion dwell/drift, and any store
+  legs retired when a drop missed its arrival, land in the deadhead remainder), but Σ must NEVER
+  EXCEED the session span (that would be the mixed-basis double-count the #688-review Fix 1
+  closes — strictly guaranteed, except in a session with a mid-dash odometer reset, where all
+  mileage invariants are void anyway); the CSV export's `miles_to_store`/`miles_to_dropoff` columns
+  are populated for drops whose arrival frames fired; and a driver miles edit via the Adjust dialog
+  still wins the row total (the leg columns keep the machine estimate — a deliberate mismatch, not a
+  bug). A drop with a missed `DELIVERY_ARRIVED` (no arrival frame) legitimately falls back to the old
+  partition delta with blank leg columns (and the session's already-closed store legs are retired so
+  no later drop re-claims them). An order unassigned mid-dash (#736) contributes NO per-drop leg
+  miles — its distance stays session-level only.
+  - Confirmed: 0/2
+
 - **🆕 NEW — stacked receipts still split exactly; ±1¢ drift and collapsed-receipt nulls gone (#630).**
   The per-drop receipt split is hardened for mid-stack/multi-receipt shapes: a collapsed PostTask
   re-render can no longer wipe an already-captured itemized receipt (the field-reachable break), the
