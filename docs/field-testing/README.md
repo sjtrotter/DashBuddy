@@ -81,11 +81,16 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   launch after install; expect a one-time refold at startup).
   **How to tell it's working (desk-side, after a dash with a stacked/multi-store job):** in the
   per-dash drill-down (and `delivery_records`), each drop of a stack shows a plausible nonzero
-  `X mi` (not one lump + 0.0); Σ per-drop miles ≤ the session odometer miles; the CSV export's
-  `miles_to_store`/`miles_to_dropoff` columns are populated for drops whose arrival frames fired;
-  and a driver miles edit via the Adjust dialog still wins the row total (the leg columns keep the
-  machine estimate — a deliberate mismatch, not a bug). A drop with a missed `DELIVERY_ARRIVED`
-  (no arrival frame) legitimately falls back to the old partition delta with blank leg columns.
+  `X mi` (not one lump + 0.0); **Σ per-drop miles ≤ the session odometer miles** — this is a
+  ONE-SIDED invariant: an undershoot is EXPECTED (the arrival→completion dwell/drift, and any store
+  legs retired when a stack-mate missed its arrival, land in the deadhead remainder), but Σ must
+  NEVER EXCEED the session span (that would be the mixed-basis double-count the #688-review Fix 1
+  closes); the CSV export's `miles_to_store`/`miles_to_dropoff` columns are populated for drops whose
+  arrival frames fired; and a driver miles edit via the Adjust dialog still wins the row total (the
+  leg columns keep the machine estimate — a deliberate mismatch, not a bug). A drop with a missed
+  `DELIVERY_ARRIVED` (no arrival frame) legitimately falls back to the old partition delta with blank
+  leg columns (and its own store legs are retired so no sibling re-claims them). An order unassigned
+  mid-dash (#736) contributes NO per-drop leg miles — its distance stays session-level only.
   - Confirmed: 0/2
 
 - **🆕 NEW — unassign an order mid-dash produces NO paid/confirmed artifacts (#736).**

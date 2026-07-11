@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.state.StoreKeys
 
 /** Provenance of a delivery's realized pay (#314) — mirrors the DB column, owned here as SSOT. */
 object PayBasis {
@@ -145,10 +146,13 @@ data class DeliveryFold(
     val payoutStoreForms: List<String>? = null,
     /**
      * Machine-computed to-store driving leg (#688 phase B) — the claimed [PendingStoreLeg]'s miles for
-     * this drop's job (exact store-form match, else FIFO within the job, else null). Provenance only:
-     * a driver `newMiles` correction rewrites [realizedMiles] but NEVER these leg columns, so
-     * `milesToStore + milesToDropoff` may then ≠ `realizedMiles` — that inequality is the visible edit
-     * trail. Null on a receipt-less/anchorless leg and all pre-phase-B history.
+     * this drop's job (exact NORMALIZED-chain store-form match, else FIFO within the job, else null).
+     * Stamped ONLY on a leg-sum row (`milesToDropoff != null`); a LEGACY row (missed arrival) stamps
+     * null and instead retires its job's already-closed store legs (#688 review Fix 1/Fix 4), so a
+     * lone store leg never rides an otherwise-untouched legacy row. Provenance only: a driver `newMiles`
+     * correction rewrites [realizedMiles] but NEVER these leg columns, so `milesToStore + milesToDropoff`
+     * may then ≠ `realizedMiles` — that inequality is the visible edit trail. Null on a
+     * receipt-less/anchorless/legacy leg and all pre-phase-B history.
      */
     val milesToStore: Double? = null,
     /**
@@ -320,10 +324,15 @@ object RecordFolds {
             AppEventType.OFFER_DECLINED,
             AppEventType.OFFER_TIMEOUT -> foldOffer(event, context)
             AppEventType.DELIVERY_COMPLETED -> foldDeliveryCompleted(event, context, currentCostPerMile)
-            // #688 phase B leg-anchor events (each also keeps the pre-existing liveness advance).
-            AppEventType.PICKUP_ARRIVED -> foldPickupArrived(event, context)
-            AppEventType.DELIVERY_ARRIVED -> foldDeliveryArrived(event, context)
-            AppEventType.DELIVERY_CONFIRMED -> foldDeliveryConfirmed(event, context)
+            // #688 phase B leg-anchor events (each also keeps the pre-existing liveness advance) —
+            // the leg machinery lives in LegFolds (P3 file split, #688 review Fix 6).
+            AppEventType.PICKUP_ARRIVED -> LegFolds.foldPickupArrived(event, context)
+            AppEventType.DELIVERY_ARRIVED -> LegFolds.foldDeliveryArrived(event, context)
+            AppEventType.DELIVERY_CONFIRMED -> LegFolds.foldDeliveryConfirmed(event, context)
+            // #736 unassign-via-help (#688 review Fix 2): a leg-state-only arm — purge the abandoned
+            // task's pending legs so a surviving sibling can't inherit them, liveness advanced exactly
+            // as the old catch-all `else` arm did (read-model row-inert; no record minted).
+            AppEventType.TASK_UNASSIGNED -> LegFolds.foldTaskUnassigned(event, context)
             AppEventType.PICKUP_CONFIRMED -> foldPickupConfirmed(event, context)
             AppEventType.MANUAL_DELIVERY -> foldManualDelivery(event, context, currentCostPerMile)
             AppEventType.PAY_ADJUSTMENT -> foldPayAdjustment(event, context)
@@ -560,20 +569,30 @@ object RecordFolds {
 
         // #688 phase B: consume this drop's per-leg mileage from the session leg accumulator.
         //  - milesToDropoff = this drop's own taskId entry (unambiguous).
-        //  - milesToStore   = one store leg of THIS job — exact store-form match wins (a null payload
-        //    storeName can't match, the #526/#557 "Unknown store" family), else the oldest unclaimed
-        //    leg of the job (FIFO); claimed once (DEV-DECISION 2: no fabricated split — a shared-store
-        //    stack's first drop claims the whole store leg, the sibling gets milesToStore null).
+        //  - milesToStore   = one store leg of THIS job, stamped ONLY on a LEG-SUM row (milesToDropoff
+        //    != null). Exact NORMALIZED-chain store-form match wins (#688 review Fix 3 — the #159
+        //    StoreKeys SSOT, so a payout form-drift like "StoreX #55" still matches the pickup form;
+        //    a null payload storeName can't match, the #526/#557 "Unknown store" family), else the
+        //    oldest unclaimed leg of the job (FIFO); claimed once (DEV-DECISION 2: no fabricated split —
+        //    a shared-store stack's first drop claims the whole store leg, the sibling gets null).
+        //  - A LEGACY row (missed DELIVERY_ARRIVED ⇒ milesToDropoff null) stamps NO store leg (#688
+        //    review Fix 4 — leg-sum ≠ realizedMiles must stay the driver-edit trail, not a machine
+        //    lone-leg stamp on an untouched row) and RETIRES the job's already-closed store legs below.
         val legState = ctx?.legState ?: LegState()
         val milesToDropoff = legState.pendingDropoffLegs[p.taskId]
         val storeLegs = legState.pendingStoreLegs
-        val claimIdx = run {
+        val claimIdx = if (milesToDropoff != null) {
             val exact = if (p.storeName != null) {
-                storeLegs.indexOfFirst { it.jobId == p.jobId && it.storeName == p.storeName }
+                storeLegs.indexOfFirst {
+                    it.jobId == p.jobId && it.storeName != null &&
+                        StoreKeys.normalizedChain(it.storeName) == StoreKeys.normalizedChain(p.storeName)
+                }
             } else {
                 -1
             }
             if (exact >= 0) exact else storeLegs.indexOfFirst { it.jobId == p.jobId }
+        } else {
+            -1
         }
         val milesToStore = claimIdx.takeIf { it >= 0 }?.let { storeLegs[it].miles }
 
@@ -658,10 +677,22 @@ object RecordFolds {
             // anchor to the completion odometer (null ⇒ anchor unchanged, miles roll forward).
             legState = legState.copy(
                 prevLegOdometer = odo ?: legState.prevLegOdometer,
-                pendingStoreLegs = if (claimIdx >= 0) {
-                    storeLegs.filterIndexed { i, _ -> i != claimIdx }
-                } else {
-                    storeLegs
+                pendingStoreLegs = when {
+                    // Leg-sum row: consume the single claimed store leg.
+                    claimIdx >= 0 -> storeLegs.filterIndexed { i, _ -> i != claimIdx }
+                    // Legacy row (#688 review Fix 1, mixed-basis double-count): RETIRE this job's store
+                    // legs whose closure preceded this completion — their miles are already inside the
+                    // legacy partition span (prevDrop→completion), so a surviving sibling must not
+                    // re-claim them per-leg. Keep only legs of this job provably closed AFTER this
+                    // completion odo (a genuinely later sibling's) + all legs of other jobs. A null
+                    // completion odo OR null leg-closure marker ⇒ retire (fail-null under-attribution,
+                    // never a double-count — the sanctioned error direction).
+                    milesToDropoff == null -> storeLegs.filterNot { leg ->
+                        leg.jobId == p.jobId &&
+                            !(leg.closedAtOdometer != null && odo != null && leg.closedAtOdometer > odo)
+                    }
+                    // Leg-sum row that found no store leg to claim: leave the queue untouched.
+                    else -> storeLegs
                 },
                 pendingDropoffLegs = if (milesToDropoff != null) {
                     legState.pendingDropoffLegs - p.taskId
@@ -712,51 +743,6 @@ object RecordFolds {
         val odo = event.metadata?.odometer
         val newCtx = ctx?.let { it.advance(e.occurredAt, odo).copy(legState = it.legState.advanceAnchor(odo)) }
         return FoldOutcome(context = newCtx, pickup = pickup)
-    }
-
-    /**
-     * `PICKUP_ARRIVED` (#688 phase B) — closes a **to-store** leg (previous anchor → this arrival) and
-     * queues it for the job's completion to claim as `milesToStore`. Keeps the pre-existing liveness
-     * advance. A malformed/payload-less event advances liveness only (leg anchor unchanged, miles roll
-     * forward — never lost, at worst lumped like today).
-     */
-    private fun foldPickupArrived(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
-        val e = event.event
-        val sid = e.sessionId ?: return FoldOutcome(context = context)
-        val ctx = resolveContext(context, sid, e.occurredAt)
-        val odo = event.metadata?.odometer
-        val p = e.payload as? PickupPayload
-        val withLeg = if (p != null) ctx.closeStoreLeg(p.taskId, p.jobId, p.storeName, odo) else ctx
-        return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
-    }
-
-    /**
-     * `DELIVERY_ARRIVED` (#688 phase B) — closes a **to-dropoff** leg (previous anchor → this arrival),
-     * accumulated onto the drop's own `taskId` (a grace-flap re-arrival adds to the same entry, never a
-     * second one). Keeps the pre-existing liveness advance; a malformed event advances liveness only.
-     */
-    private fun foldDeliveryArrived(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
-        val e = event.event
-        val sid = e.sessionId ?: return FoldOutcome(context = context)
-        val ctx = resolveContext(context, sid, e.occurredAt)
-        val odo = event.metadata?.odometer
-        val p = e.payload as? DeliveryPayload
-        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, odo) else ctx
-        return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
-    }
-
-    /**
-     * `DELIVERY_CONFIRMED` (#688 phase B) — advances the leg anchor only (the handoff/POD point, before
-     * the completion receipt), alongside the pre-existing liveness advance. Produces no record.
-     */
-    private fun foldDeliveryConfirmed(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
-        val e = event.event
-        val sid = e.sessionId ?: return FoldOutcome(context = context)
-        val ctx = resolveContext(context, sid, e.occurredAt)
-        val odo = event.metadata?.odometer
-        val p = e.payload as? DeliveryPayload
-        val withAnchor = if (p != null) ctx.copy(legState = ctx.legState.advanceAnchor(odo)) else ctx
-        return FoldOutcome(context = withAnchor.advance(e.occurredAt, odo))
     }
 
     /**
@@ -916,119 +902,6 @@ object RecordFolds {
         return FoldOutcome(context = newCtx, resolution = resolution)
     }
 
-    /**
-     * The in-memory/hydrated context for [sid], or a synthesized `_unknown`-platform context when a
-     * session-scoped event has no known DASH_START (fold started mid-session past the watermark, or
-     * a lost start). A synthesized session degrades to a null-odometer / _unknown-platform row —
-     * never a wrong one. [platformName] refines an `_unknown` platform when the event itself carries
-     * one (DASH_STOP's #314 stamp) — whether that `_unknown` context is being synthesized here for
-     * the first time, or was already synthesized by an EARLIER event in the session and is only now
-     * being hydrated/matched by [sid] (a skipped/malformed DASH_START leaves the session `_unknown`
-     * until its DASH_STOP arrives with the real platform; without this, the upgrade path only fired
-     * for a brand-new context and an already-`_unknown` session stayed `_unknown` forever). Never
-     * clobbers a REAL platform — only an `Unknown` one is eligible — and a [platformName] that itself
-     * fails to resolve (or resolves back to [Platform.Unknown]) leaves the context untouched.
-     */
-    private fun resolveContext(
-        context: SessionFoldContext?,
-        sid: String,
-        occurredAt: Long,
-        platformName: String? = null,
-    ): SessionFoldContext {
-        val existing = context?.takeIf { it.sessionId == sid }
-        if (existing != null) {
-            if (existing.platform == Platform.Unknown && platformName != null) {
-                val resolved = Platform.fromName(platformName)
-                if (resolved != null && resolved != Platform.Unknown) {
-                    return existing.copy(platform = resolved)
-                }
-            }
-            return existing
-        }
-        return SessionFoldContext(
-            sessionId = sid,
-            platform = platformName?.let { Platform.fromName(it) } ?: Platform.Unknown,
-            startedAt = occurredAt,
-            lastEventAt = occurredAt,
-        )
-    }
-
-    private fun SessionFoldContext.advance(occurredAt: Long, odometer: Double?): SessionFoldContext =
-        copy(
-            lastEventAt = maxOf(lastEventAt, occurredAt),
-            lastOdometer = odometer ?: lastOdometer,
-        )
-
-    // ── #688 phase B leg helpers (pure; all mirror the partition-anchor conventions above) ──
-
-    /**
-     * Advance the leg anchor to [odo]. A null odo does NOT advance (same rule as `prevDropOdometer`):
-     * the leg anchor stays put and the miles roll forward into the next closed leg.
-     */
-    private fun LegState.advanceAnchor(odo: Double?): LegState =
-        if (odo == null) this else copy(prevLegOdometer = odo)
-
-    /**
-     * Close the current leg at [odo]: returns the leg miles (floored at 0 — the mid-session
-     * odometer-reset defense) and the leg state with its anchor advanced. `null` miles ⇒ unmeasurable:
-     * either this event carries no odo (anchor unchanged, miles roll forward) or no anchor was ever
-     * seen (anchor takes this odo, this leg is unknown).
-     */
-    private fun LegState.closeLeg(odo: Double?): Pair<Double?, LegState> = when {
-        odo == null -> null to this
-        prevLegOdometer == null -> null to copy(prevLegOdometer = odo)
-        else -> (odo - prevLegOdometer).coerceAtLeast(0.0) to copy(prevLegOdometer = odo)
-    }
-
-    /** Cap a pending list at [LegState.MAX_PENDING] with deterministic drop-oldest (bounded ingestion). */
-    private fun <T> List<T>.capPending(): List<T> =
-        if (size <= LegState.MAX_PENDING) this else takeLast(LegState.MAX_PENDING)
-
-    /**
-     * Close a to-store leg and queue it (or accumulate into the same [pickupTaskId] entry on a
-     * re-arrival). Bounded at [LegState.MAX_PENDING].
-     */
-    private fun SessionFoldContext.closeStoreLeg(
-        pickupTaskId: String,
-        jobId: String,
-        storeName: String?,
-        odo: Double?,
-    ): SessionFoldContext {
-        val (miles, ls) = legState.closeLeg(odo)
-        if (miles == null) return copy(legState = ls)
-        val existingIdx = ls.pendingStoreLegs.indexOfFirst { it.pickupTaskId == pickupTaskId }
-        val legs = if (existingIdx >= 0) {
-            ls.pendingStoreLegs.mapIndexed { i, leg ->
-                if (i == existingIdx) leg.copy(miles = leg.miles + miles) else leg
-            }
-        } else {
-            (ls.pendingStoreLegs + PendingStoreLeg(pickupTaskId, jobId, storeName, miles)).capPending()
-        }
-        return copy(legState = ls.copy(pendingStoreLegs = legs))
-    }
-
-    /**
-     * Close a to-dropoff leg, accumulating onto the drop's own [taskId] (a re-arrival adds to the same
-     * entry). Bounded at [LegState.MAX_PENDING] with drop-oldest by insertion order.
-     */
-    private fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): SessionFoldContext {
-        val (miles, ls) = legState.closeLeg(odo)
-        if (miles == null) return copy(legState = ls)
-        val existing = ls.pendingDropoffLegs[taskId]
-        val merged = if (existing != null) {
-            ls.pendingDropoffLegs + (taskId to (existing + miles))
-        } else {
-            val added = ls.pendingDropoffLegs + (taskId to miles)
-            if (added.size <= LegState.MAX_PENDING) {
-                added
-            } else {
-                // Drop-oldest by insertion order (LinkedHashMap preserves it); keep the newest cap.
-                added.entries.toList().takeLast(LegState.MAX_PENDING).associate { it.key to it.value }
-            }
-        }
-        return copy(legState = ls.copy(pendingDropoffLegs = merged))
-    }
-
     private fun SessionFoldContext.bumpOutcome(type: AppEventType): SessionFoldContext = when (type) {
         AppEventType.OFFER_ACCEPTED -> copy(offersAccepted = offersAccepted + 1)
         AppEventType.OFFER_DECLINED -> copy(offersDeclined = offersDeclined + 1)
@@ -1036,3 +909,53 @@ object RecordFolds {
         else -> this
     }
 }
+
+/**
+ * The in-memory/hydrated context for [sid], or a synthesized `_unknown`-platform context when a
+ * session-scoped event has no known DASH_START (fold started mid-session past the watermark, or
+ * a lost start). A synthesized session degrades to a null-odometer / _unknown-platform row —
+ * never a wrong one. [platformName] refines an `_unknown` platform when the event itself carries
+ * one (DASH_STOP's #314 stamp) — whether that `_unknown` context is being synthesized here for
+ * the first time, or was already synthesized by an EARLIER event in the session and is only now
+ * being hydrated/matched by [sid] (a skipped/malformed DASH_START leaves the session `_unknown`
+ * until its DASH_STOP arrives with the real platform; without this, the upgrade path only fired
+ * for a brand-new context and an already-`_unknown` session stayed `_unknown` forever). Never
+ * clobbers a REAL platform — only an `Unknown` one is eligible — and a [platformName] that itself
+ * fails to resolve (or resolves back to [Platform.Unknown]) leaves the context untouched.
+ *
+ * `internal` top-level (not a `RecordFolds` member) so [LegFolds]'s leg-anchor handlers share the ONE
+ * definition (#688 review Fix 6 file split) — a duplicate would be an SSOT divergence bug.
+ */
+internal fun resolveContext(
+    context: SessionFoldContext?,
+    sid: String,
+    occurredAt: Long,
+    platformName: String? = null,
+): SessionFoldContext {
+    val existing = context?.takeIf { it.sessionId == sid }
+    if (existing != null) {
+        if (existing.platform == Platform.Unknown && platformName != null) {
+            val resolved = Platform.fromName(platformName)
+            if (resolved != null && resolved != Platform.Unknown) {
+                return existing.copy(platform = resolved)
+            }
+        }
+        return existing
+    }
+    return SessionFoldContext(
+        sessionId = sid,
+        platform = platformName?.let { Platform.fromName(it) } ?: Platform.Unknown,
+        startedAt = occurredAt,
+        lastEventAt = occurredAt,
+    )
+}
+
+/**
+ * Advance liveness (open-session duration + inferred-close + odometer anchors). `internal` top-level so
+ * both [RecordFolds] and [LegFolds] route through one definition (#688 review Fix 6).
+ */
+internal fun SessionFoldContext.advance(occurredAt: Long, odometer: Double?): SessionFoldContext =
+    copy(
+        lastEventAt = maxOf(lastEventAt, occurredAt),
+        lastOdometer = odometer ?: lastOdometer,
+    )

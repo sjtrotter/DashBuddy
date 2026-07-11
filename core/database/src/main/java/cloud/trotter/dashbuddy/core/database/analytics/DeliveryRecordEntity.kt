@@ -155,10 +155,14 @@ data class DeliveryRecordEntity(
     // ── Per-leg mileage (#688 phase B, v13) ─────────────────────────────────
     /**
      * Machine-computed to-store driving leg (#688 phase B) — this drop's claimed store leg (exact
-     * store-form match within the job, else FIFO). Provenance ONLY: a driver `newMiles`
+     * NORMALIZED-chain store-form match within the job, else FIFO). Stamped ONLY on a leg-sum row
+     * ([milesToDropoff] non-null); a LEGACY row (missed arrival) stamps null and instead retires its
+     * job's already-closed store legs (#688 review Fix 1/Fix 4), so a lone store leg never rides an
+     * otherwise-untouched legacy row — keeping `milesToStore + milesToDropoff != realizedMiles`
+     * meaningful strictly as the driver-edit trail. Provenance ONLY: a driver `newMiles`
      * DELIVERY_ADJUSTMENT rewrites [realizedMiles] but NEVER this column, so `milesToStore +
      * milesToDropoff` may then disagree with `realizedMiles` — that inequality is the visible edit
-     * trail (DEV-DECISION 1). Null on an anchorless/unclaimed leg and all pre-v13 history.
+     * trail (DEV-DECISION 1). Null on an anchorless/unclaimed/legacy leg and all pre-v13 history.
      */
     val milesToStore: Double? = null,
     /**

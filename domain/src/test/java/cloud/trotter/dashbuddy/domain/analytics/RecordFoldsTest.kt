@@ -23,9 +23,12 @@ import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -152,6 +155,23 @@ class RecordFoldsTest {
     private fun deliveryArrived(sid: String, at: Long, jobId: String, taskId: String, storeName: String? = "StoreX", odo: Double?) = ev(
         AppEventType.DELIVERY_ARRIVED, sid, at,
         DeliveryPayload(jobId = jobId, taskId = taskId, storeName = storeName, phaseStartedAt = at - 300_000, arrivedAt = at),
+        odometer = odo,
+    )
+
+    private fun taskUnassigned(
+        sid: String,
+        at: Long,
+        jobId: String,
+        taskId: String,
+        phase: TaskPhase,
+        storeName: String? = null,
+        odo: Double? = null,
+    ) = ev(
+        AppEventType.TASK_UNASSIGNED, sid, at,
+        TaskUnassignedPayload(
+            jobId = jobId, taskId = taskId, phase = phase, storeName = storeName,
+            startedAt = at - 300_000, unassignedAt = at,
+        ),
         odometer = odo,
     )
 
@@ -1274,10 +1294,12 @@ class RecordFoldsTest {
     }
 
     @Test
-    fun `criterion 4 - lone store leg does NOT replace realizedMiles`() {
+    fun `criterion 4 - lone store leg does NOT replace realizedMiles and legacy row stamps no leg`() {
         val s = "L8"
         // Store leg is known but NO DELIVERY_ARRIVED (missed arrival) → milesToDropoff null → the
-        // milesToDropoff != null gate keeps the legacy partition delta, not the lone store leg.
+        // milesToDropoff != null gate keeps the legacy partition delta, not the lone store leg. Fix 4
+        // (#688 review): a legacy row stamps NO milesToStore either — leg-sum ≠ realizedMiles must stay
+        // the driver-edit trail, not a machine lone-leg stamp on an otherwise-untouched legacy row.
         val (outcomes, _) = foldSession(
             listOf(
                 dashStart(s, 1_000, odo = 100.0),
@@ -1288,8 +1310,7 @@ class RecordFoldsTest {
         )
         val d = outcomes[3].delivery!!
         assertNull(d.milesToDropoff)
-        // milesToStore is a claimed store leg (1.0) but does NOT drive realizedMiles here.
-        assertEquals(1.0, d.milesToStore!!, 1e-9)
+        assertNull(d.milesToStore) // Fix 4: legacy-basis row does NOT stamp a lone store leg
         assertEquals(5.0, d.realizedMiles!!, 1e-9) // legacy delta 100→105, unchanged
     }
 
@@ -1315,5 +1336,95 @@ class RecordFoldsTest {
         val d = outcomes[5].delivery!!
         assertEquals(0.5, d.milesToStore!!, 1e-9)  // store leg intact through the MANUAL
         assertEquals(2.0, d.milesToDropoff!!, 1e-9)
+    }
+
+    @Test
+    fun `Fix 1 - mixed-basis stack, legacy drop retires store legs so a sibling cannot double-count`() {
+        val s = "L10"
+        // Multi-store stack where drop A MISSES its DELIVERY_ARRIVED → folds on the LEGACY partition
+        // delta, whose span (start→A-completion) already CONTAINS both store legs. On 07315d7a drop A
+        // still claimed store leg A (0.5) AND left store leg B (0.3) queued, which sibling B then
+        // re-claimed per-leg → Σ per-drop miles (4.2) EXCEEDED the 3.9 session odometer span (the
+        // reviewer's double-count). The fix: drop A stamps no store leg (Fix 4) and RETIRES the job's
+        // store legs closed before its completion (Fix 1), so B claims none of them.
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                offerAccepted(s, 1_200, "h1", eval(net = 9.0, dist = 6.0, opCpm = 0.30)),
+                pickupArrived(s, 1_500, "J1", "PA", "StoreA", odo = 100.5), // store leg A 0.5, closes 100.5
+                pickupConfirmed(s, 1_600, "J1", "PA", "StoreA", odo = 100.5),
+                pickupArrived(s, 1_700, "J1", "PB", "StoreB", odo = 100.8), // store leg B 0.3, closes 100.8
+                pickupConfirmed(s, 1_800, "J1", "PB", "StoreB", odo = 100.8),
+                // Drop A: NO deliveryArrived → milesToDropoff null → LEGACY basis (span 100.0→103.0 = 3.0).
+                delivery(s, 3_000, "J1", "DA", storeName = "StoreA", totalPay = 5.0, odo = 103.0),
+                // Drop B: arrives + completes with no dwell.
+                deliveryArrived(s, 3_500, "J1", "DB", storeName = "StoreB", odo = 103.9), // dropoff B 0.9
+                delivery(s, 3_600, "J1", "DB", storeName = "StoreB", totalPay = 5.0, odo = 103.9),
+            ),
+        )
+        val dA = outcomes[6].delivery!!
+        val dB = outcomes[8].delivery!!
+        // Drop A is legacy: no leg stamped, realizedMiles is the partition delta.
+        assertNull(dA.milesToStore)
+        assertNull(dA.milesToDropoff)
+        assertEquals(3.0, dA.realizedMiles!!, 1e-9)
+        // Drop B did NOT re-claim store leg B (retired at A's legacy completion) — dropoff leg only.
+        assertNull(dB.milesToStore)
+        assertEquals(0.9, dB.milesToDropoff!!, 1e-9)
+        assertEquals(0.9, dB.realizedMiles!!, 1e-9)
+        // The load-bearing invariant: Σ per-drop realizedMiles ≤ the session odometer span (one-sided).
+        val span = ctx!!.lastOdometer!! - ctx.startOdometer!! // 103.9 − 100.0 = 3.9
+        assertEquals(3.9, span, 1e-9)
+        assertTrue(
+            "Σ per-drop miles (${dA.realizedMiles!! + dB.realizedMiles!!}) must not exceed span ($span)",
+            dA.realizedMiles!! + dB.realizedMiles!! <= span + 1e-9,
+        )
+    }
+
+    @Test
+    fun `Fix 2 - a pickup-phase unassign purges its store leg so a surviving sibling cannot inherit it`() {
+        val s = "L11"
+        // A stacked job: store A is abandoned via unassign-in-help during pickup; store B survives. The
+        // surviving drop completes with a NULL storeName (the Unknown-store family) so it must fall to
+        // FIFO. On 07315d7a TASK_UNASSIGNED was fold-inert → store leg A stayed queued → FIFO handed the
+        // surviving drop the ABANDONED store's 0.5 miles (contrary to #736: an unassigned task's miles
+        // are session-level only). The fix purges leg A, so FIFO correctly claims store B's 0.3.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                offerAccepted(s, 1_100, "h1", eval(net = 9.0, dist = 6.0, opCpm = 0.30)),
+                pickupArrived(s, 1_500, "J1", "PA", "StoreA", odo = 100.5), // store leg A 0.5 (abandoned)
+                pickupArrived(s, 1_700, "J1", "PB", "StoreB", odo = 100.8), // store leg B 0.3 (survives)
+                taskUnassigned(s, 1_900, "J1", "PA", TaskPhase.PICKUP, storeName = "StoreA"),
+                deliveryArrived(s, 2_500, "J1", "DB", storeName = null, odo = 103.0), // dropoff B 2.2
+                delivery(s, 2_600, "J1", "DB", storeName = null, totalPay = 5.0, odo = 103.0),
+            ),
+        )
+        val dB = outcomes[6].delivery!!
+        // FIFO now sees only store leg B (A purged) → 0.3, NOT the abandoned store A's 0.5.
+        assertEquals(0.3, dB.milesToStore!!, 1e-9)
+        assertEquals(2.2, dB.milesToDropoff!!, 1e-9)
+    }
+
+    @Test
+    fun `Fix 3 - store-leg match runs through the normalizedChain SSOT, not raw equality`() {
+        val s = "L12"
+        // Two store legs; the surviving drop completes with a payout FORM-DRIFTED store name
+        // ("Mama Margies #55") that raw `==` would miss → FIFO would wrongly hand it the OLDEST leg
+        // (Bill Miller, 0.5). normalizedChain strips the "#55" franchise qualifier, so the exact match
+        // correctly claims Mama Margies' own 0.3 leg (the #159 StoreKeys SSOT, F9 read-side precedent).
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                offerAccepted(s, 1_100, "h1", eval(net = 9.0, dist = 6.0, opCpm = 0.30)),
+                pickupArrived(s, 1_500, "J1", "PA", "Bill Miller BBQ", odo = 100.5), // leg A 0.5 (oldest)
+                pickupArrived(s, 1_700, "J1", "PB", "Mama Margies", odo = 100.8),     // leg B 0.3
+                deliveryArrived(s, 2_500, "J1", "DB", storeName = "Mama Margies", odo = 103.0), // dropoff 2.2
+                delivery(s, 2_600, "J1", "DB", storeName = "Mama Margies #55", totalPay = 5.0, odo = 103.0),
+            ),
+        )
+        val dB = outcomes[5].delivery!!
+        // Normalized match claims Mama Margies' own leg (0.3), NOT Bill Miller's FIFO-oldest 0.5.
+        assertEquals(0.3, dB.milesToStore!!, 1e-9)
     }
 }

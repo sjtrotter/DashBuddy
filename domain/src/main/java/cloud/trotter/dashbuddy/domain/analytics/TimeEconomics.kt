@@ -10,12 +10,16 @@ import kotlin.math.roundToLong
  * sessions (joined via `sessionId`, with a null-session `completedAt` fallback).
  *
  * **Everything here is MEASURED, not estimated.** [onlineMillis] is Σ session durations,
- * [deliveryMinutes]/[deliveryMiles] are Σ per-delivery **partition deltas** (the odometer/time gap
- * since the previous drop, or `DASH_START` for the first), and [miles] is the session odometer
- * delta. Because delivery miles/minutes are anchored on drop completions, they **include the
- * approach legs between drops** — so the unattributed remainder ([unattributedMillis] /
- * [unattributedMiles]) is honestly "not attributed to any delivery": the tail after the last drop
- * and zero-delivery dashes, never a re-estimate.
+ * [deliveryMinutes] is Σ per-delivery **partition deltas** (the time gap since the previous drop, or
+ * `DASH_START` for the first), and [miles] is the session odometer delta. [deliveryMiles] is Σ
+ * per-delivery `realizedMiles`, which since #688 phase B is the per-**leg** sum (to-store + to-dropoff)
+ * on a leg-measured row and the legacy partition delta otherwise — so the mileage a delivery claims is
+ * bounded by its own driving legs, not the full inter-drop span. The remainder [unattributedMiles]
+ * (deadhead) therefore grows on leg-measured rows by the arrival→completion dwell/drift AND by any
+ * legs retired at a legacy-basis completion (the #688 review Fix 1 one-sided guard: Σ per-drop miles ≤
+ * the session span, undershoot expected, never over). [deliveryMinutes] is unchanged (still the full
+ * inter-drop time delta). Both remainders ([unattributedMillis] / [unattributedMiles]) stay honestly
+ * "not attributed to any delivery" — never a re-estimate.
  *
  * **Deadline coverage is explicit** (Principle 5/6 honesty): [deliveriesWithDeadline] is only the
  * deliveries that carried a captured deadline; [onTimeDeliveries] and [onTimeRate] cover ONLY that
