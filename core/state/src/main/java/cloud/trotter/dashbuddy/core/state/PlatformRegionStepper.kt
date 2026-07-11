@@ -693,11 +693,27 @@ class PlatformRegionStepper @Inject constructor() {
                 // one frame and double-fired the receipt bubble on the
                 // expanded re-observation.
                 val postTaskTaskId = r.activeTask?.taskId ?: r.recentTasks.lastOrNull()?.taskId
-                r = r.copy(
-                    lastPostTaskPayHash = payHash,
-                    lastPostTaskFields = parsed,
-                    lastAnnouncedPostTaskTaskId = postTaskTaskId ?: r.lastAnnouncedPostTaskTaskId,
-                )
+                // #630 R3: never let a COLLAPSED re-render (parsedPay == null) clobber an already-
+                // captured EXPANDED receipt for the SAME announced task. A PostTask re-entry (e.g.
+                // after a chained-offer decline) can render collapsed first, and if the retire-grace
+                // close-out apportions off `lastPostTaskFields` before auto-expand restores the
+                // itemized receipt, `apportion(null)` nulls every not-yet-minted drop's share while an
+                // exit-minted drop kept its share → Σ < total. A DIFFERENT task's collapsed receipt is
+                // a genuinely new receipt and still overwrites. `sessionEarnings` still folds below.
+                // Accepted trade: on the same-task skip the collapsed frame's possibly-updated
+                // `totalPay` is DISCARDED (the itemized expanded receipt is authoritative); an EXPANDED
+                // re-render (`parsedPay != null`) is not a downgrade and refreshes both fields normally.
+                val sameTaskCollapsedDowngrade = parsed.parsedPay == null &&
+                    r.lastPostTaskFields?.parsedPay != null &&
+                    postTaskTaskId != null &&
+                    postTaskTaskId == r.lastAnnouncedPostTaskTaskId
+                if (!sameTaskCollapsedDowngrade) {
+                    r = r.copy(
+                        lastPostTaskPayHash = payHash,
+                        lastPostTaskFields = parsed,
+                        lastAnnouncedPostTaskTaskId = postTaskTaskId ?: r.lastAnnouncedPostTaskTaskId,
+                    )
+                }
                 r.session?.let { session ->
                     val earnings = parsed.sessionEarnings
                     if (earnings != null) {

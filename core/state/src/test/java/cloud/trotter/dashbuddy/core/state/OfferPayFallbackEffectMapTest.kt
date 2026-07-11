@@ -152,20 +152,25 @@ class OfferPayFallbackEffectMapTest {
 
     @Test
     fun `FIX1 — a mid-stack PostTask exit does NOT stamp (not the last open owed drop)`() {
-        // A receipt-less mid-stack completion: d1 completes while its sibling d2 is still owed (an
-        // unresolved, identity-less placeholder, completedAt == null). FIX 1's final-shape gate stamps
-        // a PostTask-exit drop ONLY when it is the LAST OPEN owed dropoff. d2 is not yet done → d1 is
-        // mid-stack → NO stamp (the traded class: its dollars ride unattributed; it got nothing
-        // pre-#691 too). This kills the estimate-then-late-receipt / cents-drift-across-mints over-count.
+        // A receipt-less mid-stack completion: d1 completes while its sibling d2 is still owed. FIX 1's
+        // final-shape gate stamps a PostTask-exit drop ONLY when it is the LAST OPEN owed dropoff. d2 is
+        // an identity-RESOLVED, undelivered drop (customer hash present, completedAt == null) → it is an
+        // ACCOUNTABLE sibling → it holds the shape non-final → d1 is mid-stack → NO stamp (the traded
+        // class: its dollars ride unattributed; it got nothing pre-#691 too). This kills the
+        // estimate-then-late-receipt / cents-drift-across-mints over-count.
+        // NOTE (PR #754): the blocker MUST now be identity-RESOLVED — an identity-less placeholder no
+        // longer holds the gate shut (see the companion test below); that narrowing is the intended
+        // #630-review side effect on the #691 estimate gate.
         val d1 = dropoff("d1", "H-E-B", "cA", completedAt = null)
-        val placeholder = dropoff("d2", null, cust = null, completedAt = null) // identity-less, owed
-        val activeJob = job(offerPay = 12.95, tasks = listOf(d1, placeholder))
+        val d2 = dropoff("d2", "H-E-B", "cB", completedAt = null) // identity-resolved, still owed
+        val activeJob = job(offerPay = 12.95, tasks = listOf(d1, d2))
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,
             session = Session("s1", startedAt = 100L, runningEarnings = 40.0),
             activeJob = activeJob,
-            recentTasks = listOf(d1),
+            activeTask = d1,
+            recentTasks = emptyList(),
             lastPostTaskFields = null,
         )
         val regionNext = regionPrev.copy() // job stays open (mid-stack)
@@ -176,6 +181,39 @@ class OfferPayFallbackEffectMapTest {
         val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
         assertEquals("only d1 completes at the mid-stack exit", 1, rows.size)
         assertNull("mid-stack exit → no offer stamp (final-shape gate)", rows.single().offerPayShare)
+    }
+
+    @Test
+    fun `FIX1 companion (PR #754) — an identity-less placeholder sibling no longer blocks the estimate`() {
+        // The #630-review narrowing: an unresolved, customer-TBD placeholder (both identity hashes null)
+        // can NEVER mint, so it must not wedge the final-shape gate shut. d1 completes at a receipt-less
+        // PostTask exit while only such a placeholder is "owed" → d1 IS the last open ACCOUNTABLE drop →
+        // it gets its equal-split offer share (pre-#754 the placeholder wrongly held the shape non-final
+        // → d1 rode unattributed forever). The split denominator still KEEPS the placeholder (per-owed-
+        // order), so d1's share is total/2, not the whole offer.
+        val d1 = dropoff("d1", "H-E-B", "cA", completedAt = null)
+        val placeholder = dropoff("d2", null, cust = null, completedAt = null) // identity-less, owed
+        val activeJob = job(offerPay = 12.95, tasks = listOf(d1, placeholder))
+        val regionPrev = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 40.0),
+            activeJob = activeJob,
+            activeTask = d1,
+            recentTasks = emptyList(),
+            lastPostTaskFields = null,
+        )
+        val regionNext = regionPrev.copy() // job stays open
+
+        val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
+
+        val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
+        assertEquals("only d1 completes", 1, rows.size)
+        assertEquals(
+            "the placeholder no longer wedges the gate → d1 gets its equal split (12.95 / 2 owed orders)",
+            6.48, rows.single().offerPayShare!!, 0.001,
+        )
     }
 
     @Test

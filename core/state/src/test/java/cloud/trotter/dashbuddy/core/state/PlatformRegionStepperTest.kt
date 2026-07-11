@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
+import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
@@ -331,6 +333,102 @@ class PlatformRegionStepperTest {
             next.activeTask?.taskId,
         )
         assertEquals(TaskPhase.DROPOFF, next.activeTask?.phase)
+    }
+
+    // =========================================================================
+    // #630 R3 — no expanded→collapsed receipt downgrade for the SAME announced task
+    // =========================================================================
+
+    private fun postTaskObs(
+        parsedPay: ParsedPay?,
+        totalPay: Double,
+        sessionEarnings: Double?,
+        timestamp: Long,
+    ): Observation.Screen = Observation.Screen(
+        timestamp = timestamp,
+        captureId = "cap-$timestamp",
+        ruleId = "doordash.screen.test",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.PostTask,
+        modeHint = Mode.Online,
+        parsed = ParsedFields.PostTaskFields(
+            totalPay = totalPay,
+            parsedPay = parsedPay,
+            sessionEarnings = sessionEarnings,
+        ),
+    )
+
+    private val expandedReceipt = ParsedPay(
+        appPayComponents = listOf(ParsedPayItem("Base Pay", 4.5)),
+        customerTips = listOf(ParsedPayItem("Wendy's", 3.0)),
+    )
+
+    @Test
+    fun `same-task collapsed PostTask re-render does not clobber the captured expanded receipt (#630 R3)`() {
+        val task = pickupTask("task-D", "Wendy's")
+        val prev = region(activeTask = task)
+
+        // Frame 1: EXPANDED receipt for task-D.
+        val afterExpanded = stepper.step(
+            prev = prev,
+            prevFlow = FlowRegion(flow = Flow.PostTask),
+            nextFlow = FlowRegion(flow = Flow.PostTask),
+            obs = postTaskObs(expandedReceipt, totalPay = 7.5, sessionEarnings = 50.0, timestamp = 1_000L),
+            policy = policy,
+        )
+        assertNotNull("expanded receipt captured", afterExpanded.lastPostTaskFields?.parsedPay)
+        assertEquals("task-D", afterExpanded.lastAnnouncedPostTaskTaskId)
+
+        // Frame 2: a COLLAPSED re-render (parsedPay = null) for the SAME announced task — e.g. a
+        // PostTask re-entry after a chained-offer decline renders collapsed first.
+        val afterCollapsed = stepper.step(
+            prev = afterExpanded,
+            prevFlow = FlowRegion(flow = Flow.PostTask),
+            nextFlow = FlowRegion(flow = Flow.PostTask),
+            obs = postTaskObs(parsedPay = null, totalPay = 7.5, sessionEarnings = 51.0, timestamp = 2_000L),
+            policy = policy,
+        )
+
+        assertNotNull(
+            "the itemized (expanded) receipt survives a same-task collapsed re-render — the retire-" +
+                "grace close-out must apportion off the EXPANDED parsedPay, never apportion(null)",
+            afterCollapsed.lastPostTaskFields?.parsedPay,
+        )
+        assertEquals(
+            "sessionEarnings still folds from the collapsed frame",
+            51.0,
+            afterCollapsed.session?.runningEarnings,
+        )
+    }
+
+    @Test
+    fun `different-task collapsed PostTask frame DOES overwrite (a new receipt, not a downgrade)`() {
+        val taskD = pickupTask("task-D", "Wendy's")
+        val prev = region(activeTask = taskD).copy(
+            // An expanded receipt already held for a PRIOR task.
+            lastPostTaskFields = ParsedFields.PostTaskFields(
+                totalPay = 12.0,
+                parsedPay = expandedReceipt,
+                sessionEarnings = 40.0,
+            ),
+            lastAnnouncedPostTaskTaskId = "task-C",
+        )
+
+        val next = stepper.step(
+            prev = prev,
+            prevFlow = FlowRegion(flow = Flow.PostTask),
+            nextFlow = FlowRegion(flow = Flow.PostTask),
+            obs = postTaskObs(parsedPay = null, totalPay = 7.5, sessionEarnings = 51.0, timestamp = 2_000L),
+            policy = policy,
+        )
+
+        assertNull(
+            "a DIFFERENT task's collapsed receipt is a genuinely NEW receipt and overwrites",
+            next.lastPostTaskFields?.parsedPay,
+        )
+        assertEquals(7.5, next.lastPostTaskFields?.totalPay)
+        assertEquals("task-D", next.lastAnnouncedPostTaskTaskId)
+        assertEquals("sessionEarnings still folds", 51.0, next.session?.runningEarnings)
     }
 
 }
