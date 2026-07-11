@@ -83,14 +83,32 @@ was found **broken-in-part** (raw PII in capture envelopes) and moved to that en
   per-dash drill-down (and `delivery_records`), each drop of a stack shows a plausible nonzero
   `X mi` (not one lump + 0.0); **Σ per-drop miles ≤ the session odometer miles** — this is a
   ONE-SIDED invariant: an undershoot is EXPECTED (the arrival→completion dwell/drift, and any store
-  legs retired when a stack-mate missed its arrival, land in the deadhead remainder), but Σ must
-  NEVER EXCEED the session span (that would be the mixed-basis double-count the #688-review Fix 1
-  closes); the CSV export's `miles_to_store`/`miles_to_dropoff` columns are populated for drops whose
-  arrival frames fired; and a driver miles edit via the Adjust dialog still wins the row total (the
-  leg columns keep the machine estimate — a deliberate mismatch, not a bug). A drop with a missed
-  `DELIVERY_ARRIVED` (no arrival frame) legitimately falls back to the old partition delta with blank
-  leg columns (and its own store legs are retired so no sibling re-claims them). An order unassigned
-  mid-dash (#736) contributes NO per-drop leg miles — its distance stays session-level only.
+  legs retired when a drop missed its arrival, land in the deadhead remainder), but Σ must NEVER
+  EXCEED the session span (that would be the mixed-basis double-count the #688-review Fix 1
+  closes — strictly guaranteed, except in a session with a mid-dash odometer reset, where all
+  mileage invariants are void anyway); the CSV export's `miles_to_store`/`miles_to_dropoff` columns
+  are populated for drops whose arrival frames fired; and a driver miles edit via the Adjust dialog
+  still wins the row total (the leg columns keep the machine estimate — a deliberate mismatch, not a
+  bug). A drop with a missed `DELIVERY_ARRIVED` (no arrival frame) legitimately falls back to the old
+  partition delta with blank leg columns (and the session's already-closed store legs are retired so
+  no later drop re-claims them). An order unassigned mid-dash (#736) contributes NO per-drop leg
+  miles — its distance stays session-level only.
+  - Confirmed: 0/2
+
+- **🆕 NEW — stacked receipts still split exactly; ±1¢ drift and collapsed-receipt nulls gone (#630).**
+  The per-drop receipt split is hardened for mid-stack/multi-receipt shapes: a collapsed PostTask
+  re-render can no longer wipe an already-captured itemized receipt (the field-reachable break), the
+  split denominator now equals exactly the rows that mint, and the rounding cent is order-invariant.
+  **How to tell it's working (desk-side, after a dash with ≥1 stacked job):** in the per-dash
+  drill-down, each stacked job's delivery rows sum EXACTLY to its receipt total (no missing-pay row
+  where a receipt existed, no ±1¢ mismatch); the Money tab's unattributed callout doesn't grow from
+  stacked jobs. A `#630 mid-stack non-final receipt exit` WARN in the exported log (now also tripped
+  by a pay-bearing *collapsed* receipt, not only an itemized one) would be a genuine field sighting of
+  the mid-stack receipt shape — grab the capture session if you see it. NOTE (PR #754 review): the
+  final-shape gate no longer wedges shut on a never-activated placeholder (#749) or an unassigned
+  sibling (#736), so a normal single-delivered-drop stacked job must attach its full receipt (not fold
+  a $0/NONE row) — watch that a receipted delivery never shows $0 when a placeholder/unassigned
+  sibling exists.
   - Confirmed: 0/2
 
 - **🆕 NEW — unassign an order mid-dash produces NO paid/confirmed artifacts (#736).**
