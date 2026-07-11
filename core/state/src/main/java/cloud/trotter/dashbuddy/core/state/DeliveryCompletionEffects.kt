@@ -223,8 +223,11 @@ internal fun EffectMap.diffDeliveryCompletion(
         for (task in next.recentTasks) {
             if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
             val completedAt = task.completedAt ?: continue
-            // #736 belt (redundant with the null completedAt above — an abandoned task never gets
-            // one): a dropoff the dasher UNASSIGNED must never mint a DELIVERY_COMPLETED.
+            // #736 belt: a dropoff the dasher UNASSIGNED must never mint a DELIVERY_COMPLETED. Once
+            // redundant with the null-completedAt filter above (an INLINE abandon never stamps one),
+            // this is now LOAD-BEARING for #752's cross-frame retro-mark, which stamps `unassignedAt`
+            // on a grace-retired dropoff that DOES carry a `completedAt` — the marker is the only thing
+            // suppressing the fabricated completion for that never-delivered order.
             if (task.unassignedAt != null) continue
             // #498 identity firewall (guardrail): never complete an identity-less phantom.
             if (task.customerNameHash == null && task.customerAddressHash == null) continue

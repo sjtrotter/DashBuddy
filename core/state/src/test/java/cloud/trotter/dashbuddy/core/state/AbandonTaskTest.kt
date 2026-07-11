@@ -277,6 +277,110 @@ class AbandonTaskTest {
         assertEquals("pk", payload.taskId)
     }
 
+    // ---- #752: cross-frame retro-mark widened to ANY phase (the DROPOFF analog) ----------
+
+    @Test
+    fun `cross-frame retro-mark - a grace-retired DROPOFF yields no fabricated completion, one TASK_UNASSIGNED (dropoff), job closed`() {
+        // #752: the retire grace committed a `completedAt` on a DROPOFF on a PRIOR frame while the job
+        // stayed open (the drop was retired EN ROUTE — arrivedAt null — so isJobPhysicallyComplete did
+        // not close it). The confirmation frame must retro-mark THAT DROP (not a sibling pickup) so the
+        // close-out belt suppresses a fabricated DELIVERY_COMPLETED, and emit exactly one
+        // TASK_UNASSIGNED carrying phase DROPOFF. Pre-#752 (PICKUP-only retro-mark) this drop was never
+        // marked → the close-out fabricated a completion for a never-delivered order.
+        val retiredDrop = Task(
+            taskId = "dr", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            customerNameHash = "cust", arrivedAt = null, completedAt = 900L, startedAt = 300L,
+        )
+        val prevRegion = region(
+            activeTask = null, activeJob = job(listOf(retiredDrop)), recentTasks = listOf(retiredDrop),
+        )
+        val nextRegion = step(prevRegion, unassignObs(ts = 1_000L), prevFlow = Flow.TaskDropoffNavigation)
+
+        val marked = nextRegion.recentTasks.single { it.taskId == "dr" }
+        assertEquals("retro-marked the DROPOFF at the confirmation frame", 1_000L, marked.unassignedAt)
+        assertEquals("completedAt preserved (not nulled)", 900L, marked.completedAt)
+        assertNull("single-order job closed on the confirmation frame", nextRegion.activeJob)
+
+        val effects = effectMap.diff(
+            state(prevRegion, Flow.TaskDropoffNavigation), state(nextRegion, Flow.TaskUnassigned), unassignObs(ts = 1_000L),
+        )
+        assertFalse(
+            "the retire→close-out chain fabricates no DELIVERY_COMPLETED for the abandoned drop",
+            effects.logTypes().contains(AppEventType.DELIVERY_COMPLETED),
+        )
+        assertEquals(
+            "exactly one TASK_UNASSIGNED for the retro-marked dropoff",
+            1, effects.logTypes().count { it == AppEventType.TASK_UNASSIGNED },
+        )
+        val payload = effects.filterIsInstance<AppEffect.LogEvent>()
+            .first { it.event.type == AppEventType.TASK_UNASSIGNED }.event.payload as TaskUnassignedPayload
+        assertEquals("dr", payload.taskId)
+        assertEquals("the payload carries phase DROPOFF so LegFolds purges the right leg map", TaskPhase.DROPOFF, payload.phase)
+    }
+
+    @Test
+    fun `cross-frame retro-mark still targets the pickup when the job has no retired dropoff (regression)`() {
+        // The widening must not disturb the original #736 pickup-only shape: with only a retired pickup
+        // in the lineage, `maxByOrNull { completedAt }` still selects it.
+        val retiredPickup = pickup("pk", arrivedAt = 400L, completedAt = 900L)
+        val prevRegion = region(
+            activeTask = null, activeJob = job(listOf(retiredPickup)), recentTasks = listOf(retiredPickup),
+        )
+        val next = step(prevRegion, unassignObs(ts = 1_000L))
+        assertEquals("the retired pickup is retro-marked", 1_000L, next.recentTasks.single { it.taskId == "pk" }.unassignedAt)
+    }
+
+    @Test
+    fun `cross-frame retro-mark - a job with a retired pickup and a LATER retired dropoff marks the most recent (the dropoff)`() {
+        // Mixed shape: the abandon is about the leg most recently retired. maxByOrNull { completedAt }
+        // picks the dropoff (900 > 800), leaving the earlier-retired pickup untouched.
+        val retiredPickup = pickup("pk", arrivedAt = 400L, completedAt = 800L)
+        val retiredDrop = Task(
+            taskId = "dr", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            customerNameHash = "cust", arrivedAt = 600L, completedAt = 900L, startedAt = 300L,
+        )
+        val prevRegion = region(
+            activeTask = null,
+            activeJob = job(listOf(retiredPickup, retiredDrop)),
+            recentTasks = listOf(retiredPickup, retiredDrop),
+        )
+        val next = step(prevRegion, unassignObs(ts = 1_000L), prevFlow = Flow.TaskDropoffNavigation)
+
+        assertEquals("the dropoff (most recently retired) is marked", 1_000L, next.recentTasks.single { it.taskId == "dr" }.unassignedAt)
+        assertNull("the earlier-retired pickup is left untouched", next.recentTasks.single { it.taskId == "pk" }.unassignedAt)
+    }
+
+    @Test
+    fun `isJobPhysicallyComplete does NOT read a retro-marked (unassigned) arrived dropoff as delivered`() {
+        // #752 belt: the arrived-then-unassigned shape carries completedAt AND arrivedAt AND
+        // unassignedAt. Without the new `unassignedAt == null` guard this reads as accounted+finished
+        // → a false job-complete → a fabricated mint. It must read as NOT complete (absorption).
+        val unassignedDrop = Task(
+            taskId = "dr", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            customerNameHash = "cust", arrivedAt = 600L, completedAt = 900L, unassignedAt = 1_000L, startedAt = 300L,
+        )
+        val j = job(listOf(unassignedDrop))
+        assertFalse(
+            "the only drop was unassigned — the job is not physically complete",
+            isJobPhysicallyComplete(j, recentTasks = listOf(unassignedDrop), justRetired = null),
+        )
+    }
+
+    @Test
+    fun `CONTROL - isJobPhysicallyComplete still counts a genuinely delivered (not unassigned) dropoff`() {
+        // Proves the #752 guard is not over-broad: a delivered drop keeps `unassignedAt` null and
+        // still completes the job.
+        val deliveredDrop = Task(
+            taskId = "dr", jobId = "job-1", phase = TaskPhase.DROPOFF,
+            customerNameHash = "cust", arrivedAt = 600L, completedAt = 900L, startedAt = 300L,
+        )
+        val j = job(listOf(deliveredDrop))
+        assertTrue(
+            "a genuinely delivered drop still reads as physically complete",
+            isJobPhysicallyComplete(j, recentTasks = listOf(deliveredDrop), justRetired = null),
+        )
+    }
+
     @Test
     fun `delivered-A then unassign-B still mints A's completion only`() {
         val a = Task(taskId = "dA", jobId = "job-1", phase = TaskPhase.DROPOFF, customerNameHash = "cust-A", arrivedAt = 400L, completedAt = 900L, startedAt = 300L)

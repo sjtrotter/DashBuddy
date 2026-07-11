@@ -1238,11 +1238,13 @@ class PlatformRegionStepper @Inject constructor() {
      * frame). Distinct from [retireActiveTask]: an abandon marks the task with [Task.unassignedAt]
      * and **leaves [Task.completedAt] null**. The load-bearing defense against a fabricated
      * `PICKUP_CONFIRMED` is the close-out sweep's `unassignedAt == null` FILTER
-     * (`pickupConfirmSweepEffects`), which excludes an abandoned-but-arrived pickup. (The null
-     * `completedAt` also means [isJobPhysicallyComplete] never counts the drop as delivered — it reads
-     * as un-accounted, which keeps the job OPEN, never a false complete; step 2 below removes the
-     * drop's own placeholder so a single-order job can still close.) The commit is inline (ungraced):
-     * see the call site.
+     * (`pickupConfirmSweepEffects`), which excludes an abandoned-but-arrived pickup. (An INLINE
+     * abandon leaves `completedAt` null, so [isJobPhysicallyComplete] reads the drop as un-accounted,
+     * keeping the job OPEN; the CROSS-FRAME retro-mark (#752) instead keeps a grace-stamped
+     * `completedAt` and relies on the `unassignedAt` guard that [isJobPhysicallyComplete] and the
+     * DeliveryCompletionEffects belt both now carry — either way the drop is never a false complete.
+     * Step 2 below removes the drop's own placeholder so a single-order job can still close.) The
+     * commit is inline (ungraced): see the call site.
      *
      * Steps (all pure, `[timestamp]`-driven):
      * 1. Move [PlatformRegion.activeTask] → [PlatformRegion.recentTasks] with `unassignedAt` set.
@@ -1265,20 +1267,26 @@ class PlatformRegionStepper @Inject constructor() {
         // state and must survive.
         val keptPending = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
 
-        // Cross-frame retro-mark (#736 review): when the active task is ALREADY gone — the retire
-        // grace committed on a PRIOR frame (a help-flow offer/idle intrusion armed TASK_RETIRE and its
-        // grace fired before this confirmation frame, stamping `completedAt` on the pickup while the
-        // pickup-only job stayed open) — the authoritative confirmation must retro-mark the pickup it
-        // was actually about. Find the most-recently-retired pickup of the active job (`completedAt`
-        // set, `unassignedAt` still null) and set `unassignedAt` WITHOUT touching `completedAt`:
-        // nulling a stamped `completedAt` risks disturbing lineage reconciliation, and the sweep filter
-        // + the DeliveryCompletionEffects belt both key on `unassignedAt`, so the marker alone stops
-        // the fabricated PICKUP_CONFIRMED. Only runs when there is no live task to abandon.
+        // Cross-frame retro-mark (#736 review, widened by #752): when the active task is ALREADY gone —
+        // the retire grace committed on a PRIOR frame (a help-flow offer/idle intrusion armed
+        // TASK_RETIRE and its grace fired before this confirmation frame, stamping `completedAt` on the
+        // retired task while the job stayed open) — the authoritative confirmation must retro-mark the
+        // task it was actually about. Find the most-recently-retired task of the active job, **ANY
+        // phase** (`completedAt` set, `unassignedAt` still null): a grace-retired DROPOFF (retired en
+        // route, or arrived-then-retired) is exactly as much an unassign target as a pickup, and the
+        // old PICKUP-only filter mis-marked a completed sibling pickup while leaving the grace-retired
+        // drop to fabricate a `DELIVERY_COMPLETED` (#752, both defects). `maxByOrNull { completedAt }`
+        // picks the most-recently-retired task so a job with both a retired pickup and a later retired
+        // dropoff marks the drop (the leg the abandon was about). Set `unassignedAt` WITHOUT touching
+        // `completedAt`: nulling a stamped `completedAt` risks disturbing lineage reconciliation, and
+        // the sweep filter + the DeliveryCompletionEffects belt + `isJobPhysicallyComplete` all key on
+        // `unassignedAt`, so the marker alone suppresses the fabricated completion. Only runs when
+        // there is no live task to abandon.
         val retroTargetId = if (abandoned == null) {
             region.activeJob?.let { job ->
                 region.recentTasks
                     .filter {
-                        it.jobId == job.jobId && it.phase == TaskPhase.PICKUP &&
+                        it.jobId == job.jobId &&
                             it.completedAt != null && it.unassignedAt == null
                     }
                     .maxByOrNull { it.completedAt!! }
@@ -1442,16 +1450,23 @@ internal fun isJobPhysicallyComplete(
     recentTasks: List<Task>,
     justRetired: Task?,
 ): Boolean {
+    // #752: an UNASSIGNED dropoff is never "delivered" even when a retire grace stamped its
+    // `completedAt` (and, in the arrived-then-unassigned shape, its `arrivedAt`). The cross-frame
+    // retro-mark now stamps `unassignedAt` on grace-retired DROPOFFs too, so this predicate — which
+    // pre-#752 could only ever see completedAt-null unassigned drops — must exclude the marker
+    // explicitly, or a retro-marked drop would read as accounted+finished and produce a false
+    // job-complete. Fail direction stays safe (absorption): a genuinely delivered drop keeps
+    // `unassignedAt` null and still counts.
     val completedDropoffIds = recentTasks
         .filter {
             it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
-                it.completedAt != null && it.arrivedAt != null
+                it.completedAt != null && it.arrivedAt != null && it.unassignedAt == null
         }
         .mapTo(HashSet()) { it.taskId }
     val retiredDropoffId = justRetired
         ?.takeIf {
             it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
-                it.completedAt != null && it.arrivedAt != null
+                it.completedAt != null && it.arrivedAt != null && it.unassignedAt == null
         }
         ?.taskId
 
