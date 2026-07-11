@@ -1345,8 +1345,9 @@ class RecordFoldsTest {
         // delta, whose span (start→A-completion) already CONTAINS both store legs. On 07315d7a drop A
         // still claimed store leg A (0.5) AND left store leg B (0.3) queued, which sibling B then
         // re-claimed per-leg → Σ per-drop miles (4.2) EXCEEDED the 3.9 session odometer span (the
-        // reviewer's double-count). The fix: drop A stamps no store leg (Fix 4) and RETIRES the job's
-        // store legs closed before its completion (Fix 1), so B claims none of them.
+        // reviewer's double-count). The fix: drop A stamps no store leg (Fix 4) and RETIRES the
+        // session's store legs closed at/before its completion (Fix 1, session-wide per the re-verify
+        // widening — see the cross-job discriminator below), so B claims none of them.
         val (outcomes, ctx) = foldSession(
             listOf(
                 dashStart(s, 1_000, odo = 100.0),
@@ -1426,5 +1427,51 @@ class RecordFoldsTest {
         val dB = outcomes[5].delivery!!
         // Normalized match claims Mama Margies' own leg (0.3), NOT Bill Miller's FIFO-oldest 0.5.
         assertEquals(0.3, dB.milesToStore!!, 1e-9)
+    }
+
+    @Test
+    fun `Fix 1 widening - cross-job add-on leg closed inside a legacy span is retired session-wide`() {
+        val s = "L13"
+        // The re-verifier's cross-job shape: J1's order is out for delivery; a J2 ADD-ON is accepted
+        // and its PICKUP_ARRIVED closes a store leg (0.5) EN ROUTE; then J1's drop completes LEGACY
+        // (missed DELIVERY_ARRIVED). J1's legacy span is a SESSION-level partition delta
+        // (start→completion regardless of job) and already contains J2's store leg — under the
+        // jobId-SCOPED retire that leg stayed pending (different jobId), J2's leg-based drop then
+        // re-claimed it → Σ per-drop miles (3.0 + 1.5 = 4.5) EXCEEDED the 4.0 session span. The
+        // session-wide retire drops it (closed 100.9 ≤ J1's completion 103.0), so J2's drop carries
+        // its dropoff leg only.
+        val (outcomes, ctx) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                offerAccepted(s, 1_100, "h1", eval(net = 9.0, dist = 6.0, opCpm = 0.30)),
+                pickupArrived(s, 1_500, "J1", "P1", "StoreOne", odo = 100.4), // J1 store leg 0.4, closes 100.4
+                pickupConfirmed(s, 1_600, "J1", "P1", "StoreOne", odo = 100.4),
+                // J2 add-on accepted mid-route; its pickup arrival closes a leg inside J1's span.
+                pickupArrived(s, 2_000, "J2", "P2", "StoreTwo", odo = 100.9), // J2 store leg 0.5, closes 100.9
+                pickupConfirmed(s, 2_100, "J2", "P2", "StoreTwo", odo = 100.9),
+                // J1's drop: NO deliveryArrived → LEGACY basis, span 100.0→103.0 = 3.0 (contains BOTH legs).
+                delivery(s, 3_000, "J1", "D1", storeName = "StoreOne", totalPay = 6.0, odo = 103.0),
+                // J2's drop: leg-based (arrival fired).
+                deliveryArrived(s, 3_500, "J2", "D2", storeName = "StoreTwo", odo = 104.0), // dropoff 1.0
+                delivery(s, 3_600, "J2", "D2", storeName = "StoreTwo", totalPay = 5.0, odo = 104.0),
+            ),
+        )
+        val d1 = outcomes[6].delivery!!
+        val d2 = outcomes[8].delivery!!
+        // J1 legacy: no legs stamped, partition delta.
+        assertNull(d1.milesToStore)
+        assertNull(d1.milesToDropoff)
+        assertEquals(3.0, d1.realizedMiles!!, 1e-9)
+        // J2's drop does NOT claim the store leg closed inside J1's legacy span — dropoff leg only.
+        assertNull(d2.milesToStore)
+        assertEquals(1.0, d2.milesToDropoff!!, 1e-9)
+        assertEquals(1.0, d2.realizedMiles!!, 1e-9)
+        // The one-sided invariant, now strictly guaranteed (minus odometer-reset sessions).
+        val span = ctx!!.lastOdometer!! - ctx.startOdometer!! // 104.0 − 100.0 = 4.0
+        assertEquals(4.0, span, 1e-9)
+        assertTrue(
+            "Σ per-drop miles (${d1.realizedMiles!! + d2.realizedMiles!!}) must not exceed span ($span)",
+            d1.realizedMiles!! + d2.realizedMiles!! <= span + 1e-9,
+        )
     }
 }

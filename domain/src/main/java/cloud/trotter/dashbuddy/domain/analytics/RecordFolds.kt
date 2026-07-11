@@ -148,8 +148,9 @@ data class DeliveryFold(
      * Machine-computed to-store driving leg (#688 phase B) — the claimed [PendingStoreLeg]'s miles for
      * this drop's job (exact NORMALIZED-chain store-form match, else FIFO within the job, else null).
      * Stamped ONLY on a leg-sum row (`milesToDropoff != null`); a LEGACY row (missed arrival) stamps
-     * null and instead retires its job's already-closed store legs (#688 review Fix 1/Fix 4), so a
-     * lone store leg never rides an otherwise-untouched legacy row. Provenance only: a driver `newMiles`
+     * null and instead retires the SESSION's already-closed store legs — any job, since the legacy span
+     * is a session-level partition delta (#688 review Fix 1/Fix 4 + re-verify widening) — so a lone
+     * store leg never rides an otherwise-untouched legacy row. Provenance only: a driver `newMiles`
      * correction rewrites [realizedMiles] but NEVER these leg columns, so `milesToStore + milesToDropoff`
      * may then ≠ `realizedMiles` — that inequality is the visible edit trail. Null on a
      * receipt-less/anchorless/legacy leg and all pre-phase-B history.
@@ -577,7 +578,8 @@ object RecordFolds {
         //    a shared-store stack's first drop claims the whole store leg, the sibling gets null).
         //  - A LEGACY row (missed DELIVERY_ARRIVED ⇒ milesToDropoff null) stamps NO store leg (#688
         //    review Fix 4 — leg-sum ≠ realizedMiles must stay the driver-edit trail, not a machine
-        //    lone-leg stamp on an untouched row) and RETIRES the job's already-closed store legs below.
+        //    lone-leg stamp on an untouched row) and RETIRES the session's already-closed store legs
+        //    below (session-wide — the legacy span is a session-level delta, re-verify widening).
         val legState = ctx?.legState ?: LegState()
         val milesToDropoff = legState.pendingDropoffLegs[p.taskId]
         val storeLegs = legState.pendingStoreLegs
@@ -680,16 +682,18 @@ object RecordFolds {
                 pendingStoreLegs = when {
                     // Leg-sum row: consume the single claimed store leg.
                     claimIdx >= 0 -> storeLegs.filterIndexed { i, _ -> i != claimIdx }
-                    // Legacy row (#688 review Fix 1, mixed-basis double-count): RETIRE this job's store
-                    // legs whose closure preceded this completion — their miles are already inside the
-                    // legacy partition span (prevDrop→completion), so a surviving sibling must not
-                    // re-claim them per-leg. Keep only legs of this job provably closed AFTER this
-                    // completion odo (a genuinely later sibling's) + all legs of other jobs. A null
-                    // completion odo OR null leg-closure marker ⇒ retire (fail-null under-attribution,
-                    // never a double-count — the sanctioned error direction).
-                    milesToDropoff == null -> storeLegs.filterNot { leg ->
-                        leg.jobId == p.jobId &&
-                            !(leg.closedAtOdometer != null && odo != null && leg.closedAtOdometer > odo)
+                    // Legacy row (#688 review Fix 1 + re-verify widening): RETIRE pending store legs
+                    // SESSION-WIDE whose closure is at/before this completion odometer (or unknown).
+                    // The legacy span is a SESSION-level partition delta (prevDrop→completion,
+                    // regardless of job), so a CROSS-JOB leg closed inside it — the add-on shape: J2's
+                    // pickup arrival en route while J1's order is out, then J1 completes legacy — is
+                    // equally double-countable; the original job-scoped retire left that real
+                    // double-count open. Keep only legs provably closed AFTER this completion odo (a
+                    // genuinely later arrival's). A null completion odo OR null leg-closure marker ⇒
+                    // retire (fail-null under-attribution, never a double-count — the sanctioned error
+                    // direction).
+                    milesToDropoff == null -> storeLegs.filter { leg ->
+                        leg.closedAtOdometer != null && odo != null && leg.closedAtOdometer > odo
                     }
                     // Leg-sum row that found no store leg to claim: leave the queue untouched.
                     else -> storeLegs

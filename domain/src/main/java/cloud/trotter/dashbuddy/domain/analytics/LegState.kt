@@ -19,13 +19,15 @@ data class PendingStoreLeg(
     val miles: Double,
     /**
      * The odometer reading at which this to-store leg CLOSED (the `PICKUP_ARRIVED` odo; the LATEST on a
-     * re-arrival accumulation). The ordering marker a legacy-basis completion uses to retire ONLY the
-     * store legs whose closure preceded it (#688 review Fix 1): such legs' miles are already inside the
-     * legacy partition span (prevDrop→completion), so a sibling drop must not re-claim them per-leg —
-     * that was the mixed-basis double-count. Nullable-with-default: an old persisted `legStateJson`
-     * blob (a mid-upgrade in-flight session) decodes this as null, and a null / unknown closure order
-     * is treated conservatively as "preceded" (retire → per-row under-attribution, never a
-     * double-count). Never an INFO+ log surface (P7).
+     * re-arrival accumulation). The ordering marker a legacy-basis completion uses to retire the
+     * pending store legs — SESSION-WIDE, any job — whose closure is at/before it (#688 review Fix 1 +
+     * re-verify widening): the legacy span is a session-level partition delta (prevDrop→completion,
+     * regardless of job), so any leg closed inside it, including a cross-job add-on's, is already
+     * inside that span and a later drop must not re-claim it per-leg — that was the mixed-basis
+     * double-count. Nullable-with-default: an old persisted `legStateJson` blob (a mid-upgrade
+     * in-flight session) decodes this as null, and a null / unknown closure order is treated
+     * conservatively as "preceded" (retire → per-row under-attribution, never a double-count). Never
+     * an INFO+ log surface (P7).
      */
     val closedAtOdometer: Double? = null,
 )

@@ -156,8 +156,9 @@ data class DeliveryRecordEntity(
     /**
      * Machine-computed to-store driving leg (#688 phase B) — this drop's claimed store leg (exact
      * NORMALIZED-chain store-form match within the job, else FIFO). Stamped ONLY on a leg-sum row
-     * ([milesToDropoff] non-null); a LEGACY row (missed arrival) stamps null and instead retires its
-     * job's already-closed store legs (#688 review Fix 1/Fix 4), so a lone store leg never rides an
+     * ([milesToDropoff] non-null); a LEGACY row (missed arrival) stamps null and instead retires the
+     * SESSION's already-closed store legs — any job, since the legacy span is a session-level partition
+     * delta (#688 review Fix 1/Fix 4 + re-verify widening) — so a lone store leg never rides an
      * otherwise-untouched legacy row — keeping `milesToStore + milesToDropoff != realizedMiles`
      * meaningful strictly as the driver-edit trail. Provenance ONLY: a driver `newMiles`
      * DELIVERY_ADJUSTMENT rewrites [realizedMiles] but NEVER this column, so `milesToStore +
