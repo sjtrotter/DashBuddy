@@ -69,4 +69,16 @@ data class SessionRecordEntity(
     val deliveries: Int,
     /** Folded count of distinct jobIds delivered. */
     val jobsCompleted: Int,
+
+    // ── Per-leg mileage accumulator (#688 phase B, v13) ─────────────────────
+    /**
+     * Serialized [cloud.trotter.dashbuddy.domain.analytics.LegState] (#688 phase B) — the leg anchor +
+     * the pending to-store/to-dropoff legs of drops that have NOT yet completed. Persisted here because
+     * pending legs cannot be re-derived from record rows on a batch-boundary rehydration (unlike
+     * `prevDropOdometer`/`deliveredJobIds`), so incremental folding would otherwise diverge from a
+     * from-zero refold across a page boundary. Decoded FAIL-CLOSED (garbage/null ⇒ empty leg state ⇒
+     * the session's drops fall back to the legacy partition delta — never a crash, never wrong money).
+     * Null on all pre-v13 rows (the `PROJECTOR_VERSION` refold repopulates it from the immutable log).
+     */
+    val legStateJson: String? = null,
 )

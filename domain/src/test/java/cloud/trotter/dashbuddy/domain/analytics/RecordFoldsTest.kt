@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
@@ -109,13 +110,14 @@ class RecordFoldsTest {
         offerPayShare: Double? = null,
         odo: Double? = null,
         phaseStartedAt: Long = at - 600_000,
+        storeName: String? = "StoreX",
         // Identity-bearing by default (a real delivered drop). A #498/#653 phantom payload has
         // BOTH hashes null (the payload copies the task's null hashes) — pass true to model it.
         identityLess: Boolean = false,
     ) = ev(
         AppEventType.DELIVERY_COMPLETED, sid, at,
         DeliveryPayload(
-            jobId = jobId, taskId = taskId, storeName = "StoreX",
+            jobId = jobId, taskId = taskId, storeName = storeName,
             customerHash = if (identityLess) null else "cust-$taskId",
             addressHash = if (identityLess) null else "addr-$taskId",
             phaseStartedAt = phaseStartedAt, arrivedAt = at - 120_000, completedAt = at,
@@ -131,6 +133,25 @@ class RecordFoldsTest {
             sid, endedAt = at, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = earnings,
             platform = platform,
         ),
+        odometer = odo,
+    )
+
+    // ── #688 phase B leg-anchor event helpers ──
+    private fun pickupArrived(sid: String, at: Long, jobId: String, taskId: String, storeName: String, odo: Double?) = ev(
+        AppEventType.PICKUP_ARRIVED, sid, at,
+        PickupPayload(jobId = jobId, taskId = taskId, storeName = storeName, phaseStartedAt = at - 300_000, arrivedAt = at),
+        odometer = odo,
+    )
+
+    private fun pickupConfirmed(sid: String, at: Long, jobId: String, taskId: String, storeName: String, odo: Double?) = ev(
+        AppEventType.PICKUP_CONFIRMED, sid, at,
+        PickupPayload(jobId = jobId, taskId = taskId, storeName = storeName, phaseStartedAt = at - 300_000, arrivedAt = at - 60_000, confirmedAt = at),
+        odometer = odo,
+    )
+
+    private fun deliveryArrived(sid: String, at: Long, jobId: String, taskId: String, storeName: String? = "StoreX", odo: Double?) = ev(
+        AppEventType.DELIVERY_ARRIVED, sid, at,
+        DeliveryPayload(jobId = jobId, taskId = taskId, storeName = storeName, phaseStartedAt = at - 300_000, arrivedAt = at),
         odometer = odo,
     )
 
@@ -1068,5 +1089,231 @@ class RecordFoldsTest {
         val adjustOut = RecordFolds.foldEvent(badAdjust, null, null)
         assertNull(adjustOut.payAdjustment)
         assertNotNull(adjustOut.skip)
+    }
+
+    // ── #688 phase B: per-leg mileage ──────────────────────────────────────
+
+    @Test
+    fun `criterion 1 - simple job splits realizedMiles into store and dropoff legs`() {
+        val s = "L1"
+        // 100 → arrive store 100.5 (to-store 0.5) → confirm 100.6 → arrive door 103.0 (to-dropoff 2.4)
+        // → complete 103.2. realizedMiles = 0.5 + 2.4 = 2.9 (NOT the 3.2 legacy delta 100→103.2).
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                offerAccepted(s, 1_500, "h1", eval(net = 9.0, dist = 3.0, opCpm = 0.25)),
+                pickupArrived(s, 2_000, "J1", "P1", "StoreX", odo = 100.5),
+                pickupConfirmed(s, 2_500, "J1", "P1", "StoreX", odo = 100.6),
+                deliveryArrived(s, 3_000, "J1", "D1", odo = 103.0),
+                delivery(s, 3_500, "J1", "D1", totalPay = 10.0, odo = 103.2),
+            ),
+        )
+        val d = outcomes[5].delivery!!
+        assertEquals(0.5, d.milesToStore!!, 1e-9)
+        assertEquals(2.4, d.milesToDropoff!!, 1e-9)
+        assertEquals(2.9, d.realizedMiles!!, 1e-9)
+        // Invariant: realizedMiles == milesToStore + milesToDropoff when milesToDropoff != null.
+        assertEquals(d.milesToStore!! + d.milesToDropoff!!, d.realizedMiles!!, 1e-9)
+        // Net computed against the leg-sum miles, not the legacy delta.
+        assertEquals(10.0 - 2.9 * 0.25, d.netProfit!!, 1e-9)
+    }
+
+    @Test
+    fun `criterion 2 - Bill Miller Mama Margies interleaved stack gets per-drop legs`() {
+        val s = "L2"
+        // The 07-05 field stack, straight from the log (Σ legs ≈ the collapsed 6.75):
+        //   prior anchor 705.70
+        //   → Bill Miller arrive 705.92   (to-store A 0.22)
+        //   → Mama Margies arrive 706.08  (to-store B 0.16)
+        //   → drop A arrive 709.06        (to-dropoff A 2.98)
+        //   → drop B arrive 712.45        (to-dropoff B 3.39)
+        //   → both complete at the SAME odometer 712.45 (the collapse the legacy fold produced)
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 705.70),
+                offerAccepted(s, 1_500, "h1", eval(net = 9.0, dist = 6.0, opCpm = 0.30)),
+                pickupArrived(s, 2_000, "J1", "PA", "Bill Miller BBQ", odo = 705.92),
+                pickupConfirmed(s, 2_100, "J1", "PA", "Bill Miller BBQ", odo = 705.92),
+                pickupArrived(s, 2_200, "J1", "PB", "Mama Margies", odo = 706.08),
+                pickupConfirmed(s, 2_300, "J1", "PB", "Mama Margies", odo = 706.08),
+                deliveryArrived(s, 3_000, "J1", "DA", storeName = "Bill Miller BBQ", odo = 709.06),
+                deliveryArrived(s, 3_500, "J1", "DB", storeName = "Mama Margies", odo = 712.45),
+                delivery(s, 3_600, "J1", "DA", storeName = "Bill Miller BBQ", totalPay = 6.48, odo = 712.45),
+                delivery(s, 3_700, "J1", "DB", storeName = "Mama Margies", totalPay = 6.47, odo = 712.45),
+            ),
+        )
+        val dA = outcomes[8].delivery!!
+        val dB = outcomes[9].delivery!!
+        // Drop A: exact store-form match claims Bill Miller's store leg (0.22) + its own dropoff (2.98).
+        assertEquals(0.22, dA.milesToStore!!, 1e-6)
+        assertEquals(2.98, dA.milesToDropoff!!, 1e-6)
+        assertEquals(0.22 + 2.98, dA.realizedMiles!!, 1e-6)
+        // Drop B: exact store-form match claims Mama Margies' store leg (0.16) + its own dropoff (3.39).
+        assertEquals(0.16, dB.milesToStore!!, 1e-6)
+        assertEquals(3.39, dB.milesToDropoff!!, 1e-6)
+        assertEquals(0.16 + 3.39, dB.realizedMiles!!, 1e-6)
+        // The collapsed 6.75/0.0 shape is gone; Σ ≈ the old single lump.
+        assertEquals(6.75, dA.realizedMiles!! + dB.realizedMiles!!, 1e-6)
+    }
+
+    @Test
+    fun `criterion 3 - anchorless history is byte-identical - no lifecycle odometers`() {
+        val s = "L3"
+        // No PICKUP_ARRIVED/DELIVERY_ARRIVED events at all → legs unknown → legacy partition delta.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                delivery(s, 3_000, "J1", "T1", totalPay = 10.0, odo = 105.0),
+            ),
+            currentCpm = 0.20,
+        )
+        val d = outcomes[1].delivery!!
+        assertNull(d.milesToStore)
+        assertNull(d.milesToDropoff)
+        assertEquals(5.0, d.realizedMiles!!, 1e-9) // legacy delta 100→105, unchanged
+        assertEquals(10.0 - 5.0 * 0.20, d.netProfit!!, 1e-9)
+    }
+
+    @Test
+    fun `criterion 3b - lifecycle events with null odometers produce null legs and legacy delta`() {
+        val s = "L3b"
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                pickupArrived(s, 2_000, "J1", "P1", "StoreX", odo = null),
+                deliveryArrived(s, 3_000, "J1", "D1", odo = null),
+                delivery(s, 3_500, "J1", "D1", totalPay = 10.0, odo = 105.0),
+            ),
+        )
+        val d = outcomes[3].delivery!!
+        assertNull(d.milesToStore)
+        assertNull(d.milesToDropoff)
+        assertEquals(5.0, d.realizedMiles!!, 1e-9)
+    }
+
+    @Test
+    fun `criterion 4 - repeat arrival accumulates into the same dropoff leg`() {
+        val s = "L4"
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                pickupArrived(s, 1_500, "J1", "P1", "StoreX", odo = 100.0),
+                pickupConfirmed(s, 1_600, "J1", "P1", "StoreX", odo = 100.0),
+                deliveryArrived(s, 2_000, "J1", "D1", odo = 102.0), // 2.0 from confirm anchor
+                deliveryArrived(s, 2_500, "J1", "D1", odo = 102.5), // grace re-arrival: +0.5, same taskId
+                delivery(s, 3_000, "J1", "D1", totalPay = 10.0, odo = 102.6),
+            ),
+        )
+        val d = outcomes[5].delivery!!
+        assertEquals(2.5, d.milesToDropoff!!, 1e-9) // 2.0 + 0.5 accumulated, not two entries
+    }
+
+    @Test
+    fun `criterion 4 - negative per-leg delta floors at zero`() {
+        val s = "L5"
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                pickupArrived(s, 1_500, "J1", "P1", "StoreX", odo = 100.0),
+                pickupConfirmed(s, 1_600, "J1", "P1", "StoreX", odo = 100.0),
+                deliveryArrived(s, 2_000, "J1", "D1", odo = 98.0), // odometer RESET → negative → floor 0
+                delivery(s, 3_000, "J1", "D1", totalPay = 10.0, odo = 98.5),
+            ),
+        )
+        val d = outcomes[4].delivery!!
+        assertEquals(0.0, d.milesToDropoff!!, 1e-9)
+    }
+
+    @Test
+    fun `criterion 4 - shared-store stack claims the store leg once`() {
+        val s = "L6"
+        // Two drops from ONE store visit (one pickup arrival). First drop claims the store leg; the
+        // sibling gets milesToStore null (DEV-DECISION 2: claim-once, no fabricated split).
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                pickupArrived(s, 1_500, "J1", "P1", "StoreX", odo = 101.0), // to-store 1.0
+                pickupConfirmed(s, 1_600, "J1", "P1", "StoreX", odo = 101.0),
+                deliveryArrived(s, 2_000, "J1", "DA", odo = 103.0), // to-dropoff A 2.0
+                deliveryArrived(s, 2_500, "J1", "DB", odo = 104.0), // to-dropoff B 1.0
+                delivery(s, 2_600, "J1", "DA", storeName = "StoreX", totalPay = 5.0, odo = 104.0),
+                delivery(s, 2_700, "J1", "DB", storeName = "StoreX", totalPay = 5.0, odo = 104.0),
+            ),
+        )
+        val dA = outcomes[5].delivery!!
+        val dB = outcomes[6].delivery!!
+        assertEquals(1.0, dA.milesToStore!!, 1e-9)
+        assertEquals(2.0, dA.milesToDropoff!!, 1e-9)
+        assertNull(dB.milesToStore) // store leg already claimed by the sibling
+        assertEquals(1.0, dB.milesToDropoff!!, 1e-9)
+        assertEquals(1.0, dB.realizedMiles!!, 1e-9) // dropoff leg only
+    }
+
+    @Test
+    fun `criterion 4 - storeName-less drop falls back to FIFO within the job`() {
+        val s = "L7"
+        // Two store visits, both drops complete with NULL storeName (the Unknown-store family). Exact
+        // match can't fire, so each drop claims the oldest unclaimed store leg of its job (FIFO).
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                pickupArrived(s, 1_500, "J1", "PA", "StoreA", odo = 100.5), // store leg A 0.5
+                pickupConfirmed(s, 1_600, "J1", "PA", "StoreA", odo = 100.5),
+                pickupArrived(s, 1_700, "J1", "PB", "StoreB", odo = 100.8), // store leg B 0.3
+                pickupConfirmed(s, 1_800, "J1", "PB", "StoreB", odo = 100.8),
+                deliveryArrived(s, 2_000, "J1", "DA", storeName = null, odo = 102.0),
+                deliveryArrived(s, 2_500, "J1", "DB", storeName = null, odo = 103.0),
+                delivery(s, 2_600, "J1", "DA", storeName = null, totalPay = 5.0, odo = 103.0),
+                delivery(s, 2_700, "J1", "DB", storeName = null, totalPay = 5.0, odo = 103.0),
+            ),
+        )
+        val dA = outcomes[7].delivery!!
+        val dB = outcomes[8].delivery!!
+        assertEquals(0.5, dA.milesToStore!!, 1e-9) // FIFO → oldest (store A) first
+        assertEquals(0.3, dB.milesToStore!!, 1e-9) // FIFO → store B
+    }
+
+    @Test
+    fun `criterion 4 - lone store leg does NOT replace realizedMiles`() {
+        val s = "L8"
+        // Store leg is known but NO DELIVERY_ARRIVED (missed arrival) → milesToDropoff null → the
+        // milesToDropoff != null gate keeps the legacy partition delta, not the lone store leg.
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                pickupArrived(s, 1_500, "J1", "P1", "StoreX", odo = 101.0),
+                pickupConfirmed(s, 1_600, "J1", "P1", "StoreX", odo = 101.0),
+                delivery(s, 3_000, "J1", "D1", totalPay = 10.0, odo = 105.0),
+            ),
+        )
+        val d = outcomes[3].delivery!!
+        assertNull(d.milesToDropoff)
+        // milesToStore is a claimed store leg (1.0) but does NOT drive realizedMiles here.
+        assertEquals(1.0, d.milesToStore!!, 1e-9)
+        assertEquals(5.0, d.realizedMiles!!, 1e-9) // legacy delta 100→105, unchanged
+    }
+
+    @Test
+    fun `criterion 4 - MANUAL delivery does not perturb leg state`() {
+        val s = "L9"
+        // A store leg is queued; a MANUAL_DELIVERY between arrival and the real completion must NOT
+        // touch the leg accumulator — the real drop still claims its full legs.
+        val manual = ev(
+            AppEventType.MANUAL_DELIVERY, s, 2_200,
+            ManualDeliveryPayload(sessionId = s, pay = 4.0, completedAt = 2_200),
+        )
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                pickupArrived(s, 1_500, "J1", "P1", "StoreX", odo = 100.5),
+                pickupConfirmed(s, 1_600, "J1", "P1", "StoreX", odo = 100.5),
+                deliveryArrived(s, 2_000, "J1", "D1", odo = 102.5),
+                manual,
+                delivery(s, 3_000, "J1", "D1", totalPay = 10.0, odo = 102.6),
+            ),
+        )
+        val d = outcomes[5].delivery!!
+        assertEquals(0.5, d.milesToStore!!, 1e-9)  // store leg intact through the MANUAL
+        assertEquals(2.0, d.milesToDropoff!!, 1e-9)
     }
 }

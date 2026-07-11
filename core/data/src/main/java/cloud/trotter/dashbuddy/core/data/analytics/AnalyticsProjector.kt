@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryAdjustmentFold
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryFold
+import cloud.trotter.dashbuddy.domain.analytics.LegStateCodec
 import cloud.trotter.dashbuddy.domain.analytics.OfferFold
 import cloud.trotter.dashbuddy.domain.analytics.PayAdjustmentFold
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
@@ -515,6 +516,8 @@ class AnalyticsProjector @Inject constructor(
         deliveries = deliveries,
         jobsCompleted = jobsCompleted,
         startSource = startSource,
+        // #688 phase B: persist the per-leg accumulator so it survives a batch-boundary rehydration.
+        legStateJson = LegStateCodec.encode(legState),
     )
 
     private fun SessionRecordEntity.toContext(
@@ -556,6 +559,8 @@ class AnalyticsProjector @Inject constructor(
         // DASH_START that lands in a later batch upgrades it with the real platform/startedAt (F1).
         started = startSource != null,
         startSource = startSource,
+        // #688 phase B: rehydrate the per-leg accumulator; fail-closed to empty on a garbage/null blob.
+        legState = LegStateCodec.decode(legStateJson),
     )
 
     private fun DeliveryFold.toEntity() = DeliveryRecordEntity(
@@ -593,6 +598,10 @@ class AnalyticsProjector @Inject constructor(
         storeKey = null,
         payoutStoreForms = StoreResolutionRunner.encodeForms(payoutStoreForms),
         storeKeyPinned = 0,
+        // #688 phase B: the machine-computed per-leg mileage (provenance; a driver miles edit never
+        // rewrites these — see applyDeliveryAdjustment).
+        milesToStore = milesToStore,
+        milesToDropoff = milesToDropoff,
     )
 
     private fun PickupFold.toEntity() = PickupRecordEntity(
@@ -667,7 +676,15 @@ class AnalyticsProjector @Inject constructor(
          * `delivery_records.storeKey`/`payoutStoreForms` + `offer_records.storeKey`/`linkedJobId`
          * columns for ALL history (rebuild ≡ backfill — the backfill is the first drain). The F8 wipe
          * clears `stores`/`pickup_records` so the refold's first-observed store fields are correct.
+         * v6 (#688 phase B): the fold now reads the lifecycle leg-anchor events it previously ignored
+         * (PICKUP_ARRIVED/DELIVERY_ARRIVED/DELIVERY_CONFIRMED, and advances the anchor on
+         * PICKUP_CONFIRMED/DELIVERY_COMPLETED) and the from-zero refold populates per-drop
+         * `milesToStore`/`milesToDropoff` + redistributed `realizedMiles`/`netProfit` on stacked drops
+         * from the odometer stamps already in the immutable log — so per-drop net redistributes within a
+         * stack while the session total is ~conserved. Phase-A driver edits (`DELIVERY_ADJUSTMENT`)
+         * replay after their targets on the refold, so a driver's corrected total survives. Precedented
+         * side effect (as v2/v3/v4): `CURRENT_FALLBACK` rows re-stamp against today's economy.
          */
-        private const val PROJECTOR_VERSION = 5
+        private const val PROJECTOR_VERSION = 6
     }
 }

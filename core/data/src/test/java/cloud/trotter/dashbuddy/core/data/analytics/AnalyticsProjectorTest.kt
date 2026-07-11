@@ -23,6 +23,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
@@ -39,6 +40,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -1102,5 +1104,153 @@ class AnalyticsProjectorTest {
 
         val projector = AnalyticsProjector(db, repo, eventDao, analyticsDao, cancellingPrefs)
         projector.catchUp() // must rethrow, not degrade to a null cpm and continue
+    }
+
+    // ── #688 phase B: per-leg mileage (batch-boundary determinism + correction precedence) ──
+
+    /**
+     * A leg session: start → offer → pickup-arrive → pickup-confirm → delivery-arrive → complete →
+     * stop, with odometers so the completion folds milesToStore 0.5 + milesToDropoff 2.4 (realizedMiles
+     * 2.9, NOT the legacy 3.2 delta). The DELIVERY_COMPLETED is [deliverySeq].
+     */
+    private suspend fun seedLegSession(sid: String = "S1"): Long {
+        insert(
+            AppEventType.DASH_START, sid, 1_000,
+            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, sid, 1_500,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_470, decidedAt = 1_500, returnFlow = Flow.Idle,
+            ),
+        )
+        insert(
+            AppEventType.PICKUP_ARRIVED, sid, 2_000,
+            PickupPayload(jobId = "J1", taskId = "P1", storeName = "StoreX", phaseStartedAt = 1_800, arrivedAt = 2_000),
+            odometer = 100.5,
+        )
+        insert(
+            AppEventType.PICKUP_CONFIRMED, sid, 2_500,
+            PickupPayload(jobId = "J1", taskId = "P1", storeName = "StoreX", phaseStartedAt = 1_800, arrivedAt = 2_000, confirmedAt = 2_500),
+            odometer = 100.6,
+        )
+        insert(
+            AppEventType.DELIVERY_ARRIVED, sid, 3_000,
+            DeliveryPayload(jobId = "J1", taskId = "D1", storeName = "StoreX", phaseStartedAt = 2_600, arrivedAt = 3_000),
+            odometer = 103.0,
+        )
+        val deliverySeq = insert(
+            AppEventType.DELIVERY_COMPLETED, sid, 3_500,
+            DeliveryPayload(
+                jobId = "J1", taskId = "D1", storeName = "StoreX", customerHash = "c",
+                phaseStartedAt = 2_600, arrivedAt = 3_000, completedAt = 3_500, totalPay = 10.0,
+            ),
+            odometer = 103.2,
+        )
+        insert(
+            AppEventType.DASH_STOP, sid, 4_000,
+            SessionStopPayload(sid, endedAt = 4_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = 10.0),
+            odometer = 103.5,
+        )
+        return deliverySeq
+    }
+
+    @Test
+    fun `criterion 5 - leg state round-trips across a batch boundary — incremental == single-drain (#688)`() = runBlocking {
+        val seq = seedLegSession()
+
+        // Fold with a boundary that falls BETWEEN PICKUP_ARRIVED (seq 3) and DELIVERY_COMPLETED (seq 6):
+        // batch 1 drains through PICKUP_CONFIRMED (seq 4), persisting the pending store leg to
+        // session_records.legStateJson; a fresh projector resumes and folds the completion.
+        projector().processBatch(limit = 4)
+        assertEquals(4L, analyticsDao.getWatermark()!!.watermarkSequenceId)
+        val resumed = projector()
+        resumed.processBatch(limit = 100)
+        assertNull(resumed.processBatch(limit = 100))
+
+        val incremental = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("store leg survived the batch boundary", 0.5, incremental.milesToStore!!, 1e-6)
+        assertEquals(2.4, incremental.milesToDropoff!!, 1e-6)
+        assertEquals(2.9, incremental.realizedMiles!!, 1e-6)
+
+        // Force a from-zero refold (single drain) and prove the row is byte-identical.
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 7, projectorVersion = 99))
+        projector().catchUp()
+        val refold = analyticsDao.deliveryRecord(seq)!!
+        assertEquals(incremental.milesToStore, refold.milesToStore)
+        assertEquals(incremental.milesToDropoff, refold.milesToDropoff)
+        assertEquals(incremental.realizedMiles, refold.realizedMiles)
+        assertEquals(incremental.netProfit, refold.netProfit)
+    }
+
+    @Test
+    fun `criterion 5 - a garbage legStateJson blob decodes fail-closed to legacy-delta rows, no crash (#688)`() = runBlocking {
+        val seq = seedLegSession()
+        // Fold through PICKUP_CONFIRMED, then CORRUPT the persisted leg state before the completion folds.
+        projector().processBatch(limit = 4)
+        db.openHelper.writableDatabase.execSQL(
+            "UPDATE session_records SET legStateJson = 'not valid json {{' WHERE sessionId = 'S1'",
+        )
+        // Resume: the fail-closed decode degrades to empty leg state → the completion falls back to the
+        // legacy partition delta (no store/dropoff legs), never a crash.
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertNull("garbage blob → no store leg", d.milesToStore)
+        assertNull("garbage blob → no dropoff leg", d.milesToDropoff)
+        // Legacy delta: no prior drop in the session → anchor is startOdometer 100 → 103.2 − 100 = 3.2.
+        assertEquals(3.2, d.realizedMiles!!, 1e-6)
+    }
+
+    @Test
+    fun `criterion 6 - a newMiles correction wins realizedMiles for money but leaves the machine legs intact (#688)`() = runBlocking {
+        val seq = seedLegSession()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+        assertEquals(0.5, before.milesToStore!!, 1e-6)
+        assertEquals(2.4, before.milesToDropoff!!, 1e-6)
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newMiles = 8.0),
+        )
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        assertEquals("driver total wins realizedMiles", 8.0, d.realizedMiles!!, 1e-9)
+        assertEquals("machine store leg is provenance — never rewritten", 0.5, d.milesToStore!!, 1e-6)
+        assertEquals("machine dropoff leg untouched", 2.4, d.milesToDropoff!!, 1e-6)
+        // Net recomputed against the row's OWN frozen cpm over the DRIVER miles; basis unchanged (miles-only).
+        assertEquals(10.0 - 8.0 * 0.25, d.netProfit!!, 1e-9)
+        assertEquals("a miles-only edit does not flip the basis", before.payBasis, d.payBasis)
+        // The edit trail: leg sum (2.9) now disagrees with the driver's realizedMiles (8.0).
+        assertEquals(2.9, d.milesToStore!! + d.milesToDropoff!!, 1e-6)
+    }
+
+    @Test
+    fun `criterion 7 - reconciliation - per-row leg invariant holds and session odometer reads are unaffected (#688)`() = runBlocking {
+        val seq = seedLegSession()
+        projector().catchUp()
+
+        val d = analyticsDao.deliveryRecord(seq)!!
+        // Per-row invariant: realizedMiles == (milesToStore ?: 0) + milesToDropoff iff milesToDropoff != null.
+        assertEquals((d.milesToStore ?: 0.0) + d.milesToDropoff!!, d.realizedMiles!!, 1e-9)
+
+        // Reconciliation bound: 0 ≤ sessionDelta − Σ(row realizedMiles) ≤ residual (store dwell +
+        // arrived→completed drift). sessionDelta = 103.5 − 100 = 3.5; Σ legs = 2.9.
+        val session = analyticsDao.sessionRecord("S1")!!
+        val sessionDelta = session.lastOdometer!! - session.startOdometer!!
+        val residual = sessionDelta - d.realizedMiles!!
+        assertEquals(3.5, sessionDelta, 1e-6)
+        assertTrue("Σ leg miles never exceed the session odometer span", residual >= -1e-9)
+        assertTrue("residual is bounded (dwell + drift), not unboundedly large", residual <= 1.0)
+
+        // A period read (pay) is unaffected by leg redistribution — leg columns never touch pay.
+        val totals = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
+        assertEquals(10.0, totals.pay, 1e-9)
     }
 }

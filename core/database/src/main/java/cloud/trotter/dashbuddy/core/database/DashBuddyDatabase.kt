@@ -64,11 +64,19 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // offer_records.linkedJobId). The `PROJECTOR_VERSION` 4→5 refold this bump triggers populates the
     // two new tables + the storeKey columns for ALL history (rebuild ≡ backfill; the backfill is just
     // the first drain). Additive ⇒ never wipes app_events or the existing analytics rows.
+    // v12→v13 (#688 phase B) is additive-only: two new nullable REAL columns on delivery_records
+    // (milesToStore, milesToDropoff — the per-leg driving mileage) + one new nullable TEXT column on
+    // session_records (legStateJson — the serialized per-leg accumulator persisted across batch
+    // boundaries). The `PROJECTOR_VERSION` 5→6 refold this bump triggers folds the lifecycle
+    // metadata.odometer stamps (already in the immutable log) into per-drop milesToStore/milesToDropoff
+    // + redistributed realizedMiles/netProfit on stacked drops. Additive ⇒ never wipes app_events or
+    // the existing analytics rows.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
+        AutoMigration(from = 12, to = 13),
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -96,7 +104,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 12
+        const val VERSION = 13
     }
 
 }

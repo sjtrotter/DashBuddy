@@ -143,6 +143,22 @@ data class DeliveryFold(
      * ROWS (never a trigger event), keeping every store of a multi-store stack keyed and monotonic.
      */
     val payoutStoreForms: List<String>? = null,
+    /**
+     * Machine-computed to-store driving leg (#688 phase B) — the claimed [PendingStoreLeg]'s miles for
+     * this drop's job (exact store-form match, else FIFO within the job, else null). Provenance only:
+     * a driver `newMiles` correction rewrites [realizedMiles] but NEVER these leg columns, so
+     * `milesToStore + milesToDropoff` may then ≠ `realizedMiles` — that inequality is the visible edit
+     * trail. Null on a receipt-less/anchorless leg and all pre-phase-B history.
+     */
+    val milesToStore: Double? = null,
+    /**
+     * Machine-computed to-dropoff driving leg (#688 phase B) — this drop's own `taskId` entry in the
+     * pending dropoff legs (unambiguous). Null when no odometer-bearing `DELIVERY_ARRIVED` preceded the
+     * completion (missed arrival, phantom-class completion, all pre-phase-B history). When non-null,
+     * `realizedMiles == (milesToStore ?: 0) + milesToDropoff` (the leg-sum rule, §2); when null the row
+     * keeps the legacy partition delta.
+     */
+    val milesToDropoff: Double? = null,
 )
 
 /**
@@ -304,6 +320,10 @@ object RecordFolds {
             AppEventType.OFFER_DECLINED,
             AppEventType.OFFER_TIMEOUT -> foldOffer(event, context)
             AppEventType.DELIVERY_COMPLETED -> foldDeliveryCompleted(event, context, currentCostPerMile)
+            // #688 phase B leg-anchor events (each also keeps the pre-existing liveness advance).
+            AppEventType.PICKUP_ARRIVED -> foldPickupArrived(event, context)
+            AppEventType.DELIVERY_ARRIVED -> foldDeliveryArrived(event, context)
+            AppEventType.DELIVERY_CONFIRMED -> foldDeliveryConfirmed(event, context)
             AppEventType.PICKUP_CONFIRMED -> foldPickupConfirmed(event, context)
             AppEventType.MANUAL_DELIVERY -> foldManualDelivery(event, context, currentCostPerMile)
             AppEventType.PAY_ADJUSTMENT -> foldPayAdjustment(event, context)
@@ -343,6 +363,8 @@ object RecordFolds {
                     lastOdometer = odo ?: context.lastOdometer,
                     // Already a real start — keep its original startSource; only fill if somehow null.
                     startSource = context.startSource ?: p.source,
+                    // #688: keep the running leg anchor; only fill it if the placeholder had none.
+                    legState = context.legState.copy(prevLegOdometer = context.legState.prevLegOdometer ?: odo),
                 ),
             )
         }
@@ -360,6 +382,8 @@ object RecordFolds {
                     lastOdometer = odo ?: context.lastOdometer,
                     started = true,
                     startSource = p.source,
+                    // #688: the placeholder's counters/liveness carry over; seed the leg anchor if unset.
+                    legState = context.legState.copy(prevLegOdometer = context.legState.prevLegOdometer ?: odo),
                 ),
                 freshSession = true,
             )
@@ -374,6 +398,8 @@ object RecordFolds {
                 lastOdometer = odo,
                 started = true,
                 startSource = p.source,
+                // #688: initialize the leg anchor to the start odometer (null ⇒ first leg unknown).
+                legState = LegState(prevLegOdometer = odo),
             ),
             freshSession = true,
         )
@@ -528,9 +554,34 @@ object RecordFolds {
         // reset yields a NEGATIVE delta, which would otherwise INFLATE this row's netProfit
         // (pay − negativeMiles × cpm). The next drop re-anchors off this (lower) reading naturally.
         val prevOdo = ctx?.prevDropOdometer ?: ctx?.startOdometer
-        val realizedMiles = if (odo != null && prevOdo != null) (odo - prevOdo).coerceAtLeast(0.0) else null
+        val legacyRealizedMiles = if (odo != null && prevOdo != null) (odo - prevOdo).coerceAtLeast(0.0) else null
         val prevAt = ctx?.prevDropAt ?: ctx?.startedAt
         val realizedMinutes = if (prevAt != null) (completedAt - prevAt) / 60_000.0 else null
+
+        // #688 phase B: consume this drop's per-leg mileage from the session leg accumulator.
+        //  - milesToDropoff = this drop's own taskId entry (unambiguous).
+        //  - milesToStore   = one store leg of THIS job — exact store-form match wins (a null payload
+        //    storeName can't match, the #526/#557 "Unknown store" family), else the oldest unclaimed
+        //    leg of the job (FIFO); claimed once (DEV-DECISION 2: no fabricated split — a shared-store
+        //    stack's first drop claims the whole store leg, the sibling gets milesToStore null).
+        val legState = ctx?.legState ?: LegState()
+        val milesToDropoff = legState.pendingDropoffLegs[p.taskId]
+        val storeLegs = legState.pendingStoreLegs
+        val claimIdx = run {
+            val exact = if (p.storeName != null) {
+                storeLegs.indexOfFirst { it.jobId == p.jobId && it.storeName == p.storeName }
+            } else {
+                -1
+            }
+            if (exact >= 0) exact else storeLegs.indexOfFirst { it.jobId == p.jobId }
+        }
+        val milesToStore = claimIdx.takeIf { it >= 0 }?.let { storeLegs[it].miles }
+
+        // realizedMiles becomes the leg SUM only when the final (to-dropoff) leg is known; a lone store
+        // leg understates (the legacy delta already contains it), so partial leg data never replaces the
+        // total — the `milesToDropoff != null` gate (§2). Invariant: realizedMiles == (milesToStore ?: 0)
+        // + milesToDropoff iff milesToDropoff != null.
+        val realizedMiles = if (milesToDropoff != null) (milesToStore ?: 0.0) + milesToDropoff else legacyRealizedMiles
 
         // Frozen economy — immutable historical fact.
         val (frozenCpm, costBasis) = when {
@@ -583,6 +634,8 @@ object RecordFolds {
             payoutStoreForms = p.parsedPay?.customerTips
                 ?.mapNotNull { it.type.takeIf { t -> t.isNotBlank() } }
                 ?.takeIf { it.isNotEmpty() },
+            milesToStore = milesToStore,
+            milesToDropoff = milesToDropoff,
         )
 
         // #691: mark the job receipted once any drop folds RECEIPT EVIDENCE, so a later receipt-less
@@ -601,6 +654,21 @@ object RecordFolds {
             prevDropAt = completedAt,
             lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
             lastOdometer = odo ?: ctx.lastOdometer,
+            // #688: consume the claimed store leg + this drop's dropoff leg, then advance the leg
+            // anchor to the completion odometer (null ⇒ anchor unchanged, miles roll forward).
+            legState = legState.copy(
+                prevLegOdometer = odo ?: legState.prevLegOdometer,
+                pendingStoreLegs = if (claimIdx >= 0) {
+                    storeLegs.filterIndexed { i, _ -> i != claimIdx }
+                } else {
+                    storeLegs
+                },
+                pendingDropoffLegs = if (milesToDropoff != null) {
+                    legState.pendingDropoffLegs - p.taskId
+                } else {
+                    legState.pendingDropoffLegs
+                },
+            ),
         )
         // #159: every DELIVERY_COMPLETED re-triggers store resolution for its job (job-scoped). The
         // payout is NOT threaded — resolution reads payoutStoreForms from the committed rows (B1).
@@ -639,8 +707,56 @@ object RecordFolds {
             activity = p.activity,
             storeAddress = p.storeAddress,
         )
-        val newCtx = ctx?.advance(e.occurredAt, event.metadata?.odometer)
+        // #688: PICKUP_CONFIRMED advances the leg anchor only (parked — keeps the departure point
+        // fresh for the to-dropoff leg), alongside the existing liveness advance.
+        val odo = event.metadata?.odometer
+        val newCtx = ctx?.let { it.advance(e.occurredAt, odo).copy(legState = it.legState.advanceAnchor(odo)) }
         return FoldOutcome(context = newCtx, pickup = pickup)
+    }
+
+    /**
+     * `PICKUP_ARRIVED` (#688 phase B) — closes a **to-store** leg (previous anchor → this arrival) and
+     * queues it for the job's completion to claim as `milesToStore`. Keeps the pre-existing liveness
+     * advance. A malformed/payload-less event advances liveness only (leg anchor unchanged, miles roll
+     * forward — never lost, at worst lumped like today).
+     */
+    private fun foldPickupArrived(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val sid = e.sessionId ?: return FoldOutcome(context = context)
+        val ctx = resolveContext(context, sid, e.occurredAt)
+        val odo = event.metadata?.odometer
+        val p = e.payload as? PickupPayload
+        val withLeg = if (p != null) ctx.closeStoreLeg(p.taskId, p.jobId, p.storeName, odo) else ctx
+        return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
+    }
+
+    /**
+     * `DELIVERY_ARRIVED` (#688 phase B) — closes a **to-dropoff** leg (previous anchor → this arrival),
+     * accumulated onto the drop's own `taskId` (a grace-flap re-arrival adds to the same entry, never a
+     * second one). Keeps the pre-existing liveness advance; a malformed event advances liveness only.
+     */
+    private fun foldDeliveryArrived(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val sid = e.sessionId ?: return FoldOutcome(context = context)
+        val ctx = resolveContext(context, sid, e.occurredAt)
+        val odo = event.metadata?.odometer
+        val p = e.payload as? DeliveryPayload
+        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, odo) else ctx
+        return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
+    }
+
+    /**
+     * `DELIVERY_CONFIRMED` (#688 phase B) — advances the leg anchor only (the handoff/POD point, before
+     * the completion receipt), alongside the pre-existing liveness advance. Produces no record.
+     */
+    private fun foldDeliveryConfirmed(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val e = event.event
+        val sid = e.sessionId ?: return FoldOutcome(context = context)
+        val ctx = resolveContext(context, sid, e.occurredAt)
+        val odo = event.metadata?.odometer
+        val p = e.payload as? DeliveryPayload
+        val withAnchor = if (p != null) ctx.copy(legState = ctx.legState.advanceAnchor(odo)) else ctx
+        return FoldOutcome(context = withAnchor.advance(e.occurredAt, odo))
     }
 
     /**
@@ -842,6 +958,76 @@ object RecordFolds {
             lastEventAt = maxOf(lastEventAt, occurredAt),
             lastOdometer = odometer ?: lastOdometer,
         )
+
+    // ── #688 phase B leg helpers (pure; all mirror the partition-anchor conventions above) ──
+
+    /**
+     * Advance the leg anchor to [odo]. A null odo does NOT advance (same rule as `prevDropOdometer`):
+     * the leg anchor stays put and the miles roll forward into the next closed leg.
+     */
+    private fun LegState.advanceAnchor(odo: Double?): LegState =
+        if (odo == null) this else copy(prevLegOdometer = odo)
+
+    /**
+     * Close the current leg at [odo]: returns the leg miles (floored at 0 — the mid-session
+     * odometer-reset defense) and the leg state with its anchor advanced. `null` miles ⇒ unmeasurable:
+     * either this event carries no odo (anchor unchanged, miles roll forward) or no anchor was ever
+     * seen (anchor takes this odo, this leg is unknown).
+     */
+    private fun LegState.closeLeg(odo: Double?): Pair<Double?, LegState> = when {
+        odo == null -> null to this
+        prevLegOdometer == null -> null to copy(prevLegOdometer = odo)
+        else -> (odo - prevLegOdometer).coerceAtLeast(0.0) to copy(prevLegOdometer = odo)
+    }
+
+    /** Cap a pending list at [LegState.MAX_PENDING] with deterministic drop-oldest (bounded ingestion). */
+    private fun <T> List<T>.capPending(): List<T> =
+        if (size <= LegState.MAX_PENDING) this else takeLast(LegState.MAX_PENDING)
+
+    /**
+     * Close a to-store leg and queue it (or accumulate into the same [pickupTaskId] entry on a
+     * re-arrival). Bounded at [LegState.MAX_PENDING].
+     */
+    private fun SessionFoldContext.closeStoreLeg(
+        pickupTaskId: String,
+        jobId: String,
+        storeName: String?,
+        odo: Double?,
+    ): SessionFoldContext {
+        val (miles, ls) = legState.closeLeg(odo)
+        if (miles == null) return copy(legState = ls)
+        val existingIdx = ls.pendingStoreLegs.indexOfFirst { it.pickupTaskId == pickupTaskId }
+        val legs = if (existingIdx >= 0) {
+            ls.pendingStoreLegs.mapIndexed { i, leg ->
+                if (i == existingIdx) leg.copy(miles = leg.miles + miles) else leg
+            }
+        } else {
+            (ls.pendingStoreLegs + PendingStoreLeg(pickupTaskId, jobId, storeName, miles)).capPending()
+        }
+        return copy(legState = ls.copy(pendingStoreLegs = legs))
+    }
+
+    /**
+     * Close a to-dropoff leg, accumulating onto the drop's own [taskId] (a re-arrival adds to the same
+     * entry). Bounded at [LegState.MAX_PENDING] with drop-oldest by insertion order.
+     */
+    private fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): SessionFoldContext {
+        val (miles, ls) = legState.closeLeg(odo)
+        if (miles == null) return copy(legState = ls)
+        val existing = ls.pendingDropoffLegs[taskId]
+        val merged = if (existing != null) {
+            ls.pendingDropoffLegs + (taskId to (existing + miles))
+        } else {
+            val added = ls.pendingDropoffLegs + (taskId to miles)
+            if (added.size <= LegState.MAX_PENDING) {
+                added
+            } else {
+                // Drop-oldest by insertion order (LinkedHashMap preserves it); keep the newest cap.
+                added.entries.toList().takeLast(LegState.MAX_PENDING).associate { it.key to it.value }
+            }
+        }
+        return copy(legState = ls.copy(pendingDropoffLegs = merged))
+    }
 
     private fun SessionFoldContext.bumpOutcome(type: AppEventType): SessionFoldContext = when (type) {
         AppEventType.OFFER_ACCEPTED -> copy(offersAccepted = offersAccepted + 1)

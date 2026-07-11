@@ -151,4 +151,21 @@ data class DeliveryRecordEntity(
      * the additive AutoMigration back-fills existing rows).
      */
     @ColumnInfo(defaultValue = "0") val storeKeyPinned: Int = 0,
+
+    // ── Per-leg mileage (#688 phase B, v13) ─────────────────────────────────
+    /**
+     * Machine-computed to-store driving leg (#688 phase B) — this drop's claimed store leg (exact
+     * store-form match within the job, else FIFO). Provenance ONLY: a driver `newMiles`
+     * DELIVERY_ADJUSTMENT rewrites [realizedMiles] but NEVER this column, so `milesToStore +
+     * milesToDropoff` may then disagree with `realizedMiles` — that inequality is the visible edit
+     * trail (DEV-DECISION 1). Null on an anchorless/unclaimed leg and all pre-v13 history.
+     */
+    val milesToStore: Double? = null,
+    /**
+     * Machine-computed to-dropoff driving leg (#688 phase B), keyed by this drop's own `taskId`. When
+     * non-null, `realizedMiles == (milesToStore ?: 0) + milesToDropoff` (the leg-sum rule); when null
+     * the row keeps the legacy partition delta. Null when no odometer-bearing `DELIVERY_ARRIVED`
+     * preceded the completion (missed arrival, phantom-class completion, all pre-v13 history).
+     */
+    val milesToDropoff: Double? = null,
 )
